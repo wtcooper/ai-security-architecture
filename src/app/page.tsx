@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PhaseLegend } from "@/components/PhaseRail";
+import { REPO_URL } from "@/components/shell/SiteHeader";
 import { components, controls, incidents, activePersonas, risks } from "@/lib/data";
 
 export const metadata = {
@@ -178,7 +179,15 @@ export default function LandingPage() {
       <p className="mt-8 max-w-2xl text-[13px] leading-relaxed text-ink-3">
         The taxonomy is CoSAI&rsquo;s; the composition is SAIF&rsquo;s, because that layout is
         what makes the diagram readable. Everywhere the two disagree, the choice is declared
-        and shown on the component it affects.
+        and shown on the component it affects.{" "}
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-introduced hover:underline"
+        >
+          Source and full audit on GitHub ↗
+        </a>
       </p>
     </div>
   );
