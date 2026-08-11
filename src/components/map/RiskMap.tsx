@@ -86,7 +86,7 @@ export function RiskMap({
 
       <Bands />
       <Rails />
-      <Groups />
+      <Groups onSelect={onSelect} selected={active} />
 
       <g>
         {EDGES.map((edge) => (
@@ -207,34 +207,64 @@ function Rails() {
   );
 }
 
-/** Dashed outlines for the Agent and Orchestration groupings. */
-function Groups() {
+/** The Agent, drawn as a parent box: a soft panel lighter than the band it sits in. */
+function Groups({
+  onSelect,
+  selected,
+}: {
+  onSelect?: (id: string) => void;
+  selected: string[];
+}) {
+  const selectedSet = new Set(selected);
   return (
     <g>
       {GROUPS.map((group) => {
         const t = BAND_TOKENS[bandOf(group.y)];
-        const midY = group.y + group.h / 2;
+        const interactive = Boolean(onSelect);
+        const active = selectedSet.has(group.id);
         return (
-          <g key={group.id}>
+          <g
+            key={group.id}
+            onClick={interactive ? () => onSelect?.(group.id) : undefined}
+            style={{ cursor: interactive ? "pointer" : "default" }}
+            tabIndex={interactive ? 0 : undefined}
+            role={interactive ? "button" : undefined}
+            aria-label={interactive ? group.label : undefined}
+            onKeyDown={
+              interactive
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect?.(group.id);
+                    }
+                  }
+                : undefined
+            }
+          >
             <rect
               x={group.x}
               y={group.y}
               width={group.w}
               height={group.h}
-              rx={12}
-              fill="none"
-              stroke={t.rail}
-              strokeWidth={1.25}
-              strokeDasharray="6 5"
-              opacity={0.45}
-            />
+              rx={14}
+              fill="color-mix(in srgb, var(--paper) 45%, transparent)"
+              stroke={active ? "var(--ink)" : t.rail}
+              strokeWidth={active ? 1.75 : 1.25}
+              strokeDasharray={active ? undefined : "6 5"}
+              opacity={active ? 1 : 0.5}
+              style={{ transition: "stroke 200ms, opacity 200ms" }}
+            >
+              <title>{group.hint}</title>
+            </rect>
             <text
-              x={group.x + 14}
-              y={midY}
-              textAnchor="middle"
-              transform={`rotate(-90 ${group.x + 14} ${midY})`}
+              x={group.x + 18}
+              y={group.y + 20}
               fill={t.rail}
-              style={{ font: "600 11px var(--font-mono-id), monospace", letterSpacing: "0.11em" }}
+              style={{
+                font: "600 11px var(--font-mono-id), monospace",
+                letterSpacing: "0.12em",
+                pointerEvents: "none",
+              }}
             >
               {group.label.toUpperCase()}
             </text>
@@ -294,10 +324,16 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
         width={box.w}
         height={box.h}
         rx={box.group ? 10 : 7}
-        fill={active ? style.fill : box.group ? t.fill : "var(--paper)"}
+        fill={
+          active
+            ? style.fill
+            : box.group
+              ? "color-mix(in srgb, var(--paper) 70%, transparent)"
+              : "var(--paper)"
+        }
         stroke={active ? style.stroke : t.edge}
         strokeWidth={active ? 2 : 1.25}
-        opacity={active ? 1 : box.group ? 0.75 : 0.9}
+        opacity={active ? 1 : 0.9}
         style={{ transition: "fill 200ms, stroke 200ms, opacity 200ms" }}
       />
       <text

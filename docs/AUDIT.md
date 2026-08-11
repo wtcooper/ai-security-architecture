@@ -113,6 +113,10 @@ Every arrow on the map is an edge declared in `components.yaml` — nothing is i
 - **The Model → Model Output Handling** — Same swap — output handling sits on the path out of the model.
 - **Model Output Handling → Application** — Same swap — the handled model output returns to the application.
 
+### Routing convention at the agent boundary
+
+Four flows cross between the application layer and the model: the application's round trip through the model handlers, and the agent's own round trip through the model. Drawing each to its exact component means routing a line around the entire agent. Following SAIF, these four are drawn as short arrows meeting the Agent group's edge, with the group standing in for the component inside it. The declared endpoints are unchanged and still checked by the build — only the drawn geometry is abbreviated.
+
 ### Edges shown by nesting
 
 - **System Instructions → Perception** — System Instructions is drawn inside Perception, which is the handler that consumes it.

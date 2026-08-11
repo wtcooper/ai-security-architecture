@@ -19,6 +19,14 @@
  * paths implied. Drawing all 32 CoSAI edges turns the picture into a wiring diagram, so two
  * long-haul edges are deliberately omitted here. Both remain visible on the Components tab,
  * which lists every component's full "receives from / sends to" set.
+ *
+ * ROUTING CONVENTION. Four flows cross the boundary between the application layer and the
+ * model: the application's round trip through the model handlers, and the agent's own round
+ * trip through the model. Routing those to their exact component means dragging a line around
+ * the whole agent, which is what made an earlier version unreadable. Following SAIF, they are
+ * drawn as short arrows meeting the Agent group's edge — the group stands in for whatever
+ * inside it is the real endpoint. The declared endpoints in the data are unchanged and still
+ * checked; only the drawn geometry is abbreviated.
  */
 import type { BandId } from "./bands";
 
@@ -50,7 +58,11 @@ export interface Box {
   compact?: boolean;
 }
 
-/** A dashed grouping outline. Not a component. */
+/**
+ * A grouping box. Not a CoSAI component — CoSAI has no single "Agent" element, only the
+ * ten components that make one up — but it is the shape practitioners point at, so it is
+ * drawn as a parent box and can be selected for an explanation of what it contains.
+ */
 export interface Group {
   id: string;
   label: string;
@@ -59,6 +71,9 @@ export interface Group {
   w: number;
   h: number;
   band: BandId;
+  hint: string;
+  /** The CoSAI components this group is made of. */
+  members: string[];
 }
 
 export interface Edge {
@@ -115,8 +130,31 @@ export const RAILS = [
 ];
 
 export const GROUPS: Group[] = [
-  { id: "agent", label: "Agent", x: 216, y: 112, w: 730, h: 288, band: "application" },
+  {
+    id: "agent",
+    label: "Agent",
+    x: 216,
+    y: 112,
+    w: 730,
+    h: 288,
+    band: "application",
+    hint: "CoSAI has no single Agent component. An agent is this set of components working together — perception, a reasoning core, orchestration over tools and memory, and rendering.",
+    members: [
+      "componentAgentInputHandling",
+      "componentAgentSystemInstruction",
+      "componentAgentUserQuery",
+      "componentReasoningCore",
+      "componentOrchestrationInputHandling",
+      "componentTools",
+      "componentRAGContent",
+      "componentMemory",
+      "componentOrchestrationOutputHandling",
+      "componentAgentOutputHandling",
+    ],
+  },
 ];
+
+export const GROUP_IDS = GROUPS.map((g) => g.id);
 
 export const BOXES: Box[] = [
   // --- Application core ---------------------------------------------------------------
@@ -182,10 +220,10 @@ export const EDGES: Edge[] = [
   // --- Application core round trip through the model ------------------------------------
   // Drawn in SAIF's direction; CoSAI declares these four the other way round. See
   // EDGE_DEVIATIONS for the reasoning.
-  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 400 82 L 190 82 L 190 403 L 238 403" },
+  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 370 402 L 370 418", soft: true },
   { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 454 L 370 502" },
   { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 456" },
-  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 880 437 L 970 437 L 970 61 L 882 61" },
+  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 750 418 L 750 402", soft: true },
 
   // --- The application drives the agent, and the agent answers back ----------------------
   // Straight into Perception and straight out of Rendering, as SAIF drew it.
@@ -193,8 +231,8 @@ export const EDGES: Edge[] = [
   { from: "componentAgentOutputHandling", to: "componentApplication", d: "M 840 142 L 840 84" },
 
   // --- The agent talks to the model, and the model back ----------------------------------
-  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 300 504 L 300 476 L 196 476 L 196 266 L 244 266", soft: true },
-  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 932 222 L 956 222 L 956 476 L 820 476 L 820 502", soft: true },
+  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 540 502 L 540 402", soft: true },
+  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 580 402 L 580 502", soft: true },
 
   // --- Inside the agent -------------------------------------------------------------------
   { from: "componentAgentInputHandling", to: "componentReasoningCore", d: "M 336 302 L 336 359 L 418 359" },

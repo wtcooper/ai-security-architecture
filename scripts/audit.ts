@@ -158,6 +158,17 @@ async function main() {
     p(`- **${title(e.from)} → ${title(e.to)}** — ${e.reason}`);
   }
   p();
+  p("### Routing convention at the agent boundary");
+  p();
+  p(
+    "Four flows cross between the application layer and the model: the application's round " +
+      "trip through the model handlers, and the agent's own round trip through the model. " +
+      "Drawing each to its exact component means routing a line around the entire agent. " +
+      "Following SAIF, these four are drawn as short arrows meeting the Agent group's edge, " +
+      "with the group standing in for the component inside it. The declared endpoints are " +
+      "unchanged and still checked by the build — only the drawn geometry is abbreviated.",
+  );
+  p();
   p("### Edges shown by nesting");
   p();
   for (const e of CONTAINMENT_EDGES) {

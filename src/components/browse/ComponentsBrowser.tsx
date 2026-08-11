@@ -17,6 +17,7 @@ import {
   risksForComponent,
 } from "@/lib/data";
 import { HANDLING_EXPLAINER, notesFor } from "@/lib/deviations";
+import { GROUP_IDS, GROUPS } from "@/lib/map-layout";
 import type { Phase } from "@/lib/types";
 
 const SUBCATEGORY_TITLES = new Map(
@@ -29,14 +30,16 @@ export function ComponentsBrowser() {
 
   // A ?component= link wins until the visitor picks something on the map themselves.
   const linked = params.get("component");
-  const selected =
-    clicked ?? (linked && componentById.has(linked) ? linked : components[0].id);
+  const isTarget = (id: string | null) =>
+    Boolean(id) && (componentById.has(id!) || GROUP_IDS.includes(id!));
+  const selected = clicked ?? (isTarget(linked) ? linked! : components[0].id);
 
-  const component = componentById.get(selected)!;
+  const group = GROUPS.find((g) => g.id === selected);
+  const component = componentById.get(selected);
   const risks = risksForComponent(selected);
   const controls = controlsForComponent(selected);
-  const category = componentCategories.find((c) => c.id === component.category);
-  const notes = notesFor(selected);
+  const category = componentCategories.find((c) => c.id === component?.category);
+  const notes = component ? notesFor(selected) : [];
   const isHandling = selected.toLowerCase().includes("handling");
 
   return (
@@ -62,25 +65,42 @@ export function ComponentsBrowser() {
         </div>
 
         <aside className="lg:w-[420px] xl:w-[460px] shrink-0">
+          {group ? (
+            <div className="sticky top-20 rounded-xl border border-line bg-paper p-6">
+              <p className="eyebrow">Grouping · not a CoSAI component</p>
+              <h2 className="display mt-1.5 text-[24px] font-bold leading-tight text-ink">
+                {group.label}
+              </h2>
+              <p className="mt-4 text-[14px] leading-relaxed text-ink-2">{group.hint}</p>
+              <p className="eyebrow mt-6">Made of {group.members.length} components</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {group.members.map((id) => (
+                  <button key={id} onClick={() => setClicked(id)}>
+                    <Chip>{componentTitle(id)}</Chip>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
           <div className="sticky top-20 rounded-xl border border-line bg-paper p-6">
             <p className="eyebrow">
               {category?.title}
-              {component.subcategory && ` · ${SUBCATEGORY_TITLES.get(component.subcategory)}`}
+              {component!.subcategory && ` · ${SUBCATEGORY_TITLES.get(component!.subcategory)}`}
             </p>
             <h2 className="display mt-1.5 text-[24px] font-bold leading-tight text-ink">
-              {componentTitle(component.id)}
+              {componentTitle(component!.id)}
             </h2>
-            <p className="ident mt-1">{component.id}</p>
+            <p className="ident mt-1">{component!.id}</p>
 
             <Prose
-              blocks={component.description}
-              refs={component.externalReferences}
+              blocks={component!.description}
+              refs={component!.externalReferences}
               size="sm"
               className="mt-4 max-h-64 overflow-y-auto"
             />
 
-            <Flow label="Receives from (CoSAI)" ids={component.edges?.from} />
-            <Flow label="Sends to (CoSAI)" ids={component.edges?.to} />
+            <Flow label="Receives from (CoSAI)" ids={component!.edges?.from} />
+            <Flow label="Sends to (CoSAI)" ids={component!.edges?.to} />
 
             {notes.length > 0 && (
               <div className="mt-5 rounded-lg border-l-[3px] border-line-strong bg-mist py-3.5 pl-4 pr-4">
@@ -147,12 +167,13 @@ export function ComponentsBrowser() {
               </div>
             </div>
 
-            {component.mappings && (
+            {component!.mappings && (
               <div className="mt-6">
-                <MappingBadges mappings={component.mappings} />
+                <MappingBadges mappings={component!.mappings} />
               </div>
             )}
           </div>
+          )}
         </aside>
       </div>
     </>
