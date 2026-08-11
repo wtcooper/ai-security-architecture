@@ -46,9 +46,10 @@ export function TourExplorer() {
     [stepNumber, totalSteps],
   );
 
-  // Keep the address bar in step, so the current view is always shareable.
+  // Keep the address bar in step, so the current view is always shareable. Only the query is
+  // rewritten — writing a path here would drop the base path the site is served under.
   useEffect(() => {
-    window.history.replaceState(null, "", `/map?risk=${risk.id}&phase=${phase}`);
+    window.history.replaceState(null, "", `?risk=${risk.id}&phase=${phase}`);
   }, [risk.id, phase]);
 
   useEffect(() => {
