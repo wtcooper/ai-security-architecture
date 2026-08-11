@@ -127,7 +127,8 @@ The frameworks apply to different things, and CoSAI is explicit about which:
 | NIST AI RMF | controls | 10 | 8/35 controls |
 | ISO 22989 | personas | 6 | 6/8 personas |
 | EU AI Act | personas, controls | 0 | declared upstream, no mappings published yet |
-| **OWASP Agentic Top 10** | risks | 10 | 21/36 risks — **mappings authored here** |
+| **OWASP Agentic Top 10** | risks | 10 | 21/36 risks — **added here** |
+| **OWASP LLM Top 10 2026** | risks, controls | 10 | 19/36 risks, 7/35 controls — **added here** |
 
 Nothing maps to components, so the mapping block was removed from that tab rather than left
 rendering nothing.
@@ -147,11 +148,11 @@ essentially the agentic subset. The other 15 are left unmapped rather than stret
 and ASI09 *Human-Agent Trust Exploitation* has nothing mapped to it at all, because CoSAI has
 no risk for a human over-trusting an agent.
 
-### The LLM Top 10 moved on six days ago
+### The LLM Top 10 moved on a week ago
 
-**CoSAI's OWASP mappings are against the 2025 edition.** OWASP published the
-**[2026 edition](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/)** on 5 August
-2026 — the first weighted by real incident data, and it reorders most of the list:
+OWASP published the **[2026 edition](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/)**
+on **4 August 2026** — the first ranked partly on real incident data rather than expert vote
+alone. It keeps all ten risks and reorders most of them:
 
 | 2025 | 2026 | |
 | --- | --- | --- |
@@ -161,29 +162,16 @@ no risk for a human over-trusting an agent.
 | LLM05 Improper Output Handling | **LLM10** | down five |
 | LLM07 System Prompt Leakage | **LLM08 Hidden Context Exposure** | renamed and widened |
 
-CoSAI's identifiers are left exactly as published — the mappings still hold, because the
-risks did not change, only their numbers. Every entry on the Frameworks tab carries its 2026
-position inline, and the framework card has the full translation.
+**CoSAI still maps to 2025.** Rather than wait, the 2026 edition is added as its own
+framework and is the default lens, with titles and descriptions read from OWASP's document.
+What is authored is only the renumbering — OWASP kept all ten risks, so each of CoSAI's 19
+risk and 7 control mappings is carried onto its 2026 identifier one-for-one, none created,
+dropped or reinterpreted.
 
-The sourcing is stated rather than glossed: the 2026 document is behind a download form and
-OWASP's own per-risk pages still serve the 2025 entries, so the descriptions here are OWASP's
-2025 text and the 2026 positions come from launch coverage that two independent accounts
-agree on. Several write-ups titled "2026" simply reprint the 2025 list; those were discarded.
-
-Three things fall out of this that are worth having:
-
-- **Every identifier says what it means.** CoSAI publishes bare ids — `AML.M0003`,
-  `MEASURE-2.7` — which are unreadable unless you know the framework by heart.
-  [`data/frameworks/entries.yaml`](data/frameworks/entries.yaml) gives all 71 a name and a
-  one-sentence description, taken from each framework's own text and sourced in
-  [`data/PROVENANCE.md`](data/PROVENANCE.md). The build fails if CoSAI maps to an identifier
-  that has none.
-- **Selecting an entry highlights the map.** "OWASP LLM01: Prompt Injection" becomes a picture
-  of the components its mapped risks touch, at whichever phase you choose. It turns a
-  compliance identifier into an architecture.
-- **The gaps are shown, not hidden.** `LLM08:2025 Vector and Embedding Weaknesses` has nothing
-  mapped to it; 17 of 36 risks carry no OWASP mapping at all. Both are stated plainly, because
-  a cross-reference that only shows hits is misleading.
+CoSAI's 2025 edition stays on the tab one pill along, marked superseded, because every
+identifier in it is CoSAI's own. Its entries each show their 2026 position inline, and its
+card carries the full crosswalk. `LLM09:2026` has nothing mapped to it — the same gap CoSAI
+leaves at `LLM08:2025`, carried across honestly.
 
 Every mapping badge elsewhere in the app links into this view.
 

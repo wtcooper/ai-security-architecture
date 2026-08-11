@@ -132,8 +132,11 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   // from a separate table rather than merged into the CoSAI entities, so nothing downstream
   // can mistake one for the other.
   const authored = authoredMappings[frameworkId];
-  const mappingsFor = (kind: EntityKind, item: Risk | Control | Persona): string[] =>
-    authored ? (kind === "risks" ? (authored[item.id] ?? []) : []) : (item.mappings?.[frameworkId] ?? []);
+  const mappingsFor = (kind: EntityKind, item: Risk | Control | Persona): string[] => {
+    if (!authored) return item.mappings?.[frameworkId] ?? [];
+    if (kind === "personas") return [];
+    return authored[kind]?.[item.id] ?? [];
+  };
 
   for (const kind of ["risks", "controls", "personas"] as EntityKind[]) {
     const items = ENTITIES[kind];
@@ -169,8 +172,24 @@ export function mappingsForRisk(risk: Risk): { frameworkId: string; values: stri
     values,
     authored: false,
   }));
-  for (const [frameworkId, byRisk] of Object.entries(authoredMappings)) {
-    const values = byRisk[risk.id];
+  for (const [frameworkId, mapped] of Object.entries(authoredMappings)) {
+    const values = mapped.risks?.[risk.id];
+    if (values?.length) out.push({ frameworkId, values, authored: true });
+  }
+  return out;
+}
+
+/** The same, for a control. */
+export function mappingsForControl(
+  control: Control,
+): { frameworkId: string; values: string[]; authored: boolean }[] {
+  const out = Object.entries(control.mappings ?? {}).map(([frameworkId, values]) => ({
+    frameworkId,
+    values,
+    authored: false,
+  }));
+  for (const [frameworkId, mapped] of Object.entries(authoredMappings)) {
+    const values = mapped.controls?.[control.id];
     if (values?.length) out.push({ frameworkId, values, authored: true });
   }
   return out;

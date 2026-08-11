@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 
 import type {
+  AuthoredMappings,
   Component,
   ComponentCategory,
   Control,
@@ -87,7 +88,7 @@ async function main() {
   }>(join(ROOT, "data", "frameworks", "entries.yaml"));
 
   const authoredDoc = await loadYaml<{
-    frameworks: (Framework & { mappings: { risks: Record<string, string[]> } })[];
+    frameworks: (Framework & { mappings: AuthoredMappings })[];
     notes: Record<string, FrameworkNote>;
   }>(join(ROOT, "data", "overlay", "frameworks-authored.yaml"));
 
@@ -137,7 +138,11 @@ async function main() {
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
   const allFrameworks = [...frameworksDoc.frameworks, ...authoredDoc.frameworks.map(stripMappings)];
-  const authoredMappings = checkAuthoredFrameworks(authoredDoc, { riskIds, frameworksDoc });
+  const authoredMappings = checkAuthoredFrameworks(authoredDoc, {
+    riskIds,
+    controlIds,
+    frameworksDoc,
+  });
 
   // --- Framework entry reference text ----------------------------------------------
   const frameworkEntries = checkFrameworkEntries(entriesDoc.frameworks, {
@@ -434,13 +439,17 @@ function stripMappings(framework: Framework & { mappings?: unknown }): Framework
  */
 function checkAuthoredFrameworks(
   doc: {
-    frameworks: (Framework & { mappings: { risks: Record<string, string[]> } })[];
+    frameworks: (Framework & { mappings: AuthoredMappings })[];
     notes?: Record<string, FrameworkNote>;
   },
-  ctx: { riskIds: Set<string>; frameworksDoc: { frameworks: Framework[] } },
-): Record<string, Record<string, string[]>> {
+  ctx: {
+    riskIds: Set<string>;
+    controlIds: Set<string>;
+    frameworksDoc: { frameworks: Framework[] };
+  },
+): Record<string, AuthoredMappings> {
   const cosaiIds = new Set(ctx.frameworksDoc.frameworks.map((f) => f.id));
-  const out: Record<string, Record<string, string[]>> = {};
+  const out: Record<string, AuthoredMappings> = {};
 
   for (const framework of doc.frameworks) {
     const where = `authored framework ${framework.id}`;
@@ -451,11 +460,21 @@ function checkAuthoredFrameworks(
     if (!framework.attribution?.trim()) fail(`${where}: needs an attribution`);
     if (!framework.mappingRationale?.trim()) fail(`${where}: needs a mappingRationale`);
 
-    const mapped = framework.mappings?.risks ?? {};
-    for (const [riskId, entries] of Object.entries(mapped)) {
-      if (!ctx.riskIds.has(riskId)) fail(`${where}: unknown risk ${riskId}`);
-      if (!entries?.length) fail(`${where}: risk ${riskId} maps to nothing`);
+    const known: Record<keyof AuthoredMappings, Set<string>> = {
+      risks: ctx.riskIds,
+      controls: ctx.controlIds,
+    };
+    const mapped: AuthoredMappings = {};
+    for (const kind of ["risks", "controls"] as (keyof AuthoredMappings)[]) {
+      const byId = framework.mappings?.[kind];
+      if (!byId) continue;
+      for (const [id, entries] of Object.entries(byId)) {
+        if (!known[kind].has(id)) fail(`${where}: unknown ${kind.slice(0, -1)} ${id}`);
+        if (!entries?.length) fail(`${where}: ${id} maps to nothing`);
+      }
+      mapped[kind] = byId;
     }
+    if (!mapped.risks && !mapped.controls) fail(`${where}: declares no mappings at all`);
     out[framework.id] = mapped;
   }
 
@@ -472,7 +491,7 @@ function checkFrameworkEntries(
     risks: Risk[];
     controls: Control[];
     personas: Persona[];
-    authoredMappings: Record<string, Record<string, string[]>>;
+    authoredMappings: Record<string, AuthoredMappings>;
   },
 ): Record<string, Record<string, FrameworkEntryInfo>> {
   const out: Record<string, Record<string, FrameworkEntryInfo>> = {};
@@ -491,8 +510,10 @@ function checkFrameworkEntries(
     for (const item of [...ctx.risks, ...ctx.controls, ...ctx.personas]) {
       for (const value of item.mappings?.[framework.id] ?? []) mapped.add(value.split("@")[0]);
     }
-    for (const ids of Object.values(ctx.authoredMappings[framework.id] ?? {})) {
-      for (const value of ids) mapped.add(value.split("@")[0]);
+    for (const byId of Object.values(ctx.authoredMappings[framework.id] ?? {})) {
+      for (const ids of Object.values(byId)) {
+        for (const value of ids) mapped.add(value.split("@")[0]);
+      }
     }
 
     for (const id of mapped) {

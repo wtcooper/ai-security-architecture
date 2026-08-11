@@ -17,7 +17,12 @@ export const PHASES: Phase[] = ["introduced", "exposed", "mitigated"];
  * Lives here because both the build check and the render need it, and disagreeing copies
  * silently drop the unmapped entries this list exists to show.
  */
-export const FULL_LIST_FRAMEWORKS = ["owasp-top10-llm", "stride", "owasp-agentic"];
+export const FULL_LIST_FRAMEWORKS = [
+  "owasp-top10-llm",
+  "owasp-llm-2026",
+  "stride",
+  "owasp-agentic",
+];
 
 /** A paragraph of CoSAI prose, already split from the YAML block scalars. */
 export type Paragraph = string | string[];
@@ -49,6 +54,12 @@ export interface Framework {
   /** How the authored mappings were decided, and what was deliberately left unmapped. */
   mappingRationale?: string;
 }
+
+/** Entity id -> framework entry ids, per entity kind. Personas carry no authored mappings. */
+export type AuthoredMappings = {
+  risks?: Record<string, string[]>;
+  controls?: Record<string, string[]>;
+};
 
 /** An editorial note on a framework CoSAI does carry, where upstream has moved on. */
 export interface FrameworkNote {
@@ -225,9 +236,10 @@ export interface Dataset {
   frameworkEntries: Record<string, Record<string, FrameworkEntryInfo>>;
   /**
    * Mappings authored in this repository rather than published by CoSAI, kept apart from
-   * `risk.mappings` so the two are never silently merged. framework -> risk -> entry ids.
+   * `risk.mappings` so the two are never silently merged.
+   * framework -> "risks" | "controls" -> entity id -> entry ids.
    */
-  authoredMappings: Record<string, Record<string, string[]>>;
+  authoredMappings: Record<string, AuthoredMappings>;
   /** framework id -> editorial note. */
   frameworkNotes: Record<string, FrameworkNote>;
   lifecycleStages: Vocabulary[];

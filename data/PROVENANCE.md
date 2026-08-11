@@ -48,14 +48,17 @@ the Frameworks tab shows `AML.M0003` with nothing to read. Each block records it
 - **ISO/IEC 22989:2022** — clause 5 ecosystem roles. The standard's text is not openly
   licensed, so these describe each role as the standard defines it rather than quoting it.
   The only block here that is not the framework's own words.
-
 - **OWASP Top 10 for Agentic Applications 2026** — OWASP's titles and descriptions, from the
   9 December 2025 publication announcement and the project's summary of each entry. CoSAI
   does not carry this framework at all; see below.
+- **OWASP Top 10 for LLM Applications 2026** — read from the document itself
+  (`OWASP-GenAI-LLM-Top-10-2026-v1.0.pdf`, Version 2026, published 4 August 2026, CC BY-SA
+  4.0). Labels and descriptions are the opening of each entry's own Description section,
+  trimmed to the definitional sentences.
 
 `npm run data` fails if CoSAI maps to an identifier with no entry, and reports any entry
-nothing maps to — except for OWASP LLM, STRIDE and OWASP Agentic, where the full published
-list is shown on purpose so unmapped entries read as gaps.
+nothing maps to — except for the two OWASP LLM editions, STRIDE and OWASP Agentic,
+where the full published list is shown on purpose so unmapped entries read as gaps.
 
 ## Framework material that is not CoSAI's
 
@@ -69,9 +72,17 @@ from the vendored CoSAI snapshot and badged in the UI so the two are never confu
   where the ASI entry describes it as it occurs in an agentic system — 15 of CoSAI's 36 are
   deliberately left unmapped, and ASI09 has nothing mapped to it because CoSAI has no risk
   for a human over-trusting an agent.
-- **The OWASP LLM note** records that CoSAI maps against the 2025 edition while OWASP
-  published a 2026 edition on 5 August 2026, and carries the identifier crosswalk between
-  them. CoSAI's own identifiers are left exactly as published.
+- **OWASP Top 10 for LLM Applications 2026** is the current edition of a framework CoSAI
+  does carry — but CoSAI maps to the 2025 edition, and OWASP renumbered. It is added as its
+  own framework, and is the default lens on the Frameworks tab, because being current matters
+  more here than mirroring CoSAI exactly. What is authored is only the renumbering: OWASP kept
+  all ten risks and changed their order, so each of CoSAI's 19 risk and 7 control mappings is
+  carried onto its 2026 identifier one-for-one. No mapping was created, dropped or
+  reinterpreted. LLM09:2026 has nothing mapped to it, inheriting the same gap CoSAI leaves at
+  LLM08:2025.
+- **CoSAI's 2025 edition is still on the tab**, marked superseded, because every identifier in
+  it is CoSAI's own. Its note carries the full 2025 → 2026 crosswalk, and each of its entries
+  shows its 2026 position inline.
 
 ## Overlay
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Chip, MappingBadges } from "@/components/Chips";
+import { mappingsForControl } from "@/lib/frameworks";
 import { ExpandAll, PageHeader, Panel } from "@/components/Panel";
 import { firstLine, Prose } from "@/components/Prose";
 import { FilterPill } from "@/components/browse/RisksBrowser";
@@ -137,7 +138,7 @@ export function ControlsBrowser() {
                         </div>
 
                         <div className="mt-6">
-                          <MappingBadges mappings={control.mappings} />
+                          <MappingBadges mappings={control.mappings} extra={mappingsForControl(control)} />
                         </div>
                       </Panel>
                     );

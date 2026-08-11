@@ -20,7 +20,7 @@ export function FrameworksBrowser() {
   const frameworkId =
     chosen.fw ?? (params.get("fw") && frameworks.some((f) => f.id === params.get("fw"))
       ? params.get("fw")!
-      : "owasp-top10-llm");
+      : "owasp-llm-2026");
   const view = frameworkView(frameworkId)!;
 
   const linkedEntry = chosen.fw ? undefined : params.get("entry") ?? undefined;
@@ -48,7 +48,7 @@ export function FrameworksBrowser() {
       <PageHeader
         eyebrow="Cross-reference"
         title="Frameworks"
-        lead="CoSAI maps its risks, controls and personas onto six external frameworks. Read that mapping the other way round: pick what you are being measured against, and see where it lands on this map."
+        lead="CoSAI maps its risks, controls and personas onto six external frameworks, and two more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map."
       >
         <div className="mt-6 flex flex-wrap gap-1.5">
           {frameworks.map((f) => {
