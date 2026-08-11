@@ -150,6 +150,17 @@ export function FrameworksBrowser() {
                   )}
                 </div>
 
+                {entry.description && (
+                  <p className="mt-3 max-w-3xl text-[14.5px] leading-relaxed text-ink-2">
+                    {entry.description}
+                  </p>
+                )}
+                {entry.note && (
+                  <p className="mt-2 max-w-3xl text-[12.5px] leading-relaxed text-ink-3">
+                    {entry.note}
+                  </p>
+                )}
+
                 {entry.total === 0 ? (
                   <p className="mt-4 rounded-lg border-l-[3px] border-exposed bg-exposed-soft/40 py-3 pl-4 pr-4 text-[13.5px] leading-relaxed text-ink-2">
                     Nothing in CoSAI maps to this entry. That is a gap in the cross-reference

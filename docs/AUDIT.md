@@ -51,7 +51,7 @@ The map also draws what sits *outside* the system. CoSAI models the system only,
 | --- | --- |
 | User (`actorUser`) | The person the system acts for — and the untrusted side of the application boundary. |
 | External Sources (`actorExternalSources`) | Third-party services, tool registries, package proxies and content the agent reaches out to at runtime. |
-| External Sources (`actorExternalData`) | Data gathered from outside the organisation before it ever reaches the pipeline. |
+| External Data (`actorExternalData`) | Data gathered from outside the organisation before it ever reaches the pipeline. |
 
 ### Display names
 

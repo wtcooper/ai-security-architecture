@@ -17,6 +17,7 @@ import type {
   Control,
   Dataset,
   Framework,
+  FrameworkEntryInfo,
   Incident,
   Persona,
   Risk,
@@ -80,6 +81,10 @@ async function main() {
     loadIncidents(),
   ]);
 
+  const entriesDoc = await loadYaml<{
+    frameworks: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>;
+  }>(join(ROOT, "data", "frameworks", "entries.yaml"));
+
   const components = componentsDoc.components;
   const risks = risksDoc.risks;
   const controls = controlsDoc.controls;
@@ -122,6 +127,14 @@ async function main() {
   // --- Map fidelity --------------------------------------------------------------
   checkMapFidelity(components);
 
+  // --- Framework entry reference text ----------------------------------------------
+  const frameworkEntries = checkFrameworkEntries(entriesDoc.frameworks, {
+    frameworks: frameworksDoc.frameworks,
+    risks,
+    controls,
+    personas: personasDoc.personas,
+  });
+
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
   await checkAgainstSaifSeed(overlays, risks);
@@ -141,6 +154,9 @@ async function main() {
       }
       for (const id of step.risks ?? []) {
         if (!riskIds.has(id)) fail(`${at}: unknown risk ${id}`);
+        // The incident header lists the risks this case study is about; a step that names a
+        // risk missing from that list makes the header an incomplete summary of its own steps.
+        if (!inc.risks.includes(id)) fail(`${at}: risk ${id} is not in the incident's risk list`);
       }
     }
   }
@@ -171,6 +187,7 @@ async function main() {
     controlCategories: controlsDoc.categories,
     personas: personasDoc.personas,
     frameworks: frameworksDoc.frameworks,
+    frameworkEntries,
     lifecycleStages: lifecycleDoc.lifecycleStages,
     impactTypes: impactDoc.impactTypes,
     actorAccessLevels: actorDoc.actorAccessLevels,
@@ -203,7 +220,6 @@ const RISK_CATEGORIES = [
 
 interface RawOverlay {
   risk: string;
-  map?: string;
   source: "saif" | "authored";
   introduced: string[];
   exposed: string[];
@@ -374,6 +390,61 @@ function checkMapFidelity(components: Component[]) {
       `(${flipped.size} direction deviations), ${contained.size} shown by nesting, ` +
       `${undrawn.size} documented as undrawn`,
   );
+}
+
+/**
+ * Every framework identifier CoSAI maps onto has to have reference text, or the Frameworks
+ * tab shows a bare `AML.M0003` with nothing to read. Checked both ways: a mapped id with no
+ * entry fails the build, and an entry nobody maps to is reported so the file does not
+ * accumulate text for identifiers CoSAI has dropped.
+ *
+ * The exception is entries deliberately carried for frameworks whose full list we show —
+ * OWASP's ten and STRIDE's six — where an unmapped entry is the point: it is a visible gap
+ * in CoSAI's cross-reference.
+ */
+const FULL_LIST_FRAMEWORKS = new Set(["owasp-top10-llm", "stride"]);
+
+function checkFrameworkEntries(
+  declared: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>,
+  ctx: { frameworks: Framework[]; risks: Risk[]; controls: Control[]; personas: Persona[] },
+): Record<string, Record<string, FrameworkEntryInfo>> {
+  const out: Record<string, Record<string, FrameworkEntryInfo>> = {};
+  const frameworkIds = new Set(ctx.frameworks.map((f) => f.id));
+
+  for (const id of Object.keys(declared)) {
+    if (!frameworkIds.has(id)) fail(`framework entries: "${id}" is not a CoSAI framework`);
+  }
+
+  let total = 0;
+  for (const framework of ctx.frameworks) {
+    const entries = declared[framework.id]?.entries ?? {};
+    out[framework.id] = entries;
+
+    const mapped = new Set<string>();
+    for (const item of [...ctx.risks, ...ctx.controls, ...ctx.personas]) {
+      for (const value of item.mappings?.[framework.id] ?? []) mapped.add(value.split("@")[0]);
+    }
+
+    for (const id of mapped) {
+      const entry = entries[id];
+      if (!entry) {
+        fail(`framework entries: ${framework.id} "${id}" is mapped by CoSAI but has no entry`);
+        continue;
+      }
+      if (!entry.label?.trim()) fail(`framework entries: ${framework.id} "${id}" has no label`);
+      if (!entry.description?.trim())
+        fail(`framework entries: ${framework.id} "${id}" has no description`);
+    }
+    for (const id of Object.keys(entries)) {
+      if (!mapped.has(id) && !FULL_LIST_FRAMEWORKS.has(framework.id)) {
+        fail(`framework entries: ${framework.id} "${id}" has an entry but CoSAI maps nothing to it`);
+      }
+    }
+    total += Object.keys(entries).length;
+  }
+
+  console.log(`framework entries: ${total} identifiers carry reference text`);
+  return out;
 }
 
 /**

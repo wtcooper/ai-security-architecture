@@ -1,5 +1,5 @@
 import raw from "@/data/generated/dataset.json";
-import { ACTORS } from "./map-layout";
+import { ACTORS, actorById } from "./map-layout";
 import { DISPLAY_NAME } from "./naming";
 import type { Component, Control, Dataset, Persona, Risk, RiskOverlay } from "./types";
 
@@ -14,6 +14,7 @@ export const {
   controlCategories,
   personas,
   frameworks,
+  frameworkEntries,
   lifecycleStages,
   impactTypes,
   actorAccessLevels,
@@ -41,6 +42,19 @@ const actorLabel = new Map(ACTORS.map((a) => [a.id, a.label]));
 
 /** Boundary actors are not CoSAI components but can be named by risks and incidents. */
 export const isActor = (id: string) => actorLabel.has(id);
+export { actorById };
+
+/**
+ * Every incident step that names this component or actor. The boundary actors carry no CoSAI
+ * risks or controls of their own, so the incidents are the only thing that gives them content.
+ */
+export function incidentStepsFor(targetId: string) {
+  return incidents.flatMap((incident) =>
+    incident.steps
+      .filter((step) => step.components.includes(targetId))
+      .map((step) => ({ incident, step })),
+  );
+}
 
 /**
  * What a component is called throughout the UI. See src/lib/naming.ts — CoSAI's titles are

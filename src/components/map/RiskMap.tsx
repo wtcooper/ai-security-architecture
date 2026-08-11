@@ -223,6 +223,7 @@ export function RiskMap({
           active={activeSet.has(actor.id)}
           style={style}
           stepMark={stepMarks?.[actor.id]}
+          onSelect={select}
         />
       ))}
 
@@ -594,16 +595,35 @@ function MapActor({
   active,
   style,
   stepMark,
+  onSelect,
 }: {
   actor: Actor;
   active: boolean;
   style: { stroke: string; fill: string; badge: string };
   stepMark?: number;
+  onSelect?: (id: string) => void;
 }) {
   const cx = actor.x + actor.w / 2;
   const cy = actor.y + actor.h / 2;
+  const interactive = Boolean(onSelect);
   return (
-    <g>
+    <g
+      onClick={interactive ? () => onSelect?.(actor.id) : undefined}
+      style={{ cursor: interactive ? "pointer" : "default" }}
+      tabIndex={interactive ? 0 : undefined}
+      role={interactive ? "button" : undefined}
+      aria-label={interactive ? actor.label : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect?.(actor.id);
+              }
+            }
+          : undefined
+      }
+    >
       <path
         d={actor.d}
         fill="none"

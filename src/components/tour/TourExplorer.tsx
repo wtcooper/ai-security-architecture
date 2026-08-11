@@ -104,7 +104,10 @@ export function TourExplorer() {
           </h1>
           <p className="mt-1.5 text-[13px] text-ink-3">
             {riskCategories.find((c) => c.id === risk.category)?.title}
-            {overlay?.source === "saif" && " · mapping from Google SAIF"}
+            {overlay &&
+              (overlay.source === "saif"
+                ? " · highlights from Google SAIF"
+                : " · highlights authored here")}
           </p>
         </div>
 

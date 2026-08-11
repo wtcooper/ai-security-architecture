@@ -29,6 +29,26 @@ This is factual mapping data (risk → component identifiers), used only as a se
 own `data/overlay/risk-components.yaml`. No SAIF prose or artwork is redistributed here —
 all displayed descriptions come from the Apache-2.0 CoSAI-RM snapshot above.
 
+## Framework entry reference text
+
+`data/frameworks/entries.yaml` gives every external-framework identifier CoSAI maps onto a
+name and a one-sentence description. CoSAI publishes bare identifiers only, so without this
+the Frameworks tab shows `AML.M0003` with nothing to read. Each block records its own source:
+
+- **MITRE ATLAS** — `dist/ATLAS.yaml` at tag `v5.0.1`, the version CoSAI's mappings declare.
+  Labels are ATLAS names verbatim; descriptions are the first sentence of the ATLAS
+  description. Two identifiers CoSAI stamps `@5.0.1` (`AML.T0034.002`, `AML.M0028`) were not
+  defined until later; their text comes from `v5.6.0` and each carries a note saying so.
+- **OWASP Top 10 for LLM 2025** — OWASP's titles, with one-sentence summaries written here.
+- **STRIDE** — the standard definitions of the six categories.
+- **NIST AI RMF 1.0** — subcategory text verbatim from the NIST AI RMF Playbook
+  (`airc.nist.gov`). The short labels are ours; NIST publishes the subcategories without one.
+- **ISO/IEC 22989:2022** — clause 5 ecosystem roles, summarised here.
+
+`npm run data` fails if CoSAI maps to an identifier with no entry, and reports any entry
+nothing maps to — except for OWASP and STRIDE, where the full published list is shown on
+purpose so unmapped entries read as gaps in CoSAI's cross-reference.
+
 ## Overlay
 
 `data/overlay/risk-components.yaml` is original work in this repository. Each entry records

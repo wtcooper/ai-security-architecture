@@ -34,6 +34,17 @@ export interface Framework {
   applicableTo?: string[];
 }
 
+/**
+ * What one external-framework identifier means, in that framework's own words. CoSAI
+ * publishes bare ids; this is the reference text for them. See data/frameworks/entries.yaml.
+ */
+export interface FrameworkEntryInfo {
+  label: string;
+  description: string;
+  /** Set where the framework's own data disagrees with the version CoSAI declares. */
+  note?: string;
+}
+
 export interface ComponentCategory {
   id: string;
   title: string;
@@ -176,6 +187,8 @@ export interface Dataset {
   controlCategories: { id: string; title: string }[];
   personas: Persona[];
   frameworks: Framework[];
+  /** framework id -> entry id -> reference text. */
+  frameworkEntries: Record<string, Record<string, FrameworkEntryInfo>>;
   lifecycleStages: Vocabulary[];
   impactTypes: Vocabulary[];
   actorAccessLevels: Vocabulary[];

@@ -201,7 +201,8 @@ export const BOXES: Box[] = [
 ];
 
 /**
- * 30 of CoSAI's 32 edges. Routed short and local, in SAIF's idiom.
+ * 26 of CoSAI's 32 edges. Routed short and local, in SAIF's idiom. The other six are the
+ * two shown by nesting and the four listed as deliberately undrawn, below.
  */
 export const EDGES: Edge[] = [
   // --- Model creation, bottom up -------------------------------------------------------
@@ -340,6 +341,7 @@ export const EDGE_DEVIATIONS: { from: string; to: string; reason: string }[] = [
  */
 export interface Actor {
   id: string;
+  /** Drawn on the pill, and used everywhere the actor is named. Unique across actors. */
   label: string;
   /** Highlight pill. */
   x: number;
@@ -353,6 +355,8 @@ export interface Actor {
   /** One-way flows get an arrowhead; boundaries that carry traffic both ways do not. */
   directed?: boolean;
   hint: string;
+  /** What the actor's connector meets — a component id, or a group id. */
+  borders: string[];
 }
 
 export const ACTORS: Actor[] = [
@@ -365,6 +369,7 @@ export const ACTORS: Actor[] = [
     h: 24,
     d: "M 560 -16 L 560 38",
     hint: "The person the system acts for — and the untrusted side of the application boundary.",
+    borders: ["componentApplication"],
   },
   {
     id: "actorExternalSources",
@@ -376,10 +381,11 @@ export const ACTORS: Actor[] = [
     rotated: true,
     d: "M 948 258 L 1004 258",
     hint: "Third-party services, tool registries, package proxies and content the agent reaches out to at runtime.",
+    borders: ["agent"],
   },
   {
     id: "actorExternalData",
-    label: "External Sources",
+    label: "External Data",
     x: 484,
     y: 1046,
     w: 152,
@@ -387,10 +393,12 @@ export const ACTORS: Actor[] = [
     d: "M 560 1046 L 560 1022",
     directed: true,
     hint: "Data gathered from outside the organisation before it ever reaches the pipeline.",
+    borders: ["componentDataSources"],
   },
 ];
 
 export const ACTOR_IDS = ACTORS.map((a) => a.id);
+export const actorById = new Map(ACTORS.map((a) => [a.id, a]));
 
 export const CAPTIONS: Caption[] = [
   { text: "Orchestration", x: 580, y: 132, small: true },

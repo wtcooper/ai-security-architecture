@@ -71,9 +71,11 @@ CoSAI does not declare, or if a CoSAI edge is neither drawn, nested, nor documen
 - **One contradiction in the source data.** CoSAI's edges route the application out through
   Output Handling and back in through Input Handling; its own prose says output handling guards
   "dangerous outputs from a model". The map follows the prose, which is also SAIF's reading.
-- **The boundary is drawn.** The User, and external sources on both the agent and data sides,
-  appear as dashed actors. CoSAI models the system and not what sits outside it — but most of the
-  2026 incidents happen exactly there, so risks and incident steps can name them.
+- **The boundary is drawn.** Three dashed actors — **User**, **External Sources** on the agent
+  side and **External Data** upstream of the pipeline — mark where untrusted input crosses in.
+  CoSAI models the system and not what sits outside it, so none of the three is a component and
+  none carries a CoSAI risk or control; but most of the 2026 incidents happen exactly there, so
+  incident steps name them and the Components tab explains each one.
 
 `docs/AUDIT.md` is generated from the data and lists every one of these, with reasons.
 
@@ -99,7 +101,7 @@ provenances:
 | --- | --- |
 | **Landing** | What this is, how to read the three phases, where the data comes from. |
 | **Risk Map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
+| **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
@@ -129,8 +131,14 @@ The frameworks apply to different things, and CoSAI is explicit about which:
 Nothing maps to components, so the mapping block was removed from that tab rather than left
 rendering nothing.
 
-Two things fall out of this that are worth having:
+Three things fall out of this that are worth having:
 
+- **Every identifier says what it means.** CoSAI publishes bare ids — `AML.M0003`,
+  `MEASURE-2.7` — which are unreadable unless you know the framework by heart.
+  [`data/frameworks/entries.yaml`](data/frameworks/entries.yaml) gives all 71 a name and a
+  one-sentence description, taken from each framework's own text and sourced in
+  [`data/PROVENANCE.md`](data/PROVENANCE.md). The build fails if CoSAI maps to an identifier
+  that has none.
 - **Selecting an entry highlights the map.** "OWASP LLM01: Prompt Injection" becomes a picture
   of the components its mapped risks touch, at whichever phase you choose. It turns a
   compliance identifier into an architecture.

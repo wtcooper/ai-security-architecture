@@ -9,15 +9,17 @@ import { PageHeader } from "@/components/Panel";
 import { Prose } from "@/components/Prose";
 import { PHASE_META } from "@/components/PhaseRail";
 import {
+  actorById,
   componentById,
   componentCategories,
   components,
   componentTitle,
   controlsForComponent,
+  incidentStepsFor,
   risksForComponent,
 } from "@/lib/data";
 import { HANDLING_EXPLAINER, notesFor } from "@/lib/deviations";
-import { GROUP_IDS, GROUPS } from "@/lib/map-layout";
+import { ACTORS, GROUP_IDS, GROUPS, type Actor } from "@/lib/map-layout";
 import type { Phase } from "@/lib/types";
 
 const SUBCATEGORY_TITLES = new Map(
@@ -31,9 +33,10 @@ export function ComponentsBrowser() {
   // A ?component= link wins until the visitor picks something on the map themselves.
   const linked = params.get("component");
   const isTarget = (id: string | null) =>
-    Boolean(id) && (componentById.has(id!) || GROUP_IDS.includes(id!));
+    Boolean(id) && (componentById.has(id!) || GROUP_IDS.includes(id!) || actorById.has(id!));
   const selected = clicked ?? (isTarget(linked) ? linked! : components[0].id);
 
+  const actor = actorById.get(selected);
   const group = GROUPS.find((g) => g.id === selected);
   const component = componentById.get(selected);
   const risks = risksForComponent(selected);
@@ -53,7 +56,8 @@ export function ComponentsBrowser() {
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-6 py-8 lg:flex-row">
         <div className="min-w-0 flex-1">
           <p className="text-[13px] text-ink-3">
-            Click any of the 23 components
+            Click any of the 23 components, the Agent group, or the {ACTORS.length} dashed
+            boundary actors
           </p>
           <RiskMap
             phase="introduced"
@@ -65,7 +69,9 @@ export function ComponentsBrowser() {
         </div>
 
         <aside className="lg:w-[420px] xl:w-[460px] shrink-0">
-          {group ? (
+          {actor ? (
+            <ActorPanel actor={actor} onSelect={setClicked} />
+          ) : group ? (
             <div className="sticky top-20 rounded-xl border border-line bg-paper p-6">
               <p className="eyebrow">Grouping · not a CoSAI component</p>
               <h2 className="display mt-1.5 text-[24px] font-bold leading-tight text-ink">
@@ -171,6 +177,83 @@ export function ComponentsBrowser() {
         </aside>
       </div>
     </>
+  );
+}
+
+/**
+ * The User and the two external-source actors. CoSAI models the system and not what sits
+ * outside it, so none of these is a component and none carries CoSAI risks or controls — but
+ * they are where untrusted input crosses in, which is where most of the 2026 incidents live.
+ * The incident steps are what gives them their content.
+ */
+function ActorPanel({ actor, onSelect }: { actor: Actor; onSelect: (id: string) => void }) {
+  const steps = incidentStepsFor(actor.id);
+  return (
+    <div className="sticky top-20 rounded-xl border border-line bg-paper p-6">
+      <p className="eyebrow">Boundary actor · not a CoSAI component</p>
+      <h2 className="display mt-1.5 text-[24px] font-bold leading-tight text-ink">
+        {actor.label}
+      </h2>
+      <p className="mt-4 text-[14px] leading-relaxed text-ink-2">{actor.hint}</p>
+
+      <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="eyebrow shrink-0">Borders</span>
+        <span className="text-[13px] text-ink-2">
+          {actor.borders
+            .map((id) => GROUPS.find((g) => g.id === id)?.label ?? componentTitle(id))
+            .join(" · ")}
+        </span>
+      </div>
+
+      <div className="mt-5 rounded-lg border-l-[3px] border-line-strong bg-mist py-3.5 pl-4 pr-4">
+        <p className="eyebrow">Why this is drawn at all</p>
+        <p className="mt-2 text-[13px] leading-snug text-ink-2">
+          CoSAI&rsquo;s components stop at the edge of the system, so there is no upstream
+          entry for the user or the outside world — and therefore no CoSAI risk or control
+          attached to either. SAIF drew them, and most of the 2026 incidents cross exactly
+          these boundaries, so each is drawn dashed: highlightable, nameable by an incident
+          step, and explicitly outside the taxonomy.
+        </p>
+      </div>
+
+      <div className="mt-6">
+        <p className="eyebrow">
+          {steps.length} incident step{steps.length === 1 ? "" : "s"} cross this boundary
+        </p>
+        {steps.length === 0 ? (
+          <p className="mt-2 text-[13px] leading-snug text-ink-2">
+            None of the five incidents replayed here is an attack on the training-data supply,
+            so nothing currently names this boundary. It is drawn because the pipeline starts
+            outside the organisation whether or not this set of case studies exercises it.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {steps.map(({ incident, step }) => (
+              <li key={`${incident.id}-${step.n}`}>
+                <Link
+                  href="/examples"
+                  className="text-[13.5px] text-ink-2 transition-colors hover:text-introduced"
+                >
+                  <span className="ident">{step.n}</span> {step.title}
+                </Link>
+                <span className="block text-[12px] text-ink-3">{incident.title}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <p className="eyebrow">Other boundary actors</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {ACTORS.filter((a) => a.id !== actor.id).map((a) => (
+            <button key={a.id} onClick={() => onSelect(a.id)}>
+              <Chip>{a.label}</Chip>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
