@@ -1,13 +1,22 @@
-# CoSAI Risk Map Explorer
+# AI Risk Map
 
-An interactive walkthrough of the [CoSAI Risk Map](https://github.com/cosai-oasis/secure-ai-tooling/tree/main/risk-map) — the successor to Google's SAIF Map after SAIF was donated to the Coalition for Secure AI at OASIS.
+A recreation of [Google's SAIF Map](https://saif.google/secure-ai-framework), rebuilt on the
+broader taxonomy that succeeded it — the [CoSAI Risk Map](https://github.com/cosai-oasis/secure-ai-tooling/tree/main/risk-map),
+which Google's SAIF became after donation to the Coalition for Secure AI at OASIS.
 
-CoSAI-RM publishes a much broader taxonomy than SAIF (36 risks vs 15, with a full agentic component breakdown) but ships as YAML with no interactive front end. This is that front end, plus an **Examples** tab that replays real AI security incidents on the same map.
+CoSAI-RM publishes a much broader taxonomy than SAIF (36 risks vs 15, with a full agentic
+component breakdown) but ships as YAML with no interactive front end. This is that front end,
+plus an **Examples** tab that replays real AI security incidents on the same map.
+
+**The taxonomy is CoSAI's; the composition is SAIF's**, because that layout is what makes the
+diagram readable. Everywhere the two disagree the choice is declared, checked at build time,
+and shown in the product on the component it affects.
 
 ## Tabs
 
 | Tab | What it does |
 | --- | --- |
+| **Landing** | What this is, how to read it, and where the data comes from. |
 | **Risk Map** | Step through all 36 risks × 3 phases. For each, the map highlights where the risk is **introduced**, **exposed** and **mitigated**, and names the controls. |
 | **Components** | Click any component on the map for its description, data flow, the risks that touch it, and the controls that protect it. |
 | **Risks** | All 36 risks by category — descriptions, personas, lifecycle/impact/attacker-access facets, framework mappings, linked controls. |
@@ -39,19 +48,21 @@ One diagram shows all **23** CoSAI components, with the agent and its orchestrat
 expanded. Two properties are asserted on every build, so this is checkable rather than a
 claim:
 
-- **Bands are computed, not chosen.** Each component's band comes from its own `category` /
-  `subcategory` in `components.yaml` (`src/lib/bands.ts`). CoSAI has three categories; the
-  four-band stack is recovered by splitting Infrastructure along its own two subcategories.
-  Eleven components therefore sit in a different band than SAIF drew them — Training &
-  Tuning, Evaluation and Frameworks are Model components in CoSAI, orchestration is a Model
-  concern rather than an Application one, and Data Storage is a Data component.
-- **Arrows are the CoSAI edge graph.** All 32 edges are drawn and nothing else is. The build
-  compares the drawn set against `components.yaml` and fails on any addition, omission or
-  reversal.
+- **Bands start from CoSAI.** Each component's band comes from its own `category` /
+  `subcategory` in `components.yaml`. CoSAI has three categories; the four-band stack is
+  recovered by splitting Infrastructure along its own two subcategories, which is also why the
+  bands are named **Model Infrastructure** and **Data Infrastructure**. Eight components are
+  drawn elsewhere — the agent's orchestration, and the model-creation processes — each declared
+  in `BAND_DEVIATIONS` with a reason. The build fails on any undeclared divergence.
+- **Every arrow is a CoSAI edge.** Nothing is invented. 30 of CoSAI's 32 edges are drawn; the
+  two omitted are long-haul duplicates listed in `UNDRAWN_EDGES` with reasons, and both remain
+  visible on the Components tab. Four are drawn in the opposite direction to CoSAI's edge list,
+  declared in `EDGE_DEVIATIONS` — CoSAI's edges and its own prose contradict each other on the
+  application input/output round trip, and the map follows the prose, which is also SAIF's
+  reading.
 
-`docs/AUDIT.md` lists every placement, every edge, and one genuine contradiction found in the
-upstream data (CoSAI's edges and its prose disagree on the direction of the application
-input/output handling round trip — the map follows the edges).
+`docs/AUDIT.md` lists every placement, every edge, every deviation and every authored
+judgement.
 
 ## How the map knows what to highlight
 

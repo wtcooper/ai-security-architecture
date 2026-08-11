@@ -22,9 +22,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CoSAI Risk Map Explorer",
+  title: "AI Risk Map",
   description:
-    "Interactive walkthrough of the CoSAI Risk Map: where AI risks are introduced, exposed and mitigated across the components of an AI system.",
+    "An interactive map of AI security risk: where each risk is introduced, exposed and mitigated across the components of an AI system.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

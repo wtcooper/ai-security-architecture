@@ -25,7 +25,7 @@ import type {
 } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { BANDS, BOXES, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import { BANDS, BOXES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 
 const ROOT = process.cwd();
 const COSAI_DIR = join(ROOT, "data", "cosai");
@@ -321,19 +321,33 @@ function checkMapFidelity(components: Component[]) {
   }
   const drawnEdges = new Set(EDGES.map((e) => `${e.from} -> ${e.to}`));
   const undrawn = new Set(UNDRAWN_EDGES.map((e) => `${e.from} -> ${e.to}`));
+  const flipped = new Set(EDGE_DEVIATIONS.map((e) => `${e.from} -> ${e.to}`));
+  const reverse = (edge: string) => edge.split(" -> ").reverse().join(" -> ");
 
   if (drawnEdges.size !== EDGES.length) fail("map edges: the same edge is drawn twice");
   for (const edge of drawnEdges) {
-    if (!cosaiEdges.has(edge)) fail(`map edges: the map draws "${edge}", which CoSAI does not declare`);
+    if (cosaiEdges.has(edge)) continue;
+    // A drawn edge CoSAI does not declare is only allowed if it is a declared direction
+    // flip of an edge CoSAI does declare.
+    if (flipped.has(edge) && cosaiEdges.has(reverse(edge))) continue;
+    fail(`map edges: the map draws "${edge}", which CoSAI does not declare`);
+  }
+  for (const e of EDGE_DEVIATIONS) {
+    const edge = `${e.from} -> ${e.to}`;
+    if (!drawnEdges.has(edge)) fail(`map edges: EDGE_DEVIATIONS names "${edge}", which is not drawn`);
+    if (!cosaiEdges.has(reverse(edge))) {
+      fail(`map edges: EDGE_DEVIATIONS claims "${edge}" flips a CoSAI edge, but CoSAI has no "${reverse(edge)}"`);
+    }
+    if (!e.reason?.trim()) fail(`map edges: direction deviation ${edge} has no reason`);
   }
   for (const edge of undrawn) {
     if (!cosaiEdges.has(edge)) fail(`map edges: UNDRAWN_EDGES names "${edge}", which CoSAI does not declare`);
     if (drawnEdges.has(edge)) fail(`map edges: "${edge}" is both drawn and listed as undrawn`);
   }
+  const flippedSources = new Set([...flipped].map(reverse));
   for (const edge of cosaiEdges) {
-    if (!drawnEdges.has(edge) && !undrawn.has(edge)) {
-      fail(`map edges: CoSAI declares "${edge}" but it is neither drawn nor documented as undrawn`);
-    }
+    if (drawnEdges.has(edge) || undrawn.has(edge) || flippedSources.has(edge)) continue;
+    fail(`map edges: CoSAI declares "${edge}" but it is neither drawn nor documented as undrawn`);
   }
   for (const e of UNDRAWN_EDGES) {
     if (!e.reason?.trim()) fail(`map edges: undrawn edge ${e.from} -> ${e.to} has no reason`);
@@ -342,7 +356,8 @@ function checkMapFidelity(components: Component[]) {
   console.log(
     `map fidelity: ${drawn.length}/${declared.size} components placed ` +
       `(${deviations} documented band deviations), ` +
-      `${drawnEdges.size}/${cosaiEdges.size} edges drawn, ${undrawn.size} documented as undrawn`,
+      `${drawnEdges.size}/${cosaiEdges.size} edges drawn ` +
+      `(${flipped.size} direction deviations), ${undrawn.size} documented as undrawn`,
   );
 }
 

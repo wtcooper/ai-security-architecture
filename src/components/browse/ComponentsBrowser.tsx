@@ -16,6 +16,7 @@ import {
   controlsForComponent,
   risksForComponent,
 } from "@/lib/data";
+import { HANDLING_EXPLAINER, notesFor } from "@/lib/deviations";
 import type { Phase } from "@/lib/types";
 
 const SUBCATEGORY_TITLES = new Map(
@@ -35,11 +36,13 @@ export function ComponentsBrowser() {
   const risks = risksForComponent(selected);
   const controls = controlsForComponent(selected);
   const category = componentCategories.find((c) => c.id === component.category);
+  const notes = notesFor(selected);
+  const isHandling = selected.toLowerCase().includes("handling");
 
   return (
     <>
       <PageHeader
-        eyebrow={`${components.length} components · CoSAI Risk Map`}
+        eyebrow={`${components.length} components · CoSAI taxonomy`}
         title="Components"
         lead="The building blocks of an AI system. Pick one on the map to see what it does, which risks touch it, and which controls protect it."
       />
@@ -76,8 +79,36 @@ export function ComponentsBrowser() {
               className="mt-4 max-h-64 overflow-y-auto"
             />
 
-            <Flow label="Receives from" ids={component.edges?.from} />
-            <Flow label="Sends to" ids={component.edges?.to} />
+            <Flow label="Receives from (CoSAI)" ids={component.edges?.from} />
+            <Flow label="Sends to (CoSAI)" ids={component.edges?.to} />
+
+            {notes.length > 0 && (
+              <div className="mt-5 rounded-lg border-l-[3px] border-line-strong bg-mist py-3.5 pl-4 pr-4">
+                <p className="eyebrow">How the map differs from CoSAI here</p>
+                <ul className="mt-2 space-y-2">
+                  {notes.map((n, i) => (
+                    <li key={i} className="text-[13px] leading-snug text-ink-2">
+                      {n.text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {isHandling && (
+              <details className="mt-4 rounded-lg border border-line px-4 py-3">
+                <summary className="cursor-pointer text-[13px] font-semibold text-ink">
+                  {HANDLING_EXPLAINER.title}
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {HANDLING_EXPLAINER.body.map((para) => (
+                    <p key={para} className="text-[13px] leading-relaxed text-ink-2">
+                      {para}
+                    </p>
+                  ))}
+                </div>
+              </details>
+            )}
 
             <div className="mt-6">
               <p className="eyebrow">{risks.length} risks touch this component</p>
@@ -85,7 +116,7 @@ export function ComponentsBrowser() {
                 {risks.map(({ risk, phases }) => (
                   <li key={risk.id} className="flex items-start justify-between gap-3">
                     <Link
-                      href={`/?risk=${risk.id}&phase=${phases[0]}`}
+                      href={`/map?risk=${risk.id}&phase=${phases[0]}`}
                       className="text-[13.5px] text-ink-2 hover:text-introduced transition-colors"
                     >
                       {risk.title}

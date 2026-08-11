@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor } from "../src/lib/bands";
-import { EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import { EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 import type { Component, Control, Paragraph, Risk } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 
@@ -136,6 +136,12 @@ async function main() {
   }
   p();
   p(`${EDGES.length} edges drawn.`);
+  p();
+  p("### Edges drawn in the opposite direction");
+  p();
+  for (const e of EDGE_DEVIATIONS) {
+    p(`- **${title(e.from)} → ${title(e.to)}** — ${e.reason}`);
+  }
   p();
   p("### Declared edges not drawn");
   p();

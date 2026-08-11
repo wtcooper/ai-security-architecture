@@ -48,7 +48,7 @@ export function TourExplorer() {
 
   // Keep the address bar in step, so the current view is always shareable.
   useEffect(() => {
-    window.history.replaceState(null, "", `?risk=${risk.id}&phase=${phase}`);
+    window.history.replaceState(null, "", `/map?risk=${risk.id}&phase=${phase}`);
   }, [risk.id, phase]);
 
   useEffect(() => {

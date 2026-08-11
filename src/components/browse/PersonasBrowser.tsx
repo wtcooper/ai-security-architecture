@@ -30,7 +30,7 @@ export function PersonasBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`${activePersonas.length} personas · CoSAI Risk Map`}
+        eyebrow={`${activePersonas.length} personas · CoSAI taxonomy`}
         title="Personas"
         lead="Who owns what. CoSAI replaced SAIF's two roles with eight, so a risk or a control can name the party actually responsible for it."
       />

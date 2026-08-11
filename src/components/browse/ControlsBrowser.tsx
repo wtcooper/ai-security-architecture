@@ -36,7 +36,7 @@ export function ControlsBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`${controls.length} controls · CoSAI Risk Map`}
+        eyebrow={`${controls.length} controls · CoSAI taxonomy`}
         title="Controls"
         lead="Each control is a countermeasure, mapped to the components it protects and the risks it addresses. Assurance and governance controls apply across every risk."
       >

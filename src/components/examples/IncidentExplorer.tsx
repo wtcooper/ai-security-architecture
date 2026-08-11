@@ -91,7 +91,7 @@ export function IncidentExplorer() {
               <p className="eyebrow mt-5">CoSAI risks</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {step.risks.map((id) => (
-                  <Link key={id} href={`/?risk=${id}&phase=${step.phase}`}>
+                  <Link key={id} href={`/map?risk=${id}&phase=${step.phase}`}>
                     <Chip tone="exposed">{riskTitle(id)}</Chip>
                   </Link>
                 ))}

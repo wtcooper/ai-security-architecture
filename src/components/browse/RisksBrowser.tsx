@@ -37,7 +37,7 @@ export function RisksBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`${risks.length} risks · CoSAI Risk Map`}
+        eyebrow={`${risks.length} risks · CoSAI taxonomy`}
         title="Risks"
         lead="Each risk names a way an AI system can be attacked or fail, the components it touches, and the controls that address it."
       >
@@ -161,7 +161,7 @@ export function RisksBrowser() {
                         </div>
 
                         <Link
-                          href={`/?risk=${risk.id}&phase=introduced`}
+                          href={`/map?risk=${risk.id}&phase=introduced`}
                           className="mt-6 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
                         >
                           See it on the map →

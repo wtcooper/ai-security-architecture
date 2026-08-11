@@ -54,10 +54,10 @@ Every arrow on the map is an edge declared in `components.yaml` — nothing is i
 | Agent Output Handling | The Model |
 | Agent System Instructions | Agent Input Handling |
 | Agent User Query | Agent Input Handling |
-| Application | Application Output Handling |
+| Application | Application Input Handling |
 | Application | Agent Input Handling |
-| Application Input Handling | Application |
-| Application Output Handling | The Model |
+| Application Input Handling | The Model |
+| Application Output Handling | Application |
 | Data Filtering and Processing | Training Data |
 | Data Sources | Data Filtering and Processing |
 | Data Storage Infrastructure | Training and Tuning |
@@ -75,12 +75,19 @@ Every arrow on the map is an edge declared in `components.yaml` — nothing is i
 | Agent Reasoning Core | Agent Output Handling |
 | Agent Reasoning Core | Orchestration Input Handling |
 | The Model | Model Evaluation |
-| The Model | Application Input Handling |
+| The Model | Application Output Handling |
 | The Model | Agent Input Handling |
 | External Tools and Services | Orchestration Output Handling |
 | Training Data | Data Storage Infrastructure |
 
 30 edges drawn.
+
+### Edges drawn in the opposite direction
+
+- **Application → Application Input Handling** — CoSAI's edges route the application out through Output Handling and back in through Input Handling — an application-centric reading. Its own prose is model-centric: output handling "protects against dangerous outputs from a model". We draw the prose reading, which is also SAIF's: input handling guards what reaches the model, output handling guards what comes back.
+- **Application Input Handling → The Model** — Same swap — input handling sits on the path into the model.
+- **The Model → Application Output Handling** — Same swap — output handling sits on the path out of the model.
+- **Application Output Handling → Application** — Same swap — the handled model output returns to the application.
 
 ### Declared edges not drawn
 

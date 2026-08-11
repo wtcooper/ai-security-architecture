@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "Risk Map" },
+  { href: "/map", label: "Risk Map" },
   { href: "/components", label: "Components" },
   { href: "/risks", label: "Risks" },
   { href: "/controls", label: "Controls" },
@@ -21,14 +21,13 @@ export function SiteHeader() {
         <Link href="/" className="flex items-center gap-2.5 shrink-0">
           <MapGlyph />
           <span className="display text-[15px] font-bold leading-none">
-            CoSAI <span className="font-medium text-ink-2">Risk Map</span>
+            AI <span className="font-medium text-ink-2">Risk Map</span>
           </span>
         </Link>
 
         <nav aria-label="Sections" className="flex items-end gap-1 h-full -mb-px overflow-x-auto">
           {TABS.map((tab) => {
-            const active =
-              tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+            const active = pathname.startsWith(tab.href);
             return (
               <Link
                 key={tab.href}

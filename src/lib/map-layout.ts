@@ -121,19 +121,21 @@ export const BOXES: Box[] = [
   { id: "componentAgentInputHandling", label: "Agent Input Handling", x: 252, y: 258, w: 160, h: 36 },
 
   // --- Agent · orchestration -----------------------------------------------------------
-  { id: "componentOrchestrationInputHandling", label: "Input Handling", x: 470, y: 144, w: 240, h: 26, compact: true },
+  { id: "componentOrchestrationInputHandling", label: "Orchestration Input", x: 470, y: 144, w: 240, h: 26, compact: true },
   { id: "componentTools", label: "Tools (Autonomous Actions)", x: 470, y: 178, w: 240, h: 32 },
   { id: "componentRAGContent", label: "Content / RAG", x: 470, y: 216, w: 240, h: 32 },
   { id: "componentMemory", label: "Memory", x: 470, y: 254, w: 240, h: 32 },
-  { id: "componentOrchestrationOutputHandling", label: "Output Handling", x: 470, y: 294, w: 240, h: 26, compact: true },
+  { id: "componentOrchestrationOutputHandling", label: "Orchestration Output", x: 470, y: 294, w: 240, h: 26, compact: true },
 
   // --- Agent · rendering and core ------------------------------------------------------
   { id: "componentAgentOutputHandling", label: "Agent Output Handling", x: 760, y: 148, w: 160, h: 146 },
   { id: "componentReasoningCore", label: "Reasoning Core", x: 430, y: 340, w: 320, h: 44, emphasis: true },
 
   // --- Application core, model-facing --------------------------------------------------
-  { id: "componentApplicationOutputHandling", label: "Output Handling", x: 240, y: 420, w: 260, h: 34 },
-  { id: "componentApplicationInputHandling", label: "Input Handling", x: 620, y: 420, w: 260, h: 34 },
+  // Input Handling guards what reaches the model; Output Handling guards what comes back.
+  // That is SAIF's arrangement and what CoSAI's own prose describes; see EDGE_DEVIATIONS.
+  { id: "componentApplicationInputHandling", label: "App Input Handling", x: 240, y: 420, w: 260, h: 34 },
+  { id: "componentApplicationOutputHandling", label: "App Output Handling", x: 620, y: 420, w: 260, h: 34 },
 
   // --- Model core -----------------------------------------------------------------------
   { id: "componentTheModel", label: "MODEL", x: 240, y: 504, w: 640, h: 54, emphasis: true },
@@ -169,10 +171,12 @@ export const EDGES: Edge[] = [
   { from: "componentModelServing", to: "componentTheModel", d: "M 780 614 L 780 560" },
 
   // --- Application core round trip through the model ------------------------------------
-  { from: "componentApplication", to: "componentApplicationOutputHandling", d: "M 400 82 L 190 82 L 190 403 L 238 403" },
-  { from: "componentApplicationOutputHandling", to: "componentTheModel", d: "M 370 454 L 370 502" },
-  { from: "componentTheModel", to: "componentApplicationInputHandling", d: "M 750 504 L 750 456" },
-  { from: "componentApplicationInputHandling", to: "componentApplication", d: "M 880 437 L 962 437 L 962 61 L 882 61" },
+  // Drawn in SAIF's direction; CoSAI declares these four the other way round. See
+  // EDGE_DEVIATIONS for the reasoning.
+  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 400 82 L 190 82 L 190 403 L 238 403" },
+  { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 454 L 370 502" },
+  { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 456" },
+  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 880 437 L 962 437 L 962 61 L 882 61" },
 
   // --- Application drives the agent, and the agent answers -------------------------------
   { from: "componentApplication", to: "componentAgentInputHandling", d: "M 480 82 L 480 100 L 210 100 L 210 268 L 250 268", soft: true },
@@ -219,6 +223,39 @@ export const UNDRAWN_EDGES: { from: string; to: string; reason: string }[] = [
     reason:
       "Return leg of the same duplicate path; the drawn Orchestration → Reasoning Core → " +
       "Model route already carries it.",
+  },
+];
+
+/**
+ * Edges drawn in the opposite direction to CoSAI's declaration. CoSAI's edge list and its
+ * own prose disagree here, so one of them has to be picked; the build requires the choice
+ * to be declared, and the Components tab surfaces it to readers.
+ */
+export const EDGE_DEVIATIONS: { from: string; to: string; reason: string }[] = [
+  {
+    from: "componentApplication",
+    to: "componentApplicationInputHandling",
+    reason:
+      "CoSAI's edges route the application out through Output Handling and back in through " +
+      "Input Handling — an application-centric reading. Its own prose is model-centric: " +
+      "output handling \"protects against dangerous outputs from a model\". We draw the " +
+      "prose reading, which is also SAIF's: input handling guards what reaches the model, " +
+      "output handling guards what comes back.",
+  },
+  {
+    from: "componentApplicationInputHandling",
+    to: "componentTheModel",
+    reason: "Same swap — input handling sits on the path into the model.",
+  },
+  {
+    from: "componentTheModel",
+    to: "componentApplicationOutputHandling",
+    reason: "Same swap — output handling sits on the path out of the model.",
+  },
+  {
+    from: "componentApplicationOutputHandling",
+    to: "componentApplication",
+    reason: "Same swap — the handled model output returns to the application.",
   },
 ];
 
