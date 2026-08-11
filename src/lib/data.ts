@@ -1,5 +1,6 @@
 import raw from "@/data/generated/dataset.json";
 import { ACTORS } from "./map-layout";
+import { DISPLAY_NAME } from "./naming";
 import type { Component, Control, Dataset, Persona, Risk, RiskOverlay } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -36,37 +37,18 @@ const vocab = new Map(
 );
 export const vocabTitle = (id: string) => vocab.get(id) ?? id;
 
-/**
- * CoSAI reuses "Input Handling" and "Output Handling" across the application, orchestration
- * and agent layers. On its own that title is ambiguous, so qualify the ones that collide.
- */
-const QUALIFIER: Record<string, string> = {
-  componentApplicationInputHandling: "Application",
-  componentApplicationOutputHandling: "Application",
-  componentOrchestrationInputHandling: "Orchestration",
-  componentOrchestrationOutputHandling: "Orchestration",
-  componentAgentInputHandling: "Agent",
-  componentAgentOutputHandling: "Agent",
-};
-
-const duplicateTitles = new Set(
-  components.map((c) => c.title).filter((t, i, all) => all.indexOf(t) !== i),
-);
-
 const actorLabel = new Map(ACTORS.map((a) => [a.id, a.label]));
 
 /** Boundary actors are not CoSAI components but can be named by risks and incidents. */
 export const isActor = (id: string) => actorLabel.has(id);
 
-export const componentTitle = (id: string) => {
-  const actor = actorLabel.get(id);
-  if (actor) return actor;
-  const component = componentById.get(id);
-  if (!component) return id;
-  return duplicateTitles.has(component.title) && QUALIFIER[id]
-    ? `${QUALIFIER[id]} ${component.title}`
-    : component.title;
-};
+/**
+ * What a component is called throughout the UI. See src/lib/naming.ts — CoSAI's titles are
+ * built for a table and collide on a diagram, so a small number are renamed, consistently
+ * everywhere. CoSAI's own title is always shown on the Components tab.
+ */
+export const componentTitle = (id: string) =>
+  actorLabel.get(id) ?? DISPLAY_NAME[id] ?? componentById.get(id)?.title ?? id;
 export const riskTitle = (id: string) => riskById.get(id)?.title ?? id;
 export const controlTitle = (id: string) => controlById.get(id)?.title ?? id;
 export const personaTitle = (id: string) => personaById.get(id)?.title ?? id;

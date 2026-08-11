@@ -25,7 +25,15 @@ import type {
 } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { ACTOR_IDS, BANDS, BOXES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import {
+  ACTOR_IDS,
+  BANDS,
+  BOXES,
+  CONTAINMENT_EDGES,
+  EDGE_DEVIATIONS,
+  EDGES,
+  UNDRAWN_EDGES,
+} from "../src/lib/map-layout";
 
 const ROOT = process.cwd();
 const COSAI_DIR = join(ROOT, "data", "cosai");
@@ -324,6 +332,7 @@ function checkMapFidelity(components: Component[]) {
   }
   const drawnEdges = new Set(EDGES.map((e) => `${e.from} -> ${e.to}`));
   const undrawn = new Set(UNDRAWN_EDGES.map((e) => `${e.from} -> ${e.to}`));
+  const contained = new Set(CONTAINMENT_EDGES.map((e) => `${e.from} -> ${e.to}`));
   const flipped = new Set(EDGE_DEVIATIONS.map((e) => `${e.from} -> ${e.to}`));
   const reverse = (edge: string) => edge.split(" -> ").reverse().join(" -> ");
 
@@ -349,18 +358,21 @@ function checkMapFidelity(components: Component[]) {
   }
   const flippedSources = new Set([...flipped].map(reverse));
   for (const edge of cosaiEdges) {
-    if (drawnEdges.has(edge) || undrawn.has(edge) || flippedSources.has(edge)) continue;
+    if (drawnEdges.has(edge) || undrawn.has(edge) || contained.has(edge) || flippedSources.has(edge)) continue;
     fail(`map edges: CoSAI declares "${edge}" but it is neither drawn nor documented as undrawn`);
   }
-  for (const e of UNDRAWN_EDGES) {
-    if (!e.reason?.trim()) fail(`map edges: undrawn edge ${e.from} -> ${e.to} has no reason`);
+  for (const e of [...UNDRAWN_EDGES, ...CONTAINMENT_EDGES]) {
+    const edge = `${e.from} -> ${e.to}`;
+    if (!cosaiEdges.has(edge)) fail(`map edges: "${edge}" is documented but CoSAI does not declare it`);
+    if (!e.reason?.trim()) fail(`map edges: ${edge} has no reason`);
   }
 
   console.log(
     `map fidelity: ${drawn.length}/${declared.size} components placed ` +
       `(${deviations} documented band deviations), ` +
       `${drawnEdges.size}/${cosaiEdges.size} edges drawn ` +
-      `(${flipped.size} direction deviations), ${undrawn.size} documented as undrawn`,
+      `(${flipped.size} direction deviations), ${contained.size} shown by nesting, ` +
+      `${undrawn.size} documented as undrawn`,
   );
 }
 

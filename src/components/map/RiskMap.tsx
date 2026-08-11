@@ -16,6 +16,7 @@ import {
   type Actor,
   type Box,
 } from "@/lib/map-layout";
+import { componentTitle } from "@/lib/data";
 import type { Phase } from "@/lib/types";
 
 const PHASE_STYLE: Record<Phase, { stroke: string; fill: string; badge: string }> = {
@@ -257,13 +258,17 @@ interface MapBoxProps {
 function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: MapBoxProps) {
   const t = BAND_TOKENS[bandOf(box.y)];
   const interactive = Boolean(onSelect);
+  const label = componentTitle(box.id);
   const labelSize = box.emphasis ? 16 : box.compact ? 10.5 : 12.5;
 
+  // Group boxes carry their title at the top, leaving room for the children inside.
+  const titleY = box.group ? box.y + 22 : box.y + box.h / 2;
+
   // Long labels in narrow boxes wrap onto two lines.
-  const words = box.label.split(" ");
-  const wrap = !box.emphasis && !box.compact && box.label.length > 18 && box.w < 200;
+  const words = label.split(" ");
+  const wrap = !box.emphasis && !box.compact && !box.group && label.length > 18 && box.w < 220;
   const mid = Math.ceil(words.length / 2);
-  const lines = wrap ? [words.slice(0, mid).join(" "), words.slice(mid).join(" ")] : [box.label];
+  const lines = wrap ? [words.slice(0, mid).join(" "), words.slice(mid).join(" ")] : [label];
 
   return (
     <g
@@ -271,7 +276,7 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
       style={{ cursor: interactive ? "pointer" : "default" }}
       tabIndex={interactive ? 0 : undefined}
       role={interactive ? "button" : undefined}
-      aria-label={interactive ? `${box.label}${active ? `, ${phase}` : ""}` : undefined}
+      aria-label={interactive ? `${label}${active ? `, ${phase}` : ""}` : undefined}
       onKeyDown={
         interactive
           ? (e) => {
@@ -288,21 +293,23 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
         y={box.y}
         width={box.w}
         height={box.h}
-        rx={7}
-        fill={active ? style.fill : "var(--paper)"}
+        rx={box.group ? 10 : 7}
+        fill={active ? style.fill : box.group ? t.fill : "var(--paper)"}
         stroke={active ? style.stroke : t.edge}
         strokeWidth={active ? 2 : 1.25}
-        opacity={active ? 1 : 0.9}
+        opacity={active ? 1 : box.group ? 0.75 : 0.9}
         style={{ transition: "fill 200ms, stroke 200ms, opacity 200ms" }}
       />
       <text
         x={box.x + box.w / 2}
-        y={box.y + box.h / 2}
+        y={titleY}
         textAnchor="middle"
         dominantBaseline="central"
-        fill={active ? "var(--ink)" : "var(--ink-2)"}
+        fill={active ? "var(--ink)" : box.group ? "var(--ink-2)" : "var(--ink-2)"}
         style={{
-          font: `${box.emphasis ? 600 : 500} ${labelSize}px var(--font-display), sans-serif`,
+          font: `${box.emphasis || box.group ? 600 : 500} ${
+            box.group ? 14 : labelSize
+          }px var(--font-display), sans-serif`,
           letterSpacing: box.emphasis ? "-0.01em" : "0",
           pointerEvents: "none",
           transition: "fill 200ms",
@@ -314,6 +321,23 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
           </tspan>
         ))}
       </text>
+
+      {box.sublabel && (
+        <text
+          x={box.x + box.w / 2}
+          y={box.y + 39}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="var(--ink-3)"
+          style={{
+            font: "400 10.5px var(--font-mono-id), monospace",
+            letterSpacing: "0.03em",
+            pointerEvents: "none",
+          }}
+        >
+          {box.sublabel}
+        </text>
+      )}
 
       {active && showBadge && (
         <PhaseBadge phase={phase} x={box.x} y={box.y + box.h / 2} color={style.badge} />

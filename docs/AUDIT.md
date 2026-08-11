@@ -19,29 +19,29 @@ Every box on the map is a CoSAI component. Band assignment starts from each comp
 | Model Serving Infrastructure | `componentsInfrastructure` / `componentsModelDeployment` | modelInfrastructure | **modelInfrastructure** |  |
 | The Model | `componentsModel` / `componentsModelCore` | model | **model** |  |
 | Application | `componentsApplication` / `componentsApplicationCore` | application | **application** |  |
-| Application Output Handling | `componentsApplication` / `componentsApplicationCore` | application | **application** |  |
-| Application Input Handling | `componentsApplication` / `componentsApplicationCore` | application | **application** |  |
+| Model Output Handling | `componentsApplication` / `componentsApplicationCore` | application | **application** |  |
+| Model Input Handling | `componentsApplication` / `componentsApplicationCore` | application | **application** |  |
 | Agent Reasoning Core | `componentsApplication` / `componentsAgent` | application | **application** |  |
-| Orchestration Output Handling | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
-| Orchestration Input Handling | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
+| Orchestration Output | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
+| Orchestration Input | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
 | External Tools and Services | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
 | Model Memory | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
-| Retrieval Augmented Generation & Content | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
-| Agent User Query | `componentsApplication` / `componentsAgent` | application | **application** |  |
-| Agent System Instructions | `componentsApplication` / `componentsAgent` | application | **application** |  |
-| Agent Input Handling | `componentsApplication` / `componentsAgent` | application | **application** |  |
-| Agent Output Handling | `componentsApplication` / `componentsAgent` | application | **application** |  |
+| Content / RAG | `componentsModel` / `componentsOrchestration` | model | **application** | deviation |
+| User Query | `componentsApplication` / `componentsAgent` | application | **application** |  |
+| System Instructions | `componentsApplication` / `componentsAgent` | application | **application** |  |
+| Perception | `componentsApplication` / `componentsAgent` | application | **application** |  |
+| Rendering | `componentsApplication` / `componentsAgent` | application | **application** |  |
 
 23 components, all drawn on the map. 8 are drawn outside the band CoSAI's classification implies. Each is a deliberate, declared choice in `BAND_DEVIATIONS` (`src/lib/bands.ts`); the build fails on any undeclared divergence:
 
 - **Model Frameworks and Code** — Model-creation process — kept in the creation half, as in SAIF
 - **Model Evaluation** — Model-creation process — kept in the creation half, as in SAIF
 - **Training and Tuning** — Model-creation process — kept in the creation half, as in SAIF
-- **Orchestration Output Handling** — Agent plumbing — drawn inside the Agent group, as in SAIF
-- **Orchestration Input Handling** — Agent plumbing — drawn inside the Agent group, as in SAIF
+- **Orchestration Output** — Agent plumbing — drawn inside the Agent group, as in SAIF
+- **Orchestration Input** — Agent plumbing — drawn inside the Agent group, as in SAIF
 - **External Tools and Services** — Agent plumbing — drawn inside the Agent group, as in SAIF
 - **Model Memory** — Agent plumbing — drawn inside the Agent group, as in SAIF
-- **Retrieval Augmented Generation & Content** — Agent plumbing — drawn inside the Agent group, as in SAIF
+- **Content / RAG** — Agent plumbing — drawn inside the Agent group, as in SAIF
 
 ### Boundary actors
 
@@ -53,56 +53,75 @@ The map also draws what sits *outside* the system. CoSAI models the system only,
 | External Sources (`actorExternalSources`) | Third-party services, tool registries, package proxies and content the agent reaches out to at runtime. |
 | External Sources (`actorExternalData`) | Data gathered from outside the organisation before it ever reaches the pipeline. |
 
+### Display names
+
+CoSAI's titles are written for a table, where a category column disambiguates them — three components are titled “Input Handling” and three “Output Handling”. These are renamed for the diagram, consistently everywhere in the product, with CoSAI's own title always shown on the Components tab.
+
+| CoSAI title | Shown as | Why |
+| --- | --- | --- |
+| Input Handling | **Perception** | CoSAI titles this “Input Handling”. It is the agent's input transformation — the point where user instructions and contextual data are collected and made safe — so it takes SAIF's name for that boundary, Perception. System Instructions and User Query are drawn inside it, because CoSAI's edges route both of them into it. |
+| Output Handling | **Rendering** | CoSAI titles this “Output Handling”. It is the agent's output transformation — formatting a response for display inside a trusted application — so it takes SAIF's name for that boundary, Rendering. |
+| Agent User Query | **User Query** | CoSAI titles this “Agent User Query”. It is simply the user's query; the “Agent” prefix is redundant once the box is drawn inside the agent. |
+| Agent System Instructions | **System Instructions** | CoSAI titles this “Agent System Instructions”, for the same reason. Drawn as “System Instructions”. |
+| Input Handling | **Model Input Handling** | CoSAI titles this “Input Handling” and files it under the application, but its only edges run to and from the model — it is an application-owned guard on the model boundary, and the name says which boundary it guards. |
+| Output Handling | **Model Output Handling** | CoSAI titles this “Output Handling”, for the same reason. Its description is explicit that it protects against “dangerous outputs from a model”. |
+| Input Handling | **Orchestration Input** | CoSAI titles this “Input Handling”; the layer prefix separates it from the other two handlers of that name. |
+| Output Handling | **Orchestration Output** | CoSAI titles this “Output Handling”; the layer prefix separates it from the other two handlers of that name. |
+| Retrieval Augmented Generation & Content | **Content / RAG** | CoSAI titles this “Retrieval Augmented Generation & Content”, which does not fit the box. Shortened to SAIF's label. |
+
 ## 2. Flows
 
 Every arrow on the map is an edge declared in `components.yaml` — nothing is invented. CoSAI declares 32 edges; drawing all of them turns the picture into a wiring diagram, so a small number are deliberately left out and listed below. The build fails if an edge is drawn that CoSAI does not declare, or if a declared edge is neither drawn nor documented as undrawn.
 
 | From | To |
 | --- | --- |
-| Agent Input Handling | Agent Reasoning Core |
-| Agent Output Handling | Application |
-| Agent Output Handling | The Model |
-| Agent System Instructions | Agent Input Handling |
-| Agent User Query | Agent Input Handling |
-| Application | Application Input Handling |
-| Application | Agent Input Handling |
-| Application Input Handling | The Model |
-| Application Output Handling | Application |
+| Perception | Agent Reasoning Core |
+| Rendering | Application |
+| Rendering | The Model |
+| Application | Model Input Handling |
+| Application | Perception |
+| Model Input Handling | The Model |
+| Model Output Handling | Application |
 | Data Filtering and Processing | Training Data |
 | Data Sources | Data Filtering and Processing |
 | Data Storage Infrastructure | Training and Tuning |
-| Model Memory | Orchestration Output Handling |
+| Model Memory | Orchestration Output |
 | Model Evaluation | Training and Tuning |
 | Model Frameworks and Code | Training and Tuning |
 | Model Serving Infrastructure | The Model |
 | Model Storage | The Model |
 | Training and Tuning | The Model |
-| Orchestration Input Handling | External Tools and Services |
-| Orchestration Input Handling | Retrieval Augmented Generation & Content |
-| Orchestration Input Handling | Model Memory |
-| Orchestration Output Handling | Agent Reasoning Core |
-| Retrieval Augmented Generation & Content | Orchestration Output Handling |
-| Agent Reasoning Core | Agent Output Handling |
-| Agent Reasoning Core | Orchestration Input Handling |
+| Orchestration Input | External Tools and Services |
+| Orchestration Input | Content / RAG |
+| Orchestration Input | Model Memory |
+| Orchestration Output | Agent Reasoning Core |
+| Content / RAG | Orchestration Output |
+| Agent Reasoning Core | Rendering |
+| Agent Reasoning Core | Orchestration Input |
 | The Model | Model Evaluation |
-| The Model | Application Output Handling |
-| The Model | Agent Input Handling |
-| External Tools and Services | Orchestration Output Handling |
+| The Model | Model Output Handling |
+| The Model | Perception |
+| External Tools and Services | Orchestration Output |
 | Training Data | Data Storage Infrastructure |
 
-30 edges drawn.
+28 edges drawn.
 
 ### Edges drawn in the opposite direction
 
-- **Application → Application Input Handling** — CoSAI's edges route the application out through Output Handling and back in through Input Handling — an application-centric reading. Its own prose is model-centric: output handling "protects against dangerous outputs from a model". We draw the prose reading, which is also SAIF's: input handling guards what reaches the model, output handling guards what comes back.
-- **Application Input Handling → The Model** — Same swap — input handling sits on the path into the model.
-- **The Model → Application Output Handling** — Same swap — output handling sits on the path out of the model.
-- **Application Output Handling → Application** — Same swap — the handled model output returns to the application.
+- **Application → Model Input Handling** — CoSAI's edges route the application out through Output Handling and back in through Input Handling — an application-centric reading. Its own prose is model-centric: output handling "protects against dangerous outputs from a model". We draw the prose reading, which is also SAIF's: input handling guards what reaches the model, output handling guards what comes back.
+- **Model Input Handling → The Model** — Same swap — input handling sits on the path into the model.
+- **The Model → Model Output Handling** — Same swap — output handling sits on the path out of the model.
+- **Model Output Handling → Application** — Same swap — the handled model output returns to the application.
+
+### Edges shown by nesting
+
+- **System Instructions → Perception** — System Instructions is drawn inside Perception, which is the handler that consumes it.
+- **User Query → Perception** — User Query is drawn inside Perception, which is the handler that consumes it.
 
 ### Declared edges not drawn
 
-- **The Model → Orchestration Input Handling** — The model reaching orchestration directly duplicates the Reasoning Core path already drawn, and needs a long route across three bands to show it.
-- **Orchestration Output Handling → The Model** — Return leg of the same duplicate path; the drawn Orchestration → Reasoning Core → Model route already carries it.
+- **The Model → Orchestration Input** — The model reaching orchestration directly duplicates the Reasoning Core path already drawn, and needs a long route across three bands to show it.
+- **Orchestration Output → The Model** — Return leg of the same duplicate path; the drawn Orchestration → Reasoning Core → Model route already carries it.
 
 Both remain visible in the product: the Components tab lists every component's full `receives from` / `sends to` set, so no CoSAI relationship is hidden.
 
@@ -129,7 +148,7 @@ CoSAI publishes `tourContent` prose for introduced / exposed / mitigated but no 
 
 > The risk is introduced when the application or deployment architecture lacks strict controls for handling live user data, such as enabling excessive logging or insecure session management.
 
-Chosen: `Application`, `Application Output Handling`, `Data Storage Infrastructure`
+Chosen: `Application`, `Model Output Handling`, `Data Storage Infrastructure`
 
 **Exposed**
 
@@ -141,7 +160,7 @@ Chosen: `Application`, `Data Storage Infrastructure`, `Model Memory`
 
 > Mitigate this risk with data minimization techniques (e.g., logging only essential metadata), using ephemeral storage for session data, and enforcing strict data handling and retention policies for all runtime data.
 
-Chosen: `Application`, `Application Input Handling`, `Application Output Handling`, `Data Storage Infrastructure`
+Chosen: `Application`, `Model Input Handling`, `Model Output Handling`, `Data Storage Infrastructure`
 
 Components protected by this risk's 2 controls, for comparison: Data Storage Infrastructure, Application
 
@@ -183,15 +202,15 @@ Chosen: `Application`, `Model Serving Infrastructure`
 
 > This risk is exposed during service usage when attackers submit requests designed to maximize costs, trigger expensive operations, or exhaust allocated budgets through automated or manual abuse of pricing mechanisms.
 
-Chosen: `Application`, `Application Input Handling`, `Model Serving Infrastructure`, `The Model`
+Chosen: `Application`, `Model Input Handling`, `Model Serving Infrastructure`, `The Model`
 
 **Mitigated**
 
 > Mitigation involves implementing robust cost quotas and guardrails, rate limiting and usage monitoring, anomaly detection for unusual consumption patterns, and access controls to prevent unauthorized or excessive resource usage.
 
-Chosen: `Application`, `Application Input Handling`, `Model Serving Infrastructure`
+Chosen: `Application`, `Model Input Handling`, `Model Serving Infrastructure`
 
-Components protected by this risk's 2 controls, for comparison: Application, Agent Reasoning Core, Orchestration Input Handling, Orchestration Output Handling
+Components protected by this risk's 2 controls, for comparison: Application, Agent Reasoning Core, Orchestration Input, Orchestration Output
 
 #### Federated/Distributed Training Privacy
 
@@ -215,7 +234,7 @@ Chosen: `Training and Tuning`, `Data Storage Infrastructure`, `The Model`
 
 Chosen: `Data Filtering and Processing`, `Training Data`, `Training and Tuning`, `Model Evaluation`
 
-Components protected by this risk's 4 controls, for comparison: Training and Tuning, Model Evaluation, Application Output Handling, Model Serving Infrastructure, Model Storage
+Components protected by this risk's 4 controls, for comparison: Training and Tuning, Model Evaluation, Model Output Handling, Model Serving Infrastructure, Model Storage
 
 #### Adapter/PEFT Injection
 
@@ -249,21 +268,21 @@ Components protected by this risk's 4 controls, for comparison: Model Serving In
 
 > Tool Registry Tampering risk is introduced when vetted tool registries, MCP server manifests, or discovery endpoints lack ongoing integrity monitoring and tamper detection.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`
+Chosen: `External Tools and Services`, `Orchestration Input`
 
 **Exposed**
 
 > This risk is exposed at deployment and runtime when compromised tool metadata redirects agent tool selection, causing invocation of unintended or malicious tools despite prior vetting.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
 **Mitigated**
 
 > Mitigation involves runtime integrity monitoring of tool metadata against known-good baselines, configuration integrity verification, anomalous tool selection detection, and vulnerability management for registry infrastructure.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
-Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Application, Orchestration Input Handling, Orchestration Output Handling, Agent Input Handling, Agent Output Handling, Agent Reasoning Core, External Tools and Services
+Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Application, Orchestration Input, Orchestration Output, Perception, Rendering, Agent Reasoning Core, External Tools and Services
 
 #### Orchestrator/Route Hijack
 
@@ -273,21 +292,21 @@ Components protected by this risk's 3 controls, for comparison: Model Serving In
 
 > Orchestrator/Route Hijack risks are introduced when AI routing and orchestration systems lack proper access controls, integrity verification, or secure configuration management, allowing attackers to manipulate routing decisions or redirect requests to unauthorized models.
 
-Chosen: `Orchestration Input Handling`, `Model Serving Infrastructure`, `Application`
+Chosen: `Orchestration Input`, `Model Serving Infrastructure`, `Application`
 
 **Exposed**
 
 > This risk is exposed during request routing and model selection when compromised orchestration logic redirects traffic to malicious models or when configuration tampering alters intended routing behavior, potentially exposing users to unauthorized or compromised AI systems.
 
-Chosen: `Orchestration Input Handling`, `Orchestration Output Handling`, `Model Serving Infrastructure`, `The Model`
+Chosen: `Orchestration Input`, `Orchestration Output`, `Model Serving Infrastructure`, `The Model`
 
 **Mitigated**
 
 > Mitigation involves implementing secure configuration management with integrity verification, robust access controls for routing systems, cryptographic signing of routing configurations, monitoring for anomalous routing patterns, and validation of model endpoints before request forwarding.
 
-Chosen: `Orchestration Input Handling`, `Orchestration Output Handling`, `Model Serving Infrastructure`, `Agent Reasoning Core`
+Chosen: `Orchestration Input`, `Orchestration Output`, `Model Serving Infrastructure`, `Agent Reasoning Core`
 
-Components protected by this risk's 6 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Memory, Agent Reasoning Core, Model Evaluation, Model Storage, Application, External Tools and Services, Orchestration Input Handling, Orchestration Output Handling
+Components protected by this risk's 6 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Memory, Agent Reasoning Core, Model Evaluation, Model Storage, Application, External Tools and Services, Orchestration Input, Orchestration Output
 
 #### Evaluation/Benchmark Manipulation
 
@@ -321,21 +340,21 @@ Components protected by this risk's 1 controls, for comparison: Model Serving In
 
 > Covert Channels in Model Outputs are introduced when AI systems lack proper output monitoring, steganography detection, or behavioral analysis capabilities, allowing attackers to exploit model outputs for hidden information transmission.
 
-Chosen: `The Model`, `Application Output Handling`
+Chosen: `The Model`, `Model Output Handling`
 
 **Exposed**
 
 > This risk is exposed during model usage when attackers encode hidden information in model outputs, response patterns, or behavioral characteristics, potentially enabling unauthorized data exfiltration or covert communication that bypasses traditional security controls.
 
-Chosen: `The Model`, `Application Output Handling`, `Application`
+Chosen: `The Model`, `Model Output Handling`, `Application`
 
 **Mitigated**
 
 > Mitigation involves implementing comprehensive output validation and sanitization, deploying steganography detection systems, monitoring for anomalous response patterns, analyzing model behavior for covert channels, and applying randomization techniques to disrupt potential information encoding mechanisms.
 
-Chosen: `Application Output Handling`, `Model Evaluation`, `The Model`, `Application`
+Chosen: `Model Output Handling`, `Model Evaluation`, `The Model`, `Application`
 
-Components protected by this risk's 2 controls, for comparison: Application Output Handling, Agent Output Handling, Orchestration Output Handling, Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage
+Components protected by this risk's 2 controls, for comparison: Model Output Handling, Rendering, Orchestration Output, Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage
 
 #### Malicious Loader/Deserialization
 
@@ -359,7 +378,7 @@ Chosen: `Model Frameworks and Code`, `Model Storage`, `Model Serving Infrastruct
 
 Chosen: `Model Frameworks and Code`, `Model Storage`, `Model Serving Infrastructure`, `The Model`
 
-Components protected by this risk's 5 controls, for comparison: Application Input Handling, Agent Input Handling, Orchestration Input Handling, Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, The Model
+Components protected by this risk's 5 controls, for comparison: Model Input Handling, Perception, Orchestration Input, Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, The Model
 
 #### Tool Source Provenance
 
@@ -369,21 +388,21 @@ Components protected by this risk's 5 controls, for comparison: Application Inpu
 
 > Tool Source Provenance risk is introduced when tool registries, MCP server manifests, or discovery endpoints are adopted without provenance verification or publisher identity validation.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`
+Chosen: `External Tools and Services`, `Orchestration Input`
 
 **Exposed**
 
 > This risk is exposed during tool discovery and selection when agents consume unvetted tool metadata and make invocation decisions based on unverified descriptions or schemas.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Agent Reasoning Core`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Agent Reasoning Core`
 
 **Mitigated**
 
 > Mitigation involves cryptographic signing of tool manifests, publisher identity verification, namespace governance to prevent typosquatting, and least-privilege tool access policies.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
-Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Agent Reasoning Core, External Tools and Services, Retrieval Augmented Generation & Content, Model Memory
+Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Agent Reasoning Core, External Tools and Services, Content / RAG, Model Memory
 
 #### Prompt/Response Cache Poisoning
 
@@ -399,15 +418,15 @@ Chosen: `Model Serving Infrastructure`, `Model Memory`, `Data Storage Infrastruc
 
 > This risk is exposed during model serving when poisoned cache entries are retrieved and served to users, potentially delivering malicious content, sensitive information, or manipulated responses from previous interactions.
 
-Chosen: `Model Serving Infrastructure`, `Model Memory`, `The Model`, `Application Output Handling`
+Chosen: `Model Serving Infrastructure`, `Model Memory`, `The Model`, `Model Output Handling`
 
 **Mitigated**
 
 > Mitigation involves implementing strong cache isolation per user or tenant, validating cached content integrity, using cryptographically secure cache keys, and applying access controls to prevent unauthorized cache manipulation.
 
-Chosen: `Model Serving Infrastructure`, `Model Memory`, `Data Storage Infrastructure`, `Application Input Handling`, `Application Output Handling`
+Chosen: `Model Serving Infrastructure`, `Model Memory`, `Data Storage Infrastructure`, `Model Input Handling`, `Model Output Handling`
 
-Components protected by this risk's 5 controls, for comparison: Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Application Input Handling, Agent Input Handling, Orchestration Input Handling, Application Output Handling, Agent Output Handling, Orchestration Output Handling, Data Storage Infrastructure
+Components protected by this risk's 5 controls, for comparison: Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Model Input Handling, Perception, Orchestration Input, Model Output Handling, Rendering, Orchestration Output, Data Storage Infrastructure
 
 #### Retrieval/Vector Store Poisoning
 
@@ -417,21 +436,21 @@ Components protected by this risk's 5 controls, for comparison: Model Serving In
 
 > Retrieval/Vector Store Poisoning is introduced during data ingestion and indexing processes when malicious content is added to knowledge bases, vector stores, or retrieval corpora without proper validation and sanitization.
 
-Chosen: `Data Sources`, `Data Filtering and Processing`, `Retrieval Augmented Generation & Content`
+Chosen: `Data Sources`, `Data Filtering and Processing`, `Content / RAG`
 
 **Exposed**
 
 > This risk is exposed during retrieval and generation phases when poisoned content is retrieved and incorporated into model responses, potentially spreading misinformation or executing malicious instructions.
 
-Chosen: `Retrieval Augmented Generation & Content`, `Orchestration Output Handling`, `Agent Reasoning Core`, `The Model`
+Chosen: `Content / RAG`, `Orchestration Output`, `Agent Reasoning Core`, `The Model`
 
 **Mitigated**
 
 > Mitigation involves implementing robust data validation and sanitization during ingestion, maintaining data integrity through cryptographic verification, and filtering both inputs and outputs to detect and prevent malicious content retrieval.
 
-Chosen: `Data Filtering and Processing`, `Retrieval Augmented Generation & Content`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Output Handling`
+Chosen: `Data Filtering and Processing`, `Content / RAG`, `Orchestration Input`, `Orchestration Output`, `Rendering`
 
-Components protected by this risk's 5 controls, for comparison: Data Filtering and Processing, Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Application Input Handling, Agent Input Handling, Orchestration Input Handling, Application Output Handling, Agent Output Handling, Orchestration Output Handling, Data Sources, Data Storage Infrastructure
+Components protected by this risk's 5 controls, for comparison: Data Filtering and Processing, Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Model Input Handling, Perception, Orchestration Input, Model Output Handling, Rendering, Orchestration Output, Data Sources, Data Storage Infrastructure
 
 #### Agent Delegation Chain Opacity
 
@@ -441,21 +460,21 @@ Components protected by this risk's 5 controls, for comparison: Data Filtering a
 
 > Introduced during deployment when delegation chain architecture is configured — specifically when orchestration layers, IAM policies, and MCP server configurations do not require structured delegation event emission at each hop.
 
-Chosen: `Orchestration Input Handling`, `Orchestration Output Handling`, `External Tools and Services`
+Chosen: `Orchestration Input`, `Orchestration Output`, `External Tools and Services`
 
 **Exposed**
 
 > Exposed at runtime when multi-hop agent delegation occurs without correlation ID propagation or structured delegation events. The opacity persists until an incident requires forensic reconstruction of the actor chain, at which point the gap becomes visible.
 
-Chosen: `Agent Reasoning Core`, `Orchestration Input Handling`, `Orchestration Output Handling`, `External Tools and Services`, `Agent Output Handling`
+Chosen: `Agent Reasoning Core`, `Orchestration Input`, `Orchestration Output`, `External Tools and Services`, `Rendering`
 
 **Mitigated**
 
 > Mitigated by requiring orchestrators to emit signed delegation spans per hop with correlation IDs, actor identifiers, scope deltas, and timestamps, bound to an append-only store. Real-time detection of missing or out-of-order spans shifts the control from post-incident reconstruction to in-flight chain integrity monitoring.
 
-Chosen: `Agent Input Handling`, `Agent Output Handling`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`, `External Tools and Services`
+Chosen: `Perception`, `Rendering`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`, `External Tools and Services`
 
-Components protected by this risk's 3 controls, for comparison: Orchestration Input Handling, Orchestration Output Handling, Agent Input Handling, Agent Output Handling, Agent Reasoning Core, External Tools and Services, Model Serving Infrastructure
+Components protected by this risk's 3 controls, for comparison: Orchestration Input, Orchestration Output, Perception, Rendering, Agent Reasoning Core, External Tools and Services, Model Serving Infrastructure
 
 #### Stale Agent Identity Binding
 
@@ -477,9 +496,9 @@ Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Model Serving In
 
 > Mitigated by cryptographic binding of agent identity to specific signed model manifests, runtime attestation of the model artifact before authorizing tool access, and automated credential invalidation on any change to the bound model artifact.
 
-Chosen: `Model Serving Infrastructure`, `Model Storage`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input Handling`
+Chosen: `Model Serving Infrastructure`, `Model Storage`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input`
 
-Components protected by this risk's 4 controls, for comparison: Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Agent Reasoning Core, External Tools and Services, Orchestration Input Handling, Orchestration Output Handling, Model Memory, Application
+Components protected by this risk's 4 controls, for comparison: Model Serving Infrastructure, Model Evaluation, Training and Tuning, Model Storage, Agent Reasoning Core, External Tools and Services, Orchestration Input, Orchestration Output, Model Memory, Application
 
 #### MCP Transport Hijacking
 
@@ -489,21 +508,21 @@ Components protected by this risk's 4 controls, for comparison: Model Serving In
 
 > Introduced during deployment when MCP connections are configured without mandatory TLS, mutual authentication, or origin validation — particularly when MCP servers run locally or in environments where agents connect to third-party endpoints.
 
-Chosen: `Orchestration Input Handling`, `Orchestration Output Handling`, `External Tools and Services`
+Chosen: `Orchestration Input`, `Orchestration Output`, `External Tools and Services`
 
 **Exposed**
 
 > Exposed at runtime when an attacker intercepts, modifies, or replays MCP messages on the transport channel. DNS rebinding attacks target locally-running MCP servers from remote websites.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
 **Mitigated**
 
 > Mitigated by enforcing mutual TLS for all MCP connections, binding session tokens to transport-layer identifiers, validating Origin headers on all incoming connections, restricting local servers to localhost binding, and implementing replay protection with short-lived sessions.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Model Serving Infrastructure`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Model Serving Infrastructure`
 
-Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, External Tools and Services, Orchestration Input Handling, Orchestration Output Handling, Application
+Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, External Tools and Services, Orchestration Input, Orchestration Output, Application
 
 #### Shadow and Unknown Agents
 
@@ -513,21 +532,21 @@ Components protected by this risk's 3 controls, for comparison: Model Serving In
 
 > Introduced during deployment when orchestration layers or development teams create agents without central registration, or when provisioning controls do not require identity lifecycle enrollment before credential issuance.
 
-Chosen: `Agent Reasoning Core`, `Agent System Instructions`, `Application`
+Chosen: `Agent Reasoning Core`, `System Instructions`, `Application`
 
 **Exposed**
 
 > Exposed at runtime when unregistered agents interact with tools, MCP servers, or other agents using inherited or shared credentials. The exposure persists through maintenance cycles when decommissioning processes fail to revoke credentials for retired agents.
 
-Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`
+Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input`, `Orchestration Output`
 
 **Mitigated**
 
 > Mitigated by central agent inventory management requiring registration before credential issuance, cryptographic attestation of agent identity, runtime detection of unregistered agents, and automated credential revocation on lifecycle state changes.
 
-Chosen: `Application`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`
+Chosen: `Application`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input`, `Orchestration Output`
 
-Components protected by this risk's 5 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, Orchestration Input Handling, Orchestration Output Handling, Agent Input Handling, Agent Output Handling, Agent Reasoning Core, External Tools and Services, Model Memory
+Components protected by this risk's 5 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, Orchestration Input, Orchestration Output, Perception, Rendering, Agent Reasoning Core, External Tools and Services, Model Memory
 
 #### Runaway Agent Tool Loops
 
@@ -537,21 +556,21 @@ Components protected by this risk's 5 controls, for comparison: Model Serving In
 
 > Introduced during deployment when agent orchestration frameworks are configured without default tool-call limits, context-window budgets, or termination condition validation.
 
-Chosen: `Orchestration Input Handling`, `Agent Reasoning Core`
+Chosen: `Orchestration Input`, `Agent Reasoning Core`
 
 **Exposed**
 
 > Exposed at runtime when an agent enters a recursive tool-calling cycle that consumes context window, compute, and API budget without converging on a result or triggering a termination condition.
 
-Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `The Model`
+Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `The Model`
 
 **Mitigated**
 
 > Mitigated by enforcing per-agent, per-session, and per-tool-call resource budgets; setting mandatory max_turns defaults in orchestration frameworks; monitoring for context-window saturation and loop patterns; and implementing circuit breakers that halt agent execution when cumulative resource thresholds are exceeded.
 
-Chosen: `Agent Input Handling`, `Agent Output Handling`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `Perception`, `Rendering`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
-Components protected by this risk's 2 controls, for comparison: Orchestration Input Handling, Orchestration Output Handling, Agent Input Handling, Agent Output Handling, Agent Reasoning Core
+Components protected by this risk's 2 controls, for comparison: Orchestration Input, Orchestration Output, Perception, Rendering, Agent Reasoning Core
 
 #### Agentic Delegation Confused Deputy
 
@@ -561,21 +580,21 @@ Components protected by this risk's 2 controls, for comparison: Orchestration In
 
 > Introduced during deployment when agent delegation boundaries are configured without caller authorization validation — specifically when high-privilege agents accept delegation requests without verifying whether the caller's authority matches the requested action's privilege level.
 
-Chosen: `Agent Reasoning Core`, `Orchestration Input Handling`, `External Tools and Services`
+Chosen: `Agent Reasoning Core`, `Orchestration Input`, `External Tools and Services`
 
 **Exposed**
 
 > Exposed at runtime when a less-privileged caller (another agent, external input, or low-privilege user) submits a request that the high-privilege deputy fulfills using its own permissions. The deputy cannot distinguish the caller's authorization scope from its own.
 
-Chosen: `Agent Input Handling`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`
+Chosen: `Perception`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input`, `Orchestration Output`
 
 **Mitigated**
 
 > Mitigated by enforcing caller authorization validation at every delegation boundary, scoping the deputy's effective permissions to the intersection of its own permissions and the caller's authorization, and applying least-privilege narrowing at each delegation hop.
 
-Chosen: `Agent Input Handling`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`
+Chosen: `Perception`, `Agent Reasoning Core`, `External Tools and Services`, `Orchestration Input`, `Orchestration Output`
 
-Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, Agent Reasoning Core, External Tools and Services, Retrieval Augmented Generation & Content, Model Memory, Orchestration Input Handling, Orchestration Output Handling, Agent Input Handling, Agent Output Handling
+Components protected by this risk's 3 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, Agent Reasoning Core, External Tools and Services, Content / RAG, Model Memory, Orchestration Input, Orchestration Output, Perception, Rendering
 
 #### Cross-Tenant Credential Propagation
 
@@ -585,21 +604,21 @@ Components protected by this risk's 3 controls, for comparison: Model Serving In
 
 > Introduced during deployment when agent identities, credential pools, or MCP server endpoints are configured to serve multiple tenants without strict tenant-scoped isolation at the identity layer.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Model Serving Infrastructure`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Model Serving Infrastructure`
 
 **Exposed**
 
 > Exposed at runtime when a compromise in one tenant (credential theft, infrastructure exploitation, or insider access) yields credentials that authenticate to other tenants' resources because the credentials are not tenant-scoped.
 
-Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Model Memory`, `Orchestration Output Handling`, `Model Serving Infrastructure`
+Chosen: `Agent Reasoning Core`, `External Tools and Services`, `Model Memory`, `Orchestration Output`, `Model Serving Infrastructure`
 
 **Mitigated**
 
 > Mitigated by issuing strictly tenant-scoped agent credentials with no cross-tenant validity, enforcing tenant boundary validation at every MCP hop and delegation step, and isolating credential pools, token caches, and MCP endpoints per tenant.
 
-Chosen: `External Tools and Services`, `Model Memory`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Model Serving Infrastructure`
+Chosen: `External Tools and Services`, `Model Memory`, `Orchestration Input`, `Orchestration Output`, `Model Serving Infrastructure`
 
-Components protected by this risk's 4 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, Agent Reasoning Core, External Tools and Services, Retrieval Augmented Generation & Content, Model Memory, Orchestration Input Handling, Orchestration Output Handling
+Components protected by this risk's 4 controls, for comparison: Model Serving Infrastructure, Training and Tuning, Model Evaluation, Model Storage, Agent Reasoning Core, External Tools and Services, Content / RAG, Model Memory, Orchestration Input, Orchestration Output
 
 #### Zombie / Shadow MCP Servers
 
@@ -609,21 +628,21 @@ Components protected by this risk's 4 controls, for comparison: Model Serving In
 
 > Introduced during deployment when MCP servers are provisioned and registered in tool registries, DNS, or agent configurations.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`
+Chosen: `External Tools and Services`, `Orchestration Input`
 
 **Exposed**
 
 > Exposed at runtime when decommissioned servers are not fully removed from all discovery mechanisms. Agents continue calling stale endpoints because registry presence implies legitimacy. The exposure persists through maintenance cycles when decommissioning processes are incomplete.
 
-Chosen: `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
 **Mitigated**
 
 > Mitigated by requiring cryptographic attestation and runtime liveness verification for all MCP server endpoints, automating removal from all discovery mechanisms on decommission, and monitoring for agent calls to unresponsive or unverified endpoints.
 
-Chosen: `Application`, `External Tools and Services`, `Orchestration Input Handling`, `Orchestration Output Handling`, `Agent Reasoning Core`
+Chosen: `Application`, `External Tools and Services`, `Orchestration Input`, `Orchestration Output`, `Agent Reasoning Core`
 
-Components protected by this risk's 4 controls, for comparison: Orchestration Input Handling, Orchestration Output Handling, Agent Input Handling, Agent Output Handling, Agent Reasoning Core, External Tools and Services, Model Serving Infrastructure, Application
+Components protected by this risk's 4 controls, for comparison: Orchestration Input, Orchestration Output, Perception, Rendering, Agent Reasoning Core, External Tools and Services, Model Serving Infrastructure, Application
 
 ### 3b. SAIF-seeded — 15 risks
 
@@ -639,10 +658,10 @@ Highlights below are Google's original mapping, not ours.
 | Model Deployment Tampering | Model Serving Infrastructure | Model Serving Infrastructure | Model Serving Infrastructure |
 | Denial of ML Service | Application, The Model | Application | Application |
 | Model Reverse Engineering | Application | Application | Application |
-| Insecure Integrated Component | Application, Agent Reasoning Core, External Tools and Services, Model Memory, Retrieval Augmented Generation & Content | Application, Agent Reasoning Core, External Tools and Services, Model Memory, Retrieval Augmented Generation & Content | Application, Agent Reasoning Core, External Tools and Services, Model Memory, Retrieval Augmented Generation & Content |
-| Prompt Injection | The Model | The Model | Application Input Handling, Application Output Handling, Training and Tuning, Model Evaluation |
+| Insecure Integrated Component | Application, Agent Reasoning Core, External Tools and Services, Model Memory, Content / RAG | Application, Agent Reasoning Core, External Tools and Services, Model Memory, Content / RAG | Application, Agent Reasoning Core, External Tools and Services, Model Memory, Content / RAG |
+| Prompt Injection | The Model | The Model | Model Input Handling, Model Output Handling, Training and Tuning, Model Evaluation |
 | Model Evasion | The Model | The Model | The Model, Training and Tuning, Model Evaluation |
-| Sensitive Data Disclosure | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, The Model, Agent Reasoning Core, External Tools and Services, Model Memory, Retrieval Augmented Generation & Content | The Model, Application, Agent Reasoning Core, External Tools and Services, Model Memory, Retrieval Augmented Generation & Content | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, Application Output Handling, Application, Agent Reasoning Core, External Tools and Services, Model Memory, Retrieval Augmented Generation & Content |
-| Inferred Sensitive Data | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, The Model | The Model | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, Application Output Handling |
-| Insecure Model Output | The Model | The Model | Application Output Handling |
-| Rogue Actions | Agent Reasoning Core, External Tools and Services, Retrieval Augmented Generation & Content, Model Memory, The Model | Application | Application, Agent User Query, Agent System Instructions, Agent Input Handling, Agent Output Handling, Agent Reasoning Core, Orchestration Input Handling, Orchestration Output Handling, External Tools and Services, Retrieval Augmented Generation & Content, Model Memory, Application Input Handling, Application Output Handling, The Model |
+| Sensitive Data Disclosure | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, The Model, Agent Reasoning Core, External Tools and Services, Model Memory, Content / RAG | The Model, Application, Agent Reasoning Core, External Tools and Services, Model Memory, Content / RAG | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, Model Output Handling, Application, Agent Reasoning Core, External Tools and Services, Model Memory, Content / RAG |
+| Inferred Sensitive Data | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, The Model | The Model | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, Model Output Handling |
+| Insecure Model Output | The Model | The Model | Model Output Handling |
+| Rogue Actions | Agent Reasoning Core, External Tools and Services, Content / RAG, Model Memory, The Model | Application | Application, User Query, System Instructions, Perception, Rendering, Agent Reasoning Core, Orchestration Input, Orchestration Output, External Tools and Services, Content / RAG, Model Memory, Model Input Handling, Model Output Handling, The Model |

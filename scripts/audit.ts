@@ -15,7 +15,8 @@ import { join } from "node:path";
 import { parse } from "yaml";
 
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor } from "../src/lib/bands";
-import { ACTORS, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import { ACTORS, CONTAINMENT_EDGES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import { DISPLAY_NAME, NAME_REASON } from "../src/lib/naming";
 import type { Component, Control, Paragraph, Risk } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 
@@ -51,23 +52,7 @@ async function main() {
   const controlById = new Map(controls.map((c) => [c.id, c]));
   const overlayByRisk = new Map(overlays.map((o) => [o.risk, o]));
 
-  // CoSAI reuses "Input Handling" / "Output Handling" across three layers; qualify them.
-  const QUALIFIER: Record<string, string> = {
-    componentApplicationInputHandling: "Application",
-    componentApplicationOutputHandling: "Application",
-    componentOrchestrationInputHandling: "Orchestration",
-    componentOrchestrationOutputHandling: "Orchestration",
-    componentAgentInputHandling: "Agent",
-    componentAgentOutputHandling: "Agent",
-  };
-  const dupes = new Set(
-    components.map((c) => c.title).filter((t, i, all) => all.indexOf(t) !== i),
-  );
-  const title = (id: string) => {
-    const c = byId.get(id);
-    if (!c) return id;
-    return dupes.has(c.title) && QUALIFIER[id] ? `${QUALIFIER[id]} ${c.title}` : c.title;
-  };
+  const title = (id: string) => DISPLAY_NAME[id] ?? byId.get(id)?.title ?? id;
 
   const out: string[] = [];
   const p = (s = "") => out.push(s);
@@ -132,6 +117,22 @@ async function main() {
   for (const a of ACTORS) p(`| ${a.label} (\`${a.id}\`) | ${a.hint} |`);
   p();
 
+  p("### Display names");
+  p();
+  p(
+    "CoSAI's titles are written for a table, where a category column disambiguates them — " +
+      "three components are titled “Input Handling” and three “Output Handling”. These are " +
+      "renamed for the diagram, consistently everywhere in the product, with CoSAI's own " +
+      "title always shown on the Components tab.",
+  );
+  p();
+  p("| CoSAI title | Shown as | Why |");
+  p("| --- | --- | --- |");
+  for (const [id, name] of Object.entries(DISPLAY_NAME)) {
+    p(`| ${byId.get(id)?.title ?? id} | **${name}** | ${NAME_REASON[id] ?? ""} |`);
+  }
+  p();
+
   // --- 2. Edges -----------------------------------------------------------------------
   p("## 2. Flows");
   p();
@@ -154,6 +155,12 @@ async function main() {
   p("### Edges drawn in the opposite direction");
   p();
   for (const e of EDGE_DEVIATIONS) {
+    p(`- **${title(e.from)} → ${title(e.to)}** — ${e.reason}`);
+  }
+  p();
+  p("### Edges shown by nesting");
+  p();
+  for (const e of CONTAINMENT_EDGES) {
     p(`- **${title(e.from)} → ${title(e.to)}** — ${e.reason}`);
   }
   p();

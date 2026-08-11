@@ -36,7 +36,10 @@ export interface Band {
 export interface Box {
   /** CoSAI component id. Every box on this map is a real component. */
   id: string;
-  label: string;
+  /** Second line, for the group boxes that carry SAIF's transformation wording. */
+  sublabel?: string;
+  /** This component visually contains others, as SAIF drew Perception. */
+  group?: boolean;
   x: number;
   y: number;
   w: number;
@@ -112,51 +115,52 @@ export const RAILS = [
 ];
 
 export const GROUPS: Group[] = [
-  { id: "agent", label: "Agent", x: 220, y: 112, w: 720, h: 292, band: "application" },
+  { id: "agent", label: "Agent", x: 216, y: 112, w: 730, h: 288, band: "application" },
 ];
 
 export const BOXES: Box[] = [
   // --- Application core ---------------------------------------------------------------
-  { id: "componentApplication", label: "Application", x: 240, y: 40, w: 640, h: 42, emphasis: true },
+  { id: "componentApplication", x: 240, y: 40, w: 640, h: 42, emphasis: true },
 
   // --- Agent · perception --------------------------------------------------------------
-  { id: "componentAgentSystemInstruction", label: "System Instructions", x: 252, y: 148, w: 160, h: 36 },
-  { id: "componentAgentUserQuery", label: "User Query", x: 252, y: 196, w: 160, h: 36 },
-  { id: "componentAgentInputHandling", label: "Agent Input Handling", x: 252, y: 258, w: 160, h: 36 },
+  // Perception is a parent box: CoSAI routes System Instructions, User Query, the
+  // Application and the Model all into it, and SAIF drew it containing the first two.
+  { id: "componentAgentInputHandling", sublabel: "Input Transformation", group: true, x: 246, y: 144, w: 180, h: 156 },
+  { id: "componentAgentSystemInstruction", x: 258, y: 198, w: 156, h: 40 },
+  { id: "componentAgentUserQuery", x: 258, y: 246, w: 156, h: 40 },
 
   // --- Agent · orchestration -----------------------------------------------------------
-  { id: "componentOrchestrationInputHandling", label: "Orchestration Input", x: 470, y: 144, w: 240, h: 26, compact: true },
-  { id: "componentTools", label: "Tools (Autonomous Actions)", x: 470, y: 178, w: 240, h: 32 },
-  { id: "componentRAGContent", label: "Content / RAG", x: 470, y: 216, w: 240, h: 32 },
-  { id: "componentMemory", label: "Memory", x: 470, y: 254, w: 240, h: 32 },
-  { id: "componentOrchestrationOutputHandling", label: "Orchestration Output", x: 470, y: 294, w: 240, h: 26, compact: true },
+  { id: "componentOrchestrationInputHandling", x: 470, y: 144, w: 220, h: 24, compact: true },
+  { id: "componentTools", x: 470, y: 176, w: 220, h: 32 },
+  { id: "componentRAGContent", x: 470, y: 214, w: 220, h: 32 },
+  { id: "componentMemory", x: 470, y: 252, w: 220, h: 32 },
+  { id: "componentOrchestrationOutputHandling", x: 470, y: 292, w: 220, h: 24, compact: true },
 
   // --- Agent · rendering and core ------------------------------------------------------
-  { id: "componentAgentOutputHandling", label: "Agent Output Handling", x: 760, y: 148, w: 160, h: 146 },
-  { id: "componentReasoningCore", label: "Reasoning Core", x: 430, y: 340, w: 320, h: 44, emphasis: true },
+  { id: "componentAgentOutputHandling", sublabel: "Output Transformation", group: true, x: 750, y: 144, w: 180, h: 156 },
+  { id: "componentReasoningCore", x: 420, y: 336, w: 320, h: 46, emphasis: true },
 
   // --- Application core, model-facing --------------------------------------------------
   // CoSAI files these under the application, and their only edges are to and from the model:
   // they are application-owned guards on the model boundary, which is what the labels say.
-  // Input Handling guards what reaches the model; Output Handling guards what comes back.
-  { id: "componentApplicationInputHandling", label: "Model Input Handling", x: 240, y: 420, w: 260, h: 34 },
-  { id: "componentApplicationOutputHandling", label: "Model Output Handling", x: 620, y: 420, w: 260, h: 34 },
+  { id: "componentApplicationInputHandling", x: 240, y: 420, w: 260, h: 34 },
+  { id: "componentApplicationOutputHandling", x: 620, y: 420, w: 260, h: 34 },
 
   // --- Model core -----------------------------------------------------------------------
-  { id: "componentTheModel", label: "MODEL", x: 240, y: 504, w: 640, h: 54, emphasis: true },
+  { id: "componentTheModel", x: 240, y: 504, w: 640, h: 54, emphasis: true },
 
   // --- Model infrastructure --------------------------------------------------------------
-  { id: "componentModelStorage", label: "Model Storage Infrastructure", x: 200, y: 614, w: 280, h: 40 },
-  { id: "componentModelServing", label: "Model Serving Infrastructure", x: 640, y: 614, w: 280, h: 40 },
-  { id: "componentModelEvaluation", label: "Evaluation", x: 176, y: 690, w: 200, h: 46 },
-  { id: "componentModelTrainingTuning", label: "Training & Tuning", x: 440, y: 690, w: 220, h: 46 },
-  { id: "componentModelFrameworksAndCode", label: "Model Frameworks & Code", x: 720, y: 690, w: 220, h: 46 },
+  { id: "componentModelStorage", x: 200, y: 614, w: 280, h: 40 },
+  { id: "componentModelServing", x: 640, y: 614, w: 280, h: 40 },
+  { id: "componentModelEvaluation", x: 176, y: 690, w: 200, h: 46 },
+  { id: "componentModelTrainingTuning", x: 440, y: 690, w: 220, h: 46 },
+  { id: "componentModelFrameworksAndCode", x: 720, y: 690, w: 220, h: 46 },
 
   // --- Data infrastructure ----------------------------------------------------------------
-  { id: "componentDataStorage", label: "Data Storage Infrastructure", x: 300, y: 830, w: 520, h: 38 },
-  { id: "componentTrainingData", label: "Training Data", x: 300, y: 880, w: 520, h: 38 },
-  { id: "componentDataFilteringAndProcessing", label: "Data Filtering & Processing", x: 270, y: 930, w: 580, h: 38 },
-  { id: "componentDataSources", label: "Data Sources", x: 200, y: 980, w: 720, h: 38, emphasis: true },
+  { id: "componentDataStorage", x: 300, y: 830, w: 520, h: 38 },
+  { id: "componentTrainingData", x: 300, y: 880, w: 520, h: 38 },
+  { id: "componentDataFilteringAndProcessing", x: 270, y: 930, w: 580, h: 38 },
+  { id: "componentDataSources", x: 200, y: 980, w: 720, h: 38, emphasis: true },
 ];
 
 /**
@@ -181,33 +185,49 @@ export const EDGES: Edge[] = [
   { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 400 82 L 190 82 L 190 403 L 238 403" },
   { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 454 L 370 502" },
   { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 456" },
-  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 880 437 L 962 437 L 962 61 L 882 61" },
+  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 880 437 L 970 437 L 970 61 L 882 61" },
 
-  // --- Application drives the agent, and the agent answers -------------------------------
-  { from: "componentApplication", to: "componentAgentInputHandling", d: "M 480 82 L 480 100 L 210 100 L 210 268 L 250 268", soft: true },
-  { from: "componentAgentOutputHandling", to: "componentApplication", d: "M 840 148 L 840 100 L 700 100 L 700 84", soft: true },
+  // --- The application drives the agent, and the agent answers back ----------------------
+  // Straight into Perception and straight out of Rendering, as SAIF drew it.
+  { from: "componentApplication", to: "componentAgentInputHandling", d: "M 336 84 L 336 142" },
+  { from: "componentAgentOutputHandling", to: "componentApplication", d: "M 840 142 L 840 84" },
 
   // --- The agent talks to the model, and the model back ----------------------------------
-  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 300 504 L 300 476 L 196 476 L 196 284 L 250 284", soft: true },
-  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 920 221 L 966 221 L 966 468 L 820 468 L 820 502", soft: true },
+  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 300 504 L 300 476 L 196 476 L 196 266 L 244 266", soft: true },
+  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 932 222 L 956 222 L 956 476 L 820 476 L 820 502", soft: true },
 
   // --- Inside the agent -------------------------------------------------------------------
-  { from: "componentAgentSystemInstruction", to: "componentAgentInputHandling", d: "M 412 166 L 428 166 L 428 270 L 414 270" },
-  { from: "componentAgentUserQuery", to: "componentAgentInputHandling", d: "M 332 232 L 332 256" },
-  { from: "componentAgentInputHandling", to: "componentReasoningCore", d: "M 332 294 L 332 362 L 428 362" },
-  { from: "componentReasoningCore", to: "componentAgentOutputHandling", d: "M 750 362 L 840 362 L 840 296" },
+  { from: "componentAgentInputHandling", to: "componentReasoningCore", d: "M 336 302 L 336 359 L 418 359" },
+  { from: "componentReasoningCore", to: "componentAgentOutputHandling", d: "M 742 359 L 840 359 L 840 302" },
 
   // --- The reasoning core drives orchestration and reads the result -----------------------
-  { from: "componentReasoningCore", to: "componentOrchestrationInputHandling", d: "M 700 340 L 744 340 L 744 157 L 712 157" },
-  { from: "componentOrchestrationOutputHandling", to: "componentReasoningCore", d: "M 470 307 L 421 307 L 421 352 L 428 352" },
+  { from: "componentReasoningCore", to: "componentOrchestrationInputHandling", d: "M 700 340 L 720 340 L 720 156 L 692 156" },
+  { from: "componentOrchestrationOutputHandling", to: "componentReasoningCore", d: "M 470 304 L 444 304 L 444 350 L 418 350" },
 
   // --- Orchestration bus: in to each resource, each resource back out ----------------------
-  { from: "componentOrchestrationInputHandling", to: "componentTools", d: "M 470 164 L 452 164 L 452 194 L 468 194" },
-  { from: "componentOrchestrationInputHandling", to: "componentRAGContent", d: "M 470 164 L 452 164 L 452 232 L 468 232" },
-  { from: "componentOrchestrationInputHandling", to: "componentMemory", d: "M 470 164 L 452 164 L 452 270 L 468 270" },
-  { from: "componentTools", to: "componentOrchestrationOutputHandling", d: "M 710 194 L 728 194 L 728 307 L 712 307" },
-  { from: "componentRAGContent", to: "componentOrchestrationOutputHandling", d: "M 710 232 L 728 232 L 728 307 L 712 307" },
-  { from: "componentMemory", to: "componentOrchestrationOutputHandling", d: "M 710 270 L 728 270 L 728 307 L 712 307" },
+  { from: "componentOrchestrationInputHandling", to: "componentTools", d: "M 470 158 L 452 158 L 452 192 L 468 192" },
+  { from: "componentOrchestrationInputHandling", to: "componentRAGContent", d: "M 470 158 L 452 158 L 452 230 L 468 230" },
+  { from: "componentOrchestrationInputHandling", to: "componentMemory", d: "M 470 158 L 452 158 L 452 268 L 468 268" },
+  { from: "componentTools", to: "componentOrchestrationOutputHandling", d: "M 690 192 L 708 192 L 708 304 L 692 304" },
+  { from: "componentRAGContent", to: "componentOrchestrationOutputHandling", d: "M 690 230 L 708 230 L 708 304 L 692 304" },
+  { from: "componentMemory", to: "componentOrchestrationOutputHandling", d: "M 690 268 L 708 268 L 708 304 L 692 304" },
+];
+
+/**
+ * Edges shown by nesting rather than an arrow. Drawing an arrow from a box to the box it
+ * already sits inside adds clutter and says nothing; SAIF drew these by containment too.
+ */
+export const CONTAINMENT_EDGES: { from: string; to: string; reason: string }[] = [
+  {
+    from: "componentAgentSystemInstruction",
+    to: "componentAgentInputHandling",
+    reason: "System Instructions is drawn inside Perception, which is the handler that consumes it.",
+  },
+  {
+    from: "componentAgentUserQuery",
+    to: "componentAgentInputHandling",
+    reason: "User Query is drawn inside Perception, which is the handler that consumes it.",
+  },
 ];
 
 /**
@@ -307,7 +327,7 @@ export const ACTORS: Actor[] = [
     w: 26,
     h: 144,
     rotated: true,
-    d: "M 942 258 L 1004 258",
+    d: "M 948 258 L 1004 258",
     hint: "Third-party services, tool registries, package proxies and content the agent reaches out to at runtime.",
   },
   {
@@ -326,9 +346,7 @@ export const ACTORS: Actor[] = [
 export const ACTOR_IDS = ACTORS.map((a) => a.id);
 
 export const CAPTIONS: Caption[] = [
-  { text: "Perception · input transformation", x: 332, y: 133, small: true },
-  { text: "Orchestration", x: 590, y: 133, small: true },
-  { text: "Rendering · output transformation", x: 840, y: 133, small: true },
+  { text: "Orchestration", x: 580, y: 132, small: true },
 ];
 
 export const BAND_TOKENS: Record<BandId, { fill: string; edge: string; rail: string }> = {

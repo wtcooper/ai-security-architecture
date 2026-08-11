@@ -7,28 +7,13 @@
  * Components tab to show.
  */
 import { BAND_DEVIATIONS } from "./bands";
-import { EDGE_DEVIATIONS, UNDRAWN_EDGES } from "./map-layout";
+import { CONTAINMENT_EDGES, EDGE_DEVIATIONS, UNDRAWN_EDGES } from "./map-layout";
+import { NAME_REASON } from "./naming";
 
 export interface ComponentNote {
   kind: "band" | "direction" | "label";
   text: string;
 }
-
-/** Display labels that differ from the CoSAI title, and why. */
-const LABEL_NOTES: Record<string, string> = {
-  componentApplicationInputHandling:
-    "Drawn as “Model Input Handling”. CoSAI titles it “Input Handling” and files it under the application, but its only edges run to and from the model — it is an application-owned guard on the model boundary, and the label names the boundary it guards.",
-  componentApplicationOutputHandling:
-    "Drawn as “Model Output Handling”, for the same reason. CoSAI's own description is explicit that it protects against “dangerous outputs from a model”.",
-  componentOrchestrationInputHandling:
-    "Drawn as “Orchestration Input”. CoSAI titles it “Input Handling”; the layer prefix disambiguates it on the map.",
-  componentOrchestrationOutputHandling:
-    "Drawn as “Orchestration Output”. CoSAI titles it “Output Handling”; the layer prefix disambiguates it on the map.",
-  componentAgentInputHandling:
-    "Drawn as “Agent Input Handling”, under the heading SAIF used for this boundary: perception, or input transformation.",
-  componentAgentOutputHandling:
-    "Drawn as “Agent Output Handling”, under the heading SAIF used for this boundary: rendering, or output transformation.",
-};
 
 const BAND_LABEL: Record<string, string> = {
   application: "Application",
@@ -49,12 +34,18 @@ export function notesFor(componentId: string): ComponentNote[] {
     });
   }
 
-  const label = LABEL_NOTES[componentId];
+  const label = NAME_REASON[componentId];
   if (label) notes.push({ kind: "label", text: label });
 
   const flipped = EDGE_DEVIATIONS.filter((e) => e.from === componentId || e.to === componentId);
   if (flipped.length) {
     notes.push({ kind: "direction", text: flipped[0].reason });
+  }
+
+  for (const e of CONTAINMENT_EDGES) {
+    if (e.from === componentId || e.to === componentId) {
+      notes.push({ kind: "direction", text: `${e.reason} No arrow is drawn for a flow that nesting already shows.` });
+    }
   }
 
   const undrawn = UNDRAWN_EDGES.filter((e) => e.from === componentId || e.to === componentId);
