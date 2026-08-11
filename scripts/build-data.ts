@@ -24,8 +24,8 @@ import type {
   Vocabulary,
 } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
-import { bandFor, type BandId } from "../src/lib/bands";
-import { BANDS, BOXES, EDGES } from "../src/lib/map-layout";
+import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
+import { BANDS, BOXES, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 
 const ROOT = process.cwd();
 const COSAI_DIR = join(ROOT, "data", "cosai");
@@ -277,41 +277,72 @@ function checkMapFidelity(components: Component[]) {
     if (!declared.has(id)) fail(`map coverage: ${id} is drawn but is not a CoSAI component`);
   }
 
+  // Band placement must match bandFor(), so any divergence from CoSAI's own classification
+  // has to be declared in BAND_DEVIATIONS with a reason.
   const bandOfBox = new Map<string, BandId>();
   for (const band of BANDS) {
     for (const box of BOXES) {
       if (box.y >= band.y && box.y < band.y + band.height) bandOfBox.set(box.id, band.id);
     }
   }
+  let deviations = 0;
   for (const component of components) {
-    const expected = bandFor(component.category, component.subcategory);
+    const expected = bandFor(component.id, component.category, component.subcategory);
     const actual = bandOfBox.get(component.id);
-    if (!actual) fail(`map bands: ${component.id} does not sit inside any band`);
-    else if (actual !== expected) {
+    if (!actual) {
+      fail(`map bands: ${component.id} does not sit inside any band`);
+      continue;
+    }
+    if (actual !== expected) {
       fail(
-        `map bands: ${component.id} is drawn in "${actual}" but CoSAI classes it ` +
-          `${component.category}/${component.subcategory ?? "-"} => "${expected}"`,
+        `map bands: ${component.id} is drawn in "${actual}" but resolves to "${expected}" ` +
+          "— add a BAND_DEVIATIONS entry or move the box",
       );
+      continue;
+    }
+    const cosai = cosaiBandFor(component.category, component.subcategory);
+    if (cosai !== actual) {
+      if (!BAND_DEVIATIONS[component.id]?.reason) {
+        fail(`map bands: ${component.id} diverges from CoSAI but has no documented reason`);
+      }
+      deviations++;
     }
   }
+  for (const id of Object.keys(BAND_DEVIATIONS)) {
+    if (!declared.has(id)) fail(`map bands: BAND_DEVIATIONS names unknown component ${id}`);
+  }
 
+  // Every drawn arrow must be a real CoSAI edge, and every CoSAI edge must be drawn or
+  // explicitly listed as undrawn with a reason.
   const cosaiEdges = new Set<string>();
   for (const c of components) {
     for (const to of c.edges?.to ?? []) cosaiEdges.add(`${c.id} -> ${to}`);
     for (const from of c.edges?.from ?? []) cosaiEdges.add(`${from} -> ${c.id}`);
   }
   const drawnEdges = new Set(EDGES.map((e) => `${e.from} -> ${e.to}`));
+  const undrawn = new Set(UNDRAWN_EDGES.map((e) => `${e.from} -> ${e.to}`));
+
   if (drawnEdges.size !== EDGES.length) fail("map edges: the same edge is drawn twice");
-  for (const edge of cosaiEdges) {
-    if (!drawnEdges.has(edge)) fail(`map edges: CoSAI declares "${edge}" but the map omits it`);
-  }
   for (const edge of drawnEdges) {
     if (!cosaiEdges.has(edge)) fail(`map edges: the map draws "${edge}", which CoSAI does not declare`);
   }
+  for (const edge of undrawn) {
+    if (!cosaiEdges.has(edge)) fail(`map edges: UNDRAWN_EDGES names "${edge}", which CoSAI does not declare`);
+    if (drawnEdges.has(edge)) fail(`map edges: "${edge}" is both drawn and listed as undrawn`);
+  }
+  for (const edge of cosaiEdges) {
+    if (!drawnEdges.has(edge) && !undrawn.has(edge)) {
+      fail(`map edges: CoSAI declares "${edge}" but it is neither drawn nor documented as undrawn`);
+    }
+  }
+  for (const e of UNDRAWN_EDGES) {
+    if (!e.reason?.trim()) fail(`map edges: undrawn edge ${e.from} -> ${e.to} has no reason`);
+  }
 
   console.log(
-    `map fidelity: ${drawn.length}/${declared.size} components placed, ` +
-      `${drawnEdges.size}/${cosaiEdges.size} edges drawn, all bands match CoSAI`,
+    `map fidelity: ${drawn.length}/${declared.size} components placed ` +
+      `(${deviations} documented band deviations), ` +
+      `${drawnEdges.size}/${cosaiEdges.size} edges drawn, ${undrawn.size} documented as undrawn`,
   );
 }
 

@@ -14,39 +14,12 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
 
-import { bandFor } from "../src/lib/bands";
-import { EDGES } from "../src/lib/map-layout";
+import { BAND_DEVIATIONS, bandFor, cosaiBandFor } from "../src/lib/bands";
+import { EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 import type { Component, Control, Paragraph, Risk } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 
 const ROOT = process.cwd();
-
-/** Where the original SAIF map drew each component, for the comparison column. */
-const SAIF_BAND: Record<string, string> = {
-  componentDataSources: "data",
-  componentDataFilteringAndProcessing: "data",
-  componentTrainingData: "data",
-  componentDataStorage: "infrastructure",
-  componentModelEvaluation: "infrastructure",
-  componentModelTrainingTuning: "infrastructure",
-  componentModelFrameworksAndCode: "infrastructure",
-  componentModelStorage: "infrastructure",
-  componentModelServing: "infrastructure",
-  componentTheModel: "model",
-  componentApplicationInputHandling: "model",
-  componentApplicationOutputHandling: "model",
-  componentApplication: "application",
-  componentReasoningCore: "application",
-  componentAgentUserQuery: "application",
-  componentAgentSystemInstruction: "application",
-  componentAgentInputHandling: "application",
-  componentAgentOutputHandling: "application",
-  componentOrchestrationInputHandling: "application",
-  componentOrchestrationOutputHandling: "application",
-  componentTools: "application",
-  componentRAGContent: "application",
-  componentMemory: "application",
-};
 
 const flat = (p?: Paragraph[]) =>
   (p ?? [])
@@ -111,39 +84,37 @@ async function main() {
   p("## 1. Component placement");
   p();
   p(
-    "Band assignment is computed from each component's own `category` / `subcategory` in " +
-      "`components.yaml` (see `src/lib/bands.ts`) — no component is placed by hand. The last " +
-      "column shows where Google's SAIF map drew the same component, so the divergences are " +
-      "explicit.",
+    "Every box on the map is a CoSAI component. Band assignment starts from each " +
+      "component's own `category` / `subcategory` in `components.yaml`, and any divergence " +
+      "from that must be declared with a reason in `BAND_DEVIATIONS` (`src/lib/bands.ts`). " +
+      "The arrangement follows SAIF's stacked layout because that is what makes the diagram " +
+      "readable — the taxonomy is CoSAI's, the composition is SAIF's.",
   );
   p();
-  p("| Component | CoSAI category / subcategory | Our band | SAIF band | |");
+  p("| Component | CoSAI category / subcategory | CoSAI band | Drawn in | |");
   p("| --- | --- | --- | --- | --- |");
 
-  const moved: string[] = [];
+  const deviated: string[] = [];
   for (const c of components) {
-    const band = bandFor(c.category, c.subcategory);
-    const saif = SAIF_BAND[c.id];
-    const differs = saif && saif !== band;
-    if (differs) moved.push(c.id);
+    const band = bandFor(c.id, c.category, c.subcategory);
+    const cosai = cosaiBandFor(c.category, c.subcategory);
+    const differs = band !== cosai;
+    if (differs) deviated.push(c.id);
     p(
-      `| ${title(c.id)} | \`${c.category}\` / \`${c.subcategory ?? "—"}\` | **${band}** | ${saif ?? "—"} | ${
-        differs ? "moved" : ""
+      `| ${title(c.id)} | \`${c.category}\` / \`${c.subcategory ?? "—"}\` | ${cosai} | **${band}** | ${
+        differs ? "deviation" : ""
       } |`,
     );
   }
   p();
   p(
-    `${components.length} components, all drawn on the map. ${moved.length} sit in a different ` +
-      "band than SAIF used, because CoSAI classifies them differently:",
+    `${components.length} components, all drawn on the map. ${deviated.length} are drawn ` +
+      "outside the band CoSAI's classification implies. Each is a deliberate, declared choice " +
+      "in `BAND_DEVIATIONS` (`src/lib/bands.ts`); the build fails on any undeclared divergence:",
   );
   p();
-  for (const id of moved) {
-    const c = byId.get(id)!;
-    p(
-      `- **${title(c.id)}** — SAIF: ${SAIF_BAND[id]}; CoSAI: \`${c.category}\`/\`${c.subcategory}\` ` +
-        `→ ${bandFor(c.category, c.subcategory)}.`,
-    );
+  for (const id of deviated) {
+    p(`- **${title(id)}** — ${BAND_DEVIATIONS[id]?.reason ?? "undocumented"}`);
   }
   p();
 
@@ -151,9 +122,11 @@ async function main() {
   p("## 2. Flows");
   p();
   p(
-    "Every arrow on the map is an edge declared in `components.yaml`, and every declared edge " +
-      "is drawn. The build compares the two sets and fails on any addition, omission or " +
-      "reversal, so the arrows cannot drift from CoSAI.",
+    "Every arrow on the map is an edge declared in `components.yaml` — nothing is invented. " +
+      "CoSAI declares 32 edges; drawing all of them turns the picture into a wiring diagram, " +
+      "so a small number are deliberately left out and listed below. The build fails if an " +
+      "edge is drawn that CoSAI does not declare, or if a declared edge is neither drawn nor " +
+      "documented as undrawn.",
   );
   p();
   p("| From | To |");
@@ -162,7 +135,18 @@ async function main() {
     p(`| ${title(e.from)} | ${title(e.to)} |`);
   }
   p();
-  p(`${EDGES.length} edges.`);
+  p(`${EDGES.length} edges drawn.`);
+  p();
+  p("### Declared edges not drawn");
+  p();
+  for (const e of UNDRAWN_EDGES) {
+    p(`- **${title(e.from)} → ${title(e.to)}** — ${e.reason}`);
+  }
+  p();
+  p(
+    "Both remain visible in the product: the Components tab lists every component's full " +
+      "`receives from` / `sends to` set, so no CoSAI relationship is hidden.",
+  );
   p();
   p("### Known tension in the upstream data");
   p();

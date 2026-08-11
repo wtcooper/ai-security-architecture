@@ -90,10 +90,10 @@ export function RiskMap({
             d={edge.d}
             fill="none"
             stroke="var(--line-strong)"
-            strokeWidth={1.25}
-            strokeDasharray={edge.soft ? "5 4" : undefined}
+            strokeWidth={edge.soft ? 1 : 1.25}
+            strokeDasharray={edge.soft ? "3 5" : undefined}
             markerEnd="url(#arrow)"
-            opacity={edge.soft ? 0.65 : 0.95}
+            opacity={edge.soft ? 0.4 : 0.95}
           />
         ))}
       </g>
@@ -105,7 +105,10 @@ export function RiskMap({
           y={c.y}
           textAnchor="middle"
           fill="var(--ink-3)"
-          style={{ font: "500 12px var(--font-mono-id), monospace", letterSpacing: "0.04em" }}
+          style={{
+            font: `500 ${c.small ? 10.5 : 12}px var(--font-mono-id), monospace`,
+            letterSpacing: "0.04em",
+          }}
         >
           {c.text}
         </text>
@@ -138,10 +141,10 @@ function Bands() {
             <rect x={92} y={band.y} width={WIDTH - 102} height={band.height} rx={10} fill={t.fill} />
             <rect x={92} y={band.y} width={4} height={band.height} rx={2} fill={t.rail} />
             <text
-              x={80}
+              x={74}
               y={midY}
               textAnchor="middle"
-              transform={`rotate(-90 80 ${midY})`}
+              transform={`rotate(-90 74 ${midY})`}
               fill={t.rail}
               style={{
                 font: "600 12px var(--font-mono-id), monospace",
@@ -149,17 +152,6 @@ function Bands() {
               }}
             >
               {band.label.toUpperCase()}
-            </text>
-            <text
-              x={62}
-              y={midY}
-              textAnchor="middle"
-              transform={`rotate(-90 62 ${midY})`}
-              fill={t.rail}
-              opacity={0.6}
-              style={{ font: "400 10px var(--font-mono-id), monospace" }}
-            >
-              {band.sublabel}
             </text>
           </g>
         );
@@ -221,28 +213,16 @@ function Groups() {
               strokeDasharray="6 5"
               opacity={0.45}
             />
-            {group.labelPlacement === "left" ? (
-              <text
-                x={group.x + 15}
-                y={midY}
-                textAnchor="middle"
-                transform={`rotate(-90 ${group.x + 15} ${midY})`}
-                fill={t.rail}
-                style={{ font: "600 12px var(--font-mono-id), monospace", letterSpacing: "0.11em" }}
-              >
-                {group.label.toUpperCase()}
-              </text>
-            ) : (
-              <text
-                x={group.x + group.w / 2}
-                y={group.y + 24}
-                textAnchor="middle"
-                fill={t.rail}
-                style={{ font: "600 12px var(--font-mono-id), monospace", letterSpacing: "0.11em" }}
-              >
-                {group.label.toUpperCase()}
-              </text>
-            )}
+            <text
+              x={group.x + 14}
+              y={midY}
+              textAnchor="middle"
+              transform={`rotate(-90 ${group.x + 14} ${midY})`}
+              fill={t.rail}
+              style={{ font: "600 11px var(--font-mono-id), monospace", letterSpacing: "0.11em" }}
+            >
+              {group.label.toUpperCase()}
+            </text>
           </g>
         );
       })}
@@ -263,11 +243,11 @@ interface MapBoxProps {
 function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: MapBoxProps) {
   const t = BAND_TOKENS[bandOf(box.y)];
   const interactive = Boolean(onSelect);
-  const labelSize = box.emphasis ? 16 : 12.5;
+  const labelSize = box.emphasis ? 16 : box.compact ? 10.5 : 12.5;
 
   // Long labels in narrow boxes wrap onto two lines.
   const words = box.label.split(" ");
-  const wrap = !box.emphasis && box.label.length > 18 && box.w < 260;
+  const wrap = !box.emphasis && !box.compact && box.label.length > 18 && box.w < 200;
   const mid = Math.ceil(words.length / 2);
   const lines = wrap ? [words.slice(0, mid).join(" "), words.slice(mid).join(" ")] : [box.label];
 
