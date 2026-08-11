@@ -1,4 +1,5 @@
 import raw from "@/data/generated/dataset.json";
+import { ACTORS } from "./map-layout";
 import type { Component, Control, Dataset, Persona, Risk, RiskOverlay } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -52,7 +53,14 @@ const duplicateTitles = new Set(
   components.map((c) => c.title).filter((t, i, all) => all.indexOf(t) !== i),
 );
 
+const actorLabel = new Map(ACTORS.map((a) => [a.id, a.label]));
+
+/** Boundary actors are not CoSAI components but can be named by risks and incidents. */
+export const isActor = (id: string) => actorLabel.has(id);
+
 export const componentTitle = (id: string) => {
+  const actor = actorLabel.get(id);
+  if (actor) return actor;
   const component = componentById.get(id);
   if (!component) return id;
   return duplicateTitles.has(component.title) && QUALIFIER[id]

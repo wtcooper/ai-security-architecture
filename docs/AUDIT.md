@@ -43,6 +43,16 @@ Every box on the map is a CoSAI component. Band assignment starts from each comp
 - **Model Memory** — Agent plumbing — drawn inside the Agent group, as in SAIF
 - **Retrieval Augmented Generation & Content** — Agent plumbing — drawn inside the Agent group, as in SAIF
 
+### Boundary actors
+
+The map also draws what sits *outside* the system. CoSAI models the system only, so these are not components and are excluded from the coverage check — but SAIF drew them, and they are where untrusted input and third-party services cross the boundary. Risks and incident steps may name them, and they highlight like any component.
+
+| Actor | Boundary it marks |
+| --- | --- |
+| User (`actorUser`) | The person the system acts for — and the untrusted side of the application boundary. |
+| External Sources (`actorExternalSources`) | Third-party services, tool registries, package proxies and content the agent reaches out to at runtime. |
+| External Sources (`actorExternalData`) | Data gathered from outside the organisation before it ever reaches the pipeline. |
+
 ## 2. Flows
 
 Every arrow on the map is an edge declared in `components.yaml` — nothing is invented. CoSAI declares 32 edges; drawing all of them turns the picture into a wiring diagram, so a small number are deliberately left out and listed below. The build fails if an edge is drawn that CoSAI does not declare, or if a declared edge is neither drawn nor documented as undrawn.

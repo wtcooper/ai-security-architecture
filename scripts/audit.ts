@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor } from "../src/lib/bands";
-import { EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import { ACTORS, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 import type { Component, Control, Paragraph, Risk } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 
@@ -116,6 +116,20 @@ async function main() {
   for (const id of deviated) {
     p(`- **${title(id)}** — ${BAND_DEVIATIONS[id]?.reason ?? "undocumented"}`);
   }
+  p();
+
+  p("### Boundary actors");
+  p();
+  p(
+    "The map also draws what sits *outside* the system. CoSAI models the system only, so " +
+      "these are not components and are excluded from the coverage check — but SAIF drew them, " +
+      "and they are where untrusted input and third-party services cross the boundary. Risks " +
+      "and incident steps may name them, and they highlight like any component.",
+  );
+  p();
+  p("| Actor | Boundary it marks |");
+  p("| --- | --- |");
+  for (const a of ACTORS) p(`| ${a.label} (\`${a.id}\`) | ${a.hint} |`);
   p();
 
   // --- 2. Edges -----------------------------------------------------------------------

@@ -25,7 +25,7 @@ import type {
 } from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { BANDS, BOXES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
+import { ACTOR_IDS, BANDS, BOXES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 
 const ROOT = process.cwd();
 const COSAI_DIR = join(ROOT, "data", "cosai");
@@ -77,6 +77,9 @@ async function main() {
   const controls = controlsDoc.controls;
 
   const componentIds = new Set(components.map((c) => c.id));
+  // Risks and incidents may also point at a boundary actor (the User, external sources).
+  // Actors are drawn on the map but are not CoSAI components.
+  const mapTargets = new Set([...componentIds, ...ACTOR_IDS]);
   const riskIds = new Set(risks.map((r) => r.id));
   const controlIds = new Set(controls.map((c) => c.id));
   const personaIds = new Set(personasDoc.personas.map((p) => p.id));
@@ -112,7 +115,7 @@ async function main() {
   checkMapFidelity(components);
 
   // --- Overlay -----------------------------------------------------------------
-  const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds });
+  const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
   await checkAgainstSaifSeed(overlays, risks);
 
   // --- Incidents ---------------------------------------------------------------
@@ -126,7 +129,7 @@ async function main() {
       if (!PHASES.includes(step.phase)) fail(`${at}: bad phase ${step.phase}`);
       if (!step.components.length) fail(`${at}: no components`);
       for (const id of step.components) {
-        if (!componentIds.has(id)) fail(`${at}: unknown component ${id}`);
+        if (!mapTargets.has(id)) fail(`${at}: unknown component or actor ${id}`);
       }
       for (const id of step.risks ?? []) {
         if (!riskIds.has(id)) fail(`${at}: unknown risk ${id}`);

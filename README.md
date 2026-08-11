@@ -61,6 +61,11 @@ claim:
   application input/output round trip, and the map follows the prose, which is also SAIF's
   reading.
 
+- **The boundary is drawn too.** The User, and external sources on both the agent and the data
+  side, appear as dashed actors on the edges they cross. CoSAI models the system and not what
+  sits outside it, so these are not components — but most of the 2026 incidents happen exactly
+  there, so risks and incident steps can name them and they highlight like anything else.
+
 `docs/AUDIT.md` lists every placement, every edge, every deviation and every authored
 judgement.
 

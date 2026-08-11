@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ACTORS,
   BAND_TOKENS,
   BANDS,
   BOXES,
@@ -9,7 +10,9 @@ import {
   GROUPS,
   HEIGHT,
   RAILS,
+  TOP_MARGIN,
   WIDTH,
+  type Actor,
   type Box,
 } from "@/lib/map-layout";
 import type { Phase } from "@/lib/types";
@@ -60,7 +63,7 @@ export function RiskMap({
 
   return (
     <svg
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      viewBox={`0 ${-TOP_MARGIN} ${WIDTH} ${HEIGHT + TOP_MARGIN}`}
       className={className}
       role="img"
       aria-label={`CoSAI component map, highlighting where the risk is ${phase}`}
@@ -112,6 +115,16 @@ export function RiskMap({
         >
           {c.text}
         </text>
+      ))}
+
+      {ACTORS.map((actor) => (
+        <MapActor
+          key={actor.id}
+          actor={actor}
+          active={activeSet.has(actor.id)}
+          style={style}
+          stepMark={stepMarks?.[actor.id]}
+        />
       ))}
 
       {BOXES.map((box) => (
@@ -322,6 +335,91 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
             dominantBaseline="central"
             fill="#fff"
             style={{ font: "600 12px var(--font-mono-id), monospace", pointerEvents: "none" }}
+          >
+            {stepMark}
+          </text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+/**
+ * The User and the external world, drawn on the boundary they cross. Dashed and unfilled so
+ * they read as outside the system rather than as another component.
+ */
+function MapActor({
+  actor,
+  active,
+  style,
+  stepMark,
+}: {
+  actor: Actor;
+  active: boolean;
+  style: { stroke: string; fill: string; badge: string };
+  stepMark?: number;
+}) {
+  const cx = actor.x + actor.w / 2;
+  const cy = actor.y + actor.h / 2;
+  return (
+    <g>
+      <path
+        d={actor.d}
+        fill="none"
+        stroke={active ? style.stroke : "var(--line-strong)"}
+        strokeWidth={active ? 1.75 : 1.25}
+        strokeDasharray="4 4"
+        markerEnd={actor.directed ? "url(#arrow)" : undefined}
+        opacity={active ? 1 : 0.7}
+        style={{ transition: "stroke 200ms" }}
+      />
+      <rect
+        x={actor.x}
+        y={actor.y}
+        width={actor.w}
+        height={actor.h}
+        rx={11}
+        fill={active ? style.fill : "var(--paper)"}
+        stroke={active ? style.stroke : "var(--line-strong)"}
+        strokeWidth={active ? 1.75 : 1.25}
+        strokeDasharray={active ? undefined : "4 3"}
+        style={{ transition: "fill 200ms, stroke 200ms" }}
+      >
+        <title>{actor.hint}</title>
+      </rect>
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="central"
+        transform={actor.rotated ? `rotate(-90 ${cx} ${cy})` : undefined}
+        fill={active ? "var(--ink)" : "var(--ink-3)"}
+        style={{
+          font: "500 11px var(--font-mono-id), monospace",
+          letterSpacing: "0.06em",
+          pointerEvents: "none",
+          transition: "fill 200ms",
+        }}
+      >
+        {actor.label.toUpperCase()}
+      </text>
+      {stepMark !== undefined && (
+        <g className="badge-in">
+          <circle
+            cx={actor.x + actor.w}
+            cy={actor.y}
+            r={12}
+            fill="var(--ink)"
+            stroke="var(--paper)"
+            strokeWidth={2}
+          />
+          <text
+            x={actor.x + actor.w}
+            y={actor.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#fff"
+            style={{ font: "600 11px var(--font-mono-id), monospace", pointerEvents: "none" }}
           >
             {stepMark}
           </text>

@@ -76,6 +76,8 @@ export interface Caption {
 
 export const WIDTH = 1120;
 export const HEIGHT = 1070;
+/** Headroom above the diagram for the User actor, which sits outside the system. */
+export const TOP_MARGIN = 48;
 
 export const BANDS: Band[] = [
   {
@@ -259,9 +261,68 @@ export const EDGE_DEVIATIONS: { from: string; to: string; reason: string }[] = [
   },
 ];
 
+/**
+ * Boundary actors: the User and the external world. Neither is a CoSAI component — CoSAI
+ * models the system, not what sits outside it — but SAIF drew them, and they carry real
+ * meaning: they are where untrusted input and third-party services cross into the system.
+ * Most of the 2026 incidents live on exactly these edges, so they are highlightable and
+ * risks and incident steps may name them.
+ */
+export interface Actor {
+  id: string;
+  label: string;
+  /** Highlight pill. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Label runs vertically, for the right-hand rail. */
+  rotated?: boolean;
+  /** Connector into the system boundary. */
+  d: string;
+  /** One-way flows get an arrowhead; boundaries that carry traffic both ways do not. */
+  directed?: boolean;
+  hint: string;
+}
+
+export const ACTORS: Actor[] = [
+  {
+    id: "actorUser",
+    label: "User",
+    x: 516,
+    y: -40,
+    w: 88,
+    h: 24,
+    d: "M 560 -16 L 560 38",
+    hint: "The person the system acts for — and the untrusted side of the application boundary.",
+  },
+  {
+    id: "actorExternalSources",
+    label: "External Sources",
+    x: 1062,
+    y: 186,
+    w: 26,
+    h: 144,
+    rotated: true,
+    d: "M 942 258 L 1060 258",
+    hint: "Third-party services, tool registries, package proxies and content the agent reaches out to at runtime.",
+  },
+  {
+    id: "actorExternalData",
+    label: "External Sources",
+    x: 484,
+    y: 1046,
+    w: 152,
+    h: 24,
+    d: "M 560 1046 L 560 1022",
+    directed: true,
+    hint: "Data gathered from outside the organisation before it ever reaches the pipeline.",
+  },
+];
+
+export const ACTOR_IDS = ACTORS.map((a) => a.id);
+
 export const CAPTIONS: Caption[] = [
-  { text: "User", x: 560, y: 16 },
-  { text: "External sources", x: 560, y: 1058 },
   { text: "Perception · input transformation", x: 332, y: 133, small: true },
   { text: "Orchestration", x: 590, y: 133, small: true },
   { text: "Rendering · output transformation", x: 840, y: 133, small: true },
