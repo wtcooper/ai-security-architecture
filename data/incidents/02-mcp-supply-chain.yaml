@@ -1,0 +1,184 @@
+id: mcp-supply-chain
+title: The tool layer agents trust turned out to be the soft spot
+subtitle: >
+  Two years of MCP vulnerabilities, from a single malicious server owning the client to an
+  architectural flaw across every official SDK. The thing agents call is the thing attackers
+  own.
+dateRange: July 2025 – April 2026
+perspective: target
+map: agent
+summary:
+  - >
+    Agents pick tools from registries and manifests they did not write and cannot verify.
+    That trust is the vulnerability, and it has failed in every direction: the transport, the
+    server, the config, and the SDK itself.
+  - >
+    The pattern repeats. A malicious server injects commands into its client. An approved
+    config is swapped after approval. A server ships with no authentication at all. Then in
+    April 2026 the flaw moved down a layer, into the official SDKs — roughly 150 million
+    downloads and up to 200,000 vulnerable instances.
+patterns:
+  - Tool Poisoning
+  - Rug Pull
+  - Overprivileged Integration
+  - Unsandboxed Code Execution
+cves:
+  - CVE-2025-6514
+  - CVE-2025-54136
+  - CVE-2025-59528
+  - CVE-2026-32211
+risks:
+  - riskMCPTransportHijacking
+  - riskZombieShadowMCPServers
+  - riskToolRegistryTampering
+  - riskToolSourceProvenance
+  - riskShadowAndUnknownAgents
+  - riskOrchestratorRouteHijacking
+controls:
+  - controlComponentIdentityProvenance
+  - controlInterComponentTransportSecurity
+  - controlAgentInventoryManagement
+  - controlOrchestratorAndRouteIntegrity
+  - controlAgentPluginPermissions
+  - controlVulnerabilityManagement
+steps:
+  - n: 1
+    title: An untrusted server answers the handshake
+    phase: introduced
+    narrative: >
+      mcp-remote passed a malicious server's `authorization_endpoint` straight into the
+      system shell — remote code execution on the developer's own machine, from simply
+      connecting. CVSS 9.6, across 437,000+ downloads.
+    components:
+      - componentTools
+      - componentOrchestrationInputHandling
+    risks:
+      - riskMCPTransportHijacking
+      - riskToolSourceProvenance
+    cves:
+      - CVE-2025-6514
+    sources:
+      - title: "CVE-2025-6514: RCE in mcp-remote when connecting to untrusted MCP servers"
+        url: https://authzed.com/blog/timeline-mcp-breaches
+        publisher: AuthZed
+        date: 2025-07-09
+  - n: 2
+    title: Approved once, swapped afterwards
+    phase: introduced
+    narrative: >
+      Cursor "MCPoison" applied the rug-pull pattern to config: commit a benign MCP config,
+      get it approved once, then swap in the payload. Approval was never re-checked.
+      Patched in Cursor 1.3.
+    components:
+      - componentTools
+      - componentAgentSystemInstruction
+    risks:
+      - riskToolRegistryTampering
+    cves:
+      - CVE-2025-54136
+    sources:
+      - title: "MCPoison: persistent RCE via trusted-but-swapped MCP config"
+        url: https://authzed.com/blog/timeline-mcp-breaches
+        publisher: Check Point / AuthZed timeline
+        date: 2025-08-05
+  - n: 3
+    title: Servers shipped with the door open
+    phase: exposed
+    narrative: >
+      Flowise's CustomMCP node executed arbitrary JavaScript from an unauthenticated request
+      (CVSS 10.0). Azure's MCP Server shipped with no authentication at all (CVSS 9.1). By
+      April 2026, ~40 CVEs had been filed against MCP servers, clients and infrastructure.
+    components:
+      - componentTools
+      - componentOrchestrationInputHandling
+      - componentOrchestrationOutputHandling
+    risks:
+      - riskZombieShadowMCPServers
+      - riskShadowAndUnknownAgents
+    cves:
+      - CVE-2025-59528
+      - CVE-2026-32211
+    sources:
+      - title: "FlowiseAI Flowise RCE via CustomMCP node (CVE-2025-59528)"
+        url: https://www.sonicwall.com/blog/flowiseai-custom-mcp-node-remote-code-execution-
+        publisher: SonicWall
+        date: 2025-09-24
+      - title: "MCP security supply chain crisis, April 2026"
+        url: https://cyberstrategyinstitute.com/mcp-security-supply-chain-crisis/
+        publisher: Cyber Strategy Institute
+        date: 2026-04-30
+  - n: 4
+    title: The flaw moves into the SDKs
+    phase: exposed
+    narrative: >
+      An architectural STDIO flaw in the official Python, TypeScript, Java and Rust SDKs put
+      every downstream implementation at risk of remote code execution — roughly 150 million
+      downloads, 7,000 publicly reachable servers, up to 200,000 vulnerable instances.
+    components:
+      - componentTools
+      - componentOrchestrationInputHandling
+      - componentReasoningCore
+    risks:
+      - riskMCPTransportHijacking
+      - riskOrchestratorRouteHijacking
+    sources:
+      - title: "Anthropic MCP design vulnerability enables RCE, threatening AI supply chain"
+        url: https://thehackernews.com/2026/04/anthropic-mcp-design-vulnerability.html
+        publisher: The Hacker News
+        date: 2026-04-16
+      - title: "MCP security crisis: systemic design flaws in AI agent infrastructure"
+        url: https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-security-crisis-20260504-csa-styled/
+        publisher: Cloud Security Alliance
+        date: 2026-05-04
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Signed tool manifests with verified publisher identity stop steps 1 and 2. Mutual TLS
+      and origin validation close the transport. A central agent and server inventory,
+      with liveness attestation, means a decommissioned or unknown endpoint stops being
+      callable rather than lingering in a registry.
+    components:
+      - componentTools
+      - componentOrchestrationInputHandling
+      - componentOrchestrationOutputHandling
+      - componentReasoningCore
+      - componentModelServing
+    sources:
+      - title: "Securing MCP: a defense-first architecture guide"
+        url: https://christian-schneider.net/blog/securing-mcp-defense-first-architecture/
+        publisher: Christian Schneider
+alsoSeen:
+  - title: postmark-mcp npm backdoor
+    date: September 2025
+    note: >
+      A near-perfect replica of the official Postmark MCP server built trust across 15
+      releases, then began BCC'ing every outgoing email to the attacker.
+    sources:
+      - title: "A timeline of Model Context Protocol security breaches"
+        url: https://authzed.com/blog/timeline-mcp-breaches
+        publisher: AuthZed
+  - title: ClawHavoc — 1,200+ malicious skills on the OpenClaw marketplace
+    date: January–February 2026
+    note: >
+      The same trust problem one layer up: a public skill marketplace used to distribute the
+      AMOS credential stealer. CVE-2026-25253 was the first CVE assigned to an agentic system.
+    sources:
+      - title: "MCP security statistics 2026: CVEs, vulnerabilities and breach data"
+        url: https://www.practical-devsecops.com/mcp-security-statistics-2026-report/
+        publisher: Practical DevSecOps
+sources:
+  - title: "A timeline of Model Context Protocol (MCP) security breaches"
+    url: https://authzed.com/blog/timeline-mcp-breaches
+    publisher: AuthZed
+  - title: "Anthropic MCP design vulnerability enables RCE, threatening AI supply chain"
+    url: https://thehackernews.com/2026/04/anthropic-mcp-design-vulnerability.html
+    publisher: The Hacker News
+    date: 2026-04-16
+  - title: "MCP security crisis: systemic design flaws in AI agent infrastructure"
+    url: https://labs.cloudsecurityalliance.org/research/csa-research-note-mcp-security-crisis-20260504-csa-styled/
+    publisher: Cloud Security Alliance
+    date: 2026-05-04
+  - title: "The Vulnerable MCP Project"
+    url: https://vulnerablemcp.info/
+    publisher: Vulnerable MCP Project
