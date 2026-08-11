@@ -74,6 +74,7 @@ export function RiskMap({
   const [panning, setPanning] = useState(false);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
+  const captured = useRef(false);
 
   /** Client coordinates -> the map's own coordinate space. */
   const toMap = useCallback((clientX: number, clientY: number) => {
@@ -108,18 +109,26 @@ export function RiskMap({
     return () => svg.removeEventListener("wheel", onWheel);
   }, [toMap, zoomAbout]);
 
+  // Pointer capture is deliberately not taken until the pointer has actually moved: capturing
+  // on pointerdown redirects the following click to the <svg>, so it never reaches the box the
+  // visitor was aiming at.
   const startPan = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.button !== 0) return;
     drag.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
-    setPanning(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
+    captured.current = false;
   };
 
   const doPan = (e: React.PointerEvent<SVGSVGElement>) => {
     const from = drag.current;
     if (!from) return;
-    if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) > 3) moved.current = true;
+    if (!moved.current) {
+      if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) <= 3) return;
+      moved.current = true;
+      captured.current = true;
+      setPanning(true);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
     const a = toMap(from.x, from.y);
     const b = toMap(e.clientX, e.clientY);
     drag.current = { x: e.clientX, y: e.clientY };
@@ -128,8 +137,11 @@ export function RiskMap({
 
   const endPan = (e: React.PointerEvent<SVGSVGElement>) => {
     drag.current = null;
-    setPanning(false);
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    if (captured.current) {
+      captured.current = false;
+      setPanning(false);
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+    }
   };
 
   // A drag that ends over a box should not also select it.
