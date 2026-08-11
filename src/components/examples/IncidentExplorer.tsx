@@ -59,6 +59,8 @@ export function IncidentExplorer() {
           steps={incident.steps.map((s) => s.phase)}
           current={stepIndex}
           onSelect={setStepIndex}
+          onPrevious={() => setStepIndex((i) => Math.max(0, i - 1))}
+          onNext={() => setStepIndex((i) => Math.min(incident.steps.length - 1, i + 1))}
         />
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -137,25 +139,6 @@ export function IncidentExplorer() {
           <Sources sources={step.sources} label="Sources for this step" />
         </div>
 
-        <div className="flex items-center justify-between border-t border-line bg-paper px-6 py-3.5">
-          <button
-            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-            disabled={stepIndex === 0}
-            className="text-[13.5px] font-semibold text-ink-2 transition-colors hover:text-ink disabled:opacity-30"
-          >
-            ← Previous
-          </button>
-          <span className="ident">
-            {stepIndex + 1} / {incident.steps.length}
-          </span>
-          <button
-            onClick={() => setStepIndex((i) => Math.min(incident.steps.length - 1, i + 1))}
-            disabled={stepIndex === incident.steps.length - 1}
-            className="text-[13.5px] font-semibold text-introduced transition-opacity hover:underline disabled:opacity-30 disabled:no-underline"
-          >
-            Next →
-          </button>
-        </div>
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6">
@@ -190,10 +173,14 @@ function StepRail({
   steps,
   current,
   onSelect,
+  onPrevious,
+  onNext,
 }: {
   steps: Phase[];
   current: number;
   onSelect: (i: number) => void;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
   return (
     <div className="border-b border-line px-6 py-4">
@@ -224,6 +211,25 @@ function StepRail({
             </button>
           );
         })}
+      </div>
+      <div className="mt-4 flex items-center justify-between">
+        <button
+          onClick={onPrevious}
+          disabled={current === 0}
+          className="text-[13.5px] font-semibold text-ink-2 transition-colors hover:text-ink disabled:opacity-30 disabled:hover:text-ink-2"
+        >
+          ← Previous
+        </button>
+        <span className="ident">
+          {current + 1} / {steps.length}
+        </span>
+        <button
+          onClick={onNext}
+          disabled={current === steps.length - 1}
+          className="text-[13.5px] font-semibold text-introduced transition-opacity hover:underline disabled:opacity-30 disabled:no-underline"
+        >
+          Next →
+        </button>
       </div>
     </div>
   );

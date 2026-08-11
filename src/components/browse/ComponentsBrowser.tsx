@@ -90,7 +90,6 @@ export function ComponentsBrowser() {
             <h2 className="display mt-1.5 text-[24px] font-bold leading-tight text-ink">
               {componentTitle(component!.id)}
             </h2>
-            <p className="ident mt-1">{component!.id}</p>
 
             <Prose
               blocks={component!.description}

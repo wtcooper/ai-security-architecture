@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import {
   ACTORS,
   BAND_TOKENS,
@@ -52,6 +54,10 @@ interface RiskMapProps {
   className?: string;
 }
 
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 6;
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
 export function RiskMap({
   phase,
   active,
@@ -63,12 +69,90 @@ export function RiskMap({
   const activeSet = new Set(active);
   const style = selectionOnly ? SELECTION_STYLE : PHASE_STYLE[phase];
 
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [view, setView] = useState({ k: 1, x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const drag = useRef<{ x: number; y: number } | null>(null);
+  const moved = useRef(false);
+
+  /** Client coordinates -> the map's own coordinate space. */
+  const toMap = useCallback((clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return { x: 0, y: 0 };
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const { x, y } = point.matrixTransform(ctm.inverse());
+    return { x, y };
+  }, []);
+
+  /** Zoom about a fixed point, so the thing under the cursor stays under the cursor. */
+  const zoomAbout = useCallback((factor: number, at: { x: number; y: number }) => {
+    setView((v) => {
+      const k = clamp(v.k * factor, MIN_ZOOM, MAX_ZOOM);
+      const ratio = k / v.k;
+      return { k, x: at.x - (at.x - v.x) * ratio, y: at.y - (at.y - v.y) * ratio };
+    });
+  }, []);
+
+  // Wheel needs a non-passive listener to stop the page scrolling underneath.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAbout(e.deltaY < 0 ? 1.12 : 1 / 1.12, toMap(e.clientX, e.clientY));
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [toMap, zoomAbout]);
+
+  const startPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return;
+    drag.current = { x: e.clientX, y: e.clientY };
+    moved.current = false;
+    setPanning(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const doPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    const from = drag.current;
+    if (!from) return;
+    if (Math.abs(e.clientX - from.x) + Math.abs(e.clientY - from.y) > 3) moved.current = true;
+    const a = toMap(from.x, from.y);
+    const b = toMap(e.clientX, e.clientY);
+    drag.current = { x: e.clientX, y: e.clientY };
+    setView((v) => ({ ...v, x: v.x + (b.x - a.x), y: v.y + (b.y - a.y) }));
+  };
+
+  const endPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    drag.current = null;
+    setPanning(false);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  };
+
+  // A drag that ends over a box should not also select it.
+  const select = onSelect
+    ? (id: string) => {
+        if (!moved.current) onSelect(id);
+      }
+    : undefined;
+
+  const centre = { x: WIDTH / 2, y: HEIGHT / 2 };
+
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 ${-TOP_MARGIN} ${WIDTH} ${HEIGHT + TOP_MARGIN}`}
       className={className}
       role="img"
-      aria-label={`CoSAI component map, highlighting where the risk is ${phase}`}
+      aria-label={`AI system component map, highlighting where the risk is ${phase}`}
+      onPointerDown={startPan}
+      onPointerMove={doPan}
+      onPointerUp={endPan}
+      onPointerCancel={endPan}
+      style={{ touchAction: "none", cursor: panning ? "grabbing" : "grab" }}
     >
       <defs>
         <marker
@@ -84,9 +168,10 @@ export function RiskMap({
         </marker>
       </defs>
 
+      <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
       <Bands />
       <Rails />
-      <Groups onSelect={onSelect} selected={active} />
+      <Groups onSelect={select} selected={active} />
 
       <g>
         {EDGES.map((edge) => (
@@ -96,9 +181,9 @@ export function RiskMap({
             fill="none"
             stroke="var(--line-strong)"
             strokeWidth={edge.soft ? 1 : 1.25}
-            strokeDasharray={edge.soft ? "3 5" : undefined}
+            strokeDasharray={edge.soft ? "4 4" : undefined}
             markerEnd="url(#arrow)"
-            opacity={edge.soft ? 0.4 : 0.95}
+            opacity={edge.soft ? 0.6 : 0.95}
           />
         ))}
       </g>
@@ -138,10 +223,93 @@ export function RiskMap({
           style={style}
           showBadge={!selectionOnly}
           stepMark={stepMarks?.[box.id]}
-          onSelect={onSelect}
+          onSelect={select}
         />
       ))}
+      </g>
+
+      <ZoomControls
+        zoom={view.k}
+        onIn={() => zoomAbout(1.3, centre)}
+        onOut={() => zoomAbout(1 / 1.3, centre)}
+        onReset={() => setView({ k: 1, x: 0, y: 0 })}
+      />
     </svg>
+  );
+}
+
+/** Zoom controls, drawn outside the pan/zoom transform so they stay put. */
+function ZoomControls({
+  zoom,
+  onIn,
+  onOut,
+  onReset,
+}: {
+  zoom: number;
+  onIn: () => void;
+  onOut: () => void;
+  onReset: () => void;
+}) {
+  const buttons = [
+    { label: "Zoom in", onClick: onIn, glyph: <><path d="M -6 0 H 6" /><path d="M 0 -6 V 6" /></> },
+    { label: "Zoom out", onClick: onOut, glyph: <path d="M -6 0 H 6" /> },
+    {
+      label: "Reset view",
+      onClick: onReset,
+      glyph: (
+        <>
+          <path d="M -5.5 -5.5 H 5.5 V 5.5 H -5.5 Z" />
+          <path d="M -2 -2 H 2 V 2 H -2 Z" />
+        </>
+      ),
+    },
+  ];
+  return (
+    <g>
+      {zoom !== 1 && (
+        <text
+          x={938}
+          y={1051}
+          textAnchor="end"
+          fill="var(--ink-3)"
+          style={{ font: "500 11px var(--font-mono-id), monospace" }}
+        >
+          {Math.round(zoom * 100)}%
+        </text>
+      )}
+      {buttons.map((b, i) => (
+        <g
+          key={b.label}
+          transform={`translate(${979 + i * 32} 1046)`}
+          role="button"
+          tabIndex={0}
+          aria-label={b.label}
+          onClick={b.onClick}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              b.onClick();
+            }
+          }}
+          style={{ cursor: "pointer" }}
+        >
+          <rect
+            x={-13}
+            y={-13}
+            width={26}
+            height={26}
+            rx={7}
+            fill="var(--paper)"
+            stroke="var(--line-strong)"
+            strokeWidth={1.25}
+          />
+          <g fill="none" stroke="var(--ink-2)" strokeWidth={1.6} strokeLinecap="round">
+            {b.glyph}
+          </g>
+        </g>
+      ))}
+    </g>
   );
 }
 

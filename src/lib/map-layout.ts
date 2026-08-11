@@ -136,7 +136,7 @@ export const GROUPS: Group[] = [
     x: 216,
     y: 112,
     w: 730,
-    h: 288,
+    h: 274,
     band: "application",
     hint: "CoSAI has no single Agent component. An agent is this set of components working together — perception, a reasoning core, orchestration over tools and memory, and rendering.",
     members: [
@@ -176,13 +176,13 @@ export const BOXES: Box[] = [
 
   // --- Agent · rendering and core ------------------------------------------------------
   { id: "componentAgentOutputHandling", sublabel: "Output Transformation", group: true, x: 750, y: 144, w: 180, h: 156 },
-  { id: "componentReasoningCore", x: 420, y: 336, w: 320, h: 46, emphasis: true },
+  { id: "componentReasoningCore", x: 420, y: 330, w: 320, h: 46, emphasis: true },
 
   // --- Application core, model-facing --------------------------------------------------
   // CoSAI files these under the application, and their only edges are to and from the model:
   // they are application-owned guards on the model boundary, which is what the labels say.
-  { id: "componentApplicationInputHandling", x: 240, y: 420, w: 260, h: 34 },
-  { id: "componentApplicationOutputHandling", x: 620, y: 420, w: 260, h: 34 },
+  { id: "componentApplicationInputHandling", x: 240, y: 430, w: 260, h: 34 },
+  { id: "componentApplicationOutputHandling", x: 620, y: 430, w: 260, h: 34 },
 
   // --- Model core -----------------------------------------------------------------------
   { id: "componentTheModel", x: 240, y: 504, w: 640, h: 54, emphasis: true },
@@ -220,10 +220,10 @@ export const EDGES: Edge[] = [
   // --- Application core round trip through the model ------------------------------------
   // Drawn in SAIF's direction; CoSAI declares these four the other way round. See
   // EDGE_DEVIATIONS for the reasoning.
-  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 370 402 L 370 418", soft: true },
-  { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 454 L 370 502" },
-  { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 456" },
-  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 750 418 L 750 402", soft: true },
+  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 370 388 L 370 428", soft: true },
+  { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 464 L 370 502" },
+  { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 466" },
+  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 750 428 L 750 388", soft: true },
 
   // --- The application drives the agent, and the agent answers back ----------------------
   // Straight into Perception and straight out of Rendering, as SAIF drew it.
@@ -231,16 +231,16 @@ export const EDGES: Edge[] = [
   { from: "componentAgentOutputHandling", to: "componentApplication", d: "M 840 142 L 840 84" },
 
   // --- The agent talks to the model, and the model back ----------------------------------
-  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 540 502 L 540 402", soft: true },
-  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 580 402 L 580 502", soft: true },
+  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 540 502 L 540 388", soft: true },
+  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 580 388 L 580 502", soft: true },
 
   // --- Inside the agent -------------------------------------------------------------------
-  { from: "componentAgentInputHandling", to: "componentReasoningCore", d: "M 336 302 L 336 359 L 418 359" },
-  { from: "componentReasoningCore", to: "componentAgentOutputHandling", d: "M 742 359 L 840 359 L 840 302" },
+  { from: "componentAgentInputHandling", to: "componentReasoningCore", d: "M 336 302 L 336 353 L 418 353" },
+  { from: "componentReasoningCore", to: "componentAgentOutputHandling", d: "M 742 353 L 840 353 L 840 302" },
 
   // --- The reasoning core drives orchestration and reads the result -----------------------
-  { from: "componentReasoningCore", to: "componentOrchestrationInputHandling", d: "M 700 340 L 720 340 L 720 156 L 692 156" },
-  { from: "componentOrchestrationOutputHandling", to: "componentReasoningCore", d: "M 470 304 L 444 304 L 444 350 L 418 350" },
+  { from: "componentReasoningCore", to: "componentOrchestrationInputHandling", d: "M 700 334 L 720 334 L 720 156 L 692 156" },
+  { from: "componentOrchestrationOutputHandling", to: "componentReasoningCore", d: "M 470 304 L 444 304 L 444 344 L 418 344" },
 
   // --- Orchestration bus: in to each resource, each resource back out ----------------------
   { from: "componentOrchestrationInputHandling", to: "componentTools", d: "M 470 158 L 452 158 L 452 192 L 468 192" },

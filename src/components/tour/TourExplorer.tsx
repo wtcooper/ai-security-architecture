@@ -109,6 +109,25 @@ export function TourExplorer() {
 
         <div className="px-6 py-4 border-b border-line">
           <PhaseRail phase={phase} onChange={(p) => setPhaseIndex(PHASES.indexOf(p))} counts={counts} />
+          <div className="mt-4 flex items-center justify-between">
+            <button
+              onClick={() => go(-1)}
+              disabled={stepNumber === 1}
+              className="text-[13.5px] font-semibold text-ink-2 transition-colors hover:text-ink disabled:opacity-30 disabled:hover:text-ink-2"
+            >
+              ← Previous
+            </button>
+            <span className="ident">
+              {stepNumber} / {totalSteps}
+            </span>
+            <button
+              onClick={() => go(1)}
+              disabled={stepNumber === totalSteps}
+              className="text-[13.5px] font-semibold text-introduced transition-opacity hover:underline disabled:opacity-30 disabled:no-underline"
+            >
+              Next →
+            </button>
+          </div>
         </div>
 
         <div className="px-6 py-5 flex-1 overflow-y-auto">
@@ -167,25 +186,6 @@ export function TourExplorer() {
           </Link>
         </div>
 
-        <div className="border-t border-line px-6 py-3.5 flex items-center justify-between bg-paper">
-          <button
-            onClick={() => go(-1)}
-            disabled={stepNumber === 1}
-            className="text-[13.5px] font-semibold text-ink-2 hover:text-ink disabled:opacity-30 disabled:hover:text-ink-2 transition-colors"
-          >
-            ← Previous
-          </button>
-          <span className="ident">
-            {stepNumber} / {totalSteps}
-          </span>
-          <button
-            onClick={() => go(1)}
-            disabled={stepNumber === totalSteps}
-            className="text-[13.5px] font-semibold text-introduced hover:underline disabled:opacity-30 disabled:no-underline transition-opacity"
-          >
-            Next →
-          </button>
-        </div>
       </aside>
 
       {/* ------------------------------------------------------------------ map */}

@@ -68,7 +68,6 @@ export function PersonasBrowser() {
             <h2 className="display text-[27px] font-bold leading-tight text-ink">
               {persona.title}
             </h2>
-            <p className="ident mt-1">{persona.id}</p>
 
             <Prose blocks={persona.description} className="mt-4" />
 
