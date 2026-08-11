@@ -212,7 +212,7 @@ function StepRail({
           );
         })}
       </div>
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3">
         <button
           onClick={onPrevious}
           disabled={current === 0}
@@ -220,9 +220,6 @@ function StepRail({
         >
           ← Previous
         </button>
-        <span className="ident">
-          {current + 1} / {steps.length}
-        </span>
         <button
           onClick={onNext}
           disabled={current === steps.length - 1}

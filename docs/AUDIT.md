@@ -77,7 +77,6 @@ Every arrow on the map is an edge declared in `components.yaml` — nothing is i
 | --- | --- |
 | Perception | Agent Reasoning Core |
 | Rendering | Application |
-| Rendering | The Model |
 | Application | Model Input Handling |
 | Application | Perception |
 | Model Input Handling | The Model |
@@ -100,11 +99,10 @@ Every arrow on the map is an edge declared in `components.yaml` — nothing is i
 | Agent Reasoning Core | Orchestration Input |
 | The Model | Model Evaluation |
 | The Model | Model Output Handling |
-| The Model | Perception |
 | External Tools and Services | Orchestration Output |
 | Training Data | Data Storage Infrastructure |
 
-28 edges drawn.
+26 edges drawn.
 
 ### Edges drawn in the opposite direction
 
@@ -124,6 +122,8 @@ Four flows cross between the application layer and the model: the application's 
 
 ### Declared edges not drawn
 
+- **The Model → Perception** — The agent's traffic to and from the model is already drawn, through the model handlers. A second line bypassing them says nothing new and crowds the boundary.
+- **Rendering → The Model** — Return leg of the same duplicate path; the drawn route out through Model Output Handling already carries it.
 - **The Model → Orchestration Input** — The model reaching orchestration directly duplicates the Reasoning Core path already drawn, and needs a long route across three bands to show it.
 - **Orchestration Output → The Model** — Return leg of the same duplicate path; the drawn Orchestration → Reasoning Core → Model route already carries it.
 

@@ -16,17 +16,16 @@
  *                     nothing silently dropped.
  *
  * On (3): SAIF's diagram is readable because it draws the primary flow and leaves secondary
- * paths implied. Drawing all 32 CoSAI edges turns the picture into a wiring diagram, so two
- * long-haul edges are deliberately omitted here. Both remain visible on the Components tab,
- * which lists every component's full "receives from / sends to" set.
+ * paths implied. Drawing all 32 CoSAI edges turns the picture into a wiring diagram, so a few
+ * that duplicate a route already on the map are deliberately omitted. Every one of them stays
+ * visible on the Components tab, which lists each component's full "receives from / sends to".
  *
- * ROUTING CONVENTION. Four flows cross the boundary between the application layer and the
- * model: the application's round trip through the model handlers, and the agent's own round
- * trip through the model. Routing those to their exact component means dragging a line around
- * the whole agent, which is what made an earlier version unreadable. Following SAIF, they are
- * drawn as short arrows meeting the Agent group's edge — the group stands in for whatever
- * inside it is the real endpoint. The declared endpoints in the data are unchanged and still
- * checked; only the drawn geometry is abbreviated.
+ * ROUTING CONVENTION. The application's round trip through the model handlers is drawn as two
+ * short arrows meeting the Agent group's edge, following SAIF — the group stands in for
+ * whatever inside it is the real endpoint. Routing them to their exact component means
+ * dragging a line around the whole agent, which is what made an earlier version unreadable.
+ * The declared endpoints in the data are unchanged and still checked; only the drawn geometry
+ * is abbreviated.
  */
 import type { BandId } from "./bands";
 
@@ -220,19 +219,15 @@ export const EDGES: Edge[] = [
   // --- Application core round trip through the model ------------------------------------
   // Drawn in SAIF's direction; CoSAI declares these four the other way round. See
   // EDGE_DEVIATIONS for the reasoning.
-  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 370 388 L 370 428", soft: true },
+  { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 370 388 L 370 428" },
   { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 464 L 370 502" },
   { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 466" },
-  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 750 428 L 750 388", soft: true },
+  { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 750 428 L 750 388" },
 
   // --- The application drives the agent, and the agent answers back ----------------------
   // Straight into Perception and straight out of Rendering, as SAIF drew it.
   { from: "componentApplication", to: "componentAgentInputHandling", d: "M 336 84 L 336 142" },
   { from: "componentAgentOutputHandling", to: "componentApplication", d: "M 840 142 L 840 84" },
-
-  // --- The agent talks to the model, and the model back ----------------------------------
-  { from: "componentTheModel", to: "componentAgentInputHandling", d: "M 540 502 L 540 388", soft: true },
-  { from: "componentAgentOutputHandling", to: "componentTheModel", d: "M 580 388 L 580 502", soft: true },
 
   // --- Inside the agent -------------------------------------------------------------------
   { from: "componentAgentInputHandling", to: "componentReasoningCore", d: "M 336 302 L 336 353 L 418 353" },
@@ -273,6 +268,20 @@ export const CONTAINMENT_EDGES: { from: string; to: string; reason: string }[] =
  * component's "receives from / sends to". The build requires every undrawn edge to be here.
  */
 export const UNDRAWN_EDGES: { from: string; to: string; reason: string }[] = [
+  {
+    from: "componentTheModel",
+    to: "componentAgentInputHandling",
+    reason:
+      "The agent's traffic to and from the model is already drawn, through the model handlers. " +
+      "A second line bypassing them says nothing new and crowds the boundary.",
+  },
+  {
+    from: "componentAgentOutputHandling",
+    to: "componentTheModel",
+    reason:
+      "Return leg of the same duplicate path; the drawn route out through Model Output Handling " +
+      "already carries it.",
+  },
   {
     from: "componentTheModel",
     to: "componentOrchestrationInputHandling",

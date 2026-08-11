@@ -109,7 +109,7 @@ export function TourExplorer() {
 
         <div className="px-6 py-4 border-b border-line">
           <PhaseRail phase={phase} onChange={(p) => setPhaseIndex(PHASES.indexOf(p))} counts={counts} />
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3">
             <button
               onClick={() => go(-1)}
               disabled={stepNumber === 1}
@@ -117,9 +117,6 @@ export function TourExplorer() {
             >
               ← Previous
             </button>
-            <span className="ident">
-              {stepNumber} / {totalSteps}
-            </span>
             <button
               onClick={() => go(1)}
               disabled={stepNumber === totalSteps}
