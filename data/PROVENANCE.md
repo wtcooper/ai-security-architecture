@@ -39,11 +39,15 @@ the Frameworks tab shows `AML.M0003` with nothing to read. Each block records it
   Labels are ATLAS names verbatim; descriptions are the first sentence of the ATLAS
   description. Two identifiers CoSAI stamps `@5.0.1` (`AML.T0034.002`, `AML.M0028`) were not
   defined until later; their text comes from `v5.6.0` and each carries a note saying so.
-- **OWASP Top 10 for LLM 2025** — OWASP's titles, with one-sentence summaries written here.
-- **STRIDE** — the standard definitions of the six categories.
+- **OWASP Top 10 for LLM 2025** — the opening of OWASP's own Description section for each
+  entry, from the project's `2_0_vulns/` source files, trimmed to the definitional sentences.
+- **STRIDE** — Microsoft's own wording for each category, from the Threat Modeling Tool
+  documentation, with the security property each category threatens.
 - **NIST AI RMF 1.0** — subcategory text verbatim from the NIST AI RMF Playbook
   (`airc.nist.gov`). The short labels are ours; NIST publishes the subcategories without one.
-- **ISO/IEC 22989:2022** — clause 5 ecosystem roles, summarised here.
+- **ISO/IEC 22989:2022** — clause 5 ecosystem roles. The standard's text is not openly
+  licensed, so these describe each role as the standard defines it rather than quoting it.
+  The only block here that is not the framework's own words.
 
 `npm run data` fails if CoSAI maps to an identifier with no entry, and reports any entry
 nothing maps to — except for OWASP and STRIDE, where the full published list is shown on
