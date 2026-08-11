@@ -77,6 +77,14 @@ export function FrameworksBrowser() {
               {view.framework.version && (
                 <span className="ident">version {view.framework.version}</span>
               )}
+              {view.framework.authored && (
+                <span
+                  className="rounded-full bg-mist px-2 py-[2px] text-[11px] font-semibold text-ink-2"
+                  title="CoSAI does not carry this framework. The mappings onto it were authored in this repository."
+                >
+                  mappings authored here
+                </span>
+              )}
               <a
                 href={view.framework.documentUri ?? view.framework.baseUri}
                 target="_blank"
@@ -86,6 +94,57 @@ export function FrameworksBrowser() {
                 Official reference ↗
               </a>
             </div>
+
+            {view.framework.authored && view.framework.attribution && (
+              <div className="mt-4 rounded-lg border-l-[3px] border-line-strong bg-mist py-3 pl-4 pr-4">
+                <p className="eyebrow">Not CoSAI&rsquo;s cross-reference</p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
+                  {view.framework.attribution}
+                </p>
+                {view.framework.mappingRationale && (
+                  <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
+                    {view.framework.mappingRationale}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {view.note && (
+              <div className="mt-4 rounded-lg border-l-[3px] border-exposed bg-exposed-soft/30 py-3 pl-4 pr-4">
+                <p className="text-[13px] font-semibold leading-snug text-ink">
+                  {view.note.headline}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">{view.note.body}</p>
+                {view.note.link && (
+                  <a
+                    href={view.note.link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block text-[12.5px] font-semibold text-introduced hover:underline"
+                  >
+                    {view.note.link.label} ↗
+                  </a>
+                )}
+                {view.note.crosswalk && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
+                      2025 → 2026 identifier translation
+                    </summary>
+                    <ul className="mt-2 space-y-2">
+                      {view.note.crosswalk.map((row) => (
+                        <li key={row.from} className="text-[12.5px] leading-snug text-ink-2">
+                          <span className="ident">{row.from}</span>
+                          <span className="mx-1 text-ink-3">→</span>
+                          <span className="ident">{row.to}</span>{" "}
+                          <span className="font-semibold text-ink">{row.title}</span>
+                          <span className="block text-ink-3">{row.change}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
 
             {view.coverage.length > 0 ? (
               <div className="mt-4 border-t border-line pt-3">
@@ -163,8 +222,9 @@ export function FrameworksBrowser() {
 
                 {entry.total === 0 ? (
                   <p className="mt-4 rounded-lg border-l-[3px] border-exposed bg-exposed-soft/40 py-3 pl-4 pr-4 text-[13.5px] leading-relaxed text-ink-2">
-                    Nothing in CoSAI maps to this entry. That is a gap in the cross-reference
-                    worth knowing about if this framework is what you are measured against.
+                    {view.framework.authored
+                      ? "Nothing maps to this entry. CoSAI has no risk that describes it, so there was nothing to map — a real gap in the taxonomy rather than a missing judgement."
+                      : "Nothing in CoSAI maps to this entry. That is a gap in the cross-reference worth knowing about if this framework is what you are measured against."}
                   </p>
                 ) : (
                   <div className="mt-5 grid gap-6 sm:grid-cols-2">

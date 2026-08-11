@@ -49,9 +49,29 @@ the Frameworks tab shows `AML.M0003` with nothing to read. Each block records it
   licensed, so these describe each role as the standard defines it rather than quoting it.
   The only block here that is not the framework's own words.
 
+- **OWASP Top 10 for Agentic Applications 2026** — OWASP's titles and descriptions, from the
+  9 December 2025 publication announcement and the project's summary of each entry. CoSAI
+  does not carry this framework at all; see below.
+
 `npm run data` fails if CoSAI maps to an identifier with no entry, and reports any entry
-nothing maps to — except for OWASP and STRIDE, where the full published list is shown on
-purpose so unmapped entries read as gaps in CoSAI's cross-reference.
+nothing maps to — except for OWASP LLM, STRIDE and OWASP Agentic, where the full published
+list is shown on purpose so unmapped entries read as gaps.
+
+## Framework material that is not CoSAI's
+
+`data/overlay/frameworks-authored.yaml` is original work in this repository, kept separate
+from the vendored CoSAI snapshot and badged in the UI so the two are never confused.
+
+- **OWASP Top 10 for Agentic Applications (ASI01–ASI10)** is a framework CoSAI does not
+  carry: its `frameworks.yaml` lists six, the OWASP entry among them is the LLM Top 10, and
+  nothing in CoSAI's risks, controls or personas references an ASI identifier. The framework
+  is OWASP's; the 21 risk mappings onto it are judgements made here. A risk is mapped only
+  where the ASI entry describes it as it occurs in an agentic system — 15 of CoSAI's 36 are
+  deliberately left unmapped, and ASI09 has nothing mapped to it because CoSAI has no risk
+  for a human over-trusting an agent.
+- **The OWASP LLM note** records that CoSAI maps against the 2025 edition while OWASP
+  published a 2026 edition on 5 August 2026, and carries the identifier crosswalk between
+  them. CoSAI's own identifiers are left exactly as published.
 
 ## Overlay
 

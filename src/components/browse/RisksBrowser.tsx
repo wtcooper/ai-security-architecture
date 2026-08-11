@@ -16,6 +16,7 @@ import {
   risks,
   vocabTitle,
 } from "@/lib/data";
+import { mappingsForRisk } from "@/lib/frameworks";
 import { PHASES } from "@/lib/types";
 
 const CATEGORY_ACCENT: Record<string, string> = {
@@ -157,7 +158,7 @@ export function RisksBrowser() {
                         </div>
 
                         <div className="mt-6">
-                          <MappingBadges mappings={risk.mappings} />
+                          <MappingBadges mappings={risk.mappings} extra={mappingsForRisk(risk)} />
                         </div>
 
                         <Link

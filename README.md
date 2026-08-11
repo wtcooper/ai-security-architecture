@@ -105,7 +105,7 @@ provenances:
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
-| **Frameworks** | The cross-reference, read backwards. Pick OWASP / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
+| **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Examples** | Five incidents replayed step by step on the map, every step sourced. |
 
 Every map view supports pan and zoom.
@@ -119,7 +119,7 @@ the part most cross-reference tables leave out: **what a framework does not reac
 
 The frameworks apply to different things, and CoSAI is explicit about which:
 
-| Framework | Applies to | Entries | Coverage in CoSAI |
+| Framework | Applies to | Entries | Coverage |
 | --- | --- | --- | --- |
 | MITRE ATLAS | risks, controls | 39 | 20/36 risks, 10/35 controls |
 | STRIDE | risks | 6 | 26/36 risks |
@@ -127,9 +127,31 @@ The frameworks apply to different things, and CoSAI is explicit about which:
 | NIST AI RMF | controls | 10 | 8/35 controls |
 | ISO 22989 | personas | 6 | 6/8 personas |
 | EU AI Act | personas, controls | 0 | declared upstream, no mappings published yet |
+| **OWASP Agentic Top 10** | risks | 10 | 21/36 risks — **mappings authored here** |
 
 Nothing maps to components, so the mapping block was removed from that tab rather than left
 rendering nothing.
+
+### The one framework CoSAI does not carry
+
+CoSAI lists six frameworks, and the OWASP entry among them is the **LLM** Top 10. OWASP
+published a separate **[Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)**
+on 9 December 2025 — ASI01 to ASI10 — and nothing in CoSAI references it. That is the single
+most relevant external framework for CoSAI's newest content, so it is added here, in
+[`data/overlay/frameworks-authored.yaml`](data/overlay/frameworks-authored.yaml).
+
+It is the only cross-reference in the product that is not CoSAI's, so it is kept apart in the
+data and marked in the UI: the framework card carries a *mappings authored here* badge and an
+attribution block, and the badge on a risk card is labelled `authored`. 21 of 36 risks map —
+essentially the agentic subset. The other 15 are left unmapped rather than stretched to fit,
+and ASI09 *Human-Agent Trust Exploitation* has nothing mapped to it at all, because CoSAI has
+no risk for a human over-trusting an agent.
+
+**CoSAI's OWASP LLM mappings are against the 2025 edition**, and OWASP published a
+[2026 edition](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/) on 5 August
+2026 which renumbers most of the list and renames one entry. The identifiers are left exactly
+as CoSAI published them; the Frameworks tab states the discrepancy and carries the full
+2025 → 2026 translation.
 
 Three things fall out of this that are worth having:
 

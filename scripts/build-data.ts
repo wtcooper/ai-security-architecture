@@ -18,13 +18,14 @@ import type {
   Dataset,
   Framework,
   FrameworkEntryInfo,
+  FrameworkNote,
   Incident,
   Persona,
   Risk,
   RiskOverlay,
   Vocabulary,
 } from "../src/lib/types";
-import { PHASES } from "../src/lib/types";
+import { FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
 import {
   ACTOR_IDS,
@@ -85,6 +86,11 @@ async function main() {
     frameworks: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>;
   }>(join(ROOT, "data", "frameworks", "entries.yaml"));
 
+  const authoredDoc = await loadYaml<{
+    frameworks: (Framework & { mappings: { risks: Record<string, string[]> } })[];
+    notes: Record<string, FrameworkNote>;
+  }>(join(ROOT, "data", "overlay", "frameworks-authored.yaml"));
+
   const components = componentsDoc.components;
   const risks = risksDoc.risks;
   const controls = controlsDoc.controls;
@@ -127,12 +133,19 @@ async function main() {
   // --- Map fidelity --------------------------------------------------------------
   checkMapFidelity(components);
 
+  // --- Authored frameworks and notes -------------------------------------------------
+  // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
+  // alike, with `authored` marking which is which.
+  const allFrameworks = [...frameworksDoc.frameworks, ...authoredDoc.frameworks.map(stripMappings)];
+  const authoredMappings = checkAuthoredFrameworks(authoredDoc, { riskIds, frameworksDoc });
+
   // --- Framework entry reference text ----------------------------------------------
   const frameworkEntries = checkFrameworkEntries(entriesDoc.frameworks, {
-    frameworks: frameworksDoc.frameworks,
+    frameworks: allFrameworks,
     risks,
     controls,
     personas: personasDoc.personas,
+    authoredMappings,
   });
 
   // --- Overlay -----------------------------------------------------------------
@@ -186,8 +199,10 @@ async function main() {
     controls,
     controlCategories: controlsDoc.categories,
     personas: personasDoc.personas,
-    frameworks: frameworksDoc.frameworks,
+    frameworks: allFrameworks,
     frameworkEntries,
+    authoredMappings,
+    frameworkNotes: authoredDoc.notes ?? {},
     lifecycleStages: lifecycleDoc.lifecycleStages,
     impactTypes: impactDoc.impactTypes,
     actorAccessLevels: actorDoc.actorAccessLevels,
@@ -402,11 +417,63 @@ function checkMapFidelity(components: Component[]) {
  * OWASP's ten and STRIDE's six — where an unmapped entry is the point: it is a visible gap
  * in CoSAI's cross-reference.
  */
-const FULL_LIST_FRAMEWORKS = new Set(["owasp-top10-llm", "stride"]);
+const FULL_LIST = new Set(FULL_LIST_FRAMEWORKS);
+
+/** Drop the mappings block, which the dataset carries separately from the framework record. */
+function stripMappings(framework: Framework & { mappings?: unknown }): Framework {
+  const { mappings, ...rest } = framework;
+  void mappings;
+  return rest;
+}
+
+/**
+ * A framework authored here rather than published by CoSAI has to say so and say why, and
+ * its mappings have to point at risks that exist. The separation is the whole point: the
+ * Frameworks tab shows CoSAI's cross-reference, and anything that is not CoSAI's must be
+ * distinguishable from it in the data, not only in the UI.
+ */
+function checkAuthoredFrameworks(
+  doc: {
+    frameworks: (Framework & { mappings: { risks: Record<string, string[]> } })[];
+    notes?: Record<string, FrameworkNote>;
+  },
+  ctx: { riskIds: Set<string>; frameworksDoc: { frameworks: Framework[] } },
+): Record<string, Record<string, string[]>> {
+  const cosaiIds = new Set(ctx.frameworksDoc.frameworks.map((f) => f.id));
+  const out: Record<string, Record<string, string[]>> = {};
+
+  for (const framework of doc.frameworks) {
+    const where = `authored framework ${framework.id}`;
+    if (cosaiIds.has(framework.id)) {
+      fail(`${where}: CoSAI already declares this framework — it must not be authored here`);
+    }
+    if (!framework.authored) fail(`${where}: must set authored: true`);
+    if (!framework.attribution?.trim()) fail(`${where}: needs an attribution`);
+    if (!framework.mappingRationale?.trim()) fail(`${where}: needs a mappingRationale`);
+
+    const mapped = framework.mappings?.risks ?? {};
+    for (const [riskId, entries] of Object.entries(mapped)) {
+      if (!ctx.riskIds.has(riskId)) fail(`${where}: unknown risk ${riskId}`);
+      if (!entries?.length) fail(`${where}: risk ${riskId} maps to nothing`);
+    }
+    out[framework.id] = mapped;
+  }
+
+  for (const id of Object.keys(doc.notes ?? {})) {
+    if (!cosaiIds.has(id)) fail(`framework note "${id}" is not a CoSAI framework`);
+  }
+  return out;
+}
 
 function checkFrameworkEntries(
   declared: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>,
-  ctx: { frameworks: Framework[]; risks: Risk[]; controls: Control[]; personas: Persona[] },
+  ctx: {
+    frameworks: Framework[];
+    risks: Risk[];
+    controls: Control[];
+    personas: Persona[];
+    authoredMappings: Record<string, Record<string, string[]>>;
+  },
 ): Record<string, Record<string, FrameworkEntryInfo>> {
   const out: Record<string, Record<string, FrameworkEntryInfo>> = {};
   const frameworkIds = new Set(ctx.frameworks.map((f) => f.id));
@@ -424,6 +491,9 @@ function checkFrameworkEntries(
     for (const item of [...ctx.risks, ...ctx.controls, ...ctx.personas]) {
       for (const value of item.mappings?.[framework.id] ?? []) mapped.add(value.split("@")[0]);
     }
+    for (const ids of Object.values(ctx.authoredMappings[framework.id] ?? {})) {
+      for (const value of ids) mapped.add(value.split("@")[0]);
+    }
 
     for (const id of mapped) {
       const entry = entries[id];
@@ -436,7 +506,7 @@ function checkFrameworkEntries(
         fail(`framework entries: ${framework.id} "${id}" has no description`);
     }
     for (const id of Object.keys(entries)) {
-      if (!mapped.has(id) && !FULL_LIST_FRAMEWORKS.has(framework.id)) {
+      if (!mapped.has(id) && !FULL_LIST.has(framework.id)) {
         fail(`framework entries: ${framework.id} "${id}" has an entry but CoSAI maps nothing to it`);
       }
     }

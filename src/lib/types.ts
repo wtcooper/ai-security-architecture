@@ -9,6 +9,16 @@
 export type Phase = "introduced" | "exposed" | "mitigated";
 export const PHASES: Phase[] = ["introduced", "exposed", "mitigated"];
 
+/**
+ * Frameworks whose full published list is shown, not only the part that has something mapped
+ * to it. An entry with nothing mapped is a finding worth surfacing, not an omission to hide.
+ * The others are open-ended — ATLAS alone has 130 techniques — so only cited entries appear.
+ *
+ * Lives here because both the build check and the render need it, and disagreeing copies
+ * silently drop the unmapped entries this list exists to show.
+ */
+export const FULL_LIST_FRAMEWORKS = ["owasp-top10-llm", "stride", "owasp-agentic"];
+
 /** A paragraph of CoSAI prose, already split from the YAML block scalars. */
 export type Paragraph = string | string[];
 
@@ -32,6 +42,21 @@ export interface Framework {
   techniqueUriPattern?: string;
   documentUri?: string;
   applicableTo?: string[];
+  /** True for a framework CoSAI does not carry, whose mappings are authored here. */
+  authored?: boolean;
+  /** Why it is here and whose judgement the mappings are. Required when authored. */
+  attribution?: string;
+  /** How the authored mappings were decided, and what was deliberately left unmapped. */
+  mappingRationale?: string;
+}
+
+/** An editorial note on a framework CoSAI does carry, where upstream has moved on. */
+export interface FrameworkNote {
+  headline: string;
+  body: string;
+  link?: { label: string; url: string };
+  /** Identifier translation, where a newer edition renumbered the list. */
+  crosswalk?: { from: string; to: string; title: string; change: string }[];
 }
 
 /**
@@ -189,6 +214,13 @@ export interface Dataset {
   frameworks: Framework[];
   /** framework id -> entry id -> reference text. */
   frameworkEntries: Record<string, Record<string, FrameworkEntryInfo>>;
+  /**
+   * Mappings authored in this repository rather than published by CoSAI, kept apart from
+   * `risk.mappings` so the two are never silently merged. framework -> risk -> entry ids.
+   */
+  authoredMappings: Record<string, Record<string, string[]>>;
+  /** framework id -> editorial note. */
+  frameworkNotes: Record<string, FrameworkNote>;
   lifecycleStages: Vocabulary[];
   impactTypes: Vocabulary[];
   actorAccessLevels: Vocabulary[];

@@ -15,6 +15,8 @@ export const {
   personas,
   frameworks,
   frameworkEntries,
+  authoredMappings,
+  frameworkNotes,
   lifecycleStages,
   impactTypes,
   actorAccessLevels,

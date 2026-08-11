@@ -6,8 +6,17 @@
  * "I have to work in OWASP / ATLAS / NIST — what does that mean here". This builds that index,
  * and records honestly how much of CoSAI each framework actually reaches.
  */
-import { activePersonas, controls, frameworkEntries, frameworks, risks } from "./data";
-import type { Control, Framework, Persona, Risk } from "./types";
+import {
+  activePersonas,
+  authoredMappings,
+  controls,
+  frameworkEntries,
+  frameworkNotes,
+  frameworks,
+  risks,
+} from "./data";
+import { FULL_LIST_FRAMEWORKS } from "./types";
+import type { Control, Framework, FrameworkNote, Persona, Risk } from "./types";
 
 export type EntityKind = "risks" | "controls" | "personas";
 
@@ -28,20 +37,14 @@ export interface FrameworkEntry {
 
 export interface FrameworkView {
   framework: Framework;
+  /** Set where upstream has moved on since CoSAI pinned its version of this framework. */
+  note?: FrameworkNote;
   entries: FrameworkEntry[];
   /** Entity kinds that actually carry a mapping, not merely those CoSAI declares. */
   appliesTo: EntityKind[];
   coverage: { kind: EntityKind; mapped: number; total: number }[];
   unmapped: { kind: EntityKind; items: (Risk | Control | Persona)[] }[];
 }
-
-/**
- * Frameworks whose full published list is shown, not only the part CoSAI reaches. An entry
- * with nothing mapped to it is a finding worth surfacing, not an omission to hide — so for
- * these two every identifier in data/frameworks/entries.yaml is rendered, mapped or not.
- * The others are open-ended (ATLAS alone has 130 techniques), so only what CoSAI cites shows.
- */
-const FULL_LIST_FRAMEWORKS = ["owasp-top10-llm", "stride"];
 
 const KNOWN_ENTRIES: Record<string, string[]> = Object.fromEntries(
   FULL_LIST_FRAMEWORKS.map((id) => [id, Object.keys(frameworkEntries[id] ?? {})]),
@@ -109,17 +112,24 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   const coverage: FrameworkView["coverage"] = [];
   const unmapped: FrameworkView["unmapped"] = [];
 
+  // A framework CoSAI does not carry has its mappings authored here instead. They are read
+  // from a separate table rather than merged into the CoSAI entities, so nothing downstream
+  // can mistake one for the other.
+  const authored = authoredMappings[frameworkId];
+  const mappingsFor = (kind: EntityKind, item: Risk | Control | Persona): string[] =>
+    authored ? (kind === "risks" ? (authored[item.id] ?? []) : []) : (item.mappings?.[frameworkId] ?? []);
+
   for (const kind of ["risks", "controls", "personas"] as EntityKind[]) {
     const items = ENTITIES[kind];
-    const mapped = items.filter((item) => item.mappings?.[frameworkId]?.length);
+    const mapped = items.filter((item) => mappingsFor(kind, item).length);
     if (!mapped.length) continue;
 
     appliesTo.push(kind);
     coverage.push({ kind, mapped: mapped.length, total: items.length });
-    unmapped.push({ kind, items: items.filter((i) => !i.mappings?.[frameworkId]?.length) });
+    unmapped.push({ kind, items: items.filter((i) => !mappingsFor(kind, i).length) });
 
     for (const item of mapped) {
-      for (const value of item.mappings![frameworkId]) {
+      for (const value of mappingsFor(kind, item)) {
         const entry = ensure(bare(value));
         (entry[kind] as (Risk | Control | Persona)[]).push(item);
       }
@@ -130,7 +140,24 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
     .map((e) => ({ ...e, total: e.risks.length + e.controls.length + e.personas.length }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
-  return { framework, entries, appliesTo, coverage, unmapped };
+  return { framework, note: frameworkNotes[frameworkId], entries, appliesTo, coverage, unmapped };
+}
+
+/**
+ * A risk's framework mappings, CoSAI's and authored, kept labelled. Used by the badges on
+ * risk cards so the agentic lens is reachable from a risk, not only from the Frameworks tab.
+ */
+export function mappingsForRisk(risk: Risk): { frameworkId: string; values: string[]; authored: boolean }[] {
+  const out = Object.entries(risk.mappings ?? {}).map(([frameworkId, values]) => ({
+    frameworkId,
+    values,
+    authored: false,
+  }));
+  for (const [frameworkId, byRisk] of Object.entries(authoredMappings)) {
+    const values = byRisk[risk.id];
+    if (values?.length) out.push({ frameworkId, values, authored: true });
+  }
+  return out;
 }
 
 export const KIND_LABEL: Record<EntityKind, string> = {

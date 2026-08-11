@@ -30,6 +30,7 @@ export function Chip({
 
 const FRAMEWORK_ORDER = [
   "owasp-top10-llm",
+  "owasp-agentic",
   "mitre-atlas",
   "stride",
   "nist-ai-rmf",
@@ -37,23 +38,49 @@ const FRAMEWORK_ORDER = [
   "iso-22989",
 ];
 
-/** Renders framework mappings as compact, linked identifier badges. */
-export function MappingBadges({ mappings }: { mappings?: Mappings }) {
-  if (!mappings) return null;
-  const entries = FRAMEWORK_ORDER.filter((id) => mappings[id]?.length).map(
-    (id) => [id, mappings[id]] as const,
+/**
+ * Renders framework mappings as compact, linked identifier badges.
+ *
+ * `extra` carries mappings authored in this repository for a framework CoSAI does not
+ * publish. They are marked, because every other badge here is CoSAI's own assertion.
+ */
+export function MappingBadges({
+  mappings,
+  extra,
+}: {
+  mappings?: Mappings;
+  extra?: { frameworkId: string; values: string[]; authored: boolean }[];
+}) {
+  const merged: Record<string, { values: string[]; authored: boolean }> = {};
+  for (const [id, values] of Object.entries(mappings ?? {})) {
+    if (values?.length) merged[id] = { values, authored: false };
+  }
+  for (const e of extra ?? []) {
+    if (e.authored && e.values.length) merged[e.frameworkId] = { values: e.values, authored: true };
+  }
+
+  const entries = FRAMEWORK_ORDER.filter((id) => merged[id]).map(
+    (id) => [id, merged[id].values, merged[id].authored] as const,
   );
   if (!entries.length) return null;
 
   return (
     <div className="space-y-2">
-      {entries.map(([id, values]) => {
+      {entries.map(([id, values, authored]) => {
         const fw = frameworkById.get(id);
         return (
           <div key={id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
             <Link href={frameworkHref(id)} className="shrink-0 hover:opacity-70">
               <span className="eyebrow">{fw?.name ?? id}</span>
             </Link>
+            {authored && (
+              <span
+                className="ident shrink-0 text-ink-3"
+                title="CoSAI does not publish this mapping — it was authored in this repository."
+              >
+                authored
+              </span>
+            )}
             {values.map((v) => {
               const bare = v.split("@")[0];
               return (
