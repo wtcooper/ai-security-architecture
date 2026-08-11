@@ -9,7 +9,13 @@ import { PageHeader } from "@/components/Panel";
 import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { componentTitle, frameworks, overlayFor } from "@/lib/data";
-import { frameworkView, KIND_LABEL, type FrameworkEntry } from "@/lib/frameworks";
+import {
+  frameworkView,
+  KIND_LABEL,
+  resolveFrameworkLink,
+  visibleFrameworks,
+  type FrameworkEntry,
+} from "@/lib/frameworks";
 import { PHASES, type Phase } from "@/lib/types";
 
 export function FrameworksBrowser() {
@@ -17,13 +23,15 @@ export function FrameworksBrowser() {
   const [chosen, setChosen] = useState<{ fw?: string; entry?: string }>({});
   const [phase, setPhase] = useState<Phase>("exposed");
 
+  // A link may still name the superseded 2025 edition; carry it and its entry across.
+  const linked = resolveFrameworkLink(params.get("fw") ?? "", params.get("entry") ?? undefined);
   const frameworkId =
-    chosen.fw ?? (params.get("fw") && frameworks.some((f) => f.id === params.get("fw"))
-      ? params.get("fw")!
+    chosen.fw ?? (frameworks.some((f) => f.id === linked.frameworkId)
+      ? linked.frameworkId
       : "owasp-llm-2026");
   const view = frameworkView(frameworkId)!;
 
-  const linkedEntry = chosen.fw ? undefined : params.get("entry") ?? undefined;
+  const linkedEntry = chosen.fw ? undefined : linked.entryId;
   const entryId = chosen.entry ?? linkedEntry;
   const entry = view.entries.find((e) => e.id === entryId) ?? view.entries[0];
 
@@ -48,10 +56,10 @@ export function FrameworksBrowser() {
       <PageHeader
         eyebrow="Cross-reference"
         title="Frameworks"
-        lead="CoSAI maps its risks, controls and personas onto six external frameworks, and two more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map."
+        lead="CoSAI maps its risks, controls and personas onto external frameworks, and two more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map."
       >
         <div className="mt-6 flex flex-wrap gap-1.5">
-          {frameworks.map((f) => {
+          {visibleFrameworks.map((f) => {
             const v = frameworkView(f.id)!;
             return (
               <FilterPill key={f.id} active={f.id === frameworkId} onClick={() => select(f.id)}>
@@ -133,7 +141,7 @@ export function FrameworksBrowser() {
                 {view.note.crosswalk && (
                   <details className="mt-3">
                     <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
-                      2025 → 2026 identifier translation
+                      Full 2025 → 2026 identifier translation
                     </summary>
                     <ul className="mt-2 space-y-2">
                       {view.note.crosswalk.map((row) => (
@@ -225,12 +233,11 @@ export function FrameworksBrowser() {
                   </p>
                 )}
 
-                {entry.successor && (
+                {entry.predecessor && (
                   <p className="mt-3 max-w-3xl rounded-lg bg-mist px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-2">
-                    <span className="eyebrow">In the 2026 edition</span>{" "}
-                    <span className="ident ml-1">{entry.successor.to}</span>{" "}
-                    <span className="font-semibold text-ink">{entry.successor.title}</span>
-                    <span className="mt-0.5 block text-ink-3">{entry.successor.change}</span>
+                    <span className="eyebrow">CoSAI publishes this as</span>{" "}
+                    <span className="ident ml-1">{entry.predecessor.from}</span>
+                    <span className="mt-0.5 block text-ink-3">{entry.predecessor.change}</span>
                   </p>
                 )}
 

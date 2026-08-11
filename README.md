@@ -105,7 +105,7 @@ provenances:
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
-| **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
+| **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Examples** | Five incidents replayed step by step on the map, every step sourced. |
 
 Every map view supports pan and zoom.
@@ -123,12 +123,11 @@ The frameworks apply to different things, and CoSAI is explicit about which:
 | --- | --- | --- | --- |
 | MITRE ATLAS | risks, controls | 39 | 20/36 risks, 10/35 controls |
 | STRIDE | risks | 6 | 26/36 risks |
-| OWASP Top 10 for LLM | risks, controls | 10 | 19/36 risks, 7/35 controls |
 | NIST AI RMF | controls | 10 | 8/35 controls |
 | ISO 22989 | personas | 6 | 6/8 personas |
 | EU AI Act | personas, controls | 0 | declared upstream, no mappings published yet |
 | **OWASP Agentic Top 10** | risks | 10 | 21/36 risks — **added here** |
-| **OWASP LLM Top 10 2026** | risks, controls | 10 | 19/36 risks, 7/35 controls — **added here** |
+| **OWASP LLM Top 10 2026** | risks, controls | 10 | 19/36 risks, 7/35 controls — **added here**, replaces CoSAI's 2025 |
 
 Nothing maps to components, so the mapping block was removed from that tab rather than left
 rendering nothing.
@@ -168,10 +167,14 @@ What is authored is only the renumbering — OWASP kept all ten risks, so each o
 risk and 7 control mappings is carried onto its 2026 identifier one-for-one, none created,
 dropped or reinterpreted.
 
-CoSAI's 2025 edition stays on the tab one pill along, marked superseded, because every
-identifier in it is CoSAI's own. Its entries each show their 2026 position inline, and its
-card carries the full crosswalk. `LLM09:2026` has nothing mapped to it — the same gap CoSAI
-leaves at `LLM08:2025`, carried across honestly.
+**The 2025 edition is not shown.** It is superseded, and an obsolete ranking sitting next to
+the current one is a trap rather than a feature. Its data stays in the repository — it is what
+CoSAI publishes, and the translation is derived from it — so nothing is lost: every 2026 entry
+shows the 2025 identifier CoSAI actually maps to, the card holds the full crosswalk, and a
+link naming the old edition resolves to its 2026 equivalent instead of breaking.
+
+`LLM09:2026` has nothing mapped to it — the same gap CoSAI leaves at `LLM08:2025`, carried
+across honestly.
 
 Every mapping badge elsewhere in the app links into this view.
 

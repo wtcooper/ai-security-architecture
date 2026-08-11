@@ -53,6 +53,14 @@ export interface Framework {
   attribution?: string;
   /** How the authored mappings were decided, and what was deliberately left unmapped. */
   mappingRationale?: string;
+  /** The framework id this one replaces. That framework is hidden from the UI. */
+  supersedes?: string;
+  /**
+   * Set by the build on the framework named by someone else's `supersedes`. Its data stays —
+   * it is what CoSAI actually publishes, and the crosswalk is built from it — but it is not
+   * offered as a lens, because an obsolete edition of a list is noise next to the current one.
+   */
+  superseded?: boolean;
 }
 
 /** Entity id -> framework entry ids, per entity kind. Personas carry no authored mappings. */

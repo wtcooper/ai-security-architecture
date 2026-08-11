@@ -137,7 +137,10 @@ async function main() {
   // --- Authored frameworks and notes -------------------------------------------------
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
-  const allFrameworks = [...frameworksDoc.frameworks, ...authoredDoc.frameworks.map(stripMappings)];
+  const allFrameworks = markSuperseded([
+    ...frameworksDoc.frameworks,
+    ...authoredDoc.frameworks.map(stripMappings),
+  ]);
   const authoredMappings = checkAuthoredFrameworks(authoredDoc, {
     riskIds,
     controlIds,
@@ -424,6 +427,20 @@ function checkMapFidelity(components: Component[]) {
  */
 const FULL_LIST = new Set(FULL_LIST_FRAMEWORKS);
 
+/**
+ * Flag every framework that another one declares it supersedes. The superseded framework
+ * keeps all its data — CoSAI's mappings still point at it and the crosswalk is derived from
+ * it — but the UI stops offering it, so nobody reads an obsolete edition by accident.
+ */
+function markSuperseded(frameworks: Framework[]): Framework[] {
+  const replaced = new Set(frameworks.map((f) => f.supersedes).filter(Boolean) as string[]);
+  const ids = new Set(frameworks.map((f) => f.id));
+  for (const id of replaced) {
+    if (!ids.has(id)) fail(`framework supersedes unknown framework "${id}"`);
+  }
+  return frameworks.map((f) => (replaced.has(f.id) ? { ...f, superseded: true } : f));
+}
+
 /** Drop the mappings block, which the dataset carries separately from the framework record. */
 function stripMappings(framework: Framework & { mappings?: unknown }): Framework {
   const { mappings, ...rest } = framework;
@@ -478,8 +495,9 @@ function checkAuthoredFrameworks(
     out[framework.id] = mapped;
   }
 
+  const authoredIds = new Set(doc.frameworks.map((f) => f.id));
   for (const id of Object.keys(doc.notes ?? {})) {
-    if (!cosaiIds.has(id)) fail(`framework note "${id}" is not a CoSAI framework`);
+    if (!cosaiIds.has(id) && !authoredIds.has(id)) fail(`framework note "${id}" is not a framework`);
   }
   return out;
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PhaseLegend } from "@/components/PhaseRail";
 import { REPO_URL } from "@/components/shell/SiteHeader";
 import { components, controls, incidents, activePersonas, risks } from "@/lib/data";
+import { visibleFrameworks } from "@/lib/frameworks";
 
 export const metadata = {
   title: "AI Risk Map",
@@ -49,7 +50,7 @@ const SECTIONS = [
     href: "/frameworks",
     label: "Frameworks",
     blurb: "Read the mapping backwards: pick OWASP, ATLAS or NIST and see where it lands.",
-    count: "6 frameworks",
+    count: `${visibleFrameworks.length} frameworks`,
     accent: "var(--ink-2)",
   },
   {

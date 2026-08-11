@@ -31,7 +31,6 @@ export function Chip({
 const FRAMEWORK_ORDER = [
   "owasp-llm-2026",
   "owasp-agentic",
-  "owasp-top10-llm",
   "mitre-atlas",
   "stride",
   "nist-ai-rmf",

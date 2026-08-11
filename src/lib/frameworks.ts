@@ -35,8 +35,8 @@ export interface FrameworkEntry {
   description?: string;
   /** Where the framework's data disagrees with the version CoSAI declares. */
   note?: string;
-  /** What this identifier became in a newer edition of the framework. */
-  successor?: FrameworkCrosswalkRow;
+  /** What CoSAI's own, older edition of the framework calls this identifier. */
+  predecessor?: FrameworkCrosswalkRow;
   url?: string;
   risks: Risk[];
   controls: Control[];
@@ -95,11 +95,11 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   if (!framework) return undefined;
 
   const reference = frameworkEntries[frameworkId] ?? {};
-  // Where a newer edition of the framework renumbered the list, each entry carries its own
-  // row of the translation, so a reader measured against the new edition does not have to
-  // find the crosswalk and look their identifier up in it.
-  const successors = new Map(
-    (frameworkNotes[frameworkId]?.crosswalk ?? []).map((row) => [row.from, row]),
+  // This edition renumbered the list CoSAI maps to, so each entry carries its own row of the
+  // translation: the identifier CoSAI actually publishes for it. Saves anyone cross-checking
+  // against CoSAI's YAML from having to find the crosswalk and look their entry up in it.
+  const predecessors = new Map(
+    (frameworkNotes[frameworkId]?.crosswalk ?? []).map((row) => [row.to, row]),
   );
   const byEntry = new Map<string, FrameworkEntry>();
   const ensure = (id: string): FrameworkEntry => {
@@ -110,7 +110,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
         label: reference[id]?.label ?? humanise(id),
         description: reference[id]?.description,
         note: reference[id]?.note,
-        successor: successors.get(id),
+        predecessor: predecessors.get(id),
         url: entryUrl(framework, id),
         risks: [],
         controls: [],
@@ -193,6 +193,27 @@ export function mappingsForControl(
     if (values?.length) out.push({ frameworkId, values, authored: true });
   }
   return out;
+}
+
+/**
+ * The frameworks offered as a lens. A superseded edition keeps its data — CoSAI's mappings
+ * still name it — but is not something anyone should be reading now, so it is not listed.
+ */
+export const visibleFrameworks = frameworks.filter((f) => !f.superseded);
+
+/** The framework that replaced a superseded one, for resolving links that predate the swap. */
+export const successorOf = (frameworkId: string): Framework | undefined =>
+  frameworks.find((f) => f.supersedes === frameworkId);
+
+/**
+ * Resolve a `?fw=` / `?entry=` pair that may name a superseded edition, carrying the entry
+ * across with it so an old link lands on the same risk rather than on a default page.
+ */
+export function resolveFrameworkLink(frameworkId: string, entryId?: string) {
+  const successor = successorOf(frameworkId);
+  if (!successor) return { frameworkId, entryId };
+  const row = (frameworkNotes[successor.id]?.crosswalk ?? []).find((r) => r.from === entryId);
+  return { frameworkId: successor.id, entryId: row?.to ?? undefined };
 }
 
 export const KIND_LABEL: Record<EntityKind, string> = {

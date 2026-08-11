@@ -80,9 +80,12 @@ from the vendored CoSAI snapshot and badged in the UI so the two are never confu
   carried onto its 2026 identifier one-for-one. No mapping was created, dropped or
   reinterpreted. LLM09:2026 has nothing mapped to it, inheriting the same gap CoSAI leaves at
   LLM08:2025.
-- **CoSAI's 2025 edition is still on the tab**, marked superseded, because every identifier in
-  it is CoSAI's own. Its note carries the full 2025 → 2026 crosswalk, and each of its entries
-  shows its 2026 position inline.
+- **CoSAI's 2025 edition is no longer offered as a lens**, having been superseded. Its data
+  stays — it is what CoSAI publishes, the build still requires reference text for every
+  identifier CoSAI maps to, and the crosswalk is derived from it. The 2026 view carries
+  everything a reader needs from it: each entry names the 2025 identifier CoSAI publishes for
+  it, the card holds the full crosswalk, and a `?fw=owasp-top10-llm` link resolves forward to
+  the 2026 entry rather than breaking.
 
 ## Overlay
 
