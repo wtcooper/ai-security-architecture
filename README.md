@@ -103,9 +103,42 @@ provenances:
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
+| **Frameworks** | The cross-reference, read backwards. Pick OWASP / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Examples** | Five incidents replayed step by step on the map, every step sourced. |
 
 Every map view supports pan and zoom.
+
+## Frameworks as a lens
+
+CoSAI maps its entries onto six external frameworks, and each risk or control card lists what
+it corresponds to. The more common question is the reverse — *"I am measured against OWASP,
+what does that mean here"* — so the Frameworks tab inverts the index and answers it, including
+the part most cross-reference tables leave out: **what a framework does not reach**.
+
+The frameworks apply to different things, and CoSAI is explicit about which:
+
+| Framework | Applies to | Entries | Coverage in CoSAI |
+| --- | --- | --- | --- |
+| MITRE ATLAS | risks, controls | 39 | 20/36 risks, 10/35 controls |
+| STRIDE | risks | 6 | 26/36 risks |
+| OWASP Top 10 for LLM | risks, controls | 10 | 19/36 risks, 7/35 controls |
+| NIST AI RMF | controls | 10 | 8/35 controls |
+| ISO 22989 | personas | 6 | 6/8 personas |
+| EU AI Act | personas, controls | 0 | declared upstream, no mappings published yet |
+
+Nothing maps to components, so the mapping block was removed from that tab rather than left
+rendering nothing.
+
+Two things fall out of this that are worth having:
+
+- **Selecting an entry highlights the map.** "OWASP LLM01: Prompt Injection" becomes a picture
+  of the components its mapped risks touch, at whichever phase you choose. It turns a
+  compliance identifier into an architecture.
+- **The gaps are shown, not hidden.** `LLM08:2025 Vector and Embedding Weaknesses` has nothing
+  mapped to it; 17 of 36 risks carry no OWASP mapping at all. Both are stated plainly, because
+  a cross-reference that only shows hits is misleading.
+
+Every mapping badge elsewhere in the app links into this view.
 
 ## The incidents
 

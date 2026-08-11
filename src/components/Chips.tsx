@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { frameworkById } from "@/lib/data";
+import { frameworkHref } from "@/lib/frameworks";
 import type { Mappings } from "@/lib/types";
 
 export function Chip({
@@ -49,25 +51,20 @@ export function MappingBadges({ mappings }: { mappings?: Mappings }) {
         const fw = frameworkById.get(id);
         return (
           <div key={id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
-            <span className="eyebrow shrink-0">{fw?.name ?? id}</span>
+            <Link href={frameworkHref(id)} className="shrink-0 hover:opacity-70">
+              <span className="eyebrow">{fw?.name ?? id}</span>
+            </Link>
             {values.map((v) => {
               const bare = v.split("@")[0];
-              const href = fw?.techniqueUriPattern?.replace("{id}", bare) ?? fw?.baseUri;
-              const content = (
-                <span className="ident rounded bg-mist px-1.5 py-[2px] text-ink-2">{bare}</span>
-              );
-              return href ? (
-                <a
+              return (
+                <Link
                   key={v}
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:opacity-70 transition-opacity"
+                  href={frameworkHref(id, bare)}
+                  title={`See everything mapped to ${bare}`}
+                  className="transition-opacity hover:opacity-70"
                 >
-                  {content}
-                </a>
-              ) : (
-                <span key={v}>{content}</span>
+                  <span className="ident rounded bg-mist px-1.5 py-[2px] text-ink-2">{bare}</span>
+                </Link>
               );
             })}
           </div>

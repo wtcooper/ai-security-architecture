@@ -46,6 +46,13 @@ const SECTIONS = [
     accent: "var(--band-infra-rail)",
   },
   {
+    href: "/frameworks",
+    label: "Frameworks",
+    blurb: "Read the mapping backwards: pick OWASP, ATLAS or NIST and see where it lands.",
+    count: "6 frameworks",
+    accent: "var(--ink-2)",
+  },
+  {
     href: "/examples",
     label: "Examples",
     blurb: "Real 2025–26 incidents replayed on the same map, step by step and sourced.",

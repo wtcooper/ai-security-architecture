@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Chip, MappingBadges } from "@/components/Chips";
+import { Chip } from "@/components/Chips";
 import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { Prose } from "@/components/Prose";
@@ -166,11 +166,6 @@ export function ComponentsBrowser() {
               </div>
             </div>
 
-            {component!.mappings && (
-              <div className="mt-6">
-                <MappingBadges mappings={component!.mappings} />
-              </div>
-            )}
           </div>
           )}
         </aside>
