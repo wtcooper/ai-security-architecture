@@ -16,7 +16,14 @@ import {
   risks,
 } from "./data";
 import { FULL_LIST_FRAMEWORKS } from "./types";
-import type { Control, Framework, FrameworkNote, Persona, Risk } from "./types";
+import type {
+  Control,
+  Framework,
+  FrameworkCrosswalkRow,
+  FrameworkNote,
+  Persona,
+  Risk,
+} from "./types";
 
 export type EntityKind = "risks" | "controls" | "personas";
 
@@ -28,6 +35,8 @@ export interface FrameworkEntry {
   description?: string;
   /** Where the framework's data disagrees with the version CoSAI declares. */
   note?: string;
+  /** What this identifier became in a newer edition of the framework. */
+  successor?: FrameworkCrosswalkRow;
   url?: string;
   risks: Risk[];
   controls: Control[];
@@ -86,6 +95,12 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   if (!framework) return undefined;
 
   const reference = frameworkEntries[frameworkId] ?? {};
+  // Where a newer edition of the framework renumbered the list, each entry carries its own
+  // row of the translation, so a reader measured against the new edition does not have to
+  // find the crosswalk and look their identifier up in it.
+  const successors = new Map(
+    (frameworkNotes[frameworkId]?.crosswalk ?? []).map((row) => [row.from, row]),
+  );
   const byEntry = new Map<string, FrameworkEntry>();
   const ensure = (id: string): FrameworkEntry => {
     let entry = byEntry.get(id);
@@ -95,6 +110,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
         label: reference[id]?.label ?? humanise(id),
         description: reference[id]?.description,
         note: reference[id]?.note,
+        successor: successors.get(id),
         url: entryUrl(framework, id),
         risks: [],
         controls: [],

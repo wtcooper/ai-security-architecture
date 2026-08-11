@@ -54,9 +54,18 @@ export interface Framework {
 export interface FrameworkNote {
   headline: string;
   body: string;
+  /** Where the newer edition's facts came from, when the edition itself is not open. */
+  sourceNote?: string;
   link?: { label: string; url: string };
   /** Identifier translation, where a newer edition renumbered the list. */
-  crosswalk?: { from: string; to: string; title: string; change: string }[];
+  crosswalk?: FrameworkCrosswalkRow[];
+}
+
+export interface FrameworkCrosswalkRow {
+  from: string;
+  to: string;
+  title: string;
+  change: string;
 }
 
 /**

@@ -147,11 +147,28 @@ essentially the agentic subset. The other 15 are left unmapped rather than stret
 and ASI09 *Human-Agent Trust Exploitation* has nothing mapped to it at all, because CoSAI has
 no risk for a human over-trusting an agent.
 
-**CoSAI's OWASP LLM mappings are against the 2025 edition**, and OWASP published a
-[2026 edition](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/) on 5 August
-2026 which renumbers most of the list and renames one entry. The identifiers are left exactly
-as CoSAI published them; the Frameworks tab states the discrepancy and carries the full
-2025 → 2026 translation.
+### The LLM Top 10 moved on six days ago
+
+**CoSAI's OWASP mappings are against the 2025 edition.** OWASP published the
+**[2026 edition](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/)** on 5 August
+2026 — the first weighted by real incident data, and it reorders most of the list:
+
+| 2025 | 2026 | |
+| --- | --- | --- |
+| LLM06 Excessive Agency | **LLM03** | up three |
+| LLM10 Unbounded Consumption | **LLM06** | up four |
+| LLM09 Misinformation | **LLM07** | up two |
+| LLM05 Improper Output Handling | **LLM10** | down five |
+| LLM07 System Prompt Leakage | **LLM08 Hidden Context Exposure** | renamed and widened |
+
+CoSAI's identifiers are left exactly as published — the mappings still hold, because the
+risks did not change, only their numbers. Every entry on the Frameworks tab carries its 2026
+position inline, and the framework card has the full translation.
+
+The sourcing is stated rather than glossed: the 2026 document is behind a download form and
+OWASP's own per-risk pages still serve the 2025 entries, so the descriptions here are OWASP's
+2025 text and the 2026 positions come from launch coverage that two independent accounts
+agree on. Several write-ups titled "2026" simply reprint the 2025 list; those were discarded.
 
 Three things fall out of this that are worth having:
 

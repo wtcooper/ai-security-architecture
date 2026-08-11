@@ -115,6 +115,11 @@ export function FrameworksBrowser() {
                   {view.note.headline}
                 </p>
                 <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">{view.note.body}</p>
+                {view.note.sourceNote && (
+                  <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">
+                    {view.note.sourceNote}
+                  </p>
+                )}
                 {view.note.link && (
                   <a
                     href={view.note.link.url}
@@ -217,6 +222,15 @@ export function FrameworksBrowser() {
                 {entry.note && (
                   <p className="mt-2 max-w-3xl text-[12.5px] leading-relaxed text-ink-3">
                     {entry.note}
+                  </p>
+                )}
+
+                {entry.successor && (
+                  <p className="mt-3 max-w-3xl rounded-lg bg-mist px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-2">
+                    <span className="eyebrow">In the 2026 edition</span>{" "}
+                    <span className="ident ml-1">{entry.successor.to}</span>{" "}
+                    <span className="font-semibold text-ink">{entry.successor.title}</span>
+                    <span className="mt-0.5 block text-ink-3">{entry.successor.change}</span>
                   </p>
                 )}
 
