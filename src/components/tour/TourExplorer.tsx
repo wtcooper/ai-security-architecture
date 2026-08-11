@@ -191,10 +191,7 @@ export function TourExplorer() {
       {/* ------------------------------------------------------------------ map */}
       <section className="flex-1 min-w-0 p-4 sm:p-6 flex flex-col">
         <div className="flex items-center justify-between gap-4 pb-3">
-          <p className="text-[13px] text-ink-3">
-            All 23 CoSAI components · bands and flows from components.yaml
-          </p>
-          <span className="ident hidden sm:block">← → to step through</span>
+          <span className="ident ml-auto hidden sm:block">← → to step through</span>
         </div>
         <div className="flex-1 min-h-0">
           <RiskMap

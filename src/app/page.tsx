@@ -63,9 +63,26 @@ export default function LandingPage() {
         <span className="text-mitigated">mitigated</span>.
       </h1>
       <p className="mt-6 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-        A recreation of Google&rsquo;s SAIF Map, rebuilt on the broader taxonomy that
-        succeeded it — the Coalition for Secure AI Risk Map. Same walkthrough, more of the
-        modern attack surface: agents, orchestration, tools, memory and retrieval.
+        A recreation of{" "}
+        <a
+          href="https://saif.google/secure-ai-framework"
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
+        >
+          Google&rsquo;s SAIF Map
+        </a>
+        , rebuilt on the broader taxonomy that succeeded it — the{" "}
+        <a
+          href="https://github.com/cosai-oasis/secure-ai-tooling/tree/main/risk-map"
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
+        >
+          Coalition for Secure AI Risk Map
+        </a>
+        . Same walkthrough, more of the modern attack surface: agents, orchestration, tools,
+        memory and retrieval.
       </p>
 
       <div className="mt-8 flex flex-wrap items-center gap-3">

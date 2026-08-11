@@ -74,7 +74,9 @@ export interface Caption {
   small?: boolean;
 }
 
-export const WIDTH = 1120;
+export const WIDTH = 1060;
+/** Right edge of the coloured bands. Boundary actors sit outside this, to read as external. */
+export const BAND_RIGHT = 980;
 export const HEIGHT = 1070;
 /** Headroom above the diagram for the User actor, which sits outside the system. */
 export const TOP_MARGIN = 48;
@@ -134,10 +136,11 @@ export const BOXES: Box[] = [
   { id: "componentReasoningCore", label: "Reasoning Core", x: 430, y: 340, w: 320, h: 44, emphasis: true },
 
   // --- Application core, model-facing --------------------------------------------------
+  // CoSAI files these under the application, and their only edges are to and from the model:
+  // they are application-owned guards on the model boundary, which is what the labels say.
   // Input Handling guards what reaches the model; Output Handling guards what comes back.
-  // That is SAIF's arrangement and what CoSAI's own prose describes; see EDGE_DEVIATIONS.
-  { id: "componentApplicationInputHandling", label: "App Input Handling", x: 240, y: 420, w: 260, h: 34 },
-  { id: "componentApplicationOutputHandling", label: "App Output Handling", x: 620, y: 420, w: 260, h: 34 },
+  { id: "componentApplicationInputHandling", label: "Model Input Handling", x: 240, y: 420, w: 260, h: 34 },
+  { id: "componentApplicationOutputHandling", label: "Model Output Handling", x: 620, y: 420, w: 260, h: 34 },
 
   // --- Model core -----------------------------------------------------------------------
   { id: "componentTheModel", label: "MODEL", x: 240, y: 504, w: 640, h: 54, emphasis: true },
@@ -299,12 +302,12 @@ export const ACTORS: Actor[] = [
   {
     id: "actorExternalSources",
     label: "External Sources",
-    x: 1062,
+    x: 1006,
     y: 186,
     w: 26,
     h: 144,
     rotated: true,
-    d: "M 942 258 L 1060 258",
+    d: "M 942 258 L 1004 258",
     hint: "Third-party services, tool registries, package proxies and content the agent reaches out to at runtime.",
   },
   {

@@ -46,14 +46,6 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <a
-          href="https://github.com/cosai-oasis/secure-ai-tooling/tree/main/risk-map"
-          target="_blank"
-          rel="noreferrer"
-          className="ml-auto hidden md:block ident hover:text-ink-2 transition-colors"
-        >
-          cosai-oasis/secure-ai-tooling ↗
-        </a>
       </div>
     </header>
   );

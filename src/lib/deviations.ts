@@ -17,9 +17,9 @@ export interface ComponentNote {
 /** Display labels that differ from the CoSAI title, and why. */
 const LABEL_NOTES: Record<string, string> = {
   componentApplicationInputHandling:
-    "Drawn as “App Input Handling”. CoSAI titles this simply “Input Handling” and relies on the category column to tell it apart from the agent and orchestration handlers — which works in a table, but not on a diagram where all three appear at once.",
+    "Drawn as “Model Input Handling”. CoSAI titles it “Input Handling” and files it under the application, but its only edges run to and from the model — it is an application-owned guard on the model boundary, and the label names the boundary it guards.",
   componentApplicationOutputHandling:
-    "Drawn as “App Output Handling”, for the same reason: three components share the title “Output Handling” in CoSAI.",
+    "Drawn as “Model Output Handling”, for the same reason. CoSAI's own description is explicit that it protects against “dangerous outputs from a model”.",
   componentOrchestrationInputHandling:
     "Drawn as “Orchestration Input”. CoSAI titles it “Input Handling”; the layer prefix disambiguates it on the map.",
   componentOrchestrationOutputHandling:
@@ -74,6 +74,7 @@ export const HANDLING_EXPLAINER = {
   body: [
     "CoSAI defines a component as an architectural shape, and says a second component is earned by a second locus — a distinct place where something is decided or enforced. Input and output handling appears three times because an AI system has three distinct trust boundaries, each enforced somewhere different.",
     "Application handling guards the boundary between the application and the model: what reaches the model, and what comes back. Agent handling guards the boundary between the outside world and the agent — SAIF called these perception and rendering. Orchestration handling guards the boundary between the agent and the tools, retrieval and memory it calls.",
-    "CoSAI gives all three pairs the same titles and relies on the category to distinguish them. On a diagram that shows all six at once, this map adds the layer to each label instead.",
+    "CoSAI gives all three pairs the same titles and relies on the category to distinguish them. On a diagram that shows all six at once, this map names each pair after the boundary it guards instead.",
+    "There is no fourth pair for the boundary between the user and the application: CoSAI folds that into the Application component itself. The User actor marks that boundary on the map rather than a component.",
   ],
 };

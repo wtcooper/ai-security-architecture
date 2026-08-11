@@ -3,6 +3,7 @@
 import {
   ACTORS,
   BAND_TOKENS,
+  BAND_RIGHT,
   BANDS,
   BOXES,
   CAPTIONS,
@@ -151,7 +152,7 @@ function Bands() {
         const midY = band.y + band.height / 2;
         return (
           <g key={band.id}>
-            <rect x={92} y={band.y} width={WIDTH - 102} height={band.height} rx={10} fill={t.fill} />
+            <rect x={92} y={band.y} width={BAND_RIGHT - 92} height={band.height} rx={10} fill={t.fill} />
             <rect x={92} y={band.y} width={4} height={band.height} rx={2} fill={t.rail} />
             <text
               x={74}
