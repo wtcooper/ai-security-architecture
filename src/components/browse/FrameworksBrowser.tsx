@@ -8,9 +8,10 @@ import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { componentTitle, frameworks, overlayFor } from "@/lib/data";
+import { componentTitle, overlayFor } from "@/lib/data";
 import {
   frameworkView,
+  isVisibleFramework,
   KIND_LABEL,
   resolveFrameworkLink,
   visibleFrameworks,
@@ -26,9 +27,7 @@ export function FrameworksBrowser() {
   // A link may still name the superseded 2025 edition; carry it and its entry across.
   const linked = resolveFrameworkLink(params.get("fw") ?? "", params.get("entry") ?? undefined);
   const frameworkId =
-    chosen.fw ?? (frameworks.some((f) => f.id === linked.frameworkId)
-      ? linked.frameworkId
-      : "owasp-llm-2026");
+    chosen.fw ?? (isVisibleFramework(linked.frameworkId) ? linked.frameworkId : "owasp-llm-2026");
   const view = frameworkView(frameworkId)!;
 
   const linkedEntry = chosen.fw ? undefined : linked.entryId;
@@ -103,63 +102,47 @@ export function FrameworksBrowser() {
               </a>
             </div>
 
-            {view.framework.authored && view.framework.attribution && (
-              <div className="mt-4 rounded-lg border-l-[3px] border-line-strong bg-mist py-3 pl-4 pr-4">
-                <p className="eyebrow">Not CoSAI&rsquo;s cross-reference</p>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
-                  {view.framework.attribution}
-                </p>
-                {view.framework.mappingRationale && (
-                  <p className="mt-2 text-[13px] leading-relaxed text-ink-2">
-                    {view.framework.mappingRationale}
-                  </p>
-                )}
-              </div>
-            )}
+            {(view.framework.summary || view.note) && (
+              <details className="group mt-3 border-t border-line pt-3">
+                <summary className="flex cursor-pointer items-baseline gap-1.5 text-[12.5px] leading-snug text-ink-2 hover:text-ink">
+                  <span className="mt-[3px] shrink-0 text-[9px] text-ink-3 transition-transform group-open:rotate-90">
+                    &#9654;
+                  </span>
+                  <span>{view.framework.summary ?? view.note?.headline}</span>
+                </summary>
 
-            {view.note && (
-              <div className="mt-4 rounded-lg border-l-[3px] border-exposed bg-exposed-soft/30 py-3 pl-4 pr-4">
-                <p className="text-[13px] font-semibold leading-snug text-ink">
-                  {view.note.headline}
-                </p>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">{view.note.body}</p>
-                {view.note.sourceNote && (
-                  <p className="mt-2 text-[12.5px] leading-relaxed text-ink-3">
-                    {view.note.sourceNote}
-                  </p>
-                )}
-                {view.note.link && (
-                  <a
-                    href={view.note.link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2 inline-block text-[12.5px] font-semibold text-introduced hover:underline"
-                  >
-                    {view.note.link.label} ↗
-                  </a>
-                )}
-                {view.note.crosswalk && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
-                      Full 2025 → 2026 identifier translation
-                    </summary>
-                    <ul className="mt-2 space-y-2">
+                <div className="mt-2.5 space-y-2 pl-[15px] text-[12.5px] leading-relaxed text-ink-3">
+                  {view.framework.attribution && <p>{view.framework.attribution}</p>}
+                  {view.framework.mappingRationale && <p>{view.framework.mappingRationale}</p>}
+                  {view.note && <p>{view.note.body}</p>}
+                  {view.note?.sourceNote && <p>{view.note.sourceNote}</p>}
+                  {view.note?.link && (
+                    <a
+                      href={view.note.link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block font-semibold text-introduced hover:underline"
+                    >
+                      {view.note.link.label} &#8599;
+                    </a>
+                  )}
+                  {view.note?.crosswalk && (
+                    <ul className="space-y-1.5 border-t border-line pt-2">
                       {view.note.crosswalk.map((row) => (
-                        <li key={row.from} className="text-[12.5px] leading-snug text-ink-2">
+                        <li key={row.from} className="leading-snug">
                           <span className="ident">{row.from}</span>
-                          <span className="mx-1 text-ink-3">→</span>
+                          <span className="mx-1">&#8594;</span>
                           <span className="ident">{row.to}</span>{" "}
-                          <span className="font-semibold text-ink">{row.title}</span>
-                          <span className="block text-ink-3">{row.change}</span>
+                          <span className="text-ink-2">{row.title}</span>
                         </li>
                       ))}
                     </ul>
-                  </details>
-                )}
-              </div>
+                  )}
+                </div>
+              </details>
             )}
 
-            {view.coverage.length > 0 ? (
+            {view.coverage.length > 0 && (
               <div className="mt-4 border-t border-line pt-3">
                 <p className="eyebrow">How much of CoSAI it reaches</p>
                 <ul className="mt-2 space-y-1.5">
@@ -173,13 +156,6 @@ export function FrameworksBrowser() {
                   ))}
                 </ul>
               </div>
-            ) : (
-              <p className="mt-4 border-t border-line pt-3 text-[13px] leading-relaxed text-ink-2">
-                CoSAI declares this framework as applicable to{" "}
-                {(view.framework.applicableTo ?? []).join(" and ")}, but has not published any
-                mappings for it yet. Nothing here is missing on our side — the upstream data is
-                empty.
-              </p>
             )}
           </div>
 

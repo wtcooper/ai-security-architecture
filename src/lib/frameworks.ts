@@ -195,11 +195,31 @@ export function mappingsForControl(
   return out;
 }
 
+/** Does anything at all map to this framework, from CoSAI or from the authored overlay? */
+function hasAnyMapping(frameworkId: string): boolean {
+  const authored = authoredMappings[frameworkId];
+  if (authored && Object.values(authored).some((byId) => Object.keys(byId).length)) return true;
+  return [...risks, ...controls, ...activePersonas].some(
+    (item) => item.mappings?.[frameworkId]?.length,
+  );
+}
+
 /**
- * The frameworks offered as a lens. A superseded edition keeps its data — CoSAI's mappings
- * still name it — but is not something anyone should be reading now, so it is not listed.
+ * The frameworks offered as a lens. Two kinds are withheld:
+ *
+ *   - a superseded edition, which keeps its data because CoSAI's mappings still name it, but
+ *     is not something anyone should be reading now;
+ *   - a framework nothing maps to. CoSAI declares the EU AI Act applicable to personas and
+ *     controls but has published no mappings for it, so the pill leads to an empty page.
+ *
+ * Both are data-driven, so a framework returns to the tab the moment mappings appear for it —
+ * there is no list of exclusions to remember to update.
  */
-export const visibleFrameworks = frameworks.filter((f) => !f.superseded);
+export const visibleFrameworks = frameworks.filter(
+  (f) => !f.superseded && hasAnyMapping(f.id),
+);
+const visibleIds = new Set(visibleFrameworks.map((f) => f.id));
+export const isVisibleFramework = (id: string) => visibleIds.has(id);
 
 /** The framework that replaced a superseded one, for resolving links that predate the swap. */
 export const successorOf = (frameworkId: string): Framework | undefined =>

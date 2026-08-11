@@ -117,7 +117,10 @@ it corresponds to. The more common question is the reverse — *"I am measured a
 what does that mean here"* — so the Frameworks tab inverts the index and answers it, including
 the part most cross-reference tables leave out: **what a framework does not reach**.
 
-The frameworks apply to different things, and CoSAI is explicit about which:
+The frameworks apply to different things, and CoSAI is explicit about which. A framework with
+nothing mapped to it is not listed — CoSAI declares the EU AI Act applicable to personas and
+controls but has published no mappings, so its pill led to an empty page. That is a data-driven
+filter, not an exclusion list: it returns the moment mappings appear.
 
 | Framework | Applies to | Entries | Coverage |
 | --- | --- | --- | --- |
@@ -125,7 +128,6 @@ The frameworks apply to different things, and CoSAI is explicit about which:
 | STRIDE | risks | 6 | 26/36 risks |
 | NIST AI RMF | controls | 10 | 8/35 controls |
 | ISO 22989 | personas | 6 | 6/8 personas |
-| EU AI Act | personas, controls | 0 | declared upstream, no mappings published yet |
 | **OWASP Agentic Top 10** | risks | 10 | 21/36 risks — **added here** |
 | **OWASP LLM Top 10 2026** | risks, controls | 10 | 19/36 risks, 7/35 controls — **added here**, replaces CoSAI's 2025 |
 

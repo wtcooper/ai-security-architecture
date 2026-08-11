@@ -49,6 +49,8 @@ export interface Framework {
   applicableTo?: string[];
   /** True for a framework CoSAI does not carry, whose mappings are authored here. */
   authored?: boolean;
+  /** One line, shown inline. The long form goes behind a disclosure. */
+  summary?: string;
   /** Why it is here and whose judgement the mappings are. Required when authored. */
   attribution?: string;
   /** How the authored mappings were decided, and what was deliberately left unmapped. */

@@ -34,7 +34,6 @@ const FRAMEWORK_ORDER = [
   "mitre-atlas",
   "stride",
   "nist-ai-rmf",
-  "eu-ai-act",
   "iso-22989",
 ];
 

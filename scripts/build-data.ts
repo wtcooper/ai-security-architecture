@@ -474,6 +474,10 @@ function checkAuthoredFrameworks(
       fail(`${where}: CoSAI already declares this framework — it must not be authored here`);
     }
     if (!framework.authored) fail(`${where}: must set authored: true`);
+    if (!framework.summary?.trim()) fail(`${where}: needs a one-line summary`);
+    if (framework.summary && framework.summary.length > 110) {
+      fail(`${where}: summary is ${framework.summary.length} chars — it has to fit on one line`);
+    }
     if (!framework.attribution?.trim()) fail(`${where}: needs an attribution`);
     if (!framework.mappingRationale?.trim()) fail(`${where}: needs a mappingRationale`);
 
