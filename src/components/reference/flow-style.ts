@@ -8,10 +8,9 @@ import { componentById } from "@/lib/data";
 import { BAND_TOKENS } from "@/lib/map-layout";
 import type { ArchBlock, BlockKind, PathClass } from "@/lib/types";
 
-/** Stroke and dash per connector class. Colors reuse the app's phase and band tokens. */
+/** Stroke and dash per connector class. One green for everything inside the system. */
 export const PATH_STYLE: Record<PathClass, { stroke: string; dash?: string; label: string }> = {
-  primary: { stroke: "var(--mitigated)", label: "Primary data path" },
-  secondary: { stroke: "var(--introduced)", label: "Secondary data path" },
+  primary: { stroke: "var(--mitigated)", label: "Data path" },
   external: { stroke: "var(--band-data-rail)", label: "External content & actions" },
   governance: { stroke: "var(--ink-3)", dash: "3 4", label: "Governance relationship" },
 };
@@ -27,7 +26,9 @@ export const BLOCK_STYLE: Record<
 > = {
   service: { stroke: "var(--ink)", tab: "var(--ink)" },
   provider: { stroke: "var(--ink-3)", tab: "var(--ink-2)", dash: "6 4" },
-  external: { stroke: "var(--band-data-rail)", tab: "var(--band-data-rail)" },
+  // The amber lives on the dashed border and the external flows, never on the tab — a tab
+  // colour is a risk-map layer claim, and the outside world sits on no layer.
+  external: { stroke: "var(--band-data-rail)", tab: "var(--ink)", dash: "8 4" },
   governance: { stroke: "var(--ink-2)", tab: "var(--ink-2)", dash: "2 4" },
 };
 

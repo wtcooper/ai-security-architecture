@@ -352,6 +352,26 @@ async function main() {
   );
   p();
 
+  // 4d. The full anchor table: what every block claims to be in CoSAI terms, and therefore
+  // which band colours its tab. "(none)" is a deliberate statement — CoSAI names no component
+  // for gateways, sandboxes, governance planes or anything outside the system — and it is
+  // exactly what the neutral tab on the diagram means.
+  p(`### 4d. Block anchors — what each drawing claims in CoSAI terms`);
+  p();
+  p("| Architecture | Block | Kind | CoSAI anchor |");
+  p("| --- | --- | --- | --- |");
+  for (const a of archetypes) {
+    for (const b of a.blocks) {
+      if (b.kind === "actor") continue;
+      const anchorId =
+        b.cosaiComponent ?? (b.items ?? []).find((i) => i.cosaiComponent)?.cosaiComponent;
+      p(
+        `| ${a.title} | ${b.title} | ${b.kind} | ${anchorId ? `\`${anchorId}\`` : "(none)"} |`,
+      );
+    }
+  }
+  p();
+
   await mkdir(join(ROOT, "docs"), { recursive: true });
   await writeFile(join(ROOT, "docs", "AUDIT.md"), out.join("\n"));
   console.log(

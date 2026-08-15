@@ -143,11 +143,13 @@ never as a picture; `src/lib/flow-layout.ts` computes the geometry at build time
 reviewed is the claim rather than the drawing. The F5 grammar maps onto this framework directly:
 
 - **Blocks** are CoSAI components wherever CoSAI names one, anchored via `cosaiComponent` on the
-  block or its internals. The governance plane is drawn as its own column because CoSAI's
-  component set names nothing there — and the endpoint personal-agent architecture draws no
-  governance column at all, which is that diagram's finding.
-- **Typed paths** follow F5's legend: primary and secondary data paths, external content and
-  actions, and dotted governance relationships.
+  block or its internals; a neutral dark tab means CoSAI names no component for the block,
+  which is a recorded finding, not a gap — gateways, sandboxes, semantic layers, governance
+  planes and everything outside the system carry it. The endpoint personal-agent architecture
+  draws no governance column at all, which is that diagram's finding. docs/AUDIT.md section 4d
+  tables every block's anchor so the claims stay reviewable.
+- **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
+  inside the system, external content and actions, and dotted governance relationships.
 - **Numbered capability chips** are F5's design-requirements treatment carried by this
   framework's capability taxonomy: each chip marks where a capability must be deployed, and the
   rail links it to the Capabilities tab. A pinned capability must apply on the architecture's

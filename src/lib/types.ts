@@ -274,12 +274,11 @@ export interface ArchBlock {
 }
 
 /**
- * The connector classes, straight from the F5 legend. `primary` is the request path; `secondary`
- * carries data that is not the user's request — state, triggers, telemetry; `external` crosses
- * into content or services nobody in the diagram operates; `governance` is a management-plane
- * relationship, drawn dotted.
+ * The connector classes. `primary` is any data flow inside the system — one green keeps the
+ * drawings simple; `external` crosses into content or services nobody in the diagram operates;
+ * `governance` is a management-plane relationship, drawn dotted.
  */
-export type PathClass = "primary" | "secondary" | "external" | "governance";
+export type PathClass = "primary" | "external" | "governance";
 
 export interface ArchEdge {
   from: string;

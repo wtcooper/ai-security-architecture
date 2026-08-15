@@ -374,7 +374,7 @@ function checkCapabilities(
  *     one-way edge walked backwards is a wrong diagram, not a wrong scenario.
  */
 const BLOCK_KINDS = new Set(["actor", "service", "provider", "external", "governance"]);
-const PATH_CLASSES = new Set(["primary", "secondary", "external", "governance"]);
+const PATH_CLASSES = new Set(["primary", "external", "governance"]);
 const ICONS = new Set<string>(ICON_NAMES);
 
 function checkArchetypes(

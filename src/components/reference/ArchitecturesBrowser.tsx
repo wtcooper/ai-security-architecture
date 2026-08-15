@@ -141,8 +141,8 @@ export function ArchitecturesBrowser() {
               return (
                 // A fixed label column with the pills wrapping beside it — a shared flex-wrap
                 // row would drop the whole pill block under the label once it cannot fit.
-                <div key={s.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-x-3">
-                  <span className="eyebrow">{s.title}</span>
+                <div key={s.id} className="grid grid-cols-[8rem_minmax(0,1fr)] items-baseline gap-x-3">
+                  <span className="eyebrow whitespace-nowrap">{s.title}</span>
                   <div className="flex flex-wrap gap-1.5">
                     {group.map((a) => (
                       <NamePill
@@ -208,6 +208,10 @@ export function ArchitecturesBrowser() {
                   {b.label}
                 </span>
               ))}
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2.5 w-2.5 rounded-[2px] bg-ink" />
+                <span className="text-ink-3">no CoSAI component</span>
+              </span>
             </span>
             <span className="text-ink-3">Hover anything · ⌘ or Ctrl + wheel to zoom</span>
           </div>
