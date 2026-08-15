@@ -111,9 +111,11 @@ government and standards controls (NIST SP 800-218A, AI RMF, AI 600-1, the CISA/
 Eyes joint guidance, UK NCSC, CSA AICM, ISO/IEC 42001, EU AI Act Article 15), procurable
 market categories (Gartner AI TRiSM, CSA's agentic market map, the cloud providers' own
 published AI security catalogues), and lifecycle tooling maps (OWASP's AI Security Solutions
-Landscape). A class is included only where at least two independent families name it, it is
-deployable as a technology rather than a process, and it differs across at least one surface
-boundary; the count follows from that test rather than being targeted. The full method,
+Landscape). A class is included only where at least two independent families name it, **a class
+of tooling exists that implements it** — every entry is named for the technology, not the
+practice it supports, and activities, policies, artifacts and interface conventions are
+excluded — and it differs across at least one surface boundary; the count follows from that
+test rather than being targeted. The full method,
 including granularity rules and deliberate exclusions, is in the header of
 `data/overlay/capabilities.yaml`. Each entry carries a `sources` list, and where a class rests
 on market rather than standards evidence its sources say so; the CoSAI mappings are judgements
