@@ -6,7 +6,6 @@
  * (one entry per paragraph); the build step normalises them to Paragraph[].
  */
 
-import type { BandId } from "./bands";
 
 export type Phase = "introduced" | "exposed" | "mitigated";
 export const PHASES: Phase[] = ["introduced", "exposed", "mitigated"];
@@ -231,141 +230,103 @@ export interface Capability {
 /**
  * ------------------------------------------------------------------ Reference architectures
  *
- * An archetype is a class of AI application, drawn as a selection over the shared node/zone
- * vocabulary in data/reference/vocabulary.yaml. Geometry is computed by the build, never
- * authored — see ArchetypeLayout.
+ * An architecture is a class of AI application drawn in the F5 reference-architecture grammar:
+ * capability blocks connected by typed data paths, with risks and capabilities pinned onto
+ * specific blocks and flows and keyed to a side rail. Geometry is computed by the build from an
+ * authored coarse grid — see ArchLayout.
  */
 
-export interface NodeGroup {
-  id: string;
-  title: string;
-  description: string;
-}
+/**
+ * How a block is drawn and read. `service` is a capability block the operator runs; `provider`
+ * is vendor-operated, with only the published interface drawn; `external` is data or services
+ * outside the system that the agent reads or acts on; `governance` is the management plane;
+ * `actor` is a person or peer system, drawn unboxed.
+ */
+export type BlockKind = "actor" | "service" | "provider" | "external" | "governance";
 
-export interface ZoneType {
+/** An icon-plus-label sub-component inside a block, as in F5's block internals. */
+export interface ArchBlockItem {
   id: string;
-  title: string;
-  description: string;
-}
-
-export interface NodeType {
-  id: string;
-  title: string;
-  /** One of NodeGroup.id — decides the row this node type stacks into, and the legend entry. */
-  group: string;
-  /**
-   * The risk-map band this node type belongs to, where CoSAI has a place for it. Absent for the
-   * whole governance group: CoSAI's component set names no governance plane, and the diagrams
-   * say so rather than inventing a band.
-   */
-  layer?: BandId;
-  /** Default risk-map anchor, so a node can link back to the component it instantiates. */
-  cosaiComponent?: string;
-  description: string;
-}
-
-export interface ArchitectureVocabulary {
-  groups: NodeGroup[];
-  zoneTypes: ZoneType[];
-  nodeTypes: NodeType[];
-  controlKinds: ControlKind[];
-}
-
-export interface ArchetypeZone {
-  id: string;
-  /** One of ZoneType.id. */
-  type: string;
-  /**
-   * Disambiguator, authored only where an archetype has two zones of the same type — "ingest"
-   * against "query path". Absent otherwise, because the zone's name comes from its type.
-   */
-  qualifier?: string;
-  /**
-   * Computed by the build from the zone type's canonical title plus any qualifier. Never
-   * authored: fourteen different names for the same network tier taught nothing and made the
-   * diagrams incomparable, which is the problem canonical zones exist to fix.
-   */
   label: string;
-  /**
-   * The CoSAI personas responsible for this zone. Ownership is expressed in the taxonomy's own
-   * vocabulary rather than as "you" or "the vendor", because who "you" are depends on which
-   * persona is reading — and because two personas on one zone *is* shared responsibility, stated
-   * more precisely than a "shared" label would.
-   *
-   * Empty means the zone is outside the system: CoSAI names no persona for an attacker.
-   */
-  personas: string[];
+  /** One of ICON_NAMES in flow-layout.ts. */
+  icon: string;
   note?: string;
+  /** Risk-map anchor for this specific internal. */
+  cosaiComponent?: string;
 }
 
-export interface ArchetypeNode {
+export interface ArchBlock {
   id: string;
-  /** One of NodeType.id. */
-  type: string;
-  /** One of the archetype's own ArchetypeZone ids. */
-  zone: string;
-  label: string;
+  kind: BlockKind;
+  /** Drawn as the tab on the block's top edge, uppercased. */
+  title: string;
+  /** For actor blocks and blocks without items. */
+  icon?: string;
+  /** Authored coarse grid position; the build turns it into pixels. */
+  col: number;
+  row: number;
+  /** Vertical span, for tall side columns like a governance plane. */
+  rowSpan?: number;
   note?: string;
-  /** Overrides the node type's default CoSAI anchor. */
+  /** Risk-map anchor, so the block links back to the component it instantiates. */
   cosaiComponent?: string;
-  /**
-   * Only meaningful inside a `vendorOpaque` zone: an explicit claim that the provider publishes
-   * and documents this as a separately addressable service, rather than it being an internal the
-   * diagram has inferred. Managed agent runtimes sell their memory, sandbox and gateway as
-   * discrete products with their own APIs, so drawing them is reporting rather than guessing —
-   * but the claim has to be made deliberately, because the default assumption is the opposite.
-   */
-  published?: boolean;
-  /** Risks that surface at this specific node, not across the archetype. */
-  risks?: string[];
-  /** Capabilities that attach here. Checked against the capability's surface applicability. */
-  capabilities?: string[];
+  items?: ArchBlockItem[];
 }
 
 /**
- * A canonical class of control, from data/reference/vocabulary.yaml. Each names the capability
- * that delivers it, which is the route from a boundary on a diagram to the tooling that secures
- * it.
+ * The connector classes, straight from the F5 legend. `primary` is the request path; `secondary`
+ * carries data that is not the user's request — state, triggers, telemetry; `external` crosses
+ * into content or services nobody in the diagram operates; `governance` is a management-plane
+ * relationship, drawn dotted.
  */
-export interface ControlKind {
-  id: string;
-  /** Short label, drawn on the diagram. */
-  title: string;
-  capability: string;
-  description: string;
-}
+export type PathClass = "primary" | "secondary" | "external" | "governance";
 
-/** What secures one boundary crossing in the target architecture. */
-export interface EdgeControl {
-  /** One of ControlKind.id. Authored. */
-  kind: string;
-  /** What this control means on this specific crossing. Authored. */
-  note?: string;
-  /** Resolved by the build from the control kind. Never authored. */
-  title: string;
-  /** Resolved by the build from the control kind. Never authored. */
-  capability: string;
-}
-
-export interface ArchetypeEdge {
+export interface ArchEdge {
   from: string;
   to: string;
-  label?: string;
+  path: PathClass;
+  /** Drawn with arrowheads at both ends. */
+  bidir?: boolean;
   /**
-   * Required by the build whenever `from` and `to` sit in different zones. These diagrams are
-   * target states, so there is no way to express an unsecured crossing — an architecture that
-   * needs one is not the architecture this catalogue is describing.
+   * For diagonal connections only: leave the source horizontally then turn (`hv`, the default),
+   * or vertically then turn (`vh`). Authored when the default leg would cross another block —
+   * the router is simple on purpose, and the fix for a collision is this hint or a better grid.
    */
-  control?: EdgeControl;
-  risks?: string[];
-  /** `control` edges are governance-plane relationships, drawn apart from the data flow. */
-  kind?: "flow" | "control";
+  route?: "hv" | "vh";
+  label?: string;
+  note?: string;
 }
 
-/** A risk that does not localise to one node. Drawn as a bracket, per OWASP's ASI treatment. */
-export interface ArchetypeCrossCutting {
+/** A risk tag pinned to a block or a flow, leader-lined like F5's OWASP tags. */
+export interface RiskPin {
   risk: string;
-  note: string;
+  /** A block id, or an edge as "from->to". */
+  at: string;
+  note?: string;
+}
+
+/**
+ * A capability pinned where it must be deployed — the numbered chips, F5's design-requirements
+ * treatment. Numbering is the authored order, per architecture.
+ */
+export interface CapabilityPin {
+  capability: string;
+  /** A block id, or an edge as "from->to". */
+  at: string;
+  note?: string;
+}
+
+/** One step of a scenario walk: an edge followed in a stated direction. */
+export interface ScenarioStep {
+  /** "from->to"; the reverse direction of a bidirectional edge is legal. */
+  follow: string;
+  note?: string;
+}
+
+/** A numbered use-case walk over the same canvas — one architecture, many scenario walks. */
+export interface Scenario {
+  title: string;
+  steps: ScenarioStep[];
 }
 
 /**
@@ -393,49 +354,51 @@ export interface Rect {
   h: number;
 }
 
-/** Geometry computed by scripts/build-data.ts from zone membership. Never authored. */
-export interface ArchetypeLayout {
+/** Geometry computed by scripts/build-data.ts from the authored grid. Never authored. */
+export interface ArchLayout {
   width: number;
   height: number;
-  zones: Record<string, Rect>;
-  nodes: Record<string, Rect>;
+  blocks: Record<string, Rect>;
   edges: {
     from: string;
     to: string;
-    /** SVG path data. */
+    /** SVG path data, drawn from `from` towards `to`. */
     d: string;
-    /** Where the control marker sits, for crossings. */
-    labelX: number;
-    labelY: number;
-    /** True when the edge crosses a zone boundary. */
-    crosses: boolean;
+    /** Midpoint of the path, where pins and scenario step numbers attach. */
+    midX: number;
+    midY: number;
+    /** True when the segment at the midpoint runs horizontally. */
+    horizontal: boolean;
   }[];
 }
 
 export interface Archetype {
   id: string;
-  /** One of Surface.id — the deployment surface this archetype lives on. */
+  /** One of Surface.id — the deployment surface this architecture lives on. */
   surface: string;
   title: string;
   /** Short label for dense UI; falls back to title. */
   abbrev?: string;
-  /** One paragraph, shown in the archetype picker. */
+  /** One paragraph, shown in the picker. */
   summary: Paragraph[];
   description: Paragraph[];
-  /** Why this is not a variant of the archetype next to it. */
+  /** Why this is not a variant of the architecture next to it. */
   distinguishedBy?: Paragraph[];
   exemplars?: ArchetypeExemplar[];
-  zones: ArchetypeZone[];
-  nodes: ArchetypeNode[];
-  edges: ArchetypeEdge[];
-  crossCutting?: ArchetypeCrossCutting[];
-  /** Archetype-level risk set, ranked most-relevant first. */
+  blocks: ArchBlock[];
+  edges: ArchEdge[];
+  pins: { risks: RiskPin[]; capabilities: CapabilityPin[] };
+  scenarios?: Scenario[];
+  /**
+   * Derived by the build from the risk pins, in pin order, deduplicated. The rail and the
+   * cross-tab back-links read these, so they cannot drift from the drawing.
+   */
   risks: string[];
-  /** The capabilities that matter most here, ranked. */
+  /** Derived from the capability pins the same way. */
   capabilities: string[];
   deviations?: ArchetypeDeviation[];
   sources: { title: string; url: string }[];
-  layout: ArchetypeLayout;
+  layout: ArchLayout;
 }
 
 /** Resolved highlight sets for one risk, per phase. */
@@ -525,6 +488,5 @@ export interface Dataset {
   capabilities: Capability[];
   /** Provenance statement for the capabilities overlay, carried for YAML round-tripping. */
   capabilitiesAttribution: string;
-  architectureVocabulary: ArchitectureVocabulary;
   archetypes: Archetype[];
 }

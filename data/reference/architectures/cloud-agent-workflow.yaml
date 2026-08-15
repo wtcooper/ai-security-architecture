@@ -1,0 +1,456 @@
+id: archAgentWorkflow
+surface: surfaceCloud
+title: Core agent workflow
+abbrev: Agent workflow
+
+summary:
+  - >
+    A hosted agent system doing real work over business records: a front end takes requests, a
+    durable orchestration layer plans and delegates across subagents, and every tool call leaves
+    through one governed gateway. This is the target shape most cloud agent deployments should
+    converge on, whatever they orchestrate.
+
+description:
+  - >
+    The spine is a request path: application front end, agent orchestration, agentic gateway,
+    tool services, downstream systems. The architecture's security posture lives almost entirely
+    in one decision — that agents do not hold credentials or reach tools directly. Every tool
+    call, model call and connector call leaves through the gateway, which brokers short-lived
+    credentials, enforces policy per call, applies rate and budget limits, and writes the audit
+    trail as a tap rather than a favour asked of the agent.
+  - >
+    Orchestration is durable: a supervisor decomposes work for subagents and an engine journals
+    every step so the process survives crashes. Durability has two consequences nobody expects
+    from reliability machinery. Everything a step returns is written down, so a step that returns
+    a credential has persisted it. And the engine replays steps to recover, so a side effect that
+    is not idempotent can execute more than once — including a payment.
+  - >
+    Delegation is the other axis. A subagent should inherit a narrowed slice of the supervisor's
+    authority, not all of it; delegation that does not narrow is privilege distribution. And
+    inter-agent messages are model output becoming model input — one confused agent propagates
+    through the graph, which is what distinguishes multi-agent failure from a single agent with
+    more tools.
+  - >
+    The governance plane is drawn as its own column because it is what the personal-agent
+    archetype lacks: workload identities for every agent, a registry deciding what may run and
+    which tools are admitted, evaluation gates in front of change, an append-only audit sink, and
+    a stop that works while a process is mid-flight.
+
+distinguishedBy:
+  - >
+    Against the endpoint personal agent: the loop is nearly identical; the governance is not.
+    Hosting buys an identity per agent, a policy boundary on every tool call, an audit trail and
+    an administrator — none of which the endpoint pattern supplies.
+  - >
+    Against a RAG assistant: that architecture retrieves and answers. This one acts — its outputs
+    are writes to business systems, which is why the gateway, the approval gate and replay safety
+    carry the weight here.
+
+exemplars:
+  - name: Durable execution engines running agent steps
+    note: >
+      Workflow platforms that journal step results and replay to recover, with agent invocations
+      as steps alongside conventional ones.
+    asOf: "2026-08"
+  - name: Supervisor and subagent orchestration
+    note: >
+      A coordinating agent decomposing work across specialists, each with its own context and
+      tool set, over a process too long to hold in one conversation.
+    asOf: "2026-08"
+  - name: Managed agent runtimes
+    note: >
+      Cloud agent services package this same shape — runtime, gateway, registry, observability —
+      as discrete products behind one control plane.
+    asOf: "2026-08"
+
+blocks:
+  - id: initiator
+    kind: actor
+    title: Initiator
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      Starts the process and is absent for the rest of it. The approval they gave at the start is
+      the only human decision until something escalates.
+
+  - id: events
+    kind: actor
+    title: Schedules & events
+    icon: clock
+    col: 0
+    row: 0
+    note: Timers, webhooks and queue messages that start work with no human in the room.
+
+  - id: entry
+    kind: service
+    title: Application front end
+    col: 1
+    row: 1
+    cosaiComponent: componentApplication
+    note: The only place a request is still a request, before it becomes a plan.
+    items:
+      - id: api
+        label: App & API endpoint
+        icon: globe
+        note: The published surface users and systems call.
+      - id: authn
+        label: Identity & input checks
+        icon: shield
+        note: Who is asking, and whether the request is well-formed — settled before any agent runs.
+
+  - id: orchestration
+    kind: service
+    title: Agent orchestration
+    col: 2
+    row: 1
+    note: >
+      The supervisor plans and delegates; the durable engine journals every step and replays to
+      recover. Delegation should narrow authority at every hop.
+    items:
+      - id: supervisor
+        label: Supervisor agent
+        icon: agent
+        note: Decomposes the goal and routes work to specialists.
+      - id: subagents
+        label: Subagents
+        icon: agent
+        note: >
+          Specialists with their own contexts and tools. Their messages to each other are model
+          output becoming model input.
+      - id: engine
+        label: Durable engine
+        icon: gear
+        note: Journals results and replays to recover. Replay without re-authorisation re-executes side effects.
+      - id: delegation
+        label: Delegation scopes
+        icon: doc
+        note: Each hop carries less authority than its parent, and the chain is reconstructable.
+
+  - id: state
+    kind: service
+    title: State & knowledge
+    col: 2
+    row: 2
+    note: >
+      What the workflow knows and what it has done. The journal is a reliability feature and a
+      secrets sink in the same breath.
+    items:
+      - id: journal
+        label: Step journal
+        icon: doc
+        note: Everything a step returns is persisted here. A returned credential is a stored one.
+      - id: index
+        label: Vector index
+        icon: search
+        note: Retrieval context for the agents.
+      - id: memory
+        label: Shared memory
+        icon: folder
+        note: Cross-step working state the agents read back as context.
+
+  - id: gateway
+    kind: service
+    title: Agentic gateway
+    col: 3
+    row: 1
+    note: >
+      The one door. Agents hold no credentials and reach nothing directly; every model and tool
+      call is brokered, policy-checked, rate-limited and logged here.
+    items:
+      - id: broker
+        label: Credential broker
+        icon: key
+        note: Short-lived, scoped credentials fetched at step time — never held for the process's life.
+      - id: policy
+        label: Policy enforcement
+        icon: shield
+        note: A per-call decision about this agent, this tool, this argument — not a standing grant.
+      - id: limits
+        label: Rate & budget limits
+        icon: clock
+        note: The brake on loops and runaway spend, enforced outside the loop it limits.
+      - id: audit
+        label: Audit taps
+        icon: eye
+        note: The trail is recorded by the gateway, not volunteered by the agent.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 4
+    row: 0
+    note: >
+      The published inference interface, called many times across the process. Everything behind
+      it is the provider's, and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: Reached only through the gateway, on brokered credentials.
+
+  - id: tools
+    kind: service
+    title: Tool services
+    col: 4
+    row: 1
+    note: >
+      The action surface: MCP servers, connectors and peer agents. Everything here is admitted by
+      the registry and reached only through the gateway.
+    items:
+      - id: mcp
+        label: MCP servers
+        icon: plug
+        note: Tool providers with declared scopes, admitted against the registry.
+      - id: connectors
+        label: SaaS connectors
+        icon: plug
+        note: Vendor-side capabilities the workflow drives on scoped grants.
+      - id: peers
+        label: Peer agents
+        icon: agent
+        note: Cross-org delegation. A peer's output enters this graph as input.
+
+  - id: downstream
+    kind: external
+    title: Downstream services
+    col: 4
+    row: 2
+    note: The systems the workflow actually changes — where a wrong action becomes a real one.
+    items:
+      - id: records
+        label: Business records
+        icon: db
+        note: The systems of record the agents write to.
+      - id: saas
+        label: Email & SaaS
+        icon: mail
+        note: Messages sent and tickets moved on the organisation's behalf.
+      - id: apis
+        label: External APIs
+        icon: globe
+        note: Third-party services, and the untrusted content they return.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      The column the personal-agent archetype is missing. Identity, admission, evaluation, audit
+      and the ability to stop a running process — each its own service, none of them inside the
+      loop they govern.
+    items:
+      - id: idp
+        label: Identity provider
+        icon: person
+        note: A workload identity per agent, distinct from any user.
+      - id: registry
+        label: Agent & tool registry
+        icon: gear
+        note: What may run, and which tools it may be offered. Admission, not discovery.
+      - id: evals
+        label: Evaluation gates
+        icon: scale
+        note: Behavioural checks in front of every model, prompt or tool change.
+      - id: auditSink
+        label: Audit sink
+        icon: eye
+        note: Append-only, off the agents' write path, able to reconstruct the delegation chain.
+      - id: stop
+        label: Kill switch
+        icon: stop
+        note: Stops a mid-flight process without waiting for it to finish misbehaving.
+
+edges:
+  - from: initiator
+    to: entry
+    path: primary
+    bidir: true
+    label: request / result
+    note: The human's request in, and the outcome back — often days later.
+  - from: events
+    to: entry
+    path: secondary
+    label: trigger
+    note: Unattended starts. Most of this architecture's runs begin here, not with a person.
+  - from: entry
+    to: orchestration
+    path: primary
+    bidir: true
+    note: An authenticated request becomes a goal; results and escalations flow back.
+  - from: orchestration
+    to: state
+    path: secondary
+    bidir: true
+    note: >
+      Steps journal their results and read shared state back as context — the replay and
+      persistence surface.
+  - from: orchestration
+    to: gateway
+    path: primary
+    bidir: true
+    note: Every model and tool call the agents make leaves through here. There is no side door.
+  - from: gateway
+    to: provider
+    path: primary
+    bidir: true
+    route: vh
+    note: Inference on brokered credentials, with limits and logging applied per call.
+  - from: gateway
+    to: tools
+    path: primary
+    bidir: true
+    note: Tool calls carry the narrowed, per-step grant — not the supervisor's authority.
+  - from: tools
+    to: downstream
+    path: external
+    bidir: true
+    note: >
+      Actions land on real systems; whatever comes back — records, pages, API responses — is
+      untrusted content entering agent context.
+  - from: governance
+    to: tools
+    path: governance
+    label: admission
+    note: Tools and servers exist here only if the registry admitted them.
+  - from: governance
+    to: provider
+    path: governance
+    label: evaluation
+    note: Model and prompt changes pass an evaluation gate before they serve traffic.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: tools->downstream
+      note: >
+        Records, documents and API responses read over the process's lifetime are chances to
+        steer an agent whose output another agent will trust.
+    - risk: riskInsecureModelOutput
+      at: orchestration
+      note: Inter-agent messages are model output landing in another agent's context as instruction.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: orchestration
+      note: A subagent that inherits its parent's full authority is privilege distribution, not delegation.
+    - risk: riskSensitiveDataDisclosure
+      at: orchestration->state
+      note: The journal records everything a step returns. A returned secret is a persisted one.
+    - risk: riskRogueActions
+      at: tools->downstream
+      note: >
+        Consequential writes with no human present — and replay can execute a non-idempotent one
+        twice.
+    - risk: riskRunawayAgentToolLoops
+      at: gateway
+      note: An unbounded loop between agents burns budget for as long as nobody notices.
+    - risk: riskEconomicDenialOfWallet
+      at: gateway->provider
+      note: Inference called many times across days of process is a spend surface worth a brake.
+    - risk: riskToolRegistryTampering
+      at: governance->tools
+      note: The admission list is the tool supply chain; whoever writes it programs the agents.
+
+  capabilities:
+    - capability: capabilityIga
+      at: initiator->entry
+      note: The user's identity and a delegated grant scoped to this request, not a standing power.
+    - capability: capabilityNhiManagement
+      at: orchestration
+      note: A workload identity per agent and subagent, so the chain is attributable.
+    - capability: capabilitySecretsManagement
+      at: gateway
+      note: Credentials brokered at step time, short-lived and scoped; agents hold none.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: gateway
+      note: A policy decision on every tool call — agent, tool, arguments — outside the loop.
+    - capability: capabilityToolPermissionScoping
+      at: gateway->tools
+      note: Each delegation hop carries a narrower grant than its parent.
+    - capability: capabilityRateLimiting
+      at: gateway->provider
+      note: Rate and budget ceilings that end loops the agents cannot end themselves.
+    - capability: capabilityPromptInjectionDefense
+      at: tools->downstream
+      note: Returned content is classified before it re-enters any agent's context.
+    - capability: capabilityAiDlp
+      at: orchestration->state
+      note: Redaction on what steps may journal, because the journal outlives the process.
+    - capability: capabilityHitlControls
+      at: tools->downstream
+      note: An approval gate on consequential writes, sized to the blast radius.
+    - capability: capabilityAgentRegistry
+      at: governance->tools
+      note: Admission for agents and tools — nothing runs or is offered by default.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: An append-only trail that can reconstruct who delegated what to whom.
+    - capability: capabilityKillSwitch
+      at: governance
+      note: A stop that works mid-flight, because these processes run for days.
+
+scenarios:
+  - title: A user asks the agent to act
+    steps:
+      - follow: initiator->entry
+        note: The request is authenticated and a scoped grant is minted for it.
+      - follow: entry->orchestration
+        note: The supervisor decomposes the goal across subagents.
+      - follow: orchestration->gateway
+        note: Every call the agents make funnels through the one door.
+      - follow: gateway->provider
+        note: Inference on brokered credentials, limits applied.
+      - follow: gateway->tools
+        note: Tool calls carry the narrowed per-step grant.
+      - follow: tools->downstream
+        note: The write lands — behind an approval gate when it is consequential.
+      - follow: entry->initiator
+        note: The result returns, possibly days after the request.
+  - title: A step replays after a crash
+    steps:
+      - follow: state->orchestration
+        note: The engine rebuilds state from the journal — including anything a step persisted.
+      - follow: orchestration->gateway
+        note: Replayed steps re-request credentials; nothing survives from the first run.
+      - follow: gateway->tools
+        note: Idempotency fencing decides whether the side effect may run again.
+      - follow: tools->downstream
+        note: Without fencing, the payment executes twice. The journal replays; the world does not.
+  - title: An event fires days into the process
+    steps:
+      - follow: events->entry
+        note: A timer or webhook resumes work with nobody watching.
+      - follow: entry->orchestration
+        note: The waiting step wakes with its narrowed grant, not the initiator's.
+      - follow: orchestration->gateway
+        note: Credentials are fetched now — the ones from day one would be stale authority.
+      - follow: gateway->tools
+        note: The action proceeds under the same per-call policy as an attended run.
+
+deviations:
+  - subject: Subagents are drawn as one item
+    reason: >
+      There are several, with different contexts and tools. They are drawn as one because the
+      risks — inherited authority, message propagation, chain opacity — are properties of the
+      delegation pattern rather than of any particular specialist.
+  - subject: Two of this architecture's risks have no CoSAI equivalent
+    reason: >
+      OWASP's agentic taxonomy names memory poisoning and cascading hallucination as distinct
+      threats; CoSAI's risk set has neither. They are pinned here as prompt injection and insecure
+      model output, the nearest true statements, which lose the compounding that makes both
+      dangerous in a multi-agent system. Recorded rather than papered over.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI07 insecure inter-agent communication, ASI08 cascading failures"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Agentic AI — threats and mitigations v1.1, T12 and T13"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "AWS Well-Architected Agentic AI Lens — multi-agent orchestration and collaboration models"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentperf05.html
+  - title: "Microsoft Azure Architecture Center — AI agent orchestration patterns"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
+  - title: "Google Cloud — choose a design pattern for an agentic AI system"
+    url: https://docs.cloud.google.com/architecture/choose-design-pattern-agentic-ai-system
+  - title: "F5 AI reference architecture — agentic external services integration and the AI agentic gateway"
+    url: https://www.f5.com/resources/reference-architectures/ai-overview

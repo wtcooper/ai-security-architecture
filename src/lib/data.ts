@@ -8,7 +8,6 @@ import type {
   Component,
   Control,
   Dataset,
-  NodeType,
   Persona,
   Risk,
   RiskOverlay,
@@ -35,7 +34,6 @@ export const {
   incidents,
   surfaces,
   capabilities,
-  architectureVocabulary,
   archetypes,
   meta,
 } = dataset;
@@ -179,16 +177,15 @@ export const capabilitiesInOrder: Capability[] = controlCategories.flatMap((cat)
 // --- Reference architectures -----------------------------------------------------
 
 export const archetypeById = index(archetypes);
-export const nodeTypeById = index(architectureVocabulary.nodeTypes);
-export const zoneTypeById = index(architectureVocabulary.zoneTypes);
-export const nodeGroupById = index(architectureVocabulary.groups);
-export const controlKindById = index(architectureVocabulary.controlKinds);
 
-/** Every archetype whose crossings are secured by a control of this kind. */
-export const archetypesForControlKind = (kindId: string): Archetype[] =>
-  archetypes.filter((a) => a.edges.some((e) => e.control?.kind === kindId));
+/**
+ * Stable short codes for the risk tags on the diagrams, F5's LLM01 treatment applied to CoSAI:
+ * the same risk carries the same code on every architecture, in the catalogue's display order.
+ */
+const riskCodes = new Map(risksInOrder.map((r, i) => [r.id, `R${String(i + 1).padStart(2, "0")}`]));
+export const riskCode = (id: string) => riskCodes.get(id) ?? id;
 
-/** Archetypes in display order: grouped by surface, then as authored. */
+/** Architectures in display order: grouped by surface, then as authored. */
 export const archetypesInOrder: Archetype[] = surfaces.flatMap((s) =>
   archetypes.filter((a) => a.surface === s.id),
 );
@@ -196,41 +193,28 @@ export const archetypesInOrder: Archetype[] = surfaces.flatMap((s) =>
 export const archetypesForSurface = (surfaceId: string): Archetype[] =>
   archetypes.filter((a) => a.surface === surfaceId);
 
-/** What a node is called, and what it is: the authored label plus its vocabulary type. */
-export const nodeTypeOf = (typeId: string): NodeType | undefined => nodeTypeById.get(typeId);
-
-/**
- * The risk-map component a node instantiates — its own override, else its type's default.
- * Undefined where CoSAI names no equivalent, which is the whole governance plane.
- */
-export function componentForNode(archetypeId: string, nodeId: string): string | undefined {
-  const node = archetypeById.get(archetypeId)?.nodes.find((n) => n.id === nodeId);
-  if (!node) return undefined;
-  return node.cosaiComponent ?? nodeTypeById.get(node.type)?.cosaiComponent;
-}
-
-/** Every archetype that names this risk, at the archetype level or pinned to a node or edge. */
+/** Every architecture that pins this risk to a block or a flow. */
 export const archetypesForRisk = (riskId: string): Archetype[] =>
   archetypes.filter((a) => a.risks.includes(riskId));
 
 export const archetypesForCapability = (capabilityId: string): Archetype[] =>
   archetypes.filter((a) => a.capabilities.includes(capabilityId));
 
-/** Every archetype drawing a node anchored to this risk-map component. */
+/** Every architecture drawing a block or block internal anchored to this risk-map component. */
 export const archetypesForComponent = (componentId: string): Archetype[] =>
   archetypes.filter((a) =>
-    a.nodes.some((n) => (n.cosaiComponent ?? nodeTypeById.get(n.type)?.cosaiComponent) === componentId),
+    a.blocks.some(
+      (b) =>
+        b.cosaiComponent === componentId ||
+        (b.items ?? []).some((i) => i.cosaiComponent === componentId),
+    ),
   );
 
-/** Every archetype whose capability set reaches this control, via capabilities.yaml. */
+/** Every architecture whose capability set reaches this control, via capabilities.yaml. */
 export const archetypesForControl = (controlId: string): Archetype[] =>
   archetypes.filter((a) =>
     a.capabilities.some((id) => capabilityById.get(id)?.controls.includes(controlId)),
   );
-
-/** Every archetype that makes this CoSAI persona responsible for one of its trust zones. */
-export const archetypesForPersona = (personaId: string): Archetype[] =>
-  archetypes.filter((a) => a.zones.some((z) => z.personas.includes(personaId)));
 
 export const capabilitiesForArchetype = (archetypeId: string): Capability[] =>
   (archetypeById.get(archetypeId)?.capabilities ?? [])

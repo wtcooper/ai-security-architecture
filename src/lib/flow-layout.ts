@@ -1,0 +1,206 @@
+/**
+ * Build-time geometry for the flow-style reference architectures.
+ *
+ * The grammar is F5's: capability blocks on a coarse authored grid, connected by orthogonal
+ * typed paths. Authors place blocks with `col`/`row` and the build turns that into pixels —
+ * the same geometry-as-data discipline as map-layout.ts, so the client renders coordinates
+ * and never runs a layout algorithm.
+ *
+ * The router is deliberately simple: straight where the two blocks face each other, one bend
+ * otherwise. F5's diagrams stay readable because the grid is curated so flows do not cross,
+ * not because the router is clever — the same is expected of authors here.
+ */
+import type { ArchBlock, Archetype, ArchLayout, Rect } from "./types";
+
+/** The icon vocabulary FlowDiagram can draw. The build rejects anything else. */
+export const ICON_NAMES = [
+  "person",
+  "people",
+  "agent",
+  "model",
+  "chat",
+  "clock",
+  "folder",
+  "db",
+  "key",
+  "shield",
+  "plug",
+  "code",
+  "globe",
+  "doc",
+  "gear",
+  "phone",
+  "search",
+  "mail",
+  "scale",
+  "eye",
+  "stop",
+] as const;
+
+const COL_W = 176;
+const COL_GAP = 62;
+const ROW_GAP = 70;
+const MARGIN_X = 22;
+/** Room above the first row for tabs and risk-tag stacks. */
+const MARGIN_TOP = 46;
+const MARGIN_BOTTOM = 28;
+
+const TAB_H = 20;
+/** Items pack two per row inside a standard block. */
+const ITEM_H = 50;
+const BLOCK_PAD_TOP = 16;
+const BLOCK_PAD_BOTTOM = 12;
+const ACTOR_H = 66;
+
+/** How tall a block wants to be, before row heights are settled. */
+function naturalHeight(block: ArchBlock): number {
+  if (block.kind === "actor") return ACTOR_H;
+  const items = block.items?.length ?? 0;
+  if (!items) return 58;
+  // Tall side columns stack items vertically, one per row; everything else packs two across.
+  const stacked = (block.rowSpan ?? 1) > 1;
+  const rows = stacked ? items : Math.ceil(items / 2);
+  return TAB_H / 2 + BLOCK_PAD_TOP + rows * ITEM_H + BLOCK_PAD_BOTTOM;
+}
+
+/** Where items sit inside a block. Client-side rendering calls this too, so it lives here. */
+export function itemCells(block: ArchBlock, rect: Rect): Rect[] {
+  const items = block.items ?? [];
+  const stacked = (block.rowSpan ?? 1) > 1;
+  const perRow = stacked ? 1 : 2;
+  const top = rect.y + TAB_H / 2 + BLOCK_PAD_TOP;
+  return items.map((_, i) => {
+    const r = Math.floor(i / perRow);
+    const c = i % perRow;
+    const inRow = Math.min(perRow, items.length - r * perRow);
+    const cellW = (rect.w - 16) / inRow;
+    return { x: rect.x + 8 + c * cellW, y: top + r * ITEM_H, w: cellW, h: ITEM_H };
+  });
+}
+
+const overlap = (a0: number, a1: number, b0: number, b1: number): [number, number] | null => {
+  const lo = Math.max(a0, b0);
+  const hi = Math.min(a1, b1);
+  return hi - lo > 24 ? [lo, hi] : null;
+};
+
+export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
+  const cols = Math.max(...arch.blocks.map((b) => b.col)) + 1;
+  const rows = Math.max(...arch.blocks.map((b) => b.row + (b.rowSpan ?? 1) - 1)) + 1;
+  const width = MARGIN_X * 2 + cols * COL_W + (cols - 1) * COL_GAP;
+
+  // Row heights come from the single-row blocks; spanning blocks then grow their last row if
+  // the span still cannot hold them.
+  const rowH = Array.from({ length: rows }, () => 64);
+  for (const b of arch.blocks) {
+    if ((b.rowSpan ?? 1) === 1) rowH[b.row] = Math.max(rowH[b.row], naturalHeight(b));
+  }
+  for (const b of arch.blocks) {
+    const span = b.rowSpan ?? 1;
+    if (span === 1) continue;
+    const have =
+      rowH.slice(b.row, b.row + span).reduce((s, h) => s + h, 0) + ROW_GAP * (span - 1);
+    const need = naturalHeight(b) - have;
+    if (need > 0) rowH[b.row + span - 1] += need;
+  }
+
+  const rowY: number[] = [];
+  let y = MARGIN_TOP;
+  for (let r = 0; r < rows; r++) {
+    rowY.push(y);
+    y += rowH[r] + ROW_GAP;
+  }
+  const height = y - ROW_GAP + MARGIN_BOTTOM;
+
+  const blocks: Record<string, Rect> = {};
+  for (const b of arch.blocks) {
+    const span = b.rowSpan ?? 1;
+    const x = MARGIN_X + b.col * (COL_W + COL_GAP);
+    const spanH =
+      rowH.slice(b.row, b.row + span).reduce((s, h) => s + h, 0) + ROW_GAP * (span - 1);
+    const h = span > 1 ? spanH : naturalHeight(b);
+    // Centre a short block in its row; a spanning block takes the whole span.
+    const top = span > 1 ? rowY[b.row] : rowY[b.row] + (rowH[b.row] - h) / 2;
+    blocks[b.id] = { x, y: top, w: COL_W, h };
+  }
+
+  // --- Edges ---------------------------------------------------------------------
+  // Parallel edges between the same pair fan out a few pixels so both stay visible.
+  const pairCount = new Map<string, number>();
+  const pairSeen = new Map<string, number>();
+  for (const e of arch.edges) {
+    const key = [e.from, e.to].sort().join("~");
+    pairCount.set(key, (pairCount.get(key) ?? 0) + 1);
+  }
+
+  const edges = arch.edges.map((e) => {
+    const a = blocks[e.from];
+    const b = blocks[e.to];
+    const key = [e.from, e.to].sort().join("~");
+    const n = pairCount.get(key) ?? 1;
+    const i = pairSeen.get(key) ?? 0;
+    pairSeen.set(key, i + 1);
+    const off = n > 1 ? (i - (n - 1) / 2) * 16 : 0;
+
+    const yOv = overlap(a.y, a.y + a.h, b.y, b.y + b.h);
+    if (yOv) {
+      // Facing sides, straight horizontal.
+      const yMid = (yOv[0] + yOv[1]) / 2 + off;
+      const [x1, x2] = a.x < b.x ? [a.x + a.w, b.x] : [a.x, b.x + b.w];
+      return {
+        from: e.from,
+        to: e.to,
+        d: `M ${x1} ${yMid} L ${x2} ${yMid}`,
+        midX: (x1 + x2) / 2,
+        midY: yMid,
+        horizontal: true,
+      };
+    }
+    const xOv = overlap(a.x, a.x + a.w, b.x, b.x + b.w);
+    if (xOv) {
+      const xMid = (xOv[0] + xOv[1]) / 2 + off;
+      const [y1, y2] = a.y < b.y ? [a.y + a.h, b.y] : [a.y, b.y + b.h];
+      return {
+        from: e.from,
+        to: e.to,
+        d: `M ${xMid} ${y1} L ${xMid} ${y2}`,
+        midX: xMid,
+        midY: (y1 + y2) / 2,
+        horizontal: false,
+      };
+    }
+    if (e.route === "vh") {
+      // One bend, leaving vertically: down (or up) the source's column, turn at the target's
+      // row, enter the target sideways. Entry sits a little above centre so a vh arrival and an
+      // hv departure on the same block do not draw over each other.
+      const ax = a.x + a.w / 2 + off;
+      const y1 = a.y + a.h / 2 < b.y + b.h / 2 ? a.y + a.h : a.y;
+      const by = b.y + b.h / 2 - 14 + off;
+      const bx = ax < b.x ? b.x : b.x + b.w;
+      return {
+        from: e.from,
+        to: e.to,
+        d: `M ${ax} ${y1} L ${ax} ${by} L ${bx} ${by}`,
+        midX: ax,
+        midY: (y1 + by) / 2,
+        horizontal: false,
+      };
+    }
+    // One bend, leaving sideways: across at the source's centre, turn at the target's column,
+    // enter the target vertically.
+    const ay = a.y + a.h / 2 + off;
+    const x1 = a.x + a.w / 2 < b.x + b.w / 2 ? a.x + a.w : a.x;
+    const bx = b.x + b.w / 2 + off;
+    const by = ay < b.y ? b.y : b.y + b.h;
+    return {
+      from: e.from,
+      to: e.to,
+      d: `M ${x1} ${ay} L ${bx} ${ay} L ${bx} ${by}`,
+      midX: (x1 + bx) / 2,
+      midY: ay,
+      horizontal: true,
+    };
+  });
+
+  return { width, height, blocks, edges };
+}
