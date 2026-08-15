@@ -1,7 +1,8 @@
 import raw from "@/data/generated/dataset.json";
+import { bandFor, type BandId } from "./bands";
 import { ACTORS, actorById } from "./map-layout";
 import { DISPLAY_NAME } from "./naming";
-import type { Component, Control, Dataset, Persona, Risk, RiskOverlay } from "./types";
+import type { Capability, Component, Control, Dataset, Persona, Risk, RiskOverlay } from "./types";
 
 export const dataset = raw as unknown as Dataset;
 
@@ -22,6 +23,8 @@ export const {
   actorAccessLevels,
   overlays,
   incidents,
+  surfaces,
+  capabilities,
   meta,
 } = dataset;
 
@@ -131,3 +134,32 @@ export const personasForRisk = (riskId: string): Persona[] =>
     .filter((p): p is Persona => Boolean(p));
 
 export const overlayFor = (riskId: string): RiskOverlay | undefined => overlayByRisk.get(riskId);
+
+export const capabilityById = index(capabilities);
+export const surfaceById = index(surfaces);
+
+export const controlsForCapability = (capabilityId: string): Control[] =>
+  (capabilityById.get(capabilityId)?.controls ?? [])
+    .map((id) => controlById.get(id))
+    .filter((c): c is Control => Boolean(c));
+
+export const risksForCapability = (capabilityId: string): Risk[] =>
+  (capabilityById.get(capabilityId)?.risks ?? [])
+    .map((id) => riskById.get(id))
+    .filter((r): r is Risk => Boolean(r));
+
+export const componentsForCapability = (capabilityId: string): Component[] =>
+  (capabilityById.get(capabilityId)?.components ?? [])
+    .map((id) => componentById.get(id))
+    .filter((c): c is Component => Boolean(c));
+
+/** Which stack layers this capability touches, via its anchored components. */
+export const bandsForCapability = (capabilityId: string): Set<BandId> =>
+  new Set(
+    componentsForCapability(capabilityId).map((c) => bandFor(c.id, c.category, c.subcategory)),
+  );
+
+/** Capabilities in display order: grouped by control category, then as authored. */
+export const capabilitiesInOrder: Capability[] = controlCategories.flatMap((cat) =>
+  capabilities.filter((c) => c.category === cat.id),
+);

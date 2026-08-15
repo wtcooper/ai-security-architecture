@@ -98,3 +98,27 @@ prose, `lifecycleStage`, and mapped controls).
 
 `data/incidents/*.yaml` is original work. Every incident and every flow step carries its own
 `sources` list of public reporting; those links are rendered in the UI.
+
+## Capabilities
+
+`data/overlay/capabilities.yaml` is original work: a taxonomy of vendor-neutral technology
+capability classes (EDR, model API guardrails, AI-SPM, …), each mapped onto CoSAI controls,
+risks and components, with per-surface applicability across endpoint, cloud/hosted and
+third-party SaaS. The capability classes were derived by convergence across four independent
+source families read from the primary documents — threat and mitigation catalogues (MITRE
+ATLAS, the OWASP LLM and Agentic Top 10s, LLMSVS, the Securing Agentic Applications Guide),
+government and standards controls (NIST SP 800-218A, AI RMF, AI 600-1, the CISA/NSA and Five
+Eyes joint guidance, UK NCSC, CSA AICM, ISO/IEC 42001, EU AI Act Article 15), procurable
+market categories (Gartner AI TRiSM, CSA's agentic market map, the cloud providers' own
+published AI security catalogues), and lifecycle tooling maps (OWASP's AI Security Solutions
+Landscape). A class is included only where at least two independent families name it, it is
+deployable as a technology rather than a process, and it differs across at least one surface
+boundary; the count follows from that test rather than being targeted. The full method,
+including granularity rules and deliberate exclusions, is in the header of
+`data/overlay/capabilities.yaml`. Each entry carries a `sources` list, and where a class rests
+on market rather than standards evidence its sources say so; the CoSAI mappings are judgements
+made here. Product names are deliberately absent: a fork records its own
+tooling and posture (`status` per surface) via the Capabilities tab's export flow, and the
+shipped dataset never sets `status`. `npm run data` fails on any dangling id, a primary
+`category` no mapped control belongs to, or a capability missing a decision for a declared
+surface.

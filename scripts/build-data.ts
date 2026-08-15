@@ -13,6 +13,7 @@ import { parse } from "yaml";
 
 import type {
   AuthoredMappings,
+  Capability,
   Component,
   ComponentCategory,
   Control,
@@ -24,9 +25,10 @@ import type {
   Persona,
   Risk,
   RiskOverlay,
+  Surface,
   Vocabulary,
 } from "../src/lib/types";
-import { FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
+import { CAPABILITY_STATUSES, FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
 import {
   ACTOR_IDS,
@@ -92,6 +94,12 @@ async function main() {
     notes: Record<string, FrameworkNote>;
   }>(join(ROOT, "data", "overlay", "frameworks-authored.yaml"));
 
+  const capabilitiesDoc = await loadYaml<{
+    attribution?: string;
+    surfaces: Surface[];
+    capabilities: Capability[];
+  }>(join(ROOT, "data", "overlay", "capabilities.yaml"));
+
   const components = componentsDoc.components;
   const risks = risksDoc.risks;
   const controls = controlsDoc.controls;
@@ -156,6 +164,14 @@ async function main() {
     authoredMappings,
   });
 
+  // --- Capabilities ------------------------------------------------------------
+  checkCapabilities(capabilitiesDoc, {
+    controlCategories: controlsDoc.categories,
+    controls,
+    riskIds,
+    componentIds,
+  });
+
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
   await checkAgainstSaifSeed(overlays, risks);
@@ -198,6 +214,7 @@ async function main() {
         controls: controls.length,
         personas: personasDoc.personas.length,
         incidents: incidents.length,
+        capabilities: capabilitiesDoc.capabilities.length,
       },
     },
     componentCategories: componentsDoc.categories,
@@ -216,6 +233,9 @@ async function main() {
     actorAccessLevels: actorDoc.actorAccessLevels,
     overlays,
     incidents,
+    surfaces: capabilitiesDoc.surfaces,
+    capabilities: capabilitiesDoc.capabilities,
+    capabilitiesAttribution: capabilitiesDoc.attribution ?? "",
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -225,8 +245,83 @@ async function main() {
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
-      `${incidents.length} incidents`,
+      `${incidents.length} incidents, ${capabilitiesDoc.capabilities.length} capabilities`,
   );
+}
+
+/**
+ * The technology-capability overlay: vendor-neutral tooling classes mapped onto CoSAI
+ * controls, risks and components, with per-surface applicability. Same contract as the
+ * other overlays — a dangling id fails the build, and the shipped dataset carries no
+ * posture statuses (those belong to forks).
+ */
+function checkCapabilities(
+  doc: { attribution?: string; surfaces: Surface[]; capabilities: Capability[] },
+  ctx: {
+    controlCategories: { id: string; title: string }[];
+    controls: Control[];
+    riskIds: Set<string>;
+    componentIds: Set<string>;
+  },
+) {
+  if (!doc.attribution?.trim()) fail("capabilities: attribution is required");
+
+  const surfaceIds = doc.surfaces?.map((s) => s.id) ?? [];
+  if (surfaceIds.length < 3) fail("capabilities: expected at least three surfaces");
+  if (new Set(surfaceIds).size !== surfaceIds.length) fail("capabilities: duplicate surface ids");
+
+  const categoryIds = new Set(ctx.controlCategories.map((c) => c.id));
+  const controlById = new Map(ctx.controls.map((c) => [c.id, c]));
+  const seen = new Set<string>();
+
+  for (const cap of doc.capabilities ?? []) {
+    const where = `capability ${cap.id}`;
+    if (!/^capability[A-Z]/.test(cap.id)) fail(`${where}: id must match ^capability[A-Z]`);
+    if (seen.has(cap.id)) fail(`${where}: duplicate id`);
+    seen.add(cap.id);
+
+    if (!cap.description?.length) fail(`${where}: needs a description`);
+    if (!cap.examples?.length) fail(`${where}: needs example technology classes`);
+    if (!cap.controls?.length) fail(`${where}: needs at least one control`);
+    if (!cap.components?.length) fail(`${where}: needs at least one component`);
+
+    if (!categoryIds.has(cap.category)) fail(`${where}: unknown category ${cap.category}`);
+    for (const id of cap.controls ?? []) {
+      if (!controlById.has(id)) fail(`${where}: unknown control ${id}`);
+    }
+    // The primary category places the capability in exactly one matrix row; requiring a
+    // mapped control of that category keeps the placement honest rather than cosmetic.
+    if (
+      categoryIds.has(cap.category) &&
+      !(cap.controls ?? []).some((id) => controlById.get(id)?.category === cap.category)
+    ) {
+      fail(`${where}: no mapped control belongs to its primary category ${cap.category}`);
+    }
+    for (const id of cap.risks ?? []) {
+      if (!ctx.riskIds.has(id)) fail(`${where}: unknown risk ${id}`);
+    }
+    for (const id of cap.components ?? []) {
+      if (!ctx.componentIds.has(id)) fail(`${where}: unknown component ${id}`);
+    }
+
+    // Every declared surface must get a conscious decision — mirrors the overlay's
+    // per-phase completeness rule.
+    const keys = Object.keys(cap.surfaces ?? {});
+    for (const id of surfaceIds) {
+      if (!keys.includes(id)) fail(`${where}: missing surface ${id}`);
+    }
+    for (const key of keys) {
+      if (!surfaceIds.includes(key)) fail(`${where}: unknown surface ${key}`);
+      const info = cap.surfaces[key];
+      if (typeof info?.applies !== "boolean") fail(`${where}: surface ${key} needs applies`);
+      if (info?.status && !CAPABILITY_STATUSES.includes(info.status)) {
+        fail(`${where}: surface ${key} has invalid status ${info.status}`);
+      }
+    }
+    if (!keys.some((k) => cap.surfaces[k]?.applies)) {
+      fail(`${where}: must apply to at least one surface`);
+    }
+  }
 }
 
 /**

@@ -19,7 +19,7 @@ import {
 import { mappingsForRisk } from "@/lib/frameworks";
 import { PHASES } from "@/lib/types";
 
-const CATEGORY_ACCENT: Record<string, string> = {
+export const RISK_CATEGORY_ACCENT: Record<string, string> = {
   risksSupplyChainAndDevelopment: "var(--band-data-rail)",
   risksDeploymentAndInfrastructure: "var(--band-infra-rail)",
   risksRuntimeInputSecurity: "var(--band-app-rail)",
@@ -50,7 +50,7 @@ export function RisksBrowser() {
             <FilterPill
               key={c.id}
               active={category === c.id}
-              accent={CATEGORY_ACCENT[c.id]}
+              accent={RISK_CATEGORY_ACCENT[c.id]}
               onClick={() => setCategory(c.id)}
             >
               {c.title}
@@ -74,7 +74,7 @@ export function RisksBrowser() {
               <h2 className="display mb-1 flex items-center gap-2.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">
                 <span
                   className="h-2 w-2 rounded-full"
-                  style={{ background: CATEGORY_ACCENT[cat.id] }}
+                  style={{ background: RISK_CATEGORY_ACCENT[cat.id] }}
                 />
                 {cat.title}
               </h2>
@@ -90,7 +90,7 @@ export function RisksBrowser() {
                         id={risk.id}
                         title={risk.title}
                         meta={firstLine(risk.shortDescription, 130)}
-                        accent={CATEGORY_ACCENT[cat.id]}
+                        accent={RISK_CATEGORY_ACCENT[cat.id]}
                         openAll={openAll}
                         deepLinkId={deepLink}
                       >

@@ -17,7 +17,7 @@ import {
   risksForControl,
 } from "@/lib/data";
 
-const CATEGORY_ACCENT: Record<string, string> = {
+export const CONTROL_CATEGORY_ACCENT: Record<string, string> = {
   controlsData: "var(--band-data-rail)",
   controlsInfrastructure: "var(--band-infra-rail)",
   controlsModel: "var(--band-model-rail)",
@@ -49,7 +49,7 @@ export function ControlsBrowser() {
             <FilterPill
               key={c.id}
               active={category === c.id}
-              accent={CATEGORY_ACCENT[c.id]}
+              accent={CONTROL_CATEGORY_ACCENT[c.id]}
               onClick={() => setCategory(c.id)}
             >
               {c.title}
@@ -73,7 +73,7 @@ export function ControlsBrowser() {
               <h2 className="display mb-1 flex items-center gap-2.5 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">
                 <span
                   className="h-2 w-2 rounded-full"
-                  style={{ background: CATEGORY_ACCENT[cat.id] }}
+                  style={{ background: CONTROL_CATEGORY_ACCENT[cat.id] }}
                 />
                 {cat.title}
               </h2>
@@ -89,7 +89,7 @@ export function ControlsBrowser() {
                         id={control.id}
                         title={control.title}
                         meta={firstLine(control.description, 130)}
-                        accent={CATEGORY_ACCENT[cat.id]}
+                        accent={CONTROL_CATEGORY_ACCENT[cat.id]}
                         openAll={openAll}
                         deepLinkId={deepLink}
                       >

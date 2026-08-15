@@ -174,6 +174,57 @@ export interface Vocabulary {
   description?: Paragraph[];
 }
 
+/**
+ * Assessment states a fork can record per capability per surface. Shipped unset — the
+ * repository maps the taxonomy, a deployment maps its own posture onto it.
+ */
+export type CapabilityStatus = "inPlace" | "partial" | "gap" | "notApplicable";
+export const CAPABILITY_STATUSES: CapabilityStatus[] = [
+  "inPlace",
+  "partial",
+  "gap",
+  "notApplicable",
+];
+
+/** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */
+export interface Surface {
+  id: string;
+  title: string;
+  description?: Paragraph[];
+}
+
+export interface CapabilitySurfaceInfo {
+  /** Whether the capability is structurally available on this surface at all. */
+  applies: boolean;
+  /** How it shows up (or why it cannot) on this surface. */
+  note?: string;
+  /** Optional posture assessment. Never set in the shipped dataset; forks may commit it. */
+  status?: CapabilityStatus;
+}
+
+/**
+ * A technology capability: a vendor-neutral class of security tooling that implements
+ * CoSAI controls on one or more surfaces. Authored in this repository (data/overlay/
+ * capabilities.yaml), not CoSAI's.
+ */
+export interface Capability {
+  id: string;
+  title: string;
+  /** Short label for dense UI (matrix chips); falls back to title. */
+  abbrev?: string;
+  /** Primary CoSAI control category — the matrix row this capability lives in. */
+  category: string;
+  description: Paragraph[];
+  /** Vendor-neutral example technology classes. */
+  examples: string[];
+  controls: string[];
+  risks: string[];
+  components: string[];
+  /** Keyed by surface id; the build requires every declared surface to be present. */
+  surfaces: Record<string, CapabilitySurfaceInfo>;
+  sources?: { title: string; url: string }[];
+}
+
 /** Resolved highlight sets for one risk, per phase. */
 export interface RiskOverlay {
   risk: string;
@@ -257,4 +308,8 @@ export interface Dataset {
   actorAccessLevels: Vocabulary[];
   overlays: RiskOverlay[];
   incidents: Incident[];
+  surfaces: Surface[];
+  capabilities: Capability[];
+  /** Provenance statement for the capabilities overlay, carried for YAML round-tripping. */
+  capabilitiesAttribution: string;
 }

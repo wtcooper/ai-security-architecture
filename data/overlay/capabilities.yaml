@@ -1,0 +1,2532 @@
+# Technology-capability taxonomy: vendor-neutral classes of security tooling that implement
+# CoSAI controls on specific deployment surfaces. Authored in this repository — not CoSAI data.
+#
+# Conventions:
+#   - Vendor-neutral only. No product names; a fork adds its own tooling via the Capabilities
+#     tab's customize flow (export YAML -> commit here).
+#   - `category` is the capability's PRIMARY CoSAI control category and decides its matrix row.
+#     The build requires at least one mapped control to belong to that category.
+#   - `surfaces` must carry every surface declared below; `applies: false` records a structural
+#     limit (e.g. no agent on vendor infrastructure), with the reason in `note`.
+#   - `status` is never set here. It exists in the schema so a fork can commit its own posture
+#     assessment (inPlace | partial | gap | notApplicable).
+#   - `sources` cite public pages substantiating the capability class, per data/PROVENANCE.md.
+#
+# HOW THIS LIST WAS DERIVED (2026-08)
+#
+# The class list is not a target count. It is the set of capabilities that survived a
+# convergence test across four independent source families, read from the primary documents:
+#
+#   1. Threat/mitigation catalogues — MITRE ATLAS v5.6.0 (35 mitigations, AML.M0000-M0034),
+#      OWASP LLM Top 10 2026, OWASP Top 10 for Agentic Applications 2026 (ASI01-ASI10),
+#      OWASP LLMSVS v2.0, OWASP Securing Agentic Applications Guide 1.0.
+#   2. Government and standards controls — NIST SP 800-218A, NIST AI RMF 1.0, NIST AI 600-1
+#      (212 suggested actions, 51 tagged Information Security), CISA/NSA "Deploying AI Systems
+#      Securely" and "AI Data Security", the 2026 Five Eyes "Careful adoption of agentic AI
+#      services", UK NCSC's 17 guidelines, CSA AI Controls Matrix v1.1, ISO/IEC 42001,
+#      EU AI Act Article 15.
+#   3. Procurable market categories — Gartner's AI TRiSM four-layer market guide, CSA's Agentic
+#      AI Security Innovator Market Map, and the cloud providers' own published AI security
+#      service catalogues.
+#   4. Lifecycle tooling maps — OWASP's AI Security Solutions Landscape (LLM and Agentic
+#      editions), which name SecOps tasks per lifecycle stage.
+#
+# Inclusion test: named as a distinct capability by at least two independent source families,
+# AND procurable or deployable as a technology class (not a process), AND differentiated across
+# at least one surface boundary. Granularity follows the sources: Gartner's own split of the
+# data layer into DSPM / DLP / DAG / runtime redaction is preserved because the market buys them
+# separately; conversely non-human identity and agent identity are ONE entry because every
+# vendor and CSA's own NHI taxonomy treat agent identity as a class of non-human identity.
+#
+# Deliberate exclusions, with reasons: bias and fairness testing, and hallucination detection as
+# a standalone (safety rather than security — CoSAI carries no corresponding risk); deepfake
+# detection (named only by ATLAS M0034, no CoSAI risk); Zero Trust (an architecture stance, not
+# a purchasable capability — it appears inside segmentation and identity entries); ATLAS's
+# predictive-ML-specific mitigations M0002/M0006/M0009/M0010 (single-source, narrow).
+#
+# Where a capability rests on market rather than standards evidence, its `sources` say so.
+
+attribution: >
+  Authored in this repository. Capability classes were derived from public standards, government
+  guidance, and analyst market literature (see the header of data/overlay/capabilities.yaml for
+  the derivation method); the mappings onto CoSAI controls, risks, and components are this
+  repository's judgement, not CoSAI's.
+
+surfaces:
+  - id: surfaceEndpoint
+    title: Endpoint
+    description:
+      - >
+        AI agents and assistants running on managed devices — desktop and CLI agents with local
+        file, tool, and credential access. The organisation owns the whole stack, so
+        device-native controls reach everything.
+  - id: surfaceCloud
+    title: Cloud / hosted
+    description:
+      - >
+        Production AI systems the organisation deploys and operates in cloud or datacenter
+        environments. The richest control surface: identity, gateways, guardrail APIs, and
+        posture management all apply natively.
+  - id: surfaceSaas
+    title: Third-party SaaS
+    description:
+      - >
+        Vendor-operated AI consumed as a service. The internals are opaque; the control plane
+        collapses to the edges — browser, identity, network path, connectors, and contract.
+
+capabilities:
+  # ================================================================= Data Controls
+
+  - id: capabilityAiDlp
+    title: Data loss prevention for AI interactions
+    abbrev: AI DLP
+    category: controlsData
+    description:
+      - >
+        Policy inspection and blocking of sensitive data moving into prompts, uploads, and
+        connectors, and out through model responses. AI-specific because the egress path is a
+        conversation rather than a file transfer, and because agent tool calls create machine
+        egress that classical DLP channels never saw.
+    examples:
+      - endpoint DLP agents
+      - network and API DLP inspection
+      - in-session prompt and upload controls
+    controls:
+      - controlUserDataManagement
+      - controlRuntimePrivacyEnhancingTechnologies
+      - controlOutputValidationAndSanitization
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskExcessiveDataHandlingDuringInference
+      - riskInferredSensitiveData
+    components:
+      - componentApplicationInputHandling
+      - componentApplicationOutputHandling
+      - componentAgentUserQuery
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Device-resident inspection sees prompts before they leave, including in native apps and CLI agents.
+      surfaceCloud:
+        applies: true
+        note: Enforced inline at the application or gateway boundary around your own inference path.
+      surfaceSaas:
+        applies: true
+        note: Reaches vendor AI only through the edges — browser, endpoint agent, or network path.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (DLP named in the information-governance layer)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — DLP tuned to agent behaviours"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+
+  - id: capabilityDspm
+    title: Data security posture management for AI
+    abbrev: DSPM
+    category: controlsData
+    description:
+      - >
+        Discovery, classification, and risk scoring of the data estate that feeds AI — training
+        corpora, retrieval indexes, agent memory stores, and conversation logs — plus retention
+        and secure-deletion enforcement over them. Answers which sensitive data an AI system can
+        reach before an incident makes the question urgent.
+    examples:
+      - data discovery and classification
+      - data risk posture scoring
+      - retention and verifiable deletion
+    controls:
+      - controlUserDataManagement
+      - controlTrainingDataManagement
+      - controlModelAndDataInventoryManagement
+    risks:
+      - riskExcessiveDataHandling
+      - riskSensitiveDataDisclosure
+      - riskUnauthorizedTrainingData
+    components:
+      - componentDataSources
+      - componentDataStorage
+      - componentRAGContent
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Partial reach — local agent working directories and memory files, via the endpoint agent.
+      surfaceCloud:
+        applies: true
+        note: Native coverage of stores, indexes, and pipelines you operate.
+      surfaceSaas:
+        applies: true
+        note: Only what vendor APIs and connectors expose; vendor-internal stores stay dark.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (DSPM in the information-governance layer)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "CISA/NSA, AI Data Security: Best Practices for Securing Data Used to Train & Operate AI Systems (AA25-142A)"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+
+  - id: capabilityDataAccessGovernance
+    title: Data access governance for retrieval
+    abbrev: DAG
+    category: controlsData
+    description:
+      - >
+        Remediation of over-broad permissions in the content repositories an assistant retrieves
+        from, and enforcement that retrieval runs as the requesting user rather than as a
+        privileged service principal. The dominant real-world failure mode for enterprise
+        assistants is not a model flaw but pre-existing oversharing that the assistant surfaces.
+    examples:
+      - permission and oversharing analysis
+      - purpose-based access control
+      - identity-scoped retrieval enforcement
+    controls:
+      - controlUserDataManagement
+      - controlModelAndDataAccessControls
+      - controlApplicationAccessManagement
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskExcessiveDataHandling
+      - riskAgenticDelegationConfusedDeputy
+    components:
+      - componentDataSources
+      - componentRAGContent
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: The repositories and their permission models live server-side, not on the device.
+      surfaceCloud:
+        applies: true
+        note: Enforced in the retrieval layer you build, with the caller's identity carried through.
+      surfaceSaas:
+        applies: true
+        note: The primary control for vendor assistants indexing your own tenant content.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (data access governance, purpose-based access control, permissions sprawl)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "OWASP Top 10 for LLM Applications — LLM02 Sensitive Information Disclosure (authorize before retrieval)"
+        url: https://genai.owasp.org/llm-top-10/
+
+  - id: capabilityPromptRedaction
+    title: Sensitive-data detection & redaction in AI I/O
+    abbrev: Redaction
+    category: controlsData
+    description:
+      - >
+        Inline detection and transformation of identifiers and secrets in prompts, retrieved
+        context, and responses — masking, tokenization, or de-identification applied at the model
+        boundary. Distinct from DLP: DLP decides whether traffic is allowed, redaction changes
+        what the model ever sees.
+    examples:
+      - PII and secret detectors
+      - de-identification and masking services
+      - context minimization filters
+    controls:
+      - controlRuntimePrivacyEnhancingTechnologies
+      - controlUserDataManagement
+      - controlInputValidationAndSanitization
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskExcessiveDataHandlingDuringInference
+      - riskInferredSensitiveData
+    components:
+      - componentApplicationInputHandling
+      - componentApplicationOutputHandling
+      - componentMemory
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Client-side redaction before the request leaves the device.
+      surfaceCloud:
+        applies: true
+        note: Standard guardrail-service feature on every major inference platform.
+      surfaceSaas:
+        applies: true
+        note: Achievable only by proxying the session; the vendor's own filters are not yours to configure.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (intelligent data obfuscation and redaction, runtime layer)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "NIST AI 600-1, Generative AI Profile — MS-2.2-002 (privacy output filters, PII removal)"
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf
+
+  - id: capabilityDataProvenance
+    title: Training data provenance & lineage
+    abbrev: Provenance
+    category: controlsData
+    description:
+      - >
+        Cryptographically anchored records of where every training, fine-tuning, and evaluation
+        dataset came from, how it was transformed, and which model versions consumed it. The most
+        widely converged capability in the entire corpus — named by six of the seven government
+        and standards sources reviewed.
+    examples:
+      - dataset lineage tracking
+      - signed, append-only provenance ledgers
+      - data version control
+    controls:
+      - controlTrainingDataManagement
+      - controlModelAndDataIntegrityManagement
+      - controlModelAndDataInventoryManagement
+    risks:
+      - riskUnauthorizedTrainingData
+      - riskDataPoisoning
+      - riskModelSourceTampering
+    components:
+      - componentDataSources
+      - componentTrainingData
+      - componentDataFilteringAndProcessing
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: Training data does not exist on the consuming endpoint.
+      surfaceCloud:
+        applies: true
+        note: Applies wherever you curate or fine-tune; the whole capability lives in your pipeline.
+      surfaceSaas:
+        applies: false
+        note: The vendor's corpus is undisclosed; you get contractual assurances, not lineage.
+    sources:
+      - title: "NIST SP 800-218A — PW.3.2 (track the provenance of data), PS.3.2"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+      - title: "CISA/NSA, AI Data Security (AA25-142A) — Best Practice 1: source reliable data and track data provenance"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+
+  - id: capabilityDataSanitization
+    title: Training data sanitization & poisoning detection
+    abbrev: Data sanitization
+    category: controlsData
+    description:
+      - >
+        Statistical and model-based screening of corpora for poisoned, backdoored, duplicated, or
+        unauthorized records before they reach training — plus the pipeline controls that make
+        screening mandatory rather than advisory. Named as an explicit technical measure in EU AI
+        Act Article 15(5).
+    examples:
+      - poisoning and backdoor detection
+      - dataset anomaly and outlier screening
+      - deduplication and quality gating
+    controls:
+      - controlTrainingDataSanitization
+      - controlTrainingDataManagement
+      - controlAdversarialTrainingAndTesting
+    risks:
+      - riskDataPoisoning
+      - riskUnauthorizedTrainingData
+      - riskEvaluationBenchmarkManipulation
+    components:
+      - componentTrainingData
+      - componentDataFilteringAndProcessing
+      - componentModelTrainingTuning
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: No training occurs on the consuming endpoint.
+      surfaceCloud:
+        applies: true
+        note: Applies to any corpus you assemble, including fine-tuning and RLHF sets.
+      surfaceSaas:
+        applies: false
+        note: You cannot inspect or screen a vendor's training data.
+    sources:
+      - title: "NIST SP 800-218A — PW.3.1 (analyze data for signs of data poisoning, bias, homogeneity, and tampering)"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+      - title: "MITRE ATLAS — AML.M0007 Sanitize Training Data"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityPetTooling
+    title: Privacy-enhancing technologies
+    abbrev: PETs
+    category: controlsData
+    description:
+      - >
+        Mathematical and architectural techniques that let a model learn from or reason over data
+        without exposing it — differential privacy, federated learning, secure multi-party
+        computation, homomorphic encryption, synthetic data, and on-device processing. Gartner
+        names the full set as one market segment in its AI TRiSM information-governance layer.
+    examples:
+      - differential privacy in training
+      - federated and decentralized learning
+      - synthetic data generation
+      - on-device inference
+    controls:
+      - controlModelPrivacyEnhancingTechnologies
+      - controlRuntimePrivacyEnhancingTechnologies
+      - controlTrainingDataManagement
+    risks:
+      - riskInferredSensitiveData
+      - riskFederatedDistributedTrainingPrivacy
+      - riskSensitiveDataDisclosure
+    components:
+      - componentTrainingData
+      - componentModelTrainingTuning
+      - componentTheModel
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: On-device processing is itself a PET — data never leaves the device.
+      surfaceCloud:
+        applies: true
+        note: Full range available where you control training and inference.
+      surfaceSaas:
+        applies: false
+        note: PET selection is the vendor's architectural choice, not a control you can apply.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (PETs: homomorphic encryption, synthetic data, differential privacy, federated ML, ZKPs, SMPC)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "CISA/NSA, AI Data Security (AA25-142A) — Best Practice 8: leverage privacy-preserving techniques"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+
+  - id: capabilityRagSecurity
+    title: Retrieval & vector store security
+    abbrev: RAG security
+    category: controlsData
+    description:
+      - >
+        Trust-tiering, tenancy isolation, and ingest-time screening for the retrieval corpus and
+        embedding store, so that poisoned or untrusted documents cannot silently steer generation.
+        OWASP promoted this to a standalone Top 10 entry; CoSAI carries a dedicated control for it.
+    examples:
+      - retrieval source trust scoring
+      - per-tenant index isolation
+      - ingest and retrieval anomaly detection
+    controls:
+      - controlRetrievalAndVectorSystemIntegrity
+      - controlTrainingDataSanitization
+      - controlModelAndDataAccessControls
+    risks:
+      - riskRetrievalVectorStorePoisoning
+      - riskPromptInjection
+      - riskSensitiveDataDisclosure
+    components:
+      - componentRAGContent
+      - componentDataStorage
+      - componentMemory
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents build their own context from files and web fetches — the same trust problem, unindexed.
+      surfaceCloud:
+        applies: true
+        note: The index, its tenancy model, and its ingest path are all yours.
+      surfaceSaas:
+        applies: false
+        note: The vendor owns the index; your lever is repository permissions, not retrieval controls.
+    sources:
+      - title: "OWASP Top 10 for LLM Applications — LLM09 Vector and Embedding Weaknesses"
+        url: https://genai.owasp.org/llm-top-10/
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI06 Memory & Context Poisoning"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  # ================================================================= Infrastructure Controls
+
+  - id: capabilityAiSpm
+    title: AI security posture management
+    abbrev: AI-SPM
+    category: controlsInfrastructure
+    description:
+      - >
+        Continuous discovery of AI workloads, models, endpoints, and their dependencies, with
+        misconfiguration findings, attack-path analysis, and risk scoring across them. The
+        cloud-security-posture pattern retargeted at the AI stack, and one of only two categories
+        every major cloud provider ships under that exact name.
+    examples:
+      - AI workload and model discovery
+      - misconfiguration and exposure findings
+      - AI attack path analysis
+    controls:
+      - controlModelAndDataInventoryManagement
+      - controlModelAndDataAccessControls
+      - controlVulnerabilityManagement
+    risks:
+      - riskModelDeploymentTampering
+      - riskModelExfiltration
+      - riskInsecureIntegratedComponent
+    components:
+      - componentModelServing
+      - componentModelStorage
+      - componentDataStorage
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: Posture management targets hosted workloads; endpoint coverage comes from device management instead.
+      surfaceCloud:
+        applies: true
+        note: The primary surface — it is a cloud-plane capability by construction.
+      surfaceSaas:
+        applies: true
+        note: Limited to what vendor configuration APIs expose about your tenant.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (posture management within AI governance)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "CSA AI Controls Matrix v1.1 — 247 control objectives across 18 domains"
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+
+  - id: capabilityAiBom
+    title: AI bill of materials & artifact signing
+    abbrev: AI-BOM
+    category: controlsInfrastructure
+    description:
+      - >
+        Machine-readable manifests of the models, datasets, adapters, and tools composing an AI
+        system, with cryptographic signatures and verification at load time. Notably a standards
+        capability with no cloud-provider product behind it — every major provider treats model
+        signing as guidance, which makes it a common real-world gap.
+    examples:
+      - ML and AI bill of materials
+      - model and dataset signing
+      - signature verification at deploy
+    controls:
+      - controlModelAndDataIntegrityManagement
+      - controlModelAndDataInventoryManagement
+      - controlSecureByDefaultMLTooling
+    risks:
+      - riskModelSourceTampering
+      - riskModelDeploymentTampering
+      - riskAdapterPEFTInjection
+      - riskToolSourceProvenance
+    components:
+      - componentModelStorage
+      - componentModelFrameworksAndCode
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Applies to locally installed models, agent definitions, and tool packages.
+      surfaceCloud:
+        applies: true
+        note: Generated in the build pipeline and verified at deployment.
+      surfaceSaas:
+        applies: false
+        note: Vendors publish attestations, not signed component manifests you can verify.
+    sources:
+      - title: "MITRE ATLAS — AML.M0023 AI Bill of Materials, AML.M0013 Code Signing, AML.M0014 Verify AI Artifacts"
+        url: https://atlas.mitre.org/mitigations
+      - title: "OWASP Top 10 for LLM Applications — LLM04 Supply Chain (AIBOM, CycloneDX ML-BOM, model signing)"
+        url: https://genai.owasp.org/llm-top-10/
+
+  - id: capabilityModelScanning
+    title: Model artifact scanning & safe deserialization
+    abbrev: Model scanning
+    category: controlsInfrastructure
+    description:
+      - >
+        Static inspection of model files for embedded code, unsafe serialization formats, and
+        malware before they are loaded, plus enforcement of safe loaders that cannot execute
+        arbitrary code on deserialization. CSA singles out secure model serialization as one of
+        the few AI Controls Matrix objectives it names publicly.
+    examples:
+      - model file malware scanning
+      - unsafe serialization detection
+      - restricted loader enforcement
+    controls:
+      - controlModelAndDataExecutionIntegrity
+      - controlModelAndDataIntegrityManagement
+      - controlVulnerabilityManagement
+    risks:
+      - riskMaliciousLoaderDeserialization
+      - riskModelSourceTampering
+      - riskAdapterPEFTInjection
+    components:
+      - componentModelStorage
+      - componentModelFrameworksAndCode
+      - componentTheModel
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Directly relevant where developers pull models from public hubs onto workstations.
+      surfaceCloud:
+        applies: true
+        note: Gated in the registry and at deploy time.
+      surfaceSaas:
+        applies: false
+        note: You never handle the vendor's model artifacts.
+    sources:
+      - title: "NIST SP 800-218A — PW.7.2 (scan all AI models for malware), PW.6.1 (secure model serialization)"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+      - title: "MITRE ATLAS — AML.M0011 Restrict Library Loading, AML.M0016 Vulnerability Scanning"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityModelWeightProtection
+    title: Model weight protection
+    abbrev: Weight protection
+    category: controlsInfrastructure
+    description:
+      - >
+        Aggressive isolation of trained weights and configuration parameters as the crown-jewel
+        asset — restricted storage zones, hardware-backed key custody, minimal-response inference
+        interfaces, and two-person control on access. Five independent government and standards
+        sources name it; no market product category corresponds to it.
+    examples:
+      - restricted weight storage zones
+      - hardware security module key custody
+      - minimal-disclosure inference interfaces
+    controls:
+      - controlModelAndDataAccessControls
+      - controlIsolatedConfidentialComputing
+      - controlModelAndDataIntegrityManagement
+    risks:
+      - riskModelExfiltration
+      - riskModelReverseEngineering
+      - riskAcceleratorAndSystemSideChannels
+    components:
+      - componentModelStorage
+      - componentModelServing
+      - componentTheModel
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Applies only where models run locally — a real concern for on-device and edge deployments.
+      surfaceCloud:
+        applies: true
+        note: The canonical case; storage isolation and key custody are directly yours to set.
+      surfaceSaas:
+        applies: false
+        note: The vendor holds the weights; protection is entirely theirs.
+    sources:
+      - title: "CISA/NSA, Deploying AI Systems Securely — Protect model weights (highly restricted zones, HSM custody)"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+      - title: "NIST SP 800-218A — PS.1.3 (protect all model weights and configuration parameters)"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+
+  - id: capabilityEncryptionKeyManagement
+    title: Encryption & key management for AI assets
+    abbrev: Encryption / KMS
+    category: controlsInfrastructure
+    description:
+      - >
+        Encryption of training corpora, weights, prompts, and inference logs at rest and in
+        transit, with keys held in dedicated custody and rotated on a schedule. Baseline security
+        made AI-specific by what has to be covered: conversation logs and agent memory are
+        sensitive stores that classical inventories miss.
+    examples:
+      - customer-managed and bring-your-own keys
+      - hardware-backed key custody
+      - transport encryption for model and tool calls
+    controls:
+      - controlModelAndDataAccessControls
+      - controlModelAndDataIntegrityManagement
+      - controlInterComponentTransportSecurity
+    risks:
+      - riskModelExfiltration
+      - riskSensitiveDataDisclosure
+      - riskExcessiveDataHandling
+    components:
+      - componentDataStorage
+      - componentModelStorage
+      - componentMemory
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Disk encryption and OS key stores protect local model caches, agent memory, and credentials.
+      surfaceCloud:
+        applies: true
+        note: Customer-managed keys over stores, logs, and model artifacts.
+      surfaceSaas:
+        applies: true
+        note: Only where the vendor offers customer-managed keys; otherwise contractual.
+    sources:
+      - title: "CISA/NSA, AI Data Security (AA25-142A) — Best Practices 6 and 7: encrypt data, store data securely"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+      - title: "MITRE ATLAS — AML.M0012 Encrypt Sensitive Information"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityConfidentialComputing
+    title: Confidential computing & trusted execution
+    abbrev: Confidential compute
+    category: controlsInfrastructure
+    description:
+      - >
+        Hardware-enforced enclaves that keep weights and prompt data encrypted while in use, with
+        remote attestation proving which code is running. Gartner places it in the AI TRiSM
+        infrastructure layer; OWASP places it in the highest mitigation tier for sensitive-data
+        disclosure.
+    examples:
+      - trusted execution environments
+      - confidential inference enclaves
+      - remote attestation of workloads
+    controls:
+      - controlIsolatedConfidentialComputing
+      - controlModelAndDataAccessControls
+      - controlComponentIdentityProvenance
+    risks:
+      - riskModelExfiltration
+      - riskAcceleratorAndSystemSideChannels
+      - riskSensitiveDataDisclosure
+    components:
+      - componentModelServing
+      - componentTheModel
+      - componentDataStorage
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: Device enclaves exist but are not an available deployment target for agent workloads.
+      surfaceCloud:
+        applies: true
+        note: Offered as confidential VM and accelerator families you can select.
+      surfaceSaas:
+        applies: false
+        note: An internal vendor architecture decision, not a customer control.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (confidential computing, trusted execution environments)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "CISA/NSA, AI Data Security (AA25-142A) — Best Practice 4: leverage trusted infrastructure, secure enclaves"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+
+  - id: capabilityAgentSandboxing
+    title: Agent execution sandboxing
+    abbrev: Sandboxing
+    category: controlsInfrastructure
+    description:
+      - >
+        Containment of the environment where an agent runs code, touches files, and executes
+        tools — filesystem isolation, per-session teardown, syscall mediation, and kernel or
+        micro-VM boundaries. Named by every agentic source reviewed, and the one control that
+        limits blast radius when prompt injection succeeds anyway.
+    examples:
+      - per-session micro-VM or container isolation
+      - kernel-mediated sandboxes
+      - sandboxed code interpreters
+    controls:
+      - controlIsolatedConfidentialComputing
+      - controlModelAndDataExecutionIntegrity
+      - controlAgentExecutionBounds
+    risks:
+      - riskRogueActions
+      - riskInsecureIntegratedComponent
+      - riskInsecureModelOutput
+    components:
+      - componentTools
+      - componentApplication
+      - componentReasoningCore
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: The main containment mechanism for CLI and desktop coding agents on developer machines.
+      surfaceCloud:
+        applies: true
+        note: Per-session isolated runtimes for hosted agents, torn down after each task.
+      surfaceSaas:
+        applies: false
+        note: Vendor agents execute in vendor infrastructure you cannot constrain.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 Execution Sandboxes and Egress Controls, ASI05 Execution environment security"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "OWASP Securing Agentic Applications Guide 1.0 — 3.2.3 Environment Hardening & Sandboxing"
+        url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+
+  - id: capabilityAiGateway
+    title: AI gateway & tool-call broker
+    abbrev: AI gateway
+    category: controlsInfrastructure
+    description:
+      - >
+        A centralized broker that every model call and tool invocation passes through, providing
+        one place to apply routing integrity, authentication, guardrails, quotas, and logging.
+        The single most consistently shipped agent-security building block across all three major
+        clouds, usually spanning both model traffic and Model Context Protocol tool traffic.
+    examples:
+      - LLM proxy and routing layers
+      - MCP and agent-to-agent gateways
+      - policy-enforcing API brokers
+    controls:
+      - controlOrchestratorAndRouteIntegrity
+      - controlModelAndDataAccessControls
+      - controlInputValidationAndSanitization
+      - controlAgentPluginPermissions
+    risks:
+      - riskOrchestratorRouteHijacking
+      - riskPromptInjection
+      - riskEconomicDenialOfWallet
+      - riskZombieShadowMCPServers
+    components:
+      - componentModelServing
+      - componentOrchestrationInputHandling
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents can be pinned to route through the gateway rather than calling providers directly.
+      surfaceCloud:
+        applies: true
+        note: The natural chokepoint for everything you operate.
+      surfaceSaas:
+        applies: true
+        note: Only for traffic that traverses your network path; in-vendor agent-to-tool calls bypass it.
+    sources:
+      - title: "OWASP Securing Agentic Applications Guide 1.0 — §8 API Access Control, Rate-Limits, and API Gateways"
+        url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+      - title: "Model Context Protocol — Security Best Practices (confused deputy, token passthrough, scope minimization)"
+        url: https://modelcontextprotocol.io/specification/latest/basic/security_best_practices
+
+  - id: capabilityEgressControl
+    title: Network segmentation & egress control
+    abbrev: Egress control
+    category: controlsInfrastructure
+    description:
+      - >
+        Allow-listed outbound destinations and network boundaries around AI workloads and agent
+        runtimes, so that a compromised agent cannot reach arbitrary hosts to exfiltrate data or
+        fetch instructions. The classic containment control, and the one that converts many
+        injection outcomes from breach into noise.
+    examples:
+      - outbound domain allow-lists
+      - workload network segmentation
+      - egress proxies for agent traffic
+    controls:
+      - controlModelAndDataAccessControls
+      - controlIsolatedConfidentialComputing
+      - controlAgentExecutionBounds
+    risks:
+      - riskModelExfiltration
+      - riskRogueActions
+      - riskSensitiveDataDisclosure
+    components:
+      - componentModelServing
+      - componentTools
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Enforced by the device's own network stack and agent sandbox configuration.
+      surfaceCloud:
+        applies: true
+        note: Subnet, firewall, and egress-proxy policy around inference and agent workloads.
+      surfaceSaas:
+        applies: true
+        note: You can control your network's path to the vendor, but not the vendor's onward egress.
+    sources:
+      - title: "CISA/NSA, Deploying AI Systems Securely — harden deployment environment configurations, firewalls with allow lists"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 Execution Sandboxes and Egress Controls"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  - id: capabilitySse
+    title: Secure service edge for AI services
+    abbrev: SSE / CASB
+    category: controlsInfrastructure
+    description:
+      - >
+        Network- and identity-layer brokerage of employee access to external AI services, with
+        per-service policy, inline inspection, and tenancy enforcement. For third-party SaaS AI
+        this is one of the few places where inspection is even possible, and it now includes
+        prompt-injection screening for widely used consumer assistants.
+    examples:
+      - cloud access security brokers
+      - secure web and AI gateways
+      - per-service tenancy restrictions
+    controls:
+      - controlModelAndDataAccessControls
+      - controlApplicationAccessManagement
+      - controlInputValidationAndSanitization
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskPromptInjection
+      - riskShadowAndUnknownAgents
+    components:
+      - componentApplication
+      - componentApplicationInputHandling
+      - componentAgentUserQuery
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Delivered by the device agent when traffic does not traverse a corporate network.
+      surfaceCloud:
+        applies: true
+        note: Applies to workload egress toward external model providers.
+      surfaceSaas:
+        applies: true
+        note: The primary inspection point for vendor AI — often the only one available.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (network, endpoint and cloud security as the base layer beneath AI TRiSM)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "OWASP AI Security Solutions Landscape — LLM-enabled web application firewall, secure API access"
+        url: https://genai.owasp.org/ai-security-solutions-landscape/
+
+  - id: capabilityNhiManagement
+    title: Non-human & agent identity management
+    abbrev: NHI / agent ID
+    category: controlsInfrastructure
+    description:
+      - >
+        Issuing each agent and workload a distinct, cryptographically anchored identity with its
+        own keys, then discovering, inventorying, and governing those identities over their
+        lifecycle. CSA's non-human identity taxonomy makes agent identity a class of NHI, and
+        every vendor in the space sells them as one platform — so they are one capability here.
+    examples:
+      - workload identity frameworks
+      - agent identity issuance and attestation
+      - non-human identity discovery and lifecycle
+    controls:
+      - controlComponentIdentityProvenance
+      - controlAgentCredentialIsolation
+      - controlApplicationAccessManagement
+    risks:
+      - riskStaleAgentIdentityBinding
+      - riskShadowAndUnknownAgents
+      - riskAgentDelegationChainOpacity
+    components:
+      - componentReasoningCore
+      - componentTools
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents need identities too; device attestation can anchor them.
+      surfaceCloud:
+        applies: true
+        note: Workload identity with short-lived credentials is the mature pattern here.
+      surfaceSaas:
+        applies: true
+        note: Vendor agents can be registered as first-class identities in your directory.
+    sources:
+      - title: "CSA, Defining Non-Human Identity — five NHI classes including agent identities (autonomous actor, including AI)"
+        url: https://cloudsecurityalliance.org/artifacts/defining-non-human-identity
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — each agent as a distinct principal with a cryptographically anchored identity"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+
+  - id: capabilitySecretsManagement
+    title: Secrets management & ephemeral credentials
+    abbrev: Secrets / JIT
+    category: controlsInfrastructure
+    description:
+      - >
+        Vaulted storage of the API keys and tokens agents use, issued just-in-time with narrow
+        scope and short lifetimes rather than embedded in configuration. Token mismanagement is
+        the first entry in the OWASP MCP Top 10, and long-lived agent credentials are the most
+        common concrete finding in agent deployments.
+    examples:
+      - secret vaults and brokers
+      - just-in-time credential issuance
+      - automated rotation
+    controls:
+      - controlModelAndDataAccessControls
+      - controlAgentCredentialIsolation
+      - controlComponentIdentityProvenance
+    risks:
+      - riskCrossTenantCredentialPropagation
+      - riskRogueActions
+      - riskStaleAgentIdentityBinding
+    components:
+      - componentTools
+      - componentApplication
+      - componentReasoningCore
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agent configuration files are a notorious home for long-lived plaintext tokens.
+      surfaceCloud:
+        applies: true
+        note: Brokered credentials with per-session scope are directly achievable.
+      surfaceSaas:
+        applies: true
+        note: Partial — the vendor manages its own internal secrets; you govern the connectors you authorize.
+    sources:
+      - title: "OWASP MCP Top 10 — MCP01 Token Mismanagement & Secret Exposure"
+        url: https://owasp.org/www-project-mcp-top-10/
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 Just-in-Time and Ephemeral Access"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  - id: capabilityTransportSecurity
+    title: Inter-component & inter-agent transport security
+    abbrev: mTLS / A2A
+    category: controlsInfrastructure
+    description:
+      - >
+        Mutually authenticated, integrity-protected channels between agents, orchestrators, and
+        tool servers, with protocol version pinning, typed message contracts, and replay
+        protection. OWASP gave insecure inter-agent communication its own Top 10 entry; the Five
+        Eyes guidance calls for mutual TLS on all inter-agent and agent-to-service calls.
+    examples:
+      - mutual TLS between agent components
+      - protocol pinning and version enforcement
+      - signed messages and anti-replay
+    controls:
+      - controlInterComponentTransportSecurity
+      - controlComponentIdentityProvenance
+      - controlOrchestratorAndRouteIntegrity
+    risks:
+      - riskMCPTransportHijacking
+      - riskOrchestratorRouteHijacking
+      - riskAgentDelegationChainOpacity
+    components:
+      - componentTools
+      - componentOrchestrationInputHandling
+      - componentOrchestrationOutputHandling
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Partial — local transports are often plain standard I/O between processes on one host.
+      surfaceCloud:
+        applies: true
+        note: The full pattern applies to distributed multi-agent systems you operate.
+      surfaceSaas:
+        applies: false
+        note: Communication between a vendor's internal agents is invisible to you.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI07 Insecure Inter-Agent Communication"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "Model Context Protocol — Security Best Practices (transport security, state handle hijacking)"
+        url: https://modelcontextprotocol.io/specification/latest/basic/security_best_practices
+
+  - id: capabilityMlSecureDefaults
+    title: Secure ML pipeline & development environment
+    abbrev: Secure ML pipeline
+    category: controlsInfrastructure
+    description:
+      - >
+        Hardening of the build path that produces AI systems — isolated training environments,
+        trusted library and registry sources, protected notebooks, and CI/CD that will not deploy
+        an unverified artifact. NIST's generative-AI SSDF profile is almost entirely about this
+        surface.
+    examples:
+      - isolated training and development environments
+      - trusted model and package registries
+      - notebook and pipeline hardening
+    controls:
+      - controlSecureByDefaultMLTooling
+      - controlModelAndDataExecutionIntegrity
+      - controlModelAndDataIntegrityManagement
+    risks:
+      - riskModelSourceTampering
+      - riskModelDeploymentTampering
+      - riskInsecureIntegratedComponent
+    components:
+      - componentModelFrameworksAndCode
+      - componentModelTrainingTuning
+      - componentModelEvaluation
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: The consuming endpoint is not where models are built; developer workstations are covered by endpoint controls.
+      surfaceCloud:
+        applies: true
+        note: Where training, evaluation, and deployment pipelines actually run.
+      surfaceSaas:
+        applies: false
+        note: You do not participate in the vendor's build pipeline.
+    sources:
+      - title: "NIST SP 800-218A, Secure Software Development Practices for Generative AI and Dual-Use Foundation Models"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+      - title: "OWASP AI Security Solutions Landscape — secure CI/CD pipeline, secure library and code repository"
+        url: https://genai.owasp.org/ai-security-solutions-landscape/
+
+  - id: capabilityStagedRollout
+    title: Staged rollout, versioning & rollback
+    abbrev: Rollback
+    category: controlsInfrastructure
+    description:
+      - >
+        Version control over models, prompts, and agent definitions with progressive release and
+        an automated path back to a known-good state when behaviour regresses. Named across the
+        Five Eyes agentic guidance, CISA deployment guidance, and EU AI Act Article 15(4)'s
+        requirement for backup and fail-safe plans.
+    examples:
+      - model and prompt version control
+      - progressive rollout with graduated autonomy
+      - automated rollback on drift
+    controls:
+      - controlModelAndDataIntegrityManagement
+      - controlSecureByDefaultMLTooling
+      - controlAgentIntegrityManagement
+    risks:
+      - riskModelDeploymentTampering
+      - riskModelSourceTampering
+      - riskDenialOfMLService
+    components:
+      - componentModelStorage
+      - componentModelServing
+      - componentAgentSystemInstruction
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Managed rollout of agent and extension versions across the device fleet.
+      surfaceCloud:
+        applies: true
+        note: Fully yours — staged deployment and rollback of models and agent definitions.
+      surfaceSaas:
+        applies: false
+        note: The vendor ships when it ships; you rarely get to pin a version or roll one back.
+    sources:
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — versioning and rollback, phased deployment, graduated autonomy"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+      - title: "CISA/NSA, Deploying AI Systems Securely — version control, automated rollbacks to last known good state"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+
+  # ================================================================= Model Controls
+
+  - id: capabilityPromptInjectionDefense
+    title: Prompt injection & jailbreak detection
+    abbrev: Injection defense
+    category: controlsModel
+    description:
+      - >
+        Classification of inputs and retrieved content for instruction-injection and
+        safety-bypass attempts, applied at every boundary where untrusted text enters the model's
+        context. Named as a distinct detector by all three major clouds and elevated by CSA to
+        one of the few AI Controls Matrix objectives it publishes by name.
+    examples:
+      - prompt-attack and jailbreak classifiers
+      - indirect injection screening of retrieved content
+      - invisible-character and encoding sanitization
+    controls:
+      - controlInputValidationAndSanitization
+      - controlAdversarialTrainingAndTesting
+      - controlRetrievalAndVectorSystemIntegrity
+    risks:
+      - riskPromptInjection
+      - riskModelEvasion
+      - riskRogueActions
+    components:
+      - componentApplicationInputHandling
+      - componentAgentInputHandling
+      - componentRAGContent
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Increasingly hooked at the pre-tool-call boundary of local coding agents.
+      surfaceCloud:
+        applies: true
+        note: A managed guardrail-service feature on every major inference platform.
+      surfaceSaas:
+        applies: true
+        note: Only via an inline gateway on the network path; the vendor's own detectors are not yours to tune.
+    sources:
+      - title: "CSA AI Controls Matrix v1.1 — AIS-15, prompt injection as a positive control"
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+      - title: "OWASP Top 10 for LLM Applications — LLM01 Prompt Injection"
+        url: https://genai.owasp.org/llm-top-10/
+
+  - id: capabilityModelGuardrails
+    title: Runtime content & policy guardrails
+    abbrev: Guardrails
+    category: controlsModel
+    description:
+      - >
+        Configurable filtering of model inputs and outputs against harm categories, denied
+        topics, blocked terms, and organisation-specific policies, with block or annotate
+        enforcement. The most universally shipped AI security capability, and the one CSA's
+        market map elevates to a top-level domain.
+    examples:
+      - harm-category content filters
+      - denied topics and term blocklists
+      - custom policy classifiers
+    controls:
+      - controlOutputValidationAndSanitization
+      - controlInputValidationAndSanitization
+      - controlUserTransparencyAndControls
+    risks:
+      - riskInsecureModelOutput
+      - riskPromptInjection
+      - riskSensitiveDataDisclosure
+    components:
+      - componentApplicationOutputHandling
+      - componentApplicationInputHandling
+      - componentAgentOutputHandling
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Client-side guardrails are possible but weaker — the same process can often bypass them.
+      surfaceCloud:
+        applies: true
+        note: Native, policy-configurable, and enforced server-side.
+      surfaceSaas:
+        applies: true
+        note: The vendor's filters are fixed; your own apply only to traffic you proxy.
+    sources:
+      - title: "MITRE ATLAS — AML.M0020 Generative AI Guardrails, AML.M0021 Generative AI Guidelines"
+        url: https://atlas.mitre.org/mitigations
+      - title: "CSA, Agentic AI Security Innovator Market Map — guardrails as a top-level domain"
+        url: https://cloudsecurityalliance.org/artifacts/csa-innovator-market-map
+
+  - id: capabilityOutputEncoding
+    title: Output encoding & safe rendering
+    abbrev: Output encoding
+    category: controlsModel
+    description:
+      - >
+        Treating model output as untrusted input to whatever consumes it — context-aware
+        encoding, parameterized queries, control-character stripping, and suppression of
+        auto-rendered content that triggers outbound requests. Distinct from content filtering:
+        the risk is injection into downstream interpreters, not objectionable text.
+    examples:
+      - context-aware output encoding
+      - terminal control-character sanitization
+      - content security policy and render restrictions
+    controls:
+      - controlOutputValidationAndSanitization
+      - controlInputValidationAndSanitization
+      - controlUserTransparencyAndControls
+    risks:
+      - riskInsecureModelOutput
+      - riskCovertChannelsInModelOutputs
+      - riskRogueActions
+    components:
+      - componentApplicationOutputHandling
+      - componentAgentOutputHandling
+      - componentOrchestrationOutputHandling
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Directly relevant — terminal and IDE renderers are the injection target for escape-sequence attacks.
+      surfaceCloud:
+        applies: true
+        note: Your application renders the output, so the encoding boundary is yours.
+      surfaceSaas:
+        applies: false
+        note: The vendor owns the rendering surface entirely.
+    sources:
+      - title: "OWASP Top 10 for LLM Applications — LLM10 Improper Output Handling"
+        url: https://genai.owasp.org/llm-top-10/
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI05 Unexpected Code Execution"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  - id: capabilityGroundednessChecking
+    title: Groundedness & output verification
+    abbrev: Groundedness
+    category: controlsModel
+    description:
+      - >
+        Automated checking that a response is supported by its retrieved sources, and that a
+        proposed tool call matches the stated task, before the output is acted on. Included here
+        for its security function rather than its accuracy function: unverified output that
+        drives a privileged action is how misinformation becomes an incident.
+    examples:
+      - contextual grounding checks
+      - claim-to-source verification
+      - tool-call validation before execution
+    controls:
+      - controlOutputValidationAndSanitization
+      - controlAdversarialTrainingAndTesting
+      - controlAgentExecutionBounds
+    risks:
+      - riskInsecureModelOutput
+      - riskRogueActions
+      - riskRetrievalVectorStorePoisoning
+    components:
+      - componentApplicationOutputHandling
+      - componentAgentOutputHandling
+      - componentRAGContent
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Available where you control the agent harness and can gate on verification.
+      surfaceCloud:
+        applies: true
+        note: A named platform feature on every major provider.
+      surfaceSaas:
+        applies: false
+        note: Verification happens inside the vendor's pipeline, on their terms.
+    sources:
+      - title: "OWASP Top 10 for LLM Applications — LLM07 Misinformation (ground claims before action, validate tool calls)"
+        url: https://genai.owasp.org/llm-top-10/
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — validate outputs, confirm against multiple sources"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+
+  - id: capabilityModelHardening
+    title: Model hardening & adversarial training
+    abbrev: Model hardening
+    category: controlsModel
+    description:
+      - >
+        Changes to the model itself that raise the cost of attack — adversarial examples in the
+        training set, robustness-oriented fine-tuning, alignment against known bypass patterns,
+        and verification that fine-tuning has not undone existing safeguards. The only capability
+        class that alters the model rather than wrapping it.
+    examples:
+      - adversarial training data augmentation
+      - robustness fine-tuning
+      - post-fine-tuning safety verification
+    controls:
+      - controlAdversarialTrainingAndTesting
+      - controlInputValidationAndSanitization
+      - controlOutputValidationAndSanitization
+    risks:
+      - riskModelEvasion
+      - riskPromptInjection
+      - riskDataPoisoning
+    components:
+      - componentModelTrainingTuning
+      - componentTheModel
+      - componentModelEvaluation
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: Training does not occur on the consuming endpoint.
+      surfaceCloud:
+        applies: true
+        note: Applies wherever you train, fine-tune, or align a model.
+      surfaceSaas:
+        applies: false
+        note: The vendor's model is fixed from your side.
+    sources:
+      - title: "MITRE ATLAS — AML.M0003 Model Hardening, AML.M0022 Generative AI Model Alignment"
+        url: https://atlas.mitre.org/mitigations
+      - title: "NIST SP 800-218A — PW.3.3 (include adversarial samples in training data); NIST AI 600-1 MS-2.7-008"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+
+  - id: capabilitySystemPromptManagement
+    title: System prompt & instruction hierarchy management
+    abbrev: Prompt management
+    category: controlsModel
+    description:
+      - >
+        Treating system instructions, agent definitions, and tool descriptions as versioned,
+        reviewed, access-controlled configuration, with a structurally enforced hierarchy that
+        keeps untrusted content from being read as instruction. Four independent sources name it;
+        in practice it is where most agent deployments have no control at all.
+    examples:
+      - version-controlled system prompts
+      - instruction and data channel separation
+      - tool description review and pinning
+    controls:
+      - controlInputValidationAndSanitization
+      - controlOutputValidationAndSanitization
+      - controlAgentIntegrityManagement
+    risks:
+      - riskPromptInjection
+      - riskToolRegistryTampering
+      - riskRogueActions
+    components:
+      - componentAgentSystemInstruction
+      - componentAgentInputHandling
+      - componentReasoningCore
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agent instruction files are configuration and should be managed as code.
+      surfaceCloud:
+        applies: true
+        note: Prompts and agent definitions ship through the same review path as code.
+      surfaceSaas:
+        applies: true
+        note: Limited to any custom-instruction surface the vendor exposes; the base prompt is theirs.
+    sources:
+      - title: "OWASP Securing Agentic Applications Guide 1.0 — 3.1.2 System Prompt Engineering & Hardening"
+        url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 (locked, auditable agent system prompts under configuration management)"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  - id: capabilityContentProvenance
+    title: Content provenance & watermarking
+    abbrev: Provenance marks
+    category: controlsModel
+    description:
+      - >
+        Cryptographically verifiable credentials attached to generated media, and detection of
+        such marks on inbound content, so that machine-generated material can be identified
+        downstream. Standards-named across NIST and the Five Eyes guidance; in market terms only
+        one major cloud ships it.
+    examples:
+      - content credential signing
+      - generated-media watermarking
+      - provenance verification on ingest
+    controls:
+      - controlOutputValidationAndSanitization
+      - controlUserTransparencyAndControls
+      - controlModelAndDataIntegrityManagement
+    risks:
+      - riskCovertChannelsInModelOutputs
+      - riskInsecureModelOutput
+      - riskDataPoisoning
+    components:
+      - componentApplicationOutputHandling
+      - componentTheModel
+      - componentDataSources
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Verification of inbound content credentials can run on the device.
+      surfaceCloud:
+        applies: true
+        note: Signing at generation time is yours to enable where the platform supports it.
+      surfaceSaas:
+        applies: false
+        note: Whether vendor output carries credentials is the vendor's decision.
+    sources:
+      - title: "NIST AI 600-1 — MS-2.7-005 (watermarking, cryptographic signatures, digital fingerprints), MS-1.1-002"
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf
+      - title: "CISA/NSA, AI Data Security (AA25-142A) — content credentials"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+
+  # ================================================================= Application Controls
+
+  - id: capabilityAgentObservability
+    title: Agent observability & tracing
+    abbrev: Agent observability
+    category: controlsApplication
+    description:
+      - >
+        End-to-end capture of agent execution — prompts, reasoning steps, tool calls, memory
+        reads and writes, and inter-agent handoffs — as structured, queryable traces. Named as a
+        top-level domain by CSA's market map and shipped as a named service by all three major
+        clouds; the Five Eyes guidance is explicit that internal processes, not just inputs and
+        outputs, must be observable.
+    examples:
+      - agent execution tracing
+      - tool invocation telemetry
+      - session and handoff reconstruction
+    controls:
+      - controlAgentObservability
+      - controlAgentInventoryManagement
+      - controlThreatDetection
+    risks:
+      - riskAgentDelegationChainOpacity
+      - riskRogueActions
+      - riskRunawayAgentToolLoops
+    components:
+      - componentReasoningCore
+      - componentTools
+      - componentOrchestrationOutputHandling
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents emit traces, but shipping them off-device requires deliberate configuration.
+      surfaceCloud:
+        applies: true
+        note: Native instrumentation with standard trace conventions.
+      surfaceSaas:
+        applies: true
+        note: Limited to whatever interaction telemetry the vendor chooses to export.
+    sources:
+      - title: "CSA, Agentic AI Security Innovator Market Map — observability as a top-level domain"
+        url: https://cloudsecurityalliance.org/artifacts/csa-innovator-market-map
+      - title: "MITRE ATLAS — AML.M0024 AI Telemetry Logging"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityAgentRegistry
+    title: Agent & tool registry
+    abbrev: Agent registry
+    category: controlsApplication
+    description:
+      - >
+        An authoritative record of which agents and tool servers exist, who owns them, what
+        capabilities they declare, and whether they are approved — with reconciliation that
+        surfaces anything unregistered. Every major cloud now ships a registry, and the Five Eyes
+        guidance calls for denying agents and keys that are not in it.
+    examples:
+      - agent and MCP server registries
+      - capability descriptors and agent cards
+      - ownership and approval reconciliation
+    controls:
+      - controlAgentInventoryManagement
+      - controlAgentIntegrityManagement
+      - controlProductGovernance
+    risks:
+      - riskShadowAndUnknownAgents
+      - riskZombieShadowMCPServers
+      - riskToolRegistryTampering
+    components:
+      - componentTools
+      - componentReasoningCore
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agent and MCP server discovery now exists in endpoint tooling.
+      surfaceCloud:
+        applies: true
+        note: The registry is a first-class platform service you operate.
+      surfaceSaas:
+        applies: true
+        note: Vendor agents can be synchronized into a central registry where the vendor exposes them.
+    sources:
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — trusted registry with periodic reconciliation, deny non-registry agents"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+      - title: "OWASP Securing Agentic Applications Guide 1.0 — 6.3 Agent & Tool Discovery (agent cards, registries)"
+        url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+
+  - id: capabilityToolPermissionScoping
+    title: Tool permission scoping & least agency
+    abbrev: Tool scoping
+    category: controlsApplication
+    description:
+      - >
+        Restricting which tools an agent can call, what each tool can do, and with whose
+        privileges — minimizing the toolset, avoiding open-ended tools, and running in the user's
+        context rather than a shared service account. Named by all six threat-catalogue sources
+        reviewed; ATLAS splits it into three separate mitigations by principal type.
+    examples:
+      - tool allow-lists per agent
+      - narrowed tool scopes and parameters
+      - user-context rather than service-account execution
+    controls:
+      - controlAgentPluginPermissions
+      - controlApplicationAccessManagement
+      - controlAgentExecutionBounds
+    risks:
+      - riskRogueActions
+      - riskAgenticDelegationConfusedDeputy
+      - riskExcessiveDataHandlingDuringInference
+    components:
+      - componentTools
+      - componentReasoningCore
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Permission modes and tool allow-lists are a core feature of local coding agents.
+      surfaceCloud:
+        applies: true
+        note: Enforced in the agent framework and at the gateway.
+      surfaceSaas:
+        applies: true
+        note: Limited to the connector and scope choices the vendor exposes at authorization time.
+    sources:
+      - title: "MITRE ATLAS — AML.M0026/M0027/M0028 (agent and tool permissions configuration)"
+        url: https://atlas.mitre.org/mitigations
+      - title: "OWASP Top 10 for LLM Applications — LLM03 Excessive Agency (minimize tools, functionality, permissions)"
+        url: https://genai.owasp.org/llm-top-10/
+
+  - id: capabilityAgentRuntimeEnforcement
+    title: Runtime action authorization
+    abbrev: Action policy
+    category: controlsApplication
+    description:
+      - >
+        A deterministic policy decision point that evaluates every proposed tool call or state
+        change against declarative rules before it executes, independently of the model's
+        reasoning. The strongest convergence in the entire corpus: named by all three major
+        clouds, by Gartner as aligning agent activity with agent intentions, and by OWASP as the
+        intent gate.
+    examples:
+      - policy engines over tool calls
+      - declarative action policies
+      - intent and semantic conformance checks
+    controls:
+      - controlAgentExecutionBounds
+      - controlAgentPluginPermissions
+      - controlApplicationAccessManagement
+    risks:
+      - riskRogueActions
+      - riskRunawayAgentToolLoops
+      - riskAgenticDelegationConfusedDeputy
+    components:
+      - componentReasoningCore
+      - componentTools
+      - componentOrchestrationOutputHandling
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: The permission prompt in a local agent is this control in its simplest form.
+      surfaceCloud:
+        applies: true
+        note: A named managed service on major platforms, with policy expressed as code.
+      surfaceSaas:
+        applies: false
+        note: You cannot insert a policy decision point into a vendor's agent loop.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 Policy Enforcement Middleware (Intent Gate), ASI08 Independent policy enforcement"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (align agent activity with agent intentions)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+
+  - id: capabilityHitlControls
+    title: Human-in-the-loop approval & escalation
+    abbrev: HITL
+    category: controlsApplication
+    description:
+      - >
+        Mandatory human confirmation for privileged, irreversible, or externally visible actions,
+        with thresholds set by operators rather than the agent, and escalation paths when the
+        agent is uncertain. The Five Eyes guidance adds multi-agent consensus as a companion for
+        moderate-stakes decisions.
+    examples:
+      - approval gates on high-impact actions
+      - risk-tiered escalation thresholds
+      - multi-party or consensus approval
+    controls:
+      - controlAgentPluginUserControl
+      - controlUserTransparencyAndControls
+      - controlAgentExecutionBounds
+    risks:
+      - riskRogueActions
+      - riskInsecureModelOutput
+      - riskRunawayAgentToolLoops
+    components:
+      - componentAgentOutputHandling
+      - componentReasoningCore
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Interactive permission prompts are the default posture for local agents.
+      surfaceCloud:
+        applies: true
+        note: Implemented as workflow checkpoints and asynchronous approval.
+      surfaceSaas:
+        applies: true
+        note: Available only where the vendor surfaces confirmation steps; you cannot add your own.
+    sources:
+      - title: "MITRE ATLAS — AML.M0029 Human In-the-Loop for AI Agent Actions"
+        url: https://atlas.mitre.org/mitigations
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — approval thresholds not delegated to the agent, consensus controls"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+
+  - id: capabilityMemoryProtection
+    title: Agent memory & context protection
+    abbrev: Memory protection
+    category: controlsApplication
+    description:
+      - >
+        Segmentation, tenancy scoping, expiry, and validation of persistent agent memory, with
+        writes treated as privileged operations and quarantine or rollback available when memory
+        is corrupted. OWASP gave memory poisoning its own Top 10 entry; ATLAS added a dedicated
+        memory-hardening mitigation.
+    examples:
+      - per-tenant memory namespaces
+      - memory write validation and expiry
+      - memory rollback and quarantine
+    controls:
+      - controlAgentIntegrityManagement
+      - controlRetrievalAndVectorSystemIntegrity
+      - controlAgentObservability
+    risks:
+      - riskRetrievalVectorStorePoisoning
+      - riskPromptResponseCachePoisoning
+      - riskPromptInjection
+    components:
+      - componentMemory
+      - componentReasoningCore
+      - componentRAGContent
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents keep memory in plain files on disk — readable and writable by anything on the device.
+      surfaceCloud:
+        applies: true
+        note: Memory is a managed store you can segment, scope, and expire.
+      surfaceSaas:
+        applies: true
+        note: Only where the vendor exposes memory controls; the store itself is theirs.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI06 Memory & Context Poisoning"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "MITRE ATLAS — AML.M0031 Memory Hardening"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityBehavioralDriftDetection
+    title: Agent behavioural & goal-drift detection
+    abbrev: Drift detection
+    category: controlsApplication
+    description:
+      - >
+        Baselining an agent's normal goals, tool-use patterns, and decision profile, then flagging
+        divergence between stated intent and observed behaviour — including via a secondary agent
+        that validates the first. Gartner named this pattern as an emerging market of its own; the
+        Five Eyes guidance calls for monitoring goal drift against approved baselines.
+    examples:
+      - behavioural baselining for agents
+      - intent-versus-action divergence detection
+      - validating or watchdog agents
+    controls:
+      - controlAgentObservability
+      - controlAgentIntegrityManagement
+      - controlThreatDetection
+    risks:
+      - riskRogueActions
+      - riskRunawayAgentToolLoops
+      - riskAgentDelegationChainOpacity
+    components:
+      - componentReasoningCore
+      - componentTools
+      - componentMemory
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Possible where agent traces are collected centrally; otherwise there is no baseline to compare against.
+      surfaceCloud:
+        applies: true
+        note: The richest telemetry, and where behavioural baselines are practical to build.
+      surfaceSaas:
+        applies: true
+        note: Constrained to the coarse interaction signals a vendor exports.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI08 Behavioral and governance drift detection, ASI10 watchdog agents"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "Five Eyes joint guidance, Careful adoption of agentic AI services (2026) — monitor for goal drift, anomaly detection on stated versus observed behaviour"
+        url: https://www.ncsc.govt.nz/assets/guidance/Documents/Careful-adoption-of-agentic-AI-services_FINAL.pdf
+
+  - id: capabilityRateLimiting
+    title: Rate limiting, quotas & spend controls
+    abbrev: Quotas
+    category: controlsApplication
+    description:
+      - >
+        Bounds on request volume, token spend, tool-call depth, and task duration, with circuit
+        breakers between planning and execution so a runaway loop stops itself. OWASP gave
+        unbounded consumption its own Top 10 entry; providers now detect wallet-exhaustion attacks
+        as a named alert class.
+    examples:
+      - request and token rate limits
+      - hard spending caps
+      - agentic circuit breakers and progress caps
+    controls:
+      - controlAgentExecutionBounds
+      - controlApplicationAccessManagement
+      - controlAgentPluginPermissions
+    risks:
+      - riskEconomicDenialOfWallet
+      - riskDenialOfMLService
+      - riskRunawayAgentToolLoops
+    components:
+      - componentModelServing
+      - componentReasoningCore
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Enforced by the provider key or gateway the local agent uses, not by the device itself.
+      surfaceCloud:
+        applies: true
+        note: Directly configurable at the serving and gateway layers.
+      surfaceSaas:
+        applies: true
+        note: Limited to whatever seat or usage caps the vendor's plan provides.
+    sources:
+      - title: "OWASP Top 10 for LLM Applications — LLM06 Unbounded Consumption (rate limiting, hard spending caps, agentic circuit breakers)"
+        url: https://genai.owasp.org/llm-top-10/
+      - title: "MITRE ATLAS — AML.M0004 Restrict Number of AI Model Queries"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityCredentialIsolation
+    title: Agent credential isolation & delegation control
+    abbrev: Delegation control
+    category: controlsApplication
+    description:
+      - >
+        Keeping the credentials an agent uses separate from the identity it acts for, with
+        explicit on-behalf-of exchange, bounded delegation chains, and detection of transitive
+        privilege. This is the confused-deputy problem — first in the MCP specification's own
+        attack list and third in the OWASP agentic Top 10.
+    examples:
+      - on-behalf-of token exchange
+      - scoped delegation with expiry
+      - transitive permission detection
+    controls:
+      - controlAgentCredentialIsolation
+      - controlApplicationAccessManagement
+      - controlAgentPluginPermissions
+    risks:
+      - riskAgenticDelegationConfusedDeputy
+      - riskCrossTenantCredentialPropagation
+      - riskAgentDelegationChainOpacity
+    components:
+      - componentTools
+      - componentReasoningCore
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents commonly hold the user's own long-lived tokens with no separation at all.
+      surfaceCloud:
+        applies: true
+        note: Token exchange and delegation boundaries are yours to design.
+      surfaceSaas:
+        applies: true
+        note: Depends on the vendor supporting delegated authorization rather than blanket connector consent.
+    sources:
+      - title: "Model Context Protocol — Security Best Practices (confused deputy problem, token passthrough, scope minimization)"
+        url: https://modelcontextprotocol.io/specification/latest/basic/security_best_practices
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI03 Identity and Privilege Abuse (detect delegated and transitive permissions)"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  - id: capabilityMcpToolSecurity
+    title: Tool & MCP supply-chain security
+    abbrev: Tool supply chain
+    category: controlsApplication
+    description:
+      - >
+        Screening, pinning, and continuous verification of the tool servers an agent connects to
+        — static analysis of tool definitions, content-hash pinning against silent redefinition,
+        and allow-listing of approved versions. Tool poisoning and rug-pull attacks have their own
+        entries in the OWASP MCP Top 10 and CSA's MCP guidance.
+    examples:
+      - tool definition scanning
+      - content-hash pinning of tool servers
+      - approved tool and version allow-lists
+    controls:
+      - controlAgentIntegrityManagement
+      - controlAgentInventoryManagement
+      - controlModelAndDataIntegrityManagement
+    risks:
+      - riskToolSourceProvenance
+      - riskToolRegistryTampering
+      - riskZombieShadowMCPServers
+      - riskInsecureIntegratedComponent
+    components:
+      - componentTools
+      - componentReasoningCore
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Locally installed tool servers are the least governed part of most agent deployments.
+      surfaceCloud:
+        applies: true
+        note: Gated through a registry with review and approval before publication.
+      surfaceSaas:
+        applies: false
+        note: The vendor's internal tool catalogue is not exposed for verification.
+    sources:
+      - title: "OWASP MCP Top 10 — MCP03 Tool Poisoning, MCP04 Software Supply Chain Attacks, MCP09 Shadow MCP Servers"
+        url: https://owasp.org/www-project-mcp-top-10/
+      - title: "CSA, Agentic MCP Security Best Practices Guide — tool description integrity, supply chain security"
+        url: https://labs.cloudsecurityalliance.org/agentic/agentic-mcp-security-best-practices-v1/
+
+  - id: capabilityKillSwitch
+    title: Kill switch, quarantine & decommissioning
+    abbrev: Kill switch
+    category: controlsApplication
+    description:
+      - >
+        The ability to stop an agent or model immediately — revoke its credentials, quarantine it
+        from peers, and decommission it cleanly, including secure deletion of what it held. NIST's
+        AI RMF requires mechanisms to supersede, disengage, or deactivate systems behaving outside
+        intended use.
+    examples:
+      - agent kill switches and quarantine
+      - credential revocation on trigger
+      - decommissioning with secure deletion
+    controls:
+      - controlAgentExecutionBounds
+      - controlAgentInventoryManagement
+      - controlIncidentResponseManagement
+    risks:
+      - riskRogueActions
+      - riskRunawayAgentToolLoops
+      - riskShadowAndUnknownAgents
+    components:
+      - componentReasoningCore
+      - componentApplication
+      - componentModelServing
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Device management can disable or remove an agent, and revoke the credentials it held.
+      surfaceCloud:
+        applies: true
+        note: Full control — stop the workload, revoke the identity, purge the state.
+      surfaceSaas:
+        applies: true
+        note: Reduces to disabling the application and revoking its connector authorizations.
+    sources:
+      - title: "NIST AI RMF 1.0 — MANAGE 2.4 (supersede, disengage, or deactivate), GOVERN 1.7 (decommissioning)"
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI04 Supply chain kill switch, ASI10 Containment & Response"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+  - id: capabilityIga
+    title: Identity & access management for AI applications
+    abbrev: IAM / IGA
+    category: controlsApplication
+    description:
+      - >
+        Authentication and authorization of the humans using AI systems, with attribute- or
+        context-based policy, phishing-resistant multi-factor authentication, and access reviews
+        over who may reach which model, agent, or dataset. The AICM devotes a full domain to it and
+        CISA names it as a distinct operational practice.
+    examples:
+      - context-aware conditional access
+      - attribute-based access control
+      - access certification and reviews
+    controls:
+      - controlApplicationAccessManagement
+      - controlModelAndDataAccessControls
+      - controlUserTransparencyAndControls
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskModelExfiltration
+      - riskExcessiveDataHandlingDuringInference
+    components:
+      - componentApplication
+      - componentModelServing
+      - componentAgentUserQuery
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Device posture feeds the access decision for agents running locally.
+      surfaceCloud:
+        applies: true
+        note: Fully yours across models, agents, and data planes.
+      surfaceSaas:
+        applies: true
+        note: Enforced at federation; conditional access can gate entry to the vendor application.
+    sources:
+      - title: "CISA/NSA, Deploying AI Systems Securely — enforce strict access controls (RBAC, preferably ABAC, MFA, privileged access workstations)"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+      - title: "CSA AI Controls Matrix v1.1 — Identity & Access Management domain"
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+
+  - id: capabilityTransparencyControls
+    title: User transparency & interaction safeguards
+    abbrev: Transparency
+    category: controlsApplication
+    description:
+      - >
+        Interface-level safeguards that let a person judge what an AI system is about to do —
+        disclosure that they are talking to an agent, preview separated from effect, source
+        citation, and a route to report suspicious behaviour. OWASP added human-agent trust
+        exploitation to the agentic Top 10 precisely because the interface is an attack surface.
+    examples:
+      - agent disclosure and interaction labelling
+      - preview-before-effect patterns
+      - source citation and reporting paths
+    controls:
+      - controlUserTransparencyAndControls
+      - controlAgentPluginUserControl
+      - controlOutputValidationAndSanitization
+    risks:
+      - riskInsecureModelOutput
+      - riskRogueActions
+      - riskCovertChannelsInModelOutputs
+    components:
+      - componentApplicationOutputHandling
+      - componentAgentOutputHandling
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: The agent's own interface is where confirmation and preview live.
+      surfaceCloud:
+        applies: true
+        note: You design the interface, so the safeguards are yours to build.
+      surfaceSaas:
+        applies: true
+        note: Determined by the vendor's interface design; your lever is procurement, not configuration.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI09 Human-Agent Trust Exploitation (separate preview from effect, adaptive trust calibration)"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "EU AI Act, Regulation (EU) 2024/1689 — Article 13 transparency and instructions of use"
+        url: "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32024R1689"
+
+  # ================================================================= Assurance Controls
+
+  - id: capabilityAiRedTeaming
+    title: AI red teaming
+    abbrev: Red teaming
+    category: controlsAssurance
+    description:
+      - >
+        Adversarial testing of models, applications, and agents against injection, extraction,
+        evasion, and goal-hijack techniques, run continuously rather than once before launch.
+        Named by six or seven of the government and standards sources reviewed — one of the three
+        strongest convergences in the entire corpus.
+    examples:
+      - automated adversarial attack suites
+      - agentic and multi-agent red teaming
+      - scheduled and continuous red-team runs
+    controls:
+      - controlRedTeaming
+      - controlAdversarialTrainingAndTesting
+      - controlVulnerabilityManagement
+    risks:
+      - riskPromptInjection
+      - riskModelEvasion
+      - riskModelExfiltration
+      - riskRogueActions
+    components:
+      - componentModelEvaluation
+      - componentTheModel
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Tests the agent configuration, tool set, and sandbox as deployed on devices.
+      surfaceCloud:
+        applies: true
+        note: Full access to test the system you built, at any depth.
+      surfaceSaas:
+        applies: true
+        note: Constrained by the vendor's acceptable-use terms — check before testing production tenancy.
+    sources:
+      - title: "NIST AI 600-1 — MS-2.7-007 (perform AI red-teaming), MP-5.1-005, MP-2.3-005"
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf
+      - title: "OWASP Securing Agentic Applications Guide 1.0 — 7.1 Red Teaming Agentic Applications"
+        url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+
+  - id: capabilityModelEvals
+    title: Model & agent evaluation harnesses
+    abbrev: Evals
+    category: controlsAssurance
+    description:
+      - >
+        Repeatable, scored test suites over safety, robustness, and task adherence, run as a
+        release gate and again continuously in production to catch regression. Gartner lists
+        continuous assurance and evaluation as a mandatory feature of the AI TRiSM market, and all
+        three major clouds ship it as a named service.
+    examples:
+      - safety and robustness evaluation suites
+      - regression gates in the release pipeline
+      - scheduled production evaluation
+    controls:
+      - controlRedTeaming
+      - controlVulnerabilityManagement
+      - controlAdversarialTrainingAndTesting
+    risks:
+      - riskEvaluationBenchmarkManipulation
+      - riskModelEvasion
+      - riskInsecureModelOutput
+    components:
+      - componentModelEvaluation
+      - componentTheModel
+      - componentReasoningCore
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Applies to agent configurations you ship to devices, evaluated before rollout.
+      surfaceCloud:
+        applies: true
+        note: A managed platform service, integrated with the deployment gate.
+      surfaceSaas:
+        applies: true
+        note: You can evaluate vendor outputs against your own suite, but not their internals.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (continuous assurances and evaluation as a mandatory feature)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "MITRE ATLAS — AML.M0008 Validate AI Model"
+        url: https://atlas.mitre.org/mitigations
+
+  - id: capabilityAiDetectionResponse
+    title: AI-aware detection & response
+    abbrev: SIEM / SOAR
+    category: controlsAssurance
+    description:
+      - >
+        Correlation of AI telemetry — prompts, tool calls, agent identity events, model access —
+        into detections, investigations, and automated response, with AI-specific detection content
+        rather than generic cloud rules. Providers now publish named alert families for jailbreak
+        attempts, wallet attacks, ASCII smuggling, and anomalous tool invocation.
+    examples:
+      - AI detection content in a SIEM
+      - agent and model threat detection
+      - automated containment playbooks
+    controls:
+      - controlThreatDetection
+      - controlIncidentResponseManagement
+      - controlAgentObservability
+    risks:
+      - riskPromptInjection
+      - riskModelExfiltration
+      - riskRogueActions
+      - riskEconomicDenialOfWallet
+    components:
+      - componentModelServing
+      - componentApplication
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Fed by endpoint telemetry from local agents and their tool calls.
+      surfaceCloud:
+        applies: true
+        note: The deepest signal set, straight from your own inference and agent planes.
+      surfaceSaas:
+        applies: true
+        note: Only as good as the vendor's exported audit events, which are usually coarse and delayed.
+    sources:
+      - title: "CSA AI Controls Matrix v1.1 — SEF-04 AI incident-response testing; Logging & Monitoring domain"
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+      - title: "CISA/NSA, Deploying AI Systems Securely — integrate an incident detection system, implement robust logging and monitoring"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+
+  - id: capabilityAuditLogging
+    title: Audit logging & non-repudiation
+    abbrev: Audit logging
+    category: controlsAssurance
+    description:
+      - >
+        Tamper-evident, append-only records of AI and agent activity bound to cryptographic
+        identities, retained so that an action can be attributed after the fact. Distinct from
+        detection: this is the integrity of the record itself, which the Five Eyes guidance
+        protects by quarantining requests to delete audit data.
+    examples:
+      - append-only signed audit trails
+      - unified inter-agent audit logs
+      - log integrity and retention controls
+    controls:
+      - controlThreatDetection
+      - controlAgentObservability
+      - controlIncidentResponseManagement
+    risks:
+      - riskAgentDelegationChainOpacity
+      - riskShadowAndUnknownAgents
+      - riskRogueActions
+    components:
+      - componentReasoningCore
+      - componentApplication
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Requires shipping logs off the device — local-only logs are not non-repudiable.
+      surfaceCloud:
+        applies: true
+        note: Platform audit logs with immutable retention.
+      surfaceSaas:
+        applies: true
+        note: Depends entirely on the vendor's audit API and its retention window.
+    sources:
+      - title: "OWASP Top 10 for Agentic Applications 2026 — ASI08 Logging and non-repudiation (tamper-evident logs bound to cryptographic agent identities)"
+        url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+      - title: "CISA/NSA, AI Data Security (AA25-142A) — immutable, append-only cryptographically signed ledger"
+        url: https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-142a
+
+  - id: capabilityEdr
+    title: Endpoint detection & response
+    abbrev: EDR / XDR
+    category: controlsAssurance
+    description:
+      - >
+        Device-resident detection, investigation, and response, now extending into AI-specific
+        inspection: discovering local agents, hooking the pre-tool-call boundary, and inspecting
+        agent network activity. The AICM carries a full endpoint-management domain, and endpoint
+        vendors have begun instrumenting third-party coding agents by name.
+    examples:
+      - endpoint detection and response agents
+      - local AI agent discovery
+      - agent-native event inspection
+    controls:
+      - controlThreatDetection
+      - controlIncidentResponseManagement
+      - controlVulnerabilityManagement
+    risks:
+      - riskRogueActions
+      - riskSensitiveDataDisclosure
+      - riskShadowAndUnknownAgents
+    components:
+      - componentApplication
+      - componentTools
+      - componentDataStorage
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: The primary surface — the only place with kernel-level visibility into what an agent actually did.
+      surfaceCloud:
+        applies: true
+        note: Host-level coverage of the servers running inference and agent workloads.
+      surfaceSaas:
+        applies: false
+        note: No agent can be installed on vendor infrastructure.
+    sources:
+      - title: "CSA AI Controls Matrix v1.1 — Universal Endpoint Management domain"
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+      - title: "OWASP AI Security Solutions Landscape — LLM incident detection and response, user activity monitoring"
+        url: https://genai.owasp.org/ai-security-solutions-landscape/
+
+  - id: capabilityBrowserDetectionResponse
+    title: Browser detection & response
+    abbrev: Browser D&R
+    category: controlsAssurance
+    description:
+      - >
+        Inspection and enforcement inside the browser session where SaaS and hosted AI interfaces
+        are used — paste and upload controls, detection of adversarial content in responses, and
+        policy on which AI surfaces may be used at all. Market-evidenced rather than
+        standards-named, and often the only inspection point that exists for consumer AI.
+    examples:
+      - enterprise browsers
+      - browser security extensions
+      - in-session inspection and policy
+    controls:
+      - controlThreatDetection
+      - controlUserDataManagement
+      - controlInputValidationAndSanitization
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskPromptInjection
+      - riskShadowAndUnknownAgents
+    components:
+      - componentApplicationInputHandling
+      - componentApplicationOutputHandling
+      - componentAgentUserQuery
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Deployed on the device, but its value is what it sees of remote AI surfaces.
+      surfaceCloud:
+        applies: true
+        note: Covers internally hosted AI interfaces reached through the browser.
+      surfaceSaas:
+        applies: true
+        note: The primary case — inspection of vendor AI where no API or agent hook exists.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (runtime inspection and enforcement for AI applications)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "OWASP AI Security Solutions Landscape — user activity monitoring, privacy and data leakage protection"
+        url: https://genai.owasp.org/ai-security-solutions-landscape/
+
+  - id: capabilityAppSecTesting
+    title: Application security testing for AI systems
+    abbrev: SAST / SCA
+    category: controlsAssurance
+    description:
+      - >
+        Static, composition, and dynamic analysis over the code that surrounds a model — the
+        orchestration layer, the tools, and increasingly the model-generated code itself, which
+        the AI SSDF profile treats as ordinary code requiring ordinary review.
+    examples:
+      - static and composition analysis
+      - prompt and API fuzzing
+      - review of model-generated code
+    controls:
+      - controlVulnerabilityManagement
+      - controlSecureByDefaultMLTooling
+      - controlModelAndDataExecutionIntegrity
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskInsecureModelOutput
+      - riskMaliciousLoaderDeserialization
+    components:
+      - componentApplication
+      - componentModelFrameworksAndCode
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Highly relevant — coding agents on developer machines generate code that needs the same gates.
+      surfaceCloud:
+        applies: true
+        note: Runs in the pipeline that builds and deploys your AI application.
+      surfaceSaas:
+        applies: false
+        note: You have no access to the vendor's application code.
+    sources:
+      - title: "NIST SP 800-218A — PW.7 and PW.8 (review and test code to identify vulnerabilities)"
+        url: https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218A.pdf
+      - title: "OWASP Securing Agentic Applications Guide 1.0 — 3.2.1 Static Analysis, 3.2.2 Dependency Scanning, 3.2.5 Pre-deployment Testing"
+        url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+
+  - id: capabilityAiVulnMgmt
+    title: AI vulnerability & patch management
+    abbrev: Vuln mgmt
+    category: controlsAssurance
+    description:
+      - >
+        Continuous discovery and remediation of vulnerabilities in the AI stack in production —
+        serving frameworks, inference runtimes, notebooks, and agent dependencies — with patching
+        cadence and re-validation after each change. CISA is explicit that an AI system must be
+        re-evaluated for accuracy, performance, and security before it is redeployed.
+    examples:
+      - AI stack vulnerability scanning
+      - dependency and runtime patching
+      - post-patch revalidation
+    controls:
+      - controlVulnerabilityManagement
+      - controlThreatDetection
+      - controlSecureByDefaultMLTooling
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskModelDeploymentTampering
+      - riskDenialOfMLService
+    components:
+      - componentModelServing
+      - componentModelFrameworksAndCode
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Covers agent runtimes, extensions, and local tool servers on the device.
+      surfaceCloud:
+        applies: true
+        note: The full stack is yours to scan and patch.
+      surfaceSaas:
+        applies: false
+        note: Patching the vendor's stack is the vendor's obligation; you get attestations at best.
+    sources:
+      - title: "MITRE ATLAS — AML.M0016 Vulnerability Scanning"
+        url: https://atlas.mitre.org/mitigations
+      - title: "CISA/NSA, Deploying AI Systems Securely — update and patch regularly, with full re-evaluation before redeploy"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+
+  - id: capabilityVendorAssurance
+    title: Third-party AI configuration & audit assurance
+    abbrev: SaaS assurance
+    category: controlsAssurance
+    description:
+      - >
+        Verification that a vendor AI tenancy is configured to your policy — training opt-out,
+        data residency, retention, connector scope — and ingestion of the vendor's audit stream so
+        that use is evidenced rather than assumed. The practical substitute for every control you
+        cannot deploy inside someone else's product.
+    examples:
+      - SaaS posture checks for AI features
+      - vendor audit log ingestion
+      - tenancy and retention configuration review
+    controls:
+      - controlVulnerabilityManagement
+      - controlThreatDetection
+      - controlProductGovernance
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskUnauthorizedTrainingData
+      - riskExcessiveDataHandling
+    components:
+      - componentApplication
+      - componentDataSources
+      - componentModelServing
+    surfaces:
+      surfaceEndpoint:
+        applies: false
+        note: There is no vendor tenancy to assess on the device.
+      surfaceCloud:
+        applies: true
+        note: Applies to managed model services you consume inside your own cloud accounts.
+      surfaceSaas:
+        applies: true
+        note: The primary surface — and for many vendor AI features, the only assurance available.
+    sources:
+      - title: "NIST AI RMF 1.0 — MANAGE 3.1 (third-party AI risks monitored, risk controls applied and documented)"
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+      - title: "CSA AI Controls Matrix v1.1 — STA-09 service bill of materials; Supply Chain Management domain"
+        url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+
+  # ================================================================= Governance Controls
+
+  - id: capabilityAiGovernancePlatform
+    title: AI governance platform
+    abbrev: AI governance
+    category: controlsGovernance
+    description:
+      - >
+        The system of record for AI in the organisation: a catalogue of every model, application,
+        and agent with owners and risk tiers, intake and approval workflow, evidence collection,
+        and mapped compliance reporting. Gartner named it a market in its own right, with discovery
+        and registry, policy enforcement, evidence collection, and audit trail as mandatory
+        capabilities.
+    examples:
+      - AI use-case intake and approval
+      - model, application, and agent catalogue
+      - control evidence and compliance reporting
+    controls:
+      - controlProductGovernance
+      - controlRiskGovernance
+      - controlModelAndDataInventoryManagement
+    risks:
+      - riskShadowAndUnknownAgents
+      - riskUnauthorizedTrainingData
+      - riskInsecureIntegratedComponent
+    components:
+      - componentApplication
+      - componentTheModel
+      - componentModelServing
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Endpoint-deployed assistants and agents belong in the same catalogue as everything else.
+      surfaceCloud:
+        applies: true
+        note: The richest metadata, populated directly from deployment pipelines.
+      surfaceSaas:
+        applies: true
+        note: Vendor AI is registered through intake; discovery fills the gaps intake misses.
+    sources:
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (AI catalog and AI data mapping as mandatory features)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+      - title: "ISO/IEC 42001:2023 — AI management system, Annex A reference controls"
+        url: https://www.iso.org/standard/42001
+
+  - id: capabilityShadowAiDiscovery
+    title: Shadow AI discovery
+    abbrev: Shadow AI
+    category: controlsGovernance
+    description:
+      - >
+        Finding the AI that was never registered — unsanctioned assistants, browser extensions,
+        personal accounts, unmanaged agents, and undeclared tool servers — and bringing it under
+        policy. Providers now name agent sprawl and shadow agents as first-class risk types, and
+        the OWASP MCP Top 10 gives shadow servers their own entry.
+    examples:
+      - unsanctioned AI service discovery
+      - shadow agent and tool server detection
+      - unmanaged extension inventory
+    controls:
+      - controlProductGovernance
+      - controlUserPoliciesAndEducation
+      - controlAgentInventoryManagement
+    risks:
+      - riskShadowAndUnknownAgents
+      - riskZombieShadowMCPServers
+      - riskSensitiveDataDisclosure
+    components:
+      - componentApplication
+      - componentTools
+      - componentReasoningCore
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Where locally installed agents and tool servers are actually found.
+      surfaceCloud:
+        applies: true
+        note: Undeclared model endpoints and agent workloads surface through cloud discovery.
+      surfaceSaas:
+        applies: true
+        note: The classic case — employees reaching consumer AI through personal accounts.
+    sources:
+      - title: "OWASP MCP Top 10 — MCP09 Shadow MCP Servers"
+        url: https://owasp.org/www-project-mcp-top-10/
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (catalog: discovery, inventory and risk scoring of all AI used in organization)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+
+  - id: capabilityAiTprm
+    title: AI third-party risk & vendor assurance
+    abbrev: AI-TPRM
+    category: controlsGovernance
+    description:
+      - >
+        Assessment of AI vendors and model providers before adoption and on a cadence after —
+        security and privacy posture, training-data practices, subprocessors, incident obligations,
+        and evidence that claimed controls exist. Named across NCSC, NIST, ISO, and Gartner, and
+        the only lever available where the technology surface is entirely opaque.
+    examples:
+      - AI vendor security assessment
+      - model provider attestation review
+      - contractual control and incident obligations
+    controls:
+      - controlRiskGovernance
+      - controlProductGovernance
+      - controlInternalPoliciesAndEducation
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskUnauthorizedTrainingData
+      - riskModelSourceTampering
+    components:
+      - componentTheModel
+      - componentModelServing
+      - componentTools
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Applies to the agent and extension vendors whose software runs on your devices.
+      surfaceCloud:
+        applies: true
+        note: Covers model providers, hosting platforms, and framework suppliers.
+      surfaceSaas:
+        applies: true
+        note: The dominant control for vendor AI — most other capabilities cannot reach it.
+    sources:
+      - title: "UK NCSC and international partners, Guidelines for secure AI system development — secure your supply chain"
+        url: https://www.ncsc.gov.uk/collection/guidelines-secure-ai-system-development
+      - title: "NIST AI RMF 1.0 — GOVERN 6.1/6.2, MAP 4.1/4.2 (third-party risk policies and controls)"
+        url: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+
+  - id: capabilityThreatModeling
+    title: AI threat modelling & risk assessment
+    abbrev: Threat modelling
+    category: controlsGovernance
+    description:
+      - >
+        Structured analysis of what can go wrong in a specific AI system before it ships — attack
+        surface enumeration against a published AI threat taxonomy, trust boundary mapping, and
+        risk decisions recorded against it. Five sources name it, and CISA requires the developer
+        of an AI system to supply a threat model to whoever deploys it.
+    examples:
+      - AI-specific threat modelling against published taxonomies
+      - trust boundary and attack surface mapping
+      - AI risk assessment and impact analysis
+    controls:
+      - controlRiskGovernance
+      - controlProductGovernance
+      - controlInternalPoliciesAndEducation
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskPromptInjection
+      - riskRogueActions
+    components:
+      - componentApplication
+      - componentReasoningCore
+      - componentModelServing
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Local agents have their own trust boundaries — local files, credentials, and tool servers.
+      surfaceCloud:
+        applies: true
+        note: Full architectural visibility makes this the most productive surface to model.
+      surfaceSaas:
+        applies: true
+        note: Modelled at the integration boundary rather than inside the vendor's system.
+    sources:
+      - title: "CISA/NSA, Deploying AI Systems Securely — require the primary developer to provide a threat model"
+        url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+      - title: "NIST AI 100-2 E2025, Adversarial Machine Learning: A Taxonomy and Terminology of Attacks and Mitigations"
+        url: https://csrc.nist.gov/pubs/ai/100/2/e2025/final
+
+  - id: capabilityModelDocumentation
+    title: Model & system documentation
+    abbrev: Model cards
+    category: controlsGovernance
+    description:
+      - >
+        Structured, maintained documentation of each model and AI system — intended use,
+        limitations, evaluation results, data characteristics, and the controls applied — generated
+        as an artifact of the pipeline rather than written once. Required by ISO/IEC 42001 and by
+        EU AI Act obligations on instructions for use.
+    examples:
+      - model and system cards
+      - automated documentation generation
+      - regulatory disclosure artifacts
+    controls:
+      - controlProductGovernance
+      - controlUserTransparencyAndControls
+      - controlRiskGovernance
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskInsecureModelOutput
+      - riskUnauthorizedTrainingData
+    components:
+      - componentTheModel
+      - componentModelEvaluation
+      - componentApplication
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Agent definitions shipped to devices need the same documented scope and limits.
+      surfaceCloud:
+        applies: true
+        note: Generated from the pipeline that trains and deploys the model.
+      surfaceSaas:
+        applies: true
+        note: You consume the vendor's model card rather than producing one; its quality is theirs.
+    sources:
+      - title: "ISO/IEC 42001:2023 — A.6.2.7 AI system technical documentation, A.8.2 system documentation and information for users"
+        url: https://www.iso.org/standard/42001
+      - title: "Gartner, Market Guide for AI Trust, Risk and Security Management (automated documentation: bill of materials, model cards, artifacts, regulatory reports)"
+        url: "https://www.gartner.com/doc/reprints?id=1-2KEGIG1M&ct=250228&st=sb"
+
+  - id: capabilityUsagePolicyTraining
+    title: AI acceptable-use policy & user education
+    abbrev: Policy & training
+    category: controlsGovernance
+    description:
+      - >
+        Published rules on which AI may be used for what data and what decisions, paired with
+        role-specific training and reinforcement at the point of use. The least technical entry
+        here, retained because ATLAS carries it as a mitigation and because it is the only control
+        that reaches AI use you have not yet discovered.
+    examples:
+      - AI acceptable-use policy
+      - role-based AI security training
+      - in-context policy reminders
+    controls:
+      - controlUserPoliciesAndEducation
+      - controlInternalPoliciesAndEducation
+      - controlProductGovernance
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskShadowAndUnknownAgents
+      - riskInsecureModelOutput
+    components:
+      - componentAgentUserQuery
+      - componentApplication
+      - componentApplicationInputHandling
+    surfaces:
+      surfaceEndpoint:
+        applies: true
+        note: Covers how developers and staff may use locally installed agents.
+      surfaceCloud:
+        applies: true
+        note: Internal policy for teams building and operating AI systems.
+      surfaceSaas:
+        applies: true
+        note: Often the first and only control applied to consumer AI use.
+    sources:
+      - title: "MITRE ATLAS — AML.M0018 User Training"
+        url: https://atlas.mitre.org/mitigations
+      - title: "UK NCSC and international partners, Guidelines for secure AI system development — raise staff awareness of threats and risks"
+        url: https://www.ncsc.gov.uk/collection/guidelines-secure-ai-system-development
