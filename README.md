@@ -11,11 +11,6 @@ the broader taxonomy that succeeded it — the
 SAIF became after Google donated it to the Coalition for Secure AI at OASIS. Five real 2025–26
 incidents are replayed on the same map.
 
-It then adds the layer neither framework provides: **56 vendor-neutral technology capabilities**
-— the tooling that actually delivers each control — derived from the security standards and
-split across the three surfaces where the answer differs, because what protects a laptop, a
-cloud service you operate, and a vendor AI you merely subscribe to are three different answers.
-
 ---
 
 ## Why this exists

@@ -27,8 +27,6 @@ export function SiteHeader() {
     if (open) setOpen(false);
   }
 
-  const current = TABS.find((tab) => pathname.startsWith(tab.href));
-
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -41,50 +39,48 @@ export function SiteHeader() {
   return (
     <>
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
-      <div className="px-5 sm:px-7 h-14 flex items-center gap-6">
-        <Link href="/" className="flex items-center gap-2.5 shrink-0">
-          <MapGlyph />
-          <span className="display text-[15px] font-bold leading-none">
-            AI <span className="font-medium text-ink-2">Risk Map</span>
-          </span>
-        </Link>
-
-        {/* Wide enough for all eight: every section inline. */}
-        <nav aria-label="Sections" className="hidden lg:flex items-end gap-1 h-full -mb-px">
-          {TABS.map((tab) => {
-            const active = pathname.startsWith(tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                aria-current={active ? "page" : undefined}
-                className={[
-                  "px-3 py-2 mb-2 text-[13.5px] rounded-md whitespace-nowrap transition-colors",
-                  active
-                    ? "bg-ink text-white font-semibold"
-                    : "text-ink-2 hover:text-ink hover:bg-mist font-medium",
-                ].join(" ")}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="ml-auto flex shrink-0 items-center gap-1">
-          {/* Narrow: the same four bands the logo uses double as the menu control, and the
-              button names the section you are on so the header still answers "where am I". */}
+        <div className="px-5 sm:px-7 h-14 flex items-center gap-3 sm:gap-6">
+          {/* Leftmost, like every mobile app's menu button. Only exists below `lg`, where
+              there isn't room for all eight tabs inline. */}
           <button
             type="button"
             onClick={() => setOpen(!open)}
             aria-expanded={open}
             aria-controls="section-menu"
-            aria-label={open ? "Close sections menu" : "Open sections menu"}
-            className="flex items-center gap-2 rounded-md py-1.5 pl-2 pr-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink lg:hidden"
+            aria-label={open ? "Close menu" : "Open menu"}
+            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink lg:hidden"
           >
-            {open ? <CloseGlyph /> : <BandsGlyph />}
-            <span className="text-[13.5px] font-semibold">{current?.label ?? "Menu"}</span>
+            <HamburgerGlyph open={open} />
           </button>
+
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <ShieldGlyph />
+            <span className="display text-[15px] font-bold leading-none">
+              AI <span className="font-medium text-ink-2">Risk Map</span>
+            </span>
+          </Link>
+
+          {/* Wide enough for all eight: every section inline. */}
+          <nav aria-label="Sections" className="hidden lg:flex items-end gap-1 h-full -mb-px">
+            {TABS.map((tab) => {
+              const active = pathname.startsWith(tab.href);
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  aria-current={active ? "page" : undefined}
+                  className={[
+                    "px-3 py-2 mb-2 text-[13.5px] rounded-md whitespace-nowrap transition-colors",
+                    active
+                      ? "bg-ink text-white font-semibold"
+                      : "text-ink-2 hover:text-ink hover:bg-mist font-medium",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </nav>
 
           <a
             href={REPO_URL}
@@ -92,12 +88,11 @@ export function SiteHeader() {
             rel="noreferrer"
             aria-label="Source on GitHub"
             title="Source on GitHub"
-            className="rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink"
+            className="ml-auto shrink-0 rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink"
           >
             <GitHubMark />
           </a>
         </div>
-      </div>
 
         {open && (
           <nav
@@ -131,7 +126,7 @@ export function SiteHeader() {
           `fixed` child would size against the 56px bar instead of the viewport. */}
       {open && (
         <button
-          aria-label="Close sections menu"
+          aria-label="Close menu"
           tabIndex={-1}
           onClick={() => setOpen(false)}
           className="fixed inset-0 z-20 cursor-default bg-ink/20 lg:hidden"
@@ -151,39 +146,37 @@ function GitHubMark() {
   );
 }
 
-/** The logo's four bands in one colour: reads as a menu control, still the same shape. */
-function BandsGlyph() {
+/**
+ * Three bars that cross into an X. `top`/`opacity` and the transform utilities are all
+ * `transition-all`, so swapping classes on click animates instead of snapping.
+ */
+function HamburgerGlyph({ open }: { open: boolean }) {
+  const bar =
+    "absolute inset-x-0 h-[2px] rounded-full bg-current transition-all duration-200 ease-in-out";
   return (
-    <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <rect x="1" y="2" width="18" height="2.8" rx="1" />
-      <rect x="1" y="6.6" width="18" height="2.8" rx="1" />
-      <rect x="1" y="11.2" width="18" height="2.8" rx="1" />
-      <rect x="1" y="15.8" width="18" height="2.8" rx="1" />
-    </svg>
+    <span className="relative block h-4 w-5" aria-hidden="true">
+      <span className={`${bar} ${open ? "top-1/2 -translate-y-1/2 rotate-45" : "top-0"}`} />
+      <span className={`${bar} top-1/2 -translate-y-1/2 ${open ? "opacity-0" : "opacity-100"}`} />
+      <span className={`${bar} ${open ? "top-1/2 -translate-y-1/2 -rotate-45" : "bottom-0"}`} />
+    </span>
   );
 }
 
-function CloseGlyph() {
+/**
+ * The site mark: a shield in the app's own "mitigated" green, with a checkmark cut from the
+ * fill by the second subpath under `fill-rule: evenodd` — a hole, not a shape drawn on top —
+ * so it reads in one flat colour against whatever sits behind it.
+ */
+function ShieldGlyph() {
   return (
-    <svg width="17" height="17" viewBox="0 0 20 20" aria-hidden="true">
+    <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
       <path
-        d="M5 5 L15 15 M15 5 L5 15"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        fill="var(--mitigated)"
+        d="M12 2 4.5 5v6.5c0 5 3.2 8.9 7.5 10.5 4.3-1.6 7.5-5.5 7.5-10.5V5L12 2Z
+           M8.3 12.35l2.35 2.35 5-5.55.9.8-5.7 6.35-3.25-3.25Z"
       />
-    </svg>
-  );
-}
-
-/** Four stacked bands — the map itself, at 20px. */
-function MapGlyph() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-      <rect x="1" y="1.5" width="18" height="3.4" rx="1" fill="var(--band-app-rail)" />
-      <rect x="1" y="6.2" width="18" height="3.4" rx="1" fill="var(--band-model-rail)" />
-      <rect x="1" y="10.9" width="18" height="3.4" rx="1" fill="var(--band-infra-rail)" />
-      <rect x="1" y="15.6" width="18" height="3.4" rx="1" fill="var(--band-data-rail)" />
     </svg>
   );
 }
