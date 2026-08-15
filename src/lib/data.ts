@@ -2,7 +2,17 @@ import raw from "@/data/generated/dataset.json";
 import { bandFor, type BandId } from "./bands";
 import { ACTORS, actorById } from "./map-layout";
 import { DISPLAY_NAME } from "./naming";
-import type { Capability, Component, Control, Dataset, Persona, Risk, RiskOverlay } from "./types";
+import type {
+  Archetype,
+  Capability,
+  Component,
+  Control,
+  Dataset,
+  NodeType,
+  Persona,
+  Risk,
+  RiskOverlay,
+} from "./types";
 
 export const dataset = raw as unknown as Dataset;
 
@@ -25,6 +35,8 @@ export const {
   incidents,
   surfaces,
   capabilities,
+  architectureVocabulary,
+  archetypes,
   meta,
 } = dataset;
 
@@ -163,3 +175,79 @@ export const bandsForCapability = (capabilityId: string): Set<BandId> =>
 export const capabilitiesInOrder: Capability[] = controlCategories.flatMap((cat) =>
   capabilities.filter((c) => c.category === cat.id),
 );
+
+// --- Reference architectures -----------------------------------------------------
+
+export const archetypeById = index(archetypes);
+export const nodeTypeById = index(architectureVocabulary.nodeTypes);
+export const zoneTypeById = index(architectureVocabulary.zoneTypes);
+export const nodeGroupById = index(architectureVocabulary.groups);
+export const controlKindById = index(architectureVocabulary.controlKinds);
+
+/** Every archetype whose crossings are secured by a control of this kind. */
+export const archetypesForControlKind = (kindId: string): Archetype[] =>
+  archetypes.filter((a) => a.edges.some((e) => e.control?.kind === kindId));
+
+/** Archetypes in display order: grouped by surface, then as authored. */
+export const archetypesInOrder: Archetype[] = surfaces.flatMap((s) =>
+  archetypes.filter((a) => a.surface === s.id),
+);
+
+export const archetypesForSurface = (surfaceId: string): Archetype[] =>
+  archetypes.filter((a) => a.surface === surfaceId);
+
+/** What a node is called, and what it is: the authored label plus its vocabulary type. */
+export const nodeTypeOf = (typeId: string): NodeType | undefined => nodeTypeById.get(typeId);
+
+/**
+ * The risk-map component a node instantiates — its own override, else its type's default.
+ * Undefined where CoSAI names no equivalent, which is the whole governance plane.
+ */
+export function componentForNode(archetypeId: string, nodeId: string): string | undefined {
+  const node = archetypeById.get(archetypeId)?.nodes.find((n) => n.id === nodeId);
+  if (!node) return undefined;
+  return node.cosaiComponent ?? nodeTypeById.get(node.type)?.cosaiComponent;
+}
+
+/** Every archetype that names this risk, at the archetype level or pinned to a node or edge. */
+export const archetypesForRisk = (riskId: string): Archetype[] =>
+  archetypes.filter((a) => a.risks.includes(riskId));
+
+export const archetypesForCapability = (capabilityId: string): Archetype[] =>
+  archetypes.filter((a) => a.capabilities.includes(capabilityId));
+
+/** Every archetype drawing a node anchored to this risk-map component. */
+export const archetypesForComponent = (componentId: string): Archetype[] =>
+  archetypes.filter((a) =>
+    a.nodes.some((n) => (n.cosaiComponent ?? nodeTypeById.get(n.type)?.cosaiComponent) === componentId),
+  );
+
+/** Every archetype whose capability set reaches this control, via capabilities.yaml. */
+export const archetypesForControl = (controlId: string): Archetype[] =>
+  archetypes.filter((a) =>
+    a.capabilities.some((id) => capabilityById.get(id)?.controls.includes(controlId)),
+  );
+
+/** Every archetype that makes this CoSAI persona responsible for one of its trust zones. */
+export const archetypesForPersona = (personaId: string): Archetype[] =>
+  archetypes.filter((a) => a.zones.some((z) => z.personas.includes(personaId)));
+
+export const capabilitiesForArchetype = (archetypeId: string): Capability[] =>
+  (archetypeById.get(archetypeId)?.capabilities ?? [])
+    .map((id) => capabilityById.get(id))
+    .filter((c): c is Capability => Boolean(c));
+
+export const risksForArchetype = (archetypeId: string): Risk[] =>
+  (archetypeById.get(archetypeId)?.risks ?? [])
+    .map((id) => riskById.get(id))
+    .filter((r): r is Risk => Boolean(r));
+
+/**
+ * The controls an archetype reaches, grouped by CoSAI control category. Derived through the
+ * capability layer rather than authored, so the archetype cannot claim a control its own tooling
+ * does not implement.
+ */
+export function controlsForArchetype(archetypeId: string): Control[] {
+  const ids = new Set(capabilitiesForArchetype(archetypeId).flatMap((c) => c.controls));
+  return controls.filter((c) => ids.has(c.id));
+}

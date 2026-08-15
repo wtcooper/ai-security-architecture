@@ -1,0 +1,510 @@
+id: archPersonalAgentHarness
+surface: surfaceEndpoint
+title: Personal autonomous agent harness
+abbrev: Personal harness
+
+summary:
+  - >
+    An always-on daemon on a personal device that takes ambient messages from anyone who can reach
+    its channels, runs an unattended agent loop with the user's own credentials, and keeps what it
+    learns in files it will read back as instruction.
+
+description:
+  - >
+    The harness is a long-lived process, not an invocation. It owns a gateway that binds a local
+    port, one bridge per messaging channel, an agent loop, a set of tools that run as the user, and
+    a memory directory. Nothing about it is scoped to a task: it starts when the machine starts and
+    ends when the user kills it.
+  - >
+    Three properties in combination make this a distinct architecture rather than a variation on a
+    coding assistant, and every one of them is visible in the diagram.
+  - - >
+      It listens. A gateway on a local port with channel bridges attached is a network service.
+      Whoever can reach a bridge can address the agent, and the bridge — not the model — is the
+      authorization decision. Bridges are also where the authorization bugs concentrate, because
+      each new channel is a separate implementation of the same admission check.
+    - >
+      It runs unattended. A scheduled tick starts the loop with nobody watching, so there is no
+      moment at which a human sees the plan before the tools execute.
+    - >
+      It remembers in a medium it re-reads as instruction. Memory is prose the next turn treats as
+      context. A single successful injection that writes to the memory or heartbeat file survives
+      restarts and re-executes on the schedule, which is a persistence mechanism with an
+      indistinguishable footprint from normal operation.
+  - >
+    The skill supply chain is the second structural weakness. Skills combine prose and executable
+    code in one artifact and load into the agent's own process, so a skill is not a plugin with an
+    API surface — it is code running with the agent's full authority, admitted on the strength of a
+    publisher's own description. Scanners that read declared behaviour rather than observed
+    behaviour have been bypassed repeatedly, across several independent registries.
+  - >
+    What the diagram does not contain is the point. There is no management zone: no identity for
+    the agent distinct from the user, no policy engine consulted per tool call, no audit sink, no
+    registry deciding what may be installed, no kill switch beyond killing the process. Credentials
+    sit at rest inside the same blast radius as the code that reads them. Every governance control
+    in this repository's taxonomy that applies here has to be brought by the endpoint, because the
+    architecture supplies none of it.
+
+distinguishedBy:
+  - >
+    Against a vendor coding agent: the coding agent is invoked by a human who is present, reads
+    content the user chose, holds session-scoped credentials issued by a vendor, and is an outbound
+    client. The harness is triggered by strangers and by a timer, reads whatever arrives, holds
+    long-lived keys the user pasted in, and listens on a port. Nobody has ever found a hundred
+    thousand exposed coding agents, because a coding agent does not accept connections.
+  - >
+    Against a cloud agent service: the same loop hosted by a provider gets an identity, a policy
+    boundary, an audit trail and an administrator by default. Moving this architecture off the
+    endpoint changes almost nothing about the loop and almost everything about the governance.
+
+exemplars:
+  - name: OpenClaw
+    note: >
+      The reference implementation of the pattern and the origin of most public evidence about it:
+      a Node gateway daemon owning all state, channel bridges for a dozen messaging platforms, an
+      embedded agent runtime, Markdown memory with a scheduled heartbeat, in-process skills from a
+      public registry, and paired device nodes exposing camera, screen and remote execution.
+    url: https://docs.openclaw.ai/concepts/architecture
+    asOf: "2026-08"
+  - name: Hermes Agent
+    note: >
+      An independent implementation with a more mature posture and an unusually candid threat
+      model, which states plainly that its deny rules guard against an honest-but-wrong agent
+      rather than an adversarial one. Its self-improvement feature — the agent writing its own
+      skills — is the persistence vector in this archetype made into a product decision.
+    url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+    asOf: "2026-08"
+  - name: Homegrown harnesses
+    note: >
+      The long tail: a script, a messaging webhook, an API key in a dotfile, and cron. Structurally
+      identical and considerably more common than either named project.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: >
+      Everything that can address the agent or be read by it. The senders are not a subset of the
+      user's contacts, and the content is not a subset of what the user chose to open.
+
+  - id: device
+    type: device
+    personas: [personaEndUser]
+    note: >
+      One trust zone containing the daemon, its tools, its memory, and its credentials. There is no
+      internal boundary: a tool that runs here can read the memory files and the key file.
+
+  - id: container
+    type: sandbox
+    personas: [personaEndUser]
+    note: >
+      Isolation exists as an option and is typically not the default. Where it is enabled, its
+      configuration is itself reachable by the agent unless the host prevents it, which has been
+      the subject of more than one sandbox-escape finding.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: The inference API. Reached directly from the device over a key the user holds.
+
+nodes:
+  # --- Outside -------------------------------------------------------------------
+  - id: owner
+    type: humanUser
+    zone: outside
+    label: Owner
+    note: The person the agent acts for, addressing it over the same channels as everyone else.
+
+  - id: senders
+    type: untrustedSource
+    zone: outside
+    label: Unsolicited senders
+    note: >
+      Anyone who can reach a connected channel. On a public messaging network that is an unbounded
+      set, and the message body is model input.
+    risks: [riskPromptInjection]
+    capabilities: [capabilityPromptInjectionDefense]
+
+  - id: webContent
+    type: untrustedSource
+    zone: outside
+    label: Fetched content
+    note: >
+      Pages, documents and API responses the tools retrieve. Attacker-writable, and it re-enters
+      the loop as context indistinguishable from the user's own words.
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    capabilities: [capabilityPromptInjectionDefense]
+
+  - id: publicSkillHub
+    type: skillPackage
+    zone: outside
+    label: Public skill registry
+    note: >
+      An open marketplace of prose-plus-code extensions. Admission is publisher self-attestation;
+      the declared behaviour of a package and its actual behaviour are separate facts.
+    risks: [riskToolSourceProvenance, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAiBom, capabilityMcpToolSecurity]
+
+  # --- Device --------------------------------------------------------------------
+  - id: channelBridges
+    type: channelAdapter
+    zone: device
+    cosaiComponent: componentAgentUserQuery
+    label: Channel bridges
+    note: >
+      One adapter per messaging platform, each implementing its own sender check. The count of
+      channels is the count of independent authorization surfaces, which is why the disclosed
+      authorization bypasses in this archetype cluster in newly added bridges.
+    risks: [riskShadowAndUnknownAgents, riskPromptInjection]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityRateLimiting]
+
+  - id: heartbeat
+    type: scheduler
+    zone: device
+    label: Heartbeat
+    note: >
+      A periodic tick that starts the loop with no human present and re-reads the memory files. The
+      mechanism that converts a one-time injection into a recurring one.
+    risks: [riskRogueActions, riskRunawayAgentToolLoops]
+    capabilities: [capabilityAgentObservability, capabilityKillSwitch]
+
+  - id: gateway
+    type: harness
+    zone: device
+    label: Gateway daemon
+    note: >
+      One long-lived process: the gateway that owns every piece of state and binds a local port,
+      and the loop that plans, calls tools and reads the results back as context. Historically
+      bound to all interfaces, which is how exposure scans found instances by the tens of
+      thousands; current builds bind loopback with authentication.
+    risks: [riskShadowAndUnknownAgents, riskInsecureIntegratedComponent]
+    capabilities: [capabilityEdr, capabilityShadowAiDiscovery, capabilityAiVulnMgmt]
+
+  - id: memoryFiles
+    type: memoryStore
+    zone: device
+    label: Memory and index
+    note: >
+      Cross-session, cross-conversation, plain-text files plus the embedded search over them.
+      Written by the agent, read back as instruction on every subsequent turn including the
+      unattended ones. This is the persistence primitive.
+    risks: [riskPromptInjection, riskSensitiveDataDisclosure]
+    capabilities: [capabilityMemoryProtection, capabilityAiDlp]
+
+  - id: installedSkills
+    type: skillPackage
+    zone: device
+    label: Installed skills
+    note: >
+      Prose and executable code from the registry, loaded into the daemon's own process. Not
+      sandboxed from the agent by construction — a skill has whatever the agent has.
+    risks: [riskInsecureIntegratedComponent, riskToolSourceProvenance, riskToolRegistryTampering]
+    capabilities: [capabilityAiBom, capabilityAgentSandboxing, capabilityMcpToolSecurity]
+
+  - id: localTools
+    type: tool
+    zone: device
+    label: Shell and file tools
+    note: >
+      Command execution and filesystem access running as the user. The authority here is the user
+      account, not a scoped grant, so the reachable set is everything the user can reach.
+    risks: [riskRogueActions, riskExcessiveDataHandling]
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentSandboxing, capabilityEdr]
+
+  - id: localMcp
+    type: mcpServer
+    zone: device
+    label: Local MCP servers
+    note: >
+      Tool providers launched as child processes over stdio. Admission is a config file the agent
+      can usually write, which makes tool registration a self-service operation for anything that
+      has already achieved code execution.
+    risks: [riskToolRegistryTampering, riskZombieShadowMCPServers, riskMCPTransportHijacking]
+    capabilities: [capabilityMcpToolSecurity, capabilityAgentRegistry]
+
+  - id: pairedNodes
+    type: actuator
+    zone: device
+    label: Paired device nodes
+    note: >
+      Companion devices exposing camera, screen, location and remote execution to the same loop.
+      Extends the blast radius from one machine to the user's physical surroundings.
+    risks: [riskRogueActions, riskSensitiveDataDisclosure]
+    capabilities: [capabilityHitlControls, capabilityToolPermissionScoping]
+
+  - id: keyFile
+    type: credentialStore
+    zone: device
+    label: API keys at rest
+    note: >
+      Long-lived provider keys and channel tokens in a config file the agent's own tools can read.
+      A store, not a broker: the same secret every time, revocable only by hand.
+    risks: [riskSensitiveDataDisclosure, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
+
+  - id: responseOut
+    type: outputHandling
+    zone: device
+    cosaiComponent: componentOrchestrationOutputHandling
+    label: Response rendering
+    note: Replies back onto the channel, and anywhere else the agent decides to send them.
+    risks: [riskInsecureModelOutput, riskCovertChannelsInModelOutputs]
+    capabilities: [capabilityOutputEncoding, capabilityEgressControl]
+
+  # --- Container -----------------------------------------------------------------
+  - id: sandboxExec
+    type: codeSandbox
+    zone: container
+    label: Sandboxed execution
+    note: >
+      Where code execution goes when isolation is turned on. Worth drawing precisely because it is
+      optional: the same diagram without this zone is the common deployment.
+    risks: [riskRogueActions]
+    capabilities: [capabilityAgentSandboxing]
+
+  # --- Provider ------------------------------------------------------------------
+  - id: providerApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Inference API
+    note: The published interface. Everything behind it is the provider's, and is not drawn.
+    risks: [riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilityAiGateway, capabilityTransportSecurity]
+
+edges:
+  - from: owner
+    to: channelBridges
+    label: instruction
+    control:
+      kind: userIdentity
+      note: >
+        The bridge decides the sender is the owner from the messaging platform's own identifier.
+        That identifier is as strong as the platform makes it, and the agent has no second factor.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: senders
+    to: channelBridges
+    label: unsolicited message
+    control:
+      kind: admission
+      note: >
+        An allowlist of permitted senders, enforced once for every bridge rather than configured
+        per bridge. Without it any party who can reach a channel can address the agent.
+    risks: [riskPromptInjection]
+
+  - from: publicSkillHub
+    to: installedSkills
+    label: install
+    control:
+      kind: provenance
+      note: >
+        No signature the runtime verifies against a trusted root, and no admission decision by
+        anyone but the installing user. Review has to cover prose and code in the same artifact.
+    risks: [riskToolSourceProvenance, riskInsecureIntegratedComponent]
+
+  - from: webContent
+    to: localTools
+    label: fetched content
+    control:
+      kind: contentInspection
+      note: >
+        Fetched content is classified before it re-enters context. The primary injection path once
+        the agent is running, and the reason the egress allowlist matters as much as the filter.
+    risks: [riskPromptInjection]
+
+  - from: channelBridges
+    to: gateway
+    label: normalised message
+
+  - from: heartbeat
+    to: gateway
+    label: unattended tick
+    risks: [riskRunawayAgentToolLoops]
+
+
+  - from: memoryFiles
+    to: gateway
+    label: recalled context
+    risks: [riskPromptInjection]
+
+
+  - from: gateway
+    to: providerApi
+    label: inference request
+    control:
+      kind: brokeredCredential
+      note: >
+        A bearer token from the local key file, unscoped to the request and typically valid until
+        someone notices. Anything that can read the file inherits the account.
+    risks: [riskSensitiveDataDisclosure, riskEconomicDenialOfWallet]
+
+  - from: providerApi
+    to: gateway
+    label: completion
+    control:
+      kind: transport
+      note: Transport is authenticated; the content of the response is not, and it drives tool calls.
+    risks: [riskInsecureModelOutput]
+
+  - from: gateway
+    to: localTools
+    label: tool call
+    risks: [riskRogueActions]
+
+  - from: gateway
+    to: localMcp
+    label: tool call
+    risks: [riskToolRegistryTampering]
+
+  - from: gateway
+    to: installedSkills
+    label: skill invocation
+    risks: [riskInsecureIntegratedComponent]
+
+  - from: gateway
+    to: pairedNodes
+    label: device action
+    control:
+      kind: delegatedGrant
+      note: >
+        A device pairs once and stays paired. The grant is to the harness, so it is also a grant to
+        anything that has compromised the harness.
+    risks: [riskRogueActions]
+
+  - from: localTools
+    to: sandboxExec
+    label: isolated execution
+    control:
+      kind: isolation
+      note: >
+        Only present when isolation is enabled. Where the agent can also reach the container's own
+        configuration, the boundary is advisory.
+    risks: [riskRogueActions]
+
+  - from: keyFile
+    to: gateway
+    label: credentials
+    kind: control
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: localTools
+    to: keyFile
+    label: readable at rest
+    kind: control
+    risks: [riskSensitiveDataDisclosure, riskCrossTenantCredentialPropagation]
+
+  - from: gateway
+    to: memoryFiles
+    label: writes memory
+    risks: [riskPromptInjection]
+
+  - from: gateway
+    to: responseOut
+    label: response
+
+  - from: responseOut
+    to: owner
+    label: reply
+    control:
+      kind: transport
+      note: >
+        Replies go wherever the agent addresses them, which is not necessarily back to the sender
+        who prompted the turn — a covert-channel path worth naming.
+    risks: [riskCovertChannelsInModelOutputs]
+
+crossCutting:
+  - risk: riskInsecureIntegratedComponent
+    note: >
+      The harness, its bridges, its skills and its MCP servers are all third-party code in one
+      process. No single node owns this; the whole device zone is one dependency surface.
+  - risk: riskShadowAndUnknownAgents
+    note: >
+      Nothing in the architecture registers the agent with anyone. An organisation discovers these
+      by scanning for them, which is a property of the archetype rather than of any component.
+  - risk: riskRogueActions
+    note: >
+      Unattended triggering, unscoped tool authority and no approval gate compound. Each is
+      survivable alone; the combination is what makes a single injection consequential.
+
+risks:
+  - riskPromptInjection
+  - riskRogueActions
+  - riskInsecureIntegratedComponent
+  - riskToolSourceProvenance
+  - riskSensitiveDataDisclosure
+  - riskShadowAndUnknownAgents
+  - riskToolRegistryTampering
+  - riskZombieShadowMCPServers
+  - riskInsecureModelOutput
+  - riskRunawayAgentToolLoops
+  - riskAgenticDelegationConfusedDeputy
+  - riskCrossTenantCredentialPropagation
+  - riskMCPTransportHijacking
+  - riskRetrievalVectorStorePoisoning
+  - riskCovertChannelsInModelOutputs
+  - riskExcessiveDataHandling
+  - riskExcessiveDataHandlingDuringInference
+  - riskEconomicDenialOfWallet
+
+capabilities:
+  - capabilityAgentSandboxing
+  - capabilityToolPermissionScoping
+  - capabilityPromptInjectionDefense
+  - capabilityMemoryProtection
+  - capabilityEdr
+  - capabilityShadowAiDiscovery
+  - capabilityEgressControl
+  - capabilityCredentialIsolation
+  - capabilitySecretsManagement
+  - capabilityMcpToolSecurity
+  - capabilityAgentRegistry
+  - capabilityAgentRuntimeEnforcement
+  - capabilityHitlControls
+  - capabilityAgentObservability
+  - capabilityKillSwitch
+  - capabilityAiBom
+  - capabilityAiDlp
+  - capabilityOutputEncoding
+  - capabilityRagSecurity
+  - capabilityRateLimiting
+  - capabilityAiVulnMgmt
+  - capabilityAiGateway
+  - capabilityTransportSecurity
+
+deviations:
+  - subject: No management zone is drawn
+    reason: >
+      This archetype has no governance plane, and inventing one would misrepresent it. There is no
+      agent identity distinct from the user, no per-call policy decision, no audit sink, no
+      admission registry and no kill switch beyond terminating the process. The governance
+      capabilities listed above are all things an organisation must impose from the endpoint; none
+      is supplied by the architecture. The empty column is the finding.
+  - subject: The optional container is drawn as a zone rather than omitted
+    reason: >
+      Isolation is available in every mature implementation and enabled in a minority of
+      deployments. Drawing it always would overstate the typical posture; omitting it would hide
+      the single most effective structural mitigation. It is drawn, and its note says it is opt-in.
+  - subject: Paired device nodes are modelled as an actuator rather than their own zone
+    reason: >
+      A paired phone is a second device with its own trust boundary, and a fuller treatment would
+      give it a zone. It is drawn as one node here because the security-relevant fact is the grant
+      from the harness, not the companion device's internal structure.
+
+sources:
+  - title: "OpenClaw documentation — gateway architecture and channel model"
+    url: https://docs.openclaw.ai/concepts/architecture
+  - title: "OpenClaw documentation — gateway security and network binding"
+    url: https://docs.openclaw.ai/gateway/security
+  - title: "Hermes Agent — security model and stated threat boundaries"
+    url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+  - title: "Unit 42 — supply-chain risk in personal agent skill registries"
+    url: https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk/
+  - title: "HiddenLayer — injection to persistence via scheduled agent memory"
+    url: https://www.hiddenlayer.com/research/exploring-the-security-risks-of-ai-assistants-like-openclaw
+  - title: "SecurityScorecard — exposed personal agent gateways on the public internet"
+    url: https://securityscorecard.com/blog/beyond-the-hype-moltbots-real-risk-is-exposed-infrastructure-not-ai-superintelligence/
+  - title: "Snyk — malicious and flawed agent skills at registry scale"
+    url: https://snyk.io/blog/toxicskills-malicious-ai-agent-skills-clawhub/
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01, ASI02, ASI06"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/

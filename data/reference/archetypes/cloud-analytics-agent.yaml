@@ -1,0 +1,450 @@
+id: archAnalyticsAgent
+surface: surfaceCloud
+title: Text-to-SQL analytics agent
+abbrev: Analytics agent
+
+summary:
+  - >
+    A natural-language interface over a data warehouse that generates and runs queries against live
+    records. The semantic layer is the security control, and treating it as a modelling convenience
+    is the characteristic mistake.
+
+description:
+  - >
+    This is the one archetype where the model composes executable code against production data as
+    its normal mode of operation. Retrieval assistants read a pre-built index; this one writes a
+    query and runs it. That makes the question not "what was indexed" but "what can be expressed",
+    and expressiveness is exactly what a query language is for.
+  - >
+    Filtering generated SQL is not a viable control. A language rich enough to be useful is rich
+    enough to evade a filter, and the history of SQL injection defence is a long argument for
+    constraining what can be constructed rather than inspecting what was. The semantic layer is
+    that constraint: a curated set of tables, columns, joins and metrics the generator may
+    reference, with row-level policy attached. Anything outside it cannot be named, so it cannot be
+    queried.
+  - >
+    The second control is the execution identity. The query must run as the asking user, not as a
+    service account with warehouse-wide read. Where the warehouse supports row-level security and
+    column masking, running as the user makes those policies apply automatically and turns the
+    entire access-control question into one the data platform already answers. A service account
+    turns every generated query into a potential entitlement bypass.
+  - >
+    Aggregation is the risk with no clean technical answer. A user entitled to see aggregates can
+    often reconstruct individuals by asking enough narrow questions, and each individual query is
+    legitimate. Query logging and pattern detection over a session is the realistic control, and it
+    is detective rather than preventive.
+  - >
+    Cost and blast radius are the operational pair. A generated query can scan a warehouse, and a
+    generated write would be unrecoverable — which is why the execution role should be read-only
+    and the cost ceiling should be per query rather than per month.
+
+distinguishedBy:
+  - >
+    Against the embedded retrieval assistant: that one retrieves from an index built earlier; this
+    one composes a query against live data. The control moves from index-time permissions to the
+    semantic layer and the execution identity.
+  - >
+    Against the AI-augmented API backend: both produce structured output consumed by code, but here
+    the output is executed rather than validated and stored. Schema validation does not help when
+    the schema is "a valid query".
+
+exemplars:
+  - name: Warehouse-native analytics agents
+    note: >
+      Natural-language querying built into a data platform, executing against a curated semantic
+      model with the platform's own row-level security applied.
+    asOf: "2026-08"
+  - name: BI assistant layers
+    note: >
+      Conversational front ends over an existing BI semantic model, which is the best case: the
+      constraint layer already exists and was built for a different reason.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The analyst asking, and content that reached the warehouse from elsewhere.
+
+  - id: app
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: Where the question becomes a query, and where the query is constrained before it runs.
+
+  - id: warehouse
+    type: data
+    personas: [personaDataProvider]
+    note: >
+      The semantic layer, the execution engine and the records. Most of this archetype's security
+      is the data platform's existing machinery, used properly.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: The published inference interface.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Semantic-layer curation, entitlements, query audit and aggregation monitoring.
+
+nodes:
+  - id: analyst
+    type: humanUser
+    zone: outside
+    label: Analyst
+    note: >
+      Asks in natural language. Their entitlements should be the whole of what the answer can
+      contain, which is only true if the query runs as them.
+    risks: [riskSensitiveDataDisclosure, riskInferredSensitiveData]
+    capabilities: [capabilityIga, capabilityDataAccessGovernance]
+
+  - id: warehouseContent
+    type: untrustedSource
+    zone: outside
+    label: Content in the warehouse
+    note: >
+      Free-text columns holding customer and partner input. Returned in results and summarised back
+      into context, which makes the warehouse an injection path.
+    risks: [riskPromptInjection]
+    capabilities: [capabilityPromptInjectionDefense, capabilityDataSanitization]
+
+  - id: question
+    type: appUi
+    zone: app
+    label: Question interface
+    note: The conversational surface, and the session the queries are attributed to.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiDlp, capabilityAuditLogging]
+
+  - id: generator
+    type: orchestrator
+    zone: app
+    label: Query generation
+    note: >
+      Turns the question into a query, given the semantic layer's description of what exists.
+      Composes executable code against production data as its normal operation.
+    risks: [riskInsecureModelOutput, riskPromptInjection]
+    capabilities: [capabilitySystemPromptManagement, capabilityAgentObservability]
+
+  - id: queryGuard
+    type: outputHandling
+    zone: app
+    label: Query constraint check
+    note: >
+      Confirms the generated query references only the semantic layer, is read-only, and is bounded.
+      A safety net over the constraint, not a filter on SQL — filtering a query language is a game
+      the filter loses.
+    risks: [riskInsecureModelOutput, riskRogueActions, riskModelEvasion]
+    capabilities: [capabilityOutputEncoding, capabilityGroundednessChecking, capabilityAppSecTesting]
+
+  - id: resultSummary
+    type: outputEncoder
+    zone: app
+    label: Result summarisation
+    note: >
+      Turns rows back into prose. Row content re-enters the model here, which is the injection path
+      that starts in a customer-entered field and ends in an analyst's answer.
+    risks: [riskPromptInjection, riskInsecureModelOutput, riskSensitiveDataDisclosure]
+    capabilities: [capabilityGroundednessChecking, capabilityOutputEncoding, capabilityAiDlp]
+
+  - id: semanticLayer
+    type: semanticLayer
+    zone: warehouse
+    label: Semantic layer
+    note: >
+      The curated tables, joins, metrics and row policies the generator may reference. This is the
+      security control of the archetype: what cannot be named cannot be queried.
+    risks: [riskExcessiveDataHandling, riskSensitiveDataDisclosure, riskInferredSensitiveData]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm, capabilityRagSecurity]
+
+  - id: engine
+    type: actuator
+    zone: warehouse
+    label: Query execution
+    note: >
+      Runs the query as the asking user, so the platform's row-level security and column masking
+      apply without the application re-implementing them.
+    risks: [riskSensitiveDataDisclosure, riskDenialOfMLService, riskEconomicDenialOfWallet]
+    capabilities: [capabilityDataAccessGovernance, capabilityIga, capabilityRateLimiting]
+
+  - id: records
+    type: corpus
+    zone: warehouse
+    label: Warehouse records
+    note: Live production data, including everything outside the semantic layer that should stay unnameable.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityDspm, capabilityDataAccessGovernance, capabilityEncryptionKeyManagement]
+
+  - id: modelApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Inference API
+    note: >
+      Receives the schema description and the question, and later the result rows for
+      summarisation. Both directions carry data worth accounting for.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiGateway, capabilityTransportSecurity]
+
+  - id: curation
+    type: registry
+    zone: governance
+    label: Semantic layer curation
+    note: >
+      Deciding what is exposed and what stays out. A security review disguised as a data-modelling
+      task, and usually staffed as the latter.
+    risks: [riskExcessiveDataHandling, riskInferredSensitiveData]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm, capabilityAiGovernancePlatform]
+
+  - id: identity
+    type: identityProvider
+    zone: governance
+    label: Identity and entitlements
+    note: >
+      Carries the analyst's identity through to execution. Whether it survives that far is the
+      difference between an access-control system that holds and one this archetype bypasses.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+    capabilities: [capabilityIga, capabilityNhiManagement, capabilitySse]
+
+  - id: aggWatch
+    type: auditSink
+    zone: governance
+    label: Query and aggregation monitoring
+    note: >
+      Watching sequences of individually legitimate queries that together reconstruct individuals.
+      Detective, because there is no preventive answer to this at query granularity.
+    risks: [riskInferredSensitiveData, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAuditLogging, capabilityBehavioralDriftDetection, capabilityAiDetectionResponse]
+
+  - id: costGuard
+    type: policyEngine
+    zone: governance
+    label: Query cost ceiling
+    note: >
+      Per-query scan and runtime limits. A generated query can scan the warehouse, and the person
+      who asked did not know they were asking for that.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityAiGovernancePlatform]
+
+edges:
+  - from: analyst
+    to: question
+    label: natural-language question
+    control:
+      kind: userIdentity
+      note: >
+        The identity established here has to reach the execution engine intact. Everything about
+        this archetype's access control depends on that one property.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: semanticLayer
+    to: generator
+    label: available schema
+    control:
+      kind: dataEntitlement
+      note: >
+        The generator is shown only what it may use. Describing the full warehouse to the model and
+        hoping it behaves is the failure mode this control exists to prevent.
+    risks: [riskExcessiveDataHandling]
+
+  - from: question
+    to: generator
+    label: question and session context
+
+  - from: generator
+    to: modelApi
+    label: schema and question
+    control:
+      kind: brokeredCredential
+      note: >
+        Sends the curated schema and the question. The schema is a description of the business,
+        which is itself worth accounting for in data-handling terms.
+    risks: [riskExcessiveDataHandlingDuringInference]
+
+  - from: modelApi
+    to: queryGuard
+    label: generated query
+    control:
+      kind: transport
+      note: >
+        Executable code arriving from an unauthenticated content channel. This is the crossing that
+        makes the constraint check non-negotiable.
+    risks: [riskInsecureModelOutput, riskRogueActions]
+
+  - from: queryGuard
+    to: engine
+    label: constrained query
+    control:
+      kind: userIdentity
+      note: >
+        Executed as the asking user rather than a service account, so row-level security and column
+        masking apply. A service account here turns every query into an entitlement bypass.
+    risks: [riskSensitiveDataDisclosure, riskAgenticDelegationConfusedDeputy]
+
+  - from: engine
+    to: records
+    label: scan
+    control:
+      kind: dataEntitlement
+      note: >
+        The data platform's own enforcement, applied because the query arrived with a real user
+        identity. Reusing it is worth more than anything the application could build.
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: warehouseContent
+    to: records
+    label: free-text content
+    control:
+      kind: contentPermissions
+      note: >
+        Customer-entered text lands in columns that will be returned and summarised. The injection
+        arrives through data collection, not through the assistant.
+    risks: [riskPromptInjection]
+
+  - from: engine
+    to: resultSummary
+    label: result rows
+    control:
+      kind: dataEntitlement
+      note: >
+        The rows that come back are already filtered by row-level security. What crosses here is
+        exactly what the analyst was entitled to see — and it is about to be sent to a provider.
+    risks: [riskPromptInjection, riskSensitiveDataDisclosure]
+
+  - from: resultSummary
+    to: modelApi
+    label: rows for summarisation
+    control:
+      kind: brokeredCredential
+      note: >
+        The return leg sends actual records to the provider. Frequently overlooked when accounting
+        for what this archetype discloses.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandlingDuringInference]
+
+  - from: resultSummary
+    to: question
+    label: answer
+
+  - from: curation
+    to: semanticLayer
+    label: curated exposure
+    kind: control
+    control:
+      kind: dataEntitlement
+      note: >
+        Adding a table here is granting access to it. Treating semantic-model changes as data
+        modelling rather than as authorisation is the characteristic mistake of this archetype.
+    risks: [riskExcessiveDataHandling, riskInferredSensitiveData]
+
+  - from: identity
+    to: engine
+    label: user identity propagation
+    kind: control
+    control:
+      kind: userIdentity
+      note: >
+        The single most important control on the diagram. If the identity is swapped for a service
+        account anywhere along the path, every other control here is decorative.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+
+  - from: engine
+    to: aggWatch
+    label: query log
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Per session, because the aggregation risk lives in the sequence rather than in any single
+        query. Logging queries individually and never reading them together misses it entirely.
+    risks: [riskInferredSensitiveData]
+
+  - from: costGuard
+    to: engine
+    label: scan and runtime limits
+    kind: control
+    control:
+      kind: rateLimit
+      note: Enforced by the platform, because by the time the query is running the cost is committed.
+    risks: [riskEconomicDenialOfWallet, riskDenialOfMLService]
+
+crossCutting:
+  - risk: riskInferredSensitiveData
+    note: >
+      A sequence of legitimate aggregate queries reconstructing individuals. No single query is
+      wrong and no node can prevent it, which is why the only realistic control is detective and
+      operates over a session rather than a request.
+  - risk: riskSensitiveDataDisclosure
+    note: >
+      Three paths: what the query returns, what the schema description reveals about the business,
+      and what the result rows disclose when sent for summarisation. Only the first is usually
+      accounted for.
+  - risk: riskAgenticDelegationConfusedDeputy
+    note: >
+      The user's identity has to survive from the question to the execution engine. Every hop is an
+      opportunity to substitute a service account, and one substitution voids the entire model.
+
+risks:
+  - riskSensitiveDataDisclosure
+  - riskInferredSensitiveData
+  - riskExcessiveDataHandling
+  - riskAgenticDelegationConfusedDeputy
+  - riskInsecureModelOutput
+  - riskPromptInjection
+  - riskRogueActions
+  - riskEconomicDenialOfWallet
+  - riskDenialOfMLService
+  - riskModelEvasion
+  - riskStaleAgentIdentityBinding
+  - riskExcessiveDataHandlingDuringInference
+
+capabilities:
+  - capabilityDataAccessGovernance
+  - capabilityIga
+  - capabilityDspm
+  - capabilityAuditLogging
+  - capabilityBehavioralDriftDetection
+  - capabilityRagSecurity
+  - capabilityOutputEncoding
+  - capabilityGroundednessChecking
+  - capabilityAppSecTesting
+  - capabilityAiDlp
+  - capabilityRateLimiting
+  - capabilityNhiManagement
+  - capabilitySse
+  - capabilityAiDetectionResponse
+  - capabilityPromptInjectionDefense
+  - capabilityDataSanitization
+  - capabilitySystemPromptManagement
+  - capabilityAgentObservability
+  - capabilityAiGovernancePlatform
+  - capabilityEncryptionKeyManagement
+  - capabilityAiGateway
+  - capabilityTransportSecurity
+
+deviations:
+  - subject: The execution engine uses the actuator node type
+    reason: >
+      It reads rather than writes, and actuator normally marks a write path. It is used because the
+      security-relevant property is the same: this is where the model's output stops being text and
+      starts having an effect, and where the identity it runs under decides the blast radius.
+  - subject: No query-filtering node appears
+    reason: >
+      Filtering generated SQL is the control teams reach for first and it does not hold — a language
+      expressive enough to be useful is expressive enough to evade inspection. The constraint check
+      that is drawn verifies the query stays inside the semantic layer, which is a different and
+      tractable question.
+  - subject: Most of the security machinery is attributed to the data platform
+    reason: >
+      Row-level security, column masking and resource governance already exist and were built for
+      other reasons. Drawing them as application controls would suggest reimplementing them, which
+      is both expensive and worse.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM10 improper output handling, LLM02 sensitive information disclosure"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Databricks — AI security framework and agent guidance"
+    url: https://docs.databricks.com/aws/en/lakehouse-architecture/well-architected
+  - title: "Google Cloud — agentic AI for data science and analytics"
+    url: https://docs.cloud.google.com/architecture/agentic-ai-data-science
+  - title: "NIST AI 600-1 — generative AI profile, information security actions"
+    url: https://www.nist.gov/itl/ai-risk-management-framework

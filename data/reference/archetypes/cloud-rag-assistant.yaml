@@ -1,0 +1,589 @@
+id: archRagAssistant
+surface: surfaceCloud
+title: Embedded retrieval assistant
+abbrev: RAG assistant
+
+summary:
+  - >
+    A conversational surface inside an application you operate, answering from your own corpus by
+    retrieving context at query time and grounding a model response in it. The most common
+    production AI architecture, and the one where the index is the trust boundary.
+
+description:
+  - >
+    Two pipelines meet at the index and they have different threat models. The ingest pipeline runs
+    offline, reads systems of record, chunks and embeds them, and writes an index. The query
+    pipeline runs per request, retrieves from that index, assembles a prompt, calls a model, and
+    renders an answer. Almost every serious failure in this archetype is a mismatch between what
+    the two pipelines assume.
+  - >
+    The index is a second copy of your data with its own permissions model. The source has ACLs
+    that a decade of access reviews has shaped; the index has whatever the ingest pipeline chose to
+    carry over, evaluated at whatever time it last ran. Retrieval-time filtering against live
+    entitlements is the control that keeps the two in step, and building it after the index exists
+    is considerably harder than building it before. An index that is filtered post-retrieval —
+    fetch first, drop what the user may not see — has already put the content in the process that
+    is assembling a prompt.
+  - >
+    Retrieved content is untrusted input. It arrives in the same context window as the system
+    instruction and the user's question, and the model has no reliable way to tell them apart.
+    Where the corpus contains anything a third party can write — support tickets, uploaded
+    documents, product reviews, mail — retrieval is an injection path that reaches every user who
+    later asks a related question. Where the assistant can also call tools, that path reaches
+    actions.
+  - >
+    The third property worth drawing is that the model is a boundary crossing. Whether inference is
+    a managed API or something you host, the prompt leaves your application tier with whatever
+    context retrieval put into it, and what comes back drives rendering and possibly tool calls.
+    The two handlers on either side of that crossing are where output encoding and grounding checks
+    live, and they are the components most often skipped because the demo worked without them.
+
+distinguishedBy:
+  - >
+    Against the tenant-wide vendor assistant: the same user-facing capability with every control
+    point on the opposite side of the boundary. Here you own the index, the retrieval-time ACL
+    check, the guardrails and the logs, and the work is designing them. There you own the grant
+    model and the edges, and the work is assurance. Almost no capability transfers.
+  - >
+    Against an autonomous action agent: this archetype answers, that one acts. The distinction is
+    not the model or the retrieval but whether a wrong answer is a wrong answer or a wrong write.
+    Adding a single tool that mutates a record moves an assistant into that archetype and its
+    control set, which is why the boundary between them is worth naming rather than blurring.
+  - >
+    Against a text-to-SQL analytics agent: both ground answers in your data, but that one generates
+    a query against live records and the semantic layer is the control, where here the index is.
+
+exemplars:
+  - name: In-product help and knowledge assistants
+    note: >
+      A panel inside an application answering from that product's documentation and the tenant's
+      own records. The most common shipped form of this archetype.
+    asOf: "2026-08"
+  - name: Internal knowledge assistants
+    note: >
+      Built on a managed model API plus a vector store, over a wiki, a ticket system and a document
+      repository. Usually the first AI system an organisation operates itself, and usually built
+      before anyone has asked the retrieval-time-ACL question.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Users, and the third parties whose content ends up in the corpus.
+
+  - id: edge
+    type: network
+    personas: [personaApplicationDeveloper]
+    note: Where requests arrive, are authenticated, and are rate limited.
+
+  - id: app
+    type: compute
+    qualifier: query path
+    personas: [personaApplicationDeveloper]
+    note: >
+      The query pipeline. Everything here runs per request with the calling user's context, and
+      everything here is the Application Developer's to instrument.
+
+  - id: ingest
+    type: compute
+    qualifier: ingest
+    personas: [personaApplicationDeveloper, personaDataProvider]
+    note: >
+      The offline half. Runs on a schedule with a service identity, and its permission decisions
+      are frozen into the index until it runs again.
+
+  - id: stores
+    type: data
+    personas: [personaDataProvider]
+    note: The index, the corpus behind it, and the conversation state.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: >
+      A managed inference API. Where inference is self-hosted instead, this zone passes to the AI Model Serving
+      persona and the self-hosted inference archetype describes what replaces it.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: >
+      The full set, because the operating personas run the system themselves. This is what the
+      equivalent SaaS archetype does not have and cannot obtain.
+
+nodes:
+  # --- Outside -------------------------------------------------------------------
+  - id: user
+    type: humanUser
+    zone: outside
+    label: End user
+    note: An authenticated user of the application, with entitlements the answer must respect.
+
+  - id: contentAuthors
+    type: untrustedSource
+    zone: outside
+    label: Third-party content authors
+    note: >
+      Anyone who can write into an indexed source — a customer filing a ticket, a colleague
+      uploading a file, an external system syncing records. Their text is model input later.
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    capabilities: [capabilityPromptInjectionDefense, capabilityDataSanitization]
+
+  # --- Edge ----------------------------------------------------------------------
+  - id: apiGateway
+    type: apiEndpoint
+    zone: edge
+    label: API gateway
+    note: Authenticates the caller, enforces quotas, and is where per-user cost limits belong.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityTransportSecurity]
+
+  - id: promptFilter
+    type: inputHandling
+    zone: edge
+    label: Input handling
+    note: >
+      Validation and classification of the user's turn before it reaches retrieval. Catches the
+      direct injection attempt and none of the indirect one, which is the more common of the two.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails, capabilityPromptRedaction]
+
+  # --- Application tier ------------------------------------------------------------
+  - id: orchestration
+    type: orchestrator
+    zone: app
+    cosaiComponent: componentAgentSystemInstruction
+    label: Query orchestration
+    note: >
+      Assembles the prompt: system instruction, retrieved context, conversation history, user turn.
+      The component that decides what the model is allowed to see.
+    risks: [riskPromptInjection, riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilitySystemPromptManagement, capabilityAgentObservability]
+
+  - id: retriever
+    type: retriever
+    zone: app
+    label: Retriever
+    note: >
+      Selects context for this turn. The right place for the entitlement check, because it is the
+      last point at which content can be excluded rather than merely dropped after fetching.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling, riskRetrievalVectorStorePoisoning]
+    capabilities: [capabilityRagSecurity, capabilityDataAccessGovernance]
+
+  - id: grounding
+    type: outputHandling
+    zone: app
+    label: Output handling and encoding
+    note: >
+      Checks the answer against what was actually retrieved, then encodes it for wherever it lands
+      — markup, a query, a shell, another prompt. Both halves belong to one stage, and both are
+      skipped together when a demo works without them.
+    risks: [riskInsecureModelOutput, riskCovertChannelsInModelOutputs]
+    capabilities: [capabilityGroundednessChecking, capabilityModelGuardrails]
+
+  # --- Ingest --------------------------------------------------------------------
+  - id: crawler
+    type: connector
+    zone: ingest
+    label: Source connectors
+    note: >
+      Read the systems of record on a schedule, under a service identity whose reach is usually
+      broader than any single user's.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityNhiManagement, capabilityDataAccessGovernance, capabilitySecretsManagement]
+
+  - id: chunker
+    type: tuningPipeline
+    zone: ingest
+    label: Chunk and embed
+    note: >
+      Splits, embeds, and writes. Whatever permission metadata is not carried across here cannot be
+      enforced at query time, however good the retriever is.
+    risks: [riskDataPoisoning, riskRetrievalVectorStorePoisoning, riskUnauthorizedTrainingData]
+    capabilities: [capabilityDataSanitization, capabilityDataProvenance, capabilityDspm]
+
+  # --- Data tier -----------------------------------------------------------------
+  - id: corpus
+    type: corpus
+    zone: stores
+    label: Systems of record
+    note: The authoritative content and the authoritative permissions.
+    risks: [riskExcessiveDataHandling]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm]
+
+  - id: vectorIndex
+    type: index
+    zone: stores
+    label: Vector index
+    note: >
+      A second copy of the corpus with its own permission model and its own freshness. The trust
+      boundary of this archetype, and the asset most worth threat modelling on its own.
+    risks: [riskRetrievalVectorStorePoisoning, riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityRagSecurity, capabilityDspm, capabilityEncryptionKeyManagement]
+
+  - id: history
+    type: memoryStore
+    zone: stores
+    label: Conversation state
+    note: >
+      Session-scoped and per-user. Cross-user persistence would change this archetype's risk
+      profile substantially, which is why the scope is worth stating rather than assuming.
+    risks: [riskSensitiveDataDisclosure, riskPromptResponseCachePoisoning]
+    capabilities: [capabilityMemoryProtection, capabilityEncryptionKeyManagement]
+
+  # --- Provider ------------------------------------------------------------------
+  - id: modelApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Inference API
+    note: The published interface. What runs behind it is the provider's and is not drawn.
+    risks: [riskExcessiveDataHandlingDuringInference, riskDenialOfMLService]
+    capabilities: [capabilityAiGateway, capabilityTransportSecurity]
+
+  # --- Governance ----------------------------------------------------------------
+  - id: idp
+    type: identityProvider
+    zone: governance
+    label: Identity provider
+    note: Establishes the user and the entitlements the retriever will filter against.
+    capabilities: [capabilityIga, capabilitySse]
+
+  - id: secrets
+    type: secretsBroker
+    zone: governance
+    label: Secrets broker
+    note: >
+      Short-lived credentials for the model API and the connectors, issued per workload rather than
+      stored per deployment.
+    risks: [riskCrossTenantCredentialPropagation]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
+
+  - id: gatewayPolicy
+    type: guardrail
+    zone: app
+    label: AI gateway and guardrails
+    note: >
+      One enforcement point in front of every model call: routing, quotas, content policy, and the
+      log of what was actually sent. Drawn inline in the application tier rather than in the
+      control plane, because it is in the request path — a gateway that traffic can go around is
+      not a gateway.
+    risks: [riskPromptInjection, riskEconomicDenialOfWallet, riskInsecureModelOutput]
+    capabilities: [capabilityAiGateway, capabilityModelGuardrails, capabilityRateLimiting]
+
+  - id: telemetry
+    type: auditSink
+    zone: governance
+    label: Audit and observability
+    note: >
+      Prompts, retrieved document ids, model responses and decisions. Retrieved ids are the part
+      most often omitted and the part an investigation needs first.
+    capabilities: [capabilityAgentObservability, capabilityAuditLogging, capabilityAiDetectionResponse]
+
+  - id: evals
+    type: evaluationHarness
+    zone: governance
+    label: Evaluation and red teaming
+    note: >
+      Continuous adversarial testing against the live index, because the corpus changes daily and a
+      pre-launch test result expires with it.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityModelEvals, capabilityAiRedTeaming, capabilityAppSecTesting]
+
+  - id: posture
+    type: registry
+    zone: governance
+    label: AI posture management
+    note: Inventory of models, indexes and endpoints in use, and their configuration drift.
+    risks: [riskShadowAndUnknownAgents, riskModelDeploymentTampering]
+    capabilities: [capabilityAiSpm, capabilityAiBom, capabilityShadowAiDiscovery]
+
+edges:
+  - from: contentAuthors
+    to: corpus
+    label: authored content
+    control:
+      kind: contentPermissions
+      note: >
+        The existing write path into the system of record. Nothing here knows the content will
+        later be read by a model on behalf of a different user.
+    risks: [riskPromptInjection, riskDataPoisoning]
+
+  - from: user
+    to: apiGateway
+    label: question
+    control:
+      kind: userIdentity
+      note: Carries the identity the retriever must filter against; the assistant is only as scoped as this.
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: apiGateway
+    to: promptFilter
+    label: validated request
+
+  - from: promptFilter
+    to: orchestration
+    label: user turn
+    control:
+      kind: userIdentity
+      note: >
+        The user's identity has to survive this hop or the retriever cannot filter. Dropping to a
+        service identity here is the single most common cause of over-broad retrieval.
+    risks: [riskSensitiveDataDisclosure, riskAgenticDelegationConfusedDeputy]
+
+  - from: orchestration
+    to: retriever
+    label: retrieval request
+
+  - from: retriever
+    to: vectorIndex
+    label: filtered query
+    control:
+      kind: dataEntitlement
+      note: >
+        Two distinct things: what the service may read, and what this user may see. Only the second
+        is per request, and only the second stops one user's question returning another's document.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+
+  - from: history
+    to: orchestration
+    label: conversation state
+    control:
+      kind: memoryScope
+      note: Scope is the control. A cache keyed loosely enough to collide across users leaks by construction.
+    risks: [riskPromptResponseCachePoisoning]
+
+  - from: orchestration
+    to: gatewayPolicy
+    label: assembled prompt
+
+  - from: gatewayPolicy
+    to: modelApi
+    label: inference request
+    control:
+      kind: brokeredCredential
+      note: >
+        Issued per workload and expiring. Contrast with the endpoint archetypes, where the same key
+        sits in a file for months.
+    risks: [riskExcessiveDataHandlingDuringInference, riskEconomicDenialOfWallet]
+
+  - from: modelApi
+    to: grounding
+    label: completion
+    control:
+      kind: transport
+      note: >
+        The transport is authenticated and the content is not. Everything downstream must treat this
+        as untrusted input, which is what the next two nodes exist for.
+    risks: [riskInsecureModelOutput]
+
+
+  - from: grounding
+    to: user
+    label: rendered answer
+    control:
+      kind: userIdentity
+      note: Encoding is chosen by where it lands, so this edge's safety is a property of the renderer, not the session.
+    risks: [riskInsecureModelOutput]
+
+  - from: crawler
+    to: corpus
+    label: scheduled read
+    control:
+      kind: dataEntitlement
+      note: >
+        Broader than any user's access, by design and by necessity. Its scope sets the index's
+        contents and therefore the maximum reach of a retrieval-time filtering mistake.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation]
+
+  - from: corpus
+    to: chunker
+    label: documents and permissions
+    control:
+      kind: workloadIdentity
+      note: >
+        No second check between reading a document and embedding it. Whatever permission metadata
+        arrives here is all the index will ever know about that content.
+    risks: [riskExcessiveDataHandling]
+
+  - from: chunker
+    to: vectorIndex
+    label: embeddings and metadata
+    control:
+      kind: artifactIntegrity
+      note: >
+        Write access to the index is write access to what every future answer is grounded in. It
+        deserves the scrutiny of a production deploy credential, and rarely gets it.
+    risks: [riskRetrievalVectorStorePoisoning, riskDataPoisoning]
+
+  - from: idp
+    to: apiGateway
+    label: authentication
+    kind: control
+    control:
+      kind: userIdentity
+      note: >
+        The gateway validates signatures against published keys rather than calling the provider.
+        Token lifetime therefore sets how long a revoked entitlement stays usable.
+    risks: [riskStaleAgentIdentityBinding]
+
+  - from: secrets
+    to: crawler
+    label: connector credentials
+    kind: control
+    control:
+      kind: brokeredCredential
+      note: >
+        The pipeline proves what it is to the broker and receives a short-lived credential. The
+        long-lived connector grant still exists; it just no longer sits on disk.
+    risks: [riskCrossTenantCredentialPropagation]
+
+  - from: secrets
+    to: gatewayPolicy
+    label: model credentials
+    kind: control
+    control:
+      kind: brokeredCredential
+      note: >
+        The gateway holds the provider credential so no application service has to. That is the
+        point of putting it in the path: one place to rotate, one place that sees every call.
+
+  - from: telemetry
+    to: orchestration
+    label: prompt and retrieval logging
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        The application can write and cannot amend. Without that asymmetry the audit trail shares
+        a compromise with the thing it is meant to record.
+
+  - from: evals
+    to: gatewayPolicy
+    label: adversarial suites
+    kind: control
+    control:
+      kind: evaluationGate
+      note: >
+        Evaluations that bypass the gateway test a system nobody runs. Sending them through the
+        same enforcement point is what makes the result mean anything.
+    risks: [riskModelEvasion]
+
+  - from: posture
+    to: vectorIndex
+    label: inventory and drift
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Posture tooling enumerates configuration, not content. A posture scanner that can read the
+        index has become part of the data path it was meant to observe.
+    risks: [riskShadowAndUnknownAgents]
+
+crossCutting:
+  - risk: riskPromptInjection
+    note: >
+      Enters at authoring time, through a pipeline that runs days earlier, and surfaces in another
+      user's answer. No node owns it: the ingest pipeline, the index, the retriever and the
+      orchestrator each handle it correctly in isolation and the path still exists.
+  - risk: riskExcessiveDataHandling
+    note: >
+      Produced by the gap between the crawler's standing grant and the retriever's per-request
+      filter. Both are individually defensible; the risk is the distance between them.
+  - risk: riskInsecureIntegratedComponent
+    note: >
+      Embedding models, vector stores, retrieval libraries and SDKs are all third-party code in the
+      request path, and the index format is a deserialization surface.
+
+risks:
+  - riskPromptInjection
+  - riskSensitiveDataDisclosure
+  - riskRetrievalVectorStorePoisoning
+  - riskExcessiveDataHandling
+  - riskInsecureModelOutput
+  - riskDataPoisoning
+  - riskExcessiveDataHandlingDuringInference
+  - riskCrossTenantCredentialPropagation
+  - riskAgenticDelegationConfusedDeputy
+  - riskStaleAgentIdentityBinding
+  - riskPromptResponseCachePoisoning
+  - riskModelEvasion
+  - riskEconomicDenialOfWallet
+  - riskDenialOfMLService
+  - riskInsecureIntegratedComponent
+  - riskCovertChannelsInModelOutputs
+  - riskShadowAndUnknownAgents
+  - riskModelDeploymentTampering
+  - riskUnauthorizedTrainingData
+  - riskInferredSensitiveData
+
+capabilities:
+  - capabilityRagSecurity
+  - capabilityDataAccessGovernance
+  - capabilityPromptInjectionDefense
+  - capabilityGroundednessChecking
+  - capabilityOutputEncoding
+  - capabilityModelGuardrails
+  - capabilityAiGateway
+  - capabilityDspm
+  - capabilityDataSanitization
+  - capabilityDataProvenance
+  - capabilitySecretsManagement
+  - capabilityCredentialIsolation
+  - capabilityNhiManagement
+  - capabilityIga
+  - capabilitySse
+  - capabilityAgentObservability
+  - capabilityAuditLogging
+  - capabilityAiDetectionResponse
+  - capabilityModelEvals
+  - capabilityAiRedTeaming
+  - capabilityAppSecTesting
+  - capabilityAiSpm
+  - capabilityAiBom
+  - capabilityShadowAiDiscovery
+  - capabilityRateLimiting
+  - capabilityTransportSecurity
+  - capabilityEncryptionKeyManagement
+  - capabilityMemoryProtection
+  - capabilitySystemPromptManagement
+  - capabilityPromptRedaction
+  - capabilityAiDlp
+
+deviations:
+  - subject: The ingest pipeline is drawn as its own zone rather than part of the application tier
+    reason: >
+      They usually share infrastructure, so this is not a network boundary. It is drawn separately
+      because the two run at different times, under different identities, with different reach —
+      and the archetype's central failure is the gap between them. A diagram that merges them hides
+      the thing worth seeing.
+  - subject: Chunk-and-embed uses the tuning-pipeline node type
+    reason: >
+      The vocabulary has no dedicated ingest-transform type, and the tuning pipeline is the closest
+      honest match: a scheduled build system that produces an artifact the runtime trusts. Both
+      carry the same supply-chain properties.
+  - subject: The AI gateway is drawn in the application tier, not the control plane
+    reason: >
+      It is usually bought and operated as a governance product, and its policy is authored there.
+      But it sits in the request path — every model call passes through it — and drawing it beside
+      the flow rather than in it would imply traffic could go around. Its policy source is drawn as
+      a control edge instead.
+  - subject: The provider zone assumes a managed model API
+    reason: >
+      Self-hosted inference is equally common and changes the ownership of that zone entirely. It
+      is drawn as a vendor zone because that is the more common case and the more instructive
+      boundary; the self-hosted variant is a separate archetype rather than a footnote here.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM09 vector and embedding weaknesses"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Microsoft Azure Well-Architected — architecture pattern for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+  - title: "Microsoft Azure Architecture Center — RAG solution design and evaluation guide"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/rag/rag-solution-design-and-evaluation-guide
+  - title: "Google Cloud — RAG reference architectures"
+    url: https://docs.cloud.google.com/architecture/rag-reference-architectures
+  - title: "Microsoft Azure Architecture Center — secure multitenant RAG inferencing"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/secure-multitenant-rag
+  - title: "Martin Fowler and Bharani Subramaniam — emerging patterns in building GenAI products"
+    url: https://martinfowler.com/articles/gen-ai-patterns/

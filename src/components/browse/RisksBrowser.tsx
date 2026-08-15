@@ -7,7 +7,9 @@ import { Chip, MappingBadges } from "@/components/Chips";
 import { ExpandAll, PageHeader, Panel } from "@/components/Panel";
 import { firstLine, Prose } from "@/components/Prose";
 import { PHASE_META } from "@/components/PhaseRail";
+import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import {
+  archetypesForRisk,
   componentTitle,
   controlsForRisk,
   overlayFor,
@@ -139,6 +141,13 @@ export function RisksBrowser() {
                               </Link>
                             ))}
                           </div>
+                        </div>
+
+                        <div className="mt-6">
+                          <ArchetypeLinks
+                            archetypes={archetypesForRisk(risk.id)}
+                            empty="No reference architecture names this risk. Either it belongs to an archetype not yet drawn, or the catalogue has a gap."
+                          />
                         </div>
 
                         <div className="mt-6 grid gap-5 sm:grid-cols-2">

@@ -1,0 +1,503 @@
+id: archDurableWorkflow
+surface: surfaceCloud
+title: Multi-agent durable workflow
+abbrev: Durable workflow
+
+summary:
+  - >
+    Several agents collaborating on a long-running process, coordinated by a durable execution
+    engine that journals every step so the work survives crashes. The journal is what makes it
+    reliable, and it is also a secrets sink and a replay surface.
+
+description:
+  - >
+    Durable execution works by recording the result of every step and replaying the journal to
+    rebuild state after a failure. That is an excellent reliability property and it has two
+    security consequences nobody expects from a workflow engine. Everything a step returns is
+    written down, so a step that returns a credential has persisted it. And the engine replays
+    steps, so a step that is not idempotent can execute its side effect more than once — including
+    an agent's tool call, and including a payment.
+  - >
+    Delegation between agents is the second axis. A supervisor decomposing work for subagents is
+    the common shape, and the trap is that the subagent inherits the supervisor's authority rather
+    than a narrowed slice of it. Delegation that does not narrow is privilege distribution: a
+    research subagent that can also issue refunds because its parent can. Each hop should carry
+    less, and the chain should be reconstructable afterwards.
+  - >
+    Inter-agent messages are model output becoming model input. One agent's result lands in
+    another's context with the standing of an instruction, and a compromised or merely confused
+    agent propagates through the graph. This is the failure mode that distinguishes multi-agent
+    systems from a single agent with more tools: cascading, and hard to attribute after the fact
+    because every message looks like a legitimate one.
+  - >
+    Long duration adds two more. Credentials issued at the start may outlive their validity or
+    their appropriateness by the time a step runs days later, which argues for fetching at step
+    time rather than holding. And an unbounded loop between agents burns tokens for as long as
+    nobody notices — which, on a process designed to run for days, can be a while.
+
+distinguishedBy:
+  - >
+    Against the autonomous action agent: that one decides and acts, usually within seconds. This one
+    coordinates several agents over hours or days, and its distinctive risks — journal contents,
+    replay, delegation depth, cascading — all come from duration and multiplicity rather than from
+    the act itself.
+  - >
+    Against the sandboxed execution service: that contains a compromise inside one task. This
+    survives failure across many. A workflow may invoke a sandbox as a step; the concerns are
+    orthogonal.
+
+exemplars:
+  - name: Durable execution engines running agent steps
+    note: >
+      Workflow platforms that journal step results and replay to recover, with agent invocations as
+      steps alongside conventional ones.
+    asOf: "2026-08"
+  - name: Supervisor and subagent orchestration
+    note: >
+      A coordinating agent decomposing work across specialists, each with its own context and tool
+      set, over a process too long to hold in one conversation.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The initiator, and content the workflow reads from systems it does not control.
+
+  - id: control
+    type: compute
+    qualifier: orchestration
+    personas: [personaApplicationDeveloper, personaAgenticProvider]
+    note: The durable engine, the supervisor, and the journal that makes recovery possible.
+
+  - id: agents
+    type: compute
+    qualifier: agents
+    personas: [personaApplicationDeveloper, personaAgenticProvider]
+    note: Subagents with their own contexts and tools, exchanging results as messages.
+
+  - id: state
+    type: data
+    personas: [personaDataProvider]
+    note: The journal, the shared memory, and the systems the workflow actually changes.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: The published inference interface, called many times across the process.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Delegation policy, credentials, budget, audit and the ability to stop a running process.
+
+nodes:
+  - id: initiator
+    type: humanUser
+    zone: outside
+    label: Initiator
+    note: >
+      Starts the process and is absent for the rest of it. The approval they gave at the start is
+      the only human decision until something escalates.
+    risks: [riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityHitlControls, capabilityIga]
+
+  - id: externalContent
+    type: untrustedSource
+    zone: outside
+    label: External content
+    note: >
+      Documents, records and API responses the workflow reads over its lifetime. Every one is a
+      chance to steer an agent whose output another agent will trust.
+    risks: [riskPromptInjection, riskInsecureModelOutput]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: engine
+    type: orchestrator
+    zone: control
+    label: Durable execution engine
+    note: >
+      Runs steps, records results, replays to recover. Reliability machinery whose recording and
+      replay behaviours are both security-relevant.
+    risks: [riskRunawayAgentToolLoops, riskDenialOfMLService]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability, capabilityStagedRollout]
+
+  - id: supervisor
+    type: reasoningCore
+    zone: control
+    label: Supervisor agent
+    note: >
+      Decomposes the goal and delegates. Holds the broadest authority in the system, which is why
+      what it passes down matters more than what it holds.
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions, riskAgentDelegationChainOpacity]
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentObservability, capabilityAgentRegistry]
+
+  - id: subagents
+    type: subagent
+    zone: agents
+    label: Subagents
+    note: >
+      Specialists with their own contexts and tools. Each should hold a narrower authority than its
+      parent; inheriting the parent's is delegation that escalates.
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions, riskAgentDelegationChainOpacity]
+    capabilities: [capabilityToolPermissionScoping, capabilityNhiManagement, capabilityAgentRuntimeEnforcement]
+
+  - id: messageBus
+    type: connector
+    zone: agents
+    label: Inter-agent messages
+    note: >
+      One agent's output becoming another's instruction. The propagation path for a compromise, and
+      the reason a multi-agent failure is hard to attribute afterwards.
+    risks: [riskPromptInjection, riskInsecureModelOutput]
+    capabilities: [capabilityAgentObservability, capabilityModelGuardrails, capabilityGroundednessChecking]
+
+  - id: tools
+    type: toolGateway
+    zone: agents
+    label: Tool gateway
+    note: >
+      Scoped per agent rather than per workflow. Where the narrowing that delegation should perform
+      is actually enforced.
+    risks: [riskRogueActions, riskToolRegistryTampering]
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentRuntimeEnforcement, capabilityMcpToolSecurity]
+
+  - id: journal
+    type: memoryStore
+    zone: state
+    label: Execution journal
+    note: >
+      Append-only record of every step's inputs and results, replayed to recover. Whatever a step
+      returned is now durable, which makes a step that returns a secret a secret at rest.
+    risks: [riskSensitiveDataDisclosure, riskPromptInjection, riskPromptResponseCachePoisoning]
+    capabilities: [capabilityMemoryProtection, capabilityEncryptionKeyManagement, capabilityAiDlp]
+
+  - id: sharedMemory
+    type: memoryStore
+    zone: state
+    label: Shared workflow memory
+    note: >
+      Cross-agent and cross-session by construction. A poisoned entry influences every agent that
+      reads it, for the rest of the process.
+    risks: [riskPromptInjection, riskSensitiveDataDisclosure]
+    capabilities: [capabilityMemoryProtection, capabilityAiDlp, capabilityDataAccessGovernance]
+
+  - id: effects
+    type: actuator
+    zone: state
+    label: External effects
+    note: >
+      The writes, payments and provisioning the workflow performs. Idempotency here is what makes
+      replay safe, and replay is not optional in a durable engine.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityHitlControls, capabilityAuditLogging, capabilityToolPermissionScoping]
+
+  - id: modelApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Inference API
+    note: Called many times across the process, by several agents, over a long period.
+    risks: [riskExcessiveDataHandlingDuringInference, riskEconomicDenialOfWallet]
+    capabilities: [capabilityAiGateway, capabilityRateLimiting]
+
+  - id: delegationPolicy
+    type: policyEngine
+    zone: governance
+    label: Delegation policy
+    note: >
+      What a parent may pass to a child, and how deep the chain may go. Each hop narrowing is the
+      property that keeps a subagent from inheriting the supervisor's reach.
+    risks: [riskAgenticDelegationConfusedDeputy, riskAgentDelegationChainOpacity]
+    capabilities: [capabilityToolPermissionScoping, capabilityNhiManagement, capabilityAgentRuntimeEnforcement]
+
+  - id: creds
+    type: secretsBroker
+    zone: governance
+    label: Credential broker
+    note: >
+      Fetched at step time rather than held for the process. On a workflow that runs for days, a
+      credential taken at the start is stale, over-scoped, or in the journal.
+    risks: [riskSensitiveDataDisclosure, riskStaleAgentIdentityBinding, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation, capabilityNhiManagement]
+
+  - id: budget
+    type: policyEngine
+    zone: governance
+    label: Loop and budget limits
+    note: >
+      Depth, iteration and token ceilings. A cycle between two agents on a process expected to run
+      for days can burn a great deal before anyone looks.
+    risks: [riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityKillSwitch, capabilityAiGovernancePlatform]
+
+  - id: trace
+    type: auditSink
+    zone: governance
+    label: Delegation trace
+    note: >
+      Which agent asked which, with what authority, and why. Without it a multi-agent failure is
+      unattributable, because every message in the chain looked legitimate.
+    risks: [riskAgentDelegationChainOpacity, riskRogueActions]
+    capabilities: [capabilityAgentObservability, capabilityAuditLogging, capabilityAiDetectionResponse]
+
+  - id: stop
+    type: killSwitch
+    zone: governance
+    label: Workflow termination
+    note: >
+      Halting a process mid-flight and deciding what to do with its partial effects. Harder than in
+      any other archetype here, because the effects are already partly applied.
+    risks: [riskRunawayAgentToolLoops, riskRogueActions]
+    capabilities: [capabilityKillSwitch, capabilityAgentRuntimeEnforcement, capabilityHitlControls]
+
+edges:
+  - from: initiator
+    to: engine
+    label: start workflow
+    control:
+      kind: userIdentity
+      note: >
+        The initiator's entitlements bound the whole process. Capturing them at the start is what
+        stops a step running days later from exceeding what they could have done.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: engine
+    to: supervisor
+    label: run step
+
+  - from: supervisor
+    to: subagents
+    label: delegated task
+    control:
+      kind: delegatedGrant
+      note: >
+        Each hop should carry less than the one above it. Passing the parent's authority unchanged
+        is the most common defect in this archetype and it is invisible until something goes wrong.
+    risks: [riskAgenticDelegationConfusedDeputy, riskAgentDelegationChainOpacity]
+
+  - from: subagents
+    to: messageBus
+    label: result
+
+  - from: messageBus
+    to: supervisor
+    label: aggregated results
+    control:
+      kind: agentIdentity
+      note: >
+        The sender is authenticated and what it says is not. A subagent's result arrives in the
+        supervisor's context with the standing of a fact.
+    risks: [riskInsecureModelOutput, riskPromptInjection]
+
+  - from: externalContent
+    to: subagents
+    label: read during the process
+    control:
+      kind: contentInspection
+      note: >
+        Content read mid-process is classified before it enters an agent's context, because that
+        agent's output becomes another's instruction and the error propagates.
+    risks: [riskPromptInjection, riskInsecureModelOutput]
+
+  - from: subagents
+    to: modelApi
+    label: inference
+    control:
+      kind: brokeredCredential
+      note: >
+        At step time, not at workflow start. A token held across a multi-day process is either
+        expired or over-scoped by the time it is used.
+    risks: [riskExcessiveDataHandlingDuringInference, riskStaleAgentIdentityBinding]
+
+  - from: subagents
+    to: tools
+    label: tool call
+    risks: [riskRogueActions]
+
+  - from: tools
+    to: effects
+    label: external effect
+    control:
+      kind: replaySafety
+      note: >
+        The idempotency key is a security control here, not a reliability nicety: the engine will
+        replay this step, and a non-idempotent effect executes twice.
+    risks: [riskRogueActions]
+
+  - from: engine
+    to: journal
+    label: records every step
+    control:
+      kind: auditTrail
+      note: >
+        Whatever a step returned is now durable and readable by anyone who can read the journal. A
+        step that returns a secret has stored it, and replay will hand it back.
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: journal
+    to: engine
+    label: replay after failure
+    control:
+      kind: replaySafety
+      note: >
+        Replay re-derives state without re-checking whether the original authorisation still holds.
+        A step legitimate on Monday replays unchanged on Thursday.
+    risks: [riskStaleAgentIdentityBinding, riskRogueActions]
+
+  - from: sharedMemory
+    to: subagents
+    label: shared context
+    control:
+      kind: memoryScope
+      note: >
+        Cross-agent by design, which is the point and the risk. A poisoned entry reaches every
+        agent that reads it for the remainder of the process.
+    risks: [riskPromptInjection]
+
+  - from: delegationPolicy
+    to: supervisor
+    label: delegation depth and scope
+    kind: control
+    control:
+      kind: policyDecision
+      note: >
+        At each hop rather than once at the start, because the chain is built dynamically and its
+        depth is not known when the workflow begins.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: creds
+    to: tools
+    label: step-time credentials
+    kind: control
+    control:
+      kind: brokeredCredential
+      note: >
+        Fetching rather than holding is what keeps credentials out of the journal. A step that
+        returns a secret has written it down permanently.
+    risks: [riskSensitiveDataDisclosure, riskStaleAgentIdentityBinding]
+
+  - from: budget
+    to: engine
+    label: depth and token ceilings
+    kind: control
+    control:
+      kind: rateLimit
+      note: A cycle between two agents is invisible for as long as the process was expected to run.
+    risks: [riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+
+  - from: supervisor
+    to: trace
+    label: delegation record
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Parent, child, authority passed and reason. The only way to answer which agent caused an
+        outcome once several have contributed to it.
+    risks: [riskAgentDelegationChainOpacity]
+
+  - from: stop
+    to: engine
+    label: halt and reconcile
+    kind: control
+    control:
+      kind: emergencyStop
+      note: >
+        Stopping is easy; deciding what to do with half-applied effects is not. The compensating
+        path has to be designed with the workflow rather than discovered during an incident.
+    risks: [riskRunawayAgentToolLoops, riskRogueActions]
+
+crossCutting:
+  - risk: riskInsecureModelOutput
+    note: >
+      One agent's output is another's input, so an error or an injection propagates through the
+      graph and arrives looking like a legitimate result. This is the risk that distinguishes a
+      multi-agent system from a single agent with more tools.
+  - risk: riskAgentDelegationChainOpacity
+    note: >
+      Authority flows down a chain built at runtime. Without a trace of who delegated what to whom,
+      an outcome cannot be attributed to a decision, and the chain cannot be audited at all.
+  - risk: riskSensitiveDataDisclosure
+    note: >
+      The journal records everything every step returned, permanently, to make recovery work. It is
+      a reliability mechanism that is also a data store nobody designed as one.
+
+risks:
+  - riskAgenticDelegationConfusedDeputy
+  - riskAgentDelegationChainOpacity
+  - riskInsecureModelOutput
+  - riskPromptInjection
+  - riskSensitiveDataDisclosure
+  - riskRogueActions
+  - riskRunawayAgentToolLoops
+  - riskStaleAgentIdentityBinding
+  - riskEconomicDenialOfWallet
+  - riskCrossTenantCredentialPropagation
+  - riskPromptResponseCachePoisoning
+  - riskToolRegistryTampering
+  - riskExcessiveDataHandlingDuringInference
+  - riskDenialOfMLService
+
+capabilities:
+  - capabilityToolPermissionScoping
+  - capabilityNhiManagement
+  - capabilityAgentObservability
+  - capabilityAgentRuntimeEnforcement
+  - capabilityMemoryProtection
+  - capabilitySecretsManagement
+  - capabilityCredentialIsolation
+  - capabilityKillSwitch
+  - capabilityAuditLogging
+  - capabilityRateLimiting
+  - capabilityHitlControls
+  - capabilityAgentRegistry
+  - capabilityPromptInjectionDefense
+  - capabilityModelGuardrails
+  - capabilityGroundednessChecking
+  - capabilityAiDlp
+  - capabilityEncryptionKeyManagement
+  - capabilityDataAccessGovernance
+  - capabilityMcpToolSecurity
+  - capabilityAiDetectionResponse
+  - capabilityStagedRollout
+  - capabilityAiGovernancePlatform
+  - capabilityIga
+  - capabilityAiGateway
+
+deviations:
+  - subject: The execution journal is drawn as a memory store
+    reason: >
+      It is a reliability mechanism, not a memory feature, and its designers would not call it one.
+      It is typed as memory because its security properties are memory's — durable, cross-session,
+      re-read as context on replay — and typing it as infrastructure would hide that entirely.
+  - subject: Replay is drawn as an edge running backwards from the journal
+    reason: >
+      No other diagram here has an edge that re-executes history. It is drawn because replay
+      without re-authorisation is a genuine and underappreciated property of durable execution, and
+      it has no other place to appear.
+  - subject: Two of this archetype's risks have no CoSAI equivalent
+    reason: >
+      OWASP's agentic taxonomy names memory poisoning and cascading hallucination as distinct
+      threats, and CoSAI's risk set has neither. They are mapped here to prompt injection and
+      insecure model output, which are the nearest true statements but lose the compounding that
+      makes both dangerous in a multi-agent system. Recorded rather than papered over, because the
+      gap belongs to the source taxonomy and not to this diagram.
+  - subject: Subagents are drawn as one node
+    reason: >
+      There are several, with different contexts and tools. They are drawn as one because the
+      risks — inherited authority, message propagation, chain opacity — are properties of the
+      delegation pattern rather than of any particular specialist.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI07 insecure inter-agent communication, ASI08 cascading failures"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Agentic AI — threats and mitigations v1.1, T12 and T13"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "AWS Well-Architected Agentic AI Lens — multi-agent orchestration and collaboration models"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentperf05.html
+  - title: "Microsoft Azure Architecture Center — AI agent orchestration patterns"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
+  - title: "Google Cloud — choose a design pattern for an agentic AI system"
+    url: https://docs.cloud.google.com/architecture/choose-design-pattern-agentic-ai-system
+  - title: "Thoughtworks Technology Radar vol. 34 — ignoring durability in agent workflows, on hold"
+    url: https://www.thoughtworks.com/radar/techniques

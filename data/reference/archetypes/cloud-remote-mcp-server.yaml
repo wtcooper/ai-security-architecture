@@ -1,0 +1,422 @@
+id: archRemoteMcpServer
+surface: surfaceCloud
+title: Remote MCP server you publish
+abbrev: Remote MCP server
+
+summary:
+  - >
+    A tool server operated as a service for other people's agents. An OAuth resource server whose
+    clients are language models, which is a threat model no API was designed for.
+
+description:
+  - >
+    The inversion is what makes this its own architecture. Every other cloud archetype here calls
+    tools; this one is the tool. The caller is an autonomous agent acting for a user, the arguments
+    were produced by a model, and the tool descriptions this server publishes become instructions
+    inside that model's context.
+  - >
+    That last point is the responsibility no ordinary API has. A tool description is not
+    documentation — it is text the calling model acts on. A poorly worded description causes
+    misuse; a deliberately worded one is an attack on the caller. Publishing a server means
+    accepting that its descriptions and its error messages are part of somebody else's prompt, and
+    treating changes to them with the seriousness of an API contract change.
+  - >
+    Authorization is the second inversion. Standard OAuth answers "may this client act for this
+    user", and here that is necessary and not sufficient: the client is an agent that may have been
+    steered by content it read elsewhere. Scopes therefore need to be narrow enough that a hijacked
+    agent's blast radius is bounded, and consequential operations need confirmation semantics the
+    protocol can express, rather than relying on the client to prompt its user.
+  - >
+    The operational shape is otherwise a well-understood multi-tenant service, and the ordinary
+    disciplines apply with unusual force: per-tenant isolation, rate limits sized for machine
+    callers rather than humans, idempotency because agents retry, and output sizing because a large
+    result is both a cost problem for the caller and a way to crowd their context window.
+
+distinguishedBy:
+  - >
+    Against a third-party MCP server you consume: opposite side of the same boundary. There the
+    scopes are someone else's design and the work is admission and observation; here the scopes,
+    the tenancy and the descriptions are all design decisions.
+  - >
+    Against an AI-augmented API backend: that one has AI inside it and a conventional client. This
+    one has no AI inside it at all and a model as the client. The security work is entirely about
+    the caller's nature, not about anything the service does with a model.
+  - >
+    Against the local tool plane: same protocol, no boundary there and a real one here. A remote
+    server has an identity, a grant and an audit trail, which is why it is a considerably better
+    position than a stdio child process.
+
+exemplars:
+  - name: Product MCP servers
+    note: >
+      SaaS vendors publishing remote tool servers for their own products so customer agents can act
+      without a bespoke integration.
+    asOf: "2026-08"
+  - name: Internal MCP servers
+    note: >
+      The same pattern inside one organisation, exposing internal systems to internal agents. Same
+      architecture, and the temptation to skip the authorization work is much stronger.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The calling agents and the users behind them. Neither is under this service's control.
+
+  - id: edge
+    type: network
+    personas: [personaApplicationDeveloper, personaPlatformProvider]
+    note: Where agent traffic arrives and is authorised, throttled and logged.
+
+  - id: service
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: Tool implementations, and the descriptions that become somebody else's prompt.
+
+  - id: backing
+    type: data
+    personas: [personaDataProvider]
+    note: What the tools actually read and write, per tenant.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Identity, scopes, audit, and the review process for description changes.
+
+nodes:
+  - id: callingAgent
+    type: thirdPartyAgent
+    zone: outside
+    label: Calling agent
+    note: >
+      Someone else's agent, acting for a user, with arguments composed by a model that may have
+      read hostile content. A non-human caller that is neither a person nor a bot to block.
+    risks: [riskRogueActions, riskPromptInjection, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityNhiManagement, capabilityRateLimiting, capabilityAgentRegistry]
+
+  - id: delegatingUser
+    type: humanUser
+    zone: outside
+    label: Delegating user
+    note: >
+      The person the agent acts for, and the source of the authorization. Not present at call time,
+      which is why consequential operations cannot rely on them being asked.
+    risks: [riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityIga, capabilityHitlControls]
+
+  - id: authServer
+    type: identityProvider
+    zone: edge
+    label: Authorization server
+    note: >
+      Issues scoped, expiring tokens to named clients. The one place a compromised agent's access
+      can be withdrawn without redeploying anything.
+    risks: [riskStaleAgentIdentityBinding, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilitySse]
+
+  - id: transport
+    type: apiEndpoint
+    zone: edge
+    label: Protocol endpoint
+    note: >
+      The published MCP endpoint. Session handling here is a security surface — session
+      identifiers that can be guessed or replayed hand one caller another's context.
+    risks: [riskMCPTransportHijacking, riskDenialOfMLService]
+    capabilities: [capabilityTransportSecurity, capabilityRateLimiting, capabilityAiGateway]
+
+  - id: quota
+    type: policyEngine
+    zone: edge
+    label: Rate and cost limits
+    note: >
+      Sized for machine callers, which retry, loop and parallelise in ways human clients do not. A
+      limit tuned for people is not a limit here.
+    risks: [riskDenialOfMLService, riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityAgentRuntimeEnforcement]
+
+  - id: toolDefs
+    type: tool
+    zone: service
+    label: Tool definitions
+    note: >
+      Names, descriptions and schemas. These are not documentation — they are text the calling
+      model treats as instruction, which makes changing them a change to somebody else's prompt.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+    capabilities: [capabilitySystemPromptManagement, capabilityAppSecTesting, capabilityMcpToolSecurity]
+
+  - id: handlers
+    type: orchestrator
+    zone: service
+    label: Tool handlers
+    note: >
+      The implementations. Arguments arrive model-generated, so validation has to assume plausible
+      nonsense rather than the malformed input a conventional client produces.
+    risks: [riskRogueActions, riskInsecureModelOutput]
+    capabilities: [capabilityAppSecTesting, capabilityToolPermissionScoping, capabilityOutputEncoding]
+
+  - id: confirm
+    type: hitlGate
+    zone: service
+    label: Confirmation semantics
+    note: >
+      Marking an operation as requiring the caller to confirm with its user. The server cannot
+      enforce it, but declaring it is the only lever it has on consequential calls.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityHitlControls, capabilityMcpToolSecurity]
+
+  - id: resultShaping
+    type: outputEncoder
+    zone: service
+    label: Result shaping
+    note: >
+      Bounding size and structure. An oversized result costs the caller money and crowds their
+      context window, which is a denial-of-service against a model rather than a server.
+    risks: [riskInsecureModelOutput, riskEconomicDenialOfWallet, riskCovertChannelsInModelOutputs]
+    capabilities: [capabilityOutputEncoding, capabilityRateLimiting]
+
+  - id: tenantData
+    type: corpus
+    zone: backing
+    label: Tenant data
+    note: >
+      Per-tenant records the tools reach. Isolation here is the claim consuming organisations
+      cannot verify and will ask about in assurance.
+    risks: [riskCrossTenantCredentialPropagation, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm, capabilityEncryptionKeyManagement]
+
+  - id: scopeDesign
+    type: registry
+    zone: governance
+    label: Scope catalogue
+    note: >
+      What each scope permits. Coarse scopes are the difference between a hijacked agent doing one
+      thing and doing everything the user could.
+    risks: [riskAgenticDelegationConfusedDeputy, riskExcessiveDataHandling]
+    capabilities: [capabilityToolPermissionScoping, capabilityIga, capabilityAgentRegistry]
+
+  - id: descriptionReview
+    type: evaluationHarness
+    zone: governance
+    label: Description review
+    note: >
+      Reviewing tool text as a security artifact, because it executes in a caller's context. Rarely
+      done, and the reason a benign-looking copy edit can change how thousands of agents behave.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+    capabilities: [capabilityAppSecTesting, capabilityAiRedTeaming, capabilityModelEvals]
+
+  - id: callAudit
+    type: auditSink
+    zone: governance
+    label: Call audit
+    note: Which client, for which user, called what with which arguments and what came back.
+    risks: [riskShadowAndUnknownAgents, riskRogueActions]
+    capabilities: [capabilityAuditLogging, capabilityAgentObservability, capabilityAiDetectionResponse]
+
+edges:
+  - from: delegatingUser
+    to: authServer
+    label: consent
+    control:
+      kind: delegatedGrant
+      note: >
+        The user authorises a named client for named scopes. The last point at which a human
+        decides anything in this architecture — every subsequent call happens without them.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: authServer
+    to: callingAgent
+    label: scoped token
+    control:
+      kind: delegatedGrant
+      note: >
+        Audience restriction matters more than usual: a token that other resource servers accept
+        turns one compromised agent into a multi-service problem.
+    risks: [riskStaleAgentIdentityBinding, riskCrossTenantCredentialPropagation]
+
+  - from: callingAgent
+    to: transport
+    label: tool invocation
+    control:
+      kind: agentIdentity
+      note: >
+        Establishes the client and the user. It cannot establish whether the agent was steered by
+        content it read elsewhere, which is why scopes and confirmation semantics carry the weight.
+    risks: [riskRogueActions, riskMCPTransportHijacking]
+
+  - from: transport
+    to: quota
+    label: admitted request
+
+  - from: quota
+    to: handlers
+    label: throttled request
+    control:
+      kind: brokeredCredential
+      note: >
+        Client, user and tenant travel with the request rather than being re-derived. A handler
+        that re-resolves the tenant from an argument is trusting a model to name it.
+    risks: [riskRunawayAgentToolLoops, riskCrossTenantCredentialPropagation]
+
+  - from: toolDefs
+    to: callingAgent
+    label: tool schema into the caller's context
+    control:
+      kind: provenance
+      note: >
+        Tool text is a versioned, reviewed artifact rather than editable copy, because it executes
+        as instruction inside another organisation's model. Changing it is shipping an interface
+        change.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+
+  - from: handlers
+    to: confirm
+    label: consequential operation
+    risks: [riskRogueActions]
+
+  - from: confirm
+    to: tenantData
+    label: authorised write
+    control:
+      kind: dataEntitlement
+      note: >
+        Two checks: the scope permits the operation, and the tenant on the token matches the tenant
+        on the record. Skipping the second is how cross-tenant access happens in practice.
+    risks: [riskCrossTenantCredentialPropagation, riskRogueActions]
+
+  - from: handlers
+    to: tenantData
+    label: scoped read
+    control:
+      kind: dataEntitlement
+      note: Same two checks, applied on the read path where the volume is much higher.
+    risks: [riskSensitiveDataDisclosure, riskCrossTenantCredentialPropagation]
+
+  - from: handlers
+    to: resultShaping
+    label: raw result
+
+  - from: resultShaping
+    to: callingAgent
+    label: bounded result
+    control:
+      kind: transport
+      note: >
+        The result enters the caller's context window as content. Size and structure are the
+        server's responsibility to the caller, not a nicety.
+    risks: [riskInsecureModelOutput, riskEconomicDenialOfWallet]
+
+  - from: scopeDesign
+    to: authServer
+    label: scope definitions
+    kind: control
+    control:
+      kind: toolScope
+      note: >
+        Where a hijacked agent's blast radius is actually decided — long before any call arrives.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: descriptionReview
+    to: toolDefs
+    label: reviewed text
+    kind: control
+    control:
+      kind: provenance
+      note: >
+        Because the text runs in someone else's model, editing it is closer to shipping an API
+        change than to updating documentation.
+    risks: [riskPromptInjection]
+
+  - from: handlers
+    to: callAudit
+    label: call record
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Client, user, arguments and result. Also the only way to answer a customer asking what
+        their agent did here.
+    risks: [riskShadowAndUnknownAgents]
+
+crossCutting:
+  - risk: riskPromptInjection
+    note: >
+      This server is on the causing side rather than the suffering side. Its descriptions, its
+      errors and its results all land in a caller's context, so its output hygiene is somebody
+      else's input security.
+  - risk: riskAgenticDelegationConfusedDeputy
+    note: >
+      The token proves a user consented; it cannot prove the agent still represents their intent.
+      Scope design is the whole of the answer, and it happens before any request arrives.
+  - risk: riskCrossTenantCredentialPropagation
+    note: >
+      Every read and every write needs the tenant on the token checked against the tenant on the
+      record. It is not one node's job — it is a discipline across all of them.
+
+risks:
+  - riskPromptInjection
+  - riskAgenticDelegationConfusedDeputy
+  - riskCrossTenantCredentialPropagation
+  - riskRogueActions
+  - riskToolSourceProvenance
+  - riskMCPTransportHijacking
+  - riskSensitiveDataDisclosure
+  - riskDenialOfMLService
+  - riskRunawayAgentToolLoops
+  - riskEconomicDenialOfWallet
+  - riskInsecureModelOutput
+  - riskStaleAgentIdentityBinding
+  - riskShadowAndUnknownAgents
+  - riskExcessiveDataHandling
+  - riskCovertChannelsInModelOutputs
+
+capabilities:
+  - capabilityMcpToolSecurity
+  - capabilityNhiManagement
+  - capabilityToolPermissionScoping
+  - capabilityRateLimiting
+  - capabilityTransportSecurity
+  - capabilityAuditLogging
+  - capabilityAgentObservability
+  - capabilityIga
+  - capabilityAgentRegistry
+  - capabilityDataAccessGovernance
+  - capabilityDspm
+  - capabilityEncryptionKeyManagement
+  - capabilityAppSecTesting
+  - capabilityAiRedTeaming
+  - capabilityModelEvals
+  - capabilityOutputEncoding
+  - capabilityHitlControls
+  - capabilitySystemPromptManagement
+  - capabilityAiDetectionResponse
+  - capabilityAgentRuntimeEnforcement
+  - capabilityAiGateway
+  - capabilitySse
+
+deviations:
+  - subject: The tool-schema edge runs backwards, from this service into the caller
+    reason: >
+      Every other edge on these diagrams carries a request or a response. This one carries text
+      that becomes instruction in another organisation's model, and it is drawn as a crossing with
+      an auth mechanism of none because that is the honest description: no authentication applies
+      to what a description means.
+  - subject: No model appears anywhere in this architecture
+    reason: >
+      There is no AI in this service. It is in the catalogue because its client is a model, and
+      every distinctive control here follows from that and from nothing else.
+  - subject: Confirmation semantics are drawn in the service tier though the server cannot enforce them
+    reason: >
+      The server declares that an operation needs the caller to confirm; whether the caller honours
+      it is outside this boundary. It is drawn because declaring it is a real design decision and
+      the only lever available, and its note says plainly that enforcement is not the server's.
+
+sources:
+  - title: "Model Context Protocol — authorization"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "Model Context Protocol — security best practices"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "OWASP — a practical guide for secure MCP server development"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02, ASI07 insecure inter-agent communication"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/

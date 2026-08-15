@@ -1,0 +1,676 @@
+# Node and zone vocabulary for the reference architectures.
+#
+# An archetype is not a drawing. It is a selection over this vocabulary plus edges plus zone
+# membership, and the geometry is computed at build time. That is what makes ~28 architectures
+# maintainable, and it is what lets the build validate every one of them the way it already
+# validates the risk map against CoSAI.
+#
+# HOW THIS VOCABULARY WAS DERIVED (2026-08)
+#
+# Converged from five independent structural catalogues, taking the union of what they name as
+# a distinct thing an architecture contains:
+#
+#   1. CoSAI's 23 risk-map components (data/cosai/components.yaml) — the spine, and the reason
+#      most node types carry a `cosaiComponent` anchor.
+#   2. OWASP "Securing Agentic Applications" 1.0 key components KC1-KC6, whose memory model
+#      (scope x persistence) is the cleanest published treatment of agent memory.
+#   3. Azure Well-Architected "Architecture pattern for AI workloads" — its seven layers for the
+#      intelligent-application archetype and seven for the training archetype.
+#   4. CSA MAESTRO's seven layers, which is the only one that draws security and compliance as a
+#      cross-cutting vertical rather than a layer.
+#   5. The managed agent runtimes' own service decompositions, which is where the governance
+#      plane below actually comes from as a product category.
+#
+# THE `layer` FIELD, AND A FINDING
+#
+# `layer` is one of the four risk-map bands (src/lib/bands.ts) and exists so a node can be
+# coloured like, and cross-linked to, the corresponding place on the risk map.
+#
+# The `governance` group carries NO layer, deliberately. CoSAI's component set has no governance
+# plane — no identity provider, no policy engine, no agent registry, no kill switch — and neither
+# does SAIF. That is not an oversight in this file; it is the gap, and the diagrams should show it
+# as a plane sitting beside the stack rather than pretend it has a band. Every 2026 managed agent
+# runtime shipped these as separate services; the risk map has nowhere to put them.
+#
+# `cosaiComponent` is optional for the same reason: where it is absent, the node type is real but
+# CoSAI names nothing equivalent. The build reports the count so the gap stays visible.
+
+groups:
+  - id: actor
+    title: Boundary actors
+    description: >
+      Parties outside the system that address it or are addressed by it. Drawn dashed and outside
+      every owned zone, following the risk map's treatment of its three boundary actors.
+  - id: entry
+    title: Entry
+    description: How a request gets in, and what inspects it before anything reasons about it.
+  - id: reasoning
+    title: Reasoning
+    description: The model, and the loop that decides what to do with it.
+  - id: knowledge
+    title: Knowledge
+    description: What the system reads to ground itself, and what it remembers between turns.
+  - id: action
+    title: Action
+    description: How the system reaches out and changes something.
+  - id: egress
+    title: Egress
+    description: What leaves, and what checks it on the way out.
+  - id: governance
+    title: Governance plane
+    description: >
+      Identity, policy, secrets, approval, audit, registry, evaluation and shutdown. Carries no
+      risk-map band — CoSAI names none of it.
+  - id: supply
+    title: Supply chain
+    description: Artifacts and pipelines that constitute the system before it ever runs.
+
+# Zone titles are canonical: an archetype does not name its own zones. Fourteen different labels
+# for the same network tier taught nothing and made the diagrams incomparable, so the label comes
+# from the type and an archetype adds a `qualifier` only where it has two zones of one type.
+zoneTypes:
+  - id: outsideWorld
+    title: Outside world
+    description: >
+      Everything outside the system: public content, inbound senders, third-party agents. No CoSAI
+      persona is responsible for it, which is exactly what makes it the outside — nothing in here is
+      a control point, and it exists to give the untrusted edges a home.
+  - id: device
+    title: Endpoint
+    description: >
+      An endpoint the AI System Users persona works on, managed or otherwise.
+  - id: network
+    title: Network and identity edge
+    description: >
+      A network segment an operating persona controls — cloud VPC, on-prem subnet, or private link.
+  - id: compute
+    title: Compute tier
+    description: Where orchestration and inference execute.
+  - id: data
+    title: Data tier
+    description: Indexes, memory, corpora, and the stores behind them.
+  - id: management
+    title: Control plane
+    description: >
+      Identity, policy, secrets, audit and registry. Drawn as its own zone rather than a band,
+      because it governs every other zone rather than sitting in the flow.
+  - id: sandbox
+    title: Isolated execution
+    description: >
+      Isolated execution with its own filesystem, network policy and lifetime. A zone rather than
+      a node, because what makes it a control is the boundary, not the box.
+  - id: vendorOpaque
+    title: Provider
+    description: >
+      A service run by a provider persona, whose internals the consuming personas cannot inspect,
+      configure or instrument. May contain only the interfaces the provider actually publishes — an
+      inference endpoint, an API, an MCP server, a connector — and the build enforces that list.
+      Everything behind the interface is inferred, and drawing it would be inventing it. The honest
+      statement about a provider is its boundary and what crosses it.
+
+nodeTypes:
+  # ------------------------------------------------------------------ Boundary actors
+  - id: humanUser
+    title: User
+    group: actor
+    cosaiComponent: actorUser
+    description: The person the system acts for. Present, absent, or somewhere in between.
+
+  - id: untrustedSource
+    title: Untrusted content source
+    group: actor
+    cosaiComponent: actorExternalSources
+    description: >
+      Web pages, documents, emails, tool output, repository files — anything the system reads that
+      an attacker can write. The origin of every prompt-injection chain.
+
+  - id: thirdPartyAgent
+    title: Third-party agent
+    group: actor
+    description: >
+      An autonomous agent belonging to another party, addressing this system. A non-human caller
+      that is neither an AI System User nor a bot to be blocked, and that most access control has no
+      category for.
+
+  - id: operator
+    title: Operator
+    group: actor
+    description: The human who deploys, configures and can shut the system down.
+
+  # ------------------------------------------------------------------ Entry
+  - id: channelAdapter
+    title: Channel adapter
+    group: entry
+    layer: application
+    cosaiComponent: componentAgentInputHandling
+    description: >
+      A bridge from a messaging transport into the agent loop. Each additional channel is a
+      separate authorization surface, which is why channel count tracks auth-bypass count.
+
+  - id: appUi
+    title: Application UI
+    group: entry
+    layer: application
+    cosaiComponent: componentApplication
+    description: The interface a human drives, and the session behind it.
+
+  - id: apiEndpoint
+    title: API endpoint
+    group: entry
+    layer: application
+    cosaiComponent: componentApplication
+    description: A programmatic entry point with a declared contract.
+
+  - id: inputHandling
+    title: Input handling
+    group: entry
+    layer: application
+    cosaiComponent: componentApplicationInputHandling
+    description: Validation, normalisation and filtering applied before the request reaches a model.
+
+  - id: scheduler
+    title: Scheduled trigger
+    group: entry
+    layer: application
+    description: >
+      A timer or event that starts the loop with nobody watching. It is what turns a tool into a
+      service — and what turns a write into the agent's own memory into a persistence mechanism,
+      since the next tick reads it back as instruction.
+
+  # ------------------------------------------------------------------ Reasoning
+  - id: model
+    title: Model
+    group: reasoning
+    layer: model
+    cosaiComponent: componentTheModel
+    description: The weights doing the inference, wherever they run.
+
+  - id: inferenceEndpoint
+    title: Inference endpoint
+    group: reasoning
+    layer: modelInfrastructure
+    cosaiComponent: componentModelServing
+    description: >
+      The serving stack in front of the model — batching, routing, KV cache, quotas. Distinct from
+      the model because it is the thing with an address, a tenancy model, and a rate limit.
+
+  - id: reasoningCore
+    title: Reasoning core
+    group: reasoning
+    layer: application
+    cosaiComponent: componentReasoningCore
+    description: The planning loop that decides what to do next.
+
+  - id: orchestrator
+    title: Orchestrator
+    group: reasoning
+    layer: application
+    cosaiComponent: componentOrchestrationInputHandling
+    description: The code that turns a decision into a tool call and the result back into context.
+
+  - id: harness
+    title: Agent harness
+    group: reasoning
+    layer: application
+    description: >
+      The long-lived process that owns the loop, the session state and the extension surface.
+      CoSAI has no component for it: the harness is the thing you install, and increasingly the
+      thing with the CVE.
+
+  - id: subagent
+    title: Subagent
+    group: reasoning
+    layer: application
+    cosaiComponent: componentReasoningCore
+    description: >
+      A delegated agent with its own context and, usually, the parent's privileges. Delegation
+      that does not narrow authority is privilege escalation with extra steps.
+
+  - id: router
+    title: Model router
+    group: reasoning
+    layer: application
+    description: Chooses which model or provider serves a request, by cost, capability or failover.
+
+  # ------------------------------------------------------------------ Knowledge
+  - id: retriever
+    title: Retriever
+    group: knowledge
+    layer: application
+    cosaiComponent: componentRAGContent
+    description: The query-time path that selects context. Where retrieval-side ACLs are enforced or lost.
+
+  - id: index
+    title: Index
+    group: knowledge
+    layer: dataInfrastructure
+    cosaiComponent: componentDataStorage
+    description: >
+      Embeddings and their metadata. A second copy of the source data with its own permissions
+      model, which is where ACL drift between source and index lives.
+
+  - id: semanticLayer
+    title: Semantic layer
+    group: knowledge
+    layer: dataInfrastructure
+    description: >
+      Curated metrics, joins and grants a query generator is allowed to use. In a text-to-SQL
+      architecture this is the security control, not a modelling convenience.
+
+  - id: corpus
+    title: Source corpus
+    group: knowledge
+    layer: dataInfrastructure
+    cosaiComponent: componentDataSources
+    description: The systems of record the index is built from, holding the authoritative permissions.
+
+  - id: memoryStore
+    title: Memory store
+    group: knowledge
+    layer: application
+    cosaiComponent: componentMemory
+    description: >
+      What survives the turn. Classify it on OWASP's two axes — scope (in-agent or cross-agent) and
+      persistence (session, cross-session, cross-user) — because a cross-session write is how one
+      injection becomes a durable implant.
+
+  # ------------------------------------------------------------------ Action
+  - id: tool
+    title: Tool
+    group: action
+    layer: application
+    cosaiComponent: componentTools
+    description: A capability the model can invoke, and the authority that comes with it.
+
+  - id: toolGateway
+    title: Tool gateway
+    group: action
+    layer: application
+    description: >
+      A broker in front of the tool set that scopes, allowlists and logs invocations. The
+      difference between an agent that can call anything and one that can call what it was granted.
+
+  - id: mcpServer
+    title: MCP server
+    group: action
+    layer: application
+    cosaiComponent: componentTools
+    description: >
+      A tool provider speaking the Model Context Protocol, local over stdio or remote over HTTP.
+      Remote servers are OAuth resource servers; local ones are processes with your privileges.
+
+  - id: codeSandbox
+    title: Code interpreter
+    group: action
+    layer: application
+    description: Arbitrary code execution offered to the model as a tool.
+
+  - id: browserRuntime
+    title: Browser runtime
+    group: action
+    layer: application
+    description: >
+      A driven browser. Carries the user's authenticated sessions, so every page it visits is both
+      an untrusted input and a privileged context.
+
+  - id: connector
+    title: Connector
+    group: action
+    layer: application
+    cosaiComponent: componentTools
+    description: >
+      A standing integration into a system of record, usually authorised once and used thereafter.
+      Its grant, not the request, decides what the AI can reach.
+
+  - id: actuator
+    title: Actuator
+    group: action
+    layer: application
+    description: >
+      The write path into a system of record. The point at which an agent's mistake stops being
+      text and starts being an effect, so reversibility is a property of this node.
+
+  # ------------------------------------------------------------------ Egress
+  - id: outputHandling
+    title: Output handling
+    group: egress
+    layer: application
+    cosaiComponent: componentAgentOutputHandling
+    description: What the system does with a model response before anything acts on it.
+
+  - id: outputEncoder
+    title: Output encoder
+    group: egress
+    layer: application
+    cosaiComponent: componentApplicationOutputHandling
+    description: >
+      Context-correct encoding for wherever the output lands — HTML, SQL, a shell, another prompt.
+      Model output is untrusted input to whatever consumes it.
+
+  - id: egressProxy
+    title: Egress proxy
+    group: egress
+    layer: application
+    description: >
+      Default-deny outbound network control with an allowlist. The last boundary between a
+      compromised agent and an attacker's collection endpoint.
+
+  # ------------------------------------------------------------------ Governance plane (no band)
+  - id: identityProvider
+    title: Identity provider
+    group: governance
+    description: Where human identity and its entitlements are established.
+
+  - id: agentIdentity
+    title: Agent identity
+    group: governance
+    description: >
+      A first-class, revocable identity for the agent itself, distinct from the user it acts for
+      and from the service it runs on. Without it, delegation is impersonation.
+
+  - id: secretsBroker
+    title: Secrets broker
+    group: governance
+    description: >
+      Short-lived credentials issued at call time, scoped to the caller and the call.
+
+  - id: credentialStore
+    title: Credential store
+    group: governance
+    description: >
+      Where credentials sit at rest — a managed vault, an OS keychain, or a file of long-lived
+      keys. Deliberately distinct from a broker: a store hands back the same secret every time, so
+      its blast radius is everything that can read it, and revocation is a manual act.
+
+  - id: policyEngine
+    title: Policy engine
+    group: governance
+    description: Runtime authorization for actions, evaluated per invocation rather than per session.
+
+  - id: guardrail
+    title: Guardrail service
+    group: governance
+    description: Content and intent classification on the way in and out, as an enforcement point.
+
+  - id: hitlGate
+    title: Human approval gate
+    group: governance
+    description: >
+      A blocking checkpoint before a consequential action. Effective in proportion to how rarely it
+      fires: an approval prompt on every step is a click-through, not a control.
+
+  - id: auditSink
+    title: Audit and telemetry sink
+    group: governance
+    description: >
+      The immutable record of prompts, tool calls, and decisions. Also the reason an agent needs an
+      identity — an unattributable action cannot be investigated.
+
+  - id: registry
+    title: Registry
+    group: governance
+    description: >
+      The inventory of agents, tools, models or skills admitted to the environment, and the
+      admission decision behind each entry.
+
+  - id: evaluationHarness
+    title: Evaluation harness
+    group: governance
+    description: Pre-deployment and continuous testing, including adversarial suites.
+
+  - id: killSwitch
+    title: Kill switch
+    group: governance
+    description: >
+      The ability to stop a running agent and revoke its authority without a deploy. A control
+      whose absence is only discovered when it is needed.
+
+  # ------------------------------------------------------------------ Supply chain
+  - id: modelWeights
+    title: Model weights
+    group: supply
+    layer: modelInfrastructure
+    cosaiComponent: componentModelStorage
+    description: The artifact at rest, and whatever integrity claim travels with it.
+
+  - id: modelRegistry
+    title: Model registry
+    group: supply
+    layer: modelInfrastructure
+    cosaiComponent: componentModelStorage
+    description: Versioned model artifacts with provenance, lineage and promotion gates.
+
+  - id: trainingData
+    title: Training data
+    group: supply
+    layer: dataInfrastructure
+    cosaiComponent: componentTrainingData
+    description: The corpus a model was built from, and the point where poisoning becomes durable.
+
+  - id: tuningPipeline
+    title: Tuning pipeline
+    group: supply
+    layer: modelInfrastructure
+    cosaiComponent: componentModelTrainingTuning
+    description: The build system for model artifacts, with all the trust properties of one.
+
+  - id: skillPackage
+    title: Skill or extension package
+    group: supply
+    layer: application
+    description: >
+      Third-party instructions and code loaded into the agent's own process. Prose and executable
+      arrive in the same artifact, so review has to cover both — and scanners that read the
+      declared behaviour rather than the actual one have been bypassed repeatedly.
+
+# ------------------------------------------------------------------ Control kinds
+#
+# What secures a trust-boundary crossing. These diagrams are TARGET states — the architecture as
+# it should be built — so every crossing carries a control, and the control is named from this
+# canonical list rather than described freehand. An earlier draft let each archetype phrase its
+# own: 286 crossings produced 226 different phrasings, which made the diagrams incomparable and
+# taught a reader nothing transferable.
+#
+# Each kind names the capability class that delivers it, which is how the capability taxonomy
+# reaches the architectures: a reader who wants to know what to deploy at a boundary follows the
+# control kind to a capability and from there to the tooling.
+#
+# Note on the surface check: a control kind's capability is a vocabulary-level pointer to a class
+# of control, not a claim that the archetype has deployed it. Node-level and archetype-level
+# capability lists are deployment claims and the build does check those against the capability's
+# surface applicability; these are not checked that way, because a crossing is secured by transport
+# authentication whether or not the transport-security capability is one a reader can procure on
+# the surface in question.
+controlKinds:
+  - id: userIdentity
+    title: User identity
+    capability: capabilityIga
+    description: A federated, authenticated human identity, carried with the request.
+
+  - id: workloadIdentity
+    title: Workload identity
+    capability: capabilityNhiManagement
+    description: >
+      A service proving what it is to the platform, with no secret stored to do it.
+
+  - id: agentIdentity
+    title: Agent identity
+    capability: capabilityNhiManagement
+    description: >
+      A principal for the agent itself, distinct from the user it acts for and the service it runs
+      on, and revocable on its own.
+
+  - id: delegatedGrant
+    title: Delegated grant
+    capability: capabilityIga
+    description: >
+      An explicit, scoped, expiring authorisation to act for someone — an OAuth grant, a signed
+      mandate, a consent record. Revocable in one place.
+
+  - id: brokeredCredential
+    title: Brokered credential
+    capability: capabilitySecretsManagement
+    description: >
+      A short-lived secret issued at call time and never held at rest by the caller.
+
+  - id: transport
+    title: Authenticated transport
+    capability: capabilityTransportSecurity
+    description: >
+      TLS or mutual TLS. Authenticates the channel and never the meaning of what travels on it.
+
+  - id: policyDecision
+    title: Per-invocation policy
+    capability: capabilityAgentRuntimeEnforcement
+    description: >
+      Authorisation evaluated per call rather than granted per session, so authority reflects the
+      moment rather than the login.
+
+  - id: dataEntitlement
+    title: Data entitlement
+    capability: capabilityDataAccessGovernance
+    description: >
+      Access filtered by the asking identity's real entitlements, enforced where the data lives.
+
+  - id: contentPermissions
+    title: Existing content permissions
+    capability: capabilityDspm
+    description: >
+      The access control the source system already had. Predates the AI and decides most of what it
+      can reach, which is why posture management over it matters more than anything AI-specific.
+
+  - id: toolScope
+    title: Scoped tool permission
+    capability: capabilityToolPermissionScoping
+    description: >
+      A named, bounded capability rather than general access — what an agent may invoke and on what.
+
+  - id: humanApproval
+    title: Human approval
+    capability: capabilityHitlControls
+    description: >
+      A blocking decision by a person, reserved for actions that are consequential or irreversible
+      so that it fires rarely enough to be read.
+
+  - id: egressAllowlist
+    title: Egress allowlist
+    capability: capabilityEgressControl
+    description: >
+      Default-deny outbound with named exceptions. Makes a successful injection unprofitable rather
+      than merely detected.
+
+  - id: contentInspection
+    title: Content inspection
+    capability: capabilityModelGuardrails
+    description: Classification and filtering of what crosses, inbound and outbound.
+
+
+  - id: isolation
+    title: Isolation boundary
+    capability: capabilityAgentSandboxing
+    description: >
+      Enforced separation — a sandbox, a namespace, a tenant boundary — imposed by the platform
+      rather than requested of the thing being contained.
+
+  - id: memoryScope
+    title: Memory scoping
+    capability: capabilityMemoryProtection
+    description: >
+      State keyed so it cannot be read across the boundary it was written behind. Session, user or
+      tenant, chosen deliberately.
+
+  - id: admission
+    title: Registry admission
+    capability: capabilityAgentRegistry
+    description: >
+      An explicit decision that this agent, tool or server is permitted here, recorded somewhere it
+      can be revoked.
+
+  - id: provenance
+    title: Verified provenance
+    capability: capabilityContentProvenance
+    description: >
+      A signature or lineage record checked at use, so what arrives is what was approved.
+
+  - id: artifactIntegrity
+    title: Artifact integrity
+    capability: capabilityModelScanning
+    description: >
+      A model, dataset or package inspected and signed before anything loads it, with the check on
+      the load path rather than in a report.
+
+  - id: rateLimit
+    title: Quota and rate limit
+    capability: capabilityRateLimiting
+    description: >
+      Bounds on volume, cost and concurrency, sized for machine callers that retry and parallelise.
+
+  - id: replaySafety
+    title: Replay safety
+    capability: capabilityAgentRuntimeEnforcement
+    description: >
+      Idempotency, so a retried or replayed step has its effect once. A correctness property that
+      is also a security one wherever the effect costs money.
+
+  - id: auditTrail
+    title: Append-only audit
+    capability: capabilityAuditLogging
+    description: >
+      A record the producing system can write and cannot amend, so it does not share a compromise
+      with the thing it records.
+
+  - id: evaluationGate
+    title: Evaluation gate
+    capability: capabilityModelEvals
+    description: >
+      Promotion blocked until behaviour has been tested, including adversarially. A gate rather
+      than a report.
+
+  - id: postureInspection
+    title: Device posture and inspection
+    capability: capabilitySse
+    description: >
+      Managed-device checks plus inline inspection of the traffic. Frequently the only vantage
+      point on a surface nobody can instrument from inside.
+
+  - id: discovery
+    title: Independent discovery
+    capability: capabilityShadowAiDiscovery
+    description: >
+      Finding what nobody registered, from telemetry rather than self-report — which is the point,
+      since the unregistered thing is the one that matters.
+
+  - id: tenantConfiguration
+    title: Tenant configuration
+    capability: capabilityAiGovernancePlatform
+    description: >
+      Policy the customer authors and the provider enforces. The canonical shared-responsibility
+      control, and unverifiable from the customer's side by construction.
+
+  - id: vendorAssurance
+    title: Contractual assurance
+    capability: capabilityAiTprm
+    description: >
+      Diligence and contract terms. Named as a control because on a provider boundary it is
+      sometimes the only one, and labelled honestly so it is not mistaken for a technical one.
+
+  - id: providerInternal
+    title: Provider-internal
+    capability: capabilityAiTprm
+    description: >
+      A crossing that happens inside a provider's boundary. Drawn because the flow is real; marked
+      because nothing outside the provider can observe or enforce it.
+
+  - id: credentialIsolation
+    title: Credential isolation
+    capability: capabilityCredentialIsolation
+    description: >
+      The caller receives a capability and never the secret behind it — a proxy performs the
+      privileged act. A compromise then yields the action but not the credential.
+
+  - id: emergencyStop
+    title: Emergency stop
+    capability: capabilityKillSwitch
+    description: >
+      The ability to halt and revoke out of band, without a deploy and without cooperation from
+      the thing being stopped.

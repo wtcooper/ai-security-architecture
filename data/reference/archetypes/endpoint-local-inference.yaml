@@ -1,0 +1,335 @@
+id: archLocalInference
+surface: surfaceEndpoint
+title: Local model runtime
+abbrev: Local runtime
+
+summary:
+  - >
+    An open-weights model served on the user's own machine, listening on a local port so other
+    applications can call it. Chosen to keep data off a vendor's infrastructure, which succeeds —
+    and moves every control the vendor was providing onto the device.
+
+description:
+  - >
+    The reason people run this is sound: prompts and documents never leave the machine, there is no
+    per-token cost, and it works offline. The architectural consequence is that the guardrails,
+    rate limiting, abuse monitoring and content policy that a hosted API applies on the way in and
+    out are simply absent. Nothing replaces them by default.
+  - >
+    The runtime is a local network service. It binds a port, speaks an HTTP API, and historically
+    ships without authentication because the assumed caller is a process on the same machine. That
+    assumption fails in two directions: any local process — including a browser tab, through a
+    permissive CORS policy — can call it, and a runtime bound to a routable interface rather than
+    loopback is reachable from the network. This is the same exposure pattern as the personal agent
+    harness, arrived at independently.
+  - >
+    The supply chain is the second axis and the one specific to this archetype. Model weights are
+    large binaries fetched from public hubs, and several serialization formats used to distribute
+    them execute code on load. The format matters more than the source: a safe-by-construction
+    tensor format from an unknown publisher is a better position than a pickle-based one from a
+    known publisher. Scanning weights before they are loaded is the control, and the runtime is
+    usually the thing that fetches them, so the scan has to sit in front of the fetch.
+  - >
+    Worth stating plainly: this archetype removes a data-disclosure risk and adds a supply-chain
+    and an exposure risk. Whether that is a good trade depends on which the organisation is
+    actually managing, and the diagram is drawn so both sides are visible at once.
+
+distinguishedBy:
+  - >
+    Against self-hosted inference in a datacentre: identical software, entirely different
+    operational reality. There the runtime has a network policy, an identity, a scanner in the
+    pipeline and someone on call. Here it was installed by one person, has no inventory entry, and
+    its port is protected by the assumption that nothing else on the machine is hostile.
+  - >
+    Against the other endpoint archetypes: this one is not an agent. It has no loop, no tools and
+    no autonomy — it is a dependency the others consume. It earns its own architecture because its
+    risks are supply chain and local exposure rather than agency.
+
+exemplars:
+  - name: Local inference servers
+    note: >
+      Desktop applications and daemons that download open-weights models and expose an
+      OpenAI-compatible HTTP API on a loopback port for other local software to call.
+    asOf: "2026-08"
+  - name: OS and vendor-provided local runtimes
+    note: >
+      Platform-level local inference offered as a system service, with a managed model catalogue.
+      Narrower supply chain, same local-service exposure.
+    asOf: "2026-08"
+  - name: Public model hubs
+    note: >
+      Where the weights come from. Publisher identity is verifiable to varying degrees; what the
+      artifact does on load is a property of its format, not its publisher.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The model hub the weights come from, and anything else that can reach the machine.
+
+  - id: device
+    type: device
+    personas: [personaEndUser, personaModelServing]
+    note: >
+      The runtime, the weights on disk, and the local applications that call it. One trust zone —
+      any process here can reach the port.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: >
+      Everything a hosted API would have supplied, now the device owner's problem. Present only if
+      someone put it there.
+
+nodes:
+  - id: modelHub
+    type: skillPackage
+    zone: outside
+    label: Public model hub
+    note: >
+      Distribution for open weights. Publisher identity ranges from verified to arbitrary, and the
+      artifact's format decides whether loading it is an execution event.
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization, riskInsecureIntegratedComponent]
+    capabilities: [capabilityModelScanning, capabilityAiBom, capabilityContentProvenance]
+
+  - id: localCaller
+    type: untrustedSource
+    zone: outside
+    label: Other local processes
+    note: >
+      Anything on the machine that can open a socket, including a browser tab where the runtime
+      allows cross-origin requests. Not the caller the runtime was designed for.
+    risks: [riskDenialOfMLService, riskModelExfiltration]
+    capabilities: [capabilityTransportSecurity, capabilityRateLimiting]
+
+  - id: apiSurface
+    type: apiEndpoint
+    zone: device
+    label: Local HTTP API
+    note: >
+      An OpenAI-compatible endpoint on a loopback port. Frequently unauthenticated, because the
+      assumed caller is trusted by virtue of being local — an assumption the browser breaks.
+    risks: [riskDenialOfMLService, riskModelExfiltration, riskShadowAndUnknownAgents]
+    capabilities: [capabilityTransportSecurity, capabilityRateLimiting, capabilityEdr]
+
+  - id: runtime
+    type: inferenceEndpoint
+    zone: device
+    label: Inference runtime
+    note: >
+      Loads weights, batches requests, serves completions. Also the process that fetches the
+      weights, which is why the supply-chain control has to sit in front of it.
+    risks: [riskMaliciousLoaderDeserialization, riskInsecureIntegratedComponent, riskAcceleratorAndSystemSideChannels]
+    capabilities: [capabilityModelScanning, capabilityAiVulnMgmt, capabilityEdr]
+
+  - id: model
+    type: model
+    zone: device
+    label: Loaded model
+    note: >
+      Open weights running with no provider-side guardrail, no abuse monitoring and no content
+      policy. Whatever safety behaviour exists is whatever the weights carry.
+    risks: [riskModelEvasion, riskInsecureModelOutput]
+    capabilities: [capabilityModelGuardrails, capabilityAiRedTeaming, capabilityModelEvals]
+
+  - id: weights
+    type: modelWeights
+    zone: device
+    label: Weights on disk
+    note: >
+      Multi-gigabyte artifacts. Their format determines whether loading them is deserialization or
+      execution, and that is a more useful question than who published them.
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering, riskModelExfiltration]
+    capabilities: [capabilityModelScanning, capabilityModelWeightProtection, capabilityEncryptionKeyManagement]
+
+  - id: guardrail
+    type: guardrail
+    zone: device
+    label: Local guardrails
+    note: >
+      Input and output classification, if anyone deployed it. Drawn because its absence is the
+      archetype's defining property and a diagram without it has nowhere to say so.
+    risks: [riskPromptInjection, riskInsecureModelOutput]
+    capabilities: [capabilityModelGuardrails, capabilityPromptInjectionDefense, capabilityOutputEncoding]
+
+  - id: inventory
+    type: registry
+    zone: governance
+    label: Model inventory
+    note: >
+      Which models are on which machines, at which versions, from which source. Almost never
+      exists, and is the precondition for responding to a bad model release.
+    risks: [riskShadowAndUnknownAgents, riskModelSourceTampering]
+    capabilities: [capabilityAiBom, capabilityShadowAiDiscovery, capabilityModelDocumentation]
+
+  - id: scanner
+    type: evaluationHarness
+    zone: governance
+    label: Weight scanning
+    note: >
+      Format and content inspection before load. The one control that addresses the archetype's
+      distinctive risk rather than a borrowed one.
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering]
+    capabilities: [capabilityModelScanning, capabilityAiVulnMgmt, capabilityAiBom]
+
+  - id: policy
+    type: policyEngine
+    zone: governance
+    label: Runtime policy
+    note: Whether local inference is permitted at all, from which sources, and bound to which interface.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityAiGovernancePlatform, capabilityShadowAiDiscovery, capabilityEdr]
+
+edges:
+  - from: modelHub
+    to: weights
+    label: weight download
+    control:
+      kind: provenance
+      note: >
+        Transport is authenticated and the publisher may be verifiable. Neither says anything about
+        what the artifact does when the runtime opens it.
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization]
+
+  - from: localCaller
+    to: apiSurface
+    label: completion request
+    control:
+      kind: workloadIdentity
+      note: >
+        The local API authenticates its callers rather than treating locality as authorisation.
+        That assumption is what a browser tab breaks through a permissive cross-origin policy.
+    risks: [riskDenialOfMLService, riskModelExfiltration]
+
+  - from: weights
+    to: runtime
+    label: load
+    risks: [riskMaliciousLoaderDeserialization]
+
+  - from: runtime
+    to: model
+    label: serves
+
+  - from: apiSurface
+    to: guardrail
+    label: request
+
+  - from: guardrail
+    to: runtime
+    label: filtered request
+    risks: [riskPromptInjection]
+
+  - from: model
+    to: guardrail
+    label: completion
+    risks: [riskInsecureModelOutput]
+
+  - from: guardrail
+    to: apiSurface
+    label: filtered response
+    risks: [riskInsecureModelOutput]
+
+  - from: scanner
+    to: weights
+    label: pre-load inspection
+    kind: control
+    control:
+      kind: artifactIntegrity
+      note: >
+        Only a control if it runs before the runtime opens the file. A scan that reports after the
+        fact has documented an incident rather than prevented one.
+    risks: [riskMaliciousLoaderDeserialization]
+
+  - from: inventory
+    to: runtime
+    label: registration and version tracking
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Derived from what is installed rather than from anything the runtime reports, because an unregistered runtime is exactly the one worth finding.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: policy
+    to: apiSurface
+    label: binding and permission policy
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        Loopback-only binding, enforced by the device rather than requested of the application.
+        This is the control that closes the exposure path.
+    risks: [riskShadowAndUnknownAgents, riskModelExfiltration]
+
+crossCutting:
+  - risk: riskMaliciousLoaderDeserialization
+    note: >
+      Spans the hub, the file and the loader. No single node owns it: it is a property of the
+      artifact format travelling across all three, which is why format policy beats source policy.
+  - risk: riskShadowAndUnknownAgents
+    note: >
+      This archetype is installed by one person in an afternoon and appears in no inventory. Every
+      governance control listed here presumes someone knows the runtime exists.
+  - risk: riskInsecureModelOutput
+    note: >
+      No provider-side safety layer anywhere in the diagram. Whatever the weights do is the whole
+      of the behaviour, and the consumer applications were built expecting a hosted API's floor.
+
+risks:
+  - riskMaliciousLoaderDeserialization
+  - riskModelSourceTampering
+  - riskShadowAndUnknownAgents
+  - riskInsecureIntegratedComponent
+  - riskModelExfiltration
+  - riskInsecureModelOutput
+  - riskModelEvasion
+  - riskDenialOfMLService
+  - riskPromptInjection
+  - riskAcceleratorAndSystemSideChannels
+
+capabilities:
+  - capabilityModelScanning
+  - capabilityAiBom
+  - capabilityShadowAiDiscovery
+  - capabilityModelWeightProtection
+  - capabilityModelGuardrails
+  - capabilityAiVulnMgmt
+  - capabilityEdr
+  - capabilityTransportSecurity
+  - capabilityRateLimiting
+  - capabilityPromptInjectionDefense
+  - capabilityOutputEncoding
+  - capabilityAiRedTeaming
+  - capabilityModelEvals
+  - capabilityEncryptionKeyManagement
+  - capabilityAiGovernancePlatform
+  - capabilityModelDocumentation
+  - capabilityContentProvenance
+
+deviations:
+  - subject: Local guardrails are drawn although most installs have none
+    reason: >
+      Their absence is the point of the archetype, and a diagram cannot show an absence without
+      first having a place for the thing. Drawn inline with a note saying it is optional, which
+      states the position more clearly than leaving a gap in the flow.
+  - subject: Other local processes are drawn as an untrusted actor
+    reason: >
+      They are on the same device, which normally implies the same trust zone. They are drawn
+      outside it because the runtime's authentication model treats locality as authorization, and
+      naming that assumption as a boundary is the only way to show it failing.
+  - subject: There is no vendor zone
+    reason: >
+      Removing it is the entire reason this architecture is chosen. Its absence is what shifts
+      guardrails, rate limiting and abuse monitoring onto the device owner, and the diagram should
+      be read as the vendor column having moved into the governance one.
+
+sources:
+  - title: "MITRE ATLAS — machine learning supply chain and model artifact techniques"
+    url: https://atlas.mitre.org/
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "CISA and NSA — deploying AI systems securely"
+    url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+  - title: "NIST AI 600-1 — generative AI profile"
+    url: https://www.nist.gov/itl/ai-risk-management-framework

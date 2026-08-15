@@ -6,6 +6,7 @@ import { Prose } from "@/components/Prose";
 import { bandFor } from "@/lib/bands";
 import { BAND_TOKENS } from "@/lib/map-layout";
 import {
+  archetypesForCapability,
   componentsForCapability,
   componentTitle,
   controlCategories,
@@ -14,6 +15,7 @@ import {
   surfaces,
 } from "@/lib/data";
 import type { Capability, CapabilityStatus } from "@/lib/types";
+import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "./StatusPill";
 
 export function CapabilityDetail({
@@ -136,6 +138,13 @@ export function CapabilityDetail({
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <ArchetypeLinks
+          archetypes={archetypesForCapability(capability.id)}
+          empty="No reference architecture attaches this capability yet. Either the archetype it belongs to is not drawn, or nothing in the catalogue needs it."
+        />
       </div>
 
       {capability.sources?.length ? (

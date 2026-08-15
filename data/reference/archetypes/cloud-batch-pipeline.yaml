@@ -1,0 +1,412 @@
+id: archBatchPipeline
+surface: surfaceCloud
+title: Batch and offline AI pipeline
+abbrev: Batch pipeline
+
+summary:
+  - >
+    Scheduled, high-volume model inference over stored data — enriching records, classifying a
+    backlog, generating embeddings, summarising a corpus. Nobody is watching, and the output
+    becomes durable state that later systems treat as fact.
+
+description:
+  - >
+    The distinguishing property is that the output persists and loses its provenance. A synchronous
+    endpoint's mistake affects one response; a batch job's mistake is written into a million records
+    that downstream systems, analysts and other models will read as ground truth for years. By the
+    time anyone notices, the derived data has been copied into three other places.
+  - >
+    This makes provenance the primary control rather than a compliance nicety. Every generated
+    field wants to carry which model version produced it, when, from what source and at what
+    confidence — because the only realistic response to a discovered defect is to find and
+    regenerate the affected subset, and that is impossible without the stamp.
+  - >
+    Poisoning scales here in a way it does not elsewhere. Content that reaches a batch job affects
+    everything the job produces, and where the output feeds a retrieval index or a training set,
+    one poisoned input has been amplified across a corpus and made durable. Sampling and drift
+    detection on output distributions catch this; per-record validation generally does not, because
+    each individual record looks fine.
+  - >
+    Operationally the risks are the mundane ones with unusual severity. Volume plus per-token
+    pricing makes an unbounded job a financial event. Retries without idempotency duplicate both
+    cost and output. And a pipeline that fails halfway leaves a corpus in a state where some records
+    have the new treatment and some do not, which is worse for downstream consumers than either
+    outcome alone.
+
+distinguishedBy:
+  - >
+    Against the AI-augmented API backend: the same transformation on a schedule instead of in a
+    request. Latency stops mattering and durability starts: nobody is waiting, and the output will
+    outlive the job by years.
+  - >
+    Against the fine-tuning pipeline: that one produces a model, this one produces data. They share
+    the build-system trust properties, and the artifact and its blast radius are different.
+  - >
+    Against the retrieval assistant's ingest half: closely related, and this archetype generalises
+    it. Ingest is a batch pipeline whose output happens to be an index.
+
+exemplars:
+  - name: Bulk enrichment and classification
+    note: >
+      Scheduled jobs adding derived fields to a warehouse — sentiment, category, extracted entities
+      — consumed thereafter by analysts and other systems as though they were collected data.
+    asOf: "2026-08"
+  - name: Embedding generation at corpus scale
+    note: >
+      Re-embedding a corpus on a schedule or after a model change. The output is an index, and the
+      job's failure modes are the index's failure modes.
+    asOf: "2026-08"
+  - name: Provider batch inference tiers
+    note: >
+      Discounted asynchronous inference for large volumes, which makes this archetype cheap enough
+      to run over everything and therefore common.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Where the source data was authored, by parties the pipeline never authenticates.
+
+  - id: pipeline
+    type: compute
+    personas: [personaApplicationDeveloper, personaDataProvider]
+    note: >
+      Orchestration, batching and the transformation. Runs on a schedule under a service identity
+      with no human in the loop.
+
+  - id: stores
+    type: data
+    personas: [personaDataProvider]
+    note: The source corpus and the derived output, which downstream systems cannot tell apart.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: Inference, often on a discounted asynchronous tier.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Provenance, sampling, budget and the ability to find and undo what a bad run produced.
+
+nodes:
+  - id: upstreamAuthors
+    type: untrustedSource
+    zone: outside
+    label: Source content authors
+    note: >
+      Whoever wrote the records being processed — customers, partners, staff, other systems. One
+      hostile input is amplified across everything the job produces.
+    risks: [riskDataPoisoning, riskPromptInjection]
+    capabilities: [capabilityDataSanitization, capabilityPromptInjectionDefense, capabilityDataProvenance]
+
+  - id: trigger
+    type: scheduler
+    zone: pipeline
+    label: Schedule
+    note: >
+      Starts the run with nobody watching. There is no user to notice that the output looks wrong,
+      which is why sampling replaces observation here.
+    risks: [riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityAgentObservability]
+
+  - id: orchestration
+    type: orchestrator
+    zone: pipeline
+    label: Job orchestration
+    note: >
+      Batching, checkpointing, retries and idempotency. Retry without idempotency duplicates both
+      the output and the bill.
+    risks: [riskEconomicDenialOfWallet, riskDenialOfMLService]
+    capabilities: [capabilityRateLimiting, capabilityStagedRollout, capabilityAgentObservability]
+
+  - id: transform
+    type: inputHandling
+    zone: pipeline
+    label: Prompt construction
+    note: >
+      Turns each record into a prompt. Source content and instruction are concatenated here, at
+      volume, with no review of any individual result.
+    risks: [riskPromptInjection, riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilitySystemPromptManagement, capabilityPromptRedaction, capabilityPromptInjectionDefense]
+
+  - id: validate
+    type: outputHandling
+    zone: pipeline
+    label: Output validation
+    note: >
+      Schema conformance and range checks per record. Catches malformed output and not systematic
+      drift, because each bad record looks individually plausible.
+    risks: [riskInsecureModelOutput, riskModelEvasion]
+    capabilities: [capabilityGroundednessChecking, capabilityOutputEncoding, capabilityModelGuardrails]
+
+  - id: stamp
+    type: outputEncoder
+    zone: pipeline
+    label: Provenance stamping
+    note: >
+      Model version, run identifier, timestamp, source record and confidence on every generated
+      field. Without it, a defect discovered later cannot be scoped, and regeneration is a full
+      re-run of everything.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+    capabilities: [capabilityDataProvenance, capabilityContentProvenance, capabilityAiBom]
+
+  - id: sourceCorpus
+    type: corpus
+    zone: stores
+    label: Source corpus
+    note: The records being processed, and the permissions the derived output should inherit.
+    risks: [riskDataPoisoning, riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDspm, capabilityDataAccessGovernance, capabilityDataSanitization]
+
+  - id: derived
+    type: index
+    zone: stores
+    label: Derived data
+    note: >
+      Generated fields, embeddings and summaries. Downstream systems read these as facts, and
+      nothing about their shape says a model produced them.
+    risks: [riskDataPoisoning, riskInsecureModelOutput, riskUnauthorizedTrainingData]
+    capabilities: [capabilityDataProvenance, capabilityDspm, capabilityEncryptionKeyManagement]
+
+  - id: batchApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Batch inference
+    note: >
+      Asynchronous, discounted, and holding a large volume of the corpus for the duration of the
+      job. Retention terms matter more here than on a per-request path.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityAiGateway]
+
+  - id: sampling
+    type: evaluationHarness
+    zone: governance
+    label: Output sampling
+    note: >
+      Human and automated review of a sample per run, plus distribution comparison against the
+      previous one. The only control that catches systematic error at this volume.
+    risks: [riskDataPoisoning, riskInsecureModelOutput, riskModelEvasion]
+    capabilities: [capabilityBehavioralDriftDetection, capabilityModelEvals, capabilityHitlControls]
+
+  - id: budget
+    type: policyEngine
+    zone: governance
+    label: Run budget and ceiling
+    note: >
+      A hard stop on tokens and spend per run. Volume multiplied by per-token pricing with no
+      ceiling is an open commitment, and the job has no user to abandon it.
+    risks: [riskEconomicDenialOfWallet, riskRunawayAgentToolLoops]
+    capabilities: [capabilityRateLimiting, capabilityAiGovernancePlatform, capabilityKillSwitch]
+
+  - id: lineage
+    type: registry
+    zone: governance
+    label: Run and lineage registry
+    note: >
+      Which run produced which records with which model version. The artifact that makes a targeted
+      rollback possible instead of a full regeneration.
+    risks: [riskDataPoisoning, riskModelDeploymentTampering]
+    capabilities: [capabilityAiBom, capabilityDataProvenance, capabilityModelDocumentation]
+
+  - id: creds
+    type: secretsBroker
+    zone: governance
+    label: Pipeline identity
+    note: >
+      A service identity with read access across the corpus and write access to the derived store.
+      Broader than any user's, and unattended.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityNhiManagement, capabilitySecretsManagement, capabilityIga]
+
+edges:
+  - from: upstreamAuthors
+    to: sourceCorpus
+    label: authored records
+    control:
+      kind: contentPermissions
+      note: >
+        Nothing AI-specific gates this, and it happened long before the pipeline existed. One
+        poisoned record becomes an influence on everything the run produces.
+    risks: [riskDataPoisoning, riskPromptInjection]
+
+  - from: trigger
+    to: orchestration
+    label: scheduled run
+    risks: [riskRunawayAgentToolLoops]
+
+  - from: sourceCorpus
+    to: transform
+    label: batched records
+    control:
+      kind: dataEntitlement
+      note: >
+        Broader than any individual's access, because the job processes everything. Whether the
+        derived output inherits the source's permissions is decided downstream, and often not at all.
+    risks: [riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+
+  - from: transform
+    to: batchApi
+    label: batch submission
+    control:
+      kind: brokeredCredential
+      note: >
+        Carries a large share of the corpus to the provider in one submission, which makes the
+        retention terms on the batch tier a material question rather than boilerplate.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+
+  - from: batchApi
+    to: validate
+    label: results
+    control:
+      kind: transport
+      note: >
+        Unauthenticated content arriving at volume, with nobody reading it. Every downstream
+        consumer will treat what survives validation as collected data.
+    risks: [riskInsecureModelOutput]
+
+  - from: validate
+    to: stamp
+    label: conforming records
+
+  - from: stamp
+    to: derived
+    label: stamped output
+    control:
+      kind: workloadIdentity
+      note: >
+        Write access limited to the derived store rather than the source. A pipeline that can
+        overwrite its own inputs makes the defect unrecoverable.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+
+  - from: sampling
+    to: derived
+    label: sampled review and drift comparison
+    kind: control
+    control:
+      kind: evaluationGate
+      note: >
+        Comparing this run's output distribution against the last is what catches a model change or
+        a poisoning campaign. Per-record validation cannot see either.
+    risks: [riskDataPoisoning, riskModelEvasion]
+
+  - from: budget
+    to: orchestration
+    label: token and spend ceiling
+    kind: control
+    control:
+      kind: rateLimit
+      note: >
+        A hard stop rather than an alert, because there is no user watching to abandon a runaway
+        job.
+    risks: [riskEconomicDenialOfWallet]
+
+  - from: lineage
+    to: stamp
+    label: run and model identifiers
+    kind: control
+    control:
+      kind: provenance
+      note: >
+        The version recorded has to be the version used. Stamping a configured value rather than
+        the one the provider actually served makes the lineage confidently wrong.
+    risks: [riskModelDeploymentTampering]
+
+  - from: creds
+    to: orchestration
+    label: pipeline identity
+    kind: control
+    control:
+      kind: workloadIdentity
+      note: >
+        Read on the source, write on the derived store, and nothing else. The asymmetry is what
+        keeps a bad run recoverable.
+    risks: [riskExcessiveDataHandling]
+
+crossCutting:
+  - risk: riskDataPoisoning
+    note: >
+      Amplified and made durable. One hostile input influences an entire run's output, which is then
+      read as fact by systems and people who never see the pipeline. Provenance and sampling are the
+      only controls that scale to it.
+  - risk: riskUnauthorizedTrainingData
+    note: >
+      Derived data is indistinguishable from collected data once written, so it flows into training
+      sets and indexes downstream. Without the stamp nobody can tell what a model generated.
+  - risk: riskEconomicDenialOfWallet
+    note: >
+      Volume, per-token pricing, retries and no human watching. Each is fine; together they are the
+      most common way this archetype produces an incident that is purely financial.
+
+risks:
+  - riskDataPoisoning
+  - riskInsecureModelOutput
+  - riskUnauthorizedTrainingData
+  - riskExcessiveDataHandling
+  - riskSensitiveDataDisclosure
+  - riskEconomicDenialOfWallet
+  - riskPromptInjection
+  - riskExcessiveDataHandlingDuringInference
+  - riskModelDeploymentTampering
+  - riskModelEvasion
+  - riskRunawayAgentToolLoops
+  - riskDenialOfMLService
+  - riskCrossTenantCredentialPropagation
+
+capabilities:
+  - capabilityDataProvenance
+  - capabilityBehavioralDriftDetection
+  - capabilityDataSanitization
+  - capabilityDspm
+  - capabilityAiBom
+  - capabilityRateLimiting
+  - capabilityNhiManagement
+  - capabilitySecretsManagement
+  - capabilityDataAccessGovernance
+  - capabilityGroundednessChecking
+  - capabilityOutputEncoding
+  - capabilityModelGuardrails
+  - capabilityModelEvals
+  - capabilityHitlControls
+  - capabilityKillSwitch
+  - capabilityAiGovernancePlatform
+  - capabilityContentProvenance
+  - capabilityEncryptionKeyManagement
+  - capabilityPromptInjectionDefense
+  - capabilityPromptRedaction
+  - capabilitySystemPromptManagement
+  - capabilityStagedRollout
+  - capabilityAgentObservability
+  - capabilityModelDocumentation
+  - capabilityIga
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+  - capabilityAiGateway
+
+deviations:
+  - subject: Derived data uses the index node type
+    reason: >
+      It is often a warehouse table rather than a vector index. The index type is used because the
+      security-relevant property is the same: a second body of data with its own permissions and
+      its own freshness, derived from a source whose access controls it may or may not carry.
+  - subject: Provenance stamping is drawn as a pipeline node rather than a governance control
+    reason: >
+      It is a governance concern, but it has to happen inside the write path to be true. Drawing it
+      in the control plane would suggest it could be applied afterwards, and a provenance stamp
+      added later is a guess.
+  - subject: No human appears anywhere except in sampling
+    reason: >
+      That is the archetype. The single human touchpoint is a sample of the output after the fact,
+      and putting it in the control plane rather than the flow states plainly that nobody reviews
+      the run itself.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Microsoft Azure Well-Architected — training and data pipeline patterns for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+  - title: "NIST AI 600-1 — generative AI profile, data provenance actions"
+    url: https://www.nist.gov/itl/ai-risk-management-framework
+  - title: "CISA and NSA — AI data security"
+    url: https://www.cisa.gov/resources-tools/resources/ai-data-security

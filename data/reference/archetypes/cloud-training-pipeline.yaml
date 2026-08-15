@@ -1,0 +1,451 @@
+id: archTrainingPipeline
+surface: surfaceCloud
+title: Fine-tuning and model registry pipeline
+abbrev: Training pipeline
+
+summary:
+  - >
+    A build system whose artifact is a model. Curated data goes in, a tuned checkpoint comes out,
+    and everything that is true of a compiler and its supply chain is true here — except that the
+    output cannot be diffed and the defects cannot be found by reading it.
+
+description:
+  - >
+    Treating this as a build pipeline is the whole of the correct framing. It has source inputs, a
+    build environment, dependencies, an artifact, a registry and a promotion path, and it deserves
+    the controls a software pipeline gets: reproducibility, provenance, signed artifacts, and a
+    promotion gate nothing bypasses.
+  - >
+    Where the analogy breaks is inspection. A compiled binary can be decompiled, diffed and
+    scanned; a tuned checkpoint cannot be read for backdoors in any practical sense. That makes
+    input control and evaluation the substitutes for code review — what went into the training set
+    and how the result behaves are the only two things anyone can actually examine.
+  - >
+    Poisoning is therefore the primary risk and it is durable. A poisoned example influences every
+    inference the model ever makes, survives redeployment, and is not removable without retraining.
+    A targeted poisoning that only activates on a trigger phrase is invisible to accuracy metrics
+    and to any evaluation that does not know what to look for.
+  - >
+    Training data is also a disclosure surface in a way inference data is not. Memorised examples
+    can be extracted from the model afterwards, so anything with personal or confidential content
+    in the training set has been baked into an artifact that may be shared far more widely than
+    the dataset ever was.
+  - >
+    The two access questions to settle early: who may promote a checkpoint to production, and who
+    may read the training corpus. Both tend to default to a broad platform-team role, and both are
+    higher-privilege than they look.
+
+distinguishedBy:
+  - >
+    Against the batch pipeline: same build-system trust properties, different artifact. That
+    produces data; this produces a model. The data can be corrected in place, the model cannot.
+  - >
+    Against self-hosted inference: that consumes artifacts, this produces them. They meet at the
+    registry, and the promotion gate between them is where both archetypes' supply-chain controls
+    concentrate.
+
+exemplars:
+  - name: Managed fine-tuning services
+    note: >
+      Provider-hosted tuning against a customer dataset, producing a private checkpoint served from
+      the same platform. Availability of this varies sharply by provider and by year.
+    asOf: "2026-08"
+  - name: Self-operated tuning on accelerator fleets
+    note: >
+      Adapter or full fine-tuning on the organisation's own hardware, with a registry and promotion
+      pipeline built alongside.
+    asOf: "2026-08"
+  - name: Adapter and preference tuning
+    note: >
+      Lightweight tuning producing an adapter rather than a full checkpoint. Smaller artifact, same
+      supply-chain questions, and an additional one about who may load an adapter at serve time.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Where training content originated, and the base models the pipeline starts from.
+
+  - id: dataPrep
+    type: compute
+    qualifier: data preparation
+    personas: [personaDataProvider]
+    note: Curation, filtering and labelling. The only place a poisoned example can still be caught.
+
+  - id: training
+    type: compute
+    qualifier: training
+    personas: [personaModelCreator, personaPlatformProvider]
+    note: >
+      A build environment with accelerators. Its dependencies, its network reach and its
+      reproducibility are build-system concerns.
+
+  - id: artifacts
+    type: data
+    personas: [personaDataProvider, personaModelProvider]
+    note: The corpus and the artifacts produced from it, both requiring provenance that survives.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Provenance, evaluation, promotion authority and the record of what produced what.
+
+nodes:
+  - id: dataOrigins
+    type: untrustedSource
+    zone: outside
+    label: Training content origins
+    note: >
+      Scraped corpora, purchased datasets, user-generated content and internal records. Each
+      carries a different provenance claim and most carry none.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+    capabilities: [capabilityDataProvenance, capabilityDataSanitization, capabilityAiBom]
+
+  - id: baseModel
+    type: modelWeights
+    zone: outside
+    label: Base model
+    note: >
+      The starting checkpoint. Everything it already contains is inherited, and tuning does not
+      remove it.
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization, riskAdapterPEFTInjection]
+    capabilities: [capabilityModelScanning, capabilityAiBom, capabilityModelDocumentation]
+
+  - id: curation
+    type: inputHandling
+    zone: dataPrep
+    cosaiComponent: componentDataFilteringAndProcessing
+    label: Curation and filtering
+    note: >
+      Deduplication, quality filtering, removal of sensitive content. The last point at which a
+      poisoned or improperly sourced example can be removed rather than baked in.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData, riskExcessiveDataHandling]
+    capabilities: [capabilityDataSanitization, capabilityDspm, capabilityDataAccessGovernance]
+
+  - id: labelling
+    type: connector
+    zone: dataPrep
+    label: Labelling and preference data
+    note: >
+      Human or model-generated labels, frequently from an outsourced workforce. A supply chain with
+      a direct path into model behaviour and almost no scrutiny.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+    capabilities: [capabilityDataProvenance, capabilityAiTprm, capabilityDataSanitization]
+
+  - id: trainJob
+    type: tuningPipeline
+    zone: training
+    label: Training job
+    note: >
+      The build. Reproducibility — same data, same code, same seed, same artifact — is what makes
+      an incident investigable at all.
+    risks: [riskModelSourceTampering, riskInsecureIntegratedComponent, riskFederatedDistributedTrainingPrivacy]
+    capabilities: [capabilityMlSecureDefaults, capabilityAiBom, capabilityAiVulnMgmt]
+
+  - id: frameworks
+    type: skillPackage
+    zone: training
+    cosaiComponent: componentModelFrameworksAndCode
+    label: Frameworks and dependencies
+    note: >
+      Training libraries and their transitive dependencies, executing with access to the corpus and
+      the artifact. An ordinary software supply chain in an unusual position.
+    risks: [riskInsecureIntegratedComponent, riskMaliciousLoaderDeserialization]
+    capabilities: [capabilityAiBom, capabilityAppSecTesting, capabilityAiVulnMgmt]
+
+  - id: corpus
+    type: trainingData
+    zone: artifacts
+    label: Training corpus
+    note: >
+      The assembled dataset. Read access to it is higher-privilege than it looks, because it is the
+      union of everything the organisation decided a model should learn.
+    risks: [riskUnauthorizedTrainingData, riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm, capabilityEncryptionKeyManagement]
+
+  - id: checkpoint
+    type: modelWeights
+    zone: artifacts
+    label: Tuned checkpoint
+    note: >
+      The output. Cannot be read for defects, may have memorised its inputs, and will be served to
+      everyone once promoted.
+    risks: [riskModelExfiltration, riskDataPoisoning, riskSensitiveDataDisclosure]
+    capabilities: [capabilityModelWeightProtection, capabilityEncryptionKeyManagement, capabilityModelScanning]
+
+  - id: registry
+    type: modelRegistry
+    zone: artifacts
+    label: Model registry
+    note: >
+      Versioned artifacts with lineage back to the exact dataset and code that produced them, and a
+      promotion gate to production.
+    risks: [riskModelDeploymentTampering, riskModelSourceTampering, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAiBom, capabilityStagedRollout, capabilityModelDocumentation]
+
+  - id: lineage
+    type: registry
+    zone: governance
+    label: Data and model lineage
+    note: >
+      Which examples, which code, which base model, which run. The only route to scoping the damage
+      when a dataset turns out to have been poisoned or improperly sourced.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+    capabilities: [capabilityDataProvenance, capabilityAiBom, capabilityModelDocumentation]
+
+  - id: evals
+    type: evaluationHarness
+    zone: governance
+    cosaiComponent: componentModelEvaluation
+    label: Evaluation and red teaming
+    note: >
+      Capability, safety and backdoor probing. Substitutes for reading the artifact, and a targeted
+      poisoning passes every benchmark that does not know its trigger.
+    risks: [riskDataPoisoning, riskModelEvasion, riskEvaluationBenchmarkManipulation]
+    capabilities: [capabilityModelEvals, capabilityAiRedTeaming, capabilityModelHardening]
+
+  - id: promotion
+    type: hitlGate
+    zone: governance
+    label: Promotion authority
+    note: >
+      Who may move a checkpoint to production. A high-privilege decision that usually defaults to a
+      broad platform-team role.
+    risks: [riskModelDeploymentTampering, riskShadowAndUnknownAgents]
+    capabilities: [capabilityStagedRollout, capabilityHitlControls, capabilityIga]
+
+  - id: signing
+    type: secretsBroker
+    zone: governance
+    label: Artifact signing
+    note: >
+      Signing the checkpoint and verifying the signature at load. What makes the registry's
+      promotion gate meaningful rather than advisory.
+    risks: [riskModelSourceTampering, riskModelDeploymentTampering]
+    capabilities: [capabilityModelWeightProtection, capabilitySecretsManagement, capabilityEncryptionKeyManagement]
+
+  - id: privacyTooling
+    type: evaluationHarness
+    zone: governance
+    label: Memorisation and privacy testing
+    note: >
+      Extraction and membership-inference testing. The only way to find out whether the artifact
+      remembers its training data before someone else does.
+    risks: [riskSensitiveDataDisclosure, riskInferredSensitiveData, riskModelReverseEngineering]
+    capabilities: [capabilityPetTooling, capabilityAiRedTeaming, capabilityModelEvals]
+
+edges:
+  - from: dataOrigins
+    to: curation
+    label: raw content
+    control:
+      kind: contentInspection
+      note: >
+        Curation is the only place a poisoned or improperly sourced example can still be removed.
+        After training it is in the weights and cannot be taken out.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+
+  - from: labelling
+    to: curation
+    label: labels and preferences
+    control:
+      kind: provenance
+      note: >
+        Frequently an outsourced workforce with a direct influence on model behaviour and very
+        little scrutiny relative to that influence.
+    risks: [riskDataPoisoning]
+
+  - from: curation
+    to: corpus
+    label: curated dataset
+    control:
+      kind: dataEntitlement
+      note: >
+        Corpus writes decide what the model will learn. The write path deserves the review a
+        production deploy gets.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+
+  - from: baseModel
+    to: trainJob
+    label: starting checkpoint
+    control:
+      kind: artifactIntegrity
+      note: >
+        Everything already in the base model is inherited. Tuning adds behaviour and does not
+        subtract it.
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization, riskAdapterPEFTInjection]
+
+  - from: corpus
+    to: trainJob
+    label: training data
+    control:
+      kind: dataEntitlement
+      note: >
+        Scoped to the dataset approved for this run, so a job cannot quietly widen its own inputs.
+    risks: [riskUnauthorizedTrainingData, riskExcessiveDataHandling]
+
+  - from: frameworks
+    to: trainJob
+    label: dependencies
+    control:
+      kind: artifactIntegrity
+      note: >
+        Executes with access to the corpus and the artifact. An ordinary dependency chain with an
+        unusually valuable reach.
+    risks: [riskInsecureIntegratedComponent]
+
+  - from: trainJob
+    to: checkpoint
+    label: produces artifact
+    control:
+      kind: artifactIntegrity
+      note: >
+        Write-once and candidate-only, so a job cannot overwrite an already-promoted artifact.
+        The signing key lives outside this environment for the same reason.
+    risks: [riskDataPoisoning, riskModelSourceTampering]
+
+  - from: checkpoint
+    to: registry
+    label: candidate version
+
+  - from: evals
+    to: registry
+    label: evaluation gate
+    kind: control
+    control:
+      kind: evaluationGate
+      note: >
+        The substitute for code review on an artifact nobody can read. Blocking, because a report
+        on an unreadable artifact changes nothing on its own.
+    risks: [riskDataPoisoning, riskModelEvasion]
+
+  - from: privacyTooling
+    to: checkpoint
+    label: memorisation testing
+    kind: control
+    control:
+      kind: evaluationGate
+      note: >
+        Before promotion, because a model that memorised its training data has turned a dataset
+        with restricted access into an artifact with broad access.
+    risks: [riskSensitiveDataDisclosure, riskModelReverseEngineering]
+
+  - from: signing
+    to: registry
+    label: signs promoted artifact
+    kind: control
+    control:
+      kind: provenance
+      note: >
+        Outside, so a compromised training job cannot sign its own output. The verification happens
+        at load in whichever serving archetype consumes it.
+    risks: [riskModelSourceTampering, riskModelDeploymentTampering]
+
+  - from: promotion
+    to: registry
+    label: promotion decision
+    kind: control
+    control:
+      kind: humanApproval
+      note: >
+        Separation of duties: whoever runs training should not be able to promote unilaterally. The
+        default configuration usually grants both to the same role.
+    risks: [riskModelDeploymentTampering]
+
+  - from: lineage
+    to: registry
+    label: dataset and code lineage
+    kind: control
+    control:
+      kind: provenance
+      note: >
+        Recorded during the run rather than reconstructed later. Without it, a poisoning discovered
+        months on cannot be scoped to affected models.
+    risks: [riskDataPoisoning, riskUnauthorizedTrainingData]
+
+crossCutting:
+  - risk: riskDataPoisoning
+    note: >
+      The archetype's defining risk, and durable in a way no other archetype's is. It enters at
+      curation or labelling, is baked into an unreadable artifact, and cannot be removed without
+      retraining. Input control and evaluation are the only two places it can be addressed.
+  - risk: riskUnauthorizedTrainingData
+    note: >
+      Spans origins, labelling and curation, and becomes irreversible at the training job. A
+      licensing or privacy defect discovered afterwards is a retraining decision, not a deletion.
+  - risk: riskSensitiveDataDisclosure
+    note: >
+      Training data can be memorised and later extracted, so restricted-access content becomes part
+      of a widely-served artifact. This is the disclosure path with no runtime control at all.
+
+risks:
+  - riskDataPoisoning
+  - riskUnauthorizedTrainingData
+  - riskModelSourceTampering
+  - riskSensitiveDataDisclosure
+  - riskModelDeploymentTampering
+  - riskModelExfiltration
+  - riskInsecureIntegratedComponent
+  - riskMaliciousLoaderDeserialization
+  - riskAdapterPEFTInjection
+  - riskModelEvasion
+  - riskEvaluationBenchmarkManipulation
+  - riskModelReverseEngineering
+  - riskInferredSensitiveData
+  - riskExcessiveDataHandling
+  - riskShadowAndUnknownAgents
+  - riskFederatedDistributedTrainingPrivacy
+
+capabilities:
+  - capabilityDataProvenance
+  - capabilityDataSanitization
+  - capabilityAiBom
+  - capabilityModelScanning
+  - capabilityModelWeightProtection
+  - capabilityStagedRollout
+  - capabilityModelEvals
+  - capabilityAiRedTeaming
+  - capabilityModelHardening
+  - capabilityPetTooling
+  - capabilityDataAccessGovernance
+  - capabilityDspm
+  - capabilityEncryptionKeyManagement
+  - capabilitySecretsManagement
+  - capabilityModelDocumentation
+  - capabilityMlSecureDefaults
+  - capabilityAiVulnMgmt
+  - capabilityAppSecTesting
+  - capabilityHitlControls
+  - capabilityIga
+  - capabilityAiTprm
+
+deviations:
+  - subject: The training environment names the legacy Model Creator persona
+    reason: >
+      CoSAI marks Model Creator as superseded and the current set has no exact replacement for
+      whoever builds a model. Model Provider describes the party that supplies one, which is not
+      the same as the party that trains it. The legacy persona is the accurate label, and using the
+      nearest current one would misattribute the responsibility.
+  - subject: Labelling is drawn as a connector
+    reason: >
+      It is usually an outsourced human workforce, and the vocabulary has no node type for people
+      as a supply chain. Connector captures what matters architecturally — a standing integration
+      feeding data in from a third party — and the note says what it actually is.
+  - subject: No inference or serving appears
+    reason: >
+      This archetype ends at the registry. What happens next is the self-hosted inference or
+      managed model archetype, and the promotion gate is the seam between them — drawn here because
+      this is the side that produces the artifact.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning, LLM04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "MITRE ATLAS — poisoning, model artifact and supply chain techniques"
+    url: https://atlas.mitre.org/
+  - title: "NIST SP 800-218A — secure software development practices for generative AI"
+    url: https://csrc.nist.gov/pubs/sp/800/218/a/final
+  - title: "CISA and NSA — AI data security"
+    url: https://www.cisa.gov/resources-tools/resources/ai-data-security
+  - title: "Microsoft Azure Well-Architected — training workload architecture pattern"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern

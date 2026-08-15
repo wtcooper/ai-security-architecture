@@ -669,3 +669,61 @@ Highlights below are Google's original mapping, not ours.
 | Inferred Sensitive Data | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, The Model | The Model | Data Sources, Data Filtering and Processing, Training and Tuning, Model Evaluation, Model Output Handling |
 | Insecure Model Output | The Model | The Model | Model Output Handling |
 | Rogue Actions | Agent Reasoning Core, External Tools and Services, Content / RAG, Model Memory, The Model | Application | Application, User Query, System Instructions, Perception, Rendering, Agent Reasoning Core, Orchestration Input, Orchestration Output, External Tools and Services, Content / RAG, Model Memory, Model Input Handling, Model Output Handling, The Model |
+
+## 4. Archetype coverage
+
+28 reference architectures across 3 surfaces. Everything below is a gap between the taxonomy and the drawings — either an archetype worth adding, or a mapping worth revisiting.
+
+| Surface | Architectures |
+| --- | --- |
+| Endpoint | 6 — Agentic browser and AI extension, Vendor coding and coworker agent, Desktop assistant with computer use, Local model runtime, Local MCP and tool plane, Personal autonomous agent harness |
+| Cloud / hosted | 16 — Autonomous action agent over business records, Agent-facing endpoint, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Multi-agent durable workflow, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Third-party SaaS | 6 — Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
+
+### 4a. Risks no architecture names — 0 of 36
+
+_None. Every CoSAI risk appears in at least one reference architecture._
+
+### 4b. Capabilities no architecture attaches — 0 of 56
+
+_None. Every capability in the taxonomy is attached somewhere._
+
+### 4c. CoSAI components no architecture draws — 0 of 23
+
+_None. Every CoSAI component is anchored by at least one architecture node._
+
+### 4d. Controls the catalogue requires — 29 of 29 kinds in use
+
+These are target architectures: every boundary crossing carries a control from the canonical list, and each kind names the capability that delivers it. A kind with no uses is a gap worth explaining.
+
+| Control | Crossings | Delivered by |
+| --- | --- | --- |
+| Brokered credential | 26 | Secrets management & ephemeral credentials |
+| User identity | 23 | Identity & access management for AI applications |
+| Authenticated transport | 23 | Inter-component & inter-agent transport security |
+| Append-only audit | 23 | Audit logging & non-repudiation |
+| Workload identity | 18 | Non-human & agent identity management |
+| Delegated grant | 16 | Identity & access management for AI applications |
+| Data entitlement | 16 | Data access governance for retrieval |
+| Tenant configuration | 16 | AI governance platform |
+| Content inspection | 15 | Runtime content & policy guardrails |
+| Registry admission | 14 | Agent & tool registry |
+| Independent discovery | 14 | Shadow AI discovery |
+| Verified provenance | 11 | Content provenance & watermarking |
+| Isolation boundary | 10 | Agent execution sandboxing |
+| Artifact integrity | 10 | Model artifact scanning & safe deserialization |
+| Evaluation gate | 9 | Model & agent evaluation harnesses |
+| Agent identity | 7 | Non-human & agent identity management |
+| Provider-internal | 7 | Third-party risk management platform for AI vendors |
+| Per-invocation policy | 6 | Runtime action authorization |
+| Egress allowlist | 6 | Network segmentation & egress control |
+| Memory scoping | 6 | Agent memory & context protection |
+| Quota and rate limit | 6 | Rate limiting, quotas & spend controls |
+| Existing content permissions | 5 | Data security posture management for AI |
+| Human approval | 5 | Human-in-the-loop approval & escalation |
+| Device posture and inspection | 5 | Secure service edge for AI services |
+| Replay safety | 4 | Runtime action authorization |
+| Contractual assurance | 3 | Third-party risk management platform for AI vendors |
+| Credential isolation | 3 | Agent credential isolation & delegation control |
+| Emergency stop | 3 | Kill switch, quarantine & decommissioning |
+| Scoped tool permission | 1 | Tool permission scoping & least agency |

@@ -1,0 +1,502 @@
+id: archCodingAgent
+surface: surfaceEndpoint
+title: Vendor coding and coworker agent
+abbrev: Coding agent
+
+summary:
+  - >
+    A vendor-built agent loop in a terminal or editor, driven by a developer who is present, with
+    read and write access to a working tree, a shell, and whatever tool servers the project admits.
+
+description:
+  - >
+    The defining property is the human in the loop and the fact that the loop is scoped to a task.
+    The developer starts it, watches it, and is the approval gate for the actions that matter. Most
+    of this archetype's security posture rests on that gate being real rather than nominal.
+  - >
+    What makes it more than an editor plugin is the tool plane. The agent reads a project
+    configuration file to decide which tool servers to launch and trust, and that file usually sits
+    in the repository — which means it arrives with the code. Cloning a project and starting the
+    agent can register tool providers the developer never chose, and the disclosed vulnerability
+    pattern in this archetype is overwhelmingly about that file: injecting into it, swapping its
+    contents after approval, or getting it auto-registered without a prompt. Agent configuration
+    is now a protected-path class, and the vendors that added enforcement did so reactively.
+  - >
+    The second exposure is that everything the agent reads is untrusted input with the same
+    standing as the developer's instruction: source files, dependency manifests, issue text, test
+    output, and the responses of any tool it calls. A repository is a document the attacker may
+    have contributed to. The agent has no reliable way to separate the code it was asked to change
+    from instructions embedded in that code.
+  - >
+    Approval fatigue is the failure mode that makes the rest matter. A gate that fires on every
+    file write trains the developer to accept, and an accepted prompt is not oversight. The
+    architectures that hold up narrow what needs approving — by sandboxing execution, by scoping
+    tool permissions in advance, and by making network egress default-deny — so that the prompts
+    that do fire are rare enough to read.
+
+distinguishedBy:
+  - >
+    Against the personal autonomous harness: this agent is invoked, not triggered; reads content
+    the developer chose to clone, not messages from strangers; holds credentials the vendor issued
+    for a session, not long-lived keys in a dotfile; and is an outbound client with no listening
+    port. It also has an administrator — enterprise deployments get managed settings, an audit
+    trail and a policy file, none of which the harness archetype has.
+  - >
+    Against a sandboxed cloud execution service: the same agent run by the vendor on their
+    infrastructure gets an isolated filesystem, default-deny egress and a clean teardown. Here it
+    runs on a machine that also holds the developer's SSH keys, cloud credentials and browser
+    profile, and nothing separates them from the agent's shell.
+
+exemplars:
+  - name: Terminal and CLI coding agents
+    note: >
+      Vendor agent loops that run in a shell against a working directory, with a permission model
+      for file writes and command execution and support for project-scoped tool servers.
+    asOf: "2026-08"
+  - name: IDE-embedded agents
+    note: >
+      The same loop inside an editor, where the tool-server configuration lives in a dotfile in the
+      repository. This is the specific location that has repeatedly proven to be a code-execution
+      path when it can be written or swapped between approval and use.
+    asOf: "2026-08"
+  - name: Managed enterprise deployments
+    note: >
+      The same product with centrally managed settings, an allowlist of permitted tool servers and
+      exported audit. The architecture is unchanged; the governance column is the difference.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The developer, and everything the agent will read that someone else wrote.
+
+  - id: workstation
+    type: device
+    personas: [personaEndUser, personaApplicationDeveloper]
+    note: >
+      Also holds the developer's SSH keys, cloud credentials and browser sessions. Nothing in this
+      archetype separates those from the agent's shell.
+
+  - id: exec
+    type: sandbox
+    personas: [personaApplicationDeveloper]
+    note: >
+      Increasingly the default for command execution rather than an opt-in. Where it is present,
+      it is the control that lets the approval gate fire rarely enough to be read.
+
+  - id: vendor
+    type: vendorOpaque
+    qualifier: vendor service
+    personas: [personaAgenticProvider, personaModelProvider]
+    note: The inference API and, in managed deployments, the policy and audit endpoints.
+
+  - id: thirdParty
+    type: vendorOpaque
+    qualifier: third-party tools
+    personas: [personaAgenticProvider]
+    note: >
+      Remote tool providers the project depends on. Their behaviour belongs to the Agentic Platform persona;
+      what remains controllable is whether they are admitted and how far they are scoped.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: >
+      Present in managed deployments and absent otherwise. The same binary is a governed tool or an
+      ungoverned one depending on whether this column exists.
+
+nodes:
+  # --- Outside -------------------------------------------------------------------
+  - id: developer
+    type: humanUser
+    zone: outside
+    label: Developer
+    note: Present, watching, and the approval gate. The archetype's posture depends on that staying true.
+
+  - id: repoContent
+    type: untrustedSource
+    zone: outside
+    label: Repository content
+    note: >
+      Source files, dependency manifests, issue and PR text, build output. Contributed to by people
+      who are not the developer, and read into context as though it were instruction.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+    capabilities: [capabilityPromptInjectionDefense, capabilityAppSecTesting]
+
+  # --- Workstation ---------------------------------------------------------------
+
+  - id: harness
+    type: harness
+    zone: workstation
+    label: Agent client
+    note: >
+      The terminal or editor the developer drives, and the vendor's loop behind it running as that
+      developer. Outbound only — it accepts no connections, which is the single largest structural
+      difference from a personal agent harness.
+    risks: [riskRogueActions, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityEdr, capabilityAiVulnMgmt]
+
+  - id: planner
+    type: reasoningCore
+    zone: workstation
+    label: Planning loop
+    note: Decides the next edit or command from the task and everything it has read so far.
+    risks: [riskRogueActions, riskPromptInjection]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability]
+
+  - id: agentConfig
+    type: registry
+    zone: workstation
+    label: Agent configuration
+    note: >
+      The project file that declares which tool servers the agent may launch and what it is
+      permitted to do without asking. It arrives with the repository, and it is the single most
+      attacked artifact in this archetype — by injection into it, by modification after approval,
+      and by auto-registration without a prompt.
+    risks: [riskToolRegistryTampering, riskZombieShadowMCPServers, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityEdr]
+
+  - id: approval
+    type: hitlGate
+    zone: workstation
+    label: Approval prompt
+    note: >
+      Blocks on writes and commands. Effective in inverse proportion to how often it fires: a
+      prompt on every action is a click-through, so the surrounding controls exist to make it rare.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityHitlControls, capabilityToolPermissionScoping]
+
+  - id: editTools
+    type: tool
+    zone: workstation
+    label: File and edit tools
+    note: >
+      Read and write across the working tree, and often beyond it. Scope is a setting, not a
+      boundary.
+    risks: [riskRogueActions, riskSensitiveDataDisclosure]
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
+
+  - id: localMcp
+    type: mcpServer
+    zone: workstation
+    label: Local tool servers
+    note: >
+      Child processes launched over stdio with the developer's privileges, admitted by the
+      configuration file above.
+    risks: [riskToolRegistryTampering, riskMCPTransportHijacking, riskZombieShadowMCPServers]
+    capabilities: [capabilityMcpToolSecurity, capabilityAgentRegistry]
+
+  - id: sessionCreds
+    type: credentialStore
+    zone: workstation
+    label: Session credentials
+    note: >
+      Vendor-issued and session-scoped, which is the meaningful improvement over a long-lived key
+      in a file. The developer's other credentials on the same machine are not.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilityCredentialIsolation, capabilitySecretsManagement]
+
+  - id: egress
+    type: egressProxy
+    zone: workstation
+    label: Egress control
+    note: >
+      Default-deny outbound with an allowlist. The last boundary between a repository-borne
+      injection and an attacker's collection endpoint.
+    risks: [riskSensitiveDataDisclosure, riskCovertChannelsInModelOutputs]
+    capabilities: [capabilityEgressControl, capabilitySse]
+
+  # --- Sandbox -------------------------------------------------------------------
+  - id: sandboxShell
+    type: codeSandbox
+    zone: exec
+    label: Command execution
+    note: >
+      Builds, tests and shell commands. Isolating this is what turns "approve every command" into
+      "approve the ones that leave the box".
+    risks: [riskRogueActions]
+    capabilities: [capabilityAgentSandboxing]
+
+  # --- Vendor --------------------------------------------------------------------
+  - id: vendorApi
+    type: inferenceEndpoint
+    zone: vendor
+    label: Inference API
+    note: The published interface. What is behind it is the vendor's and is not drawn.
+    risks: [riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilityAiGateway, capabilityTransportSecurity]
+
+  - id: remoteMcp
+    type: mcpServer
+    zone: thirdParty
+    label: Remote tool servers
+    note: >
+      Third-party tool providers reached over HTTP. As OAuth resource servers they are a better
+      trust story than a local child process — the grant is explicit, scoped and revocable — but
+      their tool descriptions are still model input.
+    risks: [riskToolSourceProvenance, riskMCPTransportHijacking, riskInsecureIntegratedComponent]
+    capabilities: [capabilityMcpToolSecurity, capabilityNhiManagement, capabilityTransportSecurity]
+
+  # --- Governance ----------------------------------------------------------------
+  - id: managedPolicy
+    type: policyEngine
+    zone: governance
+    label: Managed settings
+    note: >
+      Centrally enforced permissions and a tool-server allowlist the developer cannot override.
+      The difference between a governed deployment and a shadow one.
+    risks: [riskShadowAndUnknownAgents, riskToolRegistryTampering]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityAgentRegistry, capabilityAiGovernancePlatform]
+
+  - id: audit
+    type: auditSink
+    zone: governance
+    label: Session audit
+    note: Exported prompts, tool calls and approvals. Absent in unmanaged installs.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityAuditLogging, capabilityAgentObservability, capabilityAiDetectionResponse]
+
+  - id: discovery
+    type: registry
+    zone: governance
+    label: Shadow AI discovery
+    note: Finding the installs nobody registered, which on a developer machine is most of them.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityShadowAiDiscovery, capabilityAiBom]
+
+edges:
+  - from: developer
+    to: harness
+    label: task
+    control:
+      kind: userIdentity
+      note: Whoever is at the machine is the developer, as far as the agent is concerned.
+
+  - from: repoContent
+    to: editTools
+    label: files read into context
+    control:
+      kind: contentInspection
+      note: >
+        Repository content is treated as untrusted on read. It cannot be authenticated — a
+        contributor is not the developer — so the sandbox and the egress allowlist bound what a
+        successful injection achieves.
+    risks: [riskPromptInjection]
+
+  - from: repoContent
+    to: agentConfig
+    label: ships with the clone
+    control:
+      kind: admission
+      note: >
+        A tool server declared by a cloned repository is admitted only against a managed
+        allowlist, never auto-registered. This is the specific crossing behind most of this
+        archetype's disclosed code-execution paths.
+    risks: [riskToolRegistryTampering, riskInsecureIntegratedComponent]
+
+
+  - from: harness
+    to: planner
+    label: turn
+
+  - from: agentConfig
+    to: localMcp
+    label: admits and launches
+    risks: [riskToolRegistryTampering]
+
+  - from: planner
+    to: approval
+    label: proposed action
+    risks: [riskRogueActions]
+
+  - from: approval
+    to: editTools
+    label: approved write
+    risks: [riskRogueActions]
+
+  - from: approval
+    to: localMcp
+    label: approved tool call
+
+  - from: planner
+    to: sandboxShell
+    label: command
+    control:
+      kind: isolation
+      note: >
+        Two controls in series, and the reason the second can stay usable: with execution
+        contained, only the actions that escape the box need a human.
+    risks: [riskRogueActions]
+
+  - from: planner
+    to: egress
+    label: outbound request
+
+  - from: egress
+    to: vendorApi
+    label: inference request
+    control:
+      kind: brokeredCredential
+      note: >
+        Issued by the vendor per session and expiring on its own. The meaningful contrast with the
+        personal-harness archetype, where the same authority sits in a file indefinitely.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+
+  - from: vendorApi
+    to: planner
+    label: completion
+    control:
+      kind: transport
+      note: Transport is authenticated; the content drives file writes and commands, and is not.
+    risks: [riskInsecureModelOutput]
+
+  - from: egress
+    to: remoteMcp
+    label: tool call
+    control:
+      kind: delegatedGrant
+      note: >
+        An explicit grant to a named server, which is the strongest authentication on this diagram.
+        It says nothing about whether the tool's own description is honest.
+    risks: [riskToolSourceProvenance, riskMCPTransportHijacking]
+
+  - from: remoteMcp
+    to: planner
+    label: tool result
+    control:
+      kind: transport
+      note: >
+        Tool output re-enters the context window. A compromised or merely hostile tool server
+        writes directly into the agent's instructions.
+    risks: [riskPromptInjection, riskInsecureIntegratedComponent]
+
+  - from: sessionCreds
+    to: harness
+    label: credentials
+    kind: control
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: managedPolicy
+    to: agentConfig
+    label: enforced allowlist
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        Only meaningful if the enforcement is outside the file it governs. A policy stored beside
+        the configuration it constrains is a suggestion.
+    risks: [riskToolRegistryTampering]
+
+  - from: managedPolicy
+    to: approval
+    label: non-overridable gates
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: Which actions the developer is not permitted to auto-approve away.
+    risks: [riskRogueActions]
+
+  - from: harness
+    to: audit
+    label: session events
+    kind: control
+    control:
+      kind: auditTrail
+      note: Present in managed deployments; in an unmanaged install there is no record at all.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: discovery
+    to: harness
+    label: install detection
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Finds the installs that never enrolled. Necessary precisely because this archetype is a
+        binary a developer can fetch without asking anyone.
+    risks: [riskShadowAndUnknownAgents]
+
+crossCutting:
+  - risk: riskToolRegistryTampering
+    note: >
+      The configuration file, the local servers it launches and the remote servers it names are one
+      chain. Securing any single link leaves the path open, which is why the disclosed
+      vulnerabilities in this archetype keep landing in different places along it.
+  - risk: riskPromptInjection
+    note: >
+      Arrives through repository content, dependency metadata, tool output and test results — four
+      unrelated paths into the same context window, none of which is the developer's instruction.
+  - risk: riskShadowAndUnknownAgents
+    note: >
+      Everything in the governance column is optional. The same binary with no managed settings has
+      no policy, no audit and no inventory, and that is the common case.
+
+risks:
+  - riskPromptInjection
+  - riskToolRegistryTampering
+  - riskRogueActions
+  - riskInsecureIntegratedComponent
+  - riskSensitiveDataDisclosure
+  - riskToolSourceProvenance
+  - riskShadowAndUnknownAgents
+  - riskZombieShadowMCPServers
+  - riskMCPTransportHijacking
+  - riskInsecureModelOutput
+  - riskAgenticDelegationConfusedDeputy
+  - riskExcessiveDataHandlingDuringInference
+  - riskCovertChannelsInModelOutputs
+
+capabilities:
+  - capabilityAgentSandboxing
+  - capabilityToolPermissionScoping
+  - capabilityMcpToolSecurity
+  - capabilityAgentRegistry
+  - capabilityHitlControls
+  - capabilityEgressControl
+  - capabilityAgentRuntimeEnforcement
+  - capabilityEdr
+  - capabilityShadowAiDiscovery
+  - capabilityAgentObservability
+  - capabilityAuditLogging
+  - capabilityCredentialIsolation
+  - capabilitySecretsManagement
+  - capabilityPromptInjectionDefense
+  - capabilityAppSecTesting
+  - capabilityAiVulnMgmt
+  - capabilityAiBom
+  - capabilityNhiManagement
+  - capabilityTransportSecurity
+  - capabilityAiGateway
+  - capabilitySse
+  - capabilityAiGovernancePlatform
+  - capabilityAiDetectionResponse
+
+deviations:
+  - subject: The control plane is drawn even though most installs do not have one
+    reason: >
+      Unlike the personal-harness archetype, where no governance plane exists to draw, here it
+      exists as a product feature and is simply not always deployed. Omitting it would hide the
+      available answer; drawing it without saying so would overstate the typical posture. It is
+      drawn, marked shared, and every node in it says what its absence means.
+  - subject: Agent configuration is drawn as a registry node rather than a file
+    reason: >
+      Physically it is a dotfile. Functionally it is the admission decision for the entire tool
+      plane, and the vocabulary's registry type is what carries that meaning. Drawing it as a data
+      store would understate what writing to it achieves.
+  - subject: Remote tool servers get their own vendor zone rather than sharing the vendor's
+    reason: >
+      They are a different third party with a different grant and a different failure mode. Folding
+      them into the model vendor's boundary would imply one trust relationship where there are two.
+
+sources:
+  - title: "Model Context Protocol — security best practices for clients and servers"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "Model Context Protocol — authorization for remote servers"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "Claude Code — security model and permission system"
+    url: https://code.claude.com/docs/en/security
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 tool misuse, ASI04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "Thoughtworks Technology Radar vol. 34 — sandboxed execution for coding agents"
+    url: https://www.thoughtworks.com/radar/techniques

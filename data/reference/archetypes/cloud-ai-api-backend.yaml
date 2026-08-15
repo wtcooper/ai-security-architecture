@@ -1,0 +1,434 @@
+id: archAiApiBackend
+surface: surfaceCloud
+title: AI-augmented API backend
+abbrev: AI API backend
+
+summary:
+  - >
+    A conventional API with a model somewhere in the middle — classifying, extracting, summarising
+    or routing — behind a contract that promises a typed response. The most widespread AI
+    architecture and the least often recognised as one.
+
+description:
+  - >
+    There is no chat interface here and frequently no user-visible AI at all. A support ticket gets
+    categorised, an invoice gets extracted, a message gets routed, a document gets summarised, and
+    the caller receives a normal API response. The AI is an implementation detail of an endpoint,
+    which is exactly why this archetype tends to skip the controls the chat-shaped ones get.
+  - >
+    The defining property is that model output re-enters a deterministic system. Downstream code
+    branches on a classification, writes an extracted value to a record, or passes a generated
+    string into a query. The model's output is untrusted input to everything after it, and the
+    single most valuable control is schema validation with a deterministic failure path — a
+    response that does not conform is rejected rather than coerced.
+  - >
+    Free-text fields inside a structured response are where this goes wrong. A schema that
+    validates shape but leaves a string field unconstrained has validated nothing about the content
+    of that field, and that string is often the one that reaches a template, a query or another
+    prompt. Constraining to enumerations wherever the domain allows is worth more than any filter.
+  - >
+    Two operational properties differ from a normal backend and catch teams out. Latency and
+    availability now depend on an external inference call, so timeouts, retries and a deterministic
+    fallback path are functional requirements rather than resilience niceties. And cost is
+    per-token on a path that may be called at request volume, which makes an unbounded input a
+    financial exposure as well as a performance one.
+
+distinguishedBy:
+  - >
+    Against the embedded retrieval assistant: no conversation, no retrieval, no human reading the
+    output. The consumer of the model's output is code, which changes the control set from
+    grounding and rendering to schema validation and fallback.
+  - >
+    Against an autonomous action agent: this has no loop and no discretion. It performs one
+    transformation per request within a fixed contract. Where the extracted value drives a write,
+    the write is the calling system's decision, not the model's.
+  - >
+    Against a batch pipeline: same transformation, synchronous and in the request path, so latency
+    and availability become the caller's problem rather than a schedule's.
+
+exemplars:
+  - name: Classification and routing endpoints
+    note: >
+      Ticket triage, content moderation, intent routing. A typed response consumed by code, with
+      the model replacing a rules engine that used to be maintained by hand.
+    asOf: "2026-08"
+  - name: Document extraction services
+    note: >
+      Invoices, forms and contracts turned into structured records. The extracted values are
+      written to systems of record, which is where the validation question becomes concrete.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Callers, and the documents and text they submit for processing.
+
+  - id: edge
+    type: network
+    personas: [personaApplicationDeveloper]
+    note: The published contract, and the quotas and authentication in front of it.
+
+  - id: service
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: >
+      The transformation, the validation, and the deterministic path taken when the model does not
+      cooperate.
+
+  - id: records
+    type: data
+    personas: [personaDataProvider]
+    note: Where extracted values and classifications land.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: The published inference interface.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Credentials, quotas, evaluation and the record of what the model was asked and answered.
+
+nodes:
+  - id: caller
+    type: thirdPartyAgent
+    zone: outside
+    label: Calling system
+    note: >
+      Another service or a customer integration. Expects a typed response and will not tolerate a
+      prose apology when the model misbehaves.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityNhiManagement]
+
+  - id: payload
+    type: untrustedSource
+    zone: outside
+    label: Submitted content
+    note: >
+      Ticket text, uploaded documents, message bodies. Written by whoever submitted them, and
+      reaching a prompt without ever looking like a prompt to the developer who wrote the endpoint.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityPromptInjectionDefense, capabilityDataSanitization]
+
+  - id: apiContract
+    type: apiEndpoint
+    zone: edge
+    label: API endpoint
+    note: >
+      The published contract. Its promise of a typed response is what the whole validation
+      discipline downstream exists to keep.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityTransportSecurity, capabilityAppSecTesting]
+
+  - id: inputValidation
+    type: inputHandling
+    zone: edge
+    label: Input validation
+    note: >
+      Size, type and content limits before anything reaches a model. On a per-token dependency,
+      bounding input length is a cost control as much as a safety one.
+    risks: [riskPromptInjection, riskEconomicDenialOfWallet, riskExcessiveDataHandling]
+    capabilities: [capabilityPromptInjectionDefense, capabilityRateLimiting, capabilityPromptRedaction]
+
+  - id: transform
+    type: orchestrator
+    zone: service
+    label: Transformation
+    note: >
+      Builds the prompt, calls the model, and is the only place in the service that knows an AI is
+      involved at all.
+    risks: [riskPromptInjection, riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilitySystemPromptManagement, capabilityAgentObservability]
+
+  - id: schemaCheck
+    type: outputHandling
+    zone: service
+    label: Output validation
+    note: >
+      Schema conformance with rejection rather than coercion, then constraints on the fields
+      themselves — enumerations where the domain allows, encoding for wherever a free-text value is
+      about to land. Validating shape alone says nothing about the contents of a string.
+    risks: [riskInsecureModelOutput, riskModelEvasion]
+    capabilities: [capabilityGroundednessChecking, capabilityOutputEncoding, capabilityModelGuardrails]
+
+  - id: fallback
+    type: router
+    zone: service
+    label: Deterministic fallback
+    note: >
+      What the endpoint returns when the model is slow, unavailable or non-conforming. A functional
+      requirement, because the contract promised a response.
+    risks: [riskDenialOfMLService, riskInsecureModelOutput]
+    capabilities: [capabilityStagedRollout, capabilityMlSecureDefaults]
+
+  - id: writePath
+    type: actuator
+    zone: records
+    label: Record write
+    note: >
+      Where an extracted value or a classification becomes state. The caller's decision to trust
+      the output, made concrete.
+    risks: [riskInsecureModelOutput, riskRogueActions]
+    capabilities: [capabilityAuditLogging, capabilityDataAccessGovernance, capabilityHitlControls]
+
+  - id: modelApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Inference API
+    note: The published interface, and now part of this endpoint's latency and availability budget.
+    risks: [riskExcessiveDataHandlingDuringInference, riskDenialOfMLService]
+    capabilities: [capabilityAiGateway, capabilityTransportSecurity]
+
+  - id: creds
+    type: secretsBroker
+    zone: governance
+    label: Credential broker
+    note: Short-lived provider credentials rather than a key in the service's configuration.
+    risks: [riskCrossTenantCredentialPropagation]
+    capabilities: [capabilitySecretsManagement, capabilityNhiManagement, capabilityCredentialIsolation]
+
+  - id: evals
+    type: evaluationHarness
+    zone: governance
+    label: Accuracy and adversarial evaluation
+    note: >
+      Behaviour on a labelled set, and on inputs designed to break the schema. Where a chat product
+      degrades noticeably, this one silently miscategorises.
+    risks: [riskModelEvasion, riskInsecureModelOutput]
+    capabilities: [capabilityModelEvals, capabilityAiRedTeaming, capabilityAppSecTesting]
+
+  - id: quota
+    type: policyEngine
+    zone: governance
+    label: Quota and cost ceiling
+    note: >
+      A per-token dependency called at request volume. Without a ceiling, traffic and cost are the
+      same variable.
+    risks: [riskEconomicDenialOfWallet, riskDenialOfMLService]
+    capabilities: [capabilityRateLimiting, capabilityAiGovernancePlatform]
+
+  - id: log
+    type: auditSink
+    zone: governance
+    label: Prompt and response log
+    note: >
+      What was sent and what came back, per request. The only way to reconstruct why a record holds
+      the value it does.
+    risks: [riskSensitiveDataDisclosure, riskInsecureModelOutput]
+    capabilities: [capabilityAuditLogging, capabilityAgentObservability, capabilityAiDetectionResponse]
+
+edges:
+  - from: caller
+    to: apiContract
+    label: request
+    control:
+      kind: workloadIdentity
+      note: >
+        Conventional API authentication. Authenticates the caller and nothing about the content
+        they submitted, which is the part that reaches the model.
+    risks: [riskDenialOfMLService]
+
+  - from: payload
+    to: inputValidation
+    label: submitted content
+    control:
+      kind: contentInspection
+      note: >
+        Submitted content is bounded and classified before it becomes a prompt. Easily skipped
+        here, because the endpoint does not look like an AI feature to whoever wrote it.
+    risks: [riskPromptInjection]
+
+  - from: apiContract
+    to: inputValidation
+    label: validated request
+
+  - from: inputValidation
+    to: transform
+    label: bounded input
+    control:
+      kind: workloadIdentity
+      note: >
+        The edge has already bounded size and stripped what it can. Everything after this point
+        treats the payload as adversarial regardless.
+    risks: [riskPromptInjection]
+
+  - from: transform
+    to: modelApi
+    label: inference request
+    control:
+      kind: brokeredCredential
+      note: Issued per workload rather than held in the service's configuration.
+    risks: [riskExcessiveDataHandlingDuringInference]
+
+  - from: modelApi
+    to: schemaCheck
+    label: model response
+    control:
+      kind: transport
+      note: >
+        Authenticated transport carrying unauthenticated content into a deterministic system. Every
+        control from here to the write path exists because of this crossing.
+    risks: [riskInsecureModelOutput]
+
+
+  - from: schemaCheck
+    to: fallback
+    label: non-conforming or timed out
+    risks: [riskDenialOfMLService, riskInsecureModelOutput]
+
+  - from: schemaCheck
+    to: apiContract
+    label: typed response
+    control:
+      kind: workloadIdentity
+      note: >
+        What crosses back out is a validated, constrained object rather than model text. That is
+        the contract the endpoint published, and the only thing that keeps it true.
+    risks: [riskInsecureModelOutput]
+
+  - from: fallback
+    to: apiContract
+    label: deterministic response
+    control:
+      kind: workloadIdentity
+      note: >
+        The same contract, honoured without the model. A caller cannot tell the difference, which
+        is the property that makes the dependency survivable.
+    risks: [riskDenialOfMLService]
+
+  - from: schemaCheck
+    to: writePath
+    label: extracted value
+    control:
+      kind: policyDecision
+      note: >
+        The model influenced the value; it did not authorise the write. Keeping those separate is
+        what stops this archetype from quietly becoming an action agent.
+    risks: [riskInsecureModelOutput, riskRogueActions]
+
+  - from: creds
+    to: transform
+    label: provider credentials
+    kind: control
+    control:
+      kind: brokeredCredential
+      note: >
+        Issued at call time to a workload that proved what it is. Nothing in the service tier holds
+        a provider key at rest.
+    risks: [riskCrossTenantCredentialPropagation]
+
+  - from: quota
+    to: apiContract
+    label: request and cost limits
+    kind: control
+    control:
+      kind: rateLimit
+      note: Enforced at the edge, because by the service tier the token spend is already committed.
+    risks: [riskEconomicDenialOfWallet]
+
+  - from: evals
+    to: schemaCheck
+    label: conformance and adversarial suites
+    kind: control
+    control:
+      kind: evaluationGate
+      note: >
+        Tests that the schema holds under adversarial input, not only that accuracy is acceptable
+        on the happy path.
+    risks: [riskModelEvasion]
+
+  - from: transform
+    to: log
+    label: prompt and response
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        The only record of why a field holds the value it does. Frequently omitted here precisely
+        because the endpoint does not look like an AI feature.
+    risks: [riskSensitiveDataDisclosure]
+
+crossCutting:
+  - risk: riskInsecureModelOutput
+    note: >
+      The archetype's central risk. Model output flows into branching logic, record writes and
+      sometimes queries, and every consumer of it was written expecting a value rather than an
+      adversary.
+  - risk: riskPromptInjection
+    note: >
+      Arrives inside ordinary business content, on an endpoint nobody thinks of as an AI feature.
+      That framing is what causes the injection controls to be skipped here more than anywhere else.
+  - risk: riskDenialOfMLService
+    note: >
+      An external inference call sits inside a synchronous request path. Latency, availability and
+      cost become the caller's problem, which is why the fallback path is functional rather than
+      defensive.
+
+risks:
+  - riskInsecureModelOutput
+  - riskPromptInjection
+  - riskExcessiveDataHandlingDuringInference
+  - riskDenialOfMLService
+  - riskEconomicDenialOfWallet
+  - riskModelEvasion
+  - riskSensitiveDataDisclosure
+  - riskCrossTenantCredentialPropagation
+  - riskRogueActions
+  - riskExcessiveDataHandling
+  - riskCovertChannelsInModelOutputs
+
+capabilities:
+  - capabilityOutputEncoding
+  - capabilityGroundednessChecking
+  - capabilityPromptInjectionDefense
+  - capabilityModelGuardrails
+  - capabilityRateLimiting
+  - capabilityModelEvals
+  - capabilityAiRedTeaming
+  - capabilityAppSecTesting
+  - capabilitySecretsManagement
+  - capabilityNhiManagement
+  - capabilityCredentialIsolation
+  - capabilityAuditLogging
+  - capabilityAgentObservability
+  - capabilityAiDetectionResponse
+  - capabilityDataAccessGovernance
+  - capabilityHitlControls
+  - capabilitySystemPromptManagement
+  - capabilityPromptRedaction
+  - capabilityDataSanitization
+  - capabilityStagedRollout
+  - capabilityMlSecureDefaults
+  - capabilityAiGovernancePlatform
+  - capabilityAiGateway
+  - capabilityTransportSecurity
+
+deviations:
+  - subject: The calling system is drawn as a third-party agent rather than a user
+    reason: >
+      It is usually another service, sometimes an agent, and only occasionally a person. The
+      third-party-agent type carries the property that matters — a non-human caller with its own
+      credential and its own retry behaviour — which is what shapes the quota and idempotency
+      requirements.
+  - subject: A deterministic fallback is drawn as a routing node
+    reason: >
+      It is not a security control and would not normally appear on a security diagram. It is drawn
+      because the alternative to it is returning model output that failed validation, which is
+      precisely the failure the schema check exists to prevent.
+  - subject: No retrieval appears
+    reason: >
+      Many real implementations add it. It is left out to keep this archetype distinct from the
+      retrieval assistant — the transformation-behind-a-contract shape is what is being described,
+      and adding retrieval makes it that other archetype with a typed response.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM10 improper output handling"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Martin Fowler and Bharani Subramaniam — emerging patterns in building GenAI products"
+    url: https://martinfowler.com/articles/gen-ai-patterns/
+  - title: "AWS Well-Architected Generative AI Lens"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html
+  - title: "Microsoft Azure Well-Architected — architecture pattern for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern

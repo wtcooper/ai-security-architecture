@@ -12,6 +12,8 @@ import { join } from "node:path";
 import { parse } from "yaml";
 
 import type {
+  Archetype,
+  ArchitectureVocabulary,
   AuthoredMappings,
   Capability,
   Component,
@@ -30,6 +32,7 @@ import type {
 } from "../src/lib/types";
 import { CAPABILITY_STATUSES, FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
+import { layoutArchetype } from "../src/lib/architecture-layout";
 import {
   ACTOR_IDS,
   BANDS,
@@ -60,6 +63,16 @@ async function loadIncidents(): Promise<Incident[]> {
   return Promise.all(files.map((f) => loadYaml<Incident>(join(dir, f))));
 }
 
+/** One file per archetype, so 28 of them stay reviewable one at a time. */
+async function loadArchetypes(): Promise<AuthoredArchetype[]> {
+  const dir = join(ROOT, "data", "reference", "archetypes");
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort();
+  return Promise.all(files.map((f) => loadYaml<AuthoredArchetype>(join(dir, f))));
+}
+
+/** An archetype as authored: everything except the geometry, which the build computes. */
+type AuthoredArchetype = Omit<Archetype, "layout">;
+
 async function main() {
   const [
     componentsDoc,
@@ -83,6 +96,11 @@ async function main() {
     cosai<{ actorAccessLevels: Vocabulary[] }>("actor-access"),
     loadYaml<{ overlays: RawOverlay[] }>(join(ROOT, "data", "overlay", "risk-components.yaml")),
     loadIncidents(),
+  ]);
+
+  const [architectureVocabulary, authoredArchetypes] = await Promise.all([
+    loadYaml<ArchitectureVocabulary>(join(ROOT, "data", "reference", "vocabulary.yaml")),
+    loadArchetypes(),
   ]);
 
   const entriesDoc = await loadYaml<{
@@ -172,6 +190,15 @@ async function main() {
     componentIds,
   });
 
+  // --- Reference architectures ---------------------------------------------------
+  const archetypes = checkArchetypes(authoredArchetypes, architectureVocabulary, {
+    surfaces: capabilitiesDoc.surfaces,
+    capabilities: capabilitiesDoc.capabilities,
+    riskIds,
+    personaIds,
+    mapTargets,
+  });
+
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
   await checkAgainstSaifSeed(overlays, risks);
@@ -215,6 +242,7 @@ async function main() {
         personas: personasDoc.personas.length,
         incidents: incidents.length,
         capabilities: capabilitiesDoc.capabilities.length,
+        archetypes: archetypes.length,
       },
     },
     componentCategories: componentsDoc.categories,
@@ -236,6 +264,8 @@ async function main() {
     surfaces: capabilitiesDoc.surfaces,
     capabilities: capabilitiesDoc.capabilities,
     capabilitiesAttribution: capabilitiesDoc.attribution ?? "",
+    architectureVocabulary,
+    archetypes,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -245,7 +275,8 @@ async function main() {
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
-      `${incidents.length} incidents, ${capabilitiesDoc.capabilities.length} capabilities`,
+      `${incidents.length} incidents, ${capabilitiesDoc.capabilities.length} capabilities, ` +
+      `${archetypes.length} archetypes`,
   );
 }
 
@@ -322,6 +353,307 @@ function checkCapabilities(
       fail(`${where}: must apply to at least one surface`);
     }
   }
+}
+
+/**
+ * The reference architectures. Same contract as everything else here: a dangling id fails the
+ * build. Three checks are specific to this dataset and worth naming, because each encodes an
+ * editorial rule that would otherwise erode:
+ *
+ *   - Every edge crossing a zone boundary must declare `auth`. `mechanism: "none"` is a valid
+ *     and deliberate answer. Nearly every agent CVE of the last year is a boundary crossing whose
+ *     authentication was absent or assumed, and no published AI reference architecture labels its
+ *     crossings; a diagram here that quietly omits one is worse than no diagram.
+ *   - A `vendorOpaque` zone may contain only the interfaces a vendor actually publishes. You
+ *     cannot see inside a vendor's service, so drawing its orchestrator or its memory store would
+ *     be inventing them. The honest statement is the boundary and what crosses it.
+ *   - A capability attached to a node must actually apply on that archetype's surface, per
+ *     capabilities.yaml. This is what stops the two tabs from drifting into contradiction.
+ */
+/** The only node types that may appear inside a vendorOpaque zone: things a vendor publishes. */
+const VENDOR_INTERFACE_TYPES = new Set([
+  "inferenceEndpoint",
+  "apiEndpoint",
+  "mcpServer",
+  "connector",
+  "appUi",
+]);
+
+function checkArchetypes(
+  authored: AuthoredArchetype[],
+  vocab: ArchitectureVocabulary,
+  ctx: {
+    surfaces: Surface[];
+    capabilities: Capability[];
+    riskIds: Set<string>;
+    personaIds: Set<string>;
+    mapTargets: Set<string>;
+  },
+): Archetype[] {
+  const groupIds = new Set(vocab.groups?.map((g) => g.id) ?? []);
+  const controlKindById = new Map((vocab.controlKinds ?? []).map((k) => [k.id, k]));
+  const capabilityIds = new Set(ctx.capabilities.map((c) => c.id));
+  for (const kind of vocab.controlKinds ?? []) {
+    // A control kind's capability is a vocabulary-level pointer to a class of control, not a
+    // claim that any archetype deployed it — so it is checked for existence and deliberately not
+    // against surface applicability. Node and archetype capability lists are deployment claims
+    // and are checked that way below.
+    if (!capabilityIds.has(kind.capability)) {
+      fail(`vocabulary: control kind ${kind.id} names unknown capability ${kind.capability}`);
+    }
+    if (!kind.title?.trim()) fail(`vocabulary: control kind ${kind.id} needs a title`);
+  }
+  const zoneTypeById = new Map((vocab.zoneTypes ?? []).map((z) => [z.id, z]));
+  const nodeTypeById = new Map((vocab.nodeTypes ?? []).map((t) => [t.id, t]));
+  const surfaceIds = new Set(ctx.surfaces.map((s) => s.id));
+  const capabilityById = new Map(ctx.capabilities.map((c) => [c.id, c]));
+
+  for (const type of vocab.nodeTypes ?? []) {
+    if (!groupIds.has(type.group)) fail(`vocabulary: node type ${type.id} has unknown group ${type.group}`);
+    if (type.cosaiComponent && !ctx.mapTargets.has(type.cosaiComponent)) {
+      fail(`vocabulary: node type ${type.id} anchors unknown component ${type.cosaiComponent}`);
+    }
+    // The governance plane deliberately carries no band; everything else must declare one, or a
+    // node silently loses its link back to the risk map.
+    if (type.group !== "governance" && type.group !== "actor" && !type.layer) {
+      fail(`vocabulary: node type ${type.id} needs a layer (only the governance group may omit it)`);
+    }
+  }
+
+  const seen = new Set<string>();
+  const bySurface = new Map<string, number>();
+  const kindUse = new Map<string, number>();
+  let crossings = 0;
+
+  const out = authored.map((arch) => {
+    const where = `archetype ${arch.id}`;
+    if (!/^arch[A-Z]/.test(arch.id ?? "")) fail(`${where}: id must match ^arch[A-Z]`);
+    if (seen.has(arch.id)) fail(`${where}: duplicate id`);
+    seen.add(arch.id);
+
+    if (!surfaceIds.has(arch.surface)) fail(`${where}: unknown surface ${arch.surface}`);
+    bySurface.set(arch.surface, (bySurface.get(arch.surface) ?? 0) + 1);
+
+    if (!arch.summary?.length) fail(`${where}: needs a summary`);
+    if (!arch.description?.length) fail(`${where}: needs a description`);
+    if (!arch.sources?.length) fail(`${where}: needs at least one source`);
+    if (!arch.risks?.length) fail(`${where}: needs at least one risk`);
+    if (!arch.capabilities?.length) fail(`${where}: needs at least one capability`);
+    if (!arch.zones?.length) fail(`${where}: needs at least one zone`);
+    if (!arch.nodes?.length) fail(`${where}: needs at least one node`);
+
+    for (const ex of arch.exemplars ?? []) {
+      // Named products age fast. An undated one silently becomes a wrong claim.
+      if (!ex.asOf?.trim()) fail(`${where}: exemplar "${ex.name}" needs an asOf date`);
+      if (!ex.note?.trim()) fail(`${where}: exemplar "${ex.name}" needs a note`);
+    }
+    for (const d of arch.deviations ?? []) {
+      if (!d.reason?.trim()) fail(`${where}: deviation "${d.subject}" has no reason`);
+    }
+
+    // --- Zones ---------------------------------------------------------------
+    const zoneIds = new Set<string>();
+    const zoneTypeOf = new Map<string, string>();
+    const typeCount = new Map<string, number>();
+    for (const zone of arch.zones ?? []) {
+      typeCount.set(zone.type, (typeCount.get(zone.type) ?? 0) + 1);
+    }
+    for (const zone of arch.zones ?? []) {
+      const at = `${where} zone ${zone.id}`;
+      if (zoneIds.has(zone.id)) fail(`${at}: duplicate zone id`);
+      zoneIds.add(zone.id);
+      zoneTypeOf.set(zone.id, zone.type);
+      const zoneType = zoneTypeById.get(zone.type);
+      if (!zoneType) fail(`${at}: unknown zone type ${zone.type}`);
+
+      // The label is the type's canonical title, plus a qualifier only where the archetype has
+      // two zones of that type. Archetypes do not get to name their own zones — that is what
+      // produced fourteen different names for one network tier and made them incomparable.
+      if ((zone as { label?: string }).label) {
+        fail(`${at}: zones do not carry a label; the type supplies it, add a qualifier if two share a type`);
+      }
+      const repeated = (typeCount.get(zone.type) ?? 0) > 1;
+      if (repeated && !zone.qualifier?.trim()) {
+        fail(`${at}: two zones share type ${zone.type} — one of them needs a qualifier`);
+      }
+      if (!repeated && zone.qualifier?.trim()) {
+        fail(`${at}: qualifier is only for telling two zones of one type apart`);
+      }
+      zone.label = zone.qualifier
+        ? `${zoneType?.title ?? zone.type} · ${zone.qualifier}`
+        : zoneType?.title ?? zone.type;
+
+      // Ownership is stated in CoSAI's persona vocabulary. An outsideWorld zone carries none —
+      // CoSAI names no persona for an attacker — and every other zone must name at least one, so
+      // no part of an architecture is left without a responsible party.
+      if (!Array.isArray(zone.personas)) {
+        fail(`${at}: needs a personas list (empty only for outsideWorld)`);
+      } else {
+        for (const id of zone.personas) {
+          if (!ctx.personaIds.has(id)) fail(`${at}: unknown persona ${id}`);
+        }
+        if (zone.type === "outsideWorld" && zone.personas.length) {
+          fail(`${at}: an outsideWorld zone is outside the system and owns no persona`);
+        }
+        if (zone.type !== "outsideWorld" && !zone.personas.length) {
+          fail(`${at}: needs at least one CoSAI persona responsible for it`);
+        }
+      }
+    }
+
+    // --- Nodes ---------------------------------------------------------------
+    const nodeIds = new Set<string>();
+    const zoneOfNode = new Map<string, string>();
+    const populated = new Set<string>();
+    for (const node of arch.nodes ?? []) {
+      const at = `${where} node ${node.id}`;
+      if (nodeIds.has(node.id)) fail(`${at}: duplicate node id`);
+      nodeIds.add(node.id);
+      zoneOfNode.set(node.id, node.zone);
+      populated.add(node.zone);
+
+      const type = nodeTypeById.get(node.type);
+      if (!type) fail(`${at}: unknown node type ${node.type}`);
+      if (!zoneIds.has(node.zone)) fail(`${at}: unknown zone ${node.zone}`);
+      if (!node.label?.trim()) fail(`${at}: needs a label`);
+
+      if (node.cosaiComponent && !ctx.mapTargets.has(node.cosaiComponent)) {
+        fail(`${at}: unknown component or actor ${node.cosaiComponent}`);
+      }
+
+      for (const id of node.risks ?? []) {
+        if (!ctx.riskIds.has(id)) fail(`${at}: unknown risk ${id}`);
+        // A risk pinned to a node but absent from the archetype's own list makes the header an
+        // incomplete summary of its own diagram — the same rule the incidents already follow.
+        if (!(arch.risks ?? []).includes(id)) fail(`${at}: risk ${id} is not in the archetype's risk list`);
+      }
+      for (const id of node.capabilities ?? []) {
+        checkCapabilityOnSurface(id, at);
+        if (!(arch.capabilities ?? []).includes(id)) {
+          fail(`${at}: capability ${id} is not in the archetype's capability list`);
+        }
+      }
+    }
+
+    // A vendor-operated zone is a boundary with a published interface on it, not a container for
+    // a guess at the vendor's design. Anything beyond the interface is invented.
+    for (const zone of arch.zones ?? []) {
+      if (!populated.has(zone.id)) {
+        fail(`${where} zone ${zone.id}: has no nodes — remove it or put something in it`);
+      }
+      if (zone.type !== "vendorOpaque") continue;
+      for (const node of arch.nodes ?? []) {
+        if (node.zone !== zone.id) continue;
+        // Either an interface type, or an explicit claim that the provider sells this as a
+        // separately addressable service. The claim is the point: it forces the author to assert
+        // that the component is documented rather than inferred.
+        if (!VENDOR_INTERFACE_TYPES.has(node.type) && !node.published) {
+          fail(
+            `${where} node ${node.id}: type ${node.type} sits in a vendorOpaque zone — it must be ` +
+              `an interface type (${[...VENDOR_INTERFACE_TYPES].join(", ")}) or set published: true`,
+          );
+        }
+        if (node.published && !node.note?.trim()) {
+          fail(`${where} node ${node.id}: published: true needs a note saying what is documented`);
+        }
+      }
+    }
+    for (const node of arch.nodes ?? []) {
+      if (node.published && zoneTypeOf.get(node.zone) !== "vendorOpaque") {
+        fail(`${where} node ${node.id}: published: true only means something in a vendorOpaque zone`);
+      }
+    }
+
+    // --- Edges ---------------------------------------------------------------
+    const edgeKeys = new Set<string>();
+    for (const edge of arch.edges ?? []) {
+      const key = `${edge.from} -> ${edge.to}`;
+      const at = `${where} edge ${key}`;
+      if (edgeKeys.has(key)) fail(`${at}: duplicate edge`);
+      edgeKeys.add(key);
+      if (edge.from === edge.to) fail(`${at}: edge loops back on itself`);
+      if (!nodeIds.has(edge.from)) fail(`${at}: unknown source node ${edge.from}`);
+      if (!nodeIds.has(edge.to)) fail(`${at}: unknown target node ${edge.to}`);
+
+      const crosses =
+        nodeIds.has(edge.from) &&
+        nodeIds.has(edge.to) &&
+        zoneOfNode.get(edge.from) !== zoneOfNode.get(edge.to);
+      // These are target architectures, so there is no way to say a crossing is unsecured: every
+      // boundary declares a control from the canonical list, and the kind is what ties the
+      // boundary to a capability. Controls on same-zone edges are allowed but not required.
+      if (crosses) crossings++;
+      if (crosses && !edge.control?.kind) {
+        fail(`${at}: crosses a zone boundary and must declare control.kind`);
+      }
+      if (edge.control?.kind) {
+        const kind = controlKindById.get(edge.control.kind);
+        if (!kind) fail(`${at}: unknown control kind ${edge.control.kind}`);
+        else {
+          edge.control.title = kind.title;
+          edge.control.capability = kind.capability;
+          kindUse.set(edge.control.kind, (kindUse.get(edge.control.kind) ?? 0) + 1);
+        }
+      }
+      for (const id of edge.risks ?? []) {
+        if (!ctx.riskIds.has(id)) fail(`${at}: unknown risk ${id}`);
+        if (!(arch.risks ?? []).includes(id)) fail(`${at}: risk ${id} is not in the archetype's risk list`);
+      }
+      if (edge.kind && edge.kind !== "flow" && edge.kind !== "control") {
+        fail(`${at}: kind must be "flow" or "control"`);
+      }
+    }
+
+    // --- Archetype-level mappings -----------------------------------------------
+    for (const id of arch.risks ?? []) {
+      if (!ctx.riskIds.has(id)) fail(`${where}: unknown risk ${id}`);
+    }
+    for (const id of arch.capabilities ?? []) checkCapabilityOnSurface(id, where);
+    for (const cc of arch.crossCutting ?? []) {
+      if (!ctx.riskIds.has(cc.risk)) fail(`${where}: unknown cross-cutting risk ${cc.risk}`);
+      if (!cc.note?.trim()) fail(`${where}: cross-cutting risk ${cc.risk} has no note`);
+      if (!(arch.risks ?? []).includes(cc.risk)) {
+        fail(`${where}: cross-cutting risk ${cc.risk} is not in the archetype's risk list`);
+      }
+    }
+
+    return { ...arch, layout: layoutArchetype(arch, vocab) } satisfies Archetype;
+
+    /** A capability that does not apply on this surface cannot be attached to this archetype. */
+    function checkCapabilityOnSurface(id: string, at: string) {
+      const capability = capabilityById.get(id);
+      if (!capability) {
+        fail(`${at}: unknown capability ${id}`);
+        return;
+      }
+      if (capability.surfaces?.[arch.surface]?.applies === false) {
+        fail(
+          `${at}: capability ${id} does not apply on ${arch.surface} per capabilities.yaml — ` +
+            "fix one of the two, they cannot both be right",
+        );
+      }
+    }
+  });
+
+  for (const surface of ctx.surfaces) {
+    if (!bySurface.get(surface.id)) fail(`archetypes: surface ${surface.id} has no archetype`);
+  }
+
+  const anchored = new Set(
+    out.flatMap((a) =>
+      a.nodes.map((n) => n.cosaiComponent ?? nodeTypeById.get(n.type)?.cosaiComponent).filter(Boolean),
+    ),
+  );
+  const unanchored = (vocab.nodeTypes ?? []).filter((t) => !t.cosaiComponent).length;
+  const unusedKinds = (vocab.controlKinds ?? []).filter((k) => !kindUse.has(k.id));
+  console.log(
+    `archetypes: ${out.length} across ${bySurface.size} surfaces, ` +
+      `${crossings} crossings secured by ${kindUse.size}/${(vocab.controlKinds ?? []).length} ` +
+      `control kinds${unusedKinds.length ? ` (unused: ${unusedKinds.map((k) => k.id).join(", ")})` : ""}, ` +
+      `${anchored.size} risk-map components anchored, ` +
+      `${unanchored}/${(vocab.nodeTypes ?? []).length} node types have no CoSAI equivalent`,
+  );
+  return out;
 }
 
 /**

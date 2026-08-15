@@ -1,0 +1,494 @@
+id: archActionAgent
+surface: surfaceCloud
+title: Autonomous action agent over business records
+abbrev: Action agent
+
+summary:
+  - >
+    An agent operating a business process end to end — reading a request, deciding, and writing to
+    systems of record without a human between the decision and the effect. The archetype where the
+    design question is reversibility rather than accuracy.
+
+description:
+  - >
+    Everything structural here follows from one fact: the agent writes. A retrieval assistant that
+    is wrong produces a wrong sentence; this produces a refund, a provisioned account, a cancelled
+    order. The controls that matter are the ones that bound what can be done and make it undoable,
+    not the ones that improve the odds of being right.
+  - >
+    The action catalogue is the primary control and it should be deterministic. The model chooses
+    among named, parameter-validated actions rather than composing arbitrary calls, and each action
+    declares its own blast radius and its own compensating transaction. An agent that can call an
+    arbitrary API is not an agent with a policy problem; it is an agent with no policy surface at
+    all.
+  - >
+    The attacker in this archetype is typically an authenticated customer. The request text is
+    supplied by the person who benefits from the outcome, and it reaches the same context window as
+    the system instruction. That is indirect prompt injection with a very short path to money, and
+    it is why the approval threshold is tied to consequence rather than to confidence.
+  - >
+    Human approval works only if it is rare. A gate on every action is a queue nobody reads; a gate
+    keyed to irreversibility and value is one somebody does. Below the threshold, the compensating
+    path — reversal, not review — is what keeps a wrong action survivable. Above it, the gate is
+    the only thing standing between an injection and an irreversible effect.
+  - >
+    The agent needs an identity of its own. Actions taken as a shared service account are neither
+    attributable nor separately revocable, which turns every incident into a full-service outage
+    when the response is to disable the credential.
+
+distinguishedBy:
+  - >
+    Against the embedded retrieval assistant: identical up to the point of the model call. That one
+    renders an answer; this one calls an actuator. Adding one mutating tool to a retrieval assistant
+    moves it into this archetype and its entire control set, which is why the boundary is worth
+    naming rather than crossing quietly.
+  - >
+    Against the vendor in-app action agent: the same behaviour with the loop on the other side of
+    the boundary. There the action catalogue is a menu; here it is a design artifact, and so are
+    the approval thresholds and the compensating transactions.
+  - >
+    Against a multi-agent durable workflow: that one is about surviving failure and replay across a
+    long-running process. This one may complete in seconds and still be consequential.
+
+exemplars:
+  - name: Autonomous customer service resolution
+    note: >
+      Agents that read a customer's request, consult policy and records, and issue the remedy
+      without a human, escalating only above a value or confidence threshold.
+    asOf: "2026-08"
+  - name: Operations and fulfilment agents
+    note: >
+      Agents acting on orders, inventory or entitlements, where the action catalogue maps to
+      existing business transactions that already have reversal semantics.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The requester, whose text the agent reads and whose outcome the agent decides.
+
+  - id: edge
+    type: network
+    personas: [personaApplicationDeveloper]
+    note: Where the request arrives and is authenticated, rate limited and classified.
+
+  - id: agentTier
+    type: compute
+    personas: [personaApplicationDeveloper, personaAgenticProvider]
+    note: The loop, its tools and its memory. Shared because the framework is rarely built in-house.
+
+  - id: records
+    type: data
+    personas: [personaDataProvider]
+    note: Where the effects land, and where reversal either exists or does not.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: The published inference interface.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Identity, policy, approval, audit and the ability to stop the agent.
+
+nodes:
+  - id: requester
+    type: humanUser
+    zone: outside
+    label: Requester
+    note: >
+      Usually an authenticated customer, and usually the party who benefits from the action. Both
+      the legitimate user and, on a bad day, the attacker.
+    risks: [riskPromptInjection]
+    capabilities: [capabilityPromptInjectionDefense]
+
+  - id: requestText
+    type: untrustedSource
+    zone: outside
+    label: Request content
+    note: >
+      Free text, attachments and history, authored by the requester. Reaches the same context
+      window as the system instruction with no marker distinguishing the two.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: intake
+    type: apiEndpoint
+    zone: edge
+    label: Intake
+    note: Authenticates the requester, binds the request to an account, and applies quotas.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityTransportSecurity]
+
+  - id: inputGuard
+    type: inputHandling
+    zone: edge
+    label: Input handling
+    note: >
+      Classification and validation before the loop starts. Catches the direct attempt; the
+      indirect path through record content is the harder one and arrives later.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails, capabilityPromptRedaction]
+
+  - id: planner
+    type: reasoningCore
+    zone: agentTier
+    label: Planning loop
+    note: Chooses the next action from the catalogue, given the request and what it has read.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy, riskRunawayAgentToolLoops]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability, capabilityRateLimiting]
+
+  - id: actionCatalogue
+    type: toolGateway
+    zone: agentTier
+    label: Action catalogue
+    note: >
+      Named, parameter-validated actions rather than arbitrary calls. Each declares its blast
+      radius and its compensating transaction. This is the archetype's primary control, and it is a
+      design artifact rather than a configuration setting.
+    risks: [riskRogueActions, riskToolRegistryTampering]
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentRuntimeEnforcement, capabilityAgentRegistry]
+
+  - id: retrieval
+    type: retriever
+    zone: agentTier
+    label: Policy and record retrieval
+    note: >
+      Reads the business policy and the customer's history. The second injection path: record
+      content is written by requesters and by staff, and re-enters as context.
+    risks: [riskPromptInjection, riskSensitiveDataDisclosure, riskRetrievalVectorStorePoisoning]
+    capabilities: [capabilityRagSecurity, capabilityDataAccessGovernance]
+
+  - id: caseMemory
+    type: memoryStore
+    zone: agentTier
+    label: Case state
+    note: >
+      Scoped to one case. Cross-case memory would let one requester's text influence another's
+      outcome, which is why the scope is a design decision and not an implementation detail.
+    risks: [riskSensitiveDataDisclosure, riskPromptResponseCachePoisoning]
+    capabilities: [capabilityMemoryProtection, capabilityEncryptionKeyManagement]
+
+  - id: actuator
+    type: actuator
+    zone: records
+    label: Transaction actuator
+    note: >
+      The write path. The point at which the agent's output stops being text, and the point where
+      reversibility is either a property of the transaction or absent.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityHitlControls, capabilityToolPermissionScoping, capabilityAuditLogging]
+
+  - id: recordStore
+    type: corpus
+    zone: records
+    label: Business records
+    note: The authoritative state, and the source retrieval reads back into context.
+    risks: [riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm]
+
+  - id: modelApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Inference API
+    note: The published interface. What runs behind it is the provider's and is not drawn.
+    risks: [riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilityAiGateway, capabilityTransportSecurity]
+
+  - id: agentId
+    type: agentIdentity
+    zone: governance
+    label: Agent identity
+    note: >
+      A distinct, revocable principal. Without it no action is attributable and the only available
+      response to an incident is disabling a credential the whole service shares.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilityCredentialIsolation]
+
+  - id: policyEngine
+    type: policyEngine
+    zone: governance
+    label: Action policy
+    note: >
+      Per-invocation authorization: which action, on which record, up to what value, under what
+      conditions. Evaluated at call time rather than granted at session time.
+    risks: [riskRogueActions, riskExcessiveDataHandling]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityToolPermissionScoping, capabilityHitlControls]
+
+  - id: approval
+    type: hitlGate
+    zone: governance
+    label: Approval threshold
+    note: >
+      Keyed to irreversibility and value, not to model confidence. Rare enough to be read is the
+      design target; a gate on everything is a queue.
+    risks: [riskRogueActions]
+    capabilities: [capabilityHitlControls, capabilityBehavioralDriftDetection]
+
+  - id: audit
+    type: auditSink
+    zone: governance
+    label: Decision audit
+    note: >
+      Every action with the reasoning, the inputs and the identity behind it. The basis for both
+      reversal and dispute.
+    risks: [riskRogueActions, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAuditLogging, capabilityAgentObservability, capabilityAiDetectionResponse]
+
+  - id: stop
+    type: killSwitch
+    zone: governance
+    label: Kill switch
+    note: >
+      Halts the agent and revokes its identity without a deploy. Needed at exactly the moment there
+      is no time to ship anything.
+    risks: [riskRogueActions, riskRunawayAgentToolLoops]
+    capabilities: [capabilityKillSwitch, capabilityAgentRuntimeEnforcement]
+
+edges:
+  - from: requester
+    to: intake
+    label: request
+    control:
+      kind: userIdentity
+      note: >
+        Authenticates who is asking. Says nothing about whether the text of the ask is honest, and
+        the authenticated customer is the threat actor in most of this archetype's failure modes.
+    risks: [riskPromptInjection]
+
+  - from: requestText
+    to: inputGuard
+    label: free text and attachments
+    control:
+      kind: contentInspection
+      note: >
+        Request text is classified before it reaches the loop. It cannot be authenticated — the
+        caller is the beneficiary of the outcome — so inspection and the action catalogue
+        downstream carry the weight.
+    risks: [riskPromptInjection]
+
+  - from: intake
+    to: inputGuard
+    label: bound request
+
+  - from: inputGuard
+    to: planner
+    label: validated request
+    control:
+      kind: userIdentity
+      note: >
+        The requester's identity has to survive into the loop, or policy cannot scope actions to
+        the account they concern.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: planner
+    to: modelApi
+    label: inference request
+    control:
+      kind: brokeredCredential
+      note: Issued per workload and expiring; the model provider never holds a standing key.
+    risks: [riskExcessiveDataHandlingDuringInference]
+
+  - from: modelApi
+    to: planner
+    label: chosen action
+    control:
+      kind: transport
+      note: >
+        The response names an action and its parameters. Transport integrity says nothing about
+        whose intent produced it, which is why the catalogue validates rather than trusts.
+    risks: [riskInsecureModelOutput, riskRogueActions]
+
+  - from: retrieval
+    to: planner
+    label: policy and history
+    risks: [riskPromptInjection]
+
+  - from: retrieval
+    to: recordStore
+    label: scoped read
+    control:
+      kind: dataEntitlement
+      note: >
+        Scoping reads to the account under discussion is what stops one requester's case from
+        retrieving another's records into context.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+
+  - from: caseMemory
+    to: planner
+    label: case state
+    control:
+      kind: memoryScope
+      note: Scope is the control; a memory keyed loosely enough to collide across cases leaks by design.
+    risks: [riskPromptResponseCachePoisoning]
+
+  - from: planner
+    to: actionCatalogue
+    label: proposed action
+    risks: [riskRogueActions]
+
+  - from: actionCatalogue
+    to: actuator
+    label: validated transaction
+    control:
+      kind: policyDecision
+      note: >
+        Two things checked at once: that this principal may act, and that this action on this
+        record is within its bounds. Session-level authorization would only answer the first.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+
+  - from: actuator
+    to: recordStore
+    label: write
+    control:
+      kind: replaySafety
+      note: >
+        Whether a wrong action is survivable is decided here. An action with no compensating
+        transaction should not be in the catalogue below the approval threshold.
+    risks: [riskRogueActions]
+
+  - from: agentId
+    to: planner
+    label: workload identity
+    kind: control
+    control:
+      kind: agentIdentity
+      note: >
+        A principal distinct from both the requester and the service. Makes each action
+        attributable and separately revocable.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+
+  - from: policyEngine
+    to: actionCatalogue
+    label: per-invocation decision
+    kind: control
+    control:
+      kind: policyDecision
+      note: >
+        Per call rather than per session. The difference between an agent that may do this now and
+        an agent that was allowed to do things an hour ago.
+    risks: [riskRogueActions]
+
+  - from: approval
+    to: actionCatalogue
+    label: gate above threshold
+    kind: control
+    control:
+      kind: humanApproval
+      note: >
+        Only fires above the irreversibility and value threshold, which is what keeps it something
+        a person actually reads.
+    risks: [riskRogueActions]
+
+  - from: actuator
+    to: audit
+    label: action record
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        The agent can write and cannot amend. Without that asymmetry the record shares a compromise
+        with the thing it records.
+    risks: [riskRogueActions]
+
+  - from: stop
+    to: planner
+    label: halt and revoke
+    kind: control
+    control:
+      kind: emergencyStop
+      note: >
+        Has to work when the agent tier is the thing misbehaving, so it cannot depend on the agent
+        tier to honour it.
+    risks: [riskRunawayAgentToolLoops]
+
+crossCutting:
+  - risk: riskRogueActions
+    note: >
+      The archetype's defining risk and not localisable: untrusted request text, a model choosing
+      among real transactions, and a write path into records. Every control on the diagram is a
+      partial answer and none is sufficient alone.
+  - risk: riskPromptInjection
+    note: >
+      Two paths — the request itself and the record content retrieved during handling. The second
+      is the harder one, because the injected text may have been written months earlier by someone
+      handling a different case.
+  - risk: riskAgenticDelegationConfusedDeputy
+    note: >
+      The agent acts on a requester's behalf using its own authority, which is broader than theirs.
+      Keeping the requester's context alive through the loop is what stops the gap being exploitable.
+
+risks:
+  - riskRogueActions
+  - riskPromptInjection
+  - riskAgenticDelegationConfusedDeputy
+  - riskSensitiveDataDisclosure
+  - riskExcessiveDataHandling
+  - riskInsecureModelOutput
+  - riskRunawayAgentToolLoops
+  - riskStaleAgentIdentityBinding
+  - riskCrossTenantCredentialPropagation
+  - riskToolRegistryTampering
+  - riskRetrievalVectorStorePoisoning
+  - riskPromptResponseCachePoisoning
+  - riskModelEvasion
+  - riskEconomicDenialOfWallet
+  - riskDenialOfMLService
+  - riskExcessiveDataHandlingDuringInference
+  - riskShadowAndUnknownAgents
+
+capabilities:
+  - capabilityToolPermissionScoping
+  - capabilityHitlControls
+  - capabilityAgentRuntimeEnforcement
+  - capabilityNhiManagement
+  - capabilityKillSwitch
+  - capabilityAuditLogging
+  - capabilityAgentObservability
+  - capabilityBehavioralDriftDetection
+  - capabilityPromptInjectionDefense
+  - capabilityModelGuardrails
+  - capabilityRagSecurity
+  - capabilityDataAccessGovernance
+  - capabilityMemoryProtection
+  - capabilityIga
+  - capabilityCredentialIsolation
+  - capabilityAgentRegistry
+  - capabilityRateLimiting
+  - capabilityDspm
+  - capabilityAiDetectionResponse
+  - capabilityEncryptionKeyManagement
+  - capabilityPromptRedaction
+  - capabilityAiGateway
+  - capabilityTransportSecurity
+
+deviations:
+  - subject: The agent tier names two personas rather than one
+    reason: >
+      The loop is the Application Developer's, and the framework it runs on is almost never built
+      in-house. Attributing the tier solely to the developer would hide a dependency that carries
+      its own vulnerabilities and its own release cadence.
+  - subject: The approval gate sits in the control plane rather than in the flow
+    reason: >
+      It blocks a request, so drawing it inline would be defensible. It is drawn as a governance
+      node because its threshold is a policy decision made outside the loop, and because it fires
+      on a minority of actions — putting it inline would suggest every action passes through a
+      human, which is the posture this archetype exists to avoid.
+  - subject: Compensating transactions are a property of an edge rather than a node
+    reason: >
+      Reversibility is not a component anyone deploys; it is a characteristic of each action in the
+      catalogue. It is recorded on the write edge, which is the only place it is either true or not.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI02 tool misuse"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Agentic AI — threats and mitigations v1.1"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "AWS Well-Architected Agentic AI Lens — bounded autonomy, human oversight, reliability"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentic-ai-lens.html
+  - title: "CoSAI Shared Responsibility Framework V1.0 — autonomy levels L0-L5 and intervention tiers"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "Microsoft Azure Architecture Center — AI agent orchestration patterns"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns

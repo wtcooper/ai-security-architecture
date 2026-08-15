@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { Chip, MappingBadges } from "@/components/Chips";
 import { PageHeader } from "@/components/Panel";
 import { firstLine, Prose } from "@/components/Prose";
+import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import {
   activePersonas,
+  archetypesForPersona,
   controlsForPersona,
   legacyPersonas,
   personaById,
@@ -119,6 +121,14 @@ export function PersonasBrowser() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-7">
+              <ArchetypeLinks
+                archetypes={archetypesForPersona(persona.id)}
+                label="Responsible for zones in these architectures"
+                empty="No reference architecture makes this persona responsible for a trust zone yet."
+              />
             </div>
 
             {persona.mappings && (

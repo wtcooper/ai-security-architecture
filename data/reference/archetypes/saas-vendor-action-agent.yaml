@@ -1,0 +1,410 @@
+id: archVendorActionAgent
+surface: surfaceSaas
+title: In-app agent acting on vendor records
+abbrev: Vendor action agent
+
+summary:
+  - >
+    An agent built into a SaaS product, acting on the records that product holds — resolving
+    tickets, updating opportunities, approving requests. It writes, and the writes are to your
+    system of record.
+
+description:
+  - >
+    The distinction from a vendor assistant that answers questions is the write path, and it
+    changes everything downstream. A wrong answer is a wrong answer; a wrong write is a changed
+    record, an email that went out, a refund that was issued. Reversibility, not accuracy, is the
+    property to design for, and it is a property of the vendor's action catalogue rather than of
+    anything you configure.
+  - >
+    The attacker is frequently your own authenticated customer. Support and service agents read
+    ticket text, form submissions and uploaded documents — content supplied by whoever opened the
+    case — and act on the tenant's records with the tenant's authority. Injection here does not
+    require a breach; it requires filling in a text field. This is the archetype where indirect
+    prompt injection has the shortest path from untrusted input to consequential action.
+  - >
+    Your control surface is the action catalogue and the identity it runs as. Which actions the
+    agent may take, on which record types, under which conditions, and whether a human approves the
+    consequential ones are all vendor-exposed settings — usually generous by default, because the
+    product is sold on autonomy. The agent's own identity, where the vendor gives it one distinct
+    from a service account, is what makes its actions attributable afterwards.
+  - >
+    What you cannot do is insert a policy decision point into the vendor's loop. There is no place
+    to put a runtime enforcement layer between the model's decision and the record write. Every
+    control is therefore either upstream of the loop — scoping what it may reach — or downstream of
+    it, in review and reversal.
+
+distinguishedBy:
+  - >
+    Against the tenant-wide assistant: that one reads across your corpus and answers. This one acts
+    within one product's data model and writes. The read archetype's central question is
+    permissions; this one's is reversibility.
+  - >
+    Against an autonomous action agent you build: identical shape, opposite ownership. There you
+    design the action allowlist, the approval threshold and the compensating transaction. Here you
+    choose from a menu, and what is not on the menu is not available.
+
+exemplars:
+  - name: Customer service and support agents
+    note: >
+      Vendor agents that resolve tickets end to end — reading the customer's message, searching
+      knowledge, and issuing refunds or account changes without a human in between.
+    asOf: "2026-08"
+  - name: CRM and ITSM in-app agents
+    note: >
+      Agents inside sales and service platforms acting on opportunities, cases and change records
+      under a configurable action catalogue.
+    asOf: "2026-08"
+  - name: Line-of-business SaaS with bolted-on agents
+    note: >
+      Agent features added to products bought for something else. Same architecture, usually a
+      thinner control catalogue and no separate agent identity.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The organisation's customers, and the text they put in fields the agent reads.
+
+  - id: workforce
+    type: device
+    personas: [personaEndUser]
+    note: The humans who supervise, review and reverse — where any of those happen.
+
+  - id: edge
+    type: network
+    personas: [personaGovernance, personaPlatformProvider]
+    note: How staff and systems reach the vendor, and who they are asserted to be.
+
+  - id: yourSystems
+    type: data
+    personas: [personaDataProvider]
+    note: >
+      What the vendor's agent reaches beyond the vendor: billing, directory, warehouse. Frequently the
+      real blast radius, and frequently forgotten.
+
+  - id: vendor
+    type: vendorOpaque
+    personas: [personaAgenticProvider]
+    note: >
+      The agent loop, the model and the record store. Configurable by the Governance persona, instrumentable by nobody outside the provider.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance, personaAgenticProvider]
+    note: Configuration the Governance persona authors and the provider enforces, plus what is observable
+      from outside.
+
+nodes:
+  - id: customer
+    type: untrustedSource
+    zone: outside
+    label: Customer-supplied text
+    note: >
+      Ticket bodies, form fields, uploaded documents, email replies. Read by the agent as context
+      and, by construction, authored by someone with an interest in the outcome.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: reviewer
+    type: humanUser
+    zone: workforce
+    label: Reviewing staff
+    note: >
+      Approves the actions the vendor permits gating, and reverses the ones nobody gated. The
+      threshold between those two is the archetype's central configuration decision.
+    risks: [riskRogueActions]
+    capabilities: [capabilityHitlControls]
+
+  - id: adminConsole
+    type: appUi
+    zone: workforce
+    label: Admin console
+    note: Where the action catalogue, the thresholds and the agent's permissions are set.
+    risks: [riskExcessiveDataHandling]
+    capabilities: [capabilityAiGovernancePlatform, capabilityToolPermissionScoping]
+
+  - id: idp
+    type: identityProvider
+    zone: edge
+    label: Identity provider
+    note: >
+      Authenticates staff and, where the vendor supports it, issues the agent an identity of
+      its own rather than letting it act as a shared service account.
+    risks: [riskStaleAgentIdentityBinding, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityIga, capabilityNhiManagement, capabilitySse]
+
+  - id: egress
+    type: egressProxy
+    zone: edge
+    label: Network inspection
+    note: What is being sent to the vendor, and what the vendor's callbacks bring back.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilitySse, capabilityEgressControl, capabilityAiDlp]
+
+  - id: downstream
+    type: actuator
+    zone: yourSystems
+    label: Downstream systems of record
+    note: >
+      Billing, entitlements, directory. Reached through integrations the vendor's agent can invoke,
+      and the point at which a wrong action stops being reversible by editing a record.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy, riskExcessiveDataHandling]
+    capabilities: [capabilityIga, capabilityNhiManagement, capabilityHitlControls]
+
+  - id: vendorAgentApi
+    type: apiEndpoint
+    zone: vendor
+    label: Vendor agent platform
+    note: >
+      Where the loop runs. No policy decision point can be inserted into it — the capability
+      taxonomy records that as structurally unavailable on this surface, and it is the reason every
+      control here sits upstream or downstream of the loop.
+    risks: [riskRogueActions, riskPromptInjection, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityAgentRegistry]
+
+  - id: vendorConnector
+    type: connector
+    zone: vendor
+    label: Vendor integrations
+    note: >
+      How the agent reaches beyond the vendor's own data model into the organisation's systems. Authorised once,
+      per integration, and usually more broadly than any single action requires.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilityToolPermissionScoping]
+
+  - id: actionPolicy
+    type: policyEngine
+    zone: governance
+    label: Action catalogue and thresholds
+    note: >
+      Which actions the agent may take, on what, and where a human is required. Generous by
+      default, because autonomy is what the product is sold on.
+    risks: [riskRogueActions, riskExcessiveDataHandling]
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAiGovernancePlatform]
+
+  - id: agentIdentity
+    type: agentIdentity
+    zone: governance
+    label: Agent identity
+    note: >
+      A distinct, revocable principal for the agent rather than a shared service account. Without
+      it, no action it takes is attributable and no single action can be revoked.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding, riskShadowAndUnknownAgents]
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilityAgentRegistry]
+
+  - id: drift
+    type: auditSink
+    zone: governance
+    label: Outcome monitoring
+    note: >
+      Watching what the agent actually did — refund rates, escalation rates, records touched.
+      Behavioural monitoring substitutes for runtime enforcement that cannot be installed here.
+    risks: [riskRogueActions, riskShadowAndUnknownAgents]
+    capabilities: [capabilityBehavioralDriftDetection, capabilityAuditLogging, capabilityAiDetectionResponse]
+
+  - id: killSwitch
+    type: killSwitch
+    zone: governance
+    label: Disable control
+    note: >
+      Turning the agent off without a vendor support ticket. Worth confirming it exists before it
+      is needed, because on this surface it is a product feature rather than something the consumer can build.
+    risks: [riskRogueActions]
+    capabilities: [capabilityKillSwitch, capabilityAiGovernancePlatform]
+
+edges:
+  - from: customer
+    to: vendorAgentApi
+    label: case text and attachments
+    control:
+      kind: contentInspection
+      note: >
+        The vendor's guardrail on case text. Configurable and not verifiable, which is why the
+        action catalogue and the reversal path are the controls that actually bound this.
+    risks: [riskPromptInjection]
+
+  - from: adminConsole
+    to: egress
+    label: configuration
+    control:
+      kind: tenantConfiguration
+      note: >
+        Administering the agent is administering everything it may do, so this session deserves the
+        same treatment as any other privileged access path.
+    risks: [riskExcessiveDataHandling]
+
+  - from: idp
+    to: egress
+    label: staff authentication
+    kind: control
+
+  - from: egress
+    to: vendorAgentApi
+    label: administration and supervision
+    control:
+      kind: tenantConfiguration
+      note: >
+        The same channel configures the agent and reviews it. Privileged access to this console is
+        privileged access to the agent's entire permission set.
+    risks: [riskExcessiveDataHandling]
+
+  - from: vendorAgentApi
+    to: reviewer
+    label: escalation and approval request
+    control:
+      kind: tenantConfiguration
+      note: >
+        Only fires for actions the catalogue marks as gated. Everything else has already happened
+        by the time anyone sees it.
+    risks: [riskRogueActions]
+
+  - from: vendorAgentApi
+    to: vendorConnector
+    label: outbound action
+    control:
+      kind: providerInternal
+      note: Not observable. The decision to act and the act itself are both inside the boundary.
+    risks: [riskRogueActions]
+
+  - from: vendorConnector
+    to: downstream
+    label: write to systems of record
+    control:
+      kind: brokeredCredential
+      note: >
+        A service principal the organisation issued, scoped per integration rather than per action. The agent
+        inherits everything that credential can do, not just what this action needed.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy, riskExcessiveDataHandling]
+
+  - from: downstream
+    to: reviewer
+    label: effects observed
+    control:
+      kind: auditTrail
+      note: >
+        First-party records of what changed. Often the only trustworthy account of what the agent did,
+        because it is the one the provider does not write.
+    risks: [riskRogueActions]
+
+  - from: actionPolicy
+    to: vendorAgentApi
+    label: catalogue and thresholds
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        The Governance persona authors it, the provider enforces it, and neither can verify the other. This is the
+        canonical shared-responsibility edge on this surface.
+    risks: [riskRogueActions]
+
+  - from: agentIdentity
+    to: vendorConnector
+    label: distinct principal
+    kind: control
+    control:
+      kind: agentIdentity
+      note: >
+        Where the vendor supports it. Where it does not, the agent shares a service account with
+        every other integration and nothing it does is separately attributable or revocable.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+
+  - from: downstream
+    to: drift
+    label: outcome telemetry
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Measured outside the provider boundary, which is what makes it reliable. The vendor's view
+        of its own agent's behaviour is the vendor's.
+    risks: [riskRogueActions]
+
+  - from: killSwitch
+    to: vendorAgentApi
+    label: disable
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        Depends entirely on the vendor having built it. Test it during evaluation rather than
+        during an incident.
+    risks: [riskRogueActions]
+
+crossCutting:
+  - risk: riskRogueActions
+    note: >
+      Untrusted input, an unobservable loop, and a write path into systems of record. No node owns
+      this — it is what the archetype is, and the controls are all upstream scoping or downstream
+      reversal because the middle is not yours.
+  - risk: riskAgenticDelegationConfusedDeputy
+    note: >
+      The agent acts through integration credentials you issued for a system, not for a decision.
+      Its authority is the union of every integration, and no single action narrows it.
+  - risk: riskExcessiveDataHandling
+    note: >
+      The connector grants set the reach, the action catalogue sets the intent, and neither is
+      scoped by the other.
+
+risks:
+  - riskRogueActions
+  - riskPromptInjection
+  - riskAgenticDelegationConfusedDeputy
+  - riskExcessiveDataHandling
+  - riskSensitiveDataDisclosure
+  - riskCrossTenantCredentialPropagation
+  - riskStaleAgentIdentityBinding
+  - riskInsecureIntegratedComponent
+  - riskShadowAndUnknownAgents
+  - riskModelEvasion
+  - riskInsecureModelOutput
+
+capabilities:
+  - capabilityToolPermissionScoping
+  - capabilityHitlControls
+  - capabilityNhiManagement
+  - capabilityIga
+  - capabilityBehavioralDriftDetection
+  - capabilityKillSwitch
+  - capabilityAuditLogging
+  - capabilityAgentRegistry
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+  - capabilityAiGovernancePlatform
+  - capabilityPromptInjectionDefense
+  - capabilityModelGuardrails
+  - capabilitySse
+  - capabilityEgressControl
+  - capabilityAiDlp
+  - capabilityAiDetectionResponse
+
+deviations:
+  - subject: Your downstream systems are drawn as a zone you own, inside a SaaS archetype
+    reason: >
+      They are not part of the vendor's architecture, and a diagram of the vendor's agent would
+      stop at its boundary. They are drawn because the write path into them is where this archetype
+      becomes consequential, and omitting them would make the blast radius look like one product's
+      record store.
+  - subject: The agent's own decision loop is not drawn
+    reason: >
+      It exists and it is the most interesting part. It is also entirely unobservable and
+      unconfigurable, and the capability taxonomy already records that no runtime enforcement can
+      be inserted into it. Drawing a loop nobody can reach would invite controls that do not exist.
+  - subject: A disable control is drawn as a governance node
+    reason: >
+      On a surface you operate, a kill switch is something you build. Here it is a checkbox the
+      vendor either shipped or did not, so it is drawn as a control-plane node whose note says to
+      verify it exists before relying on it.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01, ASI03, ASI09"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Agentic AI — threats and mitigations v1.1"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "CoSAI Shared Responsibility Framework V1.0 — autonomy levels and intervention tiers"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "AWS Well-Architected Agentic AI Lens — bounded autonomy and human oversight"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentic-ai-lens.html
+  - title: "Microsoft Learn — data security and compliance controls for AI agents"
+    url: https://learn.microsoft.com/en-us/purview/ai-agents

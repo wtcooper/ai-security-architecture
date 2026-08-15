@@ -126,3 +126,67 @@ repository maps what the taxonomy covers and must never imply a posture anyone h
 `npm run data` fails on any dangling id, a primary
 `category` no mapped control belongs to, or a capability missing a decision for a declared
 surface.
+
+## Reference architectures
+
+`data/reference/` is original work: a vocabulary of node and zone types, and 28 application
+archetypes drawn as selections over it. An archetype is authored as a graph — zones, nodes,
+edges — and never as a picture; `src/lib/architecture-layout.ts` computes the geometry at build
+time, so what is reviewed is the claim rather than the drawing.
+
+The archetype set was derived by taking the union of what the published catalogues treat as a
+distinct thing to architect — the AWS Well-Architected Generative AI and Agentic AI Lenses,
+Microsoft's Azure Architecture Center AI patterns and CAF agent guidance, Google Cloud's agentic
+architecture index, OWASP's Agentic Threats and Mitigations reference architectures, and CSA
+MAESTRO — and then splitting or merging on one test: two archetypes are separate when their
+control sets differ, not when their vendors do. Each entry records that reasoning in
+`distinguishedBy`. No published source offers a catalogue of this kind; the closest are worked
+scenarios and agent-orchestration patterns, both orthogonal to "here are the classes of AI
+application, each with an architecture".
+
+The node vocabulary converges CoSAI's 23 components with OWASP's KC1–KC6 key components, Azure
+WAF's layer model and MAESTRO's seven layers. Where a node type has a CoSAI equivalent it carries
+a `cosaiComponent` anchor and is coloured by the corresponding risk-map band. The `governance`
+group deliberately carries neither: CoSAI's component set names no identity provider, policy
+engine, agent registry, approval gate, audit sink or kill switch, and the diagrams show that plane
+sitting beside the stack rather than inventing a band for it. The build reports the count of node
+types with no CoSAI equivalent so the gap stays visible.
+
+These are **target states** — the architecture as it should be built, not a description of what
+deployments typically look like. That distinction drives the whole schema: there is no way to
+express an unsecured crossing, because an architecture that needs one is not what this catalogue
+describes. Where the common deployment is weaker than the target, the observation lives in the
+control's note; the drawn state is the one worth building.
+
+Four editorial rules are enforced by `npm run data` rather than by review:
+
+- **Every edge crossing a zone boundary names the control that secures it**, from a canonical list
+  of 29 control kinds in `vocabulary.yaml`, each of which names the capability class that delivers
+  it. That link is how the capability taxonomy reaches the architectures: a reader at a boundary
+  follows the control to a capability and from there to the tooling. An earlier draft let each
+  archetype phrase its own mechanism and 286 crossings produced 226 different phrasings, which was
+  unusable and taught nothing transferable.
+- **Zone names are canonical**, taken from the zone type rather than authored per archetype, with a
+  qualifier only where one archetype has two zones of a type. The same draft produced fourteen
+  different names for one network tier and made the diagrams incomparable.
+- **A `vendorOpaque` zone may contain only interfaces the provider publishes** — or a node with an
+  explicit `published: true` claim and a note saying what is documented. Drawing a vendor's
+  internals means inventing them, and the honest statement about a third party is its boundary and
+  what crosses it.
+- **A capability attached to an archetype must apply on that archetype's surface** per
+  `capabilities.yaml`. The two datasets cannot drift into contradiction; where they disagreed
+  during authoring, the capability taxonomy won and the archetype was corrected.
+
+Zone ownership is expressed in CoSAI personas rather than as "you" and "the vendor". Which party
+"you" are depends on who is reading, and two personas on one zone states shared responsibility more
+precisely than a "shared" label would. A zone with no persona is outside the system — CoSAI names
+none for an attacker.
+
+Named products appear only in each archetype's `exemplars`, each carrying a source and an `asOf`
+date, and are rendered as dated illustration. This is a deliberate departure from the
+vendor-neutral discipline of `capabilities.yaml`: a reference architecture is not usable without
+knowing what it is a reference to, and this is a domain where names moved fast enough during 2026
+that an undated one becomes a wrong claim. The architectures themselves name no products.
+
+`docs/AUDIT.md` section 4 reports the coverage gaps: risks no architecture names, capabilities none
+attaches, CoSAI components none draws, and every unauthenticated crossing in the catalogue.

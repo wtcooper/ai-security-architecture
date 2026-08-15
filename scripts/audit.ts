@@ -7,6 +7,8 @@
  *   2. Edge fidelity     — the full CoSAI edge list, and any prose/data tensions found.
  *   3. Overlay decisions — for each risk, the highlights and where they came from, with
  *                          CoSAI's own tour prose alongside so a reviewer can check them.
+ *   4. Archetype coverage — which risks, capabilities and components no reference architecture
+ *                          reaches, and which classes of control the catalogue requires.
  *
  *   npm run audit
  */
@@ -17,7 +19,16 @@ import { parse } from "yaml";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor } from "../src/lib/bands";
 import { ACTORS, CONTAINMENT_EDGES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from "../src/lib/map-layout";
 import { DISPLAY_NAME, NAME_REASON } from "../src/lib/naming";
-import type { Component, Control, Paragraph, Risk } from "../src/lib/types";
+import type {
+  Archetype,
+  ArchitectureVocabulary,
+  Capability,
+  Component,
+  Control,
+  Paragraph,
+  Risk,
+  Surface,
+} from "../src/lib/types";
 import { PHASES } from "../src/lib/types";
 
 const ROOT = process.cwd();
@@ -277,11 +288,114 @@ async function main() {
   }
   p();
 
+  // --- 4. Archetype coverage -------------------------------------------------------
+  // Read from the generated dataset rather than the YAML, because the build has already
+  // resolved and validated it — and because a coverage gap is only meaningful against the
+  // set that actually compiled.
+  const dataset = JSON.parse(
+    await readFile(join(ROOT, "src/data/generated/dataset.json"), "utf8"),
+  ) as { archetypes: Archetype[]; capabilities: Capability[]; surfaces: Surface[] };
+  const archetypes = dataset.archetypes ?? [];
+
+  p("## 4. Archetype coverage");
+  p();
+  p(
+    `${archetypes.length} reference architectures across ${dataset.surfaces.length} surfaces. ` +
+      "Everything below is a gap between the taxonomy and the drawings — either an archetype " +
+      "worth adding, or a mapping worth revisiting.",
+  );
+  p();
+
+  p("| Surface | Architectures |");
+  p("| --- | --- |");
+  for (const surface of dataset.surfaces) {
+    const named = archetypes.filter((a) => a.surface === surface.id);
+    p(`| ${surface.title} | ${named.length} — ${named.map((a) => a.title).join(", ")} |`);
+  }
+  p();
+
+  const namedRisks = new Set(archetypes.flatMap((a) => a.risks));
+  const unreachedRisks = risks.filter((r) => !namedRisks.has(r.id));
+  p(`### 4a. Risks no architecture names — ${unreachedRisks.length} of ${risks.length}`);
+  p();
+  p(
+    unreachedRisks.length
+      ? unreachedRisks.map((r) => `- ${r.title} (\`${r.id}\`)`).join("\n")
+      : "_None. Every CoSAI risk appears in at least one reference architecture._",
+  );
+  p();
+
+  const namedCaps = new Set(archetypes.flatMap((a) => a.capabilities));
+  const unusedCaps = dataset.capabilities.filter((c) => !namedCaps.has(c.id));
+  p(`### 4b. Capabilities no architecture attaches — ${unusedCaps.length} of ${dataset.capabilities.length}`);
+  p();
+  p(
+    unusedCaps.length
+      ? unusedCaps.map((c) => `- ${c.title} (\`${c.id}\`)`).join("\n")
+      : "_None. Every capability in the taxonomy is attached somewhere._",
+  );
+  p();
+
+  const anchored = new Set(
+    archetypes.flatMap((a) => a.nodes.map((n) => n.cosaiComponent).filter(Boolean) as string[]),
+  );
+  // A node's anchor may come from its vocabulary type rather than being set on the node, so
+  // resolve through the vocabulary the dataset carries.
+  const typeAnchor = new Map(
+    (dataset as unknown as { architectureVocabulary: { nodeTypes: { id: string; cosaiComponent?: string }[] } })
+      .architectureVocabulary.nodeTypes.map((t) => [t.id, t.cosaiComponent]),
+  );
+  for (const a of archetypes) {
+    for (const n of a.nodes) {
+      const viaType = typeAnchor.get(n.type);
+      if (viaType) anchored.add(viaType);
+    }
+  }
+  const unanchored = components.filter((c) => !anchored.has(c.id));
+  p(`### 4c. CoSAI components no architecture draws — ${unanchored.length} of ${components.length}`);
+  p();
+  p(
+    unanchored.length
+      ? unanchored.map((c) => `- ${title(c.id)} (\`${c.id}\`)`).join("\n")
+      : "_None. Every CoSAI component is anchored by at least one architecture node._",
+  );
+  p();
+
+  // Which classes of control the catalogue actually leans on. A control kind nothing uses is
+  // either a gap in the architectures or a kind that should not be in the vocabulary.
+  const kindUse = new Map<string, number>();
+  for (const a of archetypes) {
+    for (const e of a.edges) {
+      if (e.control) kindUse.set(e.control.kind, (kindUse.get(e.control.kind) ?? 0) + 1);
+    }
+  }
+  const vocabKinds = (dataset as unknown as { architectureVocabulary: ArchitectureVocabulary })
+    .architectureVocabulary.controlKinds;
+  p(`### 4d. Controls the catalogue requires — ${kindUse.size} of ${vocabKinds.length} kinds in use`);
+  p();
+  p(
+    "These are target architectures: every boundary crossing carries a control from the canonical " +
+      "list, and each kind names the capability that delivers it. A kind with no uses is a gap " +
+      "worth explaining.",
+  );
+  p();
+  p("| Control | Crossings | Delivered by |");
+  p("| --- | --- | --- |");
+  for (const kind of [...vocabKinds].sort(
+    (a, b) => (kindUse.get(b.id) ?? 0) - (kindUse.get(a.id) ?? 0),
+  )) {
+    const cap = dataset.capabilities.find((c) => c.id === kind.capability);
+    p(`| ${kind.title} | ${kindUse.get(kind.id) ?? 0} | ${cap?.title ?? kind.capability} |`);
+  }
+  p();
+
   await mkdir(join(ROOT, "docs"), { recursive: true });
   await writeFile(join(ROOT, "docs", "AUDIT.md"), out.join("\n"));
   console.log(
     `docs/AUDIT.md: ${components.length} components, ${EDGES.length} edges, ` +
-      `${authored.length} authored + ${seeded.length} seeded overlays`,
+      `${authored.length} authored + ${seeded.length} seeded overlays, ` +
+      `${archetypes.length} archetypes (${unreachedRisks.length} risks and ` +
+      `${unusedCaps.length} capabilities unreached, ${kindUse.size}/${vocabKinds.length} control kinds in use)`,
   );
 }
 

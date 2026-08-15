@@ -1,0 +1,448 @@
+id: archTenantAssistant
+surface: surfaceSaas
+title: Tenant-wide assistant over your corpus
+abbrev: Tenant assistant
+
+summary:
+  - >
+    A vendor-operated assistant granted standing access to the organisation's whole document
+    estate, answering any employee's question by retrieving across it. You configure a tenant; you
+    do not operate an architecture.
+
+description:
+  - >
+    Structurally this is retrieval-augmented generation, with one difference that changes every
+    control decision: the retriever, the index, the model and the orchestration are all inside a
+    boundary you cannot inspect. What you own is the identity that authenticates users, the grants
+    that decide what the assistant may read, the permissions already sitting on the source content,
+    the network path, and the contract.
+  - >
+    The security question is therefore not "is the vendor's RAG pipeline sound". It is a
+    permissions question you can answer without the vendor's cooperation: given that the assistant
+    inherits a user's entitlements and can search the entire indexed corpus in one turn, what does
+    each user turn out to be entitled to? Over-permissioned content that was safe by obscurity —
+    reachable in principle, never actually found — stops being safe the moment retrieval is
+    exhaustive and instant. This is the dominant failure mode of the archetype and it is a
+    pre-existing condition the assistant surfaces rather than a flaw it introduces.
+  - >
+    The second exposure is that indexed content is attacker-writable. Any document a colleague, a
+    customer, or an external collaborator can place into an indexed location is model input for
+    every employee who later asks a related question. Where the assistant can also act — send a
+    message, file a ticket, call a connector — retrieval-borne injection reaches those actions, and
+    the vendor's guardrails are the only thing between the two.
+  - >
+    Note what the diagram does not claim. The vendor zone contains its published interfaces and
+    nothing else. Drawing the vendor's retriever, index and orchestrator would be inventing them:
+    those exist, but their configuration, tenancy model and instrumentation are not observable to
+    you, and a diagram that shows them invites controls you cannot actually apply.
+
+distinguishedBy:
+  - >
+    Against an embedded retrieval assistant you build: there, the index, the retrieval-time ACL
+    check and the guardrails are yours to design, and the architecture is mostly about getting them
+    right. Here every one of them is the vendor's, and your architecture is the grant model and the
+    edges. Almost no capability transfers between the two.
+  - >
+    Against an enterprise AI chat subscription: that archetype connects a general assistant to a
+    handful of sources the user authorises. This one is granted the corpus up front, tenant-wide,
+    by an administrator. The difference is who consents and at what granularity, and it is the
+    difference between a per-user data path and an organisational one.
+
+exemplars:
+  - name: Tenant-wide productivity assistants
+    note: >
+      Vendor assistants indexing the organisation's mail, files and chat and answering across all
+      of it. Sold as a per-seat add-on to a suite the organisation already runs, which is why the
+      grant decision often precedes any security review.
+    asOf: "2026-08"
+  - name: Enterprise search assistants
+    note: >
+      Standalone vendors that connect to many systems of record and build a unified index. Same
+      shape, more connectors, and the permissions-mirroring question is their central engineering
+      claim — worth testing rather than accepting.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: >
+      Content authored by people outside the organisation that nonetheless lands in indexed locations —
+      inbound mail, shared drives, external collaborators in a workspace.
+
+  - id: workforce
+    type: device
+    personas: [personaEndUser]
+    note: >
+      Where the assistant is actually reached. For a vendor service this is the one place the traffic can still be
+      inspected, which is why endpoint and browser controls carry disproportionate weight
+      on this surface.
+
+  - id: perimeter
+    type: network
+    personas: [personaGovernance, personaPlatformProvider]
+    note: >
+      The path between AI System Users and the vendor, and the identity decisions made on it. Operated
+      by the Governance and Platform Provider personas even though nothing behind it is.
+
+  - id: estate
+    type: data
+    personas: [personaDataProvider]
+    note: >
+      The systems of record the vendor indexes. The permissions here are the real access control —
+      the assistant reflects them, and reflects their mistakes.
+
+  - id: vendor
+    type: vendorOpaque
+    personas: [personaAgenticProvider, personaModelProvider]
+    note: >
+      Retrieval, inference, orchestration and logging, none of it observable. Only the published
+      interfaces are drawn.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance, personaAgenticProvider]
+    note: >
+      What remains enforceable: who may use it, what it may reach, what is visible afterwards, and
+      what the contract obliges the provider to do.
+
+nodes:
+  # --- Outside -------------------------------------------------------------------
+  - id: externalAuthors
+    type: untrustedSource
+    zone: outside
+    label: External content authors
+    note: >
+      Anyone who can put a document into an indexed location — an inbound email, a shared folder, a
+      guest in a workspace. Their text becomes context for employees who never opened it.
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+    capabilities: [capabilityPromptInjectionDefense, capabilityAiDlp]
+
+  # --- Workforce -----------------------------------------------------------------
+  - id: employee
+    type: humanUser
+    zone: workforce
+    label: Employee
+    note: The assistant answers with this person's entitlements, whatever those turn out to be.
+
+  - id: assistantSurface
+    type: appUi
+    zone: workforce
+    label: Assistant surface
+    note: >
+      The in-app panel, browser tab or client the employee types into. The last point at which the prompt and the response are visible to first-party controls.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiDlp, capabilityBrowserDetectionResponse, capabilityPromptRedaction]
+
+  - id: managedEndpoint
+    type: egressProxy
+    zone: workforce
+    label: Browser and DLP controls
+    note: >
+      Device-resident inspection of what leaves. On a surface where the service cannot be
+      instrumented, this is the substitute for application logging. Note that endpoint detection is
+      absent by construction rather than by oversight: there is no vendor host to install it on,
+      and in-browser inspection is what reaches this traffic instead.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityBrowserDetectionResponse, capabilityAiDlp, capabilityPromptRedaction]
+
+  # --- Perimeter -----------------------------------------------------------------
+  - id: idp
+    type: identityProvider
+    zone: perimeter
+    label: Identity provider
+    note: >
+      Authenticates the user to the vendor and carries the entitlements the assistant will inherit.
+      Conditional access here is one of the few enforcement points that still binds.
+    risks: [riskStaleAgentIdentityBinding]
+    capabilities: [capabilitySse, capabilityIga, capabilityNhiManagement]
+
+  - id: secureEdge
+    type: egressProxy
+    zone: perimeter
+    label: Secure service edge
+    note: >
+      Inline inspection of traffic to the vendor, and the control that decides which vendor AI
+      services are reachable at all.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilitySse, capabilityEgressControl, capabilityAiDlp]
+
+  # --- Estate --------------------------------------------------------------------
+  - id: sourceContent
+    type: corpus
+    zone: estate
+    label: Systems of record
+    note: >
+      Mail, files, chat, tickets, wikis. The authoritative permissions live here, and every
+      over-share predates the assistant.
+    risks: [riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDspm, capabilityDataAccessGovernance]
+
+  - id: grantScope
+    type: connector
+    zone: estate
+    label: Indexing grant
+    note: >
+      The tenant-level authorisation that decides which repositories the vendor may crawl. A single
+      administrative decision that sets the assistant's entire reachable set.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityDataAccessGovernance, capabilityNhiManagement, capabilityIga]
+
+  # --- Vendor --------------------------------------------------------------------
+  - id: vendorApi
+    type: apiEndpoint
+    zone: vendor
+    label: Tenant API
+    note: >
+      The interface AI System Users and the tenant's connectors talk to. Everything it fronts — retrieval,
+      ranking, inference, orchestration — is the vendor's and is not drawn.
+    risks: [riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance]
+
+  - id: vendorConnector
+    type: connector
+    zone: vendor
+    label: Vendor connectors
+    note: >
+      The crawl and sync path the vendor runs against the content estate under the indexing grant. Its
+      schedule, retention and permission-mirroring behaviour are the provider's claims, not
+      observations anyone else can make.
+    risks: [riskExcessiveDataHandling, riskRetrievalVectorStorePoisoning]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityDataAccessGovernance]
+
+  # --- Governance ----------------------------------------------------------------
+  - id: tenantPolicy
+    type: policyEngine
+    zone: governance
+    label: Tenant policy
+    note: >
+      Vendor-side settings the Governance persona configures: who is licensed, which sources are in scope, whether the
+      assistant may act, and what is excluded from indexing.
+    risks: [riskExcessiveDataHandling]
+    capabilities: [capabilityAiGovernancePlatform, capabilityDataAccessGovernance]
+
+  - id: tenantAudit
+    type: auditSink
+    zone: governance
+    label: Exported audit
+    note: >
+      Whatever the vendor exports, at whatever fidelity and latency it chooses. Plan detection against traffic that is actually visible, not the log the provider may supply.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityAuditLogging, capabilityAiDetectionResponse]
+
+  - id: vendorAssurance
+    type: evaluationHarness
+    zone: governance
+    label: Vendor assurance
+    note: >
+      Due diligence, contractual commitments and whatever red-team evidence the vendor will share.
+      On this surface it substitutes for testing that cannot be performed directly.
+    risks: [riskInsecureIntegratedComponent]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityAiRedTeaming]
+
+  - id: discovery
+    type: registry
+    zone: governance
+    label: Shadow AI discovery
+    note: >
+      Finding the tenants nobody declared. On a surface reached by signing up, the inventory
+      problem precedes every other control.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityShadowAiDiscovery, capabilityAiTprm]
+
+edges:
+  - from: externalAuthors
+    to: sourceContent
+    label: inbound content
+    control:
+      kind: contentPermissions
+      note: >
+        Whatever already governs writes to that repository. Nothing AI-specific gates it, and it
+        was designed on the assumption that reaching content required knowing it existed.
+    risks: [riskPromptInjection, riskRetrievalVectorStorePoisoning]
+
+  - from: employee
+    to: assistantSurface
+    label: question
+
+  - from: assistantSurface
+    to: managedEndpoint
+    label: outbound inspection
+
+  - from: managedEndpoint
+    to: secureEdge
+    label: proxied request
+    control:
+      kind: postureInspection
+      note: >
+        Where TLS inspection is not in place for this vendor, the prompt and response leave
+        uninspected and the endpoint control is the only remaining view.
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: idp
+    to: secureEdge
+    label: authenticated session
+    kind: control
+
+  - from: secureEdge
+    to: vendorApi
+    label: user query
+    control:
+      kind: userIdentity
+      note: >
+        The vendor answers as this user. Everything the assistant will retrieve is decided by the
+        entitlements this assertion carries, so the token is the access-control decision.
+    risks: [riskSensitiveDataDisclosure, riskStaleAgentIdentityBinding]
+
+  - from: vendorApi
+    to: assistantSurface
+    label: grounded answer
+    control:
+      kind: transport
+      note: >
+        Citations are the vendor's claim about its own retrieval. A cited document can be checked for existence and readability by that user; what else was retrieved cannot be checked at all.
+    risks: [riskInsecureModelOutput, riskSensitiveDataDisclosure]
+
+  - from: grantScope
+    to: vendorConnector
+    label: crawl authorisation
+    control:
+      kind: delegatedGrant
+      note: >
+        A standing, non-human grant over whole repositories rather than a per-request check. Its
+        scope is the assistant's reachable set, and it is set once by an administrator.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation]
+
+  - from: sourceContent
+    to: grantScope
+    label: in-scope repositories
+
+  - from: vendorConnector
+    to: vendorApi
+    label: indexed corpus
+    control:
+      kind: providerInternal
+      note: >
+        Not observable. Whether index-time permissions stay in step with the source as content is
+        reshared is the provider's central claim and the central question for assurance.
+    risks: [riskExcessiveDataHandling, riskRetrievalVectorStorePoisoning]
+
+  - from: tenantPolicy
+    to: vendorApi
+    label: tenant configuration
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        The Governance persona sets the policy; the provider enforces it. There is no independent way to verify the
+        enforcement, which is precisely what the assurance node exists to compensate for.
+    risks: [riskExcessiveDataHandling]
+
+  - from: vendorApi
+    to: tenantAudit
+    label: exported events
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        A vendor-shaped view of vendor-side activity. Sufficient for compliance reporting, rarely
+        sufficient for investigation.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: vendorAssurance
+    to: vendorApi
+    label: contractual commitments
+    kind: control
+    control:
+      kind: vendorAssurance
+      note: >
+        The only control on this edge is legal. Naming it as a control rather than omitting it is
+        the honest treatment of a boundary no technical control reaches.
+    risks: [riskInsecureIntegratedComponent]
+
+  - from: discovery
+    to: secureEdge
+    label: unsanctioned tenant detection
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Discovery works off traffic and expense data rather than anything the vendor supplies,
+        which is why it finds tenants that were never sanctioned in the first place.
+    risks: [riskShadowAndUnknownAgents]
+
+crossCutting:
+  - risk: riskExcessiveDataHandling
+    note: >
+      Not localisable. It is produced jointly by the tenant-wide grant, the pre-existing
+      permissions on the estate, and retrieval that is exhaustive where human search was not. No
+      single node is wrong; the combination is.
+  - risk: riskPromptInjection
+    note: >
+      Enters through content authored anywhere in the estate and surfaces in any later answer. The
+      injection point and the impact point are different users on different days.
+  - risk: riskInsecureIntegratedComponent
+    note: >
+      The entire vendor zone is one integrated component you did not build and cannot test. This is
+      what makes third-party assurance a control here rather than a formality.
+
+risks:
+  - riskExcessiveDataHandling
+  - riskSensitiveDataDisclosure
+  - riskPromptInjection
+  - riskRetrievalVectorStorePoisoning
+  - riskShadowAndUnknownAgents
+  - riskInsecureIntegratedComponent
+  - riskStaleAgentIdentityBinding
+  - riskCrossTenantCredentialPropagation
+  - riskExcessiveDataHandlingDuringInference
+  - riskInsecureModelOutput
+  - riskInferredSensitiveData
+
+capabilities:
+  - capabilityDataAccessGovernance
+  - capabilityDspm
+  - capabilityAiDlp
+  - capabilitySse
+  - capabilityBrowserDetectionResponse
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+  - capabilityShadowAiDiscovery
+  - capabilityAiGovernancePlatform
+  - capabilityAuditLogging
+  - capabilityIga
+  - capabilityNhiManagement
+  - capabilityEgressControl
+  - capabilityPromptRedaction
+  - capabilityPromptInjectionDefense
+  - capabilityAiDetectionResponse
+  - capabilityAiRedTeaming
+
+deviations:
+  - subject: The vendor zone shows two interfaces and no internals
+    reason: >
+      The vendor certainly operates a retriever, an index, a ranker and an inference path. None of
+      it is inspectable, configurable or instrumentable by the customer, so drawing it would
+      suggest control points that do not exist. The two nodes drawn are the interfaces the customer
+      actually integrates with.
+  - subject: Contractual commitments are drawn as a control edge
+    reason: >
+      A contract is not a technical control and drawing it as one risks overstating it. It is drawn
+      because omitting it would leave the vendor boundary with no control at all, which understates
+      the position instead. The edge is labelled with its real mechanism so neither reading stands.
+  - subject: The control plane is marked shared rather than yours
+    reason: >
+      Policy is authored by the customer and enforced by the provider. Neither owner label alone is
+      true, and CoSAI's shared-responsibility vocabulary has the right word for it.
+
+sources:
+  - title: "CoSAI Shared Responsibility Framework V1.0 — AI-enabled SaaS operating model"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM02 sensitive information disclosure"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Microsoft Learn — Zero Trust guidance for tenant-wide AI assistants"
+    url: https://learn.microsoft.com/en-us/security/zero-trust/zero-trust-microsoft-365-copilot
+  - title: "Microsoft Learn — data security and compliance controls for AI agents"
+    url: https://learn.microsoft.com/en-us/purview/ai-agents
+  - title: "CSA AI Controls Matrix v1.1 — vendor and shared-responsibility controls"
+    url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PhaseLegend } from "@/components/PhaseRail";
 import { REPO_URL } from "@/components/shell/SiteHeader";
 import {
+  archetypes,
   capabilities,
   components,
   controls,
@@ -53,6 +54,14 @@ const SECTIONS = [
     blurb: "Which tooling actually delivers each control — on endpoint, cloud, and vendor SaaS.",
     count: `${capabilities.length} capabilities`,
     accent: "var(--introduced)",
+  },
+  {
+    href: "/reference",
+    label: "Architectures",
+    blurb:
+      "Down to the drawing: per application archetype, the trust boundaries and what authenticates every crossing.",
+    count: `${archetypes.length} archetypes`,
+    accent: "var(--band-model-rail)",
   },
   {
     href: "/personas",

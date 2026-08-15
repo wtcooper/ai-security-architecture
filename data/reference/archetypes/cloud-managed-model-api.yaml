@@ -1,0 +1,420 @@
+id: archManagedModelApi
+surface: surfaceCloud
+title: Managed model API consumption
+abbrev: Managed model API
+
+summary:
+  - >
+    Consuming a cloud provider's hosted models as a dependency of applications the organisation
+    operates. The most common AI architecture there is, and the one most often treated as a library
+    call rather than as a boundary crossing.
+
+description:
+  - >
+    This is drawn as its own archetype because it is the shared substrate beneath most of the cloud
+    application archetypes, and because the decisions made here are made once and inherited by all
+    of them. Where a team places the gateway, how the credential is issued, whether guardrails are
+    on the request path and whether the log is complete are properties of this layer, not of each
+    application above it.
+  - >
+    The essential move is that the provider is a boundary and the crossing needs one place. A model
+    call made directly from each service with an SDK and a key in a config map produces no complete
+    log, no consistent policy and no single place to rotate. Consolidating on a gateway is what
+    turns a scattered dependency into a governed one, and it is much cheaper before there are
+    twenty callers than after.
+  - >
+    The provider-side controls are real and worth using: managed guardrails, abuse monitoring,
+    content filtering and regional routing all exist and all cost less than building equivalents.
+    They are also configuration the consumer authors and the provider enforces — the classic shared
+    responsibility shape — and their defaults are usually permissive.
+  - >
+    The three things that catch organisations out are data handling terms, model version churn and
+    cost. What the provider retains and whether it trains on inputs is a contract question with a
+    per-service answer. Model versions are deprecated on the provider's schedule, so pinning and a
+    tested upgrade path are availability controls. And a token-metered dependency with no quota is
+    an open financial commitment reachable from anything that can loop.
+
+distinguishedBy:
+  - >
+    Against self-hosted inference: the same capability with the serving tier, the supply chain and
+    the capacity problem on the provider's side. Almost every control in that archetype is replaced
+    here by a contract term and a configuration setting.
+  - >
+    Against the AI gateway archetype: that one is about operating the gateway as a platform for
+    many teams and providers. This is about the consuming relationship itself, and the two are
+    usually built in that order.
+
+exemplars:
+  - name: Cloud provider model services
+    note: >
+      Hyperscaler-hosted model endpoints with managed guardrails, regional routing and
+      account-level data-handling terms, reached with the account's own identity system.
+    asOf: "2026-08"
+  - name: Direct provider APIs
+    note: >
+      A model vendor's own API, reached with a provider-issued key. Fewer platform controls, and
+      the credential is not part of the organisation's existing identity fabric.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Content that reaches the prompt from elsewhere, and the users of the applications above.
+
+  - id: apps
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: Every service that wants to call a model. The population this layer exists to serve.
+
+  - id: edge
+    type: network
+    personas: [personaApplicationDeveloper, personaPlatformProvider]
+    note: >
+      The one place model traffic crosses out. Its value is entirely in there being exactly one.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: >
+      Inference, provider-side guardrails and abuse monitoring. Configurable, not inspectable.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Credentials, quotas, version policy, logging and the contract.
+
+nodes:
+  - id: promptContent
+    type: untrustedSource
+    zone: outside
+    label: Content reaching the prompt
+    note: >
+      Whatever the applications above put in context — documents, tickets, tool output. This layer
+      cannot tell trusted from untrusted, which is why guardrails here are a backstop rather than
+      the primary defence.
+    risks: [riskPromptInjection]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: services
+    type: apiEndpoint
+    zone: apps
+    label: Application services
+    note: >
+      Many callers, written by different teams at different times. Whether they can reach the
+      provider directly decides whether this architecture holds.
+    risks: [riskShadowAndUnknownAgents, riskEconomicDenialOfWallet]
+    capabilities: [capabilityAiSpm, capabilityShadowAiDiscovery, capabilityNhiManagement]
+
+  - id: sdkCall
+    type: orchestrator
+    zone: apps
+    label: Prompt assembly
+    note: >
+      Where the system instruction, the context and the user turn are combined. Owned by each
+      application, and the reason a central guardrail cannot see intent.
+    risks: [riskPromptInjection, riskExcessiveDataHandlingDuringInference]
+    capabilities: [capabilitySystemPromptManagement, capabilityPromptRedaction]
+
+  - id: gateway
+    type: router
+    zone: edge
+    label: Model gateway
+    note: >
+      One egress point for model traffic: routing, quotas, redaction and a complete log. The
+      difference between a governed dependency and twenty ungoverned ones.
+    risks: [riskShadowAndUnknownAgents, riskEconomicDenialOfWallet, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiGateway, capabilityRateLimiting, capabilityAiDlp]
+
+  - id: egressPolicy
+    type: egressProxy
+    zone: edge
+    label: Network egress policy
+    note: >
+      Default-deny to model endpoints except through the gateway. Without it the gateway is a
+      convention, and conventions do not survive a deadline.
+    risks: [riskShadowAndUnknownAgents, riskSensitiveDataDisclosure]
+    capabilities: [capabilityEgressControl, capabilitySse, capabilityTransportSecurity]
+
+  - id: providerEndpoint
+    type: inferenceEndpoint
+    zone: provider
+    label: Model endpoint
+    note: >
+      The published interface, with a version identifier that has a deprecation date attached to
+      it. Everything behind it is the provider's.
+    risks: [riskExcessiveDataHandlingDuringInference, riskDenialOfMLService, riskModelDeploymentTampering]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityStagedRollout]
+
+  - id: providerGuardrail
+    type: apiEndpoint
+    zone: provider
+    label: Provider guardrails
+    note: >
+      Managed content and safety filtering, configured by the consumer and enforced by the
+      provider. Cheaper than building an equivalent, and permissive by default.
+    risks: [riskInsecureModelOutput, riskModelEvasion, riskPromptInjection]
+    capabilities: [capabilityModelGuardrails, capabilityPromptInjectionDefense, capabilityVendorAssurance]
+
+  - id: creds
+    type: secretsBroker
+    zone: governance
+    label: Credential broker
+    note: >
+      Short-lived, per-workload credentials rather than a provider key in configuration. Also what
+      makes per-caller attribution possible at the gateway.
+    risks: [riskCrossTenantCredentialPropagation, riskSensitiveDataDisclosure]
+    capabilities: [capabilitySecretsManagement, capabilityNhiManagement, capabilityCredentialIsolation]
+
+  - id: quota
+    type: policyEngine
+    zone: governance
+    label: Quota and cost policy
+    note: >
+      Per-caller token and spend limits. A metered dependency with no ceiling is an open financial
+      commitment reachable by anything that can loop.
+    risks: [riskEconomicDenialOfWallet, riskRunawayAgentToolLoops, riskDenialOfMLService]
+    capabilities: [capabilityRateLimiting, capabilityAiGovernancePlatform]
+
+  - id: versionPolicy
+    type: registry
+    zone: governance
+    label: Model version registry
+    note: >
+      Which versions are approved, which are pinned, and when each is deprecated by the provider.
+      Version churn is an availability risk on somebody else's schedule.
+    risks: [riskModelDeploymentTampering, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAiBom, capabilityStagedRollout, capabilityModelDocumentation]
+
+  - id: evals
+    type: evaluationHarness
+    zone: governance
+    label: Version evaluation
+    note: >
+      Re-testing behaviour when the provider ships a new version. A model upgrade is a dependency
+      upgrade with no changelog anyone can diff.
+    risks: [riskModelEvasion, riskInsecureModelOutput]
+    capabilities: [capabilityModelEvals, capabilityAiRedTeaming, capabilityStagedRollout]
+
+  - id: usageLog
+    type: auditSink
+    zone: governance
+    label: Usage and prompt log
+    note: >
+      What was sent, by whom, to which model and at what cost. Complete only because everything
+      goes through one place.
+    risks: [riskSensitiveDataDisclosure, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAuditLogging, capabilityAgentObservability, capabilityAiDetectionResponse]
+
+  - id: contract
+    type: evaluationHarness
+    zone: governance
+    label: Data handling terms
+    note: >
+      Retention, training use, region and subprocessors. Per service and per tier, and the answer
+      changes when the provider ships a new product.
+    risks: [riskExcessiveDataHandlingDuringInference, riskUnauthorizedTrainingData]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityAiGovernancePlatform]
+
+edges:
+  - from: promptContent
+    to: sdkCall
+    label: context assembled from elsewhere
+    control:
+      kind: contentInspection
+      note: >
+        Applied by the consuming application, which is the only party that knows which part of the
+        context it assembled and which arrived from elsewhere.
+    risks: [riskPromptInjection]
+
+  - from: services
+    to: sdkCall
+    label: request
+
+  - from: sdkCall
+    to: gateway
+    label: model call
+    control:
+      kind: workloadIdentity
+      note: >
+        The application proves what it is; the provider credential never reaches it. This is what
+        makes per-caller quota and attribution possible at all.
+    risks: [riskCrossTenantCredentialPropagation]
+
+  - from: gateway
+    to: egressPolicy
+    label: outbound
+
+  - from: egressPolicy
+    to: providerGuardrail
+    label: filtered request
+    control:
+      kind: brokeredCredential
+      note: >
+        Issued by the broker at call time and expiring. Contrast with a key in configuration, which
+        is the same authority with no expiry and no attribution.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+
+  - from: providerGuardrail
+    to: providerEndpoint
+    label: admitted request
+    control:
+      kind: providerInternal
+      note: Not observable. The guardrail's decision and the inference both happen inside the boundary.
+    risks: [riskModelEvasion]
+
+  - from: providerEndpoint
+    to: gateway
+    label: completion
+    control:
+      kind: transport
+      note: >
+        Transport is authenticated and the content is not. Output handling belongs to the consuming
+        application, because only it knows where the text is about to be rendered or executed.
+    risks: [riskInsecureModelOutput]
+
+  - from: creds
+    to: gateway
+    label: provider credentials
+    kind: control
+    control:
+      kind: brokeredCredential
+      note: One rotation point instead of one per service, which is the practical argument for the gateway.
+    risks: [riskCrossTenantCredentialPropagation]
+
+  - from: quota
+    to: gateway
+    label: per-caller limits
+    kind: control
+    control:
+      kind: rateLimit
+      note: >
+        Enforced at the crossing rather than trusted to each caller. A retry loop in one service
+        should not be able to exhaust the account.
+    risks: [riskEconomicDenialOfWallet, riskRunawayAgentToolLoops]
+
+  - from: versionPolicy
+    to: gateway
+    label: approved and pinned versions
+    kind: control
+    control:
+      kind: admission
+      note: >
+        Pinning at the gateway means one place to test and roll an upgrade, instead of a
+        coordinated change across every caller.
+    risks: [riskModelDeploymentTampering]
+
+  - from: evals
+    to: versionPolicy
+    label: promotion evidence
+    kind: control
+    control:
+      kind: evaluationGate
+      note: A provider version becomes approved by passing tests, not by being available.
+    risks: [riskModelEvasion]
+
+  - from: gateway
+    to: usageLog
+    label: complete call record
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Complete because there is one crossing. A per-service SDK call produces a log that is
+        complete only for the services that remembered to write one.
+    risks: [riskSensitiveDataDisclosure, riskShadowAndUnknownAgents]
+
+  - from: contract
+    to: providerEndpoint
+    label: data handling terms
+    kind: control
+    control:
+      kind: vendorAssurance
+      note: >
+        The only control over what the provider does with what it receives. Re-read it when the
+        provider ships a new service, because the terms are rarely uniform across their catalogue.
+    risks: [riskExcessiveDataHandlingDuringInference, riskUnauthorizedTrainingData]
+
+crossCutting:
+  - risk: riskShadowAndUnknownAgents
+    note: >
+      Any service that can reach the internet can reach a model provider. Everything on this
+      diagram depends on egress policy making the gateway the only available path.
+  - risk: riskEconomicDenialOfWallet
+    note: >
+      A metered dependency behind an agent loop. Not attributable to one node — it is what happens
+      when retry logic meets per-token billing without a ceiling.
+  - risk: riskModelDeploymentTampering
+    note: >
+      Model versions change under the consumer on the provider's schedule. Pinning, evaluation and
+      staged rollout together are the answer; any one alone is not.
+
+risks:
+  - riskExcessiveDataHandlingDuringInference
+  - riskShadowAndUnknownAgents
+  - riskEconomicDenialOfWallet
+  - riskSensitiveDataDisclosure
+  - riskInsecureModelOutput
+  - riskCrossTenantCredentialPropagation
+  - riskModelDeploymentTampering
+  - riskModelEvasion
+  - riskPromptInjection
+  - riskDenialOfMLService
+  - riskRunawayAgentToolLoops
+  - riskUnauthorizedTrainingData
+
+capabilities:
+  - capabilityAiGateway
+  - capabilityEgressControl
+  - capabilitySecretsManagement
+  - capabilityNhiManagement
+  - capabilityCredentialIsolation
+  - capabilityRateLimiting
+  - capabilityAuditLogging
+  - capabilityAiBom
+  - capabilityStagedRollout
+  - capabilityModelEvals
+  - capabilityAiRedTeaming
+  - capabilityModelGuardrails
+  - capabilityPromptInjectionDefense
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+  - capabilityAiDlp
+  - capabilityPromptRedaction
+  - capabilitySystemPromptManagement
+  - capabilityAiSpm
+  - capabilityShadowAiDiscovery
+  - capabilityAgentObservability
+  - capabilityAiDetectionResponse
+  - capabilityAiGovernancePlatform
+  - capabilityModelDocumentation
+  - capabilitySse
+  - capabilityTransportSecurity
+
+deviations:
+  - subject: The provider zone shows a guardrail as well as an endpoint
+    reason: >
+      Provider guardrails are usually a separate configurable service rather than part of the
+      inference endpoint, and their configuration is the consumer's. Drawing them as one node would
+      hide a control the consumer actually operates; drawing internals beyond these two would be
+      inventing them.
+  - subject: Consuming applications are drawn as one node
+    reason: >
+      There are many, written by different teams. The archetype is the relationship rather than any
+      one caller, and the population problem is stated in the note and in the shadow-AI risk rather
+      than by drawing twenty boxes.
+  - subject: Data handling terms are drawn as an evaluation-harness node
+    reason: >
+      A contract is not a harness. The vocabulary has no node type for a legal instrument, and this
+      is the closest match for something that establishes assurance without executing anything. It
+      is drawn because leaving it out would put no control at all on what the provider retains.
+
+sources:
+  - title: "CoSAI Shared Responsibility Framework V1.0 — AI and agent PaaS operating model"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "AWS Well-Architected Generative AI Lens"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html
+  - title: "Microsoft Azure Architecture Center — AI gateway guidance"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/azure-openai-gateway-guide
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM06 unbounded consumption"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/

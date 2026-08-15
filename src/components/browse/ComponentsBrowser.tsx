@@ -8,7 +8,9 @@ import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { Prose } from "@/components/Prose";
 import { PHASE_META } from "@/components/PhaseRail";
+import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import {
+  archetypesForComponent,
   actorById,
   componentById,
   componentCategories,
@@ -134,6 +136,13 @@ export function ComponentsBrowser() {
                 </div>
               </details>
             )}
+
+            <div className="mt-6">
+              <ArchetypeLinks
+                archetypes={archetypesForComponent(selected)}
+                empty="No reference architecture draws a node anchored to this component yet."
+              />
+            </div>
 
             <div className="mt-6">
               <p className="eyebrow">{risks.length} risks touch this component</p>

@@ -1,0 +1,462 @@
+id: archVoiceAgent
+surface: surfaceCloud
+title: Realtime voice agent
+abbrev: Voice agent
+
+summary:
+  - >
+    A conversational agent over a live audio channel, handling calls and acting on what it hears.
+    Injection arrives as speech, the caller's identity is asserted by a voice, and there is no
+    moment to pause and check anything.
+
+description:
+  - >
+    Realtime changes what is possible rather than what is at stake. Every asynchronous archetype
+    can insert a filter, a check or a human between the input and the effect. Here the budget is a
+    few hundred milliseconds before the pause becomes audible and the conversation breaks, which
+    means guardrails have to be streaming and partial, and human approval means transferring the
+    call rather than blocking on a queue.
+  - >
+    Identity is the harder problem. A voice is not an authenticator and has not been one for
+    several years, so anything consequential needs a second factor on another channel — a code to
+    the registered device, a callback, an in-app confirmation. Systems that treat the calling
+    number plus a plausible voice as authentication are the ones this archetype's incidents come
+    from.
+  - >
+    Audio is also the worst medium for detection. Speech-to-text loses tone, homophones and
+    overlapping speakers, so the transcript the guardrail inspects is not what was said. Where only
+    the transcript is retained, an investigation cannot recover what actually happened, and where
+    audio is retained, that is biometric data with its own regulatory weight.
+  - >
+    The telephony edge brings risks the rest of the catalogue does not have. Caller identification
+    is spoofable, the network is a third party, and a voice agent reachable on a public number is
+    an always-open endpoint with per-minute inference costs behind it.
+
+distinguishedBy:
+  - >
+    Against the autonomous action agent: the same act-on-a-request shape with the latency budget
+    removed. Every deliberative control that archetype relies on — filtering, approval queues,
+    reconsideration — is unavailable, so the compensating controls move to identity and to
+    reversibility.
+  - >
+    Against a text chat assistant: the medium changes the threat model. Audio cannot be reliably
+    inspected, transcription is lossy, the caller is anonymous by default, and the recording is
+    biometric data.
+
+exemplars:
+  - name: Realtime speech APIs with tool calling
+    note: >
+      Provider APIs handling speech in and out with low latency and function calling in-session,
+      increasingly with direct telephony integration.
+    asOf: "2026-08"
+  - name: Contact-centre voice agents
+    note: >
+      Agents answering customer calls end to end, with escalation to a human and access to account
+      records. The mainstream commercial deployment of this archetype.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The caller, whoever they actually are, arriving over a network nobody here controls.
+
+  - id: telephony
+    type: network
+    personas: [personaPlatformProvider]
+    note: >
+      Carrier and session border. Caller identification arrives here already untrustworthy, and
+      the network itself is a third party.
+
+  - id: session
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: The live conversation, its tools, and whatever can be checked inside the latency budget.
+
+  - id: records
+    type: data
+    personas: [personaDataProvider]
+    note: >
+      Customer records the agent reaches, and the audio and transcripts the call produces. The
+      second is biometric data.
+
+  - id: provider
+    type: vendorOpaque
+    personas: [personaModelProvider, personaModelServing]
+    note: Streaming speech-to-speech inference, holding the audio for the duration of the call.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Identity verification, action limits, retention policy and post-call review.
+
+nodes:
+  - id: caller
+    type: humanUser
+    zone: outside
+    label: Caller
+    note: >
+      Claims an identity by speaking. A voice is not an authenticator and a calling number is
+      spoofable, so this claim needs corroboration before anything consequential happens.
+    risks: [riskAgenticDelegationConfusedDeputy, riskSensitiveDataDisclosure]
+    capabilities: [capabilityIga, capabilityHitlControls]
+
+  - id: spokenInput
+    type: untrustedSource
+    zone: outside
+    label: Spoken content
+    note: >
+      Instructions arriving as audio. Reaches the model with no marker separating it from the
+      system prompt, and cannot be filtered as reliably as text.
+    risks: [riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: sbc
+    type: channelAdapter
+    zone: telephony
+    label: Session border
+    note: >
+      Where the call arrives. Carries caller identification that is spoofable and should be treated
+      as a hint rather than a fact.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet, riskShadowAndUnknownAgents]
+    capabilities: [capabilityRateLimiting, capabilityTransportSecurity, capabilityEgressControl]
+
+  - id: streamHandler
+    type: inputHandling
+    zone: session
+    label: Stream handling
+    note: >
+      Audio in, audio out, continuously. Any inspection here has a few hundred milliseconds before
+      the pause is audible and the conversation stops working.
+    risks: [riskPromptInjection, riskDenialOfMLService]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails, capabilityRateLimiting]
+
+  - id: dialogue
+    type: reasoningCore
+    zone: session
+    label: Dialogue agent
+    note: >
+      Holds the conversation and decides when to call a tool. Its decisions land in real time with
+      no opportunity to reconsider.
+    risks: [riskRogueActions, riskPromptInjection]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability]
+
+  - id: streamGuard
+    type: guardrail
+    zone: session
+    label: Streaming guardrail
+    note: >
+      Partial-transcript classification, inbound and outbound. Necessarily weaker than a batch
+      filter, because it must decide before the utterance is finished.
+    risks: [riskPromptInjection, riskInsecureModelOutput, riskModelEvasion]
+    capabilities: [capabilityModelGuardrails, capabilityPromptInjectionDefense, capabilityAiDlp]
+
+  - id: voiceTools
+    type: toolGateway
+    zone: session
+    label: In-session tools
+    note: >
+      Account lookups and transactions invoked mid-conversation. The gap between reads and writes
+      is where the verification requirement belongs.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAgentRuntimeEnforcement]
+
+  - id: handoff
+    type: hitlGate
+    zone: session
+    label: Human transfer
+    note: >
+      Escalation to a person. This archetype's only form of human oversight — a queue is not
+      available when the caller is on the line.
+    risks: [riskRogueActions]
+    capabilities: [capabilityHitlControls, capabilityKillSwitch]
+
+  - id: customerRecords
+    type: corpus
+    zone: records
+    label: Customer records
+    note: What the agent reads and changes, scoped to whoever the caller has actually been proven to be.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityDataAccessGovernance, capabilityDspm, capabilityIga]
+
+  - id: recordings
+    type: memoryStore
+    zone: records
+    label: Audio and transcripts
+    note: >
+      Biometric data with its own regulatory weight, plus a transcript that is not a faithful record
+      of what was said. Retaining both has consequences; retaining neither leaves incidents
+      unreconstructable.
+    risks: [riskSensitiveDataDisclosure, riskInferredSensitiveData, riskExcessiveDataHandling]
+    capabilities: [capabilityDspm, capabilityEncryptionKeyManagement, capabilityAiDlp]
+
+  - id: realtimeApi
+    type: inferenceEndpoint
+    zone: provider
+    label: Realtime inference
+    note: >
+      Streaming speech in and out. Holds the audio for the duration of the call, which makes the
+      provider's retention terms a biometric-data question.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityAiGateway]
+
+  - id: verification
+    type: identityProvider
+    zone: governance
+    label: Out-of-band verification
+    note: >
+      A code to the registered device, a callback, an in-app confirmation. The substitute for an
+      authenticator, and required before anything consequential.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+    capabilities: [capabilityIga, capabilityNhiManagement, capabilitySse]
+
+  - id: actionLimits
+    type: policyEngine
+    zone: governance
+    label: Action limits
+    note: >
+      What may happen on a call with only a voice behind it, and what requires verification or a
+      human. The compensating control for everything realtime makes impossible.
+    risks: [riskRogueActions, riskExcessiveDataHandling]
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAgentRuntimeEnforcement]
+
+  - id: retention
+    type: policyEngine
+    zone: governance
+    label: Retention policy
+    note: >
+      How long audio and transcripts are kept, and who may replay them. A genuine tension between
+      investigability and biometric-data minimisation, with no configuration that satisfies both.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityDspm, capabilityAiGovernancePlatform, capabilityDataAccessGovernance]
+
+  - id: postCall
+    type: auditSink
+    zone: governance
+    label: Post-call review
+    note: >
+      Sampled review of transcripts and actions after the fact. The only deliberative control
+      available, and it arrives after the effect.
+    risks: [riskRogueActions, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAuditLogging, capabilityBehavioralDriftDetection, capabilityAiDetectionResponse]
+
+edges:
+  - from: caller
+    to: sbc
+    label: inbound call
+    control:
+      kind: userIdentity
+      note: >
+        Caller identification is a hint, not an authenticator. Identity is established by the
+        out-of-band factor before anything consequential; this edge carries fraud signals and rate
+        limits only.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: spokenInput
+    to: streamHandler
+    label: audio stream
+    control:
+      kind: contentInspection
+      note: >
+        Streaming classification on partial transcripts. Necessarily weaker than a batch filter —
+        it must decide before the utterance ends — which is why action limits carry the rest.
+    risks: [riskPromptInjection]
+
+  - from: sbc
+    to: streamHandler
+    label: media session
+    control:
+      kind: transport
+      note: >
+        Secures the media path and says nothing about who is speaking. The carrier is a third party
+        in the middle of every call.
+    risks: [riskDenialOfMLService]
+
+  - from: streamHandler
+    to: streamGuard
+    label: partial transcript
+    risks: [riskPromptInjection]
+
+  - from: streamGuard
+    to: dialogue
+    label: admitted turn
+
+  - from: dialogue
+    to: realtimeApi
+    label: streaming inference
+    control:
+      kind: brokeredCredential
+      note: >
+        Carries the caller's audio for the duration of the call. Retention terms on this path are a
+        biometric-data question rather than a general privacy one.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+
+  - from: realtimeApi
+    to: streamGuard
+    label: streaming response
+    control:
+      kind: transport
+      note: >
+        Outbound guardrails have the same latency budget as inbound ones, so what is checked on the
+        way out is less than anyone would like.
+    risks: [riskInsecureModelOutput]
+
+  - from: dialogue
+    to: voiceTools
+    label: tool call
+    risks: [riskRogueActions]
+
+  - from: voiceTools
+    to: customerRecords
+    label: read or transact
+    control:
+      kind: dataEntitlement
+      note: >
+        Scoped to what the caller has actually been proven to be, not to what they said they are.
+        Reads on an unverified call should be narrower than reads on a verified one.
+    risks: [riskSensitiveDataDisclosure, riskRogueActions, riskAgenticDelegationConfusedDeputy]
+
+  - from: dialogue
+    to: handoff
+    label: escalate
+    risks: [riskRogueActions]
+
+  - from: streamHandler
+    to: recordings
+    label: audio and transcript
+    control:
+      kind: dataEntitlement
+      note: >
+        Biometric data plus a lossy transcript. Both need access control on replay, not only on
+        storage.
+    risks: [riskSensitiveDataDisclosure, riskInferredSensitiveData]
+
+  - from: verification
+    to: voiceTools
+    label: proof before consequence
+    kind: control
+    control:
+      kind: delegatedGrant
+      note: >
+        The compensating control for an unauthenticated medium. Consequential actions wait for it;
+        conversation does not.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: actionLimits
+    to: voiceTools
+    label: what a voice alone may do
+    kind: control
+    control:
+      kind: policyDecision
+      note: >
+        Per call rather than per session, because verification may complete partway through a
+        conversation and the permitted set changes when it does.
+    risks: [riskRogueActions]
+
+  - from: retention
+    to: recordings
+    label: retention and replay policy
+    kind: control
+    control:
+      kind: dataEntitlement
+      note: >
+        The unresolvable tension of the archetype: keeping audio makes incidents investigable and
+        makes the organisation a custodian of biometric data.
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: postCall
+    to: recordings
+    label: sampled review
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Deliberation after the fact, because there was none during. Reviewer access to recordings is
+        itself worth logging.
+    risks: [riskRogueActions]
+
+crossCutting:
+  - risk: riskAgenticDelegationConfusedDeputy
+    note: >
+      A voice is not an authenticator and a calling number is spoofable, so every action taken on
+      an unverified call is taken for someone who has not been identified. No node fixes this; the
+      out-of-band factor works around it.
+  - risk: riskPromptInjection
+    note: >
+      Arrives as speech, into a channel that cannot be inspected as reliably as text, within a
+      latency budget too short for a thorough check. All three at once, which is why this archetype
+      leans on limiting consequence rather than filtering input.
+  - risk: riskSensitiveDataDisclosure
+    note: >
+      Three paths: what the agent reads out to an unverified caller, what the audio sends to the
+      provider, and what the retained recording holds. The third is biometric and outlives the call
+      by whatever the retention policy says.
+
+risks:
+  - riskAgenticDelegationConfusedDeputy
+  - riskPromptInjection
+  - riskSensitiveDataDisclosure
+  - riskRogueActions
+  - riskExcessiveDataHandling
+  - riskInferredSensitiveData
+  - riskModelEvasion
+  - riskInsecureModelOutput
+  - riskDenialOfMLService
+  - riskEconomicDenialOfWallet
+  - riskExcessiveDataHandlingDuringInference
+  - riskStaleAgentIdentityBinding
+  - riskShadowAndUnknownAgents
+
+capabilities:
+  - capabilityHitlControls
+  - capabilityIga
+  - capabilityToolPermissionScoping
+  - capabilityModelGuardrails
+  - capabilityPromptInjectionDefense
+  - capabilityDspm
+  - capabilityAiDlp
+  - capabilityDataAccessGovernance
+  - capabilityAuditLogging
+  - capabilityBehavioralDriftDetection
+  - capabilityRateLimiting
+  - capabilityEncryptionKeyManagement
+  - capabilityAgentRuntimeEnforcement
+  - capabilityAgentObservability
+  - capabilityNhiManagement
+  - capabilitySse
+  - capabilityKillSwitch
+  - capabilityAiGovernancePlatform
+  - capabilityAiDetectionResponse
+  - capabilityTransportSecurity
+  - capabilityEgressControl
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+  - capabilityAiGateway
+
+deviations:
+  - subject: Recordings are drawn as a memory store
+    reason: >
+      They are an operational artifact rather than agent memory. The memory type is used because
+      the security properties match — durable, replayable, holding conversation content — and
+      because it puts the biometric-retention question somewhere visible rather than in prose.
+  - subject: Human transfer is drawn in the session tier rather than the control plane
+    reason: >
+      Every other archetype draws its human gate as a governance control. Here it is inside the
+      session because it is not a gate: it is a transfer, happening live, and drawing it as an
+      approval checkpoint would imply a pause that the medium does not permit.
+  - subject: The telephony edge is attributed to the Platform Provider persona
+    reason: >
+      The carrier is a third party and could reasonably be an opaque vendor zone. It is drawn as an
+      operated network tier because the session border is configured by the operating organisation,
+      and because its security-relevant property — that caller identification is untrustworthy — is
+      a fact to state rather than a boundary to draw.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI09 human-agent trust exploitation"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM01 prompt injection"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "AWS Well-Architected Generative AI Lens — autonomous call centre scenario"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/scenarios.html
+  - title: "Google Cloud — bidirectional multimodal streaming agents"
+    url: https://docs.cloud.google.com/architecture/agentic-ai-bidirectional-multimodal-streaming

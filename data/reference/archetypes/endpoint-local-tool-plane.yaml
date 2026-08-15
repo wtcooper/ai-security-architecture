@@ -1,0 +1,362 @@
+id: archLocalToolPlane
+surface: surfaceEndpoint
+title: Local MCP and tool plane
+abbrev: Local tool plane
+
+summary:
+  - >
+    The fleet of tool servers running on a developer's machine and the configuration files that
+    admit them. Not an agent — the substrate every local agent shares, and the place where this
+    surface's disclosed vulnerabilities have concentrated.
+
+description:
+  - >
+    Every endpoint agent archetype in this catalogue reads a configuration file to decide which
+    tool servers to launch and what they may do without asking. Those files are the admission
+    decision for the whole tool plane, and they are ordinary files: writable by the user, writable
+    by anything running as the user, and frequently committed to the repository they configure.
+  - >
+    Three distinct failure modes have shown up repeatedly, and they are worth separating because
+    they need different controls. Injection into the file adds a server nobody approved. Swapping
+    the file after approval means the thing that was reviewed is not the thing that runs, which is
+    a time-of-check-to-time-of-use problem and not an access-control one. Auto-registration means
+    a server is admitted with no approval step at all. Only the second is fixed by integrity
+    checking; the first needs write protection and the third needs the product to stop doing it.
+  - >
+    A local server is a child process with the user's privileges. There is no sandbox between it
+    and the filesystem, no scope on what it may read, and no identity distinguishing it from the
+    agent that launched it. The protocol's authorization work is aimed at remote servers, where
+    there is a boundary to authorize across; over stdio there is nothing to authenticate to.
+  - >
+    Tool descriptions are model input. A server declares what its tools do in text the agent reads
+    and acts on, which means a hostile server does not need a vulnerability — it can simply
+    describe itself persuasively. Servers also change their descriptions between calls, so a
+    description approved once is not the description used later.
+  - >
+    The last piece is accumulation. Servers get added for one task and never removed, and their
+    grants persist. An inventory of what is admitted, on which machines, with which scopes is the
+    control that makes the rest possible, and it is the one least often present.
+
+distinguishedBy:
+  - >
+    Against the agent archetypes that use it: those describe a loop and its authority. This
+    describes the admission mechanism they all share. It is drawn separately because the
+    vulnerabilities land here rather than in any one agent, and because fixing it fixes all of them.
+  - >
+    Against a remote MCP server you publish: that is a service with an OAuth boundary, an operator
+    and a tenancy model. This is a child process with your privileges and no boundary at all. They
+    share a protocol and almost nothing else.
+
+exemplars:
+  - name: Project-scoped tool configuration files
+    note: >
+      Dotfiles in a repository declaring which tool servers an agent should launch. Ship with the
+      clone, and have been the specific location of multiple disclosed code-execution paths.
+    asOf: "2026-08"
+  - name: User-scoped and managed tool configuration
+    note: >
+      The same declaration at user or device level. Managed variants let an administrator pin an
+      allowlist the user cannot override, which is the only durable fix for auto-registration.
+    asOf: "2026-08"
+  - name: Community tool servers
+    note: >
+      Servers installed from package registries and run as child processes. Reviewed by whoever
+      installed them, updated automatically, and holding the user's full privileges.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Package registries, repositories, and the remote services some servers front.
+
+  - id: device
+    type: device
+    personas: [personaApplicationDeveloper, personaEndUser]
+    note: >
+      Agent, configuration and servers all run as the same user in one trust zone. There is no
+      internal boundary to draw because there is none to have.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: >
+      Allowlisting, integrity checking and inventory. Available in managed deployments, absent by
+      default, and the difference between the two is the whole of this archetype's posture.
+
+nodes:
+  - id: registryFeed
+    type: skillPackage
+    zone: outside
+    label: Package registry
+    note: >
+      Where servers are installed from and updated. Publisher identity is verifiable; behaviour is
+      not, and behaviour changes on update.
+    risks: [riskToolSourceProvenance, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAiBom, capabilityMcpToolSecurity, capabilityAiVulnMgmt]
+
+  - id: repoFile
+    type: untrustedSource
+    zone: outside
+    label: Repository-supplied config
+    note: >
+      A tool-server declaration that arrived with a clone. Authored by whoever last committed to
+      the project, and read on the next agent start.
+    risks: [riskToolRegistryTampering, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAgentRegistry, capabilityAppSecTesting]
+
+  - id: agentClient
+    type: harness
+    zone: device
+    label: Agent client
+    note: >
+      Whichever agent is consuming the plane. Interchangeable — the point of drawing this
+      separately is that the plane outlives and is shared by all of them.
+    risks: [riskRogueActions]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityEdr]
+
+  - id: config
+    type: registry
+    zone: device
+    label: Tool configuration
+    note: >
+      The admission decision: which servers launch, and what runs without a prompt. In the target
+      state it is write-protected from the plane it governs — left as an ordinary user-writable
+      file, a compromised server can add its own successor, which is the loop that turns one bad
+      package into a persistent foothold.
+    risks: [riskToolRegistryTampering, riskZombieShadowMCPServers, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityEdr]
+
+  - id: approvalPrompt
+    type: hitlGate
+    zone: device
+    label: Server approval
+    note: >
+      Shown on first use of a server. Approves what the file said at that moment, which is not
+      necessarily what it says when the server is next launched.
+    risks: [riskToolRegistryTampering]
+    capabilities: [capabilityHitlControls, capabilityAgentRegistry]
+
+  - id: stdioServers
+    type: mcpServer
+    zone: device
+    label: Local tool servers
+    note: >
+      Child processes over stdio, holding the user's privileges. No sandbox, no scope, no identity
+      of their own, and nothing to authenticate to.
+    risks: [riskToolSourceProvenance, riskZombieShadowMCPServers, riskRogueActions]
+    capabilities: [capabilityMcpToolSecurity, capabilityAgentSandboxing, capabilityToolPermissionScoping]
+
+  - id: toolDescriptions
+    type: tool
+    zone: device
+    label: Tool descriptions
+    note: >
+      What each server tells the model its tools do. Model input, author-controlled, and
+      re-read on each connection — so an approved description is not a durable fact.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+    capabilities: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity]
+
+  - id: serverCreds
+    type: credentialStore
+    zone: device
+    label: Server credentials
+    note: >
+      API tokens the servers need for the services they front, typically in environment variables
+      or the config file itself — readable by every other server in the plane.
+    risks: [riskSensitiveDataDisclosure, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
+
+  - id: allowlist
+    type: policyEngine
+    zone: governance
+    label: Server allowlist
+    note: >
+      Which servers may be admitted, enforced outside the file being governed. The only durable
+      answer to auto-registration.
+    risks: [riskToolRegistryTampering, riskZombieShadowMCPServers]
+    capabilities: [capabilityAgentRegistry, capabilityAgentRuntimeEnforcement, capabilityAiGovernancePlatform]
+
+  - id: integrity
+    type: evaluationHarness
+    zone: governance
+    label: Config integrity
+    note: >
+      Detects the file changing between approval and launch. Addresses the time-of-check problem
+      specifically, which access control does not.
+    risks: [riskToolRegistryTampering]
+    capabilities: [capabilityEdr, capabilityAiDetectionResponse, capabilityAppSecTesting]
+
+  - id: planeInventory
+    type: registry
+    zone: governance
+    label: Tool plane inventory
+    note: >
+      Which servers are admitted on which machines with which scopes. Servers accumulate and are
+      never removed, so without this the plane only grows.
+    risks: [riskZombieShadowMCPServers, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAiBom, capabilityShadowAiDiscovery, capabilityAgentRegistry]
+
+edges:
+  - from: registryFeed
+    to: stdioServers
+    label: install and update
+    control:
+      kind: provenance
+      note: >
+        Publisher identity at publish time, nothing at launch time. An update changes the code
+        running with the user's privileges without any further decision.
+    risks: [riskToolSourceProvenance, riskInsecureIntegratedComponent]
+
+  - from: repoFile
+    to: config
+    label: merged on clone
+    control:
+      kind: admission
+      note: >
+        Project-supplied tool declarations are proposals, admitted against an allowlist enforced
+        outside the file. Auto-registration is the failure this replaces.
+    risks: [riskToolRegistryTampering]
+
+  - from: config
+    to: approvalPrompt
+    label: declared servers
+
+  - from: approvalPrompt
+    to: stdioServers
+    label: launch
+    risks: [riskToolRegistryTampering]
+
+  - from: stdioServers
+    to: toolDescriptions
+    label: advertises
+
+  - from: toolDescriptions
+    to: agentClient
+    label: tool schema into context
+    risks: [riskPromptInjection]
+
+  - from: agentClient
+    to: stdioServers
+    label: tool call
+    control:
+      kind: isolation
+      note: >
+        The target state runs local servers with their own filesystem and network policy rather
+        than as child processes holding the user's privileges. Nothing in the protocol provides
+        this; the client has to.
+    risks: [riskRogueActions, riskToolSourceProvenance]
+
+  - from: serverCreds
+    to: stdioServers
+    label: service tokens
+    kind: control
+    risks: [riskSensitiveDataDisclosure, riskCrossTenantCredentialPropagation]
+
+
+  - from: allowlist
+    to: config
+    label: pinned allowlist
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        Has to live somewhere the plane cannot reach. An allowlist stored beside the file it
+        governs shares that file's threat model.
+    risks: [riskToolRegistryTampering]
+
+  - from: integrity
+    to: config
+    label: change detection
+    kind: control
+    control:
+      kind: artifactIntegrity
+      note: Catches the swap between approval and launch, which is the failure integrity checking exists for.
+    risks: [riskToolRegistryTampering]
+
+  - from: planeInventory
+    to: stdioServers
+    label: enumeration
+    kind: control
+    control:
+      kind: discovery
+      note: Derived from the machine, not self-reported, because the unregistered server is the one that matters.
+    risks: [riskZombieShadowMCPServers, riskShadowAndUnknownAgents]
+
+crossCutting:
+  - risk: riskToolRegistryTampering
+    note: >
+      Three separate paths reach it — repository-supplied config, a server writing to the file that
+      admitted it, and swapping the file between approval and launch. They need three different
+      controls, which is why patching one keeps producing another disclosure.
+  - risk: riskZombieShadowMCPServers
+    note: >
+      Servers are added per task and removed never. The accumulated plane is nobody's decision; it
+      is the sum of a year of individually reasonable ones.
+  - risk: riskCrossTenantCredentialPropagation
+    note: >
+      Every server in the plane can read every other server's environment. Isolation between them
+      is a property nothing in this archetype provides.
+
+risks:
+  - riskToolRegistryTampering
+  - riskZombieShadowMCPServers
+  - riskToolSourceProvenance
+  - riskPromptInjection
+  - riskInsecureIntegratedComponent
+  - riskShadowAndUnknownAgents
+  - riskSensitiveDataDisclosure
+  - riskCrossTenantCredentialPropagation
+  - riskRogueActions
+  - riskMCPTransportHijacking
+
+capabilities:
+  - capabilityMcpToolSecurity
+  - capabilityAgentRegistry
+  - capabilityToolPermissionScoping
+  - capabilityAgentSandboxing
+  - capabilityEdr
+  - capabilityAiBom
+  - capabilityShadowAiDiscovery
+  - capabilitySecretsManagement
+  - capabilityCredentialIsolation
+  - capabilityHitlControls
+  - capabilityAgentRuntimeEnforcement
+  - capabilityPromptInjectionDefense
+  - capabilityAiDetectionResponse
+  - capabilityAppSecTesting
+  - capabilityAiVulnMgmt
+  - capabilityAiGovernancePlatform
+
+deviations:
+  - subject: This is drawn as an archetype although it is not an application
+    reason: >
+      It is a substrate the agent archetypes share rather than something anyone deploys on its own.
+      It earns a diagram because the disclosed vulnerabilities on this surface cluster here rather
+      than in any one agent, and because a reader who fixes this fixes all of them at once. The
+      alternative — repeating the tool plane inside every endpoint archetype — would state it four
+      times and improve none of them.
+  - subject: A server writing to its own admission file is not drawn
+    reason: >
+      An earlier draft drew it, because it is the loop that turns one compromised package into a
+      persistent foothold. It is not drawn now because these are target architectures: in the state
+      being described the configuration is write-protected from the plane it governs, so the edge
+      does not exist. The point survives on the configuration node and in its risks, which is where
+      a property of a component belongs rather than as a flow nobody should build.
+  - subject: No sandbox zone is drawn
+    reason: >
+      Local servers over stdio are not sandboxed by any current implementation, and drawing an
+      empty container would imply an option that does not exist here. Where execution is contained,
+      it is contained by the consuming agent, and that is drawn in the coding-agent archetype.
+
+sources:
+  - title: "Model Context Protocol — security best practices"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "Model Context Protocol — authorization"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "OWASP — a practical guide for secure MCP server development"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02, ASI04, ASI10"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "Thoughtworks Technology Radar vol. 34 — MCP by default, on hold"
+    url: https://www.thoughtworks.com/radar/techniques

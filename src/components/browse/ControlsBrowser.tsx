@@ -6,9 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { Chip, MappingBadges } from "@/components/Chips";
 import { mappingsForControl } from "@/lib/frameworks";
 import { ExpandAll, PageHeader, Panel } from "@/components/Panel";
+import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { firstLine, Prose } from "@/components/Prose";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import {
+  archetypesForControl,
   componentsForControl,
   componentTitle,
   controlCategories,
@@ -135,6 +137,13 @@ export function ControlsBrowser() {
                           <p className="mt-1.5 text-[13.5px] text-ink-2">
                             {control.personas.map(personaTitle).join(" · ")}
                           </p>
+                        </div>
+
+                        <div className="mt-6">
+                          <ArchetypeLinks
+                            archetypes={archetypesForControl(control.id)}
+                            empty="No reference architecture reaches this control through its capability set — a gap worth reading as a finding about the architectures, not about the control."
+                          />
                         </div>
 
                         <div className="mt-6">

@@ -1,0 +1,394 @@
+id: archThirdPartyMcp
+surface: surfaceSaas
+title: Third-party MCP server you consume
+abbrev: Third-party MCP
+
+summary:
+  - >
+    A vendor-operated tool server your agents call over the network. You authorise it once, scope
+    it as far as the vendor's OAuth scopes allow, and thereafter it both acts on your systems and
+    writes into your agents' context.
+
+description:
+  - >
+    This is a supply-chain relationship with a property ordinary vendor integrations do not have:
+    the vendor supplies text that your model treats as instruction. Tool names, descriptions and
+    results all enter the context window. A hostile or merely careless server needs no vulnerability
+    to influence your agent — describing itself persuasively is sufficient, and descriptions are
+    re-read on each connection rather than fixed at approval time.
+  - >
+    What you can verify is narrow and worth stating precisely. You can verify who the server is, at
+    connection time, through OAuth. You can constrain what it may reach, to the granularity of the
+    scopes the vendor chose to publish. You can see what left, if you route agent egress through
+    something that inspects. You cannot verify the server's internal tool catalogue, you cannot put
+    a policy decision point inside its execution, and you cannot test it the way you would test
+    your own code. Those are not gaps in your programme; they are properties of the boundary.
+  - >
+    Enterprise-managed authorization changes the shape usefully where it is available. Moving the
+    admission decision to the identity provider — rather than each server's own consent screen —
+    means a security team decides which servers the organisation may connect to, and revocation is
+    one place rather than many. That converts an unbounded set of individually-consented
+    integrations into an administered one, which is the single highest-value change available here.
+  - >
+    Accumulation is the quiet risk. Servers are connected for one project, keep their grants, and
+    outlive the reason. Enumerating what is connected and to what scope is the precondition for
+    every other control, and unlike the local tool plane there is at least an identity provider
+    that can answer the question.
+
+distinguishedBy:
+  - >
+    Against a remote MCP server you publish: there you are the resource server, you own the
+    tenancy model and the scopes, and the security work is building them properly. Here you are the
+    client, the scopes are someone else's design, and the security work is admission and
+    observation. Almost no capability transfers.
+  - >
+    Against the local tool plane: that one is child processes with your privileges and nothing to
+    authenticate to. This one has a real authorization boundary, a revocable grant and an audit
+    trail — a much better position that comes with the loss of any ability to inspect the code.
+  - >
+    Against a tenant-wide assistant: that vendor reads your corpus to answer questions. This one
+    acts on your systems on an agent's instruction, and the agent's instruction may have come from
+    content the vendor itself supplied.
+
+exemplars:
+  - name: Vendor-published MCP servers
+    note: >
+      Major SaaS providers publishing remote tool servers for their own products, so agents can
+      read and write records without a bespoke integration. The mainstream case.
+    asOf: "2026-08"
+  - name: Aggregator and gateway MCP services
+    note: >
+      Third parties fronting many downstream tools behind one server. One grant, many reachable
+      systems, and the scope you approved is not the scope that ultimately gets used.
+    asOf: "2026-08"
+  - name: Enterprise-managed connection
+    note: >
+      Admission moved to the identity provider so a security team, rather than each individual
+      user's consent click, decides which servers may be reached.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: Other tenants of the same server, and the content that reaches it from elsewhere.
+
+  - id: yourRuntime
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: >
+      Wherever the consuming agents run — a workstation or the organisation's own cloud. Drawn as one zone because the
+      relationship with the vendor is the same either way.
+
+  - id: edge
+    type: network
+    personas: [personaGovernance, personaPlatformProvider]
+    note: >
+      The last place anything can be seen or stopped. On this surface, network position substitutes
+      for instrumentation that does not exist.
+
+  - id: vendor
+    type: vendorOpaque
+    personas: [personaAgenticProvider]
+    note: >
+      An OAuth resource server run by the Agentic Platform persona. Integration is with its published
+      interface; its catalogue, its execution and its downstream reach are not observable.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Admission, scoping, inventory and assurance — the whole of what the consuming personas actually control here.
+
+nodes:
+  - id: otherTenants
+    type: thirdPartyAgent
+    zone: outside
+    label: Other tenants
+    note: >
+      Everyone else on the same multi-tenant server. Their isolation is the provider's claim, and it is one of the few things assurance can usefully ask about.
+    risks: [riskCrossTenantCredentialPropagation, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance]
+
+  - id: upstreamContent
+    type: untrustedSource
+    zone: outside
+    label: Content the server returns
+    note: >
+      Records, documents and messages the server reads from systems outside this architecture, passed
+      back as tool results and entering the agent's context as instruction.
+    risks: [riskPromptInjection]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: agent
+    type: harness
+    zone: yourRuntime
+    label: Consuming agent
+    note: The client. Its authority over the organisation's systems is what the provider's tool results steer.
+    risks: [riskRogueActions, riskPromptInjection]
+    capabilities: [capabilityAgentObservability, capabilityHitlControls]
+
+  - id: mcpClient
+    type: toolGateway
+    zone: yourRuntime
+    label: Tool broker
+    note: >
+      Where the connection is made and where a description can be pinned, a result can be size- and
+      shape-checked, and a call can be denied. The only insertion point available in this relationship.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentRegistry, capabilityRateLimiting]
+
+  - id: approval
+    type: hitlGate
+    zone: yourRuntime
+    label: Approval gate
+    note: >
+      For the calls that write. Worth reserving for exactly those, since the read calls are too
+      frequent for a human to remain a real check on them.
+    risks: [riskRogueActions]
+    capabilities: [capabilityHitlControls, capabilityKillSwitch]
+
+  - id: egressPath
+    type: egressProxy
+    zone: edge
+    label: Egress inspection
+    note: >
+      What is going to this vendor and how much of it. The substitute for application logging the provider does not expose.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityEgressControl, capabilitySse, capabilityAiDlp]
+
+  - id: serverApi
+    type: mcpServer
+    zone: vendor
+    label: Vendor MCP server
+    note: >
+      The published interface. Its tool catalogue is not exposed for verification, and its
+      downstream reach is whatever the vendor built.
+    risks: [riskToolSourceProvenance, riskInsecureIntegratedComponent, riskZombieShadowMCPServers]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityAgentRegistry]
+
+  - id: idp
+    type: identityProvider
+    zone: governance
+    label: Identity provider
+    note: >
+      Where admission belongs. Deciding centrally which servers may be connected converts a set of
+      individual consent clicks into an administered list with one place to revoke.
+    risks: [riskShadowAndUnknownAgents, riskStaleAgentIdentityBinding]
+    capabilities: [capabilityIga, capabilitySse, capabilityNhiManagement]
+
+  - id: grantRegistry
+    type: registry
+    zone: governance
+    label: Connection inventory
+    note: >
+      Which servers are connected, by whom, at what scope, and when last used. Grants outlive their
+      projects, and this is the only thing that notices.
+    risks: [riskZombieShadowMCPServers, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAgentRegistry, capabilityNhiManagement, capabilityShadowAiDiscovery]
+
+  - id: tprm
+    type: evaluationHarness
+    zone: governance
+    label: Vendor assurance
+    note: >
+      Tenant isolation, retention, subprocessors, and what happens to the data sent. The questions inspection cannot answer have to be answered by contract.
+    risks: [riskInsecureIntegratedComponent, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance, capabilityThreatModeling]
+
+  - id: audit
+    type: auditSink
+    zone: governance
+    label: Call audit
+    note: >
+      Which tool was called, by which agent, with what arguments. Captured at the broker, because the provider's view of it belongs to the provider.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityAuditLogging, capabilityAgentObservability, capabilityAiDetectionResponse]
+
+edges:
+  - from: agent
+    to: mcpClient
+    label: tool call
+
+  - from: mcpClient
+    to: approval
+    label: write call
+    risks: [riskRogueActions]
+
+  - from: approval
+    to: egressPath
+    label: approved call
+    control:
+      kind: workloadIdentity
+      note: >
+        The runtime proves what it is on the way out, so the egress path can tell an agent's
+        traffic from anything else leaving the same network.
+
+  - from: mcpClient
+    to: egressPath
+    label: read call
+    control:
+      kind: workloadIdentity
+      note: >
+        Reads skip the approval gate by design — there are too many of them for a human to remain a
+        real check — so this is the first point at which anyone sees them.
+    risks: [riskExcessiveDataHandling]
+
+  - from: egressPath
+    to: serverApi
+    label: invocation
+    control:
+      kind: delegatedGrant
+      note: >
+        The strongest authentication in this catalogue: a named client, an explicit scope, and a
+        grant that can be withdrawn in one place. It authenticates the server's identity and says
+        nothing about the honesty of its tool catalogue.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+
+  - from: serverApi
+    to: mcpClient
+    label: tool result and descriptions
+    control:
+      kind: transport
+      note: >
+        The return path is the risk. Descriptions and results are re-read on every connection and
+        enter the context window as instruction, so what was approved once is not what runs later.
+    risks: [riskPromptInjection, riskToolSourceProvenance]
+
+  - from: upstreamContent
+    to: serverApi
+    label: records from elsewhere
+    control:
+      kind: providerInternal
+      note: >
+        Not observable. Content the vendor reads from third parties reaches the agent through a connection authorised for something else.
+    risks: [riskPromptInjection]
+
+  - from: otherTenants
+    to: serverApi
+    label: shared infrastructure
+    control:
+      kind: providerInternal
+      note: >
+        Asserted, not verifiable. This is the specific claim third-party assurance exists to
+        interrogate, because nothing outside the provider can test it.
+    risks: [riskCrossTenantCredentialPropagation]
+
+  - from: idp
+    to: egressPath
+    label: admission decision
+    kind: control
+    control:
+      kind: admission
+      note: >
+        Moves the decision from an end user's consent screen to a security team's allowlist. The
+        highest-value change available in this archetype.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: grantRegistry
+    to: mcpClient
+    label: permitted servers and scopes
+    kind: control
+    control:
+      kind: admission
+      note: A grant not in the registry is not a grant; checking at connect is what makes that true.
+    risks: [riskZombieShadowMCPServers]
+
+  - from: tprm
+    to: serverApi
+    label: contractual commitments
+    kind: control
+    control:
+      kind: vendorAssurance
+      note: >
+        The only control on the vendor's side of this boundary. Named as a control rather than
+        omitted, and labelled honestly so it is not mistaken for a technical one.
+    risks: [riskInsecureIntegratedComponent]
+
+  - from: mcpClient
+    to: audit
+    label: call log
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Captured at the broker rather than requested from the provider, so it exists at the fidelity
+        the consumer needs rather than the one the provider chose.
+    risks: [riskShadowAndUnknownAgents]
+
+crossCutting:
+  - risk: riskPromptInjection
+    note: >
+      Arrives through the return path of a connection you deliberately made. The vendor need not be
+      hostile — it need only relay content from a system that is.
+  - risk: riskToolSourceProvenance
+    note: >
+      You can verify who the server is and never what its tools do. That asymmetry is the defining
+      property of the archetype and no control on your side closes it.
+  - risk: riskZombieShadowMCPServers
+    note: >
+      Grants accumulate across projects and people. Each connection was reasonable; the standing
+      set nobody reviews is not.
+
+risks:
+  - riskToolSourceProvenance
+  - riskPromptInjection
+  - riskZombieShadowMCPServers
+  - riskInsecureIntegratedComponent
+  - riskSensitiveDataDisclosure
+  - riskShadowAndUnknownAgents
+  - riskCrossTenantCredentialPropagation
+  - riskRogueActions
+  - riskExcessiveDataHandling
+  - riskStaleAgentIdentityBinding
+  - riskMCPTransportHijacking
+
+capabilities:
+  - capabilityAgentRegistry
+  - capabilityToolPermissionScoping
+  - capabilityNhiManagement
+  - capabilityIga
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+  - capabilityEgressControl
+  - capabilitySse
+  - capabilityAiDlp
+  - capabilityAuditLogging
+  - capabilityAgentObservability
+  - capabilityHitlControls
+  - capabilityKillSwitch
+  - capabilityShadowAiDiscovery
+  - capabilityPromptInjectionDefense
+  - capabilityModelGuardrails
+  - capabilityAiDetectionResponse
+  - capabilityRateLimiting
+  - capabilityThreatModeling
+
+deviations:
+  - subject: MCP tool security tooling is not listed as a capability here
+    reason: >
+      It would be the obvious pick and it does not apply. The capability is about verifying a tool
+      catalogue, and a vendor's catalogue is not exposed for verification — the capability taxonomy
+      already records this as structurally unavailable on this surface. What remains is scoping the
+      grant, brokering the call and watching the egress, and those are what is listed.
+  - subject: Your agent runtime is one zone rather than split by where it runs
+    reason: >
+      The agent may be on a laptop or in your cloud, and that changes a great deal about the agent
+      and nothing about this relationship. The archetype is the vendor boundary; where the client
+      sits is described by whichever agent archetype applies.
+  - subject: The vendor zone contains only the server interface
+    reason: >
+      The vendor certainly runs a tool catalogue, an execution layer and downstream integrations.
+      None is observable, and drawing them would imply controls that do not exist. The interface is
+      what you integrate with and therefore all that is drawn.
+
+sources:
+  - title: "Model Context Protocol — authorization and enterprise-managed authorization"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "Model Context Protocol — security best practices"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 tool misuse, ASI04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "CoSAI Shared Responsibility Framework V1.0"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "CSA AI Controls Matrix v1.1 — supply chain and third-party controls"
+    url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1

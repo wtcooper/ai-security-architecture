@@ -1,0 +1,447 @@
+id: archEnterpriseAiChat
+surface: surfaceSaas
+title: Enterprise AI chat with connectors
+abbrev: Enterprise chat
+
+summary:
+  - >
+    A general-purpose assistant subscription for the workforce, where each user connects their own
+    data sources. The grant model is per user and per connector, which makes the organisation's
+    total exposure a sum nobody computes.
+
+description:
+  - >
+    The contrast with a tenant-wide assistant is entirely in who consents. There, an administrator
+    grants the vendor access to the corpus once and the assistant inherits each user's entitlements
+    against it. Here, each user authorises their own connectors — a repository, a drive, a ticket
+    system — and the organisation's data path to the vendor is the union of thousands of individual
+    decisions, each made in a modal dialog.
+  - >
+    This makes the archetype's core problem visibility rather than permission. Any single grant is
+    usually appropriate: a person connecting a system they already have access to has not escalated
+    anything. What nobody has is the aggregate — which systems are connected, by how many people,
+    carrying what classification — and no individual is positioned to notice when the sum becomes a
+    problem.
+  - >
+    File upload is the parallel path and often the larger one. A user pasting a document into a
+    chat window has moved data across the boundary with no connector, no grant and no record beyond
+    what network inspection catches. Every control that watches connectors misses this entirely,
+    which is why in-browser and network inspection carry more weight in this archetype than the
+    vendor's own administrative surface does.
+  - >
+    The remaining structural question is the boundary between the enterprise tenant and the
+    consumer product. The same vendor typically offers both, the consumer one has different
+    retention and training terms, and the difference between a user being in your tenant and being
+    signed into their own account is a session cookie. Detecting and blocking the consumer variant
+    is a distinct control from governing the enterprise one, and it is usually the one that matters
+    more.
+
+distinguishedBy:
+  - >
+    Against the tenant-wide assistant: administrator-granted and corpus-wide there, user-granted
+    and connector-by-connector here. That single difference relocates the entire control set from
+    permissions governance to discovery and aggregate visibility.
+  - >
+    Against shadow AI: this is the sanctioned version of the same traffic. Drawing them separately
+    is deliberate — the sanctioned tenant is where you want the traffic to go, and most of the work
+    in this archetype is about making sure it does.
+
+exemplars:
+  - name: Enterprise assistant subscriptions
+    note: >
+      Workforce-wide licences for a general assistant, with administrative controls over retention,
+      training and which connectors may be enabled.
+    asOf: "2026-08"
+  - name: Per-user connector catalogues
+    note: >
+      Marketplaces of source connectors each user authorises for themselves, typically over OAuth,
+      with the vendor holding the resulting grant.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The consumer version of the same product, and content that arrives through connectors.
+
+  - id: workforce
+    type: device
+    personas: [personaEndUser]
+    note: >
+      Where uploads happen and where the difference between the corporate tenant and a personal
+      account is visible. The most important vantage point in this archetype.
+
+  - id: edge
+    type: network
+    personas: [personaGovernance, personaPlatformProvider]
+    note: Which tenant traffic reaches, and what leaves with it.
+
+  - id: sources
+    type: data
+    personas: [personaDataProvider, personaEndUser]
+    note: Systems the Data Provider persona is responsible for, reached by grants individual AI System
+      Users issued.
+
+  - id: vendor
+    type: vendorOpaque
+    personas: [personaAgenticProvider, personaModelProvider]
+    note: Inference, conversation storage and the connector broker.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance, personaAgenticProvider]
+    note: Tenant configuration the Governance persona authors, plus the discovery and inspection it runs
+      independently of the vendor.
+
+nodes:
+  - id: consumerTenant
+    type: apiEndpoint
+    zone: outside
+    label: Consumer product
+    note: >
+      The same vendor's unmanaged offering, reachable from the same browser with a personal login.
+      Different retention terms, no administrative visibility, one cookie away.
+    risks: [riskShadowAndUnknownAgents, riskSensitiveDataDisclosure]
+    capabilities: [capabilityShadowAiDiscovery, capabilitySse, capabilityBrowserDetectionResponse]
+
+  - id: connectorContent
+    type: untrustedSource
+    zone: outside
+    label: Content from connected systems
+    note: >
+      Tickets, documents and messages retrieved through a connector, authored by people outside the
+      conversation and entering it as context.
+    risks: [riskPromptInjection]
+    capabilities: [capabilityPromptInjectionDefense, capabilityModelGuardrails]
+
+  - id: employee
+    type: humanUser
+    zone: workforce
+    label: Employee
+    note: >
+      Authorises their own connectors and uploads their own files. Every grant reasonable, the
+      aggregate visible to nobody.
+    risks: [riskExcessiveDataHandling]
+    capabilities: [capabilityIga]
+
+  - id: chatSurface
+    type: appUi
+    zone: workforce
+    label: Chat surface
+    note: >
+      Browser tab or desktop client. The last point where the prompt, the attachment and the tenant
+      it is going to are all visible to something the organisation operates.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilityBrowserDetectionResponse, capabilityAiDlp, capabilityPromptRedaction]
+
+  - id: upload
+    type: connector
+    zone: workforce
+    label: File upload
+    note: >
+      The path that no connector governance sees. A pasted document crosses the boundary with no
+      grant, no scope and no record other than what inspection catches.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+    capabilities: [capabilityAiDlp, capabilityBrowserDetectionResponse, capabilityEgressControl]
+
+  - id: idp
+    type: identityProvider
+    zone: edge
+    label: Identity provider
+    note: >
+      Establishes the user and, critically, which tenant they are in. Tenant restriction enforced
+      here is what stops the consumer product being an alternative.
+    risks: [riskShadowAndUnknownAgents, riskStaleAgentIdentityBinding]
+    capabilities: [capabilityIga, capabilitySse, capabilityNhiManagement]
+
+  - id: sse
+    type: egressProxy
+    zone: edge
+    label: Secure service edge
+    note: >
+      Inline inspection and tenant enforcement. Does most of the real work in this archetype
+      because the vendor's admin console cannot see the traffic that never reached the managed tenant.
+    risks: [riskSensitiveDataDisclosure, riskShadowAndUnknownAgents]
+    capabilities: [capabilitySse, capabilityEgressControl, capabilityAiDlp]
+
+  - id: connectedSystems
+    type: corpus
+    zone: sources
+    label: User-connected systems
+    note: >
+      Repositories, drives and trackers, each authorised by an individual. Their union is the
+      organisation's actual data path to the vendor.
+    risks: [riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDspm, capabilityDataAccessGovernance, capabilityIga]
+
+  - id: vendorApi
+    type: apiEndpoint
+    zone: vendor
+    label: Tenant API
+    note: The published interface. Inference, storage and the connector broker are behind it.
+    risks: [riskExcessiveDataHandlingDuringInference, riskSensitiveDataDisclosure]
+    capabilities: [capabilityAiTprm, capabilityVendorAssurance]
+
+  - id: vendorConnectorBroker
+    type: connector
+    zone: vendor
+    label: Connector broker
+    note: >
+      Holds the OAuth grants users issued and calls their systems on their behalf. The grants
+      persist after the conversation, after the project, and after the employee.
+    risks: [riskExcessiveDataHandling, riskCrossTenantCredentialPropagation, riskStaleAgentIdentityBinding]
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilityToolPermissionScoping]
+
+  - id: tenantConfig
+    type: policyEngine
+    zone: governance
+    label: Tenant configuration
+    note: >
+      Retention, training opt-out, which connectors are permitted, and whether conversation history
+      is exportable. Set once and rarely revisited against a product that ships new connectors.
+    risks: [riskExcessiveDataHandling]
+    capabilities: [capabilityAiGovernancePlatform, capabilityDataAccessGovernance, capabilityVendorAssurance]
+
+  - id: grantVisibility
+    type: registry
+    zone: governance
+    label: Connector inventory
+    note: >
+      Which sources are connected, by how many people, holding what classification. The aggregate
+      no individual grant decision produces.
+    risks: [riskExcessiveDataHandling, riskShadowAndUnknownAgents]
+    capabilities: [capabilityIga, capabilityNhiManagement, capabilityDspm]
+
+  - id: discovery
+    type: registry
+    zone: governance
+    label: Shadow AI discovery
+    note: >
+      Finding traffic to the consumer product and to competing tools. Usually surfaces more data
+      movement than the sanctioned tenant does.
+    risks: [riskShadowAndUnknownAgents]
+    capabilities: [capabilityShadowAiDiscovery, capabilityAiTprm, capabilitySse]
+
+  - id: audit
+    type: auditSink
+    zone: governance
+    label: Audit and detection
+    note: >
+      Vendor export plus first-party network and browser telemetry. The second is the part that covers
+      uploads and the consumer tenant.
+    risks: [riskSensitiveDataDisclosure]
+    capabilities: [capabilityAuditLogging, capabilityAiDetectionResponse, capabilityBrowserDetectionResponse]
+
+edges:
+  - from: employee
+    to: chatSurface
+    label: prompt and attachment
+
+  - from: chatSurface
+    to: upload
+    label: attaches a file
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: upload
+    to: sse
+    label: outbound content
+    control:
+      kind: postureInspection
+      note: >
+        The only control on this path. Connector governance does not see uploads, and the vendor's
+        admin console sees them only after they have arrived.
+    risks: [riskSensitiveDataDisclosure, riskExcessiveDataHandling]
+
+  - from: chatSurface
+    to: sse
+    label: prompt
+    control:
+      kind: postureInspection
+      note: >
+        The prompt itself is inspected here or nowhere. Once it reaches the vendor, only the vendor
+        can see it, and only at the fidelity their export offers.
+    risks: [riskSensitiveDataDisclosure]
+
+  - from: idp
+    to: sse
+    label: identity and tenant assertion
+    kind: control
+    control:
+      kind: userIdentity
+      note: >
+        Asserting which tenant a user may reach is what makes the sanctioned product the only
+        available one. Without it the consumer version is a login away.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: sse
+    to: vendorApi
+    label: to the corporate tenant
+    control:
+      kind: userIdentity
+      note: >
+        Authenticates the user into the managed tenant, where retention and training terms apply.
+        Everything the enterprise agreement promises depends on the traffic arriving here.
+    risks: [riskExcessiveDataHandlingDuringInference]
+
+  - from: sse
+    to: consumerTenant
+    label: blocked or logged
+    control:
+      kind: egressAllowlist
+      note: >
+        Where inspection is absent this crossing simply succeeds, and none of the enterprise terms
+        apply to anything that goes through it.
+    risks: [riskShadowAndUnknownAgents, riskSensitiveDataDisclosure]
+
+  - from: employee
+    to: vendorConnectorBroker
+    label: authorises a connector
+    control:
+      kind: delegatedGrant
+      note: >
+        A per-user grant, made in a dialog, scoped to a whole system rather than a task, and
+        outliving the conversation that prompted it. Reasonable individually; the aggregate is the
+        organisation's data path.
+    risks: [riskExcessiveDataHandling, riskStaleAgentIdentityBinding]
+
+  - from: vendorConnectorBroker
+    to: connectedSystems
+    label: retrieval
+    control:
+      kind: delegatedGrant
+      note: >
+        Acts as the user who consented. Correct as far as access control goes, and invisible to
+        anyone trying to see the total.
+    risks: [riskExcessiveDataHandling, riskSensitiveDataDisclosure]
+
+  - from: connectorContent
+    to: vendorConnectorBroker
+    label: retrieved content
+    control:
+      kind: providerInternal
+      note: >
+        Content authored elsewhere enters the conversation as context. The same indirect injection
+        path as retrieval, arriving through a grant one employee made.
+    risks: [riskPromptInjection]
+
+  - from: vendorApi
+    to: chatSurface
+    label: response
+    control:
+      kind: transport
+      note: Response content is not authenticated, and is rendered into a browser.
+    risks: [riskInsecureModelOutput]
+
+  - from: tenantConfig
+    to: vendorApi
+    label: retention and connector policy
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        Authored by the Governance persona, enforced by the provider, unverifiable by either. Worth re-reviewing whenever
+        the vendor ships a connector, because the default for new ones is rarely off.
+    risks: [riskExcessiveDataHandling]
+
+  - from: grantVisibility
+    to: vendorConnectorBroker
+    label: grant enumeration
+    kind: control
+    control:
+      kind: tenantConfiguration
+      note: >
+        The only way to see the aggregate, and it depends on the vendor exposing per-user grants to
+        an administrator.
+    risks: [riskExcessiveDataHandling]
+
+  - from: discovery
+    to: sse
+    label: unsanctioned use detection
+    kind: control
+    control:
+      kind: discovery
+      note: Independent of the vendor, which is the point — it finds the tenants nobody enrolled.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: sse
+    to: audit
+    label: traffic record
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        Covers uploads and the consumer tenant, neither of which appears in any vendor export.
+    risks: [riskSensitiveDataDisclosure]
+
+crossCutting:
+  - risk: riskExcessiveDataHandling
+    note: >
+      Produced by summation, not by any decision. Thousands of individually appropriate consents
+      whose union nobody computed and no single user could have.
+  - risk: riskShadowAndUnknownAgents
+    note: >
+      The consumer version of the same product is one login away and carries none of the enterprise
+      terms. The sanctioned tenant's governance is only as good as the enforcement that traffic
+      reaches it.
+  - risk: riskSensitiveDataDisclosure
+    note: >
+      Two paths — connectors and uploads — with completely different control sets. Governing the
+      first and ignoring the second is the common failure.
+
+risks:
+  - riskExcessiveDataHandling
+  - riskShadowAndUnknownAgents
+  - riskSensitiveDataDisclosure
+  - riskPromptInjection
+  - riskStaleAgentIdentityBinding
+  - riskCrossTenantCredentialPropagation
+  - riskExcessiveDataHandlingDuringInference
+  - riskInsecureModelOutput
+  - riskInferredSensitiveData
+
+capabilities:
+  - capabilitySse
+  - capabilityShadowAiDiscovery
+  - capabilityAiDlp
+  - capabilityBrowserDetectionResponse
+  - capabilityIga
+  - capabilityNhiManagement
+  - capabilityDspm
+  - capabilityDataAccessGovernance
+  - capabilityAiGovernancePlatform
+  - capabilityEgressControl
+  - capabilityAuditLogging
+  - capabilityAiDetectionResponse
+  - capabilityPromptRedaction
+  - capabilityPromptInjectionDefense
+  - capabilityModelGuardrails
+  - capabilityToolPermissionScoping
+  - capabilityAiTprm
+  - capabilityVendorAssurance
+
+deviations:
+  - subject: The vendor's consumer product is drawn in the outside world
+    reason: >
+      It is the same vendor and often the same interface, so drawing it inside the vendor zone
+      would be defensible. It is drawn outside because its terms, its retention and its visibility
+      are those of an unmanaged third party, and the tenant boundary — not the vendor boundary — is
+      what actually governs the data.
+  - subject: File upload is drawn as a connector node on the device
+    reason: >
+      It is not an integration and has no grant, which is exactly why it needs to be on the
+      diagram. Giving it a node forces the question of what watches it, and the answer is a
+      different control set from the one governing connectors.
+  - subject: Individual user grants are drawn as one edge
+    reason: >
+      There are thousands, made independently. Drawing one and naming the aggregation problem in
+      its note is more truthful than a diagram that implies a single administrative decision.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM02 sensitive information disclosure"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "CoSAI Shared Responsibility Framework V1.0 — AI-enabled SaaS operating model"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "CSA AI Controls Matrix v1.1 — data governance and third-party controls"
+    url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+  - title: "NIST AI 600-1 — generative AI profile, information security actions"
+    url: https://www.nist.gov/itl/ai-risk-management-framework

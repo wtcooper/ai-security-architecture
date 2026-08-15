@@ -1,0 +1,417 @@
+id: archSelfHostedInference
+surface: surfaceCloud
+title: Self-hosted open-weights inference
+abbrev: Self-hosted inference
+
+summary:
+  - >
+    Open-weights models served on infrastructure the organisation operates — GPU nodes, a serving
+    runtime, a router in front. Chosen for data residency, cost or control, and it moves the entire
+    model-provider role inside the boundary.
+
+description:
+  - >
+    The trade is explicit and worth stating before the diagram: a data-disclosure risk goes away
+    and a supply-chain, availability and safety risk arrives. There is no provider applying content
+    policy, no provider absorbing a traffic spike, and no provider patching the serving stack. The
+    AI Model Serving persona becomes an internal one.
+  - >
+    The supply chain is the distinctive risk. Weights are large artifacts from public hubs, and
+    several distribution formats execute code on load. The control is scanning and format policy in
+    the promotion pipeline, before an artifact reaches a node — not after, and not as a report.
+    A registry with provenance and a promotion gate is what separates this from the endpoint
+    variant of the same software.
+  - >
+    Multi-tenancy on accelerators is the risk that has no equivalent anywhere else in this
+    catalogue. Batching mixes tenants' requests in one forward pass, the KV cache holds their
+    context, and prefix caching across tenants is a performance feature that is also a disclosure
+    path. Whether cache entries can be shared across tenants is a serving-configuration question
+    with data-protection consequences, and it is rarely reviewed as one.
+  - >
+    Availability becomes a security property here in a way it is not with a managed API. GPU
+    capacity is finite and expensive, admission control is the only thing standing between one
+    caller and everyone else's latency, and there is no provider to absorb the spike. Quotas are a
+    control, not a billing feature.
+
+distinguishedBy:
+  - >
+    Against the endpoint local runtime: identical software, entirely different operational
+    position. There it was installed by one person and has no inventory entry; here it has a
+    pipeline, a network policy, an identity and someone on call. Same risks, opposite maturity.
+  - >
+    Against consuming a managed model API: this archetype replaces one boundary crossing with a
+    whole subsystem. The guardrails, abuse monitoring, capacity management and patching that the
+    provider was doing are now components on the diagram.
+
+exemplars:
+  - name: Serving runtimes on Kubernetes
+    note: >
+      Open-source inference servers with continuous batching and paged attention, scheduled onto
+      GPU node pools with an inference-aware gateway in front.
+    asOf: "2026-08"
+  - name: On-premises inference for data residency
+    note: >
+      The same stack in a datacentre because the data cannot leave. The most common non-cost reason
+      organisations take on this archetype.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: The public model hubs the weights come from.
+
+  - id: consumers
+    type: network
+    personas: [personaApplicationDeveloper]
+    note: >
+      The internal applications and agents calling this service. Multiple tenants of one cluster,
+      which is where the accelerator-sharing questions come from.
+
+  - id: serving
+    type: compute
+    personas: [personaModelServing, personaPlatformProvider]
+    note: >
+      GPU nodes, the runtime and the router. The role a model provider plays in every other cloud
+      archetype, brought inside.
+
+  - id: artifacts
+    type: data
+    personas: [personaModelProvider, personaPlatformProvider]
+    note: The registry and the weights, and the promotion decisions between them.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Scanning, evaluation, quotas, and the guardrails no provider is supplying.
+
+nodes:
+  - id: modelHub
+    type: skillPackage
+    zone: outside
+    label: Public model hub
+    note: >
+      Where open weights are published. Publisher identity is verifiable to a degree; what an
+      artifact does on load is a property of its format, not its publisher.
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization, riskUnauthorizedTrainingData]
+    capabilities: [capabilityModelScanning, capabilityAiBom, capabilityDataProvenance]
+
+  - id: callingApp
+    type: apiEndpoint
+    zone: consumers
+    label: Consuming applications
+    note: >
+      Internal callers sharing one cluster. Their isolation from each other is a property of the
+      serving configuration, not of the network between them.
+    risks: [riskDenialOfMLService, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityRateLimiting, capabilityNhiManagement, capabilityIga]
+
+  - id: router
+    type: router
+    zone: serving
+    label: Inference gateway
+    note: >
+      Model routing, admission control and per-tenant quotas. On finite GPU capacity, admission
+      control is what stops one caller becoming everyone else's outage.
+    risks: [riskDenialOfMLService, riskEconomicDenialOfWallet, riskRunawayAgentToolLoops]
+    capabilities: [capabilityAiGateway, capabilityRateLimiting, capabilityTransportSecurity]
+
+  - id: runtime
+    type: inferenceEndpoint
+    zone: serving
+    label: Serving runtime
+    note: >
+      Continuous batching, paged attention, KV cache. The batching that makes it efficient is also
+      what puts several tenants' context in one process.
+    risks: [riskAcceleratorAndSystemSideChannels, riskCrossTenantCredentialPropagation, riskInsecureIntegratedComponent]
+    capabilities: [capabilityMlSecureDefaults, capabilityAiVulnMgmt, capabilityConfidentialComputing]
+
+  - id: kvCache
+    type: memoryStore
+    zone: serving
+    label: KV and prefix cache
+    note: >
+      Holds recent context to avoid recomputing it. Sharing prefixes across tenants is a
+      performance feature and a disclosure path, and the choice between them is a configuration
+      flag that rarely reaches a review.
+    risks: [riskSensitiveDataDisclosure, riskPromptResponseCachePoisoning, riskCrossTenantCredentialPropagation]
+    capabilities: [capabilityMemoryProtection, capabilityMlSecureDefaults, capabilityEncryptionKeyManagement]
+
+  - id: gpuNodes
+    type: model
+    zone: serving
+    label: Loaded models on GPU
+    note: >
+      The weights in memory across a node pool. Also a high-value exfiltration target: the artifact
+      is expensive and portable.
+    risks: [riskModelExfiltration, riskAcceleratorAndSystemSideChannels, riskModelDeploymentTampering]
+    capabilities: [capabilityModelWeightProtection, capabilityConfidentialComputing, capabilityEgressControl]
+
+  - id: registry
+    type: modelRegistry
+    zone: artifacts
+    label: Model registry
+    note: >
+      Versioned artifacts with provenance and a promotion gate. The single control that separates
+      this archetype from the endpoint one running the same software.
+    risks: [riskModelSourceTampering, riskModelDeploymentTampering, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAiBom, capabilityModelScanning, capabilityStagedRollout]
+
+  - id: weightStore
+    type: modelWeights
+    zone: artifacts
+    label: Weight storage
+    note: >
+      Multi-gigabyte artifacts at rest. Encryption and access control here protect an asset that is
+      both expensive to reproduce and trivial to copy.
+    risks: [riskModelExfiltration, riskModelSourceTampering, riskMaliciousLoaderDeserialization]
+    capabilities: [capabilityModelWeightProtection, capabilityEncryptionKeyManagement, capabilityModelScanning]
+
+  - id: scanner
+    type: evaluationHarness
+    zone: governance
+    label: Artifact scanning
+    note: >
+      Format and content inspection in the promotion pipeline, before an artifact can reach a node.
+      A scan that runs after deployment has documented an incident.
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering]
+    capabilities: [capabilityModelScanning, capabilityAiBom, capabilityAiVulnMgmt]
+
+  - id: guardrails
+    type: guardrail
+    zone: governance
+    label: Guardrail service
+    note: >
+      Content and intent classification. Drawn in the control plane because with no provider
+      applying policy, this is a service the organisation now runs itself or does without.
+    risks: [riskInsecureModelOutput, riskPromptInjection, riskModelEvasion]
+    capabilities: [capabilityModelGuardrails, capabilityPromptInjectionDefense, capabilityOutputEncoding]
+
+  - id: evals
+    type: evaluationHarness
+    zone: governance
+    label: Evaluation and red teaming
+    note: >
+      Safety and adversarial testing per model version, because the provider's evaluation no longer
+      applies to an artifact fetched from a hub and served directly.
+    risks: [riskModelEvasion, riskInsecureModelOutput, riskDataPoisoning]
+    capabilities: [capabilityModelEvals, capabilityAiRedTeaming, capabilityModelDocumentation]
+
+  - id: posture
+    type: registry
+    zone: governance
+    label: Posture and inventory
+    note: Which model versions are serving where, at what configuration, with what drift.
+    risks: [riskModelDeploymentTampering, riskShadowAndUnknownAgents]
+    capabilities: [capabilityAiSpm, capabilityAiBom, capabilityStagedRollout]
+
+  - id: secrets
+    type: secretsBroker
+    zone: governance
+    label: Workload identity
+    note: Short-lived credentials for callers and for the pipeline that promotes artifacts.
+    risks: [riskCrossTenantCredentialPropagation]
+    capabilities: [capabilitySecretsManagement, capabilityNhiManagement, capabilityCredentialIsolation]
+
+edges:
+  - from: modelHub
+    to: registry
+    label: artifact fetch
+    control:
+      kind: provenance
+      note: >
+        Establishes who published it. Says nothing about what it does on load, which is why the
+        scanner sits between this edge and any node that will open the file.
+    risks: [riskModelSourceTampering, riskMaliciousLoaderDeserialization]
+
+  - from: callingApp
+    to: router
+    label: inference request
+    control:
+      kind: workloadIdentity
+      note: >
+        The tenant on the token is what the quota and the cache-isolation decisions key off. A
+        request that arrives without one gets whatever the default tenant can do.
+    risks: [riskDenialOfMLService, riskCrossTenantCredentialPropagation]
+
+  - from: router
+    to: guardrails
+    label: policy check
+    kind: control
+    control:
+      kind: contentInspection
+      note: >
+        Inline rather than advisory. With no provider applying content policy, a guardrail the
+        traffic can go around is not one.
+    risks: [riskPromptInjection]
+
+  - from: router
+    to: runtime
+    label: scheduled request
+
+  - from: runtime
+    to: kvCache
+    label: context reuse
+    risks: [riskSensitiveDataDisclosure, riskCrossTenantCredentialPropagation]
+
+  - from: runtime
+    to: gpuNodes
+    label: forward pass
+    risks: [riskAcceleratorAndSystemSideChannels]
+
+  - from: weightStore
+    to: gpuNodes
+    label: load into memory
+    control:
+      kind: artifactIntegrity
+      note: >
+        Verifying the digest at load is what makes registry promotion meaningful. Without it the
+        gate can be bypassed by writing to storage directly.
+    risks: [riskModelDeploymentTampering, riskMaliciousLoaderDeserialization]
+
+  - from: registry
+    to: weightStore
+    label: promoted artifact
+
+  - from: runtime
+    to: callingApp
+    label: completion
+    control:
+      kind: transport
+      note: >
+        The response is unfiltered unless the guardrail is on the return path too. Output-side
+        policy is the half most often omitted when self-hosting.
+    risks: [riskInsecureModelOutput]
+
+  - from: scanner
+    to: registry
+    label: blocking gate
+    kind: control
+    control:
+      kind: artifactIntegrity
+      note: >
+        A gate rather than a report. This is the single most load-bearing control in the archetype
+        and its value is entirely in being blocking.
+    risks: [riskMaliciousLoaderDeserialization, riskModelSourceTampering]
+
+  - from: evals
+    to: registry
+    label: version evaluation
+    kind: control
+    control:
+      kind: evaluationGate
+      note: >
+        Per version, because a new checkpoint from the same publisher is a new model with new
+        behaviour and no provider is testing it on anyone's behalf.
+    risks: [riskModelEvasion]
+
+  - from: posture
+    to: runtime
+    label: configuration drift
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Watches serving configuration, including whether cross-tenant cache sharing is on. A
+        posture tool that can read the cache has joined the data path it was meant to observe.
+    risks: [riskModelDeploymentTampering, riskSensitiveDataDisclosure]
+
+  - from: secrets
+    to: callingApp
+    label: workload credentials
+    kind: control
+    control:
+      kind: workloadIdentity
+      note: Tenant identity comes from the platform rather than from a shared key in a config map.
+    risks: [riskCrossTenantCredentialPropagation]
+
+crossCutting:
+  - risk: riskCrossTenantCredentialPropagation
+    note: >
+      Batching, the KV cache and the node pool all mix tenants. Isolation is a property of several
+      configuration choices at once rather than a component anyone deploys.
+  - risk: riskMaliciousLoaderDeserialization
+    note: >
+      Spans the hub, the registry, storage and the loader. Format policy in the pipeline is the
+      only place it can be addressed for all four at once.
+  - risk: riskDenialOfMLService
+    note: >
+      GPU capacity is finite and there is no provider to absorb a spike. Admission control stops
+      being a billing feature and becomes an availability control.
+
+risks:
+  - riskMaliciousLoaderDeserialization
+  - riskModelSourceTampering
+  - riskCrossTenantCredentialPropagation
+  - riskModelExfiltration
+  - riskAcceleratorAndSystemSideChannels
+  - riskSensitiveDataDisclosure
+  - riskDenialOfMLService
+  - riskModelDeploymentTampering
+  - riskInsecureModelOutput
+  - riskModelEvasion
+  - riskInsecureIntegratedComponent
+  - riskShadowAndUnknownAgents
+  - riskPromptResponseCachePoisoning
+  - riskPromptInjection
+  - riskEconomicDenialOfWallet
+  - riskRunawayAgentToolLoops
+  - riskDataPoisoning
+  - riskUnauthorizedTrainingData
+
+capabilities:
+  - capabilityModelScanning
+  - capabilityModelWeightProtection
+  - capabilityAiBom
+  - capabilityConfidentialComputing
+  - capabilityMlSecureDefaults
+  - capabilityAiSpm
+  - capabilityAiGateway
+  - capabilityRateLimiting
+  - capabilityModelGuardrails
+  - capabilityModelEvals
+  - capabilityAiRedTeaming
+  - capabilityStagedRollout
+  - capabilityEncryptionKeyManagement
+  - capabilityMemoryProtection
+  - capabilitySecretsManagement
+  - capabilityNhiManagement
+  - capabilityCredentialIsolation
+  - capabilityEgressControl
+  - capabilityAiVulnMgmt
+  - capabilityPromptInjectionDefense
+  - capabilityOutputEncoding
+  - capabilityTransportSecurity
+  - capabilityDataProvenance
+  - capabilityModelDocumentation
+  - capabilityIga
+
+deviations:
+  - subject: The guardrail service sits in the control plane rather than inline
+    reason: >
+      It is in the request path and the AI-gateway archetype draws its equivalent inline. Here it
+      is drawn as a control-plane service reached by the router, because when self-hosting it is a
+      separate thing the organisation stands up rather than a feature of the serving stack — and
+      showing it as a dependency rather than a built-in is the point.
+  - subject: The KV cache is drawn as a memory store
+    reason: >
+      It is an optimisation, not a datastore anyone designed to hold data. It is given a node
+      because cross-tenant prefix sharing puts one tenant's context where another's request can
+      reach it, and a risk with no node has nowhere to attach.
+  - subject: No end user appears
+    reason: >
+      This archetype's callers are other systems. The humans are several layers up in whichever
+      application archetype is consuming it, and drawing them here would blur the boundary this
+      diagram exists to show.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain, LLM06 unbounded consumption"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "MITRE ATLAS — model artifact and supply chain techniques"
+    url: https://atlas.mitre.org/
+  - title: "CISA and NSA — deploying AI systems securely"
+    url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+  - title: "Microsoft Azure Well-Architected — architecture pattern for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+  - title: "Google Cloud — RAG-capable generative AI application using GKE"
+    url: https://docs.cloud.google.com/architecture/rag-capable-gen-ai-app-using-gke

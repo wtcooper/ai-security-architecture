@@ -1,0 +1,453 @@
+id: archAgentFacingApi
+surface: surfaceCloud
+title: Agent-facing endpoint
+abbrev: Agent-facing API
+
+summary:
+  - >
+    A service built to be called by other organisations' agents rather than by their engineers —
+    including agent-initiated commerce. The caller is autonomous, acting for a human who is not
+    present, and every assumption about who is on the other end has to be restated.
+
+description:
+  - >
+    Bot defence and agent enablement point in opposite directions, and this archetype is the
+    decision about which way to face. A decade of investment went into distinguishing humans from
+    automation and blocking the automation; an agent acting for a legitimate customer trips every
+    one of those signals. Continuing to block treats customers as attackers, and simply allowing
+    removes the defences that stop actual abuse. The resolution is a distinct, authenticated,
+    rate-limited path for agents rather than a hole in the human one.
+  - >
+    Delegation is the substance of it. The question is not whether the caller is a bot but whether
+    this agent is authorised to act for this customer, to what extent, and for how long. That
+    demands a delegation model with real primitives — an agent identity, a scope, an expiry and a
+    revocation path — and none of it works retroactively on an API designed for humans with
+    sessions.
+  - >
+    Where the endpoint takes payment, the emerging rails add mandates: a signed statement of what
+    the human authorised, presented by the agent and verifiable by the merchant. That is the right
+    shape and it is new, competing and unsettled, so the durable position is to build the mandate
+    check as its own component rather than couple to one scheme.
+  - >
+    The remaining differences from a human-facing API are all about behaviour. Agents retry, so
+    idempotency is a correctness requirement rather than a nicety. Agents parallelise, so limits
+    tuned for human pacing do not hold. Agents read error messages and act on them, so error text
+    is part of the interface in a way it never was. And a dispute over an agent's action needs a
+    record of the mandate it presented, not only of the request it sent.
+
+distinguishedBy:
+  - >
+    Against a remote MCP server: that publishes tools for agents to call. This publishes a business
+    API, and the caller may be any agent framework at all. The MCP archetype's descriptions-as-
+    prompt problem does not arise; the delegation and payment questions dominate instead.
+  - >
+    Against an ordinary API with bot management: same endpoint, opposite policy. That one is
+    trying to identify and block automation. This one is trying to admit it under a delegation
+    model, which is a different system rather than a relaxed setting.
+
+exemplars:
+  - name: Agent-accessible commerce endpoints
+    note: >
+      Merchants exposing a path for agent-initiated purchasing, with a mandate presented by the
+      agent and verified before the transaction.
+    asOf: "2026-08"
+  - name: Agent payment and mandate rails
+    note: >
+      Competing specifications for expressing what a human authorised an agent to spend, backed by
+      card networks, platforms and standards bodies. Unsettled, and worth abstracting behind a
+      component of your own.
+    asOf: "2026-08"
+  - name: Business APIs adding an agent lane
+    note: >
+      An existing API gaining a separate authenticated path for agent callers, with its own limits
+      and its own audit, rather than loosening the human one.
+    asOf: "2026-08"
+
+zones:
+  - id: outside
+    type: outsideWorld
+    personas: []
+    note: >
+      Third-party agents, the humans they act for, and the platforms whose delegation claims the
+      endpoint has to evaluate.
+
+  - id: edge
+    type: network
+    personas: [personaApplicationDeveloper, personaPlatformProvider]
+    note: Where agent traffic is separated from human traffic and admitted on its own terms.
+
+  - id: service
+    type: compute
+    personas: [personaApplicationDeveloper]
+    note: Mandate verification, business logic, and the idempotency that makes retries safe.
+
+  - id: records
+    type: data
+    personas: [personaDataProvider]
+    note: Orders, accounts and the evidence trail a disputed agent action will be argued from.
+
+  - id: governance
+    type: management
+    personas: [personaGovernance]
+    note: Agent registration, delegation policy, limits and dispute evidence.
+
+nodes:
+  - id: thirdPartyAgent
+    type: thirdPartyAgent
+    zone: outside
+    label: Third-party agent
+    note: >
+      Someone else's agent, running on someone else's infrastructure, acting for a customer. Not a
+      bot to be blocked and not a user to be trusted.
+    risks: [riskShadowAndUnknownAgents, riskAgenticDelegationConfusedDeputy, riskRogueActions]
+    capabilities: [capabilityNhiManagement, capabilityAgentRegistry, capabilityRateLimiting]
+
+  - id: principal
+    type: humanUser
+    zone: outside
+    label: Delegating customer
+    note: >
+      The person on whose behalf the agent acts, absent at request time. Their authorisation has to
+      arrive as a verifiable artifact rather than as an assertion.
+    risks: [riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityIga, capabilityHitlControls]
+
+  - id: agentLane
+    type: apiEndpoint
+    zone: edge
+    label: Agent lane
+    note: >
+      A separate authenticated path with its own limits and its own audit. Separation is what lets
+      bot defences stay strict on the human path.
+    risks: [riskShadowAndUnknownAgents, riskDenialOfMLService]
+    capabilities: [capabilityRateLimiting, capabilityNhiManagement, capabilityTransportSecurity]
+
+  - id: agentAuth
+    type: identityProvider
+    zone: edge
+    label: Agent authentication
+    note: >
+      Establishes which agent, from which operator, acting for which customer. Three facts, and
+      most API authentication was built to establish one.
+    risks: [riskAgenticDelegationConfusedDeputy, riskStaleAgentIdentityBinding]
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilityAgentRegistry]
+
+  - id: agentLimits
+    type: policyEngine
+    zone: edge
+    label: Agent rate limits
+    note: >
+      Tuned for callers that retry and parallelise. Limits derived from human pacing do not survive
+      contact with an agent.
+    risks: [riskDenialOfMLService, riskRunawayAgentToolLoops, riskEconomicDenialOfWallet]
+    capabilities: [capabilityRateLimiting, capabilityAgentRuntimeEnforcement]
+
+  - id: mandateCheck
+    type: inputHandling
+    zone: service
+    label: Mandate verification
+    note: >
+      Validates the signed statement of what the human authorised — scope, value, expiry. Built as
+      its own component because the schemes competing to define it are unsettled.
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions]
+    capabilities: [capabilityContentProvenance, capabilityNhiManagement, capabilityHitlControls]
+
+  - id: idempotency
+    type: orchestrator
+    zone: service
+    label: Idempotency and reconciliation
+    note: >
+      Agents retry on timeouts and ambiguity. Without idempotency keys, a retried purchase is a
+      second purchase, and the customer's agent did it.
+    risks: [riskRogueActions, riskRunawayAgentToolLoops]
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityAuditLogging]
+
+  - id: businessLogic
+    type: actuator
+    zone: service
+    label: Transaction processing
+    note: The actual operation, bounded by whatever the mandate turned out to permit.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+    capabilities: [capabilityToolPermissionScoping, capabilityAuditLogging, capabilityHitlControls]
+
+  - id: errorSurface
+    type: outputEncoder
+    zone: service
+    label: Response and error text
+    note: >
+      Agents read errors and act on them, so error text is now part of the interface. Verbose
+      failures teach an agent to retry differently, and teach an attacker the same thing.
+    risks: [riskInsecureModelOutput, riskSensitiveDataDisclosure, riskCovertChannelsInModelOutputs]
+    capabilities: [capabilityOutputEncoding, capabilityAppSecTesting]
+
+  - id: orders
+    type: corpus
+    zone: records
+    label: Orders and accounts
+    note: The state the transaction changes, and what a dispute will be resolved against.
+    risks: [riskRogueActions, riskSensitiveDataDisclosure]
+    capabilities: [capabilityDataAccessGovernance, capabilityAuditLogging, capabilityDspm]
+
+  - id: evidence
+    type: auditSink
+    zone: records
+    label: Mandate evidence
+    note: >
+      The mandate presented, the agent that presented it and the action taken. A disputed agent
+      transaction is unarguable without it.
+    risks: [riskRogueActions, riskAgentDelegationChainOpacity]
+    capabilities: [capabilityAuditLogging, capabilityContentProvenance, capabilityAgentObservability]
+
+  - id: agentRegistry
+    type: registry
+    zone: governance
+    label: Agent registry
+    note: >
+      Which agent operators are recognised and what each may do. Turns an unbounded population of
+      callers into an administered one.
+    risks: [riskShadowAndUnknownAgents, riskInsecureIntegratedComponent]
+    capabilities: [capabilityAgentRegistry, capabilityNhiManagement, capabilityAiTprm]
+
+  - id: delegationPolicy
+    type: policyEngine
+    zone: governance
+    label: Delegation policy
+    note: >
+      What an agent may do for a customer without further confirmation, and above what threshold
+      the human has to be reached on another channel.
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions]
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAiGovernancePlatform]
+
+  - id: disputeProcess
+    type: hitlGate
+    zone: governance
+    label: Dispute and reversal
+    note: >
+      What happens when a customer says their agent was not authorised to do that. Needs to exist
+      before the first one, and rests entirely on the evidence trail.
+    risks: [riskRogueActions]
+    capabilities: [capabilityHitlControls, capabilityAuditLogging, capabilityAiGovernancePlatform]
+
+  - id: abuseDetection
+    type: auditSink
+    zone: governance
+    label: Agent behaviour monitoring
+    note: >
+      Baselines per agent operator rather than per user, because normal for an agent is nothing
+      like normal for a person and the old baselines flag all of it.
+    risks: [riskShadowAndUnknownAgents, riskDenialOfMLService]
+    capabilities: [capabilityBehavioralDriftDetection, capabilityAiDetectionResponse, capabilityRateLimiting]
+
+edges:
+  - from: principal
+    to: thirdPartyAgent
+    label: authorises
+    control:
+      kind: delegatedGrant
+      note: >
+        Happens entirely outside this system, on a platform the merchant does not operate. All the
+        endpoint ever sees is the artifact that results.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: thirdPartyAgent
+    to: agentLane
+    label: request with mandate
+    control:
+      kind: delegatedGrant
+      note: >
+        Two separate claims: which agent this is, and what its human authorised. Conflating them —
+        treating a recognised agent as an authorised one — is the central failure of this archetype.
+    risks: [riskAgenticDelegationConfusedDeputy, riskRogueActions]
+
+  - from: agentAuth
+    to: agentLane
+    label: agent identity
+    kind: control
+    control:
+      kind: agentIdentity
+      note: Establishes the operator, which is the party accountable when an agent misbehaves at scale.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: agentLane
+    to: agentLimits
+    label: admitted request
+
+  - from: agentLimits
+    to: mandateCheck
+    label: throttled request
+    control:
+      kind: workloadIdentity
+      note: >
+        Agent, operator and customer travel with the request rather than being re-derived from its
+        body — which an agent composes.
+    risks: [riskAgenticDelegationConfusedDeputy]
+
+  - from: mandateCheck
+    to: idempotency
+    label: verified mandate
+    risks: [riskRogueActions]
+
+  - from: idempotency
+    to: businessLogic
+    label: deduplicated operation
+    control:
+      kind: replaySafety
+      note: >
+        Scoped to the mandate rather than the request, so a retry with a fresh request id does not
+        become a second transaction.
+    risks: [riskRogueActions]
+
+  - from: businessLogic
+    to: orders
+    label: transaction
+    control:
+      kind: delegatedGrant
+      note: >
+        Bounded by what the human authorised rather than by what the agent asked for. The mandate
+        is the authorisation; the request is just a request.
+    risks: [riskRogueActions, riskAgenticDelegationConfusedDeputy]
+
+  - from: businessLogic
+    to: evidence
+    label: mandate and action record
+    control:
+      kind: auditTrail
+      note: >
+        Retained as long as a dispute can be raised, because reconstructing what an absent human
+        authorised is otherwise impossible.
+    risks: [riskAgentDelegationChainOpacity]
+
+  - from: businessLogic
+    to: errorSurface
+    label: result or failure
+
+  - from: errorSurface
+    to: thirdPartyAgent
+    label: response
+    control:
+      kind: transport
+      note: >
+        Read by a model and acted on. Error text is now interface design, and a verbose failure
+        teaches the caller — and anyone probing — more than it should.
+    risks: [riskSensitiveDataDisclosure, riskInsecureModelOutput]
+
+  - from: agentRegistry
+    to: agentAuth
+    label: recognised operators
+    kind: control
+    control:
+      kind: admission
+      note: >
+        An unregistered agent gets the human path and its bot defences, which is the correct
+        default rather than an outage.
+    risks: [riskShadowAndUnknownAgents]
+
+  - from: delegationPolicy
+    to: mandateCheck
+    label: scope and thresholds
+    kind: control
+    control:
+      kind: policyDecision
+      note: >
+        Above the threshold the human is reached on another channel; below it the mandate suffices.
+        Where the line sits is the archetype's central business decision.
+    risks: [riskRogueActions]
+
+  - from: abuseDetection
+    to: agentLane
+    label: per-operator baselines
+    kind: control
+    control:
+      kind: discovery
+      note: >
+        Per operator rather than per user. Human baselines flag every agent, which is why the old
+        detection cannot simply be pointed at this lane.
+    risks: [riskDenialOfMLService]
+
+  - from: disputeProcess
+    to: evidence
+    label: resolves against the record
+    kind: control
+    control:
+      kind: auditTrail
+      note: >
+        The entire dispute rests on the mandate evidence. A record of the request without the
+        mandate cannot establish whether the agent exceeded its authority.
+    risks: [riskRogueActions]
+
+crossCutting:
+  - risk: riskAgenticDelegationConfusedDeputy
+    note: >
+      The archetype in one risk. A recognised agent is not an authorised one, and the human who
+      could clarify is not there. Every control here exists to keep those two facts separate.
+  - risk: riskShadowAndUnknownAgents
+    note: >
+      The caller population is unbounded and lives outside the organisation. Registration converts
+      it into something administered; without it, admitting agents means admitting anyone.
+  - risk: riskRogueActions
+    note: >
+      An agent acting beyond its mandate, or the same action executing twice on a retry. Mandate
+      scope and idempotency address different halves and neither covers both.
+
+risks:
+  - riskAgenticDelegationConfusedDeputy
+  - riskShadowAndUnknownAgents
+  - riskRogueActions
+  - riskDenialOfMLService
+  - riskAgentDelegationChainOpacity
+  - riskSensitiveDataDisclosure
+  - riskStaleAgentIdentityBinding
+  - riskRunawayAgentToolLoops
+  - riskEconomicDenialOfWallet
+  - riskInsecureModelOutput
+  - riskInsecureIntegratedComponent
+  - riskCovertChannelsInModelOutputs
+
+capabilities:
+  - capabilityNhiManagement
+  - capabilityAgentRegistry
+  - capabilityIga
+  - capabilityRateLimiting
+  - capabilityHitlControls
+  - capabilityToolPermissionScoping
+  - capabilityAuditLogging
+  - capabilityBehavioralDriftDetection
+  - capabilityContentProvenance
+  - capabilityAgentObservability
+  - capabilityAgentRuntimeEnforcement
+  - capabilityAiDetectionResponse
+  - capabilityDataAccessGovernance
+  - capabilityDspm
+  - capabilityOutputEncoding
+  - capabilityAppSecTesting
+  - capabilityAiGovernancePlatform
+  - capabilityAiTprm
+  - capabilityTransportSecurity
+
+deviations:
+  - subject: No model appears in this architecture
+    reason: >
+      Like the remote MCP server, this service contains no AI. It is in the catalogue because its
+      caller is one, and because a decade of bot defence assumed the opposite. Everything
+      distinctive here follows from the caller's nature.
+  - subject: Mandate verification is drawn as input handling
+    reason: >
+      It is an authorization decision and would sit more naturally in the control plane. It is
+      drawn inline because it has to happen per request, before the transaction, and because
+      treating it as policy configuration rather than a request-path component is how it ends up
+      being skipped on the retry path.
+  - subject: The mandate is drawn without naming a scheme
+    reason: >
+      Several competing specifications exist and none has settled. Drawing one would date the
+      diagram and imply a coupling that is not advisable yet; the component is drawn and the schemes
+      are named only in the exemplars, which carry dates.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI03 identity and privilege abuse, ASI07 inter-agent communication"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "Model Context Protocol — authorization and delegation patterns"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "CSA AI Controls Matrix v1.1 — identity and access controls for non-human actors"
+    url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+  - title: "OWASP Agentic AI — threats and mitigations v1.1, T9 identity spoofing and T16 protocol abuse"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/

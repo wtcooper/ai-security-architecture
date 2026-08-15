@@ -10,6 +10,7 @@ const TABS = [
   { href: "/risks", label: "Risks" },
   { href: "/controls", label: "Controls" },
   { href: "/capabilities", label: "Capabilities" },
+  { href: "/reference", label: "Architectures" },
   { href: "/personas", label: "Personas" },
   { href: "/frameworks", label: "Frameworks" },
   { href: "/examples", label: "Examples" },
@@ -40,15 +41,15 @@ export function SiteHeader() {
     <>
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
         <div className="px-5 sm:px-7 h-14 flex items-center gap-3 sm:gap-6">
-          {/* Leftmost, like every mobile app's menu button. Only exists below `lg`, where
-              there isn't room for all eight tabs inline. */}
+          {/* Leftmost, like every mobile app's menu button. Only exists below `xl`, where
+              there isn't room for all nine tabs inline. */}
           <button
             type="button"
             onClick={() => setOpen(!open)}
             aria-expanded={open}
             aria-controls="section-menu"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink lg:hidden"
+            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink xl:hidden"
           >
             <HamburgerGlyph open={open} />
           </button>
@@ -60,8 +61,8 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          {/* Wide enough for all eight: every section inline. */}
-          <nav aria-label="Sections" className="hidden lg:flex items-end gap-1 h-full -mb-px">
+          {/* Wide enough for all nine: every section inline. */}
+          <nav aria-label="Sections" className="hidden xl:flex items-end gap-1 h-full -mb-px">
             {TABS.map((tab) => {
               const active = pathname.startsWith(tab.href);
               return (
@@ -98,7 +99,7 @@ export function SiteHeader() {
           <nav
             id="section-menu"
             aria-label="Sections"
-            className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg lg:hidden"
+            className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg xl:hidden"
           >
             {TABS.map((tab) => {
               const active = pathname.startsWith(tab.href);
@@ -129,7 +130,7 @@ export function SiteHeader() {
           aria-label="Close menu"
           tabIndex={-1}
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-20 cursor-default bg-ink/20 lg:hidden"
+          className="fixed inset-0 z-20 cursor-default bg-ink/20 xl:hidden"
         />
       )}
     </>
