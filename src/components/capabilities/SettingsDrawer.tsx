@@ -6,7 +6,7 @@ import { CAPABILITY_STATUSES, type CapabilityStatus } from "@/lib/types";
 import { StatusPill } from "./StatusPill";
 import { exportYaml, STATUS_META, type StatusOverrides } from "./status";
 
-/** in place -> partial -> gap -> N/A -> in place. */
+/** needs assessed -> in place -> partial -> gap -> needs assessed. */
 const nextStatus = (current: CapabilityStatus): CapabilityStatus =>
   CAPABILITY_STATUSES[(CAPABILITY_STATUSES.indexOf(current) + 1) % CAPABILITY_STATUSES.length];
 
@@ -77,7 +77,7 @@ export function SettingsDrawer({
             <p className="eyebrow">Edit taxonomy · your organisation&apos;s posture</p>
             <h2 className="display mt-1 text-[20px] font-bold text-ink">Capability statuses</h2>
             <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-ink-2">
-              Everything starts green — an idealised baseline, not a claim about any
+              Every capability starts unassessed — nothing here claims anything about any
               organisation. Click a cell to cycle its status. Edits live in this browser only;
               this site is static, so to keep them, fork the repository, export below, and
               commit the file as <span className="ident">data/overlay/capabilities.yaml</span>.
@@ -106,7 +106,7 @@ export function SettingsDrawer({
             ))}
           </div>
 
-          <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,96px)] items-center">
+          <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,124px)] items-center">
             <span />
             {surfaces.map((s) => (
               <span key={s.id} className="px-2 py-1 text-center text-[11.5px] font-semibold text-ink-2">

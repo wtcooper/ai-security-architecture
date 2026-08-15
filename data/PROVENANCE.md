@@ -121,6 +121,8 @@ including granularity rules and deliberate exclusions, is in the header of
 on market rather than standards evidence its sources say so; the CoSAI mappings are judgements
 made here. Product names are deliberately absent: a fork records its own
 tooling and posture (`status` per surface) via the Capabilities tab's export flow, and the
-shipped dataset never sets `status`. `npm run data` fails on any dangling id, a primary
+shipped dataset never sets `status` — everything reads as `needsAssessment`, because this
+repository maps what the taxonomy covers and must never imply a posture anyone holds.
+`npm run data` fails on any dangling id, a primary
 `category` no mapped control belongs to, or a capability missing a decision for a declared
 surface.

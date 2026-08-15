@@ -132,7 +132,8 @@ export function CapabilitiesBrowser() {
             );
           })}
           <span className="text-[12.5px] text-ink-3">
-            Everything ships green — an idealised baseline, not an assessment. Use{" "}
+            Nothing ships assessed — this repository maps what the taxonomy covers, not what
+            anyone has deployed. Use{" "}
             <button
               onClick={() => setDrawerOpen(true)}
               className="font-semibold text-introduced hover:underline"

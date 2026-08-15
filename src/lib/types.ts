@@ -178,12 +178,13 @@ export interface Vocabulary {
  * Assessment states a fork can record per capability per surface. Shipped unset — the
  * repository maps the taxonomy, a deployment maps its own posture onto it.
  */
-export type CapabilityStatus = "inPlace" | "partial" | "gap" | "notApplicable";
+export type CapabilityStatus = "needsAssessment" | "inPlace" | "partial" | "gap";
+/** Cycle and legend order. `needsAssessment` leads: it is the shipped state of everything. */
 export const CAPABILITY_STATUSES: CapabilityStatus[] = [
+  "needsAssessment",
   "inPlace",
   "partial",
   "gap",
-  "notApplicable",
 ];
 
 /** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */

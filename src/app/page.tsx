@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { PhaseLegend } from "@/components/PhaseRail";
 import { REPO_URL } from "@/components/shell/SiteHeader";
-import { components, controls, incidents, activePersonas, risks } from "@/lib/data";
+import {
+  capabilities,
+  components,
+  controls,
+  incidents,
+  activePersonas,
+  risks,
+  surfaces,
+} from "@/lib/data";
 import { visibleFrameworks } from "@/lib/frameworks";
 
 export const metadata = {
@@ -38,6 +46,13 @@ const SECTIONS = [
     blurb: "The countermeasures, what they protect, and who is meant to own them.",
     count: `${controls.length} controls`,
     accent: "var(--mitigated)",
+  },
+  {
+    href: "/capabilities",
+    label: "Capabilities",
+    blurb: "Which tooling actually delivers each control — on endpoint, cloud, and vendor SaaS.",
+    count: `${capabilities.length} capabilities`,
+    accent: "var(--introduced)",
   },
   {
     href: "/personas",
@@ -93,6 +108,20 @@ export default function LandingPage() {
         . Same walkthrough, more of the modern attack surface: agents, orchestration, tools,
         memory and retrieval.
       </p>
+      <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
+        Both frameworks stop at the control strategy — &ldquo;user data management&rdquo;, not
+        the thing you deploy on Monday. So there is one layer here that is neither
+        CoSAI&rsquo;s nor SAIF&rsquo;s: {capabilities.length} vendor-neutral{" "}
+        <Link
+          href="/capabilities"
+          className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
+        >
+          technology capabilities
+        </Link>{" "}
+        derived from the security standards, mapped back onto CoSAI and split across the{" "}
+        {surfaces.length} surfaces where the answer differs — your endpoints, the AI you
+        operate, and the AI you merely consume.
+      </p>
 
       <div className="mt-8 flex flex-wrap items-center gap-3">
         <Link
@@ -100,6 +129,12 @@ export default function LandingPage() {
           className="rounded-lg bg-ink px-5 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
         >
           Start the tour
+        </Link>
+        <Link
+          href="/capabilities"
+          className="rounded-lg border border-line-strong bg-paper px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-ink"
+        >
+          Map your tooling
         </Link>
         <Link
           href="/examples"
@@ -181,6 +216,26 @@ export default function LandingPage() {
           >
             saif.google ↗
           </a>
+        </div>
+        <div className="rounded-xl border border-line bg-paper p-5 sm:col-span-2">
+          <p className="display text-[15px] font-semibold text-ink">
+            The capability taxonomy{" "}
+            <span className="ident ml-1.5 align-middle">authored here</span>
+          </p>
+          <p className="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">
+            The one layer neither framework provides. Each of the {capabilities.length} classes
+            had to be named by at least two independent source families — MITRE ATLAS and the
+            OWASP Top 10s, the NIST, CISA, Five Eyes, NCSC, CSA and ISO guidance, and the
+            analyst and cloud-provider market catalogues — and had to have real tooling behind
+            it, so activities and policies are excluded. Every entry carries its sources, and
+            the mappings onto CoSAI are judgements made here.
+          </p>
+          <Link
+            href="/capabilities"
+            className="mt-3 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
+          >
+            Browse the capability matrix →
+          </Link>
         </div>
       </div>
 

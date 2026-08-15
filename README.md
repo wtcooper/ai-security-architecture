@@ -11,6 +11,11 @@ the broader taxonomy that succeeded it — the
 SAIF became after Google donated it to the Coalition for Secure AI at OASIS. Five real 2025–26
 incidents are replayed on the same map.
 
+It then adds the layer neither framework provides: **56 vendor-neutral technology capabilities**
+— the tooling that actually delivers each control — derived from the security standards and
+split across the three surfaces where the answer differs, because what protects a laptop, a
+cloud service you operate, and a vendor AI you merely subscribe to are three different answers.
+
 ---
 
 ## Why this exists
@@ -104,6 +109,7 @@ provenances:
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
+| **Capabilities** | The layer neither framework has: 56 vendor-neutral technology classes, as a matrix of CoSAI control groups × three deployment surfaces. Filter by risk category or stack layer, click any capability for its controls, risks, components and sources, and record your own posture in the edit pane. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Examples** | Five incidents replayed step by step on the map, every step sourced. |
@@ -179,6 +185,114 @@ link naming the old edition resolves to its 2026 equivalent instead of breaking.
 across honestly.
 
 Every mapping badge elsewhere in the app links into this view.
+
+## The capability layer: what you actually deploy
+
+Both frameworks stop at the control *strategy*. CoSAI names "User Data Management"; leadership
+asks which tool does that, and on what — the laptop, the cloud service we run, or the vendor AI
+we merely subscribe to. The answer differs on all three, and neither framework models the
+difference.
+
+So the Capabilities tab adds a fourth taxonomy layer:
+**CoSAI control group → CoSAI control → technology capability → deployment surface.**
+Rows are the six CoSAI control groups, columns are **Endpoint**, **Cloud / hosted** and
+**Third-party SaaS**, and every cell holds the tooling classes that work there. A blank cell is
+a finding in itself: model weight protection has nothing under Third-party SaaS because the
+vendor holds the weights.
+
+The 56 classes are not a list of products, and the count was not chosen. Each had to pass three
+tests:
+
+1. **Named by at least two independent source families** — the threat and mitigation catalogues
+   (MITRE ATLAS v5.6.0, OWASP LLM and Agentic Top 10s, LLMSVS, the Securing Agentic Applications
+   Guide), government and standards controls (NIST SP 800-218A / AI RMF / AI 600-1, the CISA-NSA
+   and 2026 Five Eyes joint guidance, UK NCSC, CSA AICM, ISO/IEC 42001, EU AI Act Article 15),
+   procurable market categories (Gartner AI TRiSM, CSA's agentic market map, the cloud providers'
+   own catalogues), and lifecycle tooling maps (OWASP's AI Security Solutions Landscape).
+2. **A technology exists that implements it.** Entries are named for the tool, not the practice —
+   *model registry & documentation generation*, not *documentation*. If the honest answer to
+   "what would we deploy?" is "nothing, we would write something down or train someone", it is
+   excluded. That rule removed user-transparency safeguards and acceptable-use policy from an
+   earlier draft.
+3. **It differs across at least one surface boundary**, or it is a control restatement.
+
+Granularity follows the sources rather than taste. Gartner's information-governance layer
+separates DSPM, DLP and data access governance, and puts runtime redaction in a different layer,
+so those are four entries — the market buys them separately. Conversely non-human identity and
+agent identity are **one** entry, because CSA's own non-human identity taxonomy makes agent
+identity a class of NHI and every vendor ships them as one platform.
+
+Two findings worth stating plainly, because they change what a control mapping can claim:
+**ISO/IEC 42001's Annex A names no security control at all** — no red-teaming, no weight
+protection, no injection defence; it is a governance catalogue. And **no major cloud provider
+ships model signing**; AI-BOM and artifact signing are standards-mandated with no product behind
+them, which makes them a predictable real-world gap.
+
+**Nothing ships assessed.** Every capability starts at *needs assessed*, because this repository
+maps what the taxonomy covers and must never imply a posture anyone holds. The edit pane cycles
+each cell through *in place / partial / gap*, stores it in your browser, and exports a
+`capabilities.yaml` that round-trips through `npm run data` — so a fork commits its own answers
+and the site rebuilds around them. Vendor names are deliberately absent for the same reason: a
+fork adds its own.
+
+Deliberate exclusions are recorded with reasons in the file header — bias and fairness testing
+and standalone hallucination detection (safety, not security: CoSAI carries no matching risk),
+deepfake detection (single-source, no CoSAI risk), and Zero Trust (an architecture stance, not a
+purchasable capability — it lives inside the segmentation and identity entries).
+
+## Where things live
+
+Taxonomy data is YAML under `data/`, compiled once into a single typed dataset that the app
+reads synchronously. Nothing is fetched at runtime.
+
+```
+data/
+├── cosai/                        VENDORED, pinned commit, Apache-2.0 © Google LLC → CoSAI
+│   ├── risks.yaml                36 risks in 5 categories
+│   ├── controls.yaml             35 controls in 6 categories
+│   ├── components.yaml           23 components in 3 categories
+│   ├── personas.yaml             8 active personas (+ deprecated)
+│   ├── frameworks.yaml           the 6 frameworks CoSAI maps onto
+│   └── …                         actor-access, impact-type, lifecycle-stage vocabularies
+├── overlay/                      AUTHORED HERE — everything CoSAI does not publish
+│   ├── capabilities.yaml         ★ the capability taxonomy: 56 classes + 3 surfaces,
+│   │                               each mapped to CoSAI controls/risks/components,
+│   │                               with per-surface applicability and sources
+│   ├── risk-components.yaml      which components light up per risk × phase
+│   ├── saif-tour-seed.json       45 steps extracted from the public SAIF bundle
+│   └── frameworks-authored.yaml  OWASP Agentic Top 10 + LLM Top 10 2026 mappings
+├── frameworks/entries.yaml       framework entry titles and descriptions
+├── incidents/                    5 authored incidents, replayed on the map
+└── PROVENANCE.md                 pinned SHA, extraction record, what is original work
+
+scripts/
+├── build-data.ts                 data/** → dataset.json, with every integrity check
+├── audit.ts                      regenerates docs/AUDIT.md from the data
+├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
+└── extract-saif-tour.ts          re-extracts the SAIF tour seed
+
+src/
+├── data/generated/dataset.json   the compiled dataset (committed, never hand-edited)
+├── lib/
+│   ├── types.ts                  every shape, including Capability and Surface
+│   ├── data.ts                   the typed accessors the whole app reads
+│   ├── map-layout.ts             hand-authored SVG geometry for the map
+│   ├── bands.ts                  component → stack band
+│   ├── deviations.ts             declared divergences from CoSAI
+│   └── frameworks.ts             framework lens logic
+├── app/                          one route per tab (App Router, static export)
+│   ├── page.tsx                  landing
+│   └── map|components|risks|controls|capabilities|personas|frameworks|examples/
+└── components/
+    ├── shell/SiteHeader.tsx      nav; collapses to a menu below lg
+    ├── map/RiskMap.tsx           the SVG map
+    ├── tour/TourExplorer.tsx     the three-phase walkthrough
+    ├── browse/                   components, risks, controls, personas, frameworks
+    ├── capabilities/             ★ matrix, detail, stack filter, status store, edit drawer
+    └── examples/IncidentExplorer.tsx
+
+docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
+```
 
 ## The incidents
 
