@@ -139,8 +139,10 @@ export function ArchitecturesBrowser() {
               const group = shown.filter((a) => a.surface === s.id);
               if (!group.length) return null;
               return (
-                <div key={s.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
-                  <span className="eyebrow w-24 shrink-0">{s.title}</span>
+                // A fixed label column with the pills wrapping beside it — a shared flex-wrap
+                // row would drop the whole pill block under the label once it cannot fit.
+                <div key={s.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-x-3">
+                  <span className="eyebrow">{s.title}</span>
                   <div className="flex flex-wrap gap-1.5">
                     {group.map((a) => (
                       <NamePill
