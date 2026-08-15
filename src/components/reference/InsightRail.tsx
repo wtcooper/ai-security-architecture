@@ -7,6 +7,7 @@
  * Every row links into the taxonomy tab that owns the entity.
  */
 import Link from "next/link";
+import { useState, type ReactNode } from "react";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import type { Archetype } from "@/lib/types";
@@ -78,11 +79,10 @@ export function InsightRail({
         </section>
       )}
 
-      <section>
-        <p className="eyebrow">Capabilities to deploy · {archetype.capabilities.length}</p>
-        <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
-          The numbered chips on the drawing. Each number marks where the capability must sit.
-        </p>
+      <RailSection
+        title={`Capabilities to deploy · ${archetype.capabilities.length}`}
+        hint="The numbered chips on the drawing. Each number marks where the capability must sit."
+      >
         <div className="mt-2 space-y-1">
           {archetype.capabilities.map((id, i) => {
             const capability = capabilityById.get(id);
@@ -124,13 +124,12 @@ export function InsightRail({
             );
           })}
         </div>
-      </section>
+      </RailSection>
 
-      <section>
-        <p className="eyebrow">Risks on the drawing · {archetype.risks.length}</p>
-        <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
-          CoSAI risks, tagged where they surface. Codes are stable across every architecture.
-        </p>
+      <RailSection
+        title={`Risks on the drawing · ${archetype.risks.length}`}
+        hint="CoSAI risks, tagged where they surface. Codes are stable across every architecture."
+      >
         <div className="mt-2 space-y-1">
           {archetype.risks.map((id) => {
             const risk = riskById.get(id);
@@ -168,7 +167,52 @@ export function InsightRail({
             );
           })}
         </div>
-      </section>
+      </RailSection>
     </div>
+  );
+}
+
+/** A collapsible rail section, open by default — collapse to manage a long rail. */
+function RailSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section>
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <span className="eyebrow flex-1">{title}</span>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 12 12"
+          className={`shrink-0 text-ink-3 transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden
+        >
+          <path
+            d="M 2 4 L 6 8 L 10 4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <p className="mt-1 text-[11.5px] leading-snug text-ink-3">{hint}</p>
+          {children}
+        </>
+      )}
+    </section>
   );
 }

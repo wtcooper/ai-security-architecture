@@ -13,9 +13,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import { itemCells } from "@/lib/flow-layout";
+import { chipSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Rect } from "@/lib/types";
-import { BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-style";
+import { blockTab, BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
 const MIN_ZOOM = 0.5;
@@ -438,7 +438,7 @@ function BlockShape({
           y={rect.y - TAB_H / 2}
           width={tabW}
           height={TAB_H}
-          fill={style.tab}
+          fill={blockTab(block)}
         />
         <text
           x={rect.x + rect.w / 2}
@@ -523,21 +523,14 @@ function ChipCluster({
   onHover: (h: Hover) => void;
   onLeave: () => void;
 }) {
+  const spots = chipSpots(chips.length, blockRect, edge);
   return (
     <>
       {chips.map((chip, i) => {
-        let cx: number;
-        let cy: number;
-        if (blockRect) {
-          // On the block's bottom border, as F5 seats its chips.
-          cx = blockRect.x + 16 + i * 24;
-          cy = blockRect.y + blockRect.h;
-        } else if (edge) {
-          cx = edge.midX + (edge.horizontal ? (i - (chips.length - 1) / 2) * 24 : 0);
-          cy = edge.midY + (edge.horizontal ? 0 : (i - (chips.length - 1) / 2) * 24);
-        } else {
-          return null;
-        }
+        const spot = spots[i];
+        if (!spot) return null;
+        const cx = spot.x;
+        const cy = spot.y;
         const active = highlight?.kind === "capability" && highlight.id === chip.capability;
         const dim = highlight && !active;
         const capability = capabilityById.get(chip.capability);
@@ -613,35 +606,19 @@ function TagStack({
   onHover: (h: Hover) => void;
   onLeave: () => void;
 }) {
-  // Anchor point the leader line reaches, and where the stack grows from.
-  let ax: number;
-  let ay: number;
-  if (blockRect) {
-    ax = blockRect.x + 18;
-    ay = blockRect.y - TAB_H / 2;
-  } else if (edge) {
-    ax = edge.midX + (edge.horizontal ? -30 : 14);
-    ay = edge.midY + (edge.horizontal ? -12 : -30);
-  } else {
-    return null;
-  }
+  const { rects, leader } = tagSpots(
+    tags.map((t) => tagWidth(riskCode(t.risk))),
+    blockRect,
+    edge,
+  );
 
   return (
     <g>
-      <path
-        d={
-          blockRect
-            ? `M ${ax} ${ay - tags.length * 20 + 4} L ${ax} ${ay}`
-            : `M ${ax} ${ay - tags.length * 20 + 16} L ${ax} ${edge!.midY} L ${edge!.midX} ${edge!.midY}`
-        }
-        fill="none"
-        stroke="var(--line-strong)"
-        strokeWidth={1}
-      />
+      <path d={leader} fill="none" stroke="var(--line-strong)" strokeWidth={1} />
       {tags.map((tag, i) => {
         const code = riskCode(tag.risk);
-        const w = tagWidth(code);
-        const y = ay - 20 * (tags.length - i);
+        const r = rects[i];
+        if (!r) return null;
         const active = highlight?.kind === "risk" && highlight.id === tag.risk;
         const dim = highlight && !active;
         const risk = riskById.get(tag.risk);
@@ -661,8 +638,8 @@ function TagStack({
             }}
             onPointerEnter={() =>
               onHover({
-                x: ax + w / 2,
-                y,
+                x: r.x + r.w / 2,
+                y: r.y,
                 title: `${code} · ${risk?.title ?? tag.risk}`,
                 body: tag.note ?? "",
                 meta: "risk here — click to trace",
@@ -672,18 +649,18 @@ function TagStack({
             style={{ cursor: "pointer" }}
           >
             <rect
-              x={ax - w / 2}
-              y={y}
-              width={w}
-              height={TAG.h}
+              x={r.x}
+              y={r.y}
+              width={r.w}
+              height={TAG_H}
               rx={2}
               fill={TAG.fill}
               stroke={active ? "var(--ink)" : TAG.stroke}
               strokeWidth={active ? 1.8 : 1}
             />
             <text
-              x={ax}
-              y={y + 12.5}
+              x={r.x + r.w / 2}
+              y={r.y + 12.5}
               textAnchor="middle"
               fill={TAG.text}
               style={{

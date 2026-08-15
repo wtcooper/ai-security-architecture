@@ -1,0 +1,406 @@
+id: archVoiceAgent
+surface: surfaceCloud
+title: Realtime voice agent
+abbrev: Voice agent
+
+summary:
+  - >
+    A conversational agent over a live audio channel, handling calls and acting on what it hears.
+    Injection arrives as speech, the caller's identity is asserted by a voice, and there is no
+    moment to pause and check anything.
+
+description:
+  - >
+    Realtime changes what is possible rather than what is at stake. Every asynchronous
+    architecture can insert a filter, a check or a human between the input and the effect. Here
+    the budget is a few hundred milliseconds before the pause becomes audible and the
+    conversation breaks, which means guardrails have to be streaming and partial, and human
+    oversight means transferring the call rather than blocking on a queue.
+  - >
+    Identity is the harder problem. A voice is not an authenticator and has not been one for
+    several years — cloned voices are cheap — and the calling number is spoofable, so anything
+    consequential needs a second factor on another channel: a code to the registered device, a
+    callback, an in-app confirmation. Systems that treat the calling number plus a plausible
+    voice as authentication are the ones this architecture's incidents come from.
+  - >
+    Audio is also the worst medium for detection. Speech-to-text loses tone, homophones and
+    overlapping speakers, so the transcript the guardrail inspects is not what was said. Where
+    only the transcript is retained, an investigation cannot recover what happened; where audio
+    is retained, that is biometric data with its own regulatory weight. And the telephony edge
+    brings an exposure the rest of the catalogue lacks: a voice agent on a public number is an
+    always-open endpoint with per-minute inference costs behind it.
+
+distinguishedBy:
+  - >
+    Against the autonomous action agent: the same act-on-a-request shape with the latency budget
+    removed. Every deliberative control that architecture relies on — filtering, approval queues,
+    reconsideration — is unavailable, so the compensating controls move to identity and to
+    limiting what a voice alone may do.
+  - >
+    Against a text chat assistant: the medium changes the threat model. Audio cannot be reliably
+    inspected, transcription is lossy, the caller is anonymous by default, and the recording is
+    biometric data.
+
+exemplars:
+  - name: Realtime speech APIs with tool calling
+    note: >
+      Provider APIs handling speech in and out with low latency and function calling in-session,
+      increasingly with direct telephony integration.
+    asOf: "2026-08"
+  - name: Contact-centre voice agents
+    note: >
+      Agents answering customer calls end to end, with escalation to a human and access to
+      account records. The mainstream commercial deployment of this architecture.
+    asOf: "2026-08"
+
+blocks:
+  - id: caller
+    kind: actor
+    title: Caller
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      Claims an identity by speaking. A voice is not an authenticator and a calling number is
+      spoofable, so this claim needs corroboration before anything consequential happens.
+
+  - id: telephony
+    kind: service
+    title: Telephony edge
+    col: 1
+    row: 1
+    note: >
+      Carrier and session border. Caller identification arrives here already untrustworthy — a
+      hint, not a fact — and the network in the middle of every call is a third party.
+    items:
+      - id: sbc
+        label: Session border
+        icon: phone
+        note: Where the call arrives, and where admission, fraud signals and concurrency caps belong.
+      - id: callerHint
+        label: Caller ID & carrier signals
+        icon: globe
+        note: Spoofable, and treated as routing input rather than authentication.
+
+  - id: session
+    kind: service
+    title: Realtime session
+    col: 2
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      The live conversation: streaming audio in and out, the dialogue agent deciding when to call
+      a tool, and guardrails that must rule on partial transcripts within the latency budget.
+    items:
+      - id: streamHandler
+        label: Stream handling
+        icon: chat
+        note: >
+          Audio in, audio out, continuously. Any inspection here has a few hundred milliseconds
+          before the pause is audible.
+      - id: dialogue
+        label: Dialogue agent
+        icon: agent
+        note: Decides in real time, with no opportunity to reconsider before the words are spoken.
+      - id: streamGuard
+        label: Streaming guardrail
+        icon: shield
+        note: >
+          Partial-transcript classification, inbound and outbound. Necessarily weaker than a
+          batch filter, because it must decide before the utterance is finished.
+      - id: transfer
+        label: Human transfer
+        icon: person
+        note: >
+          Escalation to a person — this architecture's only form of human oversight, because a
+          queue is not available while the caller is on the line.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 2
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      Streaming speech-to-speech inference. It holds the caller's audio for the duration of the
+      call, which makes the provider's retention terms a biometric-data question.
+    items:
+      - id: realtimeApi
+        label: Realtime speech API
+        icon: model
+        note: Speech in, speech and tool calls out, under a latency budget nothing else in the catalogue has.
+
+  - id: tools
+    kind: service
+    title: In-session tools
+    col: 3
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      Account lookups and transactions invoked mid-conversation. The gap between reads and writes
+      is where the verification requirement belongs, and the permitted set changes when
+      verification completes mid-call.
+    items:
+      - id: lookup
+        label: Account lookup
+        icon: search
+        note: Reads on an unverified call should be narrower than reads on a verified one.
+      - id: transact
+        label: Transactions
+        icon: gear
+        note: Consequential writes wait for the out-of-band factor; conversation does not.
+
+  - id: records
+    kind: service
+    title: Customer records
+    col: 4
+    row: 2
+    cosaiComponent: componentDataSources
+    note: >
+      What the agent reads and changes, scoped to whoever the caller has actually been proven to
+      be — not to who they said they are.
+    items:
+      - id: accounts
+        label: Accounts & history
+        icon: db
+        note: The state a wrong action changes, and the data a wrong read discloses aloud.
+
+  - id: recordings
+    kind: service
+    title: Audio & transcripts
+    col: 2
+    row: 2
+    cosaiComponent: componentDataStorage
+    note: >
+      Biometric data with its own regulatory weight, plus a transcript that is not a faithful
+      record of what was said. Retaining both has consequences; retaining neither leaves
+      incidents unreconstructable.
+    items:
+      - id: audio
+        label: Call audio
+        icon: folder
+        note: A voiceprint of every caller, for as long as the retention policy says.
+      - id: transcripts
+        label: Transcripts
+        icon: doc
+        note: Lossy by construction — tone, homophones and overlapping speakers are already gone.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Verification, action limits, retention and review — the deliberative controls, all moved
+      outside the call because there is no room for them inside it.
+    items:
+      - id: verification
+        label: Out-of-band verification
+        icon: key
+        note: >
+          A code to the registered device, a callback, an in-app confirmation. The substitute for
+          an authenticator, required before anything consequential.
+      - id: actionLimits
+        label: Action limits
+        icon: scale
+        note: >
+          What may happen on a call with only a voice behind it, re-evaluated when verification
+          completes partway through.
+      - id: retention
+        label: Retention policy
+        icon: doc
+        note: >
+          How long audio and transcripts are kept, and who may replay them. A genuine tension
+          between investigability and biometric minimisation.
+      - id: postCall
+        label: Post-call review
+        icon: eye
+        note: Sampled review after the fact — the only deliberative control available, arriving after the effect.
+      - id: stop
+        label: Kill switch
+        icon: stop
+        note: Takes the number offline and drops live sessions when the agent is the thing misbehaving.
+
+edges:
+  - from: caller
+    to: telephony
+    path: primary
+    bidir: true
+    label: call audio
+    note: >
+      Whoever they are, over a network nobody here controls. Spoken instructions and the agent's
+      synthesized replies share this channel.
+  - from: telephony
+    to: session
+    path: primary
+    bidir: true
+    label: media stream
+    note: >
+      Transport is secured; the speaker is not identified. Everything the session hears is
+      untrusted input that cannot be filtered as reliably as text.
+  - from: session
+    to: provider
+    path: primary
+    bidir: true
+    label: streaming inference
+    note: >
+      The caller's audio flows to the provider for the duration of the call, and the streamed
+      response drives speech and tool calls with the same few hundred milliseconds of scrutiny.
+  - from: session
+    to: tools
+    path: primary
+    bidir: true
+    label: tool call
+    note: >
+      Decisions land in real time. What a voice alone may invoke is bounded by policy, not by
+      the model's judgement.
+  - from: tools
+    to: records
+    path: primary
+    bidir: true
+    label: read or transact
+    note: >
+      Scoped to what the caller has been proven to be. Reads on an unverified call stay narrow;
+      writes wait for the out-of-band factor.
+  - from: session
+    to: recordings
+    path: secondary
+    label: audio & transcript
+    note: >
+      Biometric data plus a lossy transcript, captured continuously. Both need access control on
+      replay, not only on storage.
+  - from: governance
+    to: tools
+    path: governance
+    label: verification & limits
+    note: >
+      Consequential actions wait for out-of-band proof; the permitted set changes the moment
+      verification completes.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: caller->telephony
+      note: >
+        Injection arrives as speech, into a channel that cannot be inspected as reliably as text,
+        within a latency budget too short for a thorough check.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: caller
+      note: >
+        A voice is not an authenticator and the calling number is spoofable, so every action on
+        an unverified call is taken for someone who has not been identified.
+    - risk: riskRogueActions
+      at: session->tools
+      note: Tool decisions land in real time, with no filter, queue or reconsideration between decision and effect.
+    - risk: riskSensitiveDataDisclosure
+      at: tools->records
+      note: What the agent reads, it may say aloud — to a caller who has only claimed to be the customer.
+    - risk: riskInferredSensitiveData
+      at: recordings
+      note: >
+        Retained audio is a voiceprint; retained transcripts are conversation content. Both
+        outlive the call by whatever the retention policy says.
+    - risk: riskExcessiveDataHandlingDuringInference
+      at: session->provider
+      note: The provider holds the caller's audio for the duration of the call — a biometric retention question.
+    - risk: riskInsecureModelOutput
+      at: session
+      note: >
+        Outbound speech gets the same few hundred milliseconds of checking as inbound, so what is
+        said is less vetted than anyone would like.
+    - risk: riskEconomicDenialOfWallet
+      at: telephony
+      note: >
+        A public number is an always-open endpoint with per-minute inference behind it; dialling
+        it is the whole attack.
+
+  capabilities:
+    - capability: capabilityIga
+      at: governance->tools
+      note: >
+        Out-of-band verification — registered device, callback, in-app — before any consequential
+        action; a voice alone proves nothing.
+    - capability: capabilityToolPermissionScoping
+      at: tools
+      note: >
+        Split the tool set by verification state: narrow reads for a voice, transactions only
+        after the second factor lands.
+    - capability: capabilityHitlControls
+      at: session->tools
+      note: Human oversight as live transfer, not a queue — sized so escalation is instant, not deliberative.
+    - capability: capabilityModelGuardrails
+      at: session
+      note: Streaming, partial-transcript guardrails on both directions, tuned for the latency budget they have.
+    - capability: capabilityPromptInjectionDefense
+      at: telephony->session
+      note: Classify partial transcripts as untrusted input, knowing the transcript is not what was said.
+    - capability: capabilityRateLimiting
+      at: telephony
+      note: Call admission, concurrency caps and per-caller pacing at the border, where cost begins.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: tools->records
+      note: Per-call policy on what a voice alone may do, re-evaluated when verification completes mid-call.
+    - capability: capabilityAiDlp
+      at: session->recordings
+      note: Redact what is captured before it is stored; the recording outlives every other artifact of the call.
+    - capability: capabilityDspm
+      at: recordings
+      note: Classify and govern recordings as biometric data, with replay access controlled and logged.
+    - capability: capabilityAiTprm
+      at: session->provider
+      note: Hold the provider's audio retention and processing terms to a biometric standard, not a general one.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: Post-call sampled review of transcripts and actions — and log reviewer access to recordings too.
+    - capability: capabilityKillSwitch
+      at: governance
+      note: A stop that takes the number offline and ends live sessions, without a deploy.
+
+scenarios:
+  - title: A caller asks to change their payout account
+    steps:
+      - follow: caller->telephony
+        note: The call arrives with a plausible voice and a caller ID worth nothing.
+      - follow: telephony->session
+        note: The conversation proceeds — nothing about talking requires identity.
+      - follow: session->provider
+        note: Streaming inference drives the dialogue within the latency budget.
+      - follow: session->tools
+        note: The agent proposes the change; the write is consequential.
+      - follow: governance->tools
+        note: Out-of-band verification fires — a code to the registered device, not to the caller.
+      - follow: tools->records
+        note: Only after the factor lands does the write execute, scoped and logged.
+      - follow: telephony->caller
+        note: The confirmation is spoken back on the same channel the request arrived on.
+  - title: A cloned voice calls
+    steps:
+      - follow: caller->telephony
+        note: The voice matches, the number is spoofed to match, and both are hints, not proof.
+      - follow: telephony->session
+        note: The conversation is fluent; nothing in the audio gives the clone away reliably.
+      - follow: session->tools
+        note: Reads stay narrow because the call is unverified — the clone learns little.
+      - follow: governance->tools
+        note: >
+          The consequential ask triggers verification on the registered device, which the
+          attacker does not hold. The attack ends there or not at all.
+  - title: The number gets flooded
+    steps:
+      - follow: caller->telephony
+        note: Dialers hit the public number; each answered call is an open streaming session.
+      - follow: telephony->session
+        note: Admission control and concurrency caps at the border decide how many get this far.
+      - follow: session->provider
+        note: Per-minute inference cost accrues on every session that survives — the meter is the target.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI09 human-agent trust exploitation"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM01 prompt injection"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "AWS Well-Architected Generative AI Lens — autonomous call centre scenario"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/scenarios.html
+  - title: "Google Cloud — bidirectional multimodal streaming agents"
+    url: https://docs.cloud.google.com/architecture/agentic-ai-bidirectional-multimodal-streaming

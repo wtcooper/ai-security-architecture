@@ -1,0 +1,434 @@
+id: archRagAssistant
+surface: surfaceCloud
+title: Embedded retrieval assistant
+abbrev: RAG assistant
+
+summary:
+  - >
+    A conversational surface inside an application you operate, answering from your own corpus by
+    retrieving context at query time and grounding a model response in it. The most common
+    production AI architecture, and the one where the index is the trust boundary.
+
+description:
+  - >
+    Two pipelines meet at the index and they have different threat models. The query pipeline runs
+    per request: the front end authenticates the user, orchestration retrieves context and
+    assembles a prompt, the gateway carries it to the model, and the answer renders back. The
+    ingest pipeline runs offline on a schedule, reads the systems of record under a service
+    identity, chunks and embeds, and writes the index. Almost every serious failure in this
+    architecture is a mismatch between what the two pipelines assume.
+  - >
+    The index is a second copy of your data with its own permissions model. The source has ACLs a
+    decade of access reviews has shaped; the index has whatever the ingest pipeline chose to carry
+    over, evaluated whenever it last ran. Retrieval-time filtering against live entitlements is the
+    control that keeps the two in step — an index filtered after fetching has already put the
+    content into the process assembling the prompt.
+  - >
+    Retrieved content is untrusted input. It lands in the same context window as the system
+    instruction and the user's question, and where the corpus contains anything a third party can
+    write — tickets, uploads, reviews, mail — retrieval is an injection path that reaches every
+    user who later asks a related question. The contrast with the action-agent architectures is
+    that outputs here are answers rather than writes, which is why the control set is grounding,
+    encoding and entitlement filtering rather than approval gates and reversibility.
+
+distinguishedBy:
+  - >
+    Against an autonomous action agent: this architecture answers, that one acts. Adding a single
+    tool that mutates a record moves an assistant into that architecture and its entire control
+    set, which is why the boundary is worth naming rather than blurring.
+  - >
+    Against the tenant-wide vendor assistant: the same user-facing capability with every control
+    point on the opposite side of the boundary. Here you own the index, the retrieval-time ACL
+    check, the guardrails and the logs, and the work is designing them.
+
+exemplars:
+  - name: In-product help and knowledge assistants
+    note: >
+      A panel inside an application answering from that product's documentation and the tenant's
+      own records. The most common shipped form of this architecture.
+    asOf: "2026-08"
+  - name: Internal knowledge assistants
+    note: >
+      Built on a managed model API plus a vector store, over a wiki, a ticket system and a document
+      repository. Usually the first AI system an organisation operates itself, and usually built
+      before anyone has asked the retrieval-time-ACL question.
+    asOf: "2026-08"
+
+blocks:
+  - id: user
+    kind: actor
+    title: End user
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      An authenticated user of the application, with entitlements the answer must respect. The
+      assistant is only as scoped as the identity that survives into retrieval.
+
+  - id: contentAuthors
+    kind: actor
+    title: Content authors
+    icon: people
+    col: 0
+    row: 2
+    note: >
+      Anyone who can write into an indexed source — a customer filing a ticket, a colleague
+      uploading a file, an external system syncing records. Their text is model input later.
+
+  - id: entry
+    kind: service
+    title: Application front end
+    col: 1
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      Authenticates the caller, validates the turn and applies quotas before anything reaches
+      retrieval. The user's identity has to survive this hop or the retriever cannot filter.
+    items:
+      - id: api
+        label: App & API endpoint
+        icon: globe
+        note: The published surface, and where per-user rate and cost limits belong.
+      - id: inputCheck
+        label: Identity & input checks
+        icon: shield
+        note: >
+          Who is asking, and classification of the turn. Catches the direct injection attempt and
+          none of the indirect one, which is the more common of the two.
+
+  - id: orchestration
+    kind: service
+    title: Query orchestration
+    col: 2
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      Assembles the prompt from system instruction, retrieved context, conversation state and the
+      user's turn — the component that decides what the model is allowed to see, and the one that
+      checks and encodes what comes back.
+    items:
+      - id: promptAssembly
+        label: Prompt assembly
+        icon: doc
+        cosaiComponent: componentAgentSystemInstruction
+        note: Merges instruction, context and turn into one prompt the model cannot tell apart.
+      - id: retriever
+        label: Retriever
+        icon: search
+        note: >
+          Selects context for this turn. The last point at which content can be excluded rather
+          than merely dropped after fetching.
+      - id: grounding
+        label: Grounding & encoding
+        icon: code
+        note: >
+          Checks the answer against what was actually retrieved, then encodes it for wherever it
+          lands. Both halves are skipped together when a demo works without them.
+
+  - id: index
+    kind: service
+    title: Index & session state
+    col: 2
+    row: 2
+    cosaiComponent: componentRAGContent
+    note: >
+      A second copy of the corpus with its own permission model and its own freshness — the trust
+      boundary of this architecture, and the asset most worth threat modelling on its own.
+    items:
+      - id: vectorIndex
+        label: Vector index
+        icon: db
+        note: What every future answer is grounded in. Write access here deserves deploy-credential scrutiny.
+      - id: sessionState
+        label: Conversation state
+        icon: folder
+        note: >
+          Session-scoped and per-user. A cache keyed loosely enough to collide across users leaks
+          by construction.
+
+  - id: gateway
+    kind: service
+    title: AI gateway & guardrails
+    col: 3
+    row: 1
+    note: >
+      One enforcement point in front of every model call: routing, quotas, content policy, and the
+      log of what was actually sent. A gateway that traffic can go around is not a gateway.
+    items:
+      - id: guardrails
+        label: Content guardrails
+        icon: shield
+        note: Policy on the assembled prompt and on the completion, applied in the request path.
+      - id: broker
+        label: Credential broker
+        icon: key
+        note: The gateway holds the provider credential so no application service has to.
+      - id: limits
+        label: Rate & cost limits
+        icon: clock
+        note: The brake on per-token spend, enforced where every call passes.
+      - id: logTap
+        label: Logging tap
+        icon: eye
+        note: Records what was sent and returned, without asking the application to volunteer it.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 4
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      The published inference interface. Everything behind it is the provider's, and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: The prompt leaves your tier with whatever context retrieval put into it.
+
+  - id: sourcesIngest
+    kind: service
+    title: Sources & ingest
+    col: 1
+    row: 2
+    cosaiComponent: componentDataSources
+    note: >
+      The offline half: systems of record read on a schedule by connectors, chunked, embedded and
+      written to the index. Its permission decisions are frozen into the index until it runs again.
+    items:
+      - id: corpus
+        label: Systems of record
+        icon: db
+        note: The authoritative content and the authoritative permissions.
+      - id: connectors
+        label: Source connectors
+        icon: plug
+        note: >
+          Read on a service identity whose reach is broader than any single user's — by design,
+          which is what makes the retrieval-time filter mandatory.
+      - id: chunkEmbed
+        label: Chunk & embed
+        icon: gear
+        cosaiComponent: componentDataFilteringAndProcessing
+        note: >
+          Whatever permission metadata is not carried across here cannot be enforced at query
+          time, however good the retriever is.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Identity, evaluation, audit and posture — the full set, because the operating organisation
+      runs this system itself. This is what the equivalent SaaS deployment does not have and
+      cannot obtain.
+    items:
+      - id: idp
+        label: Identity provider
+        icon: person
+        note: Establishes the user and the entitlements the retriever filters against.
+      - id: evals
+        label: Evaluation & red teaming
+        icon: scale
+        note: >
+          Continuous adversarial testing against the live index, because the corpus changes daily
+          and a pre-launch result expires with it.
+      - id: auditSink
+        label: Audit sink
+        icon: eye
+        note: >
+          Prompts, retrieved document ids and responses. Retrieved ids are the part most often
+          omitted and the part an investigation needs first.
+      - id: posture
+        label: AI posture management
+        icon: gear
+        note: Inventory of models, indexes and endpoints in use, and their configuration drift.
+
+edges:
+  - from: user
+    to: entry
+    path: primary
+    bidir: true
+    label: question / answer
+    note: >
+      The question carries the identity the retriever must filter against; the rendered answer
+      comes back encoded for where it lands.
+  - from: entry
+    to: orchestration
+    path: primary
+    bidir: true
+    note: >
+      The user's identity has to survive this hop or the retriever cannot filter. Dropping to a
+      service identity here is the single most common cause of over-broad retrieval.
+  - from: orchestration
+    to: index
+    path: primary
+    bidir: true
+    label: filtered retrieval
+    note: >
+      Two distinct questions: what the service may read, and what this user may see. Only the
+      second is per request, and only the second stops one user's question returning another's
+      document.
+  - from: orchestration
+    to: gateway
+    path: primary
+    bidir: true
+    label: prompt / completion
+    note: Every model call passes through the gateway's policy, limits and logging. There is no side door.
+  - from: gateway
+    to: provider
+    path: primary
+    bidir: true
+    route: vh
+    note: >
+      Inference on a brokered, expiring credential. The transport is authenticated and the
+      completion is not — everything downstream treats it as untrusted input.
+  - from: contentAuthors
+    to: sourcesIngest
+    path: secondary
+    label: authored content
+    note: >
+      The existing write path into the systems of record. Nothing here knows the content will
+      later be read by a model on behalf of a different user.
+  - from: sourcesIngest
+    to: index
+    path: secondary
+    label: embeddings & metadata
+    note: >
+      Write access to the index is write access to what every future answer is grounded in. It
+      deserves the scrutiny of a production deploy credential, and rarely gets it.
+  - from: governance
+    to: gateway
+    path: governance
+    label: policy & credentials
+    note: Gateway policy is authored in the governance plane and enforced in the request path.
+  - from: governance
+    to: provider
+    path: governance
+    label: evaluation
+    note: Model and prompt changes pass an evaluation gate before they serve traffic.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: contentAuthors->sourcesIngest
+      note: >
+        Injection enters at authoring time, through a pipeline that runs days earlier, and
+        surfaces in another user's answer.
+    - risk: riskRetrievalVectorStorePoisoning
+      at: sourcesIngest->index
+      note: Whoever can write embeddings decides what every future answer is grounded in.
+    - risk: riskSensitiveDataDisclosure
+      at: orchestration->index
+      note: >
+        The index's permissions are whatever ingest carried over. Without a live entitlement
+        filter, one user's question returns another's document.
+    - risk: riskExcessiveDataHandling
+      at: sourcesIngest
+      note: >
+        The connector's standing grant is broader than any user's access, and its scope sets the
+        maximum reach of a retrieval-time filtering mistake.
+    - risk: riskInsecureModelOutput
+      at: gateway->provider
+      note: The completion is unauthenticated content, and it drives what renders to the user.
+    - risk: riskEconomicDenialOfWallet
+      at: entry
+      note: Per-token inference behind a per-request surface makes unbounded input a financial exposure.
+    - risk: riskPromptResponseCachePoisoning
+      at: index
+      note: Conversation state keyed loosely enough to collide across users leaks by construction.
+    - risk: riskInsecureIntegratedComponent
+      at: index
+      note: >
+        Embedding models, vector stores and retrieval libraries are third-party code in the
+        request path, and the index format is a deserialization surface.
+
+  capabilities:
+    - capability: capabilityDataAccessGovernance
+      at: orchestration->index
+      note: >
+        Retrieval-time filtering against live entitlements — enforced before fetching, not by
+        dropping content after it.
+    - capability: capabilityPromptInjectionDefense
+      at: orchestration
+      note: Classify retrieved content as untrusted before it enters prompt assembly.
+    - capability: capabilityRagSecurity
+      at: index
+      note: >
+        Harden the index: write-path least privilege, permission metadata, freshness checks.
+    - capability: capabilityDataSanitization
+      at: sourcesIngest
+      note: Sanitize content and carry permission metadata across at ingest, where exclusion is still cheap.
+    - capability: capabilityAiGateway
+      at: gateway
+      note: One enforcement point in the path of every model call — routing, quotas, policy, logging.
+    - capability: capabilityModelGuardrails
+      at: gateway->provider
+      note: Content policy on the assembled prompt and on the completion, applied per call.
+    - capability: capabilityGroundednessChecking
+      at: orchestration
+      note: Check the answer against what was actually retrieved before rendering it.
+    - capability: capabilityRateLimiting
+      at: entry
+      note: Per-user quotas and cost ceilings at the edge, before token spend is committed.
+    - capability: capabilitySecretsManagement
+      at: governance->gateway
+      note: Brokered, short-lived credentials for the model API and the connectors — no keys at rest in services.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: Log prompts, retrieved document ids and responses; the ids are what an investigation needs first.
+    - capability: capabilityModelEvals
+      at: governance->provider
+      note: Continuous adversarial evaluation against the live index, through the same gateway traffic uses.
+
+scenarios:
+  - title: A user asks a question
+    steps:
+      - follow: user->entry
+        note: The question arrives with the identity the whole pipeline must preserve.
+      - follow: entry->orchestration
+        note: The authenticated turn enters orchestration with its entitlements intact.
+      - follow: orchestration->index
+        note: Retrieval filters against live entitlements — the last point content can be excluded.
+      - follow: orchestration->gateway
+        note: The assembled prompt passes gateway policy and logging.
+      - follow: gateway->provider
+        note: Inference on a brokered credential; the completion returns as untrusted content.
+      - follow: entry->user
+        note: The grounded, encoded answer renders back to the user.
+  - title: Poisoned content enters at ingest
+    steps:
+      - follow: contentAuthors->sourcesIngest
+        note: A third party writes instructions into a ticket or document, days before any query.
+      - follow: sourcesIngest->index
+        note: The ingest pipeline embeds it and writes it into the index like any other content.
+      - follow: index->orchestration
+        note: A related question from any user retrieves the poisoned chunk into their prompt.
+      - follow: orchestration->gateway
+        note: The injected text sits beside the system instruction with nothing marking it apart.
+      - follow: gateway->provider
+        note: The model follows whichever instruction it takes to be authoritative.
+  - title: Permissions drift between ingest runs
+    steps:
+      - follow: sourcesIngest->index
+        note: Permission decisions are frozen into the index at ingest time.
+      - follow: orchestration->index
+        note: The retrieval-time entitlement filter is the only control that keeps pace with revocations.
+      - follow: entry->user
+        note: The answer is exactly as scoped as that filter — no more, and no less.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM09 vector and embedding weaknesses"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Microsoft Azure Well-Architected — architecture pattern for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+  - title: "Microsoft Azure Architecture Center — RAG solution design and evaluation guide"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/rag/rag-solution-design-and-evaluation-guide
+  - title: "Google Cloud — RAG reference architectures"
+    url: https://docs.cloud.google.com/architecture/rag-reference-architectures
+  - title: "Microsoft Azure Architecture Center — secure multitenant RAG inferencing"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/secure-multitenant-rag
+  - title: "Martin Fowler and Bharani Subramaniam — emerging patterns in building GenAI products"
+    url: https://martinfowler.com/articles/gen-ai-patterns/

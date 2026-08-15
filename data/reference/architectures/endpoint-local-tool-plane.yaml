@@ -1,0 +1,349 @@
+id: archLocalToolPlane
+surface: surfaceEndpoint
+title: Local MCP and tool plane
+abbrev: Local tool plane
+
+summary:
+  - >
+    The fleet of tool servers running on a developer's machine and the configuration files that
+    admit them. Not an agent — the substrate every local agent shares, and the place where this
+    surface's disclosed vulnerabilities have concentrated.
+
+description:
+  - >
+    Every endpoint agent in this catalogue reads a configuration file to decide which tool servers
+    to launch and what they may do without asking. That file is the admission decision for the
+    whole tool plane — and it is an ordinary file: writable by the user, writable by anything
+    running as the user, and frequently committed to the repository it configures. Three failure
+    modes recur and need three different controls: injection into the file adds a server nobody
+    approved; swapping it after approval means the thing reviewed is not the thing that runs;
+    auto-registration admits a server with no approval step at all.
+  - >
+    A local server is a child process with the user's privileges. There is no sandbox between it
+    and the filesystem, no scope on what it may read, and no identity distinguishing it from the
+    agent that launched it — over stdio there is nothing to authenticate to. Tool descriptions are
+    model input: a hostile server does not need a vulnerability, it can simply describe itself
+    persuasively, and descriptions are re-read on each connection, so an approved description is
+    not a durable fact.
+  - >
+    This drawing has no governance column, and its absence is the finding — sharpened here by the
+    fact that the plane does have a management-plane edge: the configuration file itself, drawn as
+    a governance path because admission is exactly what it decides. The only management plane this
+    surface has is a user-writable dotfile. Allowlists enforced outside that file, integrity
+    checking on it, and an inventory of what is admitted where all have to be imposed on the
+    endpoint; none of them exist by default, and servers accumulate — added for one task, removed
+    never.
+
+distinguishedBy:
+  - >
+    Against the agent archetypes that use it: those describe a loop and its authority. This
+    describes the admission mechanism they all share. It is drawn separately because the
+    vulnerabilities land here rather than in any one agent, and because fixing it fixes all of
+    them.
+  - >
+    Against a remote MCP server you publish: that is a service with an OAuth boundary, an operator
+    and a tenancy model. This is a child process with your privileges and no boundary at all. They
+    share a protocol and almost nothing else.
+
+exemplars:
+  - name: Project-scoped tool configuration files
+    note: >
+      Dotfiles in a repository declaring which tool servers an agent should launch. Ship with the
+      clone, and have been the specific location of multiple disclosed code-execution paths.
+    asOf: "2026-08"
+  - name: User-scoped and managed tool configuration
+    note: >
+      The same declaration at user or device level. Managed variants let an administrator pin an
+      allowlist the user cannot override, which is the only durable fix for auto-registration.
+    asOf: "2026-08"
+  - name: Community tool servers
+    note: >
+      Servers installed from package registries and run as child processes. Reviewed by whoever
+      installed them, updated automatically, and holding the user's full privileges.
+    asOf: "2026-08"
+
+blocks:
+  - id: repo
+    kind: external
+    title: Repo-supplied config
+    col: 0
+    row: 0
+    note: >
+      A tool-server declaration that arrived with a clone, authored by whoever last committed to
+      the project, and read on the next agent start.
+    items:
+      - id: clonedDecl
+        label: Cloned declarations
+        icon: doc
+        note: The project speaks for itself about which servers to run — and the project has many authors.
+
+  - id: clients
+    kind: actor
+    title: Agent clients
+    icon: agent
+    col: 0
+    row: 1
+    note: >
+      Whichever agents consume the plane — coding agents, assistants, harnesses. Interchangeable:
+      the plane outlives and is shared by all of them.
+
+  - id: user
+    kind: actor
+    title: Developer
+    icon: person
+    col: 0
+    row: 2
+    note: >
+      Approves servers on first use, and is also the privilege every server runs with. The
+      approval covers what the file said at that moment, not what it says later.
+
+  - id: config
+    kind: service
+    title: Tool configuration
+    col: 1
+    row: 0
+    note: >
+      The admission decision for the whole plane, held in ordinary files. In the target state the
+      file is write-protected from the plane it governs — left user-writable, a compromised server
+      can add its own successor, which turns one bad package into a persistent foothold.
+    items:
+      - id: projectConfig
+        label: Project-scoped file
+        icon: doc
+        note: Ships with the clone; the single most attacked artifact on this surface.
+      - id: userConfig
+        label: User-scoped file
+        icon: doc
+        note: The same declaration at user level, shared by every project and every client.
+      - id: autoApprove
+        label: Auto-approve rules
+        icon: shield
+        note: What runs without a prompt — a decision as consequential as which servers exist.
+
+  - id: servers
+    kind: service
+    title: Local tool servers
+    col: 1
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      Child processes over stdio, holding the user's privileges. No sandbox, no scope, no identity
+      of their own, and nothing to authenticate to.
+    items:
+      - id: stdio
+        label: Stdio child processes
+        icon: plug
+        note: Every server is the user, as far as the filesystem and network are concerned.
+      - id: descriptions
+        label: Tool descriptions
+        icon: doc
+        note: >
+          What each server tells the model its tools do — model input, author-controlled, re-read
+          on each connection.
+      - id: creds
+        label: Server credentials
+        icon: key
+        note: >
+          Tokens for the services each server fronts, in environment variables or the config file
+          itself — readable by every other server in the plane.
+
+  - id: registry
+    kind: external
+    title: Package registry
+    col: 1
+    row: 2
+    note: >
+      Where servers are installed from and updated. Publisher identity is verifiable; behaviour is
+      not, and behaviour changes on update with no further decision by anyone.
+    items:
+      - id: packages
+        label: Community packages
+        icon: db
+        note: Declared behaviour and actual behaviour are separate facts.
+      - id: updates
+        label: Auto-update channel
+        icon: clock
+        note: The code running with the user's privileges changes whenever the publisher ships.
+
+  - id: services
+    kind: external
+    title: Fronted services
+    col: 2
+    row: 1
+    note: >
+      The remote APIs and accounts the servers act on with their stored tokens — and where fetched
+      content comes back in as model input.
+    items:
+      - id: apis
+        label: Remote APIs
+        icon: globe
+        note: Reached with standing tokens, on behalf of whichever agent called.
+      - id: accounts
+        label: SaaS accounts
+        icon: mail
+        note: The blast radius of a leaked server token, which every other server could read.
+
+edges:
+  - from: user
+    to: clients
+    path: primary
+    bidir: true
+    label: task / approval
+    note: >
+      The developer drives the agents and answers first-use prompts. The approval is of a
+      description at a moment in time.
+  - from: clients
+    to: servers
+    path: primary
+    bidir: true
+    label: tool calls
+    note: >
+      Tool calls out with the user's authority; results and tool descriptions back into the
+      agent's context as model input.
+  - from: repo
+    to: config
+    path: external
+    label: ships with the clone
+    note: >
+      Project-supplied declarations should be proposals admitted against an allowlist enforced
+      outside the file. Auto-registration on clone is the failure that replaces.
+  - from: config
+    to: servers
+    path: governance
+    label: admits & launches
+    note: >
+      The admission decision for the plane — the only management-plane relationship this surface
+      has, and it is a user-writable file deciding it.
+  - from: registry
+    to: servers
+    path: external
+    label: install & update
+    note: >
+      Publisher identity at publish time, nothing at launch time. An update changes the code
+      running with the user's privileges without any further decision.
+  - from: servers
+    to: services
+    path: external
+    bidir: true
+    note: >
+      Calls out with stored tokens; content back in as context. A hostile response here enters
+      whichever agent happens to be connected.
+
+pins:
+  risks:
+    - risk: riskToolRegistryTampering
+      at: repo->config
+      note: >
+        A declaration authored by whoever last committed, admitted on the next agent start. This
+        crossing is behind most of the surface's disclosed code-execution paths.
+    - risk: riskToolRegistryTampering
+      at: config->servers
+      note: >
+        The file can change between approval and launch — the thing reviewed is not the thing that
+        runs. Time-of-check-to-time-of-use, not access control.
+    - risk: riskZombieShadowMCPServers
+      at: config
+      note: >
+        Entries accumulate — added for one task, removed never. The plane is the sum of a year of
+        individually reasonable decisions.
+    - risk: riskPromptInjection
+      at: clients->servers
+      note: >
+        Tool descriptions are model input, author-controlled, and re-read on each connection — a
+        persuasive description is an attack that needs no vulnerability.
+    - risk: riskToolSourceProvenance
+      at: registry->servers
+      note: A signature proves who shipped the package, not what it does — and what it does changes on update.
+    - risk: riskRogueActions
+      at: servers
+      note: Child processes with the user's full privileges, no sandbox, no scope, and no identity of their own.
+    - risk: riskCrossTenantCredentialPropagation
+      at: servers
+      note: >
+        Every server can read every other server's environment. Isolation between them is a
+        property nothing in this plane provides.
+    - risk: riskSensitiveDataDisclosure
+      at: servers->services
+      note: Standing tokens travel with every call, and any server in the plane could have read them first.
+
+  capabilities:
+    - capability: capabilityAgentRegistry
+      at: config
+      note: >
+        An allowlist of admissible servers enforced outside the file it governs — the only durable
+        fix for auto-registration. Stored beside the file, it shares the file's threat model.
+    - capability: capabilityMcpToolSecurity
+      at: registry->servers
+      note: Provenance and behavioural review before admission, and pinned versions so an update is a decision.
+    - capability: capabilityAgentSandboxing
+      at: servers
+      note: >
+        Run each server with its own filesystem and network policy instead of the user's
+        privileges. The protocol will not provide this; the client has to.
+    - capability: capabilityToolPermissionScoping
+      at: clients->servers
+      note: Per-server scopes on what may be read and called, instead of the user's full authority for every tool.
+    - capability: capabilityEdr
+      at: config
+      note: >
+        Change detection on the configuration files — the control that catches the swap between
+        approval and launch, which access control does not.
+    - capability: capabilitySecretsManagement
+      at: servers
+      note: Broker per-server, short-lived tokens instead of standing secrets in environment variables and config files.
+    - capability: capabilityHitlControls
+      at: user->clients
+      note: A first-use approval that re-fires whenever the declaration or the description changes, not once forever.
+    - capability: capabilityPromptInjectionDefense
+      at: clients->servers
+      note: Treat tool descriptions as untrusted input; diff them between connections and surface what changed.
+    - capability: capabilityAiBom
+      at: config->servers
+      note: >
+        An inventory of what is admitted, on which machines, with which scopes — the control that
+        makes the rest possible, and the one least often present.
+    - capability: capabilityCredentialIsolation
+      at: servers->services
+      note: Each server sees only its own service's token, so one compromised server is one account, not all of them.
+
+scenarios:
+  - title: A clone brings its own tools
+    steps:
+      - follow: repo->config
+        note: The declaration arrives with the code, authored by whoever last committed.
+      - follow: config->servers
+        note: On the next agent start the servers launch — admitted by a file, not a person, unless an allowlist intervenes.
+      - follow: clients->servers
+        note: Their tool descriptions enter the agent's context as model input.
+      - follow: servers->services
+        note: Calls go out with stored tokens, on behalf of whichever agent connected.
+  - title: The swap after approval
+    steps:
+      - follow: user->clients
+        note: The developer approves a server on first use, from its description at that moment.
+      - follow: config->servers
+        note: >
+          The file changed between approval and launch. What runs is what the file says now — the
+          failure integrity checking exists for.
+  - title: One hostile package
+    steps:
+      - follow: registry->servers
+        note: An auto-update swaps the behaviour of a long-admitted server, with no new decision.
+      - follow: servers->clients
+        note: Its rewritten tool descriptions steer whichever agent connects next.
+      - follow: servers->services
+        note: >
+          It reads its neighbours' tokens from the shared environment and exercises them — one bad
+          package, every fronted account.
+
+sources:
+  - title: "Model Context Protocol — security best practices"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "Model Context Protocol — authorization"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "OWASP — a practical guide for secure MCP server development"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02, ASI04, ASI10"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "Thoughtworks Technology Radar vol. 34 — MCP by default, on hold"
+    url: https://www.thoughtworks.com/radar/techniques

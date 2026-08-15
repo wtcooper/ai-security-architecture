@@ -1,0 +1,422 @@
+id: archActionAgent
+surface: surfaceCloud
+title: Autonomous action agent over business records
+abbrev: Action agent
+
+summary:
+  - >
+    A single agent operating a business process end to end — reading a request, deciding, and
+    writing to systems of record in seconds, with no human between the decision and the effect.
+    The architecture where the design question is reversibility rather than accuracy.
+
+description:
+  - >
+    Everything structural here follows from one fact: the agent writes. A retrieval assistant that
+    is wrong produces a wrong sentence; this produces a refund, a provisioned account, a cancelled
+    order. The controls that matter are the ones that bound what can be done and make it undoable,
+    not the ones that improve the odds of being right.
+  - >
+    The action catalogue is the primary control and it should be deterministic. The model chooses
+    among named, parameter-validated actions rather than composing arbitrary calls, and each
+    action declares its own blast radius and its own compensating transaction. An agent that can
+    call an arbitrary API is not an agent with a policy problem; it is an agent with no policy
+    surface at all.
+  - >
+    The attacker is typically an authenticated customer. The request text is supplied by the
+    person who benefits from the outcome, and it reaches the same context window as the system
+    instruction — indirect prompt injection with a very short path to money. The second injection
+    path arrives through retrieval: record content written months earlier, by requesters and by
+    staff, re-enters the loop as context. That is why the approval threshold is tied to
+    consequence rather than confidence, and why it must be rare — a gate on every action is a
+    queue nobody reads, while below the threshold the compensating path, reversal rather than
+    review, is what keeps a wrong action survivable.
+  - >
+    The agent needs an identity of its own. Actions taken as a shared service account are neither
+    attributable nor separately revocable, which turns every incident into a full-service outage
+    when the response is to disable the credential.
+
+distinguishedBy:
+  - >
+    Against the embedded retrieval assistant: identical up to the point of the model call. That
+    one renders an answer; this one calls an actuator. Adding one mutating tool to a retrieval
+    assistant moves it into this architecture and its entire control set.
+  - >
+    Against the core agent workflow: that one is a durable, multi-agent process surviving crashes
+    and replay across days. This is one agent on one fast path, deciding in seconds — no
+    supervisor, no journal, no replay — and still consequential, which is why the catalogue,
+    the threshold and the compensating transaction carry the weight instead of durability
+    machinery.
+
+exemplars:
+  - name: Autonomous customer service resolution
+    note: >
+      Agents that read a customer's request, consult policy and records, and issue the remedy
+      without a human, escalating only above a value or confidence threshold.
+    asOf: "2026-08"
+  - name: Operations and fulfilment agents
+    note: >
+      Agents acting on orders, inventory or entitlements, where the action catalogue maps to
+      existing business transactions that already have reversal semantics.
+    asOf: "2026-08"
+
+blocks:
+  - id: requester
+    kind: actor
+    title: Requester
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      Usually an authenticated customer, and usually the party who benefits from the action. Both
+      the legitimate user and, on a bad day, the attacker.
+
+  - id: intake
+    kind: service
+    title: Intake
+    col: 1
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      Authenticates the requester, binds the request to an account, applies quotas and classifies
+      the text before the loop starts. Authentication says nothing about whether the ask is honest.
+    items:
+      - id: authn
+        label: Identity & account binding
+        icon: shield
+        note: Who is asking, bound to the account the request concerns, settled before the agent runs.
+      - id: inputGuard
+        label: Input classification
+        icon: eye
+        note: >
+          Catches the direct injection attempt. The indirect path through record content arrives
+          later and is the harder one.
+
+  - id: planner
+    kind: service
+    title: Planning loop
+    col: 2
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      Chooses the next action from the catalogue, given the request and what it has read. Runs
+      under its own workload identity, distinct from both the requester and the service.
+    items:
+      - id: loop
+        label: Agent loop
+        icon: agent
+        note: Reads context, calls the model, proposes an action. The full cycle completes in seconds.
+      - id: agentIdentity
+        label: Agent identity
+        icon: key
+        note: >
+          A distinct, revocable principal. Without it no action is attributable and the only
+          incident response is disabling a credential the whole service shares.
+
+  - id: stateRetrieval
+    kind: service
+    title: Retrieval & case state
+    col: 2
+    row: 2
+    cosaiComponent: componentMemory
+    note: >
+      The business policy, the customer's history and the working state of this case. Record
+      content is the second injection path — written by requesters and staff, re-entering as
+      context.
+    items:
+      - id: retrieval
+        label: Policy & record retrieval
+        icon: search
+        note: Reads scoped to the account under discussion, not to what the service can reach.
+      - id: caseState
+        label: Case state
+        icon: folder
+        note: >
+          Scoped to one case. Cross-case memory would let one requester's text influence
+          another's outcome.
+
+  - id: catalogue
+    kind: service
+    title: Action catalogue
+    col: 3
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      Named, parameter-validated actions rather than arbitrary calls, each declaring its blast
+      radius and its compensating transaction. The architecture's primary control, and a design
+      artifact rather than a configuration setting.
+    items:
+      - id: actions
+        label: Named actions
+        icon: gear
+        note: The complete set of things the agent can do. Nothing outside it is reachable.
+      - id: validation
+        label: Parameter validation
+        icon: shield
+        note: The model proposed the action; the catalogue decides whether it is well-formed and in bounds.
+      - id: policyCheck
+        label: Per-call policy
+        icon: scale
+        note: >
+          Which action, on which record, up to what value — evaluated at call time rather than
+          granted at session time.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 4
+    row: 0
+    cosaiComponent: componentModelServing
+    note: The published inference interface. What runs behind it is the provider's and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: Returns the chosen action and its parameters — content the catalogue validates rather than trusts.
+
+  - id: records
+    kind: external
+    title: Business records
+    col: 4
+    row: 2
+    note: >
+      The systems of record where effects land, and where reversal either exists or does not.
+      Also the source retrieval reads back into context.
+    items:
+      - id: transactions
+        label: Orders, accounts, entitlements
+        icon: db
+        note: The authoritative state the agent changes.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Identity, per-call policy, the approval threshold, the decision audit and the stop — each
+      outside the loop it governs, because the loop is the thing that may be misbehaving.
+    items:
+      - id: idp
+        label: Identity provider
+        icon: person
+        note: Issues the agent's workload identity and the requester's, and keeps them distinct.
+      - id: policyEngine
+        label: Action policy
+        icon: scale
+        note: The bounds the catalogue enforces per invocation, authored and changed outside the loop.
+      - id: approval
+        label: Approval threshold
+        icon: eye
+        note: >
+          Keyed to irreversibility and value, not model confidence. Rare enough that somebody
+          actually reads it.
+      - id: audit
+        label: Decision audit
+        icon: doc
+        note: Every action with the reasoning, the inputs and the identity behind it — the basis for reversal and dispute.
+      - id: stop
+        label: Kill switch
+        icon: stop
+        note: Halts the agent and revokes its identity without a deploy.
+
+edges:
+  - from: requester
+    to: intake
+    path: primary
+    bidir: true
+    label: request / outcome
+    note: >
+      Free text, attachments and history, authored by the party who benefits from the outcome.
+      The remedy or refusal returns on the same path, usually within seconds.
+  - from: intake
+    to: planner
+    path: primary
+    bidir: true
+    note: >
+      The requester's identity survives into the loop, or policy cannot scope actions to the
+      account they concern.
+  - from: planner
+    to: provider
+    path: primary
+    bidir: true
+    route: vh
+    note: >
+      Inference on a brokered, expiring credential. The response names an action and its
+      parameters — transport integrity says nothing about whose intent produced it.
+  - from: planner
+    to: stateRetrieval
+    path: secondary
+    bidir: true
+    note: >
+      Policy, history and case state read back as context — including the second injection path,
+      record content written long before this case opened.
+  - from: stateRetrieval
+    to: records
+    path: external
+    bidir: true
+    label: scoped read
+    note: >
+      Reads scoped to the account under discussion, which is what stops one requester's case from
+      retrieving another's records into context.
+  - from: planner
+    to: catalogue
+    path: primary
+    label: proposed action
+    note: The model's choice arrives here as a proposal, not a command. Validation is the boundary.
+  - from: catalogue
+    to: records
+    path: external
+    label: validated write
+    note: >
+      The point at which the agent's output stops being text. Whether a wrong action is
+      survivable is decided here: an action with no compensating transaction should not be in the
+      catalogue below the approval threshold.
+  - from: governance
+    to: catalogue
+    path: governance
+    label: policy & approval
+    note: >
+      Per-invocation bounds and the above-threshold approval gate, authored outside the loop and
+      enforced at the catalogue.
+  - from: governance
+    to: provider
+    path: governance
+    label: evaluation
+    note: Model and prompt changes pass an evaluation gate before they serve traffic.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: requester->intake
+      note: >
+        The request text is supplied by the person who benefits from the outcome, and it reaches
+        the same context window as the system instruction.
+    - risk: riskPromptInjection
+      at: stateRetrieval->records
+      note: >
+        Record content is the harder injection path — written months earlier, by someone handling
+        a different case, re-entering as context now.
+    - risk: riskRogueActions
+      at: catalogue->records
+      note: >
+        Untrusted request text, a model choosing among real transactions, and a write path into
+        records compound here.
+    - risk: riskInsecureModelOutput
+      at: planner->provider
+      note: The completion names an action and its parameters, and it is unauthenticated content.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: planner
+      note: >
+        The agent acts on a requester's behalf using authority broader than theirs. Keeping the
+        requester's context alive through the loop is what closes the gap.
+    - risk: riskSensitiveDataDisclosure
+      at: stateRetrieval->records
+      note: Reads not scoped to the account under discussion pull other customers' records into context.
+    - risk: riskRunawayAgentToolLoops
+      at: planner
+      note: A loop that retries and re-plans in seconds can spend and act faster than anyone notices.
+    - risk: riskPromptResponseCachePoisoning
+      at: stateRetrieval
+      note: Case memory keyed loosely enough to collide across cases lets one requester's text steer another's outcome.
+    - risk: riskToolRegistryTampering
+      at: catalogue
+      note: The catalogue is the policy surface; whoever can edit it programs the agent.
+    - risk: riskEconomicDenialOfWallet
+      at: intake
+      note: Per-token inference behind a customer-facing surface makes unbounded requests a spend problem.
+
+  capabilities:
+    - capability: capabilityToolPermissionScoping
+      at: catalogue
+      note: >
+        Named, parameter-validated actions with declared blast radius and a compensating
+        transaction each — the deterministic surface everything else assumes.
+    - capability: capabilityHitlControls
+      at: catalogue->records
+      note: >
+        An approval gate keyed to irreversibility and value, rare enough to be read; below it,
+        reversal rather than review.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: governance->catalogue
+      note: >
+        A per-invocation policy decision — this action, this record, this value, now — rather
+        than a session-time grant.
+    - capability: capabilityNhiManagement
+      at: planner
+      note: A distinct, revocable workload identity per agent, so actions are attributable and separately revocable.
+    - capability: capabilityDataAccessGovernance
+      at: stateRetrieval->records
+      note: Entitlement-filtered retrieval scoped to the account under discussion, enforced before fetching.
+    - capability: capabilityPromptInjectionDefense
+      at: requester->intake
+      note: Classify request text before the loop; the caller cannot be trusted about their own request.
+    - capability: capabilityMemoryProtection
+      at: stateRetrieval
+      note: Case-scoped memory with hard boundaries — no cross-case reads, ever.
+    - capability: capabilitySecretsManagement
+      at: planner->provider
+      note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing key.
+    - capability: capabilityRateLimiting
+      at: intake
+      note: Quotas and cost ceilings at the edge, before token spend and action volume are committed.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: >
+        Every action with reasoning, inputs and identity, written where the agent can append and
+        cannot amend.
+    - capability: capabilityKillSwitch
+      at: governance
+      note: A halt that also revokes the agent's identity, and does not require a deploy.
+
+scenarios:
+  - title: A customer asks for a refund
+    steps:
+      - follow: requester->intake
+        note: The request is authenticated, bound to an account, and classified.
+      - follow: intake->planner
+        note: The loop starts with the requester's identity intact.
+      - follow: planner->stateRetrieval
+        note: Policy and the customer's history load as context, scoped to this account.
+      - follow: planner->provider
+        note: The model proposes an action and parameters from the catalogue.
+      - follow: planner->catalogue
+        note: The proposal is validated — well-formed, in policy, under the value threshold.
+      - follow: catalogue->records
+        note: The refund executes, with its compensating transaction on file.
+      - follow: intake->requester
+        note: The outcome returns within seconds; the audit holds the reasoning.
+  - title: The request text is the attack
+    steps:
+      - follow: requester->intake
+        note: The text instructs the agent to ignore policy and refund in full. Classification flags what it can.
+      - follow: intake->planner
+        note: Whatever survives enters the same context window as the system instruction.
+      - follow: planner->provider
+        note: A steered model proposes the most generous action available.
+      - follow: planner->catalogue
+        note: The catalogue does not care what steered the model — parameters and policy bounds hold.
+      - follow: catalogue->records
+        note: Below the threshold the action is compensable; above it the approval gate fires.
+  - title: The injection was written months ago
+    steps:
+      - follow: planner->stateRetrieval
+        note: The loop reads the case history like any other.
+      - follow: stateRetrieval->records
+        note: A note written into a record long ago, in someone else's case, comes back as context.
+      - follow: planner->provider
+        note: The model reads it beside the system instruction with nothing marking it apart.
+      - follow: planner->catalogue
+        note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI02 tool misuse"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Agentic AI — threats and mitigations v1.1"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "AWS Well-Architected Agentic AI Lens — bounded autonomy, human oversight, reliability"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentic-ai-lens.html
+  - title: "CoSAI Shared Responsibility Framework V1.0 — autonomy levels L0-L5 and intervention tiers"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "Microsoft Azure Architecture Center — AI agent orchestration patterns"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns

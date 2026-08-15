@@ -1,0 +1,334 @@
+id: archLocalInference
+surface: surfaceEndpoint
+title: Local model runtime
+abbrev: Local runtime
+
+summary:
+  - >
+    An open-weights model served on the user's own machine, listening on a local port so other
+    local processes can call it. Chosen to keep data off a vendor's infrastructure, which succeeds
+    — and moves every control the vendor was providing onto the device.
+
+description:
+  - >
+    The reason people run this is sound: prompts and documents never leave the machine, there is
+    no per-token cost, and it works offline. The architectural consequence is that the guardrails,
+    rate limiting, abuse monitoring and content policy a hosted API applies on the way in and out
+    are simply absent, and nothing replaces them by default. The guardrail block in this drawing
+    is the target state; in the common install it does not exist, and raw model output goes
+    straight back to the caller.
+  - >
+    The runtime is a local network service. It binds a port, speaks an HTTP API, and historically
+    ships without authentication because the assumed caller is a process on the same machine. That
+    assumption fails in two directions: any local process — including a browser tab, through a
+    permissive CORS policy — can call it, and a runtime bound to a routable interface rather than
+    loopback is reachable from the network. Who may bind the port and who may call it are the
+    admission decisions of this architecture, and by default nobody makes them.
+  - >
+    The supply chain is the axis specific to this archetype. Weights are large binaries fetched
+    from public hubs, and several serialization formats execute code on load — the format matters
+    more than the source, because a safe-by-construction tensor format from an unknown publisher
+    beats a pickle-based one from a known publisher. The scan has to sit in front of the fetch,
+    because the runtime is usually the thing doing the fetching.
+  - >
+    There is no governance column, and that absence is the finding: no model inventory, no weight
+    scanning pipeline, no policy on binding or sources exists anywhere in the default deployment.
+    This runtime is installed by one person in an afternoon and appears in no inventory — every
+    control named on this page presumes someone first learns it exists.
+
+distinguishedBy:
+  - >
+    Against self-hosted inference in a datacentre: identical software, entirely different
+    operational reality. There the runtime has a network policy, an identity, a scanner in the
+    pipeline and someone on call. Here its port is protected by the assumption that nothing else
+    on the machine is hostile.
+  - >
+    Against the other endpoint archetypes: this one is not an agent. It has no loop, no tools and
+    no autonomy — it is a dependency the others consume. It earns its own architecture because its
+    risks are supply chain and local exposure rather than agency.
+
+exemplars:
+  - name: Local inference servers
+    note: >
+      Desktop applications and daemons that download open-weights models and expose an
+      OpenAI-compatible HTTP API on a loopback port for other local software to call.
+    asOf: "2026-08"
+  - name: OS and vendor-provided local runtimes
+    note: >
+      Platform-level local inference offered as a system service, with a managed model catalogue.
+      Narrower supply chain, same local-service exposure.
+    asOf: "2026-08"
+  - name: Public model hubs
+    note: >
+      Where the weights come from. Publisher identity is verifiable to varying degrees; what the
+      artifact does on load is a property of its format, not its publisher.
+    asOf: "2026-08"
+
+blocks:
+  - id: unexpectedCallers
+    kind: actor
+    title: Unexpected callers
+    icon: globe
+    col: 0
+    row: 0
+    note: >
+      Anything on the machine that can open a socket — including a browser tab, where the runtime
+      allows cross-origin requests. Not the caller the API was designed for, and nothing tells
+      them apart.
+
+  - id: localApps
+    kind: actor
+    title: Local applications
+    icon: code
+    col: 0
+    row: 1
+    note: >
+      The intended consumers: editors, agents and tools on the same machine, calling the local API
+      instead of a hosted one — and often built expecting a hosted API's safety floor.
+
+  - id: api
+    kind: service
+    title: Local HTTP API
+    col: 1
+    row: 1
+    cosaiComponent: componentModelServing
+    note: >
+      An OpenAI-compatible endpoint on a local port, frequently unauthenticated because the caller
+      is assumed trusted by virtue of being local. Which interface it binds and who may call it
+      are this architecture's admission decisions.
+    items:
+      - id: endpoint
+        label: Completion endpoint
+        icon: plug
+        note: The published local interface every consumer on the machine shares.
+      - id: binding
+        label: Interface binding
+        icon: gear
+        note: >
+          Loopback is an assumption, not a policy. Bound to a routable interface, the runtime is
+          reachable from the network.
+      - id: cors
+        label: Cross-origin policy
+        icon: globe
+        note: A permissive CORS policy lets any web page the user visits drive local inference.
+
+  - id: guardrails
+    kind: service
+    title: Local guardrails
+    col: 2
+    row: 1
+    note: >
+      Input and output classification, deployed by the device owner because nobody else will. This
+      block is the target state — in the common install it does not exist, and its absence is the
+      archetype's defining property.
+    items:
+      - id: inputFilter
+        label: Input classification
+        icon: shield
+        note: The screening a hosted API would have applied on the way in.
+      - id: outputFilter
+        label: Output classification
+        icon: eye
+        note: The floor under model behaviour that the weights alone do not provide.
+
+  - id: runtime
+    kind: service
+    title: Inference runtime
+    col: 3
+    row: 1
+    cosaiComponent: componentTheModel
+    note: >
+      Loads weights, batches requests, serves completions. Also the process that fetches the
+      weights, which is why the supply-chain control has to sit in front of the fetch. Whatever
+      safety behaviour exists is whatever the weights carry.
+    items:
+      - id: loader
+        label: Weight loader
+        icon: gear
+        note: Where a pickle-based format turns file opening into code execution.
+      - id: model
+        label: Loaded model
+        icon: model
+        note: Open weights with no provider-side guardrail, abuse monitoring or content policy.
+
+  - id: weights
+    kind: service
+    title: Weights on disk
+    col: 3
+    row: 2
+    cosaiComponent: componentModelStorage
+    note: >
+      Multi-gigabyte artifacts whose format determines whether loading them is deserialization or
+      execution — a more useful question than who published them.
+    items:
+      - id: files
+        label: Model files
+        icon: db
+        note: Readable by any process with the user's privileges, and swappable by the same.
+
+  - id: hub
+    kind: external
+    title: Public model hub
+    col: 4
+    row: 2
+    note: >
+      Distribution for open weights. Publisher identity ranges from verified to arbitrary, and
+      neither transport security nor a signature says anything about what the artifact does when
+      the runtime opens it.
+    items:
+      - id: catalogue
+        label: Open-weights catalogue
+        icon: db
+        note: Declared behaviour and actual behaviour are separate facts.
+
+edges:
+  - from: localApps
+    to: api
+    path: primary
+    bidir: true
+    label: completion request
+    note: >
+      Local software calls the local API the way it would a hosted one — usually assuming a safety
+      floor that is not there.
+  - from: unexpectedCallers
+    to: api
+    path: primary
+    label: unauthenticated request
+    note: >
+      The same endpoint, reached by callers nobody intended: a browser tab through CORS, or the
+      network if the binding is routable. Locality is standing in for authorization.
+  - from: api
+    to: guardrails
+    path: primary
+    bidir: true
+    note: >
+      Requests pass through classification on the way in and completions on the way out — when the
+      block exists at all.
+  - from: guardrails
+    to: runtime
+    path: primary
+    bidir: true
+    note: Filtered prompts in, raw completions back. Without the guardrail block this is a straight pipe.
+  - from: runtime
+    to: weights
+    path: secondary
+    bidir: true
+    label: fetch / load
+    note: >
+      The runtime fetches artifacts to disk and loads them at start. For several formats the load
+      is an execution event, which makes this the supply chain's last step.
+  - from: hub
+    to: weights
+    path: external
+    label: weight download
+    note: >
+      Transport is authenticated and the publisher may be verifiable. Neither says what the
+      artifact does when opened.
+
+pins:
+  risks:
+    - risk: riskMaliciousLoaderDeserialization
+      at: runtime->weights
+      note: >
+        Pickle-class formats execute code on load. The risk is a property of the artifact format,
+        not of the publisher.
+    - risk: riskModelSourceTampering
+      at: hub->weights
+      note: Publisher identity at publish time, nothing at load time — and a hub account is a takeover target.
+    - risk: riskDenialOfMLService
+      at: unexpectedCallers->api
+      note: Any local process can saturate the runtime; a browser tab can do it from a web page.
+    - risk: riskModelExfiltration
+      at: weights
+      note: The artifacts sit on disk with the user's file permissions — readable by anything running as the user.
+    - risk: riskShadowAndUnknownAgents
+      at: runtime
+      note: >
+        Installed by one person in an afternoon, in no inventory. Responding to a bad model
+        release presumes someone knows this runtime exists.
+    - risk: riskInsecureIntegratedComponent
+      at: runtime
+      note: The serving stack itself is fast-moving native code with its own CVE history, running unsandboxed.
+    - risk: riskInsecureModelOutput
+      at: guardrails
+      note: >
+        Where this block is absent — the common case — raw model output goes straight to callers
+        built expecting a hosted API's floor.
+    - risk: riskModelEvasion
+      at: guardrails
+      note: >
+        With no provider-side safety layer, whatever refusal behaviour the weights carry is the
+        whole of the defence, and it is removable by fine-tune.
+
+  capabilities:
+    - capability: capabilityModelScanning
+      at: hub->weights
+      note: >
+        Format and content inspection in front of the fetch — a scan that runs after the runtime
+        opens the file has documented an incident, not prevented one.
+    - capability: capabilityTransportSecurity
+      at: localApps->api
+      note: Authenticate local callers rather than treating locality as authorization; a browser tab is local too.
+    - capability: capabilityModelGuardrails
+      at: guardrails
+      note: Deploy the input and output classification a hosted API would have applied — nothing supplies it here by default.
+    - capability: capabilityRateLimiting
+      at: api
+      note: Bound what any single caller can consume, because the callers share one unmetered port.
+    - capability: capabilityAiGovernancePlatform
+      at: api
+      note: >
+        A device-enforced policy on whether local inference may run at all, from which sources,
+        and bound to loopback only.
+    - capability: capabilityModelWeightProtection
+      at: weights
+      note: Restrictive file permissions and integrity checks on the artifacts, so a swap is detectable.
+    - capability: capabilityAiBom
+      at: runtime
+      note: Which models, at which versions, from which sources, on which machines — the precondition for every response.
+    - capability: capabilityShadowAiDiscovery
+      at: runtime
+      note: Find the runtimes nobody registered, derived from the machine rather than self-reported.
+    - capability: capabilityModelEvals
+      at: guardrails
+      note: >
+        Evaluate what the weights actually do before serving them to other software — there is no
+        provider evaluation to inherit.
+
+scenarios:
+  - title: An application asks for a completion
+    steps:
+      - follow: localApps->api
+        note: A local tool calls the OpenAI-compatible endpoint as if it were hosted.
+      - follow: api->guardrails
+        note: The request crosses classification — if anyone deployed it.
+      - follow: guardrails->runtime
+        note: The model serves the completion with whatever behaviour the weights carry.
+      - follow: api->localApps
+        note: The response returns with no provider floor under it.
+  - title: A poisoned checkpoint
+    steps:
+      - follow: hub->weights
+        note: A well-reviewed model name, a compromised artifact — the download verifies transport, not behaviour.
+      - follow: weights->runtime
+        note: >
+          The runtime opens the file. In a pickle-class format, the load is the execution event,
+          with the user's privileges.
+  - title: A browser tab finds the port
+    steps:
+      - follow: unexpectedCallers->api
+        note: A visited web page calls the local endpoint through a permissive cross-origin policy.
+      - follow: api->guardrails
+        note: Nothing distinguishes this caller from the intended ones.
+      - follow: guardrails->runtime
+        note: The page now drives local inference — for free, and invisibly to the user.
+
+sources:
+  - title: "MITRE ATLAS — machine learning supply chain and model artifact techniques"
+    url: https://atlas.mitre.org/
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "CISA and NSA — deploying AI systems securely"
+    url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely
+  - title: "NIST AI 600-1 — generative AI profile"
+    url: https://www.nist.gov/itl/ai-risk-management-framework

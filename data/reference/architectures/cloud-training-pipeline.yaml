@@ -1,0 +1,502 @@
+id: archTrainingPipeline
+surface: surfaceCloud
+title: Fine-tuning and model registry pipeline
+abbrev: Training pipeline
+
+summary:
+  - >
+    A build system whose artifact is a model. Curated data goes in, a tuned checkpoint comes
+    out, and everything that is true of a compiler and its supply chain is true here — except
+    that the output cannot be diffed and the defects cannot be found by reading it.
+
+description:
+  - >
+    Treating this as a build pipeline is the whole of the correct framing. It has source inputs,
+    a build environment, dependencies, an artifact, a registry and a promotion path, and it
+    deserves the controls a software pipeline gets: reproducibility, provenance, signed
+    artifacts, and a promotion gate nothing bypasses. Where the analogy breaks is inspection: a
+    compiled binary can be decompiled and diffed; a tuned checkpoint cannot be read for
+    backdoors in any practical sense. Input control and evaluation are the substitutes for code
+    review — what went into the training set and how the result behaves are the only two things
+    anyone can actually examine.
+  - >
+    Poisoning is therefore the primary risk and it is durable. A poisoned example influences
+    every inference the model ever makes, survives redeployment, and is not removable without
+    retraining. A targeted poisoning that only activates on a trigger phrase is invisible to
+    accuracy metrics and to any evaluation that does not know what to look for — which is why
+    curation is the last place a bad example can be removed rather than baked in, and why
+    lineage from every promoted model back to its exact dataset is what makes a discovered
+    poisoning scopeable at all.
+  - >
+    Training data is also a disclosure surface in a way inference data is not. Memorised
+    examples can be extracted from the model afterwards, so restricted-access content in the
+    corpus becomes part of an artifact served far more widely than the dataset ever was. The two
+    access questions to settle early: who may promote a checkpoint to production, and who may
+    read the corpus. Both default to a broad platform-team role, and both are higher-privilege
+    than they look — which is why promotion is a separated human decision and the signing key
+    lives outside the training environment, so a compromised job cannot sign its own output.
+
+distinguishedBy:
+  - >
+    Against the batch pipeline: same build-system trust properties, different artifact. That
+    produces data; this produces a model. The data can be corrected in place; the model cannot.
+  - >
+    Against self-hosted inference: that consumes artifacts, this produces them. They meet at the
+    registry, and the promotion gate between them is where both archetypes' supply-chain
+    controls concentrate.
+
+exemplars:
+  - name: Managed fine-tuning services
+    note: >
+      Provider-hosted tuning against a customer dataset, producing a private checkpoint served
+      from the same platform. Availability varies sharply by provider and by year.
+    asOf: "2026-08"
+  - name: Self-operated tuning on accelerator fleets
+    note: >
+      Adapter or full fine-tuning on the organisation's own hardware, with a registry and
+      promotion pipeline built alongside.
+    asOf: "2026-08"
+  - name: Adapter and preference tuning
+    note: >
+      Lightweight tuning producing an adapter rather than a full checkpoint. Smaller artifact,
+      same supply-chain questions, and an additional one about who may load an adapter at serve
+      time.
+    asOf: "2026-08"
+
+blocks:
+  - id: labelling
+    kind: actor
+    title: Labelling workforce
+    icon: people
+    col: 0
+    row: 0
+    note: >
+      Human or model-generated labels and preferences, frequently from an outsourced workforce.
+      A supply chain with a direct path into model behaviour and almost no scrutiny.
+
+  - id: dataOrigins
+    kind: external
+    title: Training content origins
+    col: 0
+    row: 1
+    note: >
+      Scraped corpora, purchased datasets, user-generated content and internal records. Each
+      carries a different provenance claim and most carry none.
+    items:
+      - id: scraped
+        label: Scraped & purchased sets
+        icon: globe
+        note: Authored by parties the pipeline never authenticates.
+      - id: internal
+        label: Internal records
+        icon: db
+        note: Often restricted-access data about to be baked into a widely served artifact.
+
+  - id: curation
+    kind: service
+    title: Curation & filtering
+    col: 1
+    row: 1
+    cosaiComponent: componentDataFilteringAndProcessing
+    note: >
+      Deduplication, quality filtering and removal of sensitive or improperly sourced content.
+      The last point at which a poisoned example can be removed rather than baked in.
+    items:
+      - id: filtering
+        label: Quality & safety filters
+        icon: search
+        note: After training, a bad example is in the weights and cannot be taken out.
+      - id: sensitive
+        label: Sensitive-content removal
+        icon: shield
+        note: What stays in can later be extracted from the model by anyone who can query it.
+      - id: provenanceCapture
+        label: Provenance capture
+        icon: doc
+        note: Per-example source and licence, recorded now because it cannot be reconstructed later.
+
+  - id: corpus
+    kind: service
+    title: Training corpus
+    col: 2
+    row: 1
+    cosaiComponent: componentTrainingData
+    note: >
+      The assembled, versioned dataset. Read access is higher-privilege than it looks — it is
+      the union of everything the organisation decided a model should learn.
+    items:
+      - id: datasets
+        label: Dataset versions
+        icon: db
+        note: Immutable and versioned, so a run can be tied to exactly what it saw.
+      - id: access
+        label: Corpus access control
+        icon: key
+        note: Writes decide what the model will learn; the write path deserves a production deploy's review.
+
+  - id: upstreamArtifacts
+    kind: external
+    title: Base model & deps
+    col: 3
+    row: 0
+    note: >
+      The starting checkpoint and the training frameworks, pulled from outside. Everything the
+      base model already contains is inherited — tuning adds behaviour and does not subtract it.
+    items:
+      - id: baseCheckpoint
+        label: Base checkpoint
+        icon: model
+        note: A backdoor in the base survives tuning and every benchmark that does not know its trigger.
+      - id: frameworks
+        label: Frameworks & dependencies
+        icon: code
+        note: An ordinary software supply chain executing with access to the corpus and the artifact.
+
+  - id: trainJob
+    kind: service
+    title: Training job
+    col: 3
+    row: 1
+    cosaiComponent: componentModelTrainingTuning
+    note: >
+      The build. Reproducibility — same data, same code, same seed, same artifact — is what
+      makes an incident investigable at all.
+    items:
+      - id: tuningRun
+        label: Tuning run
+        icon: gear
+        note: Scoped to the dataset approved for this run, so a job cannot quietly widen its own inputs.
+      - id: repro
+        label: Reproducibility record
+        icon: doc
+        note: Data version, code version, seed and base model, captured during the run.
+      - id: writeOnce
+        label: Write-once output
+        icon: shield
+        note: >
+          Candidate-only writes, so a job cannot overwrite an already-promoted artifact. The
+          signing key lives outside this environment for the same reason.
+
+  - id: evalGate
+    kind: service
+    title: Evaluation & red teaming
+    col: 4
+    row: 0
+    cosaiComponent: componentModelEvaluation
+    note: >
+      Capability, safety, backdoor and memorisation testing — the substitute for reading an
+      artifact nobody can read. Blocking, because a report on an unreadable artifact changes
+      nothing on its own.
+    items:
+      - id: benchmarks
+        label: Capability & safety evals
+        icon: scale
+        note: A targeted poisoning passes every benchmark that does not know its trigger.
+      - id: redTeam
+        label: Backdoor probing
+        icon: eye
+        note: Adversarial search for triggers and behavioural anomalies against the previous version.
+      - id: privacy
+        label: Memorisation testing
+        icon: search
+        note: >
+          Extraction and membership-inference testing before promotion — the only way to learn
+          the artifact remembers its training data before someone else does.
+
+  - id: registry
+    kind: service
+    title: Model registry
+    col: 4
+    row: 1
+    cosaiComponent: componentModelStorage
+    note: >
+      Versioned artifacts with lineage back to the exact dataset and code that produced them,
+      and a promotion gate to production that nothing bypasses.
+    items:
+      - id: candidates
+        label: Candidate checkpoints
+        icon: model
+        note: Unpromoted, unsigned, and served to nobody.
+      - id: lineageMeta
+        label: Lineage metadata
+        icon: doc
+        note: Which examples, which code, which base model, which run — recorded, not reconstructed.
+      - id: signed
+        label: Signed releases
+        icon: shield
+        note: Signature applied at promotion and verified at load, which is what makes the gate meaningful.
+
+  - id: serving
+    kind: external
+    title: Serving & consumers
+    col: 4
+    row: 2
+    note: >
+      The inference platforms that pull promoted models. This archetype ends at the registry;
+      the promotion gate is the seam between producing the artifact and serving it.
+    items:
+      - id: inference
+        label: Inference platforms
+        icon: gear
+        note: Verify the signature at load — a registry bypass shows up here or never.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Lineage, promotion authority and signing — the record of what produced what, and the
+      separated decisions about what may ship.
+    items:
+      - id: lineage
+        label: Data & model lineage
+        icon: doc
+        note: >
+          The only route to scoping the damage when a dataset turns out to have been poisoned
+          or improperly sourced months later.
+      - id: promotion
+        label: Promotion authority
+        icon: scale
+        note: >
+          Separation of duties: whoever runs training cannot promote unilaterally. The default
+          configuration usually grants both to the same role.
+      - id: signing
+        label: Artifact signing
+        icon: key
+        note: >
+          Keys held outside the training environment, so a compromised job cannot sign its own
+          output. Verification happens at load, in whichever platform serves it.
+
+edges:
+  - from: dataOrigins
+    to: curation
+    path: external
+    label: raw content
+    note: >
+      Curation is the only place a poisoned or improperly sourced example can still be removed.
+      After training it is in the weights.
+  - from: labelling
+    to: curation
+    path: secondary
+    label: labels & preferences
+    note: >
+      Frequently an outsourced workforce with a direct influence on model behaviour and very
+      little scrutiny relative to that influence.
+  - from: curation
+    to: corpus
+    path: primary
+    label: curated dataset
+    note: >
+      Corpus writes decide what the model will learn. The write path deserves the review a
+      production deploy gets.
+  - from: corpus
+    to: trainJob
+    path: primary
+    label: approved training data
+    note: >
+      Scoped to the dataset version approved for this run, so a job cannot quietly widen its
+      own inputs.
+  - from: upstreamArtifacts
+    to: trainJob
+    path: external
+    label: base checkpoint & dependencies
+    note: >
+      Everything already in the base model is inherited, and the frameworks execute with access
+      to the corpus and the artifact.
+  - from: trainJob
+    to: registry
+    path: primary
+    label: candidate checkpoint
+    note: >
+      Write-once and candidate-only — a job cannot overwrite a promoted artifact, and cannot
+      sign anything.
+  - from: evalGate
+    to: registry
+    path: governance
+    label: evaluation gate
+    note: >
+      Blocking, before promotion: capability, safety, backdoor and memorisation results are the
+      substitute for code review on an artifact nobody can read.
+  - from: registry
+    to: serving
+    path: external
+    label: promoted model
+    note: >
+      Pulled only after promotion, with the signature verified at load. Deliberately the only
+      path from training to traffic.
+  - from: governance
+    to: registry
+    path: governance
+    label: signing & promotion
+    note: >
+      A separated human promotion decision, a signature applied outside the build, and lineage
+      recorded during the run rather than reconstructed later.
+
+pins:
+  risks:
+    - risk: riskDataPoisoning
+      at: dataOrigins->curation
+      note: >
+        A poisoned example that survives curation influences every inference the model ever
+        makes, and is not removable without retraining.
+    - risk: riskDataPoisoning
+      at: labelling->curation
+      note: >
+        Labels and preference data steer behaviour directly, and the workforce producing them
+        gets almost no scrutiny relative to that influence.
+    - risk: riskUnauthorizedTrainingData
+      at: corpus
+      note: >
+        A licensing or privacy defect discovered after training is a retraining decision, not a
+        deletion. Irreversibility starts at the training job.
+    - risk: riskExcessiveDataHandling
+      at: corpus
+      note: >
+        Corpus read access is the union of everything a model should learn, and it defaults to
+        a broad platform-team role.
+    - risk: riskModelSourceTampering
+      at: upstreamArtifacts->trainJob
+      note: >
+        A tampered base checkpoint or dependency is inherited whole — tuning adds behaviour and
+        does not subtract it.
+    - risk: riskInsecureIntegratedComponent
+      at: trainJob
+      note: >
+        Training frameworks and their transitive dependencies execute with access to the corpus
+        and the artifact — an ordinary supply chain in an unusually valuable position.
+    - risk: riskSensitiveDataDisclosure
+      at: trainJob->registry
+      note: >
+        The checkpoint may have memorised its inputs, turning a restricted dataset into an
+        artifact with broad access. There is no runtime control for this path.
+    - risk: riskEvaluationBenchmarkManipulation
+      at: evalGate
+      note: >
+        A targeted poisoning activates only on its trigger and passes every benchmark that does
+        not know it — the gate is necessary and insufficient alone.
+    - risk: riskModelExfiltration
+      at: registry
+      note: >
+        The registry holds the crown-jewel artifacts. Read access to checkpoints is model theft
+        with none of the serving-side telemetry.
+    - risk: riskModelDeploymentTampering
+      at: governance->registry
+      note: >
+        Whoever runs training should not be able to promote unilaterally. The default
+        configuration usually grants both to the same role.
+
+  capabilities:
+    - capability: capabilityDataProvenance
+      at: curation
+      note: >
+        Record per-example source and licence at ingestion — provenance cannot be reconstructed
+        later, and it is the only route to scoping a poisoning.
+    - capability: capabilityDataSanitization
+      at: dataOrigins->curation
+      note: >
+        Filter poisoned, sensitive and improperly sourced content here — the last point where
+        removal is deletion rather than retraining.
+    - capability: capabilityModelEvals
+      at: evalGate->registry
+      note: >
+        Make evaluation a blocking gate on promotion: capability, safety and regression against
+        the previous version, with results recorded per candidate.
+    - capability: capabilityAiRedTeaming
+      at: evalGate
+      note: >
+        Probe candidates adversarially for backdoors and trigger behaviour — the tests that
+        assume the training data was hostile.
+    - capability: capabilityPetTooling
+      at: evalGate
+      note: >
+        Run extraction and membership-inference tests before promotion, because a model that
+        memorised its corpus has widened that data's audience permanently.
+    - capability: capabilityModelWeightProtection
+      at: registry
+      note: >
+        Encrypt checkpoints at rest, restrict reads, and sign at promotion so serving can verify
+        the artifact it loads.
+    - capability: capabilityDataAccessGovernance
+      at: corpus
+      note: >
+        Gate corpus reads and writes separately, and scope each training job to its approved
+        dataset version.
+    - capability: capabilityHitlControls
+      at: governance->registry
+      note: >
+        Promotion is a human decision by someone who did not run the training — separation of
+        duties on the highest-privilege action in the pipeline.
+    - capability: capabilityModelScanning
+      at: upstreamArtifacts->trainJob
+      note: >
+        Scan base checkpoints and loaders before use — serialised model formats are a code
+        execution vector, not just data.
+    - capability: capabilityAiBom
+      at: governance
+      note: >
+        Maintain the lineage record — dataset version, code, base model, run — for every
+        artifact in the registry, recorded during the run.
+    - capability: capabilityStagedRollout
+      at: registry->serving
+      note: >
+        Promote gradually behind traffic splitting, with the signature verified at load and a
+        rollback target retained.
+    - capability: capabilityEncryptionKeyManagement
+      at: governance
+      note: >
+        Hold signing keys outside the training environment, so a compromised job cannot sign
+        its own output.
+
+scenarios:
+  - title: A tuning run ships a model
+    steps:
+      - follow: dataOrigins->curation
+        note: Raw content arrives with mixed and mostly absent provenance claims.
+      - follow: curation->corpus
+        note: What survives filtering becomes a versioned, provenance-stamped dataset.
+      - follow: corpus->trainJob
+        note: The job reads exactly the approved dataset version, nothing wider.
+      - follow: upstreamArtifacts->trainJob
+        note: The base checkpoint and frameworks come in — everything they contain is inherited.
+      - follow: trainJob->registry
+        note: The candidate lands write-once, unsigned, served to nobody.
+      - follow: evalGate->registry
+        note: Capability, backdoor and memorisation testing gate the candidate.
+      - follow: governance->registry
+        note: A separated human promotes; the signature is applied outside the build.
+      - follow: registry->serving
+        note: Serving pulls the promoted artifact and verifies the signature at load.
+  - title: A poisoning is discovered months later
+    steps:
+      - follow: governance->registry
+        note: Lineage maps the poisoned examples to every model version that learned from them.
+      - follow: registry->serving
+        note: Affected versions are rolled back to the last clean checkpoint.
+      - follow: curation->corpus
+        note: The poisoned examples are removed and the dataset re-versioned.
+      - follow: corpus->trainJob
+        note: Retraining is the only removal — the weights cannot be edited.
+  - title: A backdoored base model arrives
+    steps:
+      - follow: upstreamArtifacts->trainJob
+        note: The trigger behaviour rides in with the checkpoint; scanning and provenance are the only upstream checks.
+      - follow: trainJob->registry
+        note: The candidate carries the backdoor intact — tuning did not remove it.
+      - follow: evalGate->registry
+        note: >
+          A gate that does not know the trigger passes it, which is why base-model provenance
+          matters before this point.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning, LLM04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "MITRE ATLAS — poisoning, model artifact and supply chain techniques"
+    url: https://atlas.mitre.org/
+  - title: "NIST SP 800-218A — secure software development practices for generative AI"
+    url: https://csrc.nist.gov/pubs/sp/800/218/a/final
+  - title: "CISA and NSA — AI data security"
+    url: https://www.cisa.gov/resources-tools/resources/ai-data-security
+  - title: "Microsoft Azure Well-Architected — training workload architecture pattern"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern

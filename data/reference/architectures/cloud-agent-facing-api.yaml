@@ -1,0 +1,400 @@
+id: archAgentFacingApi
+surface: surfaceCloud
+title: Agent-facing endpoint
+abbrev: Agent-facing API
+
+summary:
+  - >
+    A service built to be called by other organisations' agents rather than by their engineers —
+    including agent-initiated commerce. The caller is autonomous, acting for a human who is not
+    present, and every assumption about who is on the other end has to be restated.
+
+description:
+  - >
+    Bot defence and agent enablement point in opposite directions, and this architecture is the
+    decision about which way to face. A decade of investment went into distinguishing humans from
+    automation and blocking the automation; an agent acting for a legitimate customer trips every
+    one of those signals. The resolution is a distinct, authenticated, rate-limited lane for
+    agents rather than a hole in the human one — the human path and its bot defences stay strict.
+  - >
+    Delegation is the substance of it. The question is not whether the caller is a bot but
+    whether this agent is authorised to act for this customer, to what extent, and for how long.
+    That demands real primitives — an agent identity, a scope, an expiry and a revocation path —
+    and where the endpoint takes payment, a mandate: a signed statement of what the human
+    authorised, presented by the agent and verified by the merchant. The competing mandate
+    schemes are unsettled, so the durable position is to build the verification as its own
+    component rather than couple to one scheme.
+  - >
+    The remaining differences are behavioural. Agents retry, so idempotency scoped to the mandate
+    is a correctness requirement. Agents parallelise, so limits tuned for human pacing do not
+    hold. Agents read error messages and act on them, so error text is part of the interface. And
+    a dispute over an agent's action needs a record of the mandate it presented, not only of the
+    request it sent.
+  - >
+    Notably, no block in this drawing carries a CoSAI component anchor: the service itself
+    contains no AI. It is in the catalogue because its caller is an agent, and the neutral tabs
+    are the honest statement that the model, the loop and the tool plane all live on the other
+    side of the wire.
+
+distinguishedBy:
+  - >
+    Against a remote MCP server: that publishes tools for agents to call. This publishes a
+    business API, and the caller may be any agent framework at all — the delegation and payment
+    questions dominate instead of tool-description injection.
+  - >
+    Against an ordinary API with bot management: same endpoint, opposite policy. That one
+    identifies and blocks automation; this one admits it under a delegation model, which is a
+    different system rather than a relaxed setting.
+
+exemplars:
+  - name: Agent-accessible commerce endpoints
+    note: >
+      Merchants exposing a path for agent-initiated purchasing, with a mandate presented by the
+      agent and verified before the transaction.
+    asOf: "2026-08"
+  - name: Agent payment and mandate rails
+    note: >
+      Competing specifications for expressing what a human authorised an agent to spend, backed
+      by card networks, platforms and standards bodies. Unsettled, and worth abstracting behind a
+      component of your own.
+    asOf: "2026-08"
+  - name: Business APIs adding an agent lane
+    note: >
+      An existing API gaining a separate authenticated path for agent callers, with its own
+      limits and its own audit, rather than loosening the human one.
+    asOf: "2026-08"
+
+blocks:
+  - id: principal
+    kind: actor
+    title: Delegating customer
+    icon: person
+    col: 0
+    row: 0
+    note: >
+      The person on whose behalf the agent acts, absent at request time. Their authorisation has
+      to arrive as a verifiable artifact rather than as an assertion.
+
+  - id: humanLane
+    kind: service
+    title: Human path & bot defence
+    col: 1
+    row: 0
+    note: >
+      The existing human-facing surface, unchanged and still strict. Unregistered agents land
+      here and meet the bot defences — the correct default rather than an outage. It is also
+      where the human is reached for above-threshold confirmation.
+    items:
+      - id: botDefence
+        label: Bot management
+        icon: shield
+        note: Stays pointed at unadmitted automation; the agent lane is what keeps it from blocking customers.
+      - id: oobChannel
+        label: Out-of-band confirmation
+        icon: phone
+        note: Above the delegation threshold, the human is reached here — on a channel the agent does not control.
+
+  - id: tpAgent
+    kind: actor
+    title: Third-party agent
+    icon: agent
+    col: 0
+    row: 1
+    note: >
+      Someone else's agent, on someone else's infrastructure, acting for a customer. Not a bot to
+      be blocked and not a user to be trusted.
+
+  - id: agentLane
+    kind: service
+    title: Agent lane
+    col: 1
+    row: 1
+    note: >
+      A separate authenticated path with its own limits and its own audit. Authentication here
+      establishes three facts — which agent, from which operator, acting for which customer —
+      where most API auth was built to establish one.
+    items:
+      - id: agentAuth
+        label: Agent authentication
+        icon: key
+        note: Establishes the operator, which is the party accountable when an agent misbehaves at scale.
+      - id: agentLimits
+        label: Per-operator rate limits
+        icon: clock
+        note: Tuned for callers that retry and parallelise; human pacing does not survive contact with an agent.
+      - id: baselines
+        label: Behaviour baselines
+        icon: eye
+        note: Normal for an agent is nothing like normal for a person, so the old detection cannot be pointed here.
+
+  - id: mandate
+    kind: service
+    title: Mandate verification
+    col: 2
+    row: 1
+    note: >
+      Validates the signed statement of what the human authorised — scope, value, expiry. Two
+      separate claims cross here: which agent this is, and what its human authorised. Conflating
+      them is the central failure of this architecture.
+    items:
+      - id: mandateCheck
+        label: Mandate check
+        icon: doc
+        note: Scope, value and expiry verified per request, including on the retry path.
+      - id: schemeAdapters
+        label: Scheme adapters
+        icon: plug
+        note: The competing mandate rails abstracted behind one component, because none has settled.
+
+  - id: txn
+    kind: service
+    title: Transaction processing
+    col: 3
+    row: 1
+    note: >
+      The actual operation, bounded by what the mandate permits, deduplicated against retries,
+      and answered in error text an agent will read and act on.
+    items:
+      - id: idempotency
+        label: Idempotency & reconciliation
+        icon: gear
+        note: >
+          Keys scoped to the mandate rather than the request, so a retry with a fresh request id
+          does not become a second purchase.
+      - id: businessLogic
+        label: Business logic
+        icon: code
+        note: Bounded by what the human authorised rather than by what the agent asked for.
+      - id: errorSurface
+        label: Response & error text
+        icon: chat
+        note: >
+          Read by a model and acted on. A verbose failure teaches the caller — and anyone probing
+          — more than it should.
+
+  - id: orders
+    kind: service
+    title: Orders & evidence
+    col: 4
+    row: 2
+    note: >
+      The state the transaction changes, and the mandate evidence a disputed agent action will be
+      argued from. A record of the request without the mandate cannot establish whether the agent
+      exceeded its authority.
+    items:
+      - id: orderStore
+        label: Orders & accounts
+        icon: db
+        note: What a dispute will be resolved against.
+      - id: evidence
+        label: Mandate evidence
+        icon: doc
+        note: The mandate presented, the agent that presented it and the action taken — retained for the dispute window.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Registration, delegation policy, dispute handling and per-operator monitoring — the
+      controls that turn an unbounded population of callers into an administered one.
+    items:
+      - id: registry
+        label: Agent registry
+        icon: gear
+        note: Which agent operators are recognised and what each may do. Unregistered agents get the human path.
+      - id: delegationPolicy
+        label: Delegation policy
+        icon: scale
+        note: >
+          What an agent may do without further confirmation, and above what threshold the human
+          is reached on another channel. Where that line sits is the central business decision.
+      - id: dispute
+        label: Dispute & reversal
+        icon: person
+        note: Exists before the first dispute, and rests entirely on the mandate evidence.
+      - id: monitoring
+        label: Operator monitoring
+        icon: eye
+        note: Baselines per agent operator rather than per user, feeding revocation when one goes bad.
+
+edges:
+  - from: principal
+    to: tpAgent
+    path: secondary
+    label: authorises
+    note: >
+      The delegation happens entirely outside this system, on a platform the merchant does not
+      operate. All the endpoint ever sees is the artifact that results.
+  - from: principal
+    to: humanLane
+    path: secondary
+    bidir: true
+    label: out-of-band confirmation
+    note: >
+      Above the delegation threshold, the human is reached here — on a channel the agent does not
+      control — before the transaction proceeds.
+  - from: tpAgent
+    to: agentLane
+    path: primary
+    bidir: true
+    label: request with mandate / response
+    note: >
+      Requests carry the agent's identity and its mandate in; responses and error text — which
+      the agent will read and act on — go back out.
+  - from: agentLane
+    to: mandate
+    path: primary
+    label: admitted request
+    note: >
+      Agent, operator and customer travel with the request rather than being re-derived from its
+      body, which an agent composes.
+  - from: mandate
+    to: txn
+    path: primary
+    label: verified mandate
+    note: The operation proceeds under what the human authorised, not under what the agent asked for.
+  - from: txn
+    to: orders
+    path: primary
+    label: transaction & evidence
+    note: >
+      The write lands together with the mandate that authorised it. Evidence recorded here is
+      what the dispute process runs on.
+  - from: governance
+    to: txn
+    path: governance
+    label: delegation thresholds
+    note: Policy decides what proceeds on the mandate alone and what waits for the human on another channel.
+  - from: governance
+    to: orders
+    path: governance
+    label: dispute resolution
+    note: A disputed agent transaction is resolved against the mandate evidence, not the request log.
+
+pins:
+  risks:
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: tpAgent->agentLane
+      note: >
+        A recognised agent is not an authorised one, and the human who could clarify is not
+        there. Every control here exists to keep those two facts separate.
+    - risk: riskShadowAndUnknownAgents
+      at: tpAgent
+      note: >
+        The caller population is unbounded and lives outside the organisation. Without
+        registration, admitting agents means admitting anyone.
+    - risk: riskDenialOfMLService
+      at: agentLane
+      note: Agents parallelise and retry; limits tuned for human pacing fail open under agent traffic.
+    - risk: riskStaleAgentIdentityBinding
+      at: agentLane
+      note: An agent credential that outlives its revoked delegation keeps acting for a customer who withdrew consent.
+    - risk: riskRogueActions
+      at: txn->orders
+      note: An agent acting beyond its mandate, or the same action executing twice on a retry — different halves, same edge.
+    - risk: riskRunawayAgentToolLoops
+      at: txn
+      note: A retrying caller in a loop turns one intended purchase into a storm without idempotency fencing.
+    - risk: riskAgentDelegationChainOpacity
+      at: orders
+      note: >
+        Without the mandate evidence, nobody can reconstruct what the absent human actually
+        authorised.
+    - risk: riskSensitiveDataDisclosure
+      at: agentLane->tpAgent
+      note: >
+        Error text is read by a model and acted on. Verbose failures teach an attacker's agent
+        exactly how to retry.
+
+  capabilities:
+    - capability: capabilityNhiManagement
+      at: tpAgent->agentLane
+      note: >
+        Agent identity with real primitives — which agent, which operator, for which customer —
+        with expiry and revocation.
+    - capability: capabilityAgentRegistry
+      at: governance
+      note: >
+        Register agent operators and their permissions; route the unregistered to the human path
+        and its bot defences.
+    - capability: capabilityContentProvenance
+      at: mandate
+      note: >
+        Verify the signed mandate — scope, value, expiry — per request, behind a scheme-neutral
+        component of your own.
+    - capability: capabilityToolPermissionScoping
+      at: mandate->txn
+      note: Bound the operation to what the human authorised, not to what the agent requested.
+    - capability: capabilityRateLimiting
+      at: agentLane
+      note: Per-operator limits sized for retrying, parallelising callers — a separate budget from the human path.
+    - capability: capabilityAuditLogging
+      at: txn->orders
+      note: >
+        Record the mandate with the action, retained for the dispute window; the request alone
+        proves nothing.
+    - capability: capabilityHitlControls
+      at: principal->humanLane
+      note: >
+        Above-threshold confirmation with the human on a channel the agent does not control.
+    - capability: capabilityBehavioralDriftDetection
+      at: agentLane
+      note: Baselines per agent operator, because human baselines flag every agent and miss the bad one.
+    - capability: capabilityOutputEncoding
+      at: agentLane->tpAgent
+      note: >
+        Treat error text as interface design: deterministic, minimal, and free of anything that
+        teaches a probe.
+    - capability: capabilityIga
+      at: principal->tpAgent
+      note: A delegated grant that is scoped and expiring, not a standing power the customer forgot they gave.
+    - capability: capabilityAiTprm
+      at: governance
+      note: Assurance on agent operators as third parties — their platform is part of your transaction path.
+
+scenarios:
+  - title: An agent buys something for its customer
+    steps:
+      - follow: principal->tpAgent
+        note: The customer authorises the agent on a platform the merchant never sees; a mandate is minted.
+      - follow: tpAgent->agentLane
+        note: The agent presents its identity and the mandate on the agent lane, not the human path.
+      - follow: agentLane->mandate
+        note: Scope, value and expiry are verified against the artifact, not the request body.
+      - follow: mandate->txn
+        note: The operation is bounded by the mandate and keyed for idempotency.
+      - follow: txn->orders
+        note: The transaction lands with the mandate evidence attached.
+      - follow: agentLane->tpAgent
+        note: A disciplined, typed response returns — error text included, because the agent will act on it.
+  - title: A timeout makes the agent retry
+    steps:
+      - follow: tpAgent->agentLane
+        note: The response was slow; the agent retries with a fresh request id.
+      - follow: agentLane->mandate
+        note: The same mandate verifies again — including on the retry path.
+      - follow: mandate->txn
+        note: Idempotency scoped to the mandate recognises the duplicate.
+      - follow: txn->orders
+        note: One transaction exists, not two. The customer's agent did not double-purchase.
+  - title: The customer says they never authorised it
+    steps:
+      - follow: txn->orders
+        note: The disputed transaction was recorded with the mandate the agent presented.
+      - follow: governance->orders
+        note: >
+          The dispute resolves against that evidence: either the action was within the mandate's
+          scope, or the agent exceeded it and the reversal path runs.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI03 identity and privilege abuse, ASI07 inter-agent communication"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "Model Context Protocol — authorization and delegation patterns"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "CSA AI Controls Matrix v1.1 — identity and access controls for non-human actors"
+    url: https://cloudsecurityalliance.org/artifacts/ai-controls-matrix-v1-1
+  - title: "OWASP Agentic AI — threats and mitigations v1.1, T9 identity spoofing and T16 protocol abuse"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/

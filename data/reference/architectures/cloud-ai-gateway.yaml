@@ -1,0 +1,384 @@
+id: archAiGateway
+surface: surfaceCloud
+title: AI gateway, router and guardrail plane
+abbrev: AI gateway
+
+summary:
+  - >
+    A shared platform service every AI workload calls through: one endpoint across many
+    providers, with redaction, guardrails, model routing, a response cache and credentialed
+    egress on the data path, and enforcement, credentials, budgets, the catalogue and the
+    aggregate log in the control plane. Built once so twenty teams do not each solve the same
+    problems differently.
+
+description:
+  - >
+    This architecture exists because of a counting argument. Twenty teams calling model
+    providers directly produce twenty credential stores, twenty logging conventions, twenty
+    quota decisions and no aggregate view. One gateway produces one of each. Nothing about it is
+    novel infrastructure — it is an egress proxy specialised for a metered, non-deterministic
+    dependency — and its value is entirely in being the only path.
+  - >
+    Which makes network enforcement the load-bearing control, and it belongs to the control
+    plane rather than the drawing's data path: default-deny egress to model endpoints with the
+    gateway as the sole exception is what converts a convention into an architecture. Everything
+    else on this diagram assumes that enforcement holds. The drawing keeps the two planes
+    honest — requests flow left to right through the gateway tiers; the governance column
+    supplies credentials, budgets, the catalogue and collects the log, and touches the data path
+    only at those points.
+  - >
+    The gateway is also the highest-value target in the organisation's AI estate and its single
+    point of failure. Every prompt and response passes through it, so it sees more sensitive
+    data than any single application; it holds the provider credentials for all of them; and
+    when it degrades, every AI workload degrades with it. Its own access control, log retention
+    and blast radius deserve the treatment given to a secrets manager, not a proxy.
+  - >
+    Two design cautions. Guardrails at the gateway see text without application context, so
+    they catch policy violations and generic injection patterns and cannot judge whether a
+    particular retrieval was appropriate — they are a floor beneath application controls, not a
+    replacement. And a semantic cache keyed loosely enough to cross callers returns one tenant's
+    response to another: a disclosure path wearing a performance feature's clothes.
+
+distinguishedBy:
+  - >
+    Against managed model API consumption: that architecture is about the relationship with one
+    provider. This is about operating the crossing as a platform for many teams and several
+    providers, with the failover, cost attribution and policy uniformity that implies.
+  - >
+    Against the internal AI platform: that is the whole paved road, including agent runtimes and
+    data plumbing. This is one component of it, and usually the first one built because it pays
+    for itself immediately.
+
+exemplars:
+  - name: Managed AI gateways
+    note: >
+      Cloud and CDN-operated gateways offering routing, caching, quotas and observability across
+      multiple model providers behind one endpoint.
+    asOf: "2026-08"
+  - name: Self-operated proxy layers
+    note: >
+      An open-source or in-house proxy standardising on one API shape across providers, with
+      per-team keys, budgets and logging.
+    asOf: "2026-08"
+
+blocks:
+  - id: promptContent
+    kind: external
+    title: Content inside prompts
+    col: 0
+    row: 0
+    note: >
+      Whatever the workloads put in context. The gateway sees the text and not the application
+      logic that assembled it, which bounds what its guardrails can conclude.
+    items:
+      - id: untrusted
+        label: Untrusted context
+        icon: doc
+        note: Documents, records and tool output already mixed into the prompt upstream.
+
+  - id: workloads
+    kind: actor
+    title: AI workloads
+    icon: code
+    col: 0
+    row: 1
+    note: >
+      Every AI application, agent and pipeline in the organisation. Whether they can reach a
+      provider without passing through the gateway decides whether this architecture is real.
+
+  - id: ingress
+    kind: service
+    title: Gateway endpoint
+    col: 1
+    row: 1
+    note: >
+      One API shape across providers, plus the policy pipeline on both legs — redaction on the
+      way out, guardrails on the way out and the way back. The uniform floor beneath every
+      application's own controls.
+    items:
+      - id: unifiedApi
+        label: Unified API
+        icon: plug
+        note: One shape across providers, which is what makes routing and failover possible without changing any caller.
+      - id: redaction
+        label: Prompt redaction
+        icon: eye
+        note: The last chance to stop a secret or an identifier reaching a provider, applied uniformly rather than per team.
+      - id: guardrail
+        label: Guardrails, both legs
+        icon: shield
+        note: Inbound and outbound classification. The return leg is the half most often left unimplemented.
+
+  - id: routing
+    kind: service
+    title: Routing & failover
+    col: 2
+    row: 1
+    note: >
+      Selects a provider by capability, cost or availability, fails over when one degrades, and
+      enforces budgets inline. Turns a hard provider dependency into a soft one — and whoever
+      alters the routing steers every application at once.
+    items:
+      - id: router
+        label: Model router
+        icon: gear
+        note: Provider and version selection against the approved catalogue.
+      - id: budgetCheck
+        label: Budget enforcement
+        icon: clock
+        note: Inline, per caller — a monthly cost report is not a control on an agent that can loop.
+
+  - id: cache
+    kind: service
+    title: Semantic cache
+    col: 2
+    row: 2
+    note: >
+      Reuses responses across similar requests to cut cost and latency. Keyed loosely enough to
+      cross callers, it returns one tenant's data to another — and it will look like a cache hit
+      rather than an incident.
+    items:
+      - id: responses
+        label: Cached responses
+        icon: db
+        note: Other callers' completions, one loose key away from being yours.
+
+  - id: egress
+    kind: service
+    title: Provider egress
+    col: 3
+    row: 1
+    note: >
+      The actual crossing, holding the provider credentials so no workload has to. The reason
+      this tier is the organisation's highest-value AI target: a compromise here is a compromise
+      of every provider relationship at once.
+    items:
+      - id: credInjection
+        label: Credential injection
+        icon: key
+        note: The provider credential is attached here and never leaves this tier.
+      - id: proxy
+        label: Egress proxy
+        icon: globe
+        note: The one place model traffic actually crosses out.
+
+  - id: providers
+    kind: provider
+    title: Model providers
+    col: 4
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      Several, deliberately. Multi-provider routing is a resilience property and a negotiating
+      position, and it is only practical because the gateway normalises them.
+    items:
+      - id: inferenceApis
+        label: Inference APIs
+        icon: model
+        note: Published interfaces with versions that deprecate on each provider's own schedule.
+
+  - id: governance
+    kind: governance
+    title: Gateway control plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      What makes the data path govern anything: the egress enforcement that makes the gateway
+      the only path, the credential store, budgets, the model catalogue, and the aggregate log —
+      the most sensitive record in the estate, because it is the only complete one.
+    items:
+      - id: netPolicy
+        label: Egress enforcement
+        icon: stop
+        note: Default-deny to model endpoints, gateway excepted. Every other control on this diagram rests on it.
+      - id: credStore
+        label: Provider credentials
+        icon: key
+        note: All of them, in one place, rotatable in one operation — concentration as benefit and exposure at once.
+      - id: budgets
+        label: Budgets & quotas
+        icon: scale
+        note: Per team, per workload, per model — and the cost attribution that usually funds the gateway in the first place.
+      - id: catalogue
+        label: Model catalogue
+        icon: gear
+        note: Which models are approved, pinned and deprecated; one place to roll a provider version change.
+      - id: telemetry
+        label: Aggregate telemetry
+        icon: eye
+        note: Every prompt, response, caller and cost. It needs the access control and retention of a secrets store, not a proxy log.
+
+edges:
+  - from: promptContent
+    to: ingress
+    path: external
+    label: text in prompts
+    note: >
+      Uniform classification for every workload, applied to text without application context — a
+      floor beneath each application's own defences, not a replacement for them.
+  - from: workloads
+    to: ingress
+    path: primary
+    bidir: true
+    label: model call / response
+    note: >
+      Per-caller workload identity rather than a shared gateway key, because quota, attribution
+      and the log all key off it. A shared key makes the aggregate view anonymous.
+  - from: ingress
+    to: routing
+    path: primary
+    bidir: true
+    note: Redacted, admitted requests forward; completions return through the guardrail's output leg.
+  - from: routing
+    to: cache
+    path: secondary
+    bidir: true
+    label: cache lookup
+    note: >
+      The scoping is the control. A key that ignores the caller returns one tenant's response to
+      another, and it will look like a cache hit rather than an incident.
+  - from: routing
+    to: egress
+    path: primary
+    bidir: true
+    note: The routed request moves to the crossing; nothing upstream of this point ever saw a provider credential.
+  - from: egress
+    to: providers
+    path: primary
+    bidir: true
+    route: vh
+    label: provider call
+    note: >
+      The credential is injected here and never leaves this tier. One rotation point for the
+      organisation — and one blast radius covering every provider relationship.
+  - from: governance
+    to: egress
+    path: governance
+    label: credentials
+    note: Provider credentials issued from one store to one tier, with no key in any application's configuration.
+  - from: governance
+    to: providers
+    path: governance
+    label: catalogue & terms
+    note: >
+      The catalogue decides which providers and versions are approved and pinned, so a provider
+      change is a gateway event rather than a migration across every caller.
+
+pins:
+  risks:
+    - risk: riskShadowAndUnknownAgents
+      at: workloads
+      note: The gateway's entire value is being the only path, and that is a network property; every control here is conditional on egress enforcement holding.
+    - risk: riskPromptInjection
+      at: promptContent->ingress
+      note: The gateway sees text without the application logic that assembled it, so injection detection here is generic by construction.
+    - risk: riskCrossTenantCredentialPropagation
+      at: workloads->ingress
+      note: A shared gateway key collapses caller identity, making quotas collective and the aggregate log anonymous.
+    - risk: riskInsecureModelOutput
+      at: ingress
+      note: The return leg through the guardrail is the half most often omitted, and the half that catches a model that has been successfully steered.
+    - risk: riskEconomicDenialOfWallet
+      at: routing
+      note: Budgets enforced inline here are the only brake between a looping agent and per-token billing across every provider.
+    - risk: riskOrchestratorRouteHijacking
+      at: routing
+      note: Whoever alters the routing configuration steers every application's traffic to a model of their choosing.
+    - risk: riskPromptResponseCachePoisoning
+      at: cache
+      note: A poisoned or mis-keyed cache entry serves every later request that matches it, across teams.
+    - risk: riskSensitiveDataDisclosure
+      at: routing->cache
+      note: A cache key that ignores the caller returns one tenant's response to another, disguised as a performance win.
+    - risk: riskSensitiveDataDisclosure
+      at: egress
+      note: This tier sees every prompt in the organisation and holds every provider credential — the highest-value AI target in the estate.
+    - risk: riskDenialOfMLService
+      at: egress->providers
+      note: One choke point means one outage takes every AI workload with it; failover across providers is the mitigation the gateway itself must supply.
+    - risk: riskModelDeploymentTampering
+      at: governance->providers
+      note: Provider versions change on the provider's schedule; the catalogue's pinning and staged rollout are the one-place answer.
+
+  capabilities:
+    - capability: capabilityAiGateway
+      at: ingress
+      note: The platform itself — one API shape, one policy pipeline, one place every model call crosses.
+    - capability: capabilityEgressControl
+      at: workloads
+      note: Default-deny egress to model endpoints with the gateway as the sole exception. Deploy this or the rest is a suggestion.
+    - capability: capabilitySecretsManagement
+      at: governance->egress
+      note: All provider credentials brokered from one store to one tier, rotatable in one operation.
+    - capability: capabilityNhiManagement
+      at: workloads->ingress
+      note: A workload identity per caller, so quota, attribution and the log survive the crossing.
+    - capability: capabilityRateLimiting
+      at: routing
+      note: Per-team, per-workload, per-model budgets enforced inline, not reported after the fact.
+    - capability: capabilityPromptRedaction
+      at: ingress
+      note: Uniform detection and masking of secrets and identifiers before anything reaches a provider.
+    - capability: capabilityModelGuardrails
+      at: ingress->routing
+      note: Classification on both legs of the pipeline — and verify the return leg exists, because it usually does not.
+    - capability: capabilityPromptInjectionDefense
+      at: promptContent->ingress
+      note: Generic injection screening as a uniform floor, with the application-context half of the defence left where the context lives.
+    - capability: capabilityMemoryProtection
+      at: cache
+      note: Caller-scoped cache keys, so a semantic hit can never cross a tenant boundary.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: The aggregate record of every prompt, caller and cost — protected like a secrets store, because it is the most sensitive log in the estate.
+    - capability: capabilityAiBom
+      at: governance->providers
+      note: The catalogue of approved, pinned and deprecating models, maintained where a version roll is one change.
+    - capability: capabilityCredentialIsolation
+      at: egress
+      note: Provider credentials confined to this tier, unreachable from any workload or any prompt.
+
+scenarios:
+  - title: A workload's model call
+    steps:
+      - follow: workloads->ingress
+        note: The call arrives on the caller's own workload identity — the fact everything downstream keys off.
+      - follow: ingress->routing
+        note: Redacted and admitted, the request is routed against the approved catalogue within budget.
+      - follow: routing->cache
+        note: A cache lookup, scoped to the caller — a hit is free, and the scoping is what keeps it legal.
+      - follow: routing->egress
+        note: On a miss, the request moves to the crossing.
+      - follow: egress->providers
+        note: The provider credential is injected here, for the first and only time.
+      - follow: providers->egress
+        note: The completion returns and heads back through the pipeline.
+      - follow: ingress->workloads
+        note: The response passes the output-leg guardrail before the caller ever sees it.
+  - title: A provider degrades
+    steps:
+      - follow: egress->providers
+        note: Latency and error rates climb on the primary provider.
+      - follow: routing->egress
+        note: Failover reroutes to an approved alternate without changing a single caller — the payoff of one API shape.
+      - follow: governance->providers
+        note: The catalogue decides which alternates were approved and pinned in advance; failover is a selection, not a scramble.
+  - title: The gateway itself is the prize
+    steps:
+      - follow: workloads->ingress
+        note: Every prompt in the organisation passes through this tier — it sees more sensitive data than any single application.
+      - follow: governance->egress
+        note: Every provider credential lives behind it; compromise here is compromise of every provider relationship at once.
+      - follow: routing->cache
+        note: And a loosely keyed cache quietly hands one tenant's responses to another. The tier deserves a secrets manager's controls, and its outage plan deserves a single-point-of-failure review.
+
+sources:
+  - title: "Microsoft Azure Architecture Center — AI gateway guidance"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/azure-openai-gateway-guide
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM06 unbounded consumption, LLM02 sensitive information disclosure"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "AWS Well-Architected Generative AI Lens — multi-tenant generative AI platform scenario"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/scenarios.html
+  - title: "CoSAI Shared Responsibility Framework V1.0"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf

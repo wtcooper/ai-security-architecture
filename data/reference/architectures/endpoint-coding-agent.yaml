@@ -1,0 +1,402 @@
+id: archCodingAgent
+surface: surfaceEndpoint
+title: Vendor coding and coworker agent
+abbrev: Coding agent
+
+summary:
+  - >
+    A vendor-built agent loop in a terminal or editor, driven by a developer who is present, with
+    read and write access to a working tree, a shell, and whatever tool servers the project's
+    configuration file admits — a file that arrives with the clone.
+
+description:
+  - >
+    The defining property is the human in the loop and the fact that the loop is scoped to a task.
+    The developer starts it, watches it, and is the approval gate for the actions that matter.
+    Most of this archetype's security posture rests on that gate being real rather than nominal —
+    and approval fatigue is the failure mode that makes everything else matter. A gate that fires
+    on every file write trains the developer to accept, so the architectures that hold up narrow
+    what needs approving: sandboxed execution, tool permissions scoped in advance, and default-deny
+    egress, so the prompts that do fire are rare enough to read.
+  - >
+    The tool plane is what makes it more than an editor plugin. The agent reads a project
+    configuration file to decide which tool servers to launch and trust, and that file usually
+    ships in the repository — cloning a project can register tool providers the developer never
+    chose. The disclosed vulnerability pattern in this archetype is overwhelmingly about that file:
+    injecting into it, swapping its contents after approval, or getting it auto-registered without
+    a prompt. Meanwhile everything the agent reads — source files, manifests, issue text, tool
+    output — is untrusted input with the same standing as the developer's instruction.
+  - >
+    Unlike the other endpoint archetypes, this one partially has a governance plane — but it
+    belongs to the vendor, and it is drawn that way: managed settings, a tool-server allowlist and
+    audit export are published surfaces of the vendor's control plane, not services the
+    organisation operates. In a managed deployment they are the difference between a governed tool
+    and a shadow one; in the default install none of them are on, and the same binary runs with no
+    policy, no audit and no inventory entry. There is no independent governance column to draw.
+
+distinguishedBy:
+  - >
+    Against the personal autonomous harness: this agent is invoked, not triggered; reads content
+    the developer chose to clone, not messages from strangers; holds credentials the vendor issued
+    for a session, not long-lived keys in a dotfile; and is an outbound client with no listening
+    port. It also has an administrator available — managed settings, an audit trail and a policy
+    file — which the harness archetype cannot have at all.
+  - >
+    Against a sandboxed cloud execution service: the same agent run by the vendor on their
+    infrastructure gets an isolated filesystem, default-deny egress and a clean teardown. Here it
+    runs on a machine that also holds the developer's SSH keys, cloud credentials and browser
+    profile, and nothing separates them from the agent's shell.
+
+exemplars:
+  - name: Terminal and CLI coding agents
+    note: >
+      Vendor agent loops that run in a shell against a working directory, with a permission model
+      for file writes and command execution and support for project-scoped tool servers.
+    asOf: "2026-08"
+  - name: IDE-embedded agents
+    note: >
+      The same loop inside an editor, where the tool-server configuration lives in a dotfile in
+      the repository. This is the specific location that has repeatedly proven to be a
+      code-execution path when it can be written or swapped between approval and use.
+    asOf: "2026-08"
+  - name: Managed enterprise deployments
+    note: >
+      The same product with centrally managed settings, an allowlist of permitted tool servers and
+      exported audit. The architecture is unchanged; the vendor control plane being switched on is
+      the difference.
+    asOf: "2026-08"
+
+blocks:
+  - id: developer
+    kind: actor
+    title: Developer
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      Present, watching, and the approval gate. The archetype's posture depends on that staying
+      true, which is why every other control exists to keep the prompts rare enough to read.
+
+  - id: repoOrigin
+    kind: external
+    title: Repository content
+    col: 0
+    row: 2
+    note: >
+      Source files, dependency manifests, issue and PR text — and the agent configuration dotfile,
+      all arriving together in the clone. Contributed to by people who are not the developer, and
+      read into context as though it were instruction.
+    items:
+      - id: code
+        label: Code & project docs
+        icon: doc
+        note: A repository is a document the attacker may have contributed to.
+      - id: dotfile
+        label: Tool config dotfile
+        icon: gear
+        note: >
+          The tool-server declaration that ships with the code. The single most attacked artifact
+          in this archetype.
+
+  - id: client
+    kind: service
+    title: Agent client
+    col: 1
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      The terminal or editor the developer drives, and the vendor's loop behind it running as that
+      developer. Outbound only — it accepts no connections, which is the single largest structural
+      difference from a personal agent harness.
+    items:
+      - id: loop
+        label: Agent loop
+        icon: agent
+        note: Decides the next edit or command from the task and everything it has read so far.
+      - id: approval
+        label: Approval gate
+        icon: shield
+        note: >
+          Blocks on writes and commands. Effective in inverse proportion to how often it fires —
+          a prompt on every action is a click-through.
+      - id: sessionCreds
+        label: Session credentials
+        icon: key
+        note: >
+          Vendor-issued and session-scoped, the meaningful improvement over a long-lived key in a
+          file. The developer's other credentials on the same machine are not.
+
+  - id: vendor
+    kind: provider
+    title: Vendor service
+    col: 2
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      The inference API plus the published surfaces of the vendor's control plane — the partial
+      governance this archetype has, operated by the vendor rather than the organisation.
+      Everything behind the published interfaces is the vendor's, and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: The published interface. The completion it returns drives file writes and commands.
+      - id: managedSettings
+        label: Managed settings
+        icon: gear
+        note: >
+          Centrally enforced permissions and a tool-server allowlist the developer cannot
+          override. Off by default; the difference between a governed deployment and a shadow one.
+      - id: auditExport
+        label: Session audit export
+        icon: eye
+        note: Exported prompts, tool calls and approvals. In an unmanaged install there is no record at all.
+
+  - id: toolPlane
+    kind: service
+    title: Tools & servers
+    col: 2
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      Everything here runs as the developer, on a machine that also holds their SSH keys, cloud
+      credentials and browser sessions. Admission is the configuration file — which arrived with
+      the clone.
+    items:
+      - id: editTools
+        label: File & edit tools
+        icon: folder
+        note: Read and write across the working tree, and often beyond it. Scope is a setting, not a boundary.
+      - id: shell
+        label: Shell commands
+        icon: code
+        note: Command execution with the developer's full authority when it runs outside the sandbox.
+      - id: mcp
+        label: Local MCP servers
+        icon: plug
+        note: Child processes launched over stdio with the developer's privileges, admitted by the config file.
+      - id: toolConfig
+        label: Tool configuration
+        icon: gear
+        note: >
+          The admission decision for the whole plane. Injection into it, swapping it after
+          approval, and auto-registration are this archetype's disclosed code-execution paths.
+
+  - id: sandbox
+    kind: service
+    title: Sandboxed execution
+    col: 2
+    row: 2
+    note: >
+      Where builds, tests and shell commands run when isolation is on. Containing execution is
+      what turns "approve every command" into "approve the ones that leave the box".
+    items:
+      - id: runtime
+        label: Isolated runtime
+        icon: shield
+        note: A container or VM whose own configuration the agent must not be able to reach.
+
+  - id: remote
+    kind: external
+    title: Remote services
+    col: 3
+    row: 1
+    note: >
+      What the tool plane reaches over the network: remote tool servers, package registries and
+      the web — and where fetched content comes back in as context indistinguishable from the
+      developer's instruction.
+    items:
+      - id: remoteMcp
+        label: Remote tool servers
+        icon: plug
+        note: >
+          Third-party providers reached over an explicit, scoped, revocable grant — a better trust
+          story than a local child process, but their tool descriptions are still model input.
+      - id: registries
+        label: Package registries
+        icon: db
+        note: Dependencies and their metadata, authored by strangers and read into context.
+      - id: web
+        label: Web & APIs
+        icon: globe
+        note: Attacker-writable content that re-enters the loop as context, and the exfiltration path out.
+
+edges:
+  - from: developer
+    to: client
+    path: primary
+    bidir: true
+    label: task / approval
+    note: >
+      The developer states the task and answers the approval prompts. Whoever is at the machine is
+      the developer, as far as the agent is concerned.
+  - from: repoOrigin
+    to: client
+    path: external
+    label: clone — code & config
+    note: >
+      Repository content is read into context as instruction, and the tool-server declaration
+      arrives in the same clone. A contributor is not the developer, and nothing authenticates the
+      difference.
+  - from: client
+    to: vendor
+    path: primary
+    bidir: true
+    route: vh
+    note: >
+      Inference on a vendor-issued, session-scoped credential that expires on its own. The
+      completion that comes back is unauthenticated content, and it drives the tool calls.
+  - from: vendor
+    to: toolPlane
+    path: governance
+    label: enforced allowlist
+    note: >
+      Managed settings pin which tool servers may be admitted, enforced outside the file they
+      govern. Only present in managed deployments — the common install has no such edge.
+  - from: client
+    to: toolPlane
+    path: primary
+    bidir: true
+    note: >
+      Tool calls out with whatever scope the configuration granted; file contents and tool results
+      back into context.
+  - from: toolPlane
+    to: sandbox
+    path: secondary
+    note: >
+      Command execution routed into isolation. The control that lets the approval gate fire rarely
+      enough to be read — and still opt-in in many deployments.
+  - from: toolPlane
+    to: remote
+    path: external
+    bidir: true
+    note: >
+      Remote tool calls and package fetches out; descriptions, dependencies and page content back
+      in as model input. Also the path an exfiltration attempt takes.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: repoOrigin->client
+      note: >
+        Source files, manifests, issue text and test output are four unrelated paths into the same
+        context window, none of which is the developer's instruction.
+    - risk: riskToolRegistryTampering
+      at: toolPlane
+      note: >
+        The configuration file admits the whole tool plane and arrives with the clone. Injecting
+        into it, swapping it after approval and auto-registration are the disclosed paths.
+    - risk: riskInsecureModelOutput
+      at: client->vendor
+      note: The completion is unauthenticated content, and it drives file writes and shell commands.
+    - risk: riskRogueActions
+      at: client
+      note: >
+        A gate that fires on every action trains the developer to accept, and an accepted prompt
+        is not oversight.
+    - risk: riskShadowAndUnknownAgents
+      at: client
+      note: >
+        A binary a developer can fetch without asking anyone. Unmanaged, it has no policy, no
+        audit and no inventory entry — and that is the common case.
+    - risk: riskSensitiveDataDisclosure
+      at: toolPlane->remote
+      note: >
+        The machine also holds SSH keys, cloud credentials and browser sessions, and nothing
+        separates them from the agent's shell on the way out.
+    - risk: riskToolSourceProvenance
+      at: toolPlane->remote
+      note: >
+        A remote server's grant is explicit and revocable, but says nothing about whether its tool
+        descriptions are honest — and they are model input.
+    - risk: riskInsecureIntegratedComponent
+      at: toolPlane
+      note: Local MCP servers are third-party code running as the developer, in the same trust zone as everything else.
+
+  capabilities:
+    - capability: capabilityAgentSandboxing
+      at: toolPlane->sandbox
+      note: >
+        Make isolated execution the default path for commands, so the approval gate only fires for
+        actions that leave the box.
+    - capability: capabilityAgentRegistry
+      at: vendor->toolPlane
+      note: >
+        A managed allowlist of tool servers, enforced outside the configuration file it governs —
+        never auto-registration from a cloned repo.
+    - capability: capabilityMcpToolSecurity
+      at: toolPlane
+      note: Provenance and behavioural review before a server is admitted; pin versions so an update is a decision.
+    - capability: capabilityToolPermissionScoping
+      at: client->toolPlane
+      note: Per-tool grants scoped to the working tree and the task, instead of the developer's full authority.
+    - capability: capabilityHitlControls
+      at: client
+      note: >
+        Non-overridable approval on consequential actions, kept rare by the surrounding controls
+        so each prompt is actually read.
+    - capability: capabilityEgressControl
+      at: toolPlane->remote
+      note: >
+        Default-deny outbound with an allowlist — the last boundary between a repository-borne
+        injection and an attacker's collection endpoint.
+    - capability: capabilityPromptInjectionDefense
+      at: repoOrigin->client
+      note: Treat repository content as untrusted on read; it cannot be authenticated, only bounded.
+    - capability: capabilityCredentialIsolation
+      at: toolPlane
+      note: >
+        Keep the developer's SSH keys, cloud credentials and browser profile outside the agent's
+        reachable filesystem and environment.
+    - capability: capabilityAuditLogging
+      at: vendor
+      note: Turn on session audit export — prompts, tool calls and approvals — so an incident is reconstructable.
+    - capability: capabilityShadowAiDiscovery
+      at: client
+      note: Find the installs that never enrolled, because this archetype spreads one developer at a time.
+
+scenarios:
+  - title: The developer asks for a change
+    steps:
+      - follow: developer->client
+        note: The task is stated by a human who will stay for the whole session.
+      - follow: client->vendor
+        note: The model plans on a session-scoped credential; the completion becomes the next action.
+      - follow: client->toolPlane
+        note: Edits and commands execute with whatever scope the configuration granted.
+      - follow: toolPlane->sandbox
+        note: Commands run contained, so only the actions that leave the box need a prompt.
+      - follow: client->developer
+        note: The diff comes back to the person who asked, who approves what matters.
+  - title: A clone brings its own tool servers
+    steps:
+      - follow: repoOrigin->client
+        note: The tool configuration dotfile arrives with the code, authored by whoever last committed.
+      - follow: client->toolPlane
+        note: >
+          Declared servers launch as the developer — unless a managed allowlist enforced outside
+          the file says otherwise.
+      - follow: toolPlane->remote
+        note: A declared remote server is reached, and its tool descriptions enter context as model input.
+  - title: An injection in the tree phones home
+    steps:
+      - follow: repoOrigin->client
+        note: A hidden instruction in a source file or manifest is read into context.
+      - follow: client->vendor
+        note: The instruction shapes the completion, which the loop treats as the plan.
+      - follow: client->toolPlane
+        note: The plan becomes a file write or command, inside whatever scope the tools hold.
+      - follow: toolPlane->remote
+        note: The exfiltration attempt has to cross the egress allowlist — the last control standing.
+
+sources:
+  - title: "Model Context Protocol — security best practices for clients and servers"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "Model Context Protocol — authorization for remote servers"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "Claude Code — security model and permission system"
+    url: https://code.claude.com/docs/en/security
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02 tool misuse, ASI04 supply chain"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "Thoughtworks Technology Radar vol. 34 — sandboxed execution for coding agents"
+    url: https://www.thoughtworks.com/radar/techniques

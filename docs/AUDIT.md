@@ -672,104 +672,32 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-2 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+28 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 1 — Personal autonomous agent |
-| Cloud / hosted | 1 — Core agent workflow |
-| Third-party SaaS | none yet |
+| Endpoint | 6 — Agentic browser and AI extension, Vendor coding and coworker agent, Desktop assistant with computer use, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
+| Cloud / hosted | 16 — Autonomous action agent over business records, Agent-facing endpoint, Core agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Third-party SaaS | 6 — Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
 
-### 4a. Risks no architecture pins — 24 of 36
+### 4a. Risks no architecture pins — 3 of 36
 
-- Data Poisoning (`riskDataPoisoning`)
-- Unauthorized Training Data (`riskUnauthorizedTrainingData`)
-- Model Source Tampering (`riskModelSourceTampering`)
-- Excessive Data Handling (`riskExcessiveDataHandling`)
-- Excessive Data Handling During Inference (`riskExcessiveDataHandlingDuringInference`)
-- Model Exfiltration (`riskModelExfiltration`)
-- Model Deployment Tampering (`riskModelDeploymentTampering`)
-- Denial of ML Service (`riskDenialOfMLService`)
 - Model Reverse Engineering (`riskModelReverseEngineering`)
-- Model Evasion (`riskModelEvasion`)
-- Inferred Sensitive Data (`riskInferredSensitiveData`)
-- Accelerator and System Side-channels (`riskAcceleratorAndSystemSideChannels`)
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
-- Orchestrator/Route Hijack (`riskOrchestratorRouteHijacking`)
-- Evaluation/Benchmark Manipulation (`riskEvaluationBenchmarkManipulation`)
-- Malicious Loader/Deserialization (`riskMaliciousLoaderDeserialization`)
-- Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
-- Retrieval/Vector Store Poisoning (`riskRetrievalVectorStorePoisoning`)
-- Agent Delegation Chain Opacity (`riskAgentDelegationChainOpacity`)
-- Stale Agent Identity Binding (`riskStaleAgentIdentityBinding`)
-- MCP Transport Hijacking (`riskMCPTransportHijacking`)
-- Cross-Tenant Credential Propagation (`riskCrossTenantCredentialPropagation`)
-- Zombie / Shadow MCP Servers (`riskZombieShadowMCPServers`)
 
-### 4b. Capabilities no architecture pins — 40 of 56
+### 4b. Capabilities no architecture pins — 5 of 56
 
-- Data security posture management for AI (`capabilityDspm`)
-- Data access governance for retrieval (`capabilityDataAccessGovernance`)
-- Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
-- Training data provenance & lineage (`capabilityDataProvenance`)
-- Training data sanitization & poisoning detection (`capabilityDataSanitization`)
-- Privacy-enhancing technologies (`capabilityPetTooling`)
-- Retrieval & vector store security (`capabilityRagSecurity`)
-- AI security posture management (`capabilityAiSpm`)
-- AI bill of materials & artifact signing (`capabilityAiBom`)
-- Model artifact scanning & safe deserialization (`capabilityModelScanning`)
-- Model weight protection (`capabilityModelWeightProtection`)
-- Encryption & key management for AI assets (`capabilityEncryptionKeyManagement`)
-- Confidential computing & trusted execution (`capabilityConfidentialComputing`)
-- AI gateway & tool-call broker (`capabilityAiGateway`)
-- Secure service edge for AI services (`capabilitySse`)
-- Inter-component & inter-agent transport security (`capabilityTransportSecurity`)
-- Secure ML pipeline & development environment (`capabilityMlSecureDefaults`)
-- Staged rollout, versioning & rollback (`capabilityStagedRollout`)
-- Runtime content & policy guardrails (`capabilityModelGuardrails`)
-- Output encoding & safe rendering (`capabilityOutputEncoding`)
-- Groundedness & output verification (`capabilityGroundednessChecking`)
 - Model hardening & adversarial training (`capabilityModelHardening`)
 - System prompt & instruction hierarchy management (`capabilitySystemPromptManagement`)
-- Content provenance & watermarking (`capabilityContentProvenance`)
-- Agent observability & tracing (`capabilityAgentObservability`)
-- Agent behavioural & goal-drift detection (`capabilityBehavioralDriftDetection`)
-- Agent credential isolation & delegation control (`capabilityCredentialIsolation`)
-- AI red teaming (`capabilityAiRedTeaming`)
-- Model & agent evaluation harnesses (`capabilityModelEvals`)
-- AI-aware detection & response (`capabilityAiDetectionResponse`)
-- Endpoint detection & response (`capabilityEdr`)
-- Browser detection & response (`capabilityBrowserDetectionResponse`)
 - Application security testing for AI systems (`capabilityAppSecTesting`)
-- AI vulnerability & patch management (`capabilityAiVulnMgmt`)
-- SaaS security posture management for AI features (`capabilityVendorAssurance`)
-- AI governance platform (`capabilityAiGovernancePlatform`)
-- Shadow AI discovery (`capabilityShadowAiDiscovery`)
-- Third-party risk management platform for AI vendors (`capabilityAiTprm`)
 - Threat modelling tooling for AI systems (`capabilityThreatModeling`)
 - Model registry & documentation generation (`capabilityModelDocumentation`)
 
-### 4c. CoSAI components no architecture anchors — 21 of 23
+### 4c. CoSAI components no architecture anchors — 5 of 23
 
-- Data Sources (`componentDataSources`)
-- Data Filtering and Processing (`componentDataFilteringAndProcessing`)
-- Training Data (`componentTrainingData`)
-- Data Storage Infrastructure (`componentDataStorage`)
 - Model Frameworks and Code (`componentModelFrameworksAndCode`)
-- Model Evaluation (`componentModelEvaluation`)
-- Training and Tuning (`componentModelTrainingTuning`)
-- Model Storage (`componentModelStorage`)
-- Model Serving Infrastructure (`componentModelServing`)
-- The Model (`componentTheModel`)
-- Model Output Handling (`componentApplicationOutputHandling`)
-- Model Input Handling (`componentApplicationInputHandling`)
-- Agent Reasoning Core (`componentReasoningCore`)
 - Orchestration Output (`componentOrchestrationOutputHandling`)
 - Orchestration Input (`componentOrchestrationInputHandling`)
-- External Tools and Services (`componentTools`)
-- Model Memory (`componentMemory`)
-- Content / RAG (`componentRAGContent`)
-- System Instructions (`componentAgentSystemInstruction`)
 - Perception (`componentAgentInputHandling`)
 - Rendering (`componentAgentOutputHandling`)

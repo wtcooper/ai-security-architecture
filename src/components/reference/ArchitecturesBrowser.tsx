@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { archetypeById, archetypesInOrder, surfaces } from "@/lib/data";
+import { BANDS, BAND_TOKENS } from "@/lib/map-layout";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
 import { PATH_STYLE } from "./flow-style";
@@ -58,7 +59,7 @@ export function ArchitecturesBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`${archetypesInOrder.length} pilot architectures · flow-style rebuild in progress`}
+        eyebrow={`${archetypesInOrder.length} application archetypes · authored`}
         title="Reference architectures"
         lead="Target-state architectures in the reference-architecture grammar the industry actually reads: capability blocks connected by typed data paths, the capabilities to deploy numbered onto the drawing, the risks tagged where they surface, and scenario walks over the same canvas. Built to be copied, not audited against."
       >
@@ -151,12 +152,24 @@ export function ArchitecturesBrowser() {
                 {style.label}
               </span>
             ))}
+            <span className="flex items-center gap-2.5 border-l border-line pl-4">
+              <span className="text-ink-3">Tab colour = risk-map layer</span>
+              {BANDS.map((b) => (
+                <span key={b.id} className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-[2px]"
+                    style={{ background: BAND_TOKENS[b.id].rail }}
+                  />
+                  {b.label}
+                </span>
+              ))}
+            </span>
             <span className="text-ink-3">Hover anything · ⌘ or Ctrl + wheel to zoom</span>
           </div>
         </div>
 
         <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
-          <div className="self-start overflow-hidden rounded-xl border border-line bg-paper">
+          <div className="flex items-start overflow-hidden rounded-xl border border-line bg-paper">
             <FlowDiagram
               archetype={archetype}
               scenario={scenario}

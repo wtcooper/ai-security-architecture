@@ -53,19 +53,6 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
         </Section>
       ) : null}
 
-      {archetype.deviations?.length ? (
-        <Section title="Drawing decisions" count={archetype.deviations.length}>
-          <div className="space-y-3">
-            {archetype.deviations.map((d) => (
-              <div key={d.subject}>
-                <p className="text-[13.5px] font-semibold text-ink">{d.subject}</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{d.reason}</p>
-              </div>
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
       <Section title="Sources" count={archetype.sources.length} last>
         <ul className="space-y-1.5">
           {archetype.sources.map((s) => (

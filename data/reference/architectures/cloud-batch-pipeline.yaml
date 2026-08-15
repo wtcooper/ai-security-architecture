@@ -1,0 +1,451 @@
+id: archBatchPipeline
+surface: surfaceCloud
+title: Batch and offline AI pipeline
+abbrev: Batch pipeline
+
+summary:
+  - >
+    Scheduled, high-volume model inference over stored data — enriching records, classifying a
+    backlog, generating embeddings, summarising a corpus. Nobody is watching at runtime, and the
+    output becomes durable state that downstream systems treat as fact.
+
+description:
+  - >
+    The distinguishing property is that the output persists and loses its provenance. A
+    synchronous endpoint's mistake affects one response; a batch job's mistake is written into a
+    million records that downstream systems, analysts and other models will read as ground truth
+    for years. By the time anyone notices, the derived data has been copied into three other
+    places.
+  - >
+    That makes provenance the primary control rather than a compliance nicety. Every generated
+    field carries which model version produced it, when, from what source and at what confidence
+    — because the only realistic response to a discovered defect is to find and regenerate the
+    affected subset, and that is impossible without the stamp. Poisoning also scales here in a
+    way it does not elsewhere: content that reaches a batch job influences everything the job
+    produces, and each individual bad record looks fine. Sampling and distribution comparison
+    against the previous run are the controls that see it; per-record validation cannot.
+  - >
+    Operationally the risks are the mundane ones with unusual severity. Volume plus per-token
+    pricing makes an unbounded job a financial event, retries without idempotency duplicate both
+    cost and output, and there is no user watching to abandon a runaway run — so the budget
+    ceiling is a hard stop enforced from the governance plane, and the pipeline identity is
+    deliberately asymmetric: read on the source, write on the derived store, and nothing else,
+    so a bad run stays recoverable.
+
+distinguishedBy:
+  - >
+    Against an AI-augmented API backend: the same transformation on a schedule instead of in a
+    request. Latency stops mattering and durability starts — nobody is waiting, and the output
+    will outlive the job by years.
+  - >
+    Against the fine-tuning pipeline: they share the build-system trust properties, but that one
+    produces a model and this one produces data. The data can be corrected in place; the model
+    cannot.
+
+exemplars:
+  - name: Bulk enrichment and classification
+    note: >
+      Scheduled jobs adding derived fields to a warehouse — sentiment, category, extracted
+      entities — consumed thereafter by analysts and other systems as though they were collected
+      data.
+    asOf: "2026-08"
+  - name: Embedding generation at corpus scale
+    note: >
+      Re-embedding a corpus on a schedule or after a model change. The output is an index, and
+      the job's failure modes are the index's failure modes.
+    asOf: "2026-08"
+  - name: Provider batch inference tiers
+    note: >
+      Discounted asynchronous inference for large volumes, which makes this archetype cheap
+      enough to run over everything and therefore common.
+    asOf: "2026-08"
+
+blocks:
+  - id: authors
+    kind: actor
+    title: Source authors
+    icon: people
+    col: 0
+    row: 2
+    note: >
+      Whoever wrote the records being processed — customers, partners, staff, other systems.
+      One hostile input is amplified across everything the run produces.
+
+  - id: schedule
+    kind: actor
+    title: Schedule
+    icon: clock
+    col: 0
+    row: 1
+    note: >
+      Starts the run with nobody watching. There is no user to notice that the output looks
+      wrong, which is why sampling replaces observation in this archetype.
+
+  - id: sourceCorpus
+    kind: service
+    title: Source corpus
+    col: 1
+    row: 2
+    cosaiComponent: componentDataSources
+    note: >
+      The records being processed, and the permissions the derived output should inherit.
+      The job reads broader than any individual user ever could.
+    items:
+      - id: records
+        label: Stored records
+        icon: db
+        note: Authored long before the pipeline existed, by parties it never authenticates.
+      - id: entitlements
+        label: Source permissions
+        icon: shield
+        note: The access rules the derived output should inherit — and often does not.
+
+  - id: orchestration
+    kind: service
+    title: Job orchestration
+    col: 1
+    row: 1
+    cosaiComponent: componentDataFilteringAndProcessing
+    note: >
+      Batching, checkpointing, retries and prompt construction, running under a service identity
+      with no human in the loop. Retry without idempotency duplicates both the output and the
+      bill.
+    items:
+      - id: batching
+        label: Batching & checkpoints
+        icon: gear
+        note: A pipeline that fails halfway leaves the corpus half-treated, which is worse than either outcome alone.
+      - id: promptBuild
+        label: Prompt construction
+        icon: doc
+        note: Source content and instruction are concatenated here, at volume, with no review of any result.
+      - id: retries
+        label: Retry & idempotency
+        icon: clock
+        note: The mechanism that decides whether a transient failure costs one record or the whole run twice.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 2
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      The published batch inference interface, holding a large volume of the corpus for the
+      duration of the job. Everything behind it is the provider's, and is not drawn.
+    items:
+      - id: batchApi
+        label: Batch inference API
+        icon: model
+        note: Asynchronous and discounted. Retention terms matter more here than on a per-request path.
+
+  - id: postProcess
+    kind: service
+    title: Validation & stamping
+    col: 3
+    row: 1
+    cosaiComponent: componentApplicationOutputHandling
+    note: >
+      Per-record checks and the provenance stamp, applied inside the write path where they are
+      true. A stamp added later is a guess.
+    items:
+      - id: validate
+        label: Output validation
+        icon: shield
+        note: >
+          Schema conformance and range checks per record. Catches malformed output, not
+          systematic drift — each bad record looks individually plausible.
+      - id: stamp
+        label: Provenance stamp
+        icon: doc
+        note: >
+          Model version, run identifier, timestamp, source record and confidence on every
+          generated field. Without it, regeneration is a full re-run of everything.
+
+  - id: derived
+    kind: service
+    title: Derived data
+    col: 4
+    row: 1
+    cosaiComponent: componentDataStorage
+    note: >
+      Generated fields, embeddings and summaries. Nothing about their shape says a model
+      produced them, which is why the stamp travels with the record.
+    items:
+      - id: fields
+        label: Generated fields
+        icon: db
+        note: Read as facts by every consumer that never sees the pipeline.
+      - id: embeddings
+        label: Embeddings & indexes
+        icon: search
+        note: Where a poisoned input becomes a durable influence on retrieval.
+
+  - id: consumers
+    kind: external
+    title: Downstream consumers
+    col: 4
+    row: 2
+    note: >
+      The systems and people that read derived data as collected data — and copy it onward
+      before anyone checks.
+    items:
+      - id: analytics
+        label: Warehouse & BI
+        icon: db
+        note: Analysts querying generated fields alongside measured ones.
+      - id: retrieval
+        label: Retrieval indexes
+        icon: search
+        note: Derived output feeding another system's context.
+      - id: trainingSets
+        label: Training sets
+        icon: folder
+        note: Where unstamped model output quietly becomes training data.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Provenance, sampling, budget and the ability to find and undo what a bad run produced —
+      each enforced outside the pipeline it governs.
+    items:
+      - id: identity
+        label: Pipeline identity
+        icon: key
+        note: >
+          A workload identity with read on the source and write on the derived store, and
+          nothing else. The asymmetry keeps a bad run recoverable.
+      - id: budget
+        label: Run budget & kill
+        icon: stop
+        note: A hard token and spend ceiling per run — a stop, not an alert, because nobody is watching.
+      - id: lineage
+        label: Run & lineage registry
+        icon: doc
+        note: >
+          Which run produced which records with which model version. The artifact that makes a
+          targeted rollback possible instead of a full regeneration.
+      - id: sampling
+        label: Sampling & drift review
+        icon: scale
+        note: >
+          Human and automated review of a sample per run, plus distribution comparison against
+          the previous one. The only control that catches systematic error at this volume.
+
+edges:
+  - from: authors
+    to: sourceCorpus
+    path: secondary
+    label: authored records
+    note: >
+      Nothing AI-specific gates this, and it happened long before the pipeline existed. One
+      poisoned record becomes an influence on everything the run produces.
+  - from: schedule
+    to: orchestration
+    path: primary
+    label: scheduled run
+    note: The unattended start. Every run of this architecture begins with a timer, not a person.
+  - from: sourceCorpus
+    to: orchestration
+    path: secondary
+    label: batched records
+    note: >
+      A read broader than any individual's access, because the job processes everything. Whether
+      the derived output inherits the source's permissions is decided downstream — often not at all.
+  - from: orchestration
+    to: provider
+    path: primary
+    label: batch submission
+    note: >
+      Carries a large share of the corpus to the provider in one submission, which makes the
+      retention terms on the batch tier a material question rather than boilerplate.
+  - from: provider
+    to: postProcess
+    path: primary
+    label: results
+    note: >
+      Unauthenticated content arriving at volume, with nobody reading it. Every downstream
+      consumer will treat what survives validation as collected data.
+  - from: postProcess
+    to: derived
+    path: primary
+    label: stamped output
+    note: >
+      Write access limited to the derived store rather than the source. A pipeline that can
+      overwrite its own inputs makes a defect unrecoverable.
+  - from: derived
+    to: consumers
+    path: external
+    label: read as fact
+    note: >
+      Derived data is indistinguishable from collected data once written, so it flows into
+      dashboards, indexes and training sets that never see the pipeline.
+  - from: governance
+    to: derived
+    path: governance
+    label: sampling & lineage
+    note: >
+      Per-run sampling, drift comparison and the lineage that maps runs to records. The version
+      recorded has to be the version the provider actually served.
+  - from: governance
+    to: provider
+    path: governance
+    label: vendor assurance
+    note: >
+      Retention, training-use and residency terms on the batch tier, assessed before a large
+      share of the corpus is handed over per run.
+
+pins:
+  risks:
+    - risk: riskDataPoisoning
+      at: authors->sourceCorpus
+      note: >
+        One hostile input is amplified across everything the run produces, then made durable.
+        The pipeline never authenticates who authored its inputs.
+    - risk: riskPromptInjection
+      at: sourceCorpus->orchestration
+      note: >
+        Record content and instruction are concatenated at volume, and no human reviews any
+        individual result.
+    - risk: riskSensitiveDataDisclosure
+      at: sourceCorpus
+      note: >
+        The pipeline identity reads broader than any user, unattended. What the job can see, a
+        misconfigured run can propagate.
+    - risk: riskEconomicDenialOfWallet
+      at: orchestration
+      note: >
+        Volume, per-token pricing, retries and no human watching. Together they are the most
+        common way this archetype produces an incident that is purely financial.
+    - risk: riskExcessiveDataHandlingDuringInference
+      at: orchestration->provider
+      note: >
+        A single submission carries a large share of the corpus to the provider, and holds it
+        there for the duration of the job.
+    - risk: riskInsecureModelOutput
+      at: provider->postProcess
+      note: >
+        Unauthenticated content at volume, with nobody reading it. Per-record validation passes
+        records that are individually plausible and systematically wrong.
+    - risk: riskDataPoisoning
+      at: derived
+      note: >
+        Amplified and durable. A defect here is read as fact by systems and people who never see
+        the pipeline, and has been copied onward by the time it is found.
+    - risk: riskUnauthorizedTrainingData
+      at: derived->consumers
+      note: >
+        Derived data flows into training sets and indexes indistinguishable from collected data.
+        Without the stamp nobody can tell what a model generated.
+
+  capabilities:
+    - capability: capabilityDataProvenance
+      at: postProcess
+      note: >
+        Stamp every generated field with model version, run, source and confidence, inside the
+        write path. This is the control everything else depends on.
+    - capability: capabilityRateLimiting
+      at: orchestration
+      note: >
+        A hard token and spend ceiling per run, enforced by the platform — there is no user
+        watching to abandon a runaway job.
+    - capability: capabilityBehavioralDriftDetection
+      at: derived
+      note: >
+        Compare each run's output distribution against the last. This is what catches a model
+        change or a poisoning campaign that per-record checks cannot see.
+    - capability: capabilityNhiManagement
+      at: orchestration
+      note: >
+        A workload identity for the pipeline: read on the source, write on the derived store,
+        nothing else, and rotated rather than pasted.
+    - capability: capabilityDataAccessGovernance
+      at: sourceCorpus->orchestration
+      note: >
+        Scope what the job may read to the dataset approved for the run, and decide explicitly
+        whether derived output inherits the source's permissions.
+    - capability: capabilityDataSanitization
+      at: authors->sourceCorpus
+      note: >
+        Filter and sanitise inbound records before they can be batched — the only point where a
+        poisoned example is one record rather than a run's worth of influence.
+    - capability: capabilityPromptInjectionDefense
+      at: sourceCorpus->orchestration
+      note: >
+        Classify record content before prompt construction; every record is untrusted input that
+        will be concatenated with instructions.
+    - capability: capabilityModelGuardrails
+      at: provider->postProcess
+      note: >
+        Schema, range and content checks on every returned record before it can be written —
+        automated, because no human reads batch output.
+    - capability: capabilityHitlControls
+      at: governance->derived
+      note: >
+        Human review of a sample per run, before consumers read the batch. The single human
+        touchpoint in this architecture is deliberate and after the fact.
+    - capability: capabilityAiBom
+      at: governance
+      note: >
+        A lineage record per run — dataset, model version, prompt version — so a defect found
+        months later can be scoped to affected records.
+    - capability: capabilityAiTprm
+      at: governance->provider
+      note: >
+        Assess the batch tier's retention and training-use terms; the submission holds a large
+        share of the corpus at the vendor for hours.
+    - capability: capabilityKillSwitch
+      at: governance
+      note: >
+        A stop that halts a mid-flight run and marks its partial output, because half-treated is
+        worse for consumers than untreated.
+
+scenarios:
+  - title: A nightly run processes the backlog
+    steps:
+      - follow: schedule->orchestration
+        note: The timer fires. Nobody is present for anything that follows.
+      - follow: sourceCorpus->orchestration
+        note: The job reads everything — broader than any user's own access.
+      - follow: orchestration->provider
+        note: A large share of the corpus leaves in one submission, under the run's budget ceiling.
+      - follow: provider->postProcess
+        note: Results return at volume; validation and the provenance stamp are the only checks.
+      - follow: postProcess->derived
+        note: Stamped records land in the derived store — write-scoped, so the source is untouched.
+      - follow: derived->consumers
+        note: From here on, generated data is read as collected data.
+  - title: One poisoned record enters the corpus
+    steps:
+      - follow: authors->sourceCorpus
+        note: A hostile input lands among millions of legitimate ones, unauthenticated.
+      - follow: sourceCorpus->orchestration
+        note: It is batched with everything else and concatenated into a prompt.
+      - follow: provider->postProcess
+        note: Each affected output record is individually plausible; per-record validation passes it.
+      - follow: postProcess->derived
+        note: The influence is now durable, and stamped — which is what will save the cleanup.
+      - follow: governance->derived
+        note: Distribution comparison against the previous run is the control that notices.
+  - title: A defect is discovered months later
+    steps:
+      - follow: governance->derived
+        note: The lineage registry maps the defective run and model version to the affected records.
+      - follow: schedule->orchestration
+        note: A targeted regeneration run is scheduled over just that subset.
+      - follow: postProcess->derived
+        note: Regenerated records overwrite the defective ones, with a new stamp. Without lineage, this is a full re-run of everything.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Microsoft Azure Well-Architected — training and data pipeline patterns for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+  - title: "NIST AI 600-1 — generative AI profile, data provenance actions"
+    url: https://www.nist.gov/itl/ai-risk-management-framework
+  - title: "CISA and NSA — AI data security"
+    url: https://www.cisa.gov/resources-tools/resources/ai-data-security

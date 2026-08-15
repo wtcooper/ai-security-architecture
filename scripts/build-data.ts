@@ -24,6 +24,7 @@ import type {
   FrameworkNote,
   Incident,
   Persona,
+  Rect,
   Risk,
   RiskOverlay,
   Surface,
@@ -31,7 +32,7 @@ import type {
 } from "../src/lib/types";
 import { CAPABILITY_STATUSES, FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { ICON_NAMES, layoutArchetype } from "../src/lib/flow-layout";
+import { chipSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
 import {
   ACTOR_IDS,
   BANDS,
@@ -66,7 +67,15 @@ async function loadIncidents(): Promise<Incident[]> {
 async function loadArchetypes(): Promise<AuthoredArchetype[]> {
   const dir = join(ROOT, "data", "reference", "architectures");
   const files = (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort();
-  return Promise.all(files.map((f) => loadYaml<AuthoredArchetype>(join(dir, f))));
+  return Promise.all(
+    files.map(async (f) => {
+      try {
+        return await loadYaml<AuthoredArchetype>(join(dir, f));
+      } catch (e) {
+        throw new Error(`architectures/${f}: ${(e as Error).message}`);
+      }
+    }),
+  );
 }
 
 /**
@@ -412,6 +421,10 @@ function checkArchetypes(
       blockIds.add(block.id);
       if (!BLOCK_KINDS.has(block.kind)) fail(`${at}: unknown kind ${block.kind}`);
       if (!block.title?.trim()) fail(`${at}: needs a title`);
+      // The title tab is as wide as the block; a longer title draws outside it.
+      if (block.kind !== "actor" && (block.title?.length ?? 0) > 24) {
+        fail(`${at}: title "${block.title}" is longer than 24 characters and will overflow its tab`);
+      }
       if (
         !Number.isInteger(block.col) ||
         block.col < 0 ||
@@ -511,7 +524,9 @@ function checkArchetypes(
     }
 
     const resolved = { ...arch, risks, capabilities };
-    return { ...resolved, layout: layoutArchetype(resolved) } satisfies Archetype;
+    const layout = layoutArchetype(resolved);
+    checkDiagramCollisions(where, resolved, layout);
+    return { ...resolved, layout } satisfies Archetype;
   });
 
   // The catalogue is being rebuilt flow-style one architecture at a time (the zone-style set is
@@ -528,12 +543,105 @@ function checkArchetypes(
   );
   const pinCount = out.reduce((s, a) => s + a.pins.risks.length + a.pins.capabilities.length, 0);
   console.log(
-    `architectures: ${out.length} flow-style pilot(s), ${pinCount} pins, ` +
+    `architectures: ${out.length} flow-style architectures, ${pinCount} pins, ` +
       `${anchored.size} risk-map components anchored` +
       (emptySurfaces.length ? ` — no architecture yet for: ${emptySurfaces.join(", ")}` : ""),
   );
   return out;
 }
+
+/**
+ * The drawings must stay legible without a human squinting at 28 screenshots: the build
+ * re-runs the exact placement maths the renderer uses (flow-layout.ts exports it to both
+ * sides) and fails when a flow would pass through a block, or a chip or risk tag would land
+ * on one, or a tag stack would run off the top of the canvas. The fix is always authored —
+ * a route hint, a different grid cell, or fewer pins on one target.
+ */
+function checkDiagramCollisions(
+  where: string,
+  arch: Omit<Archetype, "layout">,
+  layout: ReturnType<typeof layoutArchetype>,
+): void {
+  const inflate = (r: Rect, by: number): Rect => ({
+    x: r.x - by,
+    y: r.y - by,
+    w: r.w + 2 * by,
+    h: r.h + 2 * by,
+  });
+  const hits = (r: Rect, s: Rect) =>
+    r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h;
+  const blockRects = Object.entries(layout.blocks);
+
+  // Flows through blocks. Path data is our own "M x y L x y ..." — parse the segments back.
+  for (const edge of layout.edges) {
+    const nums = edge.d.match(/-?[\d.]+/g)!.map(Number);
+    for (let i = 0; i + 3 < nums.length; i += 2) {
+      const seg: Rect = {
+        x: Math.min(nums[i], nums[i + 2]) - 1,
+        y: Math.min(nums[i + 1], nums[i + 3]) - 1,
+        w: Math.abs(nums[i + 2] - nums[i]) + 2,
+        h: Math.abs(nums[i + 3] - nums[i + 1]) + 2,
+      };
+      for (const [id, rect] of blockRects) {
+        if (id === edge.from || id === edge.to) continue;
+        if (hits(seg, inflate(rect, -2))) {
+          fail(
+            `${where}: flow ${edge.from}->${edge.to} passes through block ${id} — ` +
+              `move a block, or set route: ${
+                (archEdgeOf(arch, edge)?.route ?? "hv") === "hv" ? "vh" : "hv"
+              }`,
+          );
+        }
+      }
+    }
+  }
+
+  const edgeGeoOf = (ref: string) => {
+    const found =
+      layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
+      layout.edges.find((e) => `${e.to}->${e.from}` === ref);
+    return found ? { midX: found.midX, midY: found.midY, horizontal: found.horizontal } : undefined;
+  };
+
+  const checkSpots = (kind: string, at: string, rects: Rect[], ownBlock?: string) => {
+    for (const r of rects) {
+      if (r.y < 2) fail(`${where}: ${kind} at ${at} runs off the top of the canvas — fewer pins there, or move the block down a row`);
+      for (const [id, rect] of blockRects) {
+        if (id === ownBlock) continue;
+        if (hits(r, inflate(rect, -2))) {
+          fail(`${where}: ${kind} at ${at} lands on block ${id} — pin it elsewhere or adjust the grid`);
+        }
+      }
+    }
+  };
+
+  const chipGroups = new Map<string, number>();
+  for (const pin of arch.pins.capabilities) {
+    chipGroups.set(pin.at, (chipGroups.get(pin.at) ?? 0) + 1);
+  }
+  for (const [at, n] of chipGroups) {
+    const spots = chipSpots(n, layout.blocks[at], edgeGeoOf(at));
+    checkSpots(
+      "capability chip",
+      at,
+      spots.map((s) => ({ x: s.x - 9, y: s.y - 9, w: 18, h: 18 })),
+      layout.blocks[at] ? at : undefined,
+    );
+  }
+
+  const tagGroups = new Map<string, number>();
+  for (const pin of arch.pins.risks) {
+    tagGroups.set(pin.at, (tagGroups.get(pin.at) ?? 0) + 1);
+  }
+  for (const [at, n] of tagGroups) {
+    // Tag width depends on the code ("R01"), which is constant-width here.
+    const { rects } = tagSpots(Array.from({ length: n }, () => 32), layout.blocks[at], edgeGeoOf(at));
+    checkSpots("risk tag", at, rects);
+  }
+}
+
+const archEdgeOf = (arch: Omit<Archetype, "layout">, geo: { from: string; to: string }) =>
+  arch.edges.find((e) => e.from === geo.from && e.to === geo.to);
 
 /**
  * CoSAI declares risk categories only in the risks JSON Schema enum, not in risks.yaml,

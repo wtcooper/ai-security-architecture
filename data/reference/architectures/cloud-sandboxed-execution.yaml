@@ -1,0 +1,496 @@
+id: archSandboxedExecution
+surface: surfaceCloud
+title: Sandboxed agentic execution service
+abbrev: Sandboxed execution
+summary:
+  - >
+    A service that runs agents in disposable isolated environments — cloud coding agents,
+    autonomous operations agents, agentic browsing. Untrusted code and untrusted instructions
+    execute together, and the isolation is the product.
+
+description:
+  - >
+    Everything here follows from one design commitment: the agent is assumed to be
+    compromisable, and the architecture is arranged so that it does not matter very much when it
+    is. The sandbox is not a hardening measure applied to an otherwise-trusted workload; it is
+    the trust boundary the whole service is organised around.
+  - >
+    Three properties make the isolation real. The environment is disposable, so persistence is
+    impossible without escaping — a compromise lasts for one task rather than indefinitely.
+    Egress is default-deny with a per-task allowlist, so an agent steered into exfiltrating
+    cannot reach a collection endpoint. And credentials are injected outside the sandbox rather
+    than handed into it: the agent asks a proxy for an effect — the push, the API call, the
+    deployment — and the proxy holds the token. A compromised agent gets the capability and
+    never the secret.
+  - >
+    Multi-tenancy at the isolation layer is the remaining hard part. Containers sharing a kernel
+    are a different security claim from microVMs with their own, and running many customers'
+    agents on shared hosts makes the isolation technology a load-bearing security decision
+    rather than an operational one. The output is where the boundary is crossed on purpose:
+    whatever the agent produces leaves as a reviewable artifact — a pull request, a change, a
+    report — down the same review and CI path a human's change takes. That human review is the
+    last control, and the one that erodes fastest as volume grows.
+
+distinguishedBy:
+  - >
+    Against the endpoint coding agent: the same loop, hosted. The endpoint version runs on a
+    machine that also holds SSH keys, cloud credentials and a browser profile, and nothing
+    separates them. Here the environment contains nothing but the task, and is destroyed
+    afterwards.
+  - >
+    Against the durable multi-agent workflow: that one is about surviving failure across a long
+    process; this one is about containing a compromise inside a short one. A workflow may use
+    this as a step; they are not the same concern.
+
+exemplars:
+  - name: Cloud coding agents
+    note: >
+      Vendor services that clone a repository into an isolated environment, run an agent against
+      the task, and open a pull request for review.
+    asOf: "2026-08"
+  - name: Autonomous operations and SRE agents
+    note: >
+      Agents given a contained environment and read access to production telemetry, proposing or
+      applying remediations through a reviewed path.
+    asOf: "2026-08"
+  - name: Agentic browsing services
+    note: >
+      Hosted browser automation driven by an agent, where the browser runs in the sandbox rather
+      than in the user's own session.
+    asOf: "2026-08"
+
+blocks:
+  - id: requester
+    kind: actor
+    title: Task requester
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      Describes the outcome, and reviews the artifact at the end. Absent in between — their
+      entitlements bound what the broker will do for the task.
+
+  - id: internet
+    kind: external
+    title: Arbitrary internet
+    col: 1
+    row: 0
+    note: >
+      Where a compromised agent would send what it found. Drawn because the default-deny egress
+      policy exists precisely to make this edge fail.
+    items:
+      - id: collection
+        label: Collection endpoints
+        icon: globe
+        note: The destination a successful injection needs and cannot reach.
+
+  - id: control
+    kind: service
+    title: Task control plane
+    col: 1
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      Accepts work, provisions one environment per task with a fresh identity, and tears it down
+      at the end. Deliberately outside the sandbox, which is the point.
+    items:
+      - id: scheduler
+        label: Task scheduler
+        icon: clock
+        note: One task, one environment, destroyed afterwards. Resource ceilings bound the run.
+      - id: provisioning
+        label: Environment provisioning
+        icon: gear
+        note: A fresh workload identity per task, expiring with it — persistence would undo the design.
+
+  - id: egressGate
+    kind: service
+    title: Egress gate
+    col: 2
+    row: 0
+    note: >
+      Default-deny with a per-task allowlist, enforced by the platform outside the thing it
+      contains. The control that makes a successful injection unprofitable rather than merely
+      detected.
+    items:
+      - id: allowlist
+        label: Per-task allowlist
+        icon: shield
+        note: Scoped to the task's actual dependencies, not the service's union of all needs.
+      - id: attempts
+        label: Attempt logging
+        icon: eye
+        note: >
+          Denied attempts are the highest-value signal in this archetype — they are what a
+          successful injection looks like when the architecture worked.
+
+  - id: sandbox
+    kind: service
+    title: Sandboxed runtime
+    col: 2
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      One task's agent loop, workspace and browser, in an environment that is assumed
+      compromised and arranged so a compromise expires with the task. It holds no secrets and no
+      standing authority.
+    items:
+      - id: loop
+        label: Agent loop
+        icon: agent
+        note: Plans and executes with no credentials of its own — it can only ask the proxy for effects.
+      - id: workspace
+        label: Workspace & shell
+        icon: code
+        note: Filesystem and toolchain containing the task and nothing else — no other repo, no other customer.
+      - id: browser
+        label: Clean browser
+        icon: globe
+        note: No pre-existing sessions; nothing of the user's to steal.
+      - id: isolation
+        label: Isolation boundary
+        icon: shield
+        note: >
+          Container versus microVM is a security claim, not an operational choice, once tenants
+          share hosts. The sandbox must not reach its own configuration.
+
+  - id: sourceContent
+    kind: external
+    title: Repository & web content
+    col: 2
+    row: 2
+    note: >
+      Code, issues, dependency metadata and pages the agent reads. Assumed hostile — the
+      architecture makes the reader disposable rather than the content safe.
+    items:
+      - id: repos
+        label: Cloned repositories
+        icon: code
+        note: Including README files, issues and configs that are all model input.
+      - id: pages
+        label: Web pages & docs
+        icon: globe
+        note: Attacker-writable content read as context inside the sandbox.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 3
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      The published inference interface, reached through the egress allowlist like everything
+      else. Even the model call does not put a secret inside the environment.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: On the allowlist, with the credential attached outside the sandbox.
+
+  - id: actionProxy
+    kind: service
+    title: Broker & action proxy
+    col: 3
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      Holds the task's tokens and performs privileged operations on the agent's behalf — the
+      push, the API call, the deployment. Credential isolation happens here rather than being
+      asserted.
+    items:
+      - id: broker
+        label: Credential broker
+        icon: key
+        note: >
+          Short-lived, task-scoped tokens that never pass inward, and never exceed what the
+          requester could do themselves.
+      - id: proxiedOps
+        label: Proxied operations
+        icon: plug
+        note: The agent asks for an effect; the proxy performs it and logs it.
+      - id: artifactOut
+        label: Artifact creation
+        icon: doc
+        note: Work leaves as a reviewable artifact, not a direct change — which keeps the human gate meaningful.
+
+  - id: targets
+    kind: external
+    title: Target systems
+    col: 4
+    row: 2
+    note: >
+      The systems that will trust the artifact once someone merges or applies it. Deliberately
+      reached by the same review, CI and deployment path a human's change takes.
+    items:
+      - id: repos
+        label: Target repositories
+        icon: code
+        note: Where the pull request lands, behind branch protection and review.
+      - id: infra
+        label: Infrastructure & records
+        icon: gear
+        note: Where an applied remediation becomes a real change.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Isolation policy, artifact review, session audit and termination — each enforced by the
+      platform, outside the environments they govern.
+    items:
+      - id: isolationPolicy
+        label: Isolation & egress policy
+        icon: shield
+        note: >
+          Which isolation technology, which allowlist, which resource ceiling. Whether tenants
+          share a kernel is a security decision that often gets made as an operational one.
+      - id: review
+        label: Artifact review
+        icon: scale
+        note: >
+          A human reading the diff before it lands. The last control, and the one that erodes
+          fastest as volume grows.
+      - id: audit
+        label: Session audit
+        icon: eye
+        note: Prompts, commands, network attempts and proxied actions — including every denied egress attempt.
+      - id: termination
+        label: Task termination
+        icon: stop
+        note: >
+          Destroying the environment. Cheap here in a way it is nowhere else, because the
+          environment was disposable by design.
+
+edges:
+  - from: requester
+    to: control
+    path: primary
+    bidir: true
+    label: task / artifact link
+    note: >
+      The requester's entitlements bound what the broker will later be willing to do for the
+      task; the finished artifact comes back for their review.
+  - from: control
+    to: sandbox
+    path: primary
+    label: provision per task
+    note: >
+      A fresh environment and a fresh identity, both expiring with the task. Persistence across
+      tasks would undo the main property this architecture is built for.
+  - from: sourceContent
+    to: sandbox
+    path: external
+    label: cloned content
+    note: >
+      Assumed hostile on arrival. The architecture does not try to make this content safe; it
+      makes the environment that reads it disposable.
+  - from: sandbox
+    to: egressGate
+    path: primary
+    bidir: true
+    label: outbound attempt
+    note: Every byte leaving the sandbox passes the gate — there is no other network path.
+  - from: egressGate
+    to: provider
+    path: primary
+    bidir: true
+    label: allowed — inference
+    note: >
+      On the allowlist, with the credential attached outside the sandbox. The one channel that
+      always leaves, and therefore the one worth inspecting.
+  - from: egressGate
+    to: internet
+    path: external
+    label: denied by default
+    note: >
+      Drawn because it fails. Making exfiltration unprofitable is a stronger position than
+      making injection unlikely, and it is the one this architecture can actually achieve.
+  - from: sandbox
+    to: actionProxy
+    path: primary
+    bidir: true
+    label: privileged operation request
+    note: >
+      The defining crossing. The agent asks for an effect; the proxy holds the credential and
+      performs it. A compromised agent gets the capability and never the secret.
+  - from: actionProxy
+    to: targets
+    path: external
+    label: reviewed artifact
+    note: >
+      The pull request or change lands by the same review, CI and deployment path a human's
+      change takes, so the existing controls apply unchanged.
+  - from: governance
+    to: actionProxy
+    path: governance
+    label: credential policy & audit
+    note: >
+      The broker's grants never exceed the requester's entitlements, and every proxied action is
+      recorded off the agent's write path.
+  - from: governance
+    to: targets
+    path: governance
+    label: artifact review
+    note: >
+      A human reads the diff before merge or apply. Keeping everything upstream strong is what
+      keeps this gate meaningful as volume grows.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: sourceContent->sandbox
+      note: >
+        Not mitigated here — contained. The agent is assumed to be steered by what it reads, and
+        the consequences are arranged to expire with the task.
+    - risk: riskToolSourceProvenance
+      at: sourceContent
+      note: >
+        Dependencies, build scripts and setup instructions arrive with the clone and execute in
+        the workspace. Admission is whatever the repository says about itself.
+    - risk: riskSensitiveDataDisclosure
+      at: egressGate->internet
+      note: >
+        The exfiltration path this architecture is built to close. A denied attempt here is what
+        a successful injection looks like when the design worked.
+    - risk: riskCovertChannelsInModelOutputs
+      at: egressGate->provider
+      note: >
+        The inference channel is always on the allowlist, so it is the covert path that remains
+        once everything else is denied.
+    - risk: riskCrossTenantCredentialPropagation
+      at: sandbox
+      note: >
+        Many customers' agents on shared hosts make the isolation technology the claim: a shared
+        kernel is a different promise from a microVM with its own.
+    - risk: riskRogueActions
+      at: sandbox->actionProxy
+      note: >
+        The agent's own authority is deliberately nil, so rogue actions reduce to what the proxy
+        will perform — which is why its scope check carries the weight.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: actionProxy
+      note: >
+        The proxy acts on the agent's word with real credentials. It must never exceed what the
+        requester could have done, or delegation becomes escalation.
+    - risk: riskInsecureModelOutput
+      at: actionProxy->targets
+      note: >
+        The artifact is model output that target systems will trust once merged. Human review is
+        the last control, and it erodes as volume grows.
+    - risk: riskRunawayAgentToolLoops
+      at: control
+      note: >
+        An unattended loop burns compute and inference spend until the scheduler's ceilings end
+        it — nobody is watching the task run.
+
+  capabilities:
+    - capability: capabilityAgentSandboxing
+      at: sandbox
+      note: >
+        Disposable per-task isolation, microVM-grade where tenants share hosts, with
+        configuration the sandbox cannot reach.
+    - capability: capabilityCredentialIsolation
+      at: sandbox->actionProxy
+      note: >
+        Keep every secret outside the sandbox: the agent requests effects, the proxy holds the
+        tokens and performs them.
+    - capability: capabilityEgressControl
+      at: egressGate
+      note: >
+        Default-deny with a per-task allowlist scoped to actual dependencies, enforced by the
+        platform outside the environment.
+    - capability: capabilitySecretsManagement
+      at: actionProxy
+      note: >
+        Broker short-lived, task-scoped credentials bounded by the requester's own entitlements;
+        nothing long-lived, nothing inward.
+    - capability: capabilityHitlControls
+      at: actionProxy->targets
+      note: >
+        A human review gate on every artifact before merge or apply — sized and staffed so it
+        does not rubber-stamp at volume.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: >
+        Record prompts, commands, proxied actions and every denied egress attempt — the denied
+        attempts are the signal most often not collected.
+    - capability: capabilityKillSwitch
+      at: governance
+      note: >
+        Terminate by destroying the environment. Cheap and complete, because the environment was
+        disposable from the start.
+    - capability: capabilityNhiManagement
+      at: control
+      note: >
+        A fresh workload identity per task, expiring at teardown, so nothing survives to be
+        reused by the next compromise.
+    - capability: capabilityAiDlp
+      at: egressGate->provider
+      note: >
+        Inspect what leaves on the allowed inference channel — the one egress path a steered
+        agent always has.
+    - capability: capabilityRateLimiting
+      at: control
+      note: >
+        Per-task resource, time and spend ceilings, enforced by the scheduler because no human
+        is present to abandon a runaway run.
+    - capability: capabilityToolPermissionScoping
+      at: actionProxy
+      note: >
+        The proxy performs only the operations the task was granted — a per-operation scope, not
+        the requester's whole reach.
+
+scenarios:
+  - title: A coding task runs end to end
+    steps:
+      - follow: requester->control
+        note: The task arrives; the requester's entitlements bound everything that follows.
+      - follow: control->sandbox
+        note: A fresh environment and identity are provisioned — no secrets inside.
+      - follow: sourceContent->sandbox
+        note: The repository is cloned in, assumed hostile.
+      - follow: sandbox->egressGate
+        note: The agent works; every outbound byte passes the gate.
+      - follow: egressGate->provider
+        note: Inference is on the allowlist, credential attached outside the sandbox.
+      - follow: sandbox->actionProxy
+        note: The agent asks for the push; the proxy holds the token and performs it.
+      - follow: actionProxy->targets
+        note: A pull request opens, on the same review and CI path as a human change.
+      - follow: control->requester
+        note: The artifact link comes back; the environment is destroyed.
+  - title: An injection steers the agent
+    steps:
+      - follow: sourceContent->sandbox
+        note: A hostile instruction rides in on a README, an issue or a fetched page.
+      - follow: sandbox->egressGate
+        note: The steered agent tries to send what it found.
+      - follow: egressGate->internet
+        note: Denied by default. The attempt is logged — this is the architecture working.
+      - follow: sandbox->actionProxy
+        note: An out-of-scope operation is refused; the proxy's grant never exceeded the task.
+      - follow: governance->targets
+        note: The malicious diff still has to pass a human reviewer before anything trusts it.
+  - title: A task runs away
+    steps:
+      - follow: sandbox->egressGate
+        note: An unbounded loop hammers the allowed channels; ceilings and logs accumulate.
+      - follow: governance->actionProxy
+        note: The audit trail shows the pattern; termination is invoked.
+      - follow: control->sandbox
+        note: The environment is destroyed — the kill is cheap because nothing was meant to persist.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI05 unexpected code execution"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Securing Agentic Applications Guide 1.0 — sandboxing and containment"
+    url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+  - title: "Thoughtworks Technology Radar vol. 34 — sandboxed execution for coding agents"
+    url: https://www.thoughtworks.com/radar/techniques
+  - title: "Anthropic engineering — decoupled brain and hands, credentials outside the sandbox"
+    url: https://www.anthropic.com/engineering/managed-agents
+  - title: "AWS Well-Architected Agentic AI Lens — isolation and bounded autonomy"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentic-ai-lens.html

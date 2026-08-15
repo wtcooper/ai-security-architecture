@@ -38,14 +38,14 @@ export const ICON_NAMES = [
 ] as const;
 
 const COL_W = 176;
-const COL_GAP = 62;
-const ROW_GAP = 70;
+const COL_GAP = 64;
+const ROW_GAP = 116;
 const MARGIN_X = 22;
 /** Room above the first row for tabs and risk-tag stacks. */
-const MARGIN_TOP = 46;
-const MARGIN_BOTTOM = 28;
+const MARGIN_TOP = 68;
+const MARGIN_BOTTOM = 48;
 
-const TAB_H = 20;
+export const TAB_H = 20;
 /** Items pack two per row inside a standard block. */
 const ITEM_H = 50;
 const BLOCK_PAD_TOP = 16;
@@ -121,7 +121,12 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     const h = span > 1 ? spanH : naturalHeight(b);
     // Centre a short block in its row; a spanning block takes the whole span.
     const top = span > 1 ? rowY[b.row] : rowY[b.row] + (rowH[b.row] - h) / 2;
-    blocks[b.id] = { x, y: top, w: COL_W, h };
+    // An actor is drawn as a small icon, not a box — shrink its rect so flows attach to the
+    // figure instead of floating at the edge of an invisible full-width cell.
+    blocks[b.id] =
+      b.kind === "actor"
+        ? { x: x + (COL_W - 64) / 2, y: top, w: 64, h }
+        : { x, y: top, w: COL_W, h };
   }
 
   // --- Edges ---------------------------------------------------------------------
@@ -203,4 +208,71 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   });
 
   return { width, height, blocks, edges };
+}
+
+// --- Pin placement -----------------------------------------------------------------
+// Chips and tags have deterministic positions computed from the same geometry the renderer
+// draws, and the build re-runs these functions to prove nothing lands on top of a block.
+// One implementation, imported by both sides, so the check can never drift from the drawing.
+
+export interface PinEdgeGeo {
+  midX: number;
+  midY: number;
+  horizontal: boolean;
+}
+
+export const TAG_H = 17;
+const TAG_GAP = 20;
+
+/** Numbered capability chips: on a block's bottom border, or seated on the flow itself. */
+export function chipSpots(
+  n: number,
+  block?: Rect,
+  edge?: PinEdgeGeo,
+): { x: number; y: number }[] {
+  if (block) {
+    return Array.from({ length: n }, (_, i) => ({ x: block.x + 16 + i * 24, y: block.y + block.h }));
+  }
+  if (!edge) return [];
+  return Array.from({ length: n }, (_, i) => {
+    const off = (i - (n - 1) / 2) * 24;
+    return edge.horizontal
+      ? { x: edge.midX + off, y: edge.midY }
+      : { x: edge.midX, y: edge.midY + off };
+  });
+}
+
+/**
+ * Risk-tag pills plus the leader line that ties the stack to what it tags. Blocks carry their
+ * stack above the title tab; horizontal flows above the midpoint; vertical flows beside it.
+ */
+export function tagSpots(
+  widths: number[],
+  block?: Rect,
+  edge?: PinEdgeGeo,
+): { rects: Rect[]; leader: string } {
+  const n = widths.length;
+  if (block) {
+    const ax = block.x + 18;
+    const ay = block.y - TAB_H / 2;
+    return {
+      rects: widths.map((w, i) => ({ x: ax - w / 2, y: ay - TAG_GAP * (n - i), w, h: TAG_H })),
+      leader: `M ${ax} ${ay - TAG_GAP * n + TAG_H + 2} L ${ax} ${ay}`,
+    };
+  }
+  if (!edge) return { rects: [], leader: "" };
+  if (edge.horizontal) {
+    const ax = edge.midX;
+    const bottom = edge.midY - 14;
+    return {
+      rects: widths.map((w, i) => ({ x: ax - w / 2, y: bottom - TAG_GAP * (n - i), w, h: TAG_H })),
+      leader: `M ${ax} ${bottom - TAG_GAP + TAG_H + 2} L ${ax} ${edge.midY - 5}`,
+    };
+  }
+  const right = edge.midX - 16;
+  const top = edge.midY - (n * TAG_GAP - (TAG_GAP - TAG_H)) / 2;
+  return {
+    rects: widths.map((w, i) => ({ x: right - w, y: top + i * TAG_GAP, w, h: TAG_H })),
+    leader: `M ${right + 1} ${edge.midY} L ${edge.midX - 5} ${edge.midY}`,
+  };
 }

@@ -1,0 +1,365 @@
+id: archAiApiBackend
+surface: surfaceCloud
+title: AI-augmented API backend
+abbrev: AI API backend
+
+summary:
+  - >
+    A conventional API with a model somewhere in the middle — classifying, extracting, summarising
+    or routing — behind a contract that promises a typed response. The most widespread AI
+    architecture and the least often recognised as one.
+
+description:
+  - >
+    There is no chat interface here and frequently no user-visible AI at all. A support ticket
+    gets categorised, an invoice gets extracted, a message gets routed, and the caller receives a
+    normal API response. The AI is an implementation detail of an endpoint, which is exactly why
+    this architecture tends to skip the controls the chat-shaped ones get.
+  - >
+    The defining property is that model output re-enters a deterministic system. Downstream code
+    branches on a classification, writes an extracted value to a record, or passes a generated
+    string into a query. The schema is the output contract: model output is validated against it
+    before anything downstream sees it, and a response that does not conform is rejected — routed
+    to a deterministic fallback — rather than coerced. Free-text fields inside a structured
+    response are where this goes wrong: a schema that validates shape but leaves a string
+    unconstrained has validated nothing about the content of the field most likely to reach a
+    template, a query or another prompt.
+  - >
+    Two operational properties differ from a normal backend. Latency and availability now depend
+    on an external inference call, so timeouts, retries and the fallback path are functional
+    requirements rather than resilience niceties. And cost is per-token on a path called at
+    request volume, which makes an unbounded input a financial exposure as well as a performance
+    one.
+
+distinguishedBy:
+  - >
+    Against the embedded retrieval assistant: no conversation, no retrieval, no human reading the
+    output. The consumer of the model's output is code, which changes the control set from
+    grounding and rendering to schema validation and fallback.
+  - >
+    Against an autonomous action agent: this has no loop and no discretion. It performs one
+    transformation per request within a fixed contract; where the extracted value drives a write,
+    the write is the calling system's decision, not the model's.
+
+exemplars:
+  - name: Classification and routing endpoints
+    note: >
+      Ticket triage, content moderation, intent routing. A typed response consumed by code, with
+      the model replacing a rules engine that used to be maintained by hand.
+    asOf: "2026-08"
+  - name: Document extraction services
+    note: >
+      Invoices, forms and contracts turned into structured records. The extracted values are
+      written to systems of record, which is where the validation question becomes concrete.
+    asOf: "2026-08"
+
+blocks:
+  - id: caller
+    kind: actor
+    title: Calling system
+    icon: gear
+    col: 0
+    row: 1
+    note: >
+      Another service or a customer integration, submitting content authored by someone else
+      entirely. Expects a typed response and will not tolerate a prose apology when the model
+      misbehaves.
+
+  - id: apiEdge
+    kind: service
+    title: API contract
+    col: 1
+    row: 1
+    cosaiComponent: componentApplicationInputHandling
+    note: >
+      The published contract and the checks in front of it. Its promise of a typed response is
+      what the whole validation discipline downstream exists to keep.
+    items:
+      - id: contract
+        label: Published endpoint
+        icon: globe
+        note: Conventional API authentication — it authenticates the caller and nothing about the content.
+      - id: inputBounds
+        label: Input validation & bounds
+        icon: shield
+        note: >
+          Size, type and content limits before anything reaches a model. On a per-token
+          dependency, bounding input length is a cost control as much as a safety one.
+      - id: quotas
+        label: Quotas
+        icon: clock
+        note: Enforced at the edge, because by the service tier the token spend is already committed.
+
+  - id: transform
+    kind: service
+    title: Transformation
+    col: 2
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      Builds the prompt, calls the model, and is the only place in the service that knows an AI is
+      involved at all. Everything after the edge treats the payload as adversarial regardless.
+    items:
+      - id: promptBuild
+        label: Prompt construction
+        icon: doc
+        note: Submitted content becomes model input here, without ever having looked like a prompt.
+      - id: timeouts
+        label: Timeouts & retries
+        icon: clock
+        note: An external inference call now sits inside the endpoint's latency and availability budget.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 3
+    row: 0
+    cosaiComponent: componentModelServing
+    note: The published inference interface. What runs behind it is the provider's and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: Authenticated transport carrying unauthenticated content back into a deterministic system.
+
+  - id: schemaCheck
+    kind: service
+    title: Output validation
+    col: 2
+    row: 2
+    cosaiComponent: componentApplicationOutputHandling
+    note: >
+      Schema conformance with rejection rather than coercion, then constraints on the fields
+      themselves. This is the boundary between model text and the typed object the contract
+      promised.
+    items:
+      - id: conformance
+        label: Schema conformance
+        icon: shield
+        note: A response that does not conform is rejected, never coerced into shape.
+      - id: fieldConstraints
+        label: Field constraints
+        icon: doc
+        note: >
+          Enumerations wherever the domain allows. Validating shape alone says nothing about the
+          contents of a string.
+      - id: encoding
+        label: Output encoding
+        icon: code
+        note: Free-text values encoded for wherever they land — markup, a query, another prompt.
+      - id: fallback
+        label: Deterministic fallback
+        icon: gear
+        note: >
+          What the endpoint returns when the model is slow, unavailable or non-conforming. A
+          functional requirement, because the contract promised a response.
+
+  - id: records
+    kind: external
+    title: Systems of record
+    col: 4
+    row: 2
+    note: >
+      Where extracted values and classifications become state. The model influenced the value; it
+      did not authorise the write.
+    items:
+      - id: store
+        label: Records & downstream code
+        icon: db
+        note: Code that branches on the value was written expecting a value, not an adversary.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Credentials, cost ceilings, evaluation and the record of what the model was asked and
+      answered — all easy to skip here, precisely because the endpoint does not look like an AI
+      feature.
+    items:
+      - id: creds
+        label: Credential broker
+        icon: key
+        note: Short-lived provider credentials issued per workload, not a key in the service's configuration.
+      - id: costCeiling
+        label: Quota & cost ceiling
+        icon: clock
+        note: A per-token dependency called at request volume; without a ceiling, traffic and cost are the same variable.
+      - id: evals
+        label: Accuracy & adversarial evaluation
+        icon: scale
+        note: >
+          Behaviour on a labelled set and on inputs designed to break the schema. Where a chat
+          product degrades noticeably, this one silently miscategorises.
+      - id: promptLog
+        label: Prompt & response log
+        icon: eye
+        note: The only way to reconstruct why a record holds the value it does.
+
+edges:
+  - from: caller
+    to: apiEdge
+    path: primary
+    bidir: true
+    label: request / typed response
+    note: >
+      Submitted content in — ticket text, documents, message bodies, written by whoever submitted
+      them — and the contract's typed response back out.
+  - from: apiEdge
+    to: transform
+    path: primary
+    label: bounded input
+    note: The edge has bounded size and stripped what it can; the payload is treated as adversarial anyway.
+  - from: transform
+    to: provider
+    path: primary
+    bidir: true
+    note: >
+      Inference on a brokered, per-workload credential. The response returns over authenticated
+      transport as unauthenticated content.
+  - from: transform
+    to: schemaCheck
+    path: primary
+    label: model response
+    note: >
+      Model output enters the validation boundary. Every control from here to the write path
+      exists because of this crossing.
+  - from: schemaCheck
+    to: apiEdge
+    path: primary
+    label: typed or fallback response
+    note: >
+      What crosses back out is a validated, constrained object — or the deterministic fallback,
+      which honours the same contract. A caller cannot tell the difference.
+  - from: schemaCheck
+    to: records
+    path: external
+    label: extracted value
+    note: >
+      The value becomes state in someone else's system. Keeping the model's influence separate
+      from write authorisation is what stops this architecture quietly becoming an action agent.
+  - from: governance
+    to: provider
+    path: governance
+    label: evaluation & credentials
+    note: >
+      Model, prompt and schema changes pass evaluation before serving traffic, and the provider
+      credential is brokered rather than stored.
+
+pins:
+  risks:
+    - risk: riskInsecureModelOutput
+      at: transform->schemaCheck
+      note: >
+        The central risk: model output flows into branching logic, record writes and sometimes
+        queries, and every consumer was written expecting a value rather than an adversary.
+    - risk: riskPromptInjection
+      at: caller->apiEdge
+      note: >
+        Injection arrives inside ordinary business content, on an endpoint nobody thinks of as an
+        AI feature — which is why the controls get skipped here more than anywhere else.
+    - risk: riskDenialOfMLService
+      at: transform->provider
+      note: An external inference call sits inside a synchronous request path; its availability is now yours.
+    - risk: riskSensitiveDataDisclosure
+      at: transform->provider
+      note: Whatever the caller submitted leaves your tier inside the prompt, and again into the logs.
+    - risk: riskEconomicDenialOfWallet
+      at: apiEdge
+      note: Per-token cost at request volume makes an unbounded input a financial exposure.
+    - risk: riskModelEvasion
+      at: schemaCheck
+      note: >
+        Inputs crafted to break the schema or skew the classification fail silently — a
+        miscategorisation, not an error.
+    - risk: riskRogueActions
+      at: schemaCheck->records
+      note: An extracted value that drives a write turns a wrong answer into a wrong record.
+
+  capabilities:
+    - capability: capabilityGroundednessChecking
+      at: schemaCheck
+      note: >
+        Schema validation with a deterministic failure path — reject non-conforming responses,
+        never coerce them.
+    - capability: capabilityOutputEncoding
+      at: schemaCheck->records
+      note: >
+        Constrain fields to enumerations where the domain allows, and encode free-text values for
+        wherever they land.
+    - capability: capabilityPromptInjectionDefense
+      at: caller->apiEdge
+      note: Classify submitted content before it becomes a prompt, because it never looks like one.
+    - capability: capabilityRateLimiting
+      at: apiEdge
+      note: Bound input size and enforce quotas and cost ceilings at the edge, before spend is committed.
+    - capability: capabilityMlSecureDefaults
+      at: schemaCheck
+      note: >
+        Make the fallback the default answer to every model failure mode — slow, unavailable,
+        non-conforming — so the contract holds without the model.
+    - capability: capabilitySecretsManagement
+      at: transform->provider
+      note: Brokered, short-lived provider credentials; no key at rest in the service tier.
+    - capability: capabilityModelEvals
+      at: governance->provider
+      note: >
+        Evaluate conformance under adversarial input, not only accuracy on the happy path, before
+        any model or prompt change ships.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: Log the prompt and the response per request — the only record of why a field holds its value.
+    - capability: capabilityHitlControls
+      at: schemaCheck->records
+      note: A review gate where extracted values drive consequential or irreversible writes.
+    - capability: capabilityNhiManagement
+      at: caller->apiEdge
+      note: Workload identity for callers — non-human clients with their own credentials and retry behaviour.
+
+scenarios:
+  - title: A ticket is classified
+    steps:
+      - follow: caller->apiEdge
+        note: The request is authenticated and its content bounded.
+      - follow: apiEdge->transform
+        note: The ticket text becomes a prompt in the only component that knows a model is involved.
+      - follow: transform->provider
+        note: Inference on a brokered credential, inside the endpoint's latency budget.
+      - follow: transform->schemaCheck
+        note: The response is validated against the schema; the category must be one of the enumeration.
+      - follow: schemaCheck->apiEdge
+        note: A typed object crosses back out — the contract kept.
+      - follow: apiEdge->caller
+        note: The caller consumes a normal API response, unaware of the machinery.
+  - title: The model does not cooperate
+    steps:
+      - follow: transform->provider
+        note: The call times out, or returns something that is not the schema.
+      - follow: transform->schemaCheck
+        note: Conformance fails; the response is rejected rather than coerced.
+      - follow: schemaCheck->apiEdge
+        note: The deterministic fallback honours the same contract. The caller cannot tell.
+  - title: The injection is inside an invoice
+    steps:
+      - follow: caller->apiEdge
+        note: A document authored by a third party arrives as ordinary business content.
+      - follow: apiEdge->transform
+        note: Its text reaches a prompt without ever having looked like one.
+      - follow: transform->provider
+        note: The model follows the strongest instruction in its context.
+      - follow: transform->schemaCheck
+        note: The payload rides out in the free-text field the schema left unconstrained.
+      - follow: schemaCheck->records
+        note: Field constraints and encoding decide what actually lands in the record.
+
+sources:
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM10 improper output handling"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "Martin Fowler and Bharani Subramaniam — emerging patterns in building GenAI products"
+    url: https://martinfowler.com/articles/gen-ai-patterns/
+  - title: "AWS Well-Architected Generative AI Lens"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html
+  - title: "Microsoft Azure Well-Architected — architecture pattern for AI workloads"
+    url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern

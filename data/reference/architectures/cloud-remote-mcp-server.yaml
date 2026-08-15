@@ -1,0 +1,441 @@
+id: archRemoteMcpServer
+surface: surfaceCloud
+title: Remote MCP server you publish
+abbrev: Remote MCP server
+
+summary:
+  - >
+    A tool server operated as a service for other people's agents: an OAuth resource server
+    whose clients are language models. The scopes, the tenancy and the tool descriptions are all
+    your design decisions — and the descriptions execute as instruction inside somebody else's
+    model.
+
+description:
+  - >
+    The inversion is what makes this its own architecture. Every other cloud archetype here
+    calls tools; this one is the tool. The caller is an autonomous agent acting for a user, the
+    arguments were produced by a model, and the tool descriptions this server publishes become
+    instructions inside that model's context. A poorly worded description causes misuse; a
+    deliberately worded one is an attack on the caller. Publishing a server means treating
+    changes to descriptions and error messages with the seriousness of an API contract change.
+  - >
+    Authorization is the second inversion. Standard OAuth answers "may this client act for this
+    user", and here that is necessary and not sufficient: the client is an agent that may have
+    been steered by content it read elsewhere. Scopes therefore need to be narrow enough that a
+    hijacked agent's blast radius is bounded, and consequential operations need confirmation
+    semantics the protocol can express, rather than relying on the client to prompt its user.
+  - >
+    The operational shape is otherwise a well-understood multi-tenant service, and the ordinary
+    disciplines apply with unusual force: every read and write checks both that the scope
+    permits the operation and that the tenant on the token matches the tenant on the record;
+    rate limits are sized for machine callers that retry, loop and parallelise; and results are
+    bounded in size, because an oversized result is both a cost problem for the caller and a way
+    to crowd their context window. There is no model anywhere in this service — every
+    distinctive control follows from the client being one.
+
+distinguishedBy:
+  - >
+    Against a third-party MCP server you consume: opposite side of the same boundary. There the
+    scopes are someone else's design and the work is admission and observation; here the scopes,
+    the tenancy and the descriptions are all design decisions.
+  - >
+    Against an AI-augmented API backend: that one has AI inside it and a conventional client.
+    This one has no AI inside it at all and a model as the client. The security work is entirely
+    about the caller's nature.
+
+exemplars:
+  - name: Product MCP servers
+    note: >
+      SaaS vendors publishing remote tool servers for their own products so customer agents can
+      act without a bespoke integration.
+    asOf: "2026-08"
+  - name: Internal MCP servers
+    note: >
+      The same pattern inside one organisation, exposing internal systems to internal agents.
+      Same architecture, and the temptation to skip the authorization work is much stronger.
+    asOf: "2026-08"
+
+blocks:
+  - id: delegatingUser
+    kind: actor
+    title: Delegating user
+    icon: person
+    col: 0
+    row: 0
+    note: >
+      The person the calling agent acts for, and the source of the authorization. Not present at
+      call time, which is why consequential operations cannot rely on them being asked.
+
+  - id: callingAgent
+    kind: actor
+    title: Calling agent
+    icon: agent
+    col: 0
+    row: 1
+    note: >
+      Someone else's agent, with arguments composed by a model that may have read hostile
+      content. A non-human caller that is neither a person nor a bot to block.
+
+  - id: authServer
+    kind: service
+    title: Authorization server
+    col: 1
+    row: 0
+    note: >
+      Issues scoped, expiring, audience-restricted tokens to named clients. The one place a
+      compromised agent's access can be withdrawn without redeploying anything.
+    items:
+      - id: issuance
+        label: Token issuance
+        icon: key
+        note: >
+          Short-lived and audience-restricted — a token other resource servers accept turns one
+          compromised agent into a multi-service problem.
+      - id: consent
+        label: Consent records
+        icon: doc
+        note: Which user authorised which client for which scopes, and when.
+
+  - id: endpoint
+    kind: service
+    title: Protocol endpoint
+    col: 1
+    row: 1
+    note: >
+      The published MCP surface where agent traffic arrives, is authenticated, throttled and
+      given a session. Session handling here is a security surface, not plumbing.
+    items:
+      - id: transport
+        label: MCP transport
+        icon: plug
+        note: >
+          Session identifiers that can be guessed or replayed hand one caller another's
+          context.
+      - id: sessions
+        label: Session handling
+        icon: shield
+        note: Binds each session to the authenticated client and user, never to a guessable id.
+      - id: limits
+        label: Rate & cost limits
+        icon: clock
+        note: >
+          Sized for machine callers, which retry, loop and parallelise in ways human clients do
+          not. A limit tuned for people is not a limit here.
+
+  - id: toolDefs
+    kind: service
+    title: Tool definitions
+    col: 1
+    row: 2
+    cosaiComponent: componentTools
+    note: >
+      Names, descriptions and schemas — not documentation, but text the calling model treats as
+      instruction. Changing them is changing somebody else's prompt.
+    items:
+      - id: descriptions
+        label: Tool descriptions
+        icon: doc
+        note: Versioned, reviewed artifacts, because they execute inside another organisation's model.
+      - id: schemas
+        label: Input schemas
+        icon: code
+        note: The contract model-generated arguments are validated against.
+      - id: confirmFlags
+        label: Confirmation flags
+        icon: shield
+        note: >
+          Operations marked as requiring the caller to confirm with its user. The server cannot
+          enforce it; declaring it is the only lever it has.
+
+  - id: handlers
+    kind: service
+    title: Tool handlers
+    col: 2
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      The implementations. Arguments arrive model-generated, so validation assumes plausible
+      nonsense rather than the malformed input a conventional client produces.
+    items:
+      - id: implementations
+        label: Handler code
+        icon: code
+        note: Executes with the request's brokered identity, never a standing service account.
+      - id: argValidation
+        label: Argument validation
+        icon: shield
+        note: >
+          A handler that re-resolves the tenant from an argument is trusting a model to name
+          it. Client, user and tenant travel with the request.
+      - id: resultShaping
+        label: Result shaping
+        icon: doc
+        note: >
+          Bounds size and structure. An oversized result costs the caller money and crowds
+          their context window.
+
+  - id: tenantData
+    kind: service
+    title: Tenant data
+    col: 3
+    row: 1
+    cosaiComponent: componentDataStorage
+    note: >
+      Per-tenant records the tools reach. Isolation here is the claim consuming organisations
+      cannot verify and will ask about in assurance.
+    items:
+      - id: records
+        label: Tenant records
+        icon: db
+        note: Every read and write checks the tenant on the token against the tenant on the record.
+      - id: isolation
+        label: Tenant isolation
+        icon: shield
+        note: A discipline across every handler, not one component's job.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 4
+    row: 0
+    rowSpan: 3
+    note: >
+      Scope design, description review, audit and revocation — the controls that decide a
+      hijacked agent's blast radius long before any call arrives.
+    items:
+      - id: scopeCatalogue
+        label: Scope catalogue
+        icon: scale
+        note: >
+          What each scope permits. Coarse scopes are the difference between a hijacked agent
+          doing one thing and doing everything the user could.
+      - id: descriptionReview
+        label: Description review
+        icon: doc
+        note: >
+          Tool text reviewed as a security artifact, because it executes in a caller's context.
+          A benign-looking copy edit can change how thousands of agents behave.
+      - id: callAudit
+        label: Call audit
+        icon: eye
+        note: >
+          Which client, for which user, called what with which arguments and what came back.
+          Also the only way to answer a customer asking what their agent did here.
+      - id: revocation
+        label: Revocation & kill
+        icon: stop
+        note: Withdraw a client's tokens or disable a tool without redeploying the service.
+
+edges:
+  - from: delegatingUser
+    to: authServer
+    path: primary
+    label: consent
+    note: >
+      The user authorises a named client for named scopes. The last point at which a human
+      decides anything in this architecture — every subsequent call happens without them.
+  - from: callingAgent
+    to: endpoint
+    path: primary
+    bidir: true
+    label: tool call / result
+    note: >
+      Model-composed arguments in; bounded results back into the caller's context window. The
+      identity check cannot establish whether the agent was steered by content it read
+      elsewhere.
+  - from: authServer
+    to: endpoint
+    path: secondary
+    label: token validation
+    note: >
+      Every call is validated against the issued token — client, user, scopes, audience,
+      expiry — before it reaches a handler.
+  - from: toolDefs
+    to: callingAgent
+    path: external
+    label: schema into caller's context
+    note: >
+      Tool text crossing into another organisation's model, where it executes as instruction.
+      No authentication applies to what a description means.
+  - from: endpoint
+    to: handlers
+    path: primary
+    label: authorised call
+    note: >
+      Client, user and tenant travel with the request rather than being re-derived. A handler
+      that re-resolves the tenant from an argument is trusting a model to name it.
+  - from: handlers
+    to: tenantData
+    path: primary
+    bidir: true
+    label: scoped read / write
+    note: >
+      Two checks on every operation: the scope permits it, and the tenant on the token matches
+      the tenant on the record. Skipping the second is how cross-tenant access happens in
+      practice.
+  - from: governance
+    to: authServer
+    path: governance
+    label: scope definitions
+    note: >
+      The scope catalogue is where a hijacked agent's blast radius is actually decided — long
+      before any call arrives.
+  - from: governance
+    to: toolDefs
+    path: governance
+    label: description review
+    note: >
+      Because the text runs in someone else's model, editing it is closer to shipping an API
+      change than to updating documentation.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: toolDefs->callingAgent
+      note: >
+        This server is on the causing side. Its descriptions, errors and results all land in a
+        caller's context, so its output hygiene is somebody else's input security.
+    - risk: riskToolSourceProvenance
+      at: toolDefs
+      note: >
+        Tool text treated as editable copy rather than a versioned artifact — a quiet edit
+        changes how every consuming agent behaves.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: callingAgent->endpoint
+      note: >
+        The token proves a user consented; it cannot prove the agent still represents their
+        intent. Scope design is the whole of the answer.
+    - risk: riskStaleAgentIdentityBinding
+      at: authServer
+      note: >
+        Long-lived or unrevocable tokens keep a decommissioned or compromised client alive.
+        Expiry and revocation are the only levers after issuance.
+    - risk: riskMCPTransportHijacking
+      at: endpoint
+      note: >
+        Session identifiers that can be guessed or replayed hand one caller another's context
+        and tenant.
+    - risk: riskDenialOfMLService
+      at: endpoint
+      note: >
+        Machine callers retry, loop and parallelise. Limits tuned for human clients are not
+        limits here.
+    - risk: riskRogueActions
+      at: handlers
+      note: >
+        Arguments are model-generated plausible nonsense, and the user is not present to be
+        asked. Confirmation semantics are declared, not enforced, by this side.
+    - risk: riskCrossTenantCredentialPropagation
+      at: handlers->tenantData
+      note: >
+        Every read and write needs the tenant on the token checked against the tenant on the
+        record. It is a discipline across all handlers, not one component's job.
+    - risk: riskSensitiveDataDisclosure
+      at: handlers->tenantData
+      note: >
+        The read path carries the volume. A coarse scope plus a broad query returns everything
+        the user could see, to an agent that may have been steered.
+    - risk: riskInsecureModelOutput
+      at: endpoint->callingAgent
+      note: >
+        Results enter the caller's context as content. An oversized or manipulative result is a
+        denial-of-service against a model rather than a server.
+
+  capabilities:
+    - capability: capabilityIga
+      at: delegatingUser->authServer
+      note: >
+        Bind consent to a named client and named scopes, recorded and reviewable — the delegated
+        grant every later call traces back to.
+    - capability: capabilityNhiManagement
+      at: authServer
+      note: >
+        Named clients with short-lived, audience-restricted tokens and working revocation. The
+        calling agent is a non-human identity you did not create but must manage.
+    - capability: capabilityToolPermissionScoping
+      at: governance->authServer
+      note: >
+        Design scopes narrow enough that a hijacked agent's blast radius is one operation, not
+        everything the user could do.
+    - capability: capabilityTransportSecurity
+      at: endpoint
+      note: >
+        TLS, unguessable session identifiers, and sessions bound to the authenticated client —
+        session handling is where transport hijacking is decided.
+    - capability: capabilityRateLimiting
+      at: endpoint
+      note: >
+        Per-client and per-tenant limits sized for machine callers, with idempotency keys
+        because agents retry.
+    - capability: capabilityDataAccessGovernance
+      at: handlers->tenantData
+      note: >
+        Enforce both checks on every operation: scope permits it, and token tenant matches
+        record tenant — on reads as well as writes.
+    - capability: capabilityMcpToolSecurity
+      at: toolDefs
+      note: >
+        Treat definitions as versioned security artifacts: schema-pinned, change-controlled, and
+        published with provenance callers can check.
+    - capability: capabilityAiRedTeaming
+      at: governance->toolDefs
+      note: >
+        Adversarially review descriptions and error text before release — the question is what a
+        model will do with the words, not what a human reads into them.
+    - capability: capabilityHitlControls
+      at: handlers
+      note: >
+        Declare confirmation semantics on consequential tools so the caller must confirm with
+        its user. Declaring it is the only lever this side of the boundary has.
+    - capability: capabilityOutputEncoding
+      at: endpoint->callingAgent
+      note: >
+        Bound result size and structure before it leaves — what returns becomes part of another
+        organisation's prompt.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: >
+        Record client, user, tool, arguments and result per call — the trail that answers a
+        customer asking what their agent did here.
+
+scenarios:
+  - title: A user authorises a client
+    steps:
+      - follow: delegatingUser->authServer
+        note: Consent binds a named client to named scopes. The last human decision in the flow.
+      - follow: callingAgent->endpoint
+        note: The agent calls in with its scoped token; the user is no longer present.
+      - follow: authServer->endpoint
+        note: Client, user, scopes, audience and expiry are validated per call.
+      - follow: endpoint->handlers
+        note: The authorised identity travels with the request — nothing is re-derived from arguments.
+      - follow: handlers->tenantData
+        note: Scope check plus tenant-match check, on this and every subsequent operation.
+  - title: A hijacked agent calls in
+    steps:
+      - follow: callingAgent->endpoint
+        note: >
+          The agent was steered by content it read elsewhere. Its token is valid and every
+          identity check passes.
+      - follow: endpoint->handlers
+        note: Rate limits and argument validation constrain the mechanics, not the intent.
+      - follow: handlers->tenantData
+        note: The tenant check bounds reach to the one tenant; the scope bounds it to named operations.
+      - follow: endpoint->callingAgent
+        note: The blast radius was decided by scope design long before this call arrived.
+  - title: A description edit ships
+    steps:
+      - follow: governance->toolDefs
+        note: The edit is reviewed as an interface change — text a model will act on, not copy.
+      - follow: toolDefs->callingAgent
+        note: The new wording lands in every consuming agent's context on their next session.
+
+sources:
+  - title: "Model Context Protocol — authorization"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "Model Context Protocol — security best practices"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "OWASP — a practical guide for secure MCP server development"
+    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02, ASI07 insecure inter-agent communication"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/

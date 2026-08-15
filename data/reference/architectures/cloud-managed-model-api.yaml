@@ -1,0 +1,361 @@
+id: archManagedModelApi
+surface: surfaceCloud
+title: Managed model API consumption
+abbrev: Managed model API
+
+summary:
+  - >
+    Consuming a cloud provider's hosted models as a dependency of applications the organisation
+    operates: every caller reaches the provider through one gateway, on brokered credentials,
+    under quotas, with the data-handling terms and version policy owned in one place. The most
+    common AI architecture there is, and the one most often treated as a library call rather
+    than a boundary crossing.
+
+description:
+  - >
+    This is drawn as its own architecture because it is the shared substrate beneath most cloud
+    AI workloads, and the decisions made here are made once and inherited by all of them. Where
+    the gateway sits, how the credential is issued, whether redaction is on the request path and
+    whether the log is complete are properties of this layer, not of each application above it.
+  - >
+    The essential move is that the provider is a boundary and the crossing needs one place. A
+    model call made directly from each service with an SDK and a key in a config map produces no
+    complete log, no consistent policy and no single place to rotate. Consolidating on a gateway
+    turns a scattered dependency into a governed one, and it is much cheaper before there are
+    twenty callers than after. The gateway is a convention until network egress makes it the
+    only reachable path.
+  - >
+    The provider-side controls are real and worth using: managed guardrails, abuse monitoring,
+    content filtering, regional routing and retention configuration all exist and all cost less
+    than building equivalents. They are also configuration the consumer authors and the provider
+    enforces — the classic shared-responsibility shape — and their defaults are usually
+    permissive.
+  - >
+    Three things catch organisations out: data handling terms, model version churn and cost.
+    What the provider retains and whether it trains on inputs is a contract question with a
+    per-service answer. Versions are deprecated on the provider's schedule, so pinning and a
+    tested upgrade path are availability controls. And a token-metered dependency with no quota
+    is an open financial commitment reachable from anything that can loop.
+
+distinguishedBy:
+  - >
+    Against self-hosted inference: the same capability with the serving tier, the supply chain
+    and the capacity problem on the provider's side. Almost every control in that architecture
+    is replaced here by a contract term and a configuration setting.
+  - >
+    Against the AI gateway architecture: that one is about operating the gateway as a platform
+    for many teams and several providers. This is about the consuming relationship itself, and
+    the two are usually built in that order.
+
+exemplars:
+  - name: Cloud provider model services
+    note: >
+      Hyperscaler-hosted model endpoints with managed guardrails, regional routing and
+      account-level data-handling terms, reached with the account's own identity system.
+    asOf: "2026-08"
+  - name: Direct provider APIs
+    note: >
+      A model vendor's own API, reached with a provider-issued key. Fewer platform controls, and
+      the credential is not part of the organisation's existing identity fabric.
+    asOf: "2026-08"
+
+blocks:
+  - id: promptContent
+    kind: external
+    title: Context from elsewhere
+    col: 0
+    row: 0
+    note: >
+      Whatever the applications put in context — documents, tickets, tool output. This layer
+      cannot tell trusted from untrusted, which is why gateway-level guardrails are a backstop
+      rather than the primary defence.
+    items:
+      - id: untrusted
+        label: Untrusted content
+        icon: doc
+        note: Arrives already mixed into prompts by the applications above.
+
+  - id: users
+    kind: actor
+    title: Application users
+    icon: person
+    col: 0
+    row: 1
+    note: The people using whatever the applications build on top of this dependency.
+
+  - id: pipelines
+    kind: actor
+    title: Agents & pipelines
+    icon: agent
+    col: 0
+    row: 2
+    note: >
+      Unattended callers that can loop. Against a token-metered dependency, retry logic without
+      a ceiling is an open financial commitment.
+
+  - id: apps
+    kind: service
+    title: Application services
+    col: 1
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      Many callers, written by different teams at different times. Whether they can reach the
+      provider directly — rather than only through the gateway — decides whether this
+      architecture holds.
+    items:
+      - id: services
+        label: Service callers
+        icon: code
+        note: Every service that wants a completion, each with its own deadline pressure.
+      - id: promptAssembly
+        label: Prompt assembly
+        icon: doc
+        note: Where system instruction, context and user turn combine. Only this layer knows which part it assembled and which arrived from elsewhere.
+      - id: outputHandling
+        label: Output handling
+        icon: shield
+        note: Context-correct treatment of completions, because only the application knows where the text is about to be rendered or executed.
+
+  - id: gateway
+    kind: service
+    title: Model gateway
+    col: 2
+    row: 1
+    note: >
+      One egress point for model traffic: routing, per-caller quotas, redaction and a complete
+      log. The difference between one governed dependency and twenty ungoverned ones.
+    items:
+      - id: routing
+        label: Model routing
+        icon: gear
+        note: Approved, pinned versions — one place to test and roll an upgrade.
+      - id: redaction
+        label: Prompt redaction
+        icon: eye
+        note: The last chance to stop a secret or an identifier crossing the boundary.
+      - id: quotas
+        label: Per-caller quotas
+        icon: clock
+        note: A retry loop in one service must not be able to exhaust the account.
+      - id: logTap
+        label: Call log tap
+        icon: doc
+        note: Complete only because everything crosses in one place.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 3
+    row: 0
+    cosaiComponent: componentModelServing
+    note: >
+      The published interfaces: inference, managed guardrails, and the data-handling
+      configuration surface. Everything behind them is the provider's, and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: A version identifier with a deprecation date attached to it.
+      - id: providerGuardrails
+        label: Managed guardrails
+        icon: shield
+        note: Configured by the consumer, enforced by the provider, permissive by default.
+      - id: retentionConfig
+        label: Data-handling controls
+        icon: gear
+        note: Retention, training use and region — configuration the consumer authors and cannot verify.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 4
+    row: 0
+    rowSpan: 3
+    note: >
+      Where the consuming relationship is owned: the credential broker, the spend policy, the
+      version registry and its evaluation gate, the usage log, and the contract terms that are
+      the only control over what the provider retains.
+    items:
+      - id: credBroker
+        label: Credential broker
+        icon: key
+        note: Short-lived, per-workload credentials. The provider key never appears in any application's configuration.
+      - id: spendPolicy
+        label: Quota & spend policy
+        icon: clock
+        note: Per-caller token and cost ceilings, enforced at the gateway rather than trusted to each caller.
+      - id: versionRegistry
+        label: Version registry & evals
+        icon: scale
+        note: A provider version becomes approved by passing tests, not by being available.
+      - id: usageLog
+        label: Usage & prompt log
+        icon: eye
+        note: What was sent, by whom, to which model, at what cost.
+      - id: contract
+        label: Data-handling terms
+        icon: doc
+        note: Retention, training use, region and subprocessors — per service and per tier, re-read when the provider ships a new product.
+
+edges:
+  - from: promptContent
+    to: apps
+    path: external
+    label: untrusted context
+    note: >
+      Content assembled into prompts from documents, tickets and tool output. Only the
+      application knows which parts it wrote and which arrived from elsewhere.
+  - from: users
+    to: apps
+    path: primary
+    bidir: true
+    label: request / response
+    note: The application experience this whole dependency exists to serve.
+  - from: pipelines
+    to: apps
+    path: secondary
+    label: unattended calls
+    note: Loops and schedules that call the model with nobody watching the bill.
+  - from: apps
+    to: gateway
+    path: primary
+    bidir: true
+    label: model call
+    note: >
+      The application proves what it is with a workload identity; the provider credential never
+      reaches it. That is what makes per-caller quota and attribution possible at all.
+  - from: gateway
+    to: provider
+    path: primary
+    bidir: true
+    route: vh
+    label: brokered call
+    note: >
+      Out on a short-lived brokered credential, redacted and logged; back as a completion whose
+      transport is authenticated and whose content is not.
+  - from: governance
+    to: gateway
+    path: governance
+    label: credentials & limits
+    note: >
+      The broker issues per-call credentials and the spend policy sets per-caller ceilings —
+      one rotation point and one brake, instead of one per service.
+  - from: governance
+    to: provider
+    path: governance
+    label: terms & version policy
+    note: >
+      The contract is the only control over what the provider does with what it receives, and
+      the version registry tracks deprecations that arrive on the provider's schedule.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: promptContent->apps
+      note: Context assembled from documents and tool output is a steering surface the gateway sees only as text.
+    - risk: riskShadowAndUnknownAgents
+      at: apps
+      note: Any service that can reach the internet can reach a model provider. Everything on this diagram depends on egress policy making the gateway the only available path.
+    - risk: riskRunawayAgentToolLoops
+      at: pipelines->apps
+      note: Unattended callers that can loop meet per-token billing on the other side of this boundary.
+    - risk: riskCrossTenantCredentialPropagation
+      at: apps->gateway
+      note: A shared key instead of per-workload identity makes every downstream record anonymous and every quota collective.
+    - risk: riskEconomicDenialOfWallet
+      at: gateway
+      note: A metered dependency with no ceiling is an open financial commitment; the quota here is the only brake.
+    - risk: riskSensitiveDataDisclosure
+      at: gateway->provider
+      note: Everything in the prompt crosses the boundary. Redaction on this edge is the last chance to stop a secret leaving.
+    - risk: riskExcessiveDataHandlingDuringInference
+      at: provider
+      note: What the provider retains and for how long is a contract term, not an observable property.
+    - risk: riskUnauthorizedTrainingData
+      at: provider
+      note: Whether inputs feed training is a per-service, per-tier answer that changes when the provider ships a new product.
+    - risk: riskInsecureModelOutput
+      at: apps
+      note: The completion is unauthenticated content, and only the application knows whether it is about to be rendered, executed or stored.
+    - risk: riskModelDeploymentTampering
+      at: governance->provider
+      note: Model versions change under the consumer on the provider's schedule; pinning, evaluation and staged rollout together are the answer.
+
+  capabilities:
+    - capability: capabilityAiGateway
+      at: gateway
+      note: One crossing for all model traffic — routing, quotas, redaction and the log in a single place.
+    - capability: capabilityEgressControl
+      at: apps
+      note: Default-deny to model endpoints with the gateway as the sole exception. Without it the gateway is a convention, and conventions lose to deadlines.
+    - capability: capabilitySecretsManagement
+      at: governance->gateway
+      note: Provider credentials brokered at call time, short-lived, with one rotation point for the organisation.
+    - capability: capabilityNhiManagement
+      at: apps->gateway
+      note: A workload identity per calling service, so quota, attribution and the log all key off who actually called.
+    - capability: capabilityRateLimiting
+      at: gateway
+      note: Per-caller token and spend ceilings enforced at the crossing, not trusted to each caller's retry logic.
+    - capability: capabilityPromptRedaction
+      at: gateway->provider
+      note: Detect and mask secrets and identifiers on the way out, uniformly rather than per team.
+    - capability: capabilityAuditLogging
+      at: gateway
+      note: A complete record of every call — complete only because there is exactly one crossing.
+    - capability: capabilityModelGuardrails
+      at: provider
+      note: Configure the managed guardrails deliberately; the defaults are permissive and the enforcement is the provider's.
+    - capability: capabilityAiTprm
+      at: governance->provider
+      note: Own the data-handling terms — retention, training use, region, subprocessors — per service and per tier.
+    - capability: capabilityModelEvals
+      at: governance
+      note: Re-test behaviour when the provider ships a new version; a model upgrade is a dependency upgrade with no diffable changelog.
+    - capability: capabilityAiBom
+      at: governance
+      note: A registry of which provider models and versions are approved, pinned and nearing deprecation.
+    - capability: capabilityShadowAiDiscovery
+      at: apps
+      note: Find the services calling providers directly, because the population grows faster than the architecture diagram.
+
+scenarios:
+  - title: A model call crosses the boundary
+    steps:
+      - follow: users->apps
+        note: A user request becomes a prompt — system instruction, context, user turn.
+      - follow: apps->gateway
+        note: The call arrives on a workload identity; the quota and the log key off it.
+      - follow: gateway->provider
+        note: Redacted, logged, and sent on a brokered credential that expires.
+      - follow: provider->gateway
+        note: The completion returns — authenticated transport, unauthenticated content.
+      - follow: gateway->apps
+        note: The application handles the output for its own context; only it knows where the text lands.
+  - title: A retry loop meets per-token billing
+    steps:
+      - follow: pipelines->apps
+        note: An unattended pipeline starts looping on an error path.
+      - follow: apps->gateway
+        note: The per-caller quota is the brake — one service's loop cannot exhaust the account.
+      - follow: gateway->provider
+        note: Within-ceiling traffic proceeds; the rest is refused at the crossing, not on the invoice.
+  - title: The provider deprecates a version
+    steps:
+      - follow: governance->provider
+        note: The deprecation lands in the version registry on the provider's schedule, not yours.
+      - follow: governance->gateway
+        note: The replacement version passes evaluation, then the pin rolls at the gateway — one change instead of twenty.
+      - follow: apps->gateway
+        note: Callers are unchanged; the upgrade was a gateway event, which is the payoff of the whole architecture.
+
+sources:
+  - title: "CoSAI Shared Responsibility Framework V1.0 — AI and agent PaaS operating model"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "AWS Well-Architected Generative AI Lens"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens/generative-ai-lens.html
+  - title: "Microsoft Azure Architecture Center — AI gateway guidance"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/azure-openai-gateway-guide
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM06 unbounded consumption"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
