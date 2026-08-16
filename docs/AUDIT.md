@@ -893,18 +893,22 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-0 of 28 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+4 of 28 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | — | Agentic browser and AI extension, Vendor coding agent, Desktop AI assistant, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
-| Cloud & hosted | — | Single agent workflow, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Endpoint | Vendor coding agent, Desktop AI assistant, Personal autonomous agent | Agentic browser and AI extension, Local model runtime, Local MCP and tool plane |
+| Cloud & hosted | Durable multi-agent workflow | Single agent workflow, Agent-facing endpoint, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
 | Third-party SaaS | — | Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
 
 ### 5a. Documents
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
+| Durable multi-agent workflow | build | draft | 5 | _none_ |
+| Vendor coding agent | use | draft | 5 | _none_ |
+| Desktop AI assistant | use | draft | 2 | Agent execution sandboxing, Human-in-the-loop approval & escalation, Prompt injection & jailbreak detection, Agent credential isolation & delegation control, Endpoint detection & response |
+| Personal autonomous agent | use | draft | 4 | _none_ |
 
 ### 5b. Tool registry
 
@@ -912,3 +916,11 @@ Vendor-specific entries, each dated. An entry older than six months is due a re-
 
 | Tool | Vendor | asOf | Referenced by | |
 | --- | --- | --- | --- | --- |
+| Claude Code | Anthropic | 2026-08 | Vendor coding agent |  |
+| Cursor | Anysphere | 2026-08 | Vendor coding agent |  |
+| GitHub Copilot | GitHub | 2026-08 | Vendor coding agent |  |
+| Codex | OpenAI | 2026-08 | Vendor coding agent |  |
+| ChatGPT desktop app | OpenAI | 2026-08 | Desktop AI assistant |  |
+| Claude Desktop | Anthropic | 2026-08 | Desktop AI assistant |  |
+| OpenClaw | OpenClaw (open source) | 2026-08 | Personal autonomous agent |  |
+| Hermes Agent | Nous Research | 2026-08 | Personal autonomous agent |  |
