@@ -143,11 +143,12 @@ never as a picture; `src/lib/flow-layout.ts` computes the geometry at build time
 reviewed is the claim rather than the drawing. The F5 grammar maps onto this framework directly:
 
 - **Blocks** are CoSAI components wherever CoSAI names one, anchored via `cosaiComponent` on the
-  block or its internals. Nearly every block is anchored — downstream systems as Application,
-  inbound content as Data Sources, model supply as Model Storage, and durable stores (memory
-  files, journals, indexes at rest) as Data Storage. CoSAI's Memory component is reserved for
-  in-loop working state, which the risk map draws inside the agent and therefore colours as
-  Application. A quiet grey tab is
+  block or its internals. Nearly every block is anchored, under one colour rule: anything that
+  is data at rest — records, repositories, memory files, journals, indexes, whether the system
+  reads it or acts on it — is Data Storage or Data Sources (amber); Application blue is reserved
+  for running services and code. CoSAI's Memory and RAG Content components, which the risk map
+  draws inside the agent, survive as item-level anchors within those amber blocks so the
+  cross-links stay precise. A quiet grey tab is
   reserved for the security and governance machinery CoSAI does not model: gateways, identity
   edges, sandboxes, and the governance plane itself. The endpoint personal-agent architecture
   draws no governance column at all, which is that diagram's finding. docs/AUDIT.md section 4d

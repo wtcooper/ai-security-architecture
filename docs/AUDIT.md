@@ -708,10 +708,10 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- | --- | --- |
 | Autonomous action agent over business records | Intake | service | `componentApplicationInputHandling` |
 | Autonomous action agent over business records | Planning loop | service | `componentReasoningCore` |
-| Autonomous action agent over business records | Retrieval & case state | service | `componentMemory` |
+| Autonomous action agent over business records | Retrieval & case state | service | `componentDataStorage` |
 | Autonomous action agent over business records | Action catalogue | service | `componentTools` |
 | Autonomous action agent over business records | Model provider | provider | `componentModelServing` |
-| Autonomous action agent over business records | Business records | external | `componentApplication` |
+| Autonomous action agent over business records | Business records | external | `componentDataStorage` |
 | Autonomous action agent over business records | Governance plane | governance | (none) |
 | Agent-facing endpoint | Human path & bot defence | service | (none) |
 | Agent-facing endpoint | Agent lane | service | `componentApplicationInputHandling` |
@@ -731,7 +731,7 @@ Highlights below are Google's original mapping, not ours.
 | AI-augmented API backend | Transformation | service | `componentApplication` |
 | AI-augmented API backend | Model provider | provider | `componentModelServing` |
 | AI-augmented API backend | Output validation | service | `componentApplicationOutputHandling` |
-| AI-augmented API backend | Systems of record | external | `componentApplication` |
+| AI-augmented API backend | Systems of record | external | `componentDataStorage` |
 | AI-augmented API backend | Governance plane | governance | (none) |
 | AI gateway, router and guardrail plane | Content inside prompts | external | `componentDataSources` |
 | AI gateway, router and guardrail plane | Gateway endpoint | service | (none) |
@@ -763,10 +763,10 @@ Highlights below are Google's original mapping, not ours.
 | Managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
 | Managed agent runtime | Application front end | service | `componentApplication` |
 | Managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
-| Managed agent runtime | Managed memory | provider | `componentMemory` |
+| Managed agent runtime | Managed memory | provider | `componentDataStorage` |
 | Managed agent runtime | Managed sandbox | provider | (none) |
 | Managed agent runtime | Managed tool gateway | provider | (none) |
-| Managed agent runtime | Customer systems | external | `componentApplication` |
+| Managed agent runtime | Customer systems | external | `componentDataStorage` |
 | Managed agent runtime | Customer governance | governance | (none) |
 | Managed model API consumption | Context from elsewhere | external | `componentDataSources` |
 | Managed model API consumption | Application services | service | `componentApplication` |
@@ -775,7 +775,7 @@ Highlights below are Google's original mapping, not ours.
 | Managed model API consumption | Governance plane | governance | (none) |
 | Embedded retrieval assistant | Application front end | service | `componentApplication` |
 | Embedded retrieval assistant | Query orchestration | service | `componentReasoningCore` |
-| Embedded retrieval assistant | Index & session state | service | `componentRAGContent` |
+| Embedded retrieval assistant | Index & session state | service | `componentDataStorage` |
 | Embedded retrieval assistant | AI gateway & guardrails | service | (none) |
 | Embedded retrieval assistant | Model provider | provider | `componentModelServing` |
 | Embedded retrieval assistant | Sources & ingest | service | `componentDataSources` |
@@ -793,7 +793,7 @@ Highlights below are Google's original mapping, not ours.
 | Sandboxed agentic execution service | Repository & web content | external | `componentDataSources` |
 | Sandboxed agentic execution service | Model provider | provider | `componentModelServing` |
 | Sandboxed agentic execution service | Broker & action proxy | service | `componentTools` |
-| Sandboxed agentic execution service | Target systems | external | `componentApplication` |
+| Sandboxed agentic execution service | Target systems | external | `componentDataStorage` |
 | Sandboxed agentic execution service | Governance plane | governance | (none) |
 | Self-hosted open-weights inference | Public model hub | external | `componentModelStorage` |
 | Self-hosted open-weights inference | Inference gateway | service | (none) |
@@ -841,10 +841,10 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | Inference runtime | service | `componentTheModel` |
 | Local model runtime | Weights on disk | service | `componentModelStorage` |
 | Local model runtime | Public model hub | external | `componentModelStorage` |
-| Local MCP and tool plane | Repo-supplied config | external | `componentTools` |
-| Local MCP and tool plane | Tool configuration | service | `componentTools` |
+| Local MCP and tool plane | Repo-supplied config | external | `componentDataSources` |
+| Local MCP and tool plane | Tool configuration | service | `componentDataStorage` |
 | Local MCP and tool plane | Local tool servers | service | `componentTools` |
-| Local MCP and tool plane | Package registry | external | `componentTools` |
+| Local MCP and tool plane | Package registry | external | `componentDataSources` |
 | Local MCP and tool plane | Fronted services | external | `componentApplication` |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
@@ -852,7 +852,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |
 | Personal autonomous agent | Tools & skills | service | `componentTools` |
 | Personal autonomous agent | Sandboxed execution | service | (none) |
-| Personal autonomous agent | Public skill registry | external | `componentTools` |
+| Personal autonomous agent | Public skill registry | external | `componentDataSources` |
 | Personal autonomous agent | Downstream services | external | `componentApplication` |
 | Enterprise AI chat with connectors | Chat surface & uploads | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Identity & secure edge | service | (none) |
@@ -865,7 +865,7 @@ Highlights below are Google's original mapping, not ours.
 | Vendor low-code agent builder | Agent builder platform | provider | `componentApplication` |
 | Vendor low-code agent builder | Connected systems | service | `componentDataSources` |
 | Vendor low-code agent builder | Maker governance | governance | (none) |
-| Shadow AI services and extensions | Extension distribution | external | `componentTools` |
+| Shadow AI services and extensions | Extension distribution | external | `componentDataSources` |
 | Shadow AI services and extensions | Browser & extensions | service | `componentApplication` |
 | Shadow AI services and extensions | Scripts & services | service | `componentApplication` |
 | Shadow AI services and extensions | Secure service edge | service | (none) |
