@@ -79,6 +79,7 @@ export function ArchitecturesBrowser() {
         {/* --- Picker: surface filter pills + a searchable dropdown -------------------- */}
         <div className="rounded-xl border border-line bg-paper px-5 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <ArchPicker options={shown} current={archetype} onSelect={select} />
             <div className="flex flex-wrap gap-1.5">
               <FilterPill active={!surface} onClick={() => setSurface(null)}>
                 All
@@ -96,7 +97,6 @@ export function ArchitecturesBrowser() {
                 </FilterPill>
               ))}
             </div>
-            <ArchPicker options={shown} current={archetype} onSelect={select} />
           </div>
         </div>
 
@@ -221,7 +221,7 @@ function ArchPicker({
   };
 
   return (
-    <div className="relative w-full sm:ml-auto sm:w-[360px]">
+    <div className="relative w-full sm:w-[360px]">
       <button
         onClick={() => (open ? close() : setOpen(true))}
         aria-expanded={open}
