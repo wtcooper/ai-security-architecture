@@ -167,16 +167,7 @@ export function IncidentExplorer() {
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-4 pb-3">
-          <p className="text-[13px] text-ink-3">
-            Attack path across the CoSAI component map
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {incident.patterns.map((p) => (
-              <Chip key={p}>{p}</Chip>
-            ))}
-          </div>
-        </div>
+        <p className="pb-3 text-[13px] text-ink-3">Attack path across the component map</p>
 
         <div className="min-h-0 flex-1">
           <RiskMap

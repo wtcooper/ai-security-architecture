@@ -2,7 +2,7 @@
 
 **[wtcooper.github.io/ai-security-architecture](https://wtcooper.github.io/ai-security-architecture/)**
 
-AI security from worldview to drawing. It starts as an interactive map of AI security risk —
+AI security from risk map to reference architecture. It starts as an interactive map of AI security risk —
 where each risk is **introduced**, where it is **exposed**, and where it can be **mitigated**,
 across the components of an AI system — and descends from there through the full taxonomy, the
 technology capabilities that implement each control on endpoint / cloud / third-party SaaS, and
