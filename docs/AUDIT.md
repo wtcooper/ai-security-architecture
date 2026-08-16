@@ -706,7 +706,7 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
-| Autonomous action agent over business records | Intake | service | `componentApplication` |
+| Autonomous action agent over business records | Intake | service | `componentApplicationInputHandling` |
 | Autonomous action agent over business records | Planning loop | service | `componentReasoningCore` |
 | Autonomous action agent over business records | Retrieval & case state | service | `componentMemory` |
 | Autonomous action agent over business records | Action catalogue | service | `componentTools` |
@@ -721,7 +721,7 @@ Highlights below are Google's original mapping, not ours.
 | Agent-facing endpoint | Governance plane | governance | (none) |
 | Core agent workflow | Application front end | service | `componentApplication` |
 | Core agent workflow | Agent orchestration | service | `componentReasoningCore` |
-| Core agent workflow | State & knowledge | service | `componentMemory` |
+| Core agent workflow | State & knowledge | service | `componentDataStorage` |
 | Core agent workflow | Agentic gateway | service | (none) |
 | Core agent workflow | Model provider | provider | `componentModelServing` |
 | Core agent workflow | Tool services | service | `componentTools` |
@@ -751,13 +751,13 @@ Highlights below are Google's original mapping, not ours.
 | Batch and offline AI pipeline | Model provider | provider | `componentModelServing` |
 | Batch and offline AI pipeline | Validation & stamping | service | `componentApplicationOutputHandling` |
 | Batch and offline AI pipeline | Derived data | service | `componentDataStorage` |
-| Batch and offline AI pipeline | Downstream consumers | external | `componentApplication` |
+| Batch and offline AI pipeline | Downstream consumers | external | `componentDataStorage` |
 | Batch and offline AI pipeline | Governance plane | governance | (none) |
 | Internal multi-tenant AI platform | Onboarding & templates | service | (none) |
 | Internal multi-tenant AI platform | Tenant workloads | service | `componentApplication` |
 | Internal multi-tenant AI platform | Shared AI gateway | service | (none) |
 | Internal multi-tenant AI platform | Shared agent runtime | service | `componentReasoningCore` |
-| Internal multi-tenant AI platform | Shared data plane | service | `componentMemory` |
+| Internal multi-tenant AI platform | Shared data plane | service | `componentDataStorage` |
 | Internal multi-tenant AI platform | Model providers | provider | `componentModelServing` |
 | Internal multi-tenant AI platform | Platform governance | governance | (none) |
 | Managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
@@ -849,7 +849,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
-| Personal autonomous agent | Memory & state | service | `componentMemory` |
+| Personal autonomous agent | Memory & state | service | `componentDataStorage` |
 | Personal autonomous agent | Tools & skills | service | `componentTools` |
 | Personal autonomous agent | Sandboxed execution | service | (none) |
 | Personal autonomous agent | Public skill registry | external | `componentTools` |

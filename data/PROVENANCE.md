@@ -144,7 +144,10 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
 
 - **Blocks** are CoSAI components wherever CoSAI names one, anchored via `cosaiComponent` on the
   block or its internals. Nearly every block is anchored — downstream systems as Application,
-  inbound content as Data Sources, model supply as Model Storage — and a quiet grey tab is
+  inbound content as Data Sources, model supply as Model Storage, and durable stores (memory
+  files, journals, indexes at rest) as Data Storage. CoSAI's Memory component is reserved for
+  in-loop working state, which the risk map draws inside the agent and therefore colours as
+  Application. A quiet grey tab is
   reserved for the security and governance machinery CoSAI does not model: gateways, identity
   edges, sandboxes, and the governance plane itself. The endpoint personal-agent architecture
   draws no governance column at all, which is that diagram's finding. docs/AUDIT.md section 4d
