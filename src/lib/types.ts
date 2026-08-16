@@ -443,6 +443,11 @@ export interface Incident {
   dateRange: string;
   /** "target" = the AI system was attacked. "weapon" = an AI agent ran the attack. */
   perspective: "target" | "weapon";
+  /**
+   * The reference architecture this incident played out on — the Incidents tab replays the
+   * same steps on that drawing as an alternate view of the risk map.
+   */
+  archetype: string;
   summary: string[];
   patterns: string[];
   risks: string[];

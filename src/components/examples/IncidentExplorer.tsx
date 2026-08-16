@@ -5,16 +5,28 @@ import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { RiskMap } from "@/components/map/RiskMap";
 import { PHASE_META } from "@/components/PhaseRail";
-import { componentTitle, controlTitle, incidents, riskTitle } from "@/lib/data";
+import { FlowDiagram } from "@/components/reference/FlowDiagram";
+import {
+  archetypeById,
+  blocksForComponents,
+  componentTitle,
+  controlTitle,
+  incidents,
+  riskTitle,
+} from "@/lib/data";
 import type { Incident, IncidentSource, Phase } from "@/lib/types";
 
 export function IncidentExplorer() {
   const [incidentId, setIncidentId] = useState(incidents[0].id);
   const [stepIndex, setStepIndex] = useState(0);
+  // Two schematics of the same flow: the CoSAI component map, or the incident's reference
+  // architecture. The toggle survives step changes but resets nothing — same story, other lens.
+  const [view, setView] = useState<"map" | "architecture">("map");
 
   const incident = incidents.find((i) => i.id === incidentId)!;
   const step = incident.steps[stepIndex];
   const meta = PHASE_META[step.phase];
+  const archetype = archetypeById.get(incident.archetype);
 
   const selectIncident = (id: string) => {
     setIncidentId(id);
@@ -28,7 +40,7 @@ export function IncidentExplorer() {
     <div className="flex-1 flex flex-col lg:flex-row min-h-0">
       <aside className="lg:w-[430px] xl:w-[470px] shrink-0 bg-paper border-b lg:border-b-0 lg:border-r border-line flex flex-col">
         <div className="border-b border-line px-6 pt-5 pb-4">
-          <p className="eyebrow">Real incidents on the CoSAI map</p>
+          <p className="eyebrow">Real incidents, replayed step by step</p>
           <label
             className="mt-2 block text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-3"
             htmlFor="incident"
@@ -167,15 +179,59 @@ export function IncidentExplorer() {
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col p-4 sm:p-6">
-        <p className="pb-3 text-[13px] text-ink-3">Attack path across the component map</p>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-3">
+          <p className="text-[13px] text-ink-3">
+            {view === "map" ? (
+              "Attack path across the component map"
+            ) : (
+              <>
+                Attack path across the{" "}
+                <Link
+                  href={`/reference?archetype=${incident.archetype}`}
+                  className="font-medium text-introduced hover:underline"
+                >
+                  {archetype?.title ?? incident.archetype}
+                </Link>{" "}
+                reference architecture
+              </>
+            )}
+          </p>
+          <div className="inline-flex rounded-lg border border-line bg-paper p-0.5">
+            {(["map", "architecture"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                aria-pressed={view === v}
+                className={`rounded-[6px] px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                  view === v ? "bg-ink text-white" : "text-ink-2 hover:text-ink"
+                }`}
+              >
+                {v === "map" ? "Component map" : "Reference architecture"}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="min-h-0 flex-1">
-          <RiskMap
-            phase={step.phase}
-            active={step.components}
-            stepMarks={stepMarks}
-            className="h-full w-full max-h-[calc(100vh-15rem)]"
-          />
+          {view === "map" || !archetype ? (
+            <RiskMap
+              phase={step.phase}
+              active={step.components}
+              stepMarks={stepMarks}
+              className="h-full w-full max-h-[calc(100vh-15rem)]"
+            />
+          ) : (
+            <FlowDiagram
+              archetype={archetype}
+              overlay={{
+                phase: step.phase,
+                marks: Object.fromEntries(
+                  blocksForComponents(incident.archetype, step.components).map((b) => [b, step.n]),
+                ),
+              }}
+              className="h-full w-full max-h-[calc(100vh-15rem)]"
+            />
+          )}
         </div>
 
         <IncidentFooter incident={incident} />

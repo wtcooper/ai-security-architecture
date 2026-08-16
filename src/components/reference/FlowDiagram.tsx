@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
-import type { ArchBlock, Archetype, Rect } from "@/lib/types";
+import type { ArchBlock, Archetype, Phase, Rect } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
@@ -27,12 +27,30 @@ export interface Highlight {
   id: string;
 }
 
+/**
+ * An incident step replayed on the drawing: the blocks it touches, coloured by the step's
+ * phase, with the step number badged on each. When set, the capability chips, risk tags and
+ * scenario walks stay hidden — the diagram is a canvas for someone else's story.
+ */
+export interface StepOverlay {
+  phase: Phase;
+  /** Block id -> step number. */
+  marks: Record<string, number>;
+}
+
+const OVERLAY_STYLE: Record<Phase, { stroke: string; fill: string }> = {
+  introduced: { stroke: "var(--introduced)", fill: "var(--introduced-soft)" },
+  exposed: { stroke: "var(--exposed)", fill: "var(--exposed-soft)" },
+  mitigated: { stroke: "var(--mitigated)", fill: "var(--mitigated-soft)" },
+};
+
 interface FlowDiagramProps {
   archetype: Archetype;
   /** Index into archetype.scenarios, or null for the resting view. */
-  scenario: number | null;
-  highlight: Highlight | null;
-  onHighlight: (h: Highlight | null) => void;
+  scenario?: number | null;
+  highlight?: Highlight | null;
+  onHighlight?: (h: Highlight | null) => void;
+  overlay?: StepOverlay | null;
   className?: string;
 }
 
@@ -57,9 +75,10 @@ const TAB_H = 20;
 
 export function FlowDiagram({
   archetype,
-  scenario,
-  highlight,
-  onHighlight,
+  scenario = null,
+  highlight = null,
+  onHighlight = () => {},
+  overlay = null,
   className,
 }: FlowDiagramProps) {
   const { layout } = archetype;
@@ -180,7 +199,8 @@ export function FlowDiagram({
     tagsAt.set(pin.at, [...(tagsAt.get(pin.at) ?? []), { risk: pin.risk, note: pin.note }]);
   }
 
-  const inScenario = scenario !== null;
+  // Pins hide both during a scenario walk and while an incident step is replayed on top.
+  const inScenario = scenario !== null || overlay !== null;
   const centre = { x: layout.width / 2, y: layout.height / 2 };
 
   return (
@@ -266,6 +286,8 @@ export function FlowDiagram({
               key={block.id}
               block={block}
               rect={rect}
+              mark={overlay?.marks[block.id]}
+              markStyle={overlay ? OVERLAY_STYLE[overlay.phase] : undefined}
               onHover={(h) => !panning && setHover(h)}
               onLeave={() => setHover(null)}
             />
@@ -369,14 +391,20 @@ function firstSentence(text?: string) {
 function BlockShape({
   block,
   rect,
+  mark,
+  markStyle,
   onHover,
   onLeave,
 }: {
   block: ArchBlock;
   rect: Rect;
+  /** The incident step number touching this block, when a step overlay is active. */
+  mark?: number;
+  markStyle?: { stroke: string; fill: string };
   onHover: (h: Hover) => void;
   onLeave: () => void;
 }) {
+  const active = mark !== undefined && markStyle !== undefined;
   if (block.kind === "actor") {
     const cx = rect.x + rect.w / 2;
     return (
@@ -391,6 +419,18 @@ function BlockShape({
         }
         onPointerLeave={onLeave}
       >
+        {active && (
+          <rect
+            x={rect.x - 4}
+            y={rect.y - 2}
+            width={rect.w + 8}
+            height={60}
+            rx={9}
+            fill={markStyle.fill}
+            stroke={markStyle.stroke}
+            strokeWidth={1.8}
+          />
+        )}
         <FlowIcon name={block.icon ?? "person"} x={cx} y={rect.y + 20} size={34} color="var(--ink)" />
         <text
           x={cx}
@@ -401,6 +441,7 @@ function BlockShape({
         >
           {block.title}
         </text>
+        {active && <StepBadge x={rect.x + rect.w + 2} y={rect.y + 2} n={mark} />}
       </g>
     );
   }
@@ -417,9 +458,9 @@ function BlockShape({
         width={rect.w}
         height={rect.h}
         rx={3}
-        fill="var(--paper)"
-        stroke={style.stroke}
-        strokeWidth={1.4}
+        fill={active ? markStyle.fill : "var(--paper)"}
+        stroke={active ? markStyle.stroke : style.stroke}
+        strokeWidth={active ? 2.2 : 1.4}
         strokeDasharray={style.dash}
         onPointerEnter={() =>
           onHover({
@@ -488,6 +529,25 @@ function BlockShape({
           </g>
         );
       })}
+      {active && <StepBadge x={rect.x + rect.w - 2} y={rect.y - 2} n={mark} />}
+    </g>
+  );
+}
+
+/** The incident step number, pinned to the block's corner as on the risk map. */
+function StepBadge({ x, y, n }: { x: number; y: number; n: number }) {
+  return (
+    <g style={{ pointerEvents: "none" }}>
+      <circle cx={x} cy={y} r={9} fill="var(--ink)" />
+      <text
+        x={x}
+        y={y + 3.5}
+        textAnchor="middle"
+        fill="#fff"
+        style={{ font: "700 10px var(--font-body), sans-serif" }}
+      >
+        {n}
+      </text>
     </g>
   );
 }

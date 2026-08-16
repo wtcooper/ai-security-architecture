@@ -211,8 +211,13 @@ async function main() {
   await checkAgainstSaifSeed(overlays, risks);
 
   // --- Incidents ---------------------------------------------------------------
+  const archetypeIds = new Set(archetypes.map((a) => a.id));
   for (const inc of incidents) {
     const where = `incident ${inc.id}`;
+    // Each incident replays on one reference architecture as well as on the risk map.
+    if (!inc.archetype || !archetypeIds.has(inc.archetype)) {
+      fail(`${where}: archetype "${inc.archetype}" is not a reference architecture`);
+    }
     for (const id of inc.risks) if (!riskIds.has(id)) fail(`${where}: unknown risk ${id}`);
     for (const id of inc.controls) if (!controlIds.has(id)) fail(`${where}: unknown control ${id}`);
     if (!inc.sources?.length) fail(`${where}: needs at least one source`);
