@@ -677,7 +677,7 @@ Highlights below are Google's original mapping, not ours.
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 6 — Agentic browser and AI extension, Vendor coding agent, Desktop AI assistant, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
-| Cloud & hosted | 16 — Autonomous action agent over business records, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Cloud & hosted | 16 — Single agent workflow, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
 | Third-party SaaS | 6 — Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
 
 ### 4a. Risks no architecture pins — 3 of 36
@@ -706,14 +706,14 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
-| Autonomous action agent over business records | Intake | service | `componentApplicationInputHandling` |
-| Autonomous action agent over business records | Planning loop | service | `componentReasoningCore` |
-| Autonomous action agent over business records | Retrieval & case state | service | `componentDataStorage` |
-| Autonomous action agent over business records | AI gateway | service | (none) |
-| Autonomous action agent over business records | Tool services | service | `componentTools` |
-| Autonomous action agent over business records | Model provider | provider | `componentModelServing` |
-| Autonomous action agent over business records | Business records | external | `componentDataStorage` |
-| Autonomous action agent over business records | Governance plane | governance | (none) |
+| Single agent workflow | Intake | service | `componentApplicationInputHandling` |
+| Single agent workflow | Planning loop | service | `componentReasoningCore` |
+| Single agent workflow | Retrieval & case state | service | `componentDataStorage` |
+| Single agent workflow | AI gateway | service | (none) |
+| Single agent workflow | Tool services | service | `componentTools` |
+| Single agent workflow | Model provider | provider | `componentModelServing` |
+| Single agent workflow | Downstream services | external | `componentDataStorage` |
+| Single agent workflow | Governance plane | governance | (none) |
 | Agent-facing endpoint | Human path & bot defence | service | (none) |
 | Agent-facing endpoint | Agent lane | service | `componentApplicationInputHandling` |
 | Agent-facing endpoint | Mandate verification | service | (none) |
@@ -721,7 +721,8 @@ Highlights below are Google's original mapping, not ours.
 | Agent-facing endpoint | Orders & evidence | service | `componentDataStorage` |
 | Agent-facing endpoint | Governance plane | governance | (none) |
 | Durable multi-agent workflow | Application front end | service | `componentApplication` |
-| Durable multi-agent workflow | Agent orchestration | service | `componentReasoningCore` |
+| Durable multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
+| Durable multi-agent workflow | Subagents | service | `componentReasoningCore` |
 | Durable multi-agent workflow | State & knowledge | service | `componentDataStorage` |
 | Durable multi-agent workflow | AI gateway | service | (none) |
 | Durable multi-agent workflow | Model provider | provider | `componentModelServing` |

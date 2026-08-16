@@ -13,8 +13,8 @@ summary:
 
 description:
   - >
-    The spine is a request path: application front end, agent orchestration, AI gateway,
-    tool services, downstream systems. The architecture's security posture lives almost entirely
+    The spine is a request path: application front end, supervisor agent, subagents, AI
+    gateway, tool services, downstream systems. The architecture's security posture lives almost entirely
     in one decision — that agents do not hold credentials or reach tools directly. Every tool
     call, model call and connector call leaves through the gateway, which brokers short-lived
     credentials, enforces policy per call, applies rate and budget limits, and writes the audit
@@ -26,8 +26,10 @@ description:
     a credential has persisted it. And the engine replays steps to recover, so a side effect that
     is not idempotent can execute more than once — including a payment.
   - >
-    Delegation is the other axis. A subagent should inherit a narrowed slice of the supervisor's
-    authority, not all of it; delegation that does not narrow is privilege distribution. And
+    Delegation is the other axis. Each subagent is, structurally, the single agent workflow
+    nested one level down — the same loop, the same gateway crossing, a narrower grant. A
+    subagent should inherit a narrowed slice of the supervisor's authority, not all of it;
+    delegation that does not narrow is privilege distribution. And
     inter-agent messages are model output becoming model input — one confused agent propagates
     through the graph, which is what distinguishes multi-agent failure from a single agent with
     more tools.
@@ -102,24 +104,19 @@ blocks:
 
   - id: orchestration
     kind: service
-    title: Agent orchestration
+    title: Supervisor agent
     col: 2
     row: 1
     cosaiComponent: componentReasoningCore
     note: >
-      The supervisor plans and delegates; the durable engine journals every step and replays to
-      recover. Delegation should narrow authority at every hop.
+      Decomposes the goal, routes work to the subagents and owns the process; the durable
+      engine journals every step and replays to recover. Delegation should narrow authority at
+      every hop.
     items:
       - id: supervisor
-        label: Supervisor agent
+        label: Planning loop
         icon: agent
         note: Decomposes the goal and routes work to specialists.
-      - id: subagents
-        label: Subagents
-        icon: agent
-        note: >
-          Specialists with their own contexts and tools. Their messages to each other are model
-          output becoming model input.
       - id: engine
         label: Durable engine
         icon: gear
@@ -128,6 +125,30 @@ blocks:
         label: Delegation scopes
         icon: doc
         note: Each hop carries less authority than its parent, and the chain is reconstructable.
+
+  - id: subagents
+    kind: service
+    title: Subagents
+    col: 3
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      The specialists the supervisor drives, each with its own context and tool set.
+      Structurally each one is the single agent workflow nested one level down — the
+      supervisor above it is the only real difference.
+    items:
+      - id: specialists
+        label: Specialist agents
+        icon: agent
+        note: Each runs the same loop as the single agent workflow, under its own workload identity.
+      - id: grants
+        label: Narrowed grants
+        icon: key
+        note: A slice of the supervisor's authority, not a copy of it.
+      - id: messages
+        label: Inter-agent messages
+        icon: chat
+        note: Model output becoming model input — one confused agent propagates through the graph.
 
   - id: state
     kind: service
@@ -155,7 +176,7 @@ blocks:
   - id: gateway
     kind: service
     title: AI gateway
-    col: 3
+    col: 4
     row: 1
     note: >
       The one door. Agents hold no credentials and reach nothing directly; every model and tool
@@ -181,7 +202,7 @@ blocks:
   - id: provider
     kind: provider
     title: Model provider
-    col: 4
+    col: 5
     row: 0
     cosaiComponent: componentModelServing
     note: >
@@ -196,7 +217,7 @@ blocks:
   - id: tools
     kind: service
     title: Tool services
-    col: 4
+    col: 5
     row: 1
     cosaiComponent: componentTools
     note: >
@@ -204,6 +225,12 @@ blocks:
       Everything here is admitted by
       the registry and reached only through the gateway.
     items:
+      - id: approved
+        label: Approved tools only
+        icon: shield
+        note: >
+          A deployed agent reaches only what the registry admitted. Tools are approved or they
+          are absent — secure by design.
       - id: mcp
         label: MCP servers
         icon: plug
@@ -221,7 +248,7 @@ blocks:
     kind: external
     title: Downstream services
     cosaiComponent: componentApplication
-    col: 4
+    col: 5
     row: 2
     note: The systems the workflow actually changes — where a wrong action becomes a real one.
     items:
@@ -241,7 +268,7 @@ blocks:
   - id: governance
     kind: governance
     title: Governance plane
-    col: 5
+    col: 6
     row: 0
     rowSpan: 3
     note: >
@@ -295,6 +322,14 @@ edges:
       Steps journal their results and read shared state back as context — the replay and
       persistence surface.
   - from: orchestration
+    to: subagents
+    path: primary
+    bidir: true
+    label: delegate / results
+    note: >
+      Work lands with a narrowed slice of the supervisor's authority; results return as model
+      output another agent will read as input.
+  - from: subagents
     to: gateway
     path: primary
     bidir: true
@@ -336,10 +371,10 @@ pins:
         Records, documents and API responses read over the process's lifetime are chances to
         steer an agent whose output another agent will trust.
     - risk: riskInsecureModelOutput
-      at: orchestration
+      at: orchestration->subagents
       note: Inter-agent messages are model output landing in another agent's context as instruction.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: orchestration
+      at: orchestration->subagents
       note: A subagent that inherits its parent's full authority is privilege distribution, not delegation.
     - risk: riskSensitiveDataDisclosure
       at: orchestration->state
@@ -403,8 +438,10 @@ scenarios:
       - follow: initiator->entry
         note: The request is authenticated and a scoped grant is minted for it.
       - follow: entry->orchestration
-        note: The supervisor decomposes the goal across subagents.
-      - follow: orchestration->gateway
+        note: The supervisor decomposes the goal into work for specialists.
+      - follow: orchestration->subagents
+        note: Each specialist takes its task with a narrowed grant, not the supervisor's authority.
+      - follow: subagents->gateway
         note: Every call the agents make funnels through the one door.
       - follow: gateway->provider
         note: Inference on brokered credentials, limits applied.
@@ -418,7 +455,9 @@ scenarios:
     steps:
       - follow: state->orchestration
         note: The engine rebuilds state from the journal — including anything a step persisted.
-      - follow: orchestration->gateway
+      - follow: orchestration->subagents
+        note: Replayed steps land on their specialists again.
+      - follow: subagents->gateway
         note: Replayed steps re-request credentials; nothing survives from the first run.
       - follow: gateway->tools
         note: Idempotency fencing decides whether the side effect may run again.
@@ -429,18 +468,25 @@ scenarios:
       - follow: events->entry
         note: A timer or webhook resumes work with nobody watching.
       - follow: entry->orchestration
-        note: The waiting step wakes with its narrowed grant, not the initiator's.
-      - follow: orchestration->gateway
+        note: The waiting step wakes days after the request that started the process.
+      - follow: orchestration->subagents
+        note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
+      - follow: subagents->gateway
         note: Credentials are fetched now — the ones from day one would be stale authority.
       - follow: gateway->tools
         note: The action proceeds under the same per-call policy as an attended run.
 
 deviations:
-  - subject: Subagents are drawn as one item
+  - subject: Subagents are drawn as one block
     reason: >
-      There are several, with different contexts and tools. They are drawn as one because the
+      There are several, with different contexts and tools. They share one block because the
       risks — inherited authority, message propagation, chain opacity — are properties of the
-      delegation pattern rather than of any particular specialist.
+      delegation pattern rather than of any particular specialist; each specialist individually
+      is the single agent workflow, one level down.
+  - subject: The supervisor's own model calls are not drawn
+    reason: >
+      They take the same gateway crossing as the subagents' calls; a second edge would have to
+      cross the subagent block to show it, and the one-door claim is the point of the drawing.
   - subject: Two of this architecture's risks have no CoSAI equivalent
     reason: >
       OWASP's agentic taxonomy names memory poisoning and cascading hallucination as distinct
