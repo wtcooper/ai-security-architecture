@@ -9,11 +9,12 @@
  * same chipSpots/tagSpots the SVG uses and travel with the block they annotate. Hover cards
  * replace persistent edge labels, which also keeps text off the drawing.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   applyNodeChanges,
   Background,
   BaseEdge,
+  EdgeLabelRenderer,
   Handle,
   Position,
   ReactFlow,
@@ -251,23 +252,103 @@ function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolea
   );
 }
 
+interface EdgePin {
+  kind: "chip" | "tag";
+  dx: number;
+  dy: number;
+  n?: number;
+  code?: string;
+  w?: number;
+  title: string;
+  body?: string;
+}
+
+interface BuildPathData {
+  d: string;
+  live: boolean;
+  midX: number;
+  midY: number;
+  pins: EdgePin[];
+  pinsDim: boolean;
+  onPinEnter: (event: React.MouseEvent, title: string, body?: string) => void;
+  onPinLeave: () => void;
+}
+
 /**
  * Renders the build-computed path verbatim until either endpoint has been dragged, then falls
- * back to React Flow's live handle-to-handle routing so edges follow the user's layout.
+ * back to live orthogonal routing so edges follow the user's layout. The edge's capability
+ * chips and risk tags render here too, offset from the current midpoint — so they travel with
+ * the arrow when a block is dragged.
  */
 function BuildPathEdge(props: EdgeProps) {
-  const data = props.data as { d: string; live: boolean };
+  const data = props.data as unknown as BuildPathData;
+  let path = data?.d ?? "";
+  let midX = data?.midX ?? 0;
+  let midY = data?.midY ?? 0;
   if (data?.live) {
     const [sx, sy, tx, ty] = [props.sourceX, props.sourceY, props.targetX, props.targetY];
-    const midX = (sx + tx) / 2;
-    const path =
-      Math.abs(tx - sx) > Math.abs(ty - sy)
-        ? `M ${sx} ${sy} L ${midX} ${sy} L ${midX} ${ty} L ${tx} ${ty}`
-        : `M ${sx} ${sy} L ${sx} ${(sy + ty) / 2} L ${tx} ${(sy + ty) / 2} L ${tx} ${ty}`;
-    return <BaseEdge path={path} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />;
+    if (Math.abs(tx - sx) > Math.abs(ty - sy)) {
+      const ex = (sx + tx) / 2;
+      path = `M ${sx} ${sy} L ${ex} ${sy} L ${ex} ${ty} L ${tx} ${ty}`;
+      midX = ex;
+      midY = (sy + ty) / 2;
+    } else {
+      const ey = (sy + ty) / 2;
+      path = `M ${sx} ${sy} L ${sx} ${ey} L ${tx} ${ey} L ${tx} ${ty}`;
+      midX = (sx + tx) / 2;
+      midY = ey;
+    }
   }
   return (
-    <BaseEdge path={data?.d ?? ""} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />
+    <>
+      <BaseEdge path={path} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />
+      {data?.pins?.length ? (
+        <EdgeLabelRenderer>
+          {data.pins.map((pin, i) => (
+            <div
+              key={i}
+              onMouseEnter={(e) => data.onPinEnter(e, pin.title, pin.body)}
+              onMouseLeave={data.onPinLeave}
+              style={
+                pin.kind === "chip"
+                  ? {
+                      position: "absolute",
+                      transform: `translate(${midX + pin.dx - 9}px, ${midY + pin.dy - 9}px)`,
+                      width: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      background: "var(--paper, #fff)",
+                      border: "1.5px solid var(--chip, #4a5fd0)",
+                      color: "var(--chip, #4a5fd0)",
+                      font: "700 10px/15px var(--font-mono, monospace)",
+                      textAlign: "center",
+                      opacity: data.pinsDim ? 0 : 1,
+                      pointerEvents: "all",
+                      zIndex: 10,
+                    }
+                  : {
+                      position: "absolute",
+                      transform: `translate(${midX + pin.dx}px, ${midY + pin.dy}px)`,
+                      width: pin.w,
+                      height: TAG_H,
+                      borderRadius: 3,
+                      background: "var(--paper-2, #f4f4f2)",
+                      border: "1px solid var(--line, #ddd)",
+                      color: "var(--ink-2, #555)",
+                      font: `600 9.5px/${TAG_H - 2}px var(--font-mono, monospace)`,
+                      textAlign: "center",
+                      opacity: data.pinsDim ? 0 : 1,
+                      pointerEvents: "all",
+                      zIndex: 10,
+                    }
+              }
+            >
+              {pin.kind === "chip" ? pin.n : pin.code}
+            </div>
+          ))}
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
   );
 }
 
@@ -292,7 +373,6 @@ export function FlowDiagramRF({
   className?: string;
 }) {
   const cfg = RF_CONFIG[archetype.id];
-  const wrapRef = useRef<HTMLDivElement>(null);
   const [card, setCard] = useState<HoverCard | null>(null);
   const [dragged, setDragged] = useState<ReadonlySet<string>>(new Set());
 
@@ -351,7 +431,6 @@ export function FlowDiagramRF({
     // Pins sit at the same spots the SVG renderer and the build checks use. Block-anchored
     // pins are children of their block, so they travel when the user drags it.
     const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
-    const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
 
     const chipGroups = new Map<string, { capability: string; note?: string }[]>();
     for (const pin of archetype.pins.capabilities) {
@@ -359,11 +438,10 @@ export function FlowDiagramRF({
       chipGroups.get(pin.at)!.push(pin);
     }
     for (const [at, pins] of chipGroups) {
-      const onBlock = !at.includes("->");
-      const blockRect = onBlock ? rects[at] : undefined;
-      const edge = onBlock ? undefined : edgeGeo.get(at);
-      if (!blockRect && !edge) continue;
-      const spots = chipSpots(pins.length, blockRect, edge);
+      if (at.includes("->")) continue; // edge-anchored chips render inside the edge itself
+      const blockRect = rects[at];
+      if (!blockRect) continue;
+      const spots = chipSpots(pins.length, blockRect, undefined);
       pins.forEach((pin, i) => {
         const spot = spots[i];
         if (!spot) return;
@@ -372,11 +450,8 @@ export function FlowDiagramRF({
         nodes.push({
           id: `chip:${at}:${pin.capability}`,
           type: "chip",
-          position:
-            onBlock && blockRect
-              ? { x: spot.x - 9 - blockRect.x, y: spot.y - 9 - blockRect.y }
-              : { x: spot.x - 9, y: spot.y - 9 },
-          parentId: onBlock ? at : undefined,
+          position: { x: spot.x - 9 - blockRect.x, y: spot.y - 9 - blockRect.y },
+          parentId: at,
           data: {
             n,
             dim: false,
@@ -396,12 +471,11 @@ export function FlowDiagramRF({
       tagGroups.get(pin.at)!.push(pin);
     }
     for (const [at, pins] of tagGroups) {
-      const onBlock = !at.includes("->");
-      const blockRect = onBlock ? rects[at] : undefined;
-      const edge = onBlock ? undefined : edgeGeo.get(at);
-      if (!blockRect && !edge) continue;
+      if (at.includes("->")) continue; // edge-anchored tags render inside the edge itself
+      const blockRect = rects[at];
+      if (!blockRect) continue;
       const codes = pins.map((p) => riskCode(p.risk));
-      const { rects: tagRects } = tagSpots(codes.map(tagWidth), blockRect, edge);
+      const { rects: tagRects } = tagSpots(codes.map(tagWidth), blockRect, undefined);
       pins.forEach((pin, i) => {
         const r = tagRects[i];
         if (!r) return;
@@ -409,9 +483,8 @@ export function FlowDiagramRF({
         nodes.push({
           id: `tag:${at}:${pin.risk}`,
           type: "tag",
-          position:
-            onBlock && blockRect ? { x: r.x - blockRect.x, y: r.y - blockRect.y } : { x: r.x, y: r.y },
-          parentId: onBlock ? at : undefined,
+          position: { x: r.x - blockRect.x, y: r.y - blockRect.y },
+          parentId: at,
           data: {
             code: codes[i],
             w: r.w,
@@ -458,6 +531,19 @@ export function FlowDiagramRF({
     [],
   );
 
+  const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
+    const wrap = (event.target as HTMLElement).closest("[data-rfwrap]");
+    const rect = wrap?.getBoundingClientRect();
+    if (!rect) return;
+    setCard({
+      x: Math.min(event.clientX - rect.left + 12, rect.width - 280),
+      y: Math.min(event.clientY - rect.top + 12, rect.height - 120),
+      title,
+      body,
+    });
+  }, []);
+  const onPinLeave = useCallback(() => setCard(null), []);
+
   const edges = useMemo(() => {
     const { layout } = archetype;
     const hidden = new Set(cfg?.hide ?? []);
@@ -466,6 +552,66 @@ export function FlowDiagramRF({
     const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
     // Dragging the frame moves every member block with it.
     const moved = dragged.has("__frame") ? new Set([...dragged, ...members]) : dragged;
+
+    // Edge-anchored pins, as offsets from the build midpoint — the edge component re-bases
+    // them on the live midpoint once an endpoint moves, so they travel with the arrow.
+    const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
+    const pinsByEdge = new Map<string, EdgePin[]>();
+    const chipGroups = new Map<string, { capability: string; note?: string }[]>();
+    for (const pin of archetype.pins.capabilities) {
+      if (!pin.at.includes("->")) continue;
+      if (!chipGroups.has(pin.at)) chipGroups.set(pin.at, []);
+      chipGroups.get(pin.at)!.push(pin);
+    }
+    for (const [at, pins] of chipGroups) {
+      const geo = edgeGeo.get(at);
+      if (!geo) continue;
+      const spots = chipSpots(pins.length, undefined, geo);
+      const list = pinsByEdge.get(at) ?? [];
+      pins.forEach((pin, i) => {
+        const spot = spots[i];
+        if (!spot) return;
+        const n = capNumber.get(pin.capability) ?? 0;
+        const cap = capabilityById.get(pin.capability);
+        list.push({
+          kind: "chip",
+          dx: spot.x - geo.midX,
+          dy: spot.y - geo.midY,
+          n,
+          title: `${n} · ${cap?.title ?? pin.capability}`,
+          body: pin.note,
+        });
+      });
+      pinsByEdge.set(at, list);
+    }
+    const tagGroups = new Map<string, { risk: string; note?: string }[]>();
+    for (const pin of archetype.pins.risks) {
+      if (!pin.at.includes("->")) continue;
+      if (!tagGroups.has(pin.at)) tagGroups.set(pin.at, []);
+      tagGroups.get(pin.at)!.push(pin);
+    }
+    for (const [at, pins] of tagGroups) {
+      const geo = edgeGeo.get(at);
+      if (!geo) continue;
+      const codes = pins.map((p) => riskCode(p.risk));
+      const { rects: tagRects } = tagSpots(codes.map(tagWidth), undefined, geo);
+      const list = pinsByEdge.get(at) ?? [];
+      pins.forEach((pin, i) => {
+        const r = tagRects[i];
+        if (!r) return;
+        const risk = riskById.get(pin.risk);
+        list.push({
+          kind: "tag",
+          dx: r.x - geo.midX,
+          dy: r.y - geo.midY,
+          code: codes[i],
+          w: r.w,
+          title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
+          body: pin.note,
+        });
+      });
+      pinsByEdge.set(at, list);
+    }
 
     const out: Edge[] = [];
     for (const e of archetype.edges) {
@@ -484,7 +630,18 @@ export function FlowDiagramRF({
         sourceHandle: sh,
         targetHandle: th,
         type: "buildPath",
-        data: { d: geo.d, live, label: e.label, note: e.note },
+        data: {
+          d: geo.d,
+          live,
+          midX: geo.midX,
+          midY: geo.midY,
+          label: e.label,
+          note: e.note,
+          pins: pinsByEdge.get(key) ?? [],
+          pinsDim: inScenario,
+          onPinEnter: cardAt,
+          onPinLeave,
+        },
         style: {
           stroke: style.stroke,
           strokeWidth: 1.8,
@@ -498,21 +655,10 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, cfg, inScenario, walkEdges, dragged]);
-
-  const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
-    const rect = wrapRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setCard({
-      x: Math.min(event.clientX - rect.left + 12, rect.width - 280),
-      y: Math.min(event.clientY - rect.top + 12, rect.height - 120),
-      title,
-      body,
-    });
-  }, []);
+  }, [archetype, cfg, inScenario, walkEdges, dragged, cardAt, onPinLeave]);
 
   return (
-    <div ref={wrapRef} className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
+    <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
       <ReactFlow
         nodes={displayNodes}
         edges={edges}
