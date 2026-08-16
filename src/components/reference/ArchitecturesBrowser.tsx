@@ -6,11 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { archetypeById, archetypesInOrder, surfaces } from "@/lib/data";
-import { BANDS, BAND_TOKENS } from "@/lib/map-layout";
 import type { Archetype, Paragraph } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
-import { PATH_STYLE } from "./flow-style";
+import { PATH_STYLE, REF_LAYERS } from "./flow-style";
 import { InsightRail } from "./InsightRail";
 
 const SURFACE_TAGLINE: Record<string, string> = {
@@ -198,14 +197,14 @@ export function ArchitecturesBrowser() {
               </span>
             ))}
             <span className="flex flex-wrap items-center gap-2.5">
-              <span className="text-ink-3">Tab colour = risk-map layer</span>
-              {BANDS.map((b) => (
-                <span key={b.id} className="flex items-center gap-1">
+              <span className="text-ink-3">Tab colour = layer</span>
+              {REF_LAYERS.map((l) => (
+                <span key={l.label} className="flex items-center gap-1">
                   <span
                     className="inline-block h-2.5 w-2.5 rounded-[2px]"
-                    style={{ background: BAND_TOKENS[b.id].rail }}
+                    style={{ background: l.color }}
                   />
-                  {b.label}
+                  {l.label}
                 </span>
               ))}
             </span>

@@ -3,9 +3,8 @@
  * architecture grammar into this app's tokens: white blocks with a title tab, typed data paths
  * with a small legend, light-blue numbered capability chips, and grey risk tags.
  */
-import { bandFor } from "@/lib/bands";
+import { bandFor, type BandId } from "@/lib/bands";
 import { componentById } from "@/lib/data";
-import { BAND_TOKENS } from "@/lib/map-layout";
 import type { ArchBlock, BlockKind, PathClass } from "@/lib/types";
 
 /** Stroke and dash per connector class. One green for everything inside the system. */
@@ -33,10 +32,27 @@ export const BLOCK_STYLE: Record<
 };
 
 /**
- * The tab colour carries the risk-map layer: a block anchored to a CoSAI component takes its
- * band's rail colour, so a box here and a box on the risk map read as the same thing. Nearly
- * every block is anchored; the grey fallback is reserved for security and governance machinery
- * CoSAI does not model.
+ * The reference architectures colour by what a thing is, in three layers plus grey: application
+ * code, model & its infrastructure (one green — a model provider or a serving stack covers both,
+ * and a two-colour tab is a puzzle, not a legend), and data. The risk map keeps its four bands;
+ * this collapse exists only on these diagrams.
+ */
+export const REF_LAYERS = [
+  { label: "Application", color: "var(--band-app-rail)" },
+  { label: "Model & infrastructure", color: "var(--band-infra-rail)" },
+  { label: "Data", color: "var(--band-data-rail)" },
+] as const;
+
+const LAYER_COLOR: Record<BandId, string> = {
+  application: "var(--band-app-rail)",
+  model: "var(--band-infra-rail)",
+  modelInfrastructure: "var(--band-infra-rail)",
+  dataInfrastructure: "var(--band-data-rail)",
+};
+
+/**
+ * A block anchored to a CoSAI component takes its layer's colour; the grey fallback is reserved
+ * for security and governance machinery CoSAI does not model.
  */
 export function blockTab(block: ArchBlock): string {
   const fallback = BLOCK_STYLE[block.kind as Exclude<BlockKind, "actor">]?.tab ?? "var(--ink-2)";
@@ -45,7 +61,7 @@ export function blockTab(block: ArchBlock): string {
     block.cosaiComponent ?? block.items?.find((i) => i.cosaiComponent)?.cosaiComponent;
   const component = id ? componentById.get(id) : undefined;
   if (!component) return fallback;
-  return BAND_TOKENS[bandFor(component.id, component.category, component.subcategory)].rail;
+  return LAYER_COLOR[bandFor(component.id, component.category, component.subcategory)];
 }
 
 /** The capability chips — F5's light-blue numbered design-requirement circles. */

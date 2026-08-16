@@ -146,7 +146,9 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   block or its internals. Nearly every block is anchored, under one colour rule: anything that
   is data at rest — records, repositories, memory files, journals, indexes, whether the system
   reads it or acts on it — is Data Storage or Data Sources (amber); Application blue is reserved
-  for running services and code. CoSAI's Memory and RAG Content components, which the risk map
+  for running services and code. Model and model infrastructure share one green on these
+  diagrams — a model provider covers both, and a two-colour tab is a puzzle, not a legend; the
+  risk map keeps its four bands. CoSAI's Memory and RAG Content components, which the risk map
   draws inside the agent, survive as item-level anchors within those amber blocks so the
   cross-links stay precise. A quiet grey tab is
   reserved for the security and governance machinery CoSAI does not model: gateways, identity
