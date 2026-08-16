@@ -6,6 +6,7 @@ import { Chip } from "@/components/Chips";
 import { RiskMap } from "@/components/map/RiskMap";
 import { PHASE_META } from "@/components/PhaseRail";
 import { FlowDiagram } from "@/components/reference/FlowDiagram";
+import { FlowLegend } from "@/components/reference/FlowLegend";
 import {
   archetypeById,
   blocksForComponents,
@@ -233,6 +234,7 @@ export function IncidentExplorer() {
             />
           )}
         </div>
+        {view === "architecture" && archetype && <FlowLegend className="mt-3 px-1" />}
 
         <IncidentFooter incident={incident} />
       </section>

@@ -9,7 +9,7 @@ import { archetypeById, archetypesInOrder, surfaces } from "@/lib/data";
 import type { Archetype, Paragraph } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
-import { PATH_STYLE, REF_LAYERS } from "./flow-style";
+import { FlowLegend } from "./FlowLegend";
 import { InsightRail } from "./InsightRail";
 
 const SURFACE_TAGLINE: Record<string, string> = {
@@ -127,45 +127,20 @@ export function ArchitecturesBrowser() {
               <span>{archetype.scenarios?.length ?? 0} scenario walks</span>
             </p>
           </div>
-          <div className="flex max-w-md flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-ink-2">
-            {Object.entries(PATH_STYLE).map(([id, style]) => (
-              <span key={id} className="flex items-center gap-1.5">
-                <svg width="26" height="10" aria-hidden>
-                  <path
-                    d="M 1 5 H 25"
-                    stroke={style.stroke}
-                    strokeWidth="2"
-                    strokeDasharray={style.dash}
-                  />
-                </svg>
-                {style.label}
-              </span>
-            ))}
-            <span className="flex flex-wrap items-center gap-2.5">
-              <span className="text-ink-3">Tab colour = layer</span>
-              {REF_LAYERS.map((l) => (
-                <span key={l.label} className="flex items-center gap-1">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-[2px]"
-                    style={{ background: l.color }}
-                  />
-                  {l.label}
-                </span>
-              ))}
-            </span>
-            <span className="text-ink-3">Hover anything · ⌘ or Ctrl + wheel to zoom</span>
-          </div>
         </div>
 
         <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
-          <div className="flex items-start overflow-hidden rounded-xl border border-line bg-paper">
-            <FlowDiagram
-              archetype={archetype}
-              scenario={scenario}
-              highlight={highlight}
-              onHighlight={setHighlight}
-              className="w-full"
-            />
+          <div>
+            <div className="flex items-start overflow-hidden rounded-xl border border-line bg-paper">
+              <FlowDiagram
+                archetype={archetype}
+                scenario={scenario}
+                highlight={highlight}
+                onHighlight={setHighlight}
+                className="w-full"
+              />
+            </div>
+            <FlowLegend className="mt-3 px-1" />
           </div>
           <div className="self-start rounded-xl border border-line bg-paper p-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <InsightRail
