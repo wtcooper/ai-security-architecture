@@ -1,9 +1,13 @@
-# AI Risk Map
+# AI Security Architecture
 
-**[wtcooper.github.io/ai-security-framework-viz](https://wtcooper.github.io/ai-security-framework-viz/)**
+**[wtcooper.github.io/ai-security-architecture](https://wtcooper.github.io/ai-security-architecture/)**
 
-An interactive map of AI security risk: where each risk is **introduced**, where it is
-**exposed**, and where it can be **mitigated**, across the components of an AI system.
+AI security from worldview to drawing. It starts as an interactive map of AI security risk —
+where each risk is **introduced**, where it is **exposed**, and where it can be **mitigated**,
+across the components of an AI system — and descends from there through the full taxonomy, the
+technology capabilities that implement each control on endpoint / cloud / third-party SaaS, and
+reference architectures for every class of AI application, drawn as target states in the
+capability-blocks-and-data-paths grammar practitioners already read.
 
 It is a recreation of [Google's SAIF Map](https://saif.google/secure-ai-framework), rebuilt on
 the broader taxonomy that succeeded it — the

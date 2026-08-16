@@ -94,7 +94,7 @@ export interface Caption {
 export const WIDTH = 1060;
 /** Right edge of the coloured bands. Boundary actors sit outside this, to read as external. */
 export const BAND_RIGHT = 980;
-export const HEIGHT = 1070;
+export const HEIGHT = 972;
 /** Headroom above the diagram for the User actor, which sits outside the system. */
 export const TOP_MARGIN = 48;
 
@@ -106,26 +106,26 @@ export const BANDS: Band[] = [
     y: 26,
     height: 444,
   },
-  { id: "model", label: "Model", sublabel: "Model core", y: 482, height: 98 },
+  { id: "model", label: "Model", sublabel: "Model core", y: 482, height: 78 },
   {
     id: "modelInfrastructure",
     label: "Model Infrastructure",
     sublabel: "Deployment · Training",
-    y: 592,
-    height: 208,
+    y: 572,
+    height: 150,
   },
   {
     id: "dataInfrastructure",
     label: "Data Infrastructure",
     sublabel: "Data components",
-    y: 812,
-    height: 228,
+    y: 734,
+    height: 208,
   },
 ];
 
 export const RAILS = [
-  { label: "Model usage", y: 26, height: 554 },
-  { label: "Model creation", y: 592, height: 448 },
+  { label: "Model usage", y: 26, height: 534 },
+  { label: "Model creation", y: 572, height: 370 },
 ];
 
 export const GROUPS: Group[] = [
@@ -184,20 +184,20 @@ export const BOXES: Box[] = [
   { id: "componentApplicationOutputHandling", x: 620, y: 430, w: 260, h: 34 },
 
   // --- Model core -----------------------------------------------------------------------
-  { id: "componentTheModel", x: 240, y: 504, w: 640, h: 54, emphasis: true },
+  { id: "componentTheModel", x: 240, y: 494, w: 640, h: 54, emphasis: true },
 
   // --- Model infrastructure --------------------------------------------------------------
-  { id: "componentModelStorage", x: 200, y: 614, w: 280, h: 40 },
-  { id: "componentModelServing", x: 640, y: 614, w: 280, h: 40 },
-  { id: "componentModelEvaluation", x: 176, y: 690, w: 200, h: 46 },
-  { id: "componentModelTrainingTuning", x: 440, y: 690, w: 220, h: 46 },
-  { id: "componentModelFrameworksAndCode", x: 720, y: 690, w: 220, h: 46 },
+  { id: "componentModelStorage", x: 200, y: 586, w: 280, h: 40 },
+  { id: "componentModelServing", x: 640, y: 586, w: 280, h: 40 },
+  { id: "componentModelEvaluation", x: 176, y: 650, w: 200, h: 46 },
+  { id: "componentModelTrainingTuning", x: 440, y: 650, w: 220, h: 46 },
+  { id: "componentModelFrameworksAndCode", x: 720, y: 650, w: 220, h: 46 },
 
   // --- Data infrastructure ----------------------------------------------------------------
-  { id: "componentDataStorage", x: 300, y: 830, w: 520, h: 38 },
-  { id: "componentTrainingData", x: 300, y: 880, w: 520, h: 38 },
-  { id: "componentDataFilteringAndProcessing", x: 270, y: 930, w: 580, h: 38 },
-  { id: "componentDataSources", x: 200, y: 980, w: 720, h: 38, emphasis: true },
+  { id: "componentDataStorage", x: 300, y: 752, w: 520, h: 38 },
+  { id: "componentTrainingData", x: 300, y: 798, w: 520, h: 38 },
+  { id: "componentDataFilteringAndProcessing", x: 270, y: 844, w: 580, h: 38 },
+  { id: "componentDataSources", x: 200, y: 890, w: 720, h: 38, emphasis: true },
 ];
 
 /**
@@ -206,23 +206,23 @@ export const BOXES: Box[] = [
  */
 export const EDGES: Edge[] = [
   // --- Model creation, bottom up -------------------------------------------------------
-  { from: "componentDataSources", to: "componentDataFilteringAndProcessing", d: "M 560 980 L 560 970" },
-  { from: "componentDataFilteringAndProcessing", to: "componentTrainingData", d: "M 560 930 L 560 920" },
-  { from: "componentTrainingData", to: "componentDataStorage", d: "M 560 880 L 560 870" },
-  { from: "componentDataStorage", to: "componentModelTrainingTuning", d: "M 560 830 L 560 738" },
-  { from: "componentModelEvaluation", to: "componentModelTrainingTuning", d: "M 376 713 L 438 713" },
-  { from: "componentModelFrameworksAndCode", to: "componentModelTrainingTuning", d: "M 720 713 L 662 713" },
-  { from: "componentModelTrainingTuning", to: "componentTheModel", d: "M 560 690 L 560 560" },
-  { from: "componentTheModel", to: "componentModelEvaluation", d: "M 280 558 L 280 578 L 150 578 L 150 713 L 174 713" },
-  { from: "componentModelStorage", to: "componentTheModel", d: "M 340 614 L 340 560" },
-  { from: "componentModelServing", to: "componentTheModel", d: "M 780 614 L 780 560" },
+  { from: "componentDataSources", to: "componentDataFilteringAndProcessing", d: "M 560 890 L 560 884" },
+  { from: "componentDataFilteringAndProcessing", to: "componentTrainingData", d: "M 560 844 L 560 838" },
+  { from: "componentTrainingData", to: "componentDataStorage", d: "M 560 798 L 560 792" },
+  { from: "componentDataStorage", to: "componentModelTrainingTuning", d: "M 560 752 L 560 698" },
+  { from: "componentModelEvaluation", to: "componentModelTrainingTuning", d: "M 376 673 L 438 673" },
+  { from: "componentModelFrameworksAndCode", to: "componentModelTrainingTuning", d: "M 720 673 L 662 673" },
+  { from: "componentModelTrainingTuning", to: "componentTheModel", d: "M 560 650 L 560 550" },
+  { from: "componentTheModel", to: "componentModelEvaluation", d: "M 280 548 L 280 562 L 150 562 L 150 673 L 174 673" },
+  { from: "componentModelStorage", to: "componentTheModel", d: "M 340 586 L 340 550" },
+  { from: "componentModelServing", to: "componentTheModel", d: "M 780 586 L 780 550" },
 
   // --- Application core round trip through the model ------------------------------------
   // Drawn in SAIF's direction; CoSAI declares these four the other way round. See
   // EDGE_DEVIATIONS for the reasoning.
   { from: "componentApplication", to: "componentApplicationInputHandling", d: "M 370 388 L 370 428" },
-  { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 464 L 370 502" },
-  { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 504 L 750 466" },
+  { from: "componentApplicationInputHandling", to: "componentTheModel", d: "M 370 464 L 370 492" },
+  { from: "componentTheModel", to: "componentApplicationOutputHandling", d: "M 750 494 L 750 466" },
   { from: "componentApplicationOutputHandling", to: "componentApplication", d: "M 750 428 L 750 388" },
 
   // --- The application drives the agent, and the agent answers back ----------------------
@@ -387,10 +387,10 @@ export const ACTORS: Actor[] = [
     id: "actorExternalData",
     label: "External Data",
     x: 484,
-    y: 1046,
+    y: 948,
     w: 152,
     h: 24,
-    d: "M 560 1046 L 560 1022",
+    d: "M 560 948 L 560 930",
     directed: true,
     hint: "Data gathered from outside the organisation before it ever reaches the pipeline.",
     borders: ["componentDataSources"],

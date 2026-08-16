@@ -14,9 +14,9 @@ import {
 import { visibleFrameworks } from "@/lib/frameworks";
 
 export const metadata = {
-  title: "AI Risk Map",
+  title: "AI Security Architecture",
   description:
-    "An interactive map of AI security risk: where each risk is introduced, exposed and mitigated across the components of an AI system.",
+    "AI security from worldview to drawing: the CoSAI risk map, the taxonomy behind it, the technology capabilities that implement it, and reference architectures for every class of AI application.",
 };
 
 const SECTIONS = [
@@ -89,11 +89,11 @@ const SECTIONS = [
 export default function LandingPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
-      <p className="eyebrow">An interactive map of AI security risk</p>
+      <p className="eyebrow">AI security, from worldview to drawing</p>
       <h1 className="display mt-4 max-w-3xl text-[44px] font-bold leading-[1.08] tracking-[-0.025em] text-ink sm:text-[56px]">
         Where AI risk is <span className="text-introduced">introduced</span>,{" "}
         <span className="text-exposed">exposed</span>, and{" "}
-        <span className="text-mitigated">mitigated</span>.
+        <span className="text-mitigated">mitigated</span> — and what to build about it.
       </h1>
       <p className="mt-6 max-w-2xl text-[17px] leading-relaxed text-ink-2">
         A recreation of{" "}
@@ -118,20 +118,24 @@ export default function LandingPage() {
         memory and retrieval.
       </p>
       <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-        Both frameworks stop at the control strategy — &ldquo;user data management&rdquo;, not
-        the thing you deploy on Monday. So there is one layer here that is neither
-        CoSAI&rsquo;s nor SAIF&rsquo;s: {capabilities.length} vendor-neutral{" "}
+        From that worldview the site descends one deliberate rung at a time: the taxonomy
+        behind the map — every component, risk, control and persona — then the{" "}
         <Link
           href="/capabilities"
           className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
         >
-          technology capabilities
+          {capabilities.length} technology capabilities
         </Link>{" "}
-        derived from the security standards, mapped back onto CoSAI and split across the{" "}
-        {surfaces.length} surfaces where the answer differs — your endpoints, the AI you
-        operate, and the AI you merely consume.
+        that actually implement the controls, and finally{" "}
+        <Link
+          href="/reference"
+          className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
+        >
+          {archetypes.length} reference architectures
+        </Link>{" "}
+        — one target-state drawing per class of AI application, with the capabilities numbered
+        onto the diagram and the risks tagged where they surface.
       </p>
-
       <div className="mt-8 flex flex-wrap items-center gap-3">
         <Link
           href="/map"
@@ -140,25 +144,31 @@ export default function LandingPage() {
           Start the tour
         </Link>
         <Link
+          href="/reference"
+          className="rounded-lg border border-line-strong bg-paper px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-ink"
+        >
+          Browse the architectures
+        </Link>
+        <Link
           href="/capabilities"
           className="rounded-lg border border-line-strong bg-paper px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-ink"
         >
           Map your tooling
         </Link>
-        <Link
-          href="/examples"
-          className="rounded-lg border border-line-strong bg-paper px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-ink"
-        >
-          See real incidents
-        </Link>
       </div>
 
       <div className="mt-10 rounded-xl border border-line bg-paper p-6">
-        <p className="eyebrow">How to read it</p>
-        <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-ink-2">
-          Every risk is told in three moves. Pick a risk, then step through the phases — the
-          map highlights a different set of components each time, and the mitigated step
-          names the controls that break the chain.
+        <p className="eyebrow">The ladder</p>
+        <p className="mt-2 max-w-3xl text-[14.5px] leading-relaxed text-ink-2">
+          <span className="font-semibold text-ink">Risk map</span> — every risk told in three
+          moves across the components it touches.{" "}
+          <span className="font-semibold text-ink">Taxonomy</span> — the components, risks,
+          controls and personas behind the picture, with the framework crosswalks.{" "}
+          <span className="font-semibold text-ink">Capabilities</span> — the vendor-neutral
+          tooling classes that implement each control, split across endpoint, cloud and
+          third-party SaaS.{" "}
+          <span className="font-semibold text-ink">Architectures</span> — the target-state
+          drawing for each class of AI application, built to be copied.
         </p>
         <PhaseLegend className="mt-4" />
       </div>
@@ -244,6 +254,27 @@ export default function LandingPage() {
             className="mt-3 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
           >
             Browse the capability matrix →
+          </Link>
+        </div>
+        <div className="rounded-xl border border-line bg-paper p-5 sm:col-span-2">
+          <p className="display text-[15px] font-semibold text-ink">
+            The reference architectures{" "}
+            <span className="ident ml-1.5 align-middle">authored here</span>
+          </p>
+          <p className="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">
+            No published catalogue maps classes of AI application to architectures, so this one
+            was built: {archetypes.length} archetypes across {surfaces.length} surfaces, drawn
+            in the reference-architecture grammar practitioners already read — capability
+            blocks on typed data paths, with each block anchored to the CoSAI component it
+            instantiates, the capabilities to deploy numbered onto the drawing, and the risks
+            tagged where they surface. Target states, built to be copied rather than audited
+            against.
+          </p>
+          <Link
+            href="/reference"
+            className="mt-3 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
+          >
+            Browse the architectures →
           </Link>
         </div>
       </div>

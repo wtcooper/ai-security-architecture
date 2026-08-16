@@ -22,7 +22,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Risk Map",
+  title: "AI Security Architecture",
   description:
     "An interactive map of AI security risk: where each risk is introduced, exposed and mitigated across the components of an AI system.",
 };

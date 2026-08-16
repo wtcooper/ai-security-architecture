@@ -192,7 +192,7 @@ export function RiskMap({
             d={edge.d}
             fill="none"
             stroke="var(--line-strong)"
-            strokeWidth={edge.soft ? 1 : 1.25}
+            strokeWidth={edge.soft ? 1.25 : 1.6}
             strokeDasharray={edge.soft ? "4 4" : undefined}
             markerEnd="url(#arrow)"
             opacity={edge.soft ? 0.6 : 0.95}
@@ -208,7 +208,7 @@ export function RiskMap({
           textAnchor="middle"
           fill="var(--ink-3)"
           style={{
-            font: `500 ${c.small ? 10.5 : 12}px var(--font-mono-id), monospace`,
+            font: `600 ${c.small ? 12 : 13}px var(--font-mono-id), monospace`,
             letterSpacing: "0.04em",
           }}
         >
@@ -282,7 +282,7 @@ function ZoomControls({
       {zoom !== 1 && (
         <text
           x={938}
-          y={1051}
+          y={953}
           textAnchor="end"
           fill="var(--ink-3)"
           style={{ font: "500 11px var(--font-mono-id), monospace" }}
@@ -293,7 +293,7 @@ function ZoomControls({
       {buttons.map((b, i) => (
         <g
           key={b.label}
-          transform={`translate(${979 + i * 32} 1046)`}
+          transform={`translate(${979 + i * 32} 948)`}
           role="button"
           tabIndex={0}
           aria-label={b.label}
@@ -332,23 +332,34 @@ function Bands() {
       {BANDS.map((band) => {
         const t = BAND_TOKENS[band.id];
         const midY = band.y + band.height / 2;
+        // A rotated label longer than its band splits at the space onto two stacked lines,
+        // so the compressed bands keep the full wording at full size.
+        const label = band.label.toUpperCase();
+        const fits = label.length * 9.8 < band.height - 8;
+        const lines = fits ? [label] : label.split(" ");
         return (
           <g key={band.id}>
             <rect x={92} y={band.y} width={BAND_RIGHT - 92} height={band.height} rx={10} fill={t.fill} />
             <rect x={92} y={band.y} width={4} height={band.height} rx={2} fill={t.rail} />
-            <text
-              x={74}
-              y={midY}
-              textAnchor="middle"
-              transform={`rotate(-90 74 ${midY})`}
-              fill={t.rail}
-              style={{
-                font: "600 12px var(--font-mono-id), monospace",
-                letterSpacing: "0.11em",
-              }}
-            >
-              {band.label.toUpperCase()}
-            </text>
+            {lines.map((line, i) => {
+              const x = lines.length > 1 ? (i === 0 ? 60 : 76) : 74;
+              return (
+                <text
+                  key={line}
+                  x={x}
+                  y={midY}
+                  textAnchor="middle"
+                  transform={`rotate(-90 ${x} ${midY})`}
+                  fill={t.rail}
+                  style={{
+                    font: "700 13.5px var(--font-mono-id), monospace",
+                    letterSpacing: "0.11em",
+                  }}
+                >
+                  {line}
+                </text>
+              );
+            })}
           </g>
         );
       })}
@@ -377,7 +388,7 @@ function Rails() {
               textAnchor="middle"
               transform={`rotate(-90 20 ${midY})`}
               fill="var(--ink-2)"
-              style={{ font: "600 15px var(--font-display), sans-serif" }}
+              style={{ font: "700 17px var(--font-display), sans-serif" }}
             >
               {rail.label}
             </text>
@@ -442,7 +453,7 @@ function Groups({
               y={group.y + 20}
               fill={t.rail}
               style={{
-                font: "600 11px var(--font-mono-id), monospace",
+                font: "700 12px var(--font-mono-id), monospace",
                 letterSpacing: "0.12em",
                 pointerEvents: "none",
               }}
@@ -470,7 +481,7 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
   const t = BAND_TOKENS[bandOf(box.y)];
   const interactive = Boolean(onSelect);
   const label = componentTitle(box.id);
-  const labelSize = box.emphasis ? 16 : box.compact ? 10.5 : 12.5;
+  const labelSize = box.emphasis ? 18 : box.compact ? 12 : 14;
 
   // Group boxes carry their title at the top, leaving room for the children inside.
   const titleY = box.group ? box.y + 22 : box.y + box.h / 2;
@@ -513,8 +524,8 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
               : "var(--paper)"
         }
         stroke={active ? style.stroke : t.edge}
-        strokeWidth={active ? 2 : 1.25}
-        opacity={active ? 1 : 0.9}
+        strokeWidth={active ? 2.25 : 1.5}
+        opacity={1}
         style={{ transition: "fill 200ms, stroke 200ms, opacity 200ms" }}
       />
       <text
@@ -522,10 +533,10 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
         y={titleY}
         textAnchor="middle"
         dominantBaseline="central"
-        fill={active ? "var(--ink)" : box.group ? "var(--ink-2)" : "var(--ink-2)"}
+        fill={active ? "var(--ink)" : box.group ? "var(--ink-2)" : "var(--ink)"}
         style={{
-          font: `${box.emphasis || box.group ? 600 : 500} ${
-            box.group ? 14 : labelSize
+          font: `${box.emphasis || box.group ? 700 : 600} ${
+            box.group ? 15.5 : labelSize
           }px var(--font-display), sans-serif`,
           letterSpacing: box.emphasis ? "-0.01em" : "0",
           pointerEvents: "none",
@@ -533,7 +544,7 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
         }}
       >
         {lines.map((line, i) => (
-          <tspan key={i} x={box.x + box.w / 2} dy={i === 0 ? (lines.length > 1 ? -7 : 0) : 14}>
+          <tspan key={i} x={box.x + box.w / 2} dy={i === 0 ? (lines.length > 1 ? -8 : 0) : 16}>
             {line}
           </tspan>
         ))}
@@ -547,7 +558,7 @@ function MapBox({ box, active, phase, style, showBadge, stepMark, onSelect }: Ma
           dominantBaseline="central"
           fill="var(--ink-3)"
           style={{
-            font: "400 10.5px var(--font-mono-id), monospace",
+            font: "500 11.5px var(--font-mono-id), monospace",
             letterSpacing: "0.03em",
             pointerEvents: "none",
           }}
@@ -656,7 +667,7 @@ function MapActor({
         transform={actor.rotated ? `rotate(-90 ${cx} ${cy})` : undefined}
         fill={active ? "var(--ink)" : "var(--ink-3)"}
         style={{
-          font: "500 11px var(--font-mono-id), monospace",
+          font: "600 12px var(--font-mono-id), monospace",
           letterSpacing: "0.06em",
           pointerEvents: "none",
           transition: "fill 200ms",
@@ -680,7 +691,7 @@ function MapActor({
             textAnchor="middle"
             dominantBaseline="central"
             fill="#fff"
-            style={{ font: "600 11px var(--font-mono-id), monospace", pointerEvents: "none" }}
+            style={{ font: "600 12px var(--font-mono-id), monospace", pointerEvents: "none" }}
           >
             {stepMark}
           </text>

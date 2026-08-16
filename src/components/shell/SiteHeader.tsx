@@ -1,55 +1,91 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
+/**
+ * The nav, grouped so nine sections read as five: the ladder's rungs stay top-level
+ * (Risk Map → Capabilities → Architectures) and the reference material folds into two
+ * dropdowns. Everything sits right, next to the repository link.
+ */
+type NavItem =
+  | { href: string; label: string }
+  | { label: string; children: { href: string; label: string }[] };
+
+const NAV: NavItem[] = [
   { href: "/map", label: "Risk Map" },
-  { href: "/components", label: "Components" },
-  { href: "/risks", label: "Risks" },
-  { href: "/controls", label: "Controls" },
+  {
+    label: "Taxonomy",
+    children: [
+      { href: "/components", label: "Components" },
+      { href: "/risks", label: "Risks" },
+      { href: "/controls", label: "Controls" },
+      { href: "/personas", label: "Personas" },
+    ],
+  },
   { href: "/capabilities", label: "Capabilities" },
   { href: "/reference", label: "Architectures" },
-  { href: "/personas", label: "Personas" },
-  { href: "/frameworks", label: "Frameworks" },
-  { href: "/examples", label: "Examples" },
+  {
+    label: "More",
+    children: [
+      { href: "/frameworks", label: "Frameworks" },
+      { href: "/examples", label: "Examples" },
+    ],
+  },
 ];
+
+/** The flat list, for the small-screen menu. */
+const ALL_LINKS = NAV.flatMap((item) => ("children" in item ? item.children : [item]));
 
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [dropdown, setDropdown] = useState<string | null>(null);
   const [prevPath, setPrevPath] = useState(pathname);
+  const navRef = useRef<HTMLElement>(null);
 
-  // Navigating closes the menu. Adjusted during render (the Panel.tsx idiom) so the panel never
-  // paints over the page it just moved to.
+  // Navigating closes everything. Adjusted during render (the Panel.tsx idiom) so the panel
+  // never paints over the page it just moved to.
   if (prevPath !== pathname) {
     setPrevPath(pathname);
     if (open) setOpen(false);
+    if (dropdown) setDropdown(null);
   }
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !dropdown) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        setDropdown(null);
+      }
+    };
+    const onClick = (e: MouseEvent) => {
+      if (dropdown && navRef.current && !navRef.current.contains(e.target as Node)) {
+        setDropdown(null);
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+    document.addEventListener("pointerdown", onClick);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onClick);
+    };
+  }, [open, dropdown]);
 
   return (
     <>
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
         <div className="px-5 sm:px-7 h-14 flex items-center gap-3 sm:gap-6">
-          {/* Leftmost, like every mobile app's menu button. Only exists below `xl`, where
-              there isn't room for all nine tabs inline. */}
+          {/* Leftmost, like every mobile app's menu button. Only exists below `lg`. */}
           <button
             type="button"
             onClick={() => setOpen(!open)}
             aria-expanded={open}
             aria-controls="section-menu"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink xl:hidden"
+            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink lg:hidden"
           >
             <HamburgerGlyph open={open} />
           </button>
@@ -57,30 +93,43 @@ export function SiteHeader() {
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <ShieldGlyph />
             <span className="display text-[15px] font-bold leading-none">
-              AI <span className="font-medium text-ink-2">Risk Map</span>
+              AI Security <span className="font-medium text-ink-2">Architecture</span>
             </span>
           </Link>
 
-          {/* Wide enough for all nine: every section inline. */}
-          <nav aria-label="Sections" className="hidden xl:flex items-end gap-1 h-full -mb-px">
-            {TABS.map((tab) => {
-              const active = pathname.startsWith(tab.href);
-              return (
+          {/* Right-justified, beside the repository link. */}
+          <nav
+            ref={navRef}
+            aria-label="Sections"
+            className="ml-auto hidden lg:flex items-center gap-1"
+          >
+            {NAV.map((item) =>
+              "children" in item ? (
+                <Dropdown
+                  key={item.label}
+                  item={item}
+                  pathname={pathname}
+                  open={dropdown === item.label}
+                  onToggle={() =>
+                    setDropdown(dropdown === item.label ? null : item.label)
+                  }
+                />
+              ) : (
                 <Link
-                  key={tab.href}
-                  href={tab.href}
-                  aria-current={active ? "page" : undefined}
+                  key={item.href}
+                  href={item.href}
+                  aria-current={pathname.startsWith(item.href) ? "page" : undefined}
                   className={[
-                    "px-3 py-2 mb-2 text-[13.5px] rounded-md whitespace-nowrap transition-colors",
-                    active
+                    "px-3 py-2 text-[13.5px] rounded-md whitespace-nowrap transition-colors",
+                    pathname.startsWith(item.href)
                       ? "bg-ink text-white font-semibold"
                       : "text-ink-2 hover:text-ink hover:bg-mist font-medium",
                   ].join(" ")}
                 >
-                  {tab.label}
+                  {item.label}
                 </Link>
-              );
-            })}
+              ),
+            )}
           </nav>
 
           <a
@@ -89,7 +138,7 @@ export function SiteHeader() {
             rel="noreferrer"
             aria-label="Source on GitHub"
             title="Source on GitHub"
-            className="ml-auto shrink-0 rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink"
+            className="shrink-0 rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink max-lg:ml-auto"
           >
             <GitHubMark />
           </a>
@@ -99,9 +148,9 @@ export function SiteHeader() {
           <nav
             id="section-menu"
             aria-label="Sections"
-            className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg xl:hidden"
+            className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg lg:hidden"
           >
-            {TABS.map((tab) => {
+            {ALL_LINKS.map((tab) => {
               const active = pathname.startsWith(tab.href);
               return (
                 <Link
@@ -130,14 +179,89 @@ export function SiteHeader() {
           aria-label="Close menu"
           tabIndex={-1}
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-20 cursor-default bg-ink/20 xl:hidden"
+          className="fixed inset-0 z-20 cursor-default bg-ink/20 lg:hidden"
         />
       )}
     </>
   );
 }
 
-export const REPO_URL = "https://github.com/wtcooper/ai-security-framework-viz";
+function Dropdown({
+  item,
+  pathname,
+  open,
+  onToggle,
+}: {
+  item: { label: string; children: { href: string; label: string }[] };
+  pathname: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const activeChild = item.children.some((c) => pathname.startsWith(c.href));
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={[
+          "flex items-center gap-1 px-3 py-2 text-[13.5px] rounded-md whitespace-nowrap transition-colors",
+          activeChild
+            ? "bg-ink text-white font-semibold"
+            : open
+              ? "bg-mist text-ink font-medium"
+              : "text-ink-2 hover:text-ink hover:bg-mist font-medium",
+        ].join(" ")}
+      >
+        {item.label}
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 12 12"
+          aria-hidden
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <path
+            d="M 2 4 L 6 8 L 10 4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-40 mt-1 min-w-[11rem] rounded-lg border border-line bg-paper p-1.5 shadow-lg"
+        >
+          {item.children.map((c) => {
+            const active = pathname.startsWith(c.href);
+            return (
+              <Link
+                key={c.href}
+                href={c.href}
+                role="menuitem"
+                aria-current={active ? "page" : undefined}
+                className={[
+                  "block rounded-md px-3 py-2 text-[13.5px] transition-colors",
+                  active
+                    ? "bg-ink text-white font-semibold"
+                    : "text-ink-2 hover:bg-mist hover:text-ink font-medium",
+                ].join(" ")}
+              >
+                {c.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const REPO_URL = "https://github.com/wtcooper/ai-security-architecture";
 
 function GitHubMark() {
   return (
