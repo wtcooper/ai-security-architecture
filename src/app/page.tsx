@@ -16,7 +16,7 @@ import { visibleFrameworks } from "@/lib/frameworks";
 export const metadata = {
   title: "AI Security Architecture",
   description:
-    "AI security from worldview to drawing: the CoSAI risk map, the taxonomy behind it, the technology capabilities that implement it, and reference architectures for every class of AI application.",
+    "AI security from risk map to reference architecture: the full CoSAI taxonomy, the technology capabilities that implement its controls, and target-state architectures for every class of AI application.",
 };
 
 const SECTIONS = [
@@ -89,7 +89,7 @@ const SECTIONS = [
 export default function LandingPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
-      <p className="eyebrow">AI security, from worldview to drawing</p>
+      <p className="eyebrow">AI security, from risk map to reference architecture</p>
       <h1 className="display mt-4 max-w-3xl text-[44px] font-bold leading-[1.08] tracking-[-0.025em] text-ink sm:text-[56px]">
         Where AI risk is <span className="text-introduced">introduced</span>,{" "}
         <span className="text-exposed">exposed</span>, and{" "}
@@ -118,7 +118,7 @@ export default function LandingPage() {
         memory and retrieval.
       </p>
       <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-        From that worldview the site descends one deliberate rung at a time: the taxonomy
+        From there the site descends one deliberate rung at a time: the taxonomy
         behind the map — every component, risk, control and persona — then the{" "}
         <Link
           href="/capabilities"
