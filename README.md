@@ -99,21 +99,25 @@ provenances:
   editorial judgements, marked as such, and listed in full in `docs/AUDIT.md` next to the prose
   they came from — the part of this repo most worth reviewing.
 
-## Tabs
+## The tabs
 
-| Tab | What it does |
+The nav has three destinations: the **Risk Map** group (the taxonomy, seven views), **Reference
+Architectures** (the drawing layer), and **Incidents** (the evidence).
+
+| View | What it does |
 | --- | --- |
 | **Landing** | What this is, how to read the three phases, where the data comes from. |
-| **Risk Map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
+| **Risk Map Walkthrough** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
 | **Capabilities** | The layer neither framework has: 56 vendor-neutral technology classes, as a matrix of CoSAI control groups × three deployment surfaces. Filter by risk category or stack layer, click any capability for its controls, risks, components and sources, and record your own posture in the edit pane. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
-| **Examples** | Five incidents replayed step by step on the map, every step sourced. |
+| **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the capability-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
+| **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
-Every map view supports pan and zoom.
+Every diagram supports pan and zoom.
 
 ## Frameworks as a lens
 
@@ -239,6 +243,64 @@ and standalone hallucination detection (safety, not security: CoSAI carries no m
 deepfake detection (single-source, no CoSAI risk), and Zero Trust (an architecture stance, not a
 purchasable capability — it lives inside the segmentation and identity entries).
 
+## The reference architectures: the drawing layer
+
+The taxonomy answers *what to worry about* and the capabilities answer *what class of tool to
+deploy*. The architectures answer the question that comes next in every review: **"so what does
+a sound deployment actually look like?"** — one drawing per class of AI application, 28 in all,
+across the same three surfaces as the capability matrix.
+
+The catalogue is original work: no published source offers "here are the classes of AI
+application, each with an architecture" — AWS ships worked scenarios, Google ships agent
+patterns, OWASP ships threat taxonomies, all orthogonal to it. The archetypes were derived from
+those catalogues plus the 2026 incident record, split or merged on one test: two archetypes are
+separate when their control sets differ, not when their vendors do.
+
+| Surface | Architectures |
+| --- | --- |
+| **Endpoint** (6) | Personal autonomous agent (the OpenClaw class), coding agent, agentic browser & AI extension, desktop assistant with computer use, local model runtime, local MCP & tool plane |
+| **Cloud & hosted** (16) | RAG assistant, action agent, core agent workflow, AI API backend, agent-facing endpoint, batch pipeline, remote MCP server, sandboxed execution, voice agent, analytics agent, self-hosted inference, managed model API, managed agent runtime, AI gateway, training pipeline, internal AI platform |
+| **Third-party SaaS** (6) | Tenant assistant, vendor action agent, low-code agent builder, enterprise AI chat, third-party MCP, shadow AI |
+
+The drawing grammar is the one practitioners already read from vendor reference architectures
+(F5's AI reference architecture is the closest published relative): **capability blocks** with
+icon internals and a coloured title tab, **typed data paths** (data / external content &
+actions / dotted governance), **numbered capability chips** seated on the drawing where each of
+the 56 capabilities must be deployed, **coded risk tags** (`R01`–`R36`, stable across every
+architecture) pinned where each CoSAI risk surfaces, and **scenario walks** that replay a
+use case over the same canvas with everything else faded — *a stranger messages the agent*,
+*a step replays after a crash*, *a skill is installed*.
+
+Tab colour answers "what is this thing" in three layers plus grey: **Application** (running
+code), **Model** (the model and its serving infrastructure, one green), **Data** (anything at
+rest — records, memory files, indexes, registries), and a quiet grey for the security and
+governance machinery CoSAI has no component for — gateways, identity edges, sandboxes, the
+governance plane itself. That grey is a finding about the taxonomy, not a gap in the drawings:
+it marks the 2026 product categories the component list has not caught up to. Border style
+carries who runs the block — solid for services you operate, dashed grey for a provider you
+cannot see into, dashed amber for the outside world.
+
+The discipline matches the rest of the repository — architectures are authored as graphs, never
+as pictures:
+
+- Blocks sit on a coarse authored grid; `src/lib/flow-layout.ts` computes every pixel at build
+  time. The client renders coordinates and runs no layout algorithm.
+- **Every risk and capability on a page is pinned to a specific block or flow.** The
+  architecture-level lists are derived from the pins, so the side rail can never claim
+  something the drawing does not show.
+- A pinned capability must apply on the architecture's surface per `capabilities.yaml` — the
+  two taxonomy layers cannot drift into contradiction.
+- The build **re-runs the renderer's own placement geometry** and fails if a flow passes
+  through a block, a chip or tag lands on one, a tag stack runs off the canvas, or a title
+  overflows its tab. Legibility is checked, not hoped for.
+- Named products appear only in each architecture's dated `exemplars`; the drawings themselves
+  are vendor-neutral.
+
+`docs/AUDIT.md` section 4 tables the coverage (which risks and capabilities no architecture
+pins yet) and every block's CoSAI anchor, so the colour claims stay reviewable. The
+first-generation zone-style catalogue this replaced is archived intact under
+`data/reference/archive/`.
+
 ## Where things live
 
 Taxonomy data is YAML under `data/`, compiled once into a single typed dataset that the app
@@ -262,6 +324,9 @@ data/
 │   └── frameworks-authored.yaml  OWASP Agentic Top 10 + LLM Top 10 2026 mappings
 ├── frameworks/entries.yaml       framework entry titles and descriptions
 ├── incidents/                    5 authored incidents, replayed on the map
+├── reference/
+│   ├── architectures/            ★ 28 flow-style reference architectures, one YAML each
+│   └── archive/                  the superseded zone-style catalogue, kept for the record
 └── PROVENANCE.md                 pinned SHA, extraction record, what is original work
 
 scripts/
@@ -276,18 +341,20 @@ src/
 │   ├── types.ts                  every shape, including Capability and Surface
 │   ├── data.ts                   the typed accessors the whole app reads
 │   ├── map-layout.ts             hand-authored SVG geometry for the map
+│   ├── flow-layout.ts            ★ build-time geometry + pin placement for the architectures
 │   ├── bands.ts                  component → stack band
 │   ├── deviations.ts             declared divergences from CoSAI
 │   └── frameworks.ts             framework lens logic
 ├── app/                          one route per tab (App Router, static export)
 │   ├── page.tsx                  landing
-│   └── map|components|risks|controls|capabilities|personas|frameworks|examples/
+│   └── map|components|risks|controls|capabilities|reference|personas|frameworks|examples/
 └── components/
-    ├── shell/SiteHeader.tsx      nav; collapses to a menu below lg
+    ├── shell/SiteHeader.tsx      nav: Risk Map group + Architectures + Incidents
     ├── map/RiskMap.tsx           the SVG map
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
     ├── browse/                   components, risks, controls, personas, frameworks
-    ├── capabilities/             ★ matrix, detail, stack filter, status store, edit drawer
+    ├── capabilities/             matrix, detail, stack filter, status store, edit drawer
+    ├── reference/                ★ flow diagram, insight rail, picker, per-block styling
     └── examples/IncidentExplorer.tsx
 
 docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
@@ -341,5 +408,6 @@ CoSAI-RM is vendored at a pinned commit under `data/cosai/`, Apache-2.0, © Goog
 contributed to CoSAI. See [`data/PROVENANCE.md`](data/PROVENANCE.md) for the pinned SHA, the SAIF
 extraction record, and what here is original work.
 
-Built with Next.js 16 (App Router), TypeScript and Tailwind v4. All diagrams are hand-authored
-inline SVG — no chart library, no auto-layout. No database, no runtime data fetching.
+Built with Next.js 16 (App Router), TypeScript and Tailwind v4. All diagrams are inline SVG —
+the risk map's geometry is hand-authored, the architectures' is computed at build time from
+authored graphs. No chart library, no runtime layout, no database, no runtime data fetching.
