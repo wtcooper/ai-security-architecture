@@ -15,8 +15,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Phase, Rect } from "@/lib/types";
+import dynamic from "next/dynamic";
+
 import { blockTab, BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
+
+/**
+ * Renderer bake-off, round two: the architectures where containment matters offer an
+ * experimental React Flow view (nested sandbox frame). Loaded on demand so the library ships
+ * only when toggled.
+ */
+const RF_IDS = new Set(["archSandboxedExecution", "archPersonalAgent"]);
+const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
+  ssr: false,
+  loading: () => <div className="p-8 text-sm text-ink-3">Loading React Flow…</div>,
+});
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
@@ -94,11 +107,13 @@ export function FlowDiagram({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
 
+  const [engine, setEngine] = useState<"svg" | "rf">("svg");
   const [lastId, setLastId] = useState(archetype.id);
   if (lastId !== archetype.id) {
     setLastId(archetype.id);
     setView({ k: 1, x: 0, y: 0 });
     setHover(null);
+    setEngine("svg");
   }
 
   // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
@@ -263,7 +278,34 @@ export function FlowDiagram({
   const inScenario = scenario !== null || overlay !== null;
   const centre = { x: layout.width / 2, y: layout.height / 2 };
 
+  const rfAvailable = RF_IDS.has(archetype.id) && overlay === null;
+  const engineToggle = rfAvailable ? (
+    <div className="absolute right-2 top-2 z-10 flex overflow-hidden rounded-md border border-ink-3/40 text-[11px]">
+      {(["svg", "rf"] as const).map((e) => (
+        <button
+          key={e}
+          type="button"
+          onClick={() => setEngine(e)}
+          className={e === engine ? "bg-ink px-2.5 py-1 font-semibold text-paper" : "bg-paper px-2.5 py-1 text-ink-2"}
+        >
+          {e === "svg" ? "SVG" : "React Flow"}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+  if (rfAvailable && engine === "rf") {
+    return (
+      <div className="relative w-full">
+        {engineToggle}
+        <FlowDiagramRFLazy archetype={archetype} className={className} />
+      </div>
+    );
+  }
+
   return (
+    <div className="relative w-full">
+    {engineToggle}
     <svg
       ref={svgRef}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -439,6 +481,7 @@ export function FlowDiagram({
         onReset={() => setView({ k: 1, x: 0, y: 0 })}
       />
     </svg>
+    </div>
   );
 }
 
