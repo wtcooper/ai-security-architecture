@@ -5,34 +5,29 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * The nav, grouped so nine sections read as five: the ladder's rungs stay top-level
- * (Risk Map → Capabilities → Architectures) and the reference material folds into two
- * dropdowns. Everything sits right, next to the repository link.
+ * The nav, grouped so nine sections read as three: everything CoSAI — the walkthrough and
+ * the taxonomy behind it — under one Risk Map dropdown, with the two destination sections
+ * standing alone. Everything sits right, next to the repository link.
  */
 type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
 const NAV: NavItem[] = [
-  { href: "/map", label: "Risk Map" },
   {
-    label: "Taxonomy",
+    label: "Risk Map",
     children: [
+      { href: "/map", label: "Risk Map Walkthrough" },
       { href: "/components", label: "Components" },
       { href: "/risks", label: "Risks" },
       { href: "/controls", label: "Controls" },
+      { href: "/capabilities", label: "Capabilities" },
       { href: "/personas", label: "Personas" },
-    ],
-  },
-  { href: "/capabilities", label: "Capabilities" },
-  { href: "/reference", label: "Architectures" },
-  {
-    label: "More",
-    children: [
       { href: "/frameworks", label: "Frameworks" },
-      { href: "/examples", label: "Examples" },
     ],
   },
+  { href: "/reference", label: "Reference Architectures" },
+  { href: "/examples", label: "Incidents" },
 ];
 
 /** The flat list, for the small-screen menu. */

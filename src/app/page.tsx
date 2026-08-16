@@ -79,7 +79,7 @@ const SECTIONS = [
   },
   {
     href: "/examples",
-    label: "Examples",
+    label: "Incidents",
     blurb: "Real 2025–26 incidents replayed on the same map, step by step and sourced.",
     count: `${incidents.length} incidents`,
     accent: "var(--band-data-rail)",
