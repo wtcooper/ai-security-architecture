@@ -89,6 +89,10 @@ export function FlowDiagram({
   const drag = useRef<{ x: number; y: number } | null>(null);
   const moved = useRef(false);
   const captured = useRef(false);
+  // Live pointers, for two-finger pinch on touch screens. touch-action: none suppresses the
+  // browser's own gesture, so the zoom has to be implemented here or a phone gets no zoom at all.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
 
   const [lastId, setLastId] = useState(archetype.id);
   if (lastId !== archetype.id) {
@@ -129,12 +133,41 @@ export function FlowDiagram({
   }, [toMap, zoomAbout]);
 
   const startPan = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.button !== 0) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      // Second finger down: stop panning, start pinching.
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      };
+      drag.current = null;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
     drag.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
     captured.current = false;
   };
   const doPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (pointers.current.has(e.pointerId)) {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (pinch.current && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (dist > 0 && pinch.current.dist > 0) {
+        zoomAbout(dist / pinch.current.dist, toMap(mid.x, mid.y));
+      }
+      // Two-finger drag pans as well, which is what fingers expect mid-pinch.
+      const before = toMap(pinch.current.mid.x, pinch.current.mid.y);
+      const after = toMap(mid.x, mid.y);
+      setView((v) => ({ ...v, x: v.x + (after.x - before.x), y: v.y + (after.y - before.y) }));
+      pinch.current = { dist, mid };
+      return;
+    }
     const from = drag.current;
     if (!from) return;
     if (!moved.current) {
@@ -151,6 +184,8 @@ export function FlowDiagram({
     setView((v) => ({ ...v, x: v.x + (b.x - a.x), y: v.y + (b.y - a.y) }));
   };
   const endPan = (e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
     drag.current = null;
     if (captured.current) {
       captured.current = false;
