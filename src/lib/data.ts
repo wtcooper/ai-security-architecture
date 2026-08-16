@@ -185,9 +185,9 @@ export const archetypeById = index(archetypes);
 const riskCodes = new Map(risksInOrder.map((r, i) => [r.id, `R${String(i + 1).padStart(2, "0")}`]));
 export const riskCode = (id: string) => riskCodes.get(id) ?? id;
 
-/** Architectures in display order: grouped by surface, then as authored. */
+/** Architectures in display order: grouped by surface, most common first within each. */
 export const archetypesInOrder: Archetype[] = surfaces.flatMap((s) =>
-  archetypes.filter((a) => a.surface === s.id),
+  archetypes.filter((a) => a.surface === s.id).sort((a, b) => a.rank - b.rank),
 );
 
 export const archetypesForSurface = (surfaceId: string): Archetype[] =>

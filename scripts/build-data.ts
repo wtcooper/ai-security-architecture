@@ -395,6 +395,7 @@ function checkArchetypes(
   const capabilityById = new Map(ctx.capabilities.map((c) => [c.id, c]));
   const seen = new Set<string>();
   const bySurface = new Map<string, number>();
+  const rankSeen = new Set<string>();
 
   const out = authored.map((arch) => {
     const where = `architecture ${arch.id}`;
@@ -403,6 +404,15 @@ function checkArchetypes(
     seen.add(arch.id);
     if (!surfaceIds.has(arch.surface)) fail(`${where}: unknown surface ${arch.surface}`);
     bySurface.set(arch.surface, (bySurface.get(arch.surface) ?? 0) + 1);
+    // Ordered by how common the archetype is, and the ordering is deliberate: a missing or
+    // duplicated rank silently reshuffles the catalogue, so both fail.
+    if (!Number.isInteger(arch.rank) || arch.rank < 1) {
+      fail(`${where}: needs a positive integer rank (display order within its surface)`);
+    } else {
+      const key = `${arch.surface}#${arch.rank}`;
+      if (rankSeen.has(key)) fail(`${where}: rank ${arch.rank} already used on ${arch.surface}`);
+      rankSeen.add(key);
+    }
 
     if (!arch.summary?.length) fail(`${where}: needs a summary`);
     if (!arch.description?.length) fail(`${where}: needs a description`);

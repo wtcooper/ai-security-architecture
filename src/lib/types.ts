@@ -375,6 +375,8 @@ export interface Archetype {
   id: string;
   /** One of Surface.id — the deployment surface this architecture lives on. */
   surface: string;
+  /** Display order within the surface, most common archetype first. Unique per surface. */
+  rank: number;
   title: string;
   /** Short label for dense UI; falls back to title. */
   abbrev?: string;
