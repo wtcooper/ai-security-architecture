@@ -1,9 +1,9 @@
 id: mcp-supply-chain
-title: "MCP tool supply chain: from one malicious server to every SDK"
+title: "The agent plumbing: from one malicious server to every SDK, then the gateway"
 subtitle: >
-  Two years of MCP vulnerabilities, from a single malicious server owning the client to an
-  architectural flaw across every official SDK. The thing agents call is the thing attackers
-  own.
+  Two years of failures in the layer agents call — a single malicious server owning its client,
+  an architectural flaw across every official SDK, and a backdoored release of the gateway that
+  routes enterprise AI traffic. The thing agents depend on is the thing attackers own.
 dateRange: July 2025 – April 2026
 perspective: target
 summary:
@@ -23,16 +23,23 @@ summary:
     and Rust SDKs — roughly 150 million downloads and up to 200,000 vulnerable instances from
     one architectural mistake. By then ~40 CVEs had been filed against MCP servers, clients
     and infrastructure.
+  - >
+    And a month earlier it had moved sideways, into the gateway. Attackers reached the
+    publishing token for LiteLLM — the proxy a great many organisations route their model
+    traffic through — and shipped two backdoored releases. The AI plumbing is now a
+    CISA-catalogued, actively exploited attack surface in its own right.
 patterns:
   - Tool Poisoning
   - Rug Pull
   - Overprivileged Integration
   - Unsandboxed Code Execution
+  - Supply Chain Credential Cascade
 cves:
   - CVE-2025-6514
   - CVE-2025-54136
   - CVE-2025-59528
   - CVE-2026-32211
+  - CVE-2026-33634
 risks:
   - riskMCPTransportHijacking
   - riskZombieShadowMCPServers
@@ -40,12 +47,15 @@ risks:
   - riskToolSourceProvenance
   - riskShadowAndUnknownAgents
   - riskOrchestratorRouteHijacking
+  - riskInsecureIntegratedComponent
+  - riskCrossTenantCredentialPropagation
 controls:
   - controlComponentIdentityProvenance
   - controlInterComponentTransportSecurity
   - controlAgentInventoryManagement
   - controlOrchestratorAndRouteIntegrity
   - controlAgentPluginPermissions
+  - controlAgentCredentialIsolation
   - controlVulnerabilityManagement
 steps:
   - n: 1
@@ -139,13 +149,49 @@ steps:
         publisher: Cloud Security Alliance
         date: 2026-05-04
   - n: 5
+    title: The gateway itself ships backdoored
+    phase: exposed
+    narrative: >
+      March 2026: attackers compromised a widely used scanner, harvested the LiteLLM project's
+      publishing token from its build pipeline, and released two backdoored versions of the
+      gateway that routes model traffic for a great many organisations. They were live for about
+      forty minutes on a package downloaded millions of times a day, and CISA catalogued the flaw
+      as actively exploited two days later. The clever part was the delivery: the wheel included
+      a `.pth` file, which Python executes at interpreter start-up — so the payload ran on any
+      Python process on the host, whether or not anything ever imported the gateway. It harvested
+      cloud, SSH, Kubernetes and CI credentials, and the fallout reached named companies and a
+      European Commission cloud account.
+    components:
+      - actorExternalSources
+      - componentApplication
+      - componentModelFrameworksAndCode
+      - componentModelServing
+      - componentOrchestrationOutputHandling
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskToolSourceProvenance
+      - riskCrossTenantCredentialPropagation
+    cves:
+      - CVE-2026-33634
+    sources:
+      - title: "LiteLLM compromised: the TeamPCP PyPI supply chain campaign"
+        url: https://securitylabs.datadoghq.com/articles/litellm-compromised-pypi-teampcp-supply-chain-campaign/
+        publisher: Datadog Security Labs
+        date: 2026-03-24
+      - title: "CISA adds one known exploited vulnerability to catalog"
+        url: https://www.cisa.gov/news-events/alerts/2026/03/26/cisa-adds-one-known-exploited-vulnerability-catalog
+        publisher: CISA
+        date: 2026-03-26
+  - n: 6
     title: Where this chain breaks
     phase: mitigated
     narrative: >
       Signed tool manifests with verified publisher identity stop steps 1 and 2. Mutual TLS
       and origin validation close the transport. A central agent and server inventory,
       with liveness attestation, means a decommissioned or unknown endpoint stops being
-      callable rather than lingering in a registry.
+      callable rather than lingering in a registry. And the gateway is infrastructure: pin its
+      versions, verify what you install, and give its publishing credentials the same protection
+      as a production signing key.
     components:
       - componentTools
       - componentAgentSystemInstruction
@@ -165,15 +211,18 @@ alsoSeen:
       - title: "A timeline of Model Context Protocol security breaches"
         url: https://authzed.com/blog/timeline-mcp-breaches
         publisher: AuthZed
-  - title: ClawHavoc — 1,200+ malicious skills on the OpenClaw marketplace
-    date: January–February 2026
+  - title: "The agent-framework layer becomes a KEV-grade attack surface"
+    date: March–April 2026
     note: >
-      The same trust problem one layer up: a public skill marketplace used to distribute the
-      AMOS credential stealer. CVE-2026-25253 was the first CVE assigned to an agentic system.
+      Langflow's CVE-2026-33017 (CVSS 9.3, unsandboxed flow execution from a single request) was
+      added to CISA's Known Exploited Vulnerabilities catalogue on 25 March; automated scanning
+      began about 20 hours after the advisory, with attackers reconstructing the exploit from the
+      advisory text alone. Flowise's CVE-2025-59528, above, moved to actively exploited on 7 April.
     sources:
-      - title: "MCP security statistics 2026: CVEs, vulnerabilities and breach data"
-        url: https://www.practical-devsecops.com/mcp-security-statistics-2026-report/
-        publisher: Practical DevSecOps
+      - title: "CISA: new Langflow flaw actively exploited to hijack AI workflows"
+        url: https://www.bleepingcomputer.com/news/security/cisa-new-langflow-flaw-actively-exploited-to-hijack-ai-workflows/
+        publisher: BleepingComputer
+        date: 2026-03-26
 sources:
   - title: "A timeline of Model Context Protocol (MCP) security breaches"
     url: https://authzed.com/blog/timeline-mcp-breaches

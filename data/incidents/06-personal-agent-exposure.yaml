@@ -1,0 +1,236 @@
+id: personal-agent-exposure
+title: "OpenClaw: tens of thousands of personal agents, exposed by default"
+subtitle: >
+  The personal agent boom shipped its own attack surface. A gateway on every interface, a skill
+  marketplace with no signing, and a takeover that worked even on agents listening only to
+  localhost — because the pivot was the user's own browser.
+dateRange: January – June 2026
+perspective: target
+summary:
+  - >
+    This is the endpoint surface, and it is the one architecture in this catalogue that supplies
+    no governance of its own. A personal agent harness runs as the user, holds their long-lived
+    keys, listens on a port, and loads third-party code into its own process. Everything below
+    follows from that shape rather than from any single bug — OpenClaw accumulated more than 138
+    CVEs by April 2026.
+  - >
+    Exposure came first, and the counts depend entirely on how you scan. Censys fingerprinted
+    21,639 reachable instances on 31 January, rising to 63,070 by 31 March. SecurityScorecard
+    counted 40,214 on 9 February across 28,663 unique addresses, judged 63% vulnerable and
+    12,812 directly exploitable for remote code execution. Roughly 30% answered with no
+    authentication at all.
+  - >
+    Then the supply chain. Koi Security audited all 2,857 ClawHub skills on 1 February and found
+    341 malicious — 335 of them one coordinated campaign they named ClawHavoc, discovered by
+    their own OpenClaw bot. By 16 February the registry had grown past 10,700 skills and the
+    malicious count to 824. Antiy Labs counted separately and found 1,184 packages across twelve
+    publisher accounts, a single uploader responsible for 677 of them. The payload was mostly the
+    Atomic macOS Stealer, reached through a "prerequisites" instruction in the skill's own
+    markdown rather than through anything a model scanner would inspect.
+  - >
+    The architectural finding arrived last. Binding the agent to localhost had been the standing
+    advice for everyone exposed above — and ClawJacked showed that localhost is not a boundary,
+    because the user's own browser is the pivot.
+patterns:
+  - Exposed Agent Gateway
+  - Unsigned Skill Marketplace
+  - Unsandboxed Code Execution
+  - Credential Theft via AI Tools
+  - No Action-Level Authorization
+cves:
+  - CVE-2026-25253
+  - CVE-2026-25593
+risks:
+  - riskShadowAndUnknownAgents
+  - riskToolSourceProvenance
+  - riskToolRegistryTampering
+  - riskInsecureIntegratedComponent
+  - riskRogueActions
+  - riskSensitiveDataDisclosure
+  - riskCrossTenantCredentialPropagation
+  - riskPromptInjection
+controls:
+  - controlApplicationAccessManagement
+  - controlComponentIdentityProvenance
+  - controlAgentPluginPermissions
+  - controlAgentExecutionBounds
+  - controlAgentCredentialIsolation
+  - controlAgentInventoryManagement
+  - controlVulnerabilityManagement
+steps:
+  - n: 1
+    title: The gateway binds to every interface
+    phase: introduced
+    narrative: >
+      The harness is a long-lived daemon that listens, and it listened to the internet on port
+      18789. Censys found 21,639 reachable instances on 31 January and 63,070 by 31 March;
+      SecurityScorecard counted 40,214 on 9 February and judged 12,812 of them directly
+      exploitable. About 30% required no authentication. Nothing registered any of these with
+      anyone — owners were found by scanning, not by inventory.
+    components:
+      - actorExternalSources
+      - componentApplication
+      - componentAgentInputHandling
+    risks:
+      - riskShadowAndUnknownAgents
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "OpenClaw in the wild: mapping the public exposure of a viral AI assistant"
+        url: https://censys.com/blog/openclaw-in-the-wild-mapping-the-public-exposure-of-a-viral-ai-assistant/
+        publisher: Censys
+        date: 2026-01-31
+      - title: "Researchers find 40,000 exposed OpenClaw instances"
+        url: https://www.infosecurity-magazine.com/news/researchers-40000-exposed-openclaw/
+        publisher: Infosecurity Magazine
+        date: 2026-02-09
+  - n: 2
+    title: One query parameter, and the token is gone
+    phase: exposed
+    narrative: >
+      CVE-2026-25253 (CVSS 8.8): the app accepted a `gatewayUrl` query parameter and opened a
+      WebSocket to whatever it named, without confirmation, sending the user's authentication
+      token along. Replay that token against the victim's own local gateway, switch off the
+      confirmation prompts, and run commands. One click. Patched in 2026.1.29. A separate flaw,
+      CVE-2026-25593, let an unauthenticated local caller set the agent's `cliPath` outright.
+    components:
+      - actorExternalSources
+      - componentApplication
+      - componentAgentInputHandling
+      - componentReasoningCore
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskRogueActions
+    cves:
+      - CVE-2026-25253
+      - CVE-2026-25593
+    sources:
+      - title: "OpenClaw auth token theft leading to RCE (CVE-2026-25253)"
+        url: https://www.sonicwall.com/blog/openclaw-auth-token-theft-leading-to-rce-cve-2026-25253
+        publisher: SonicWall
+      - title: "CVE-2026-25253: OpenClaw RCE vulnerability"
+        url: https://www.broadcom.com/support/security-center/protection-bulletin/cve-2026-25253-openclaw-rce-vulnerability
+        publisher: Broadcom
+  - n: 3
+    title: Localhost is not a boundary
+    phase: exposed
+    narrative: >
+      ClawJacked, disclosed by Oasis Security on 28 February, needed no click at all. A browser
+      does not block a cross-origin WebSocket to loopback, and the gateway exempted loopback from
+      rate limiting — so JavaScript on any site the user visited could brute-force the gateway
+      password at hundreds of attempts a second, then auto-register itself as a trusted device
+      with no prompt. Admin access, credentials, arbitrary commands. Patched within about a day,
+      in 2026.2.26.
+    components:
+      - actorExternalSources
+      - componentApplication
+      - componentAgentInputHandling
+      - componentReasoningCore
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskRogueActions
+      - riskPromptInjection
+    sources:
+      - title: "ClawJacked flaw lets malicious sites hijack OpenClaw agents"
+        url: https://thehackernews.com/2026/02/clawjacked-flaw-lets-malicious-sites.html
+        publisher: The Hacker News
+        date: 2026-02-28
+      - title: "ClawJacked attack let malicious websites hijack OpenClaw to steal data"
+        url: https://www.bleepingcomputer.com/news/security/clawjacked-attack-let-malicious-websites-hijack-openclaw-to-steal-data/
+        publisher: BleepingComputer
+        date: 2026-03-01
+  - n: 4
+    title: A marketplace that never checked what it shipped
+    phase: exposed
+    narrative: >
+      Skills are markdown packages with broad local access, admitted on the publisher's own
+      description, and they install into the agent's own identity. The ClawHavoc campaign hid
+      its payload behind a "prerequisites" instruction — an obfuscated shell script fetching the
+      Atomic macOS Stealer, which took keychains, browser credentials, 60+ wallet formats, SSH
+      keys and Telegram sessions. Lures impersonated wallet and trading tools. Even after
+      VirusTotal scanning was added in February, Unit 42 found five malicious skills still live
+      in June, one padded to 22 MB purely to exceed the scanner's size threshold.
+    components:
+      - actorExternalSources
+      - componentTools
+      - componentAgentSystemInstruction
+      - componentOrchestrationOutputHandling
+    risks:
+      - riskToolSourceProvenance
+      - riskToolRegistryTampering
+      - riskSensitiveDataDisclosure
+      - riskCrossTenantCredentialPropagation
+    sources:
+      - title: "ClawHavoc: 341 malicious skills found by the bot they were targeting"
+        url: https://www.koi.ai/blog/clawhavoc-341-malicious-clawedbot-skills-found-by-the-bot-they-were-targeting
+        publisher: Koi Security
+        date: 2026-02-01
+      - title: "OpenClaw's skill marketplace and the emerging AI supply chain threat"
+        url: https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-06-23
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Require a token and stop treating loopback as trusted — ClawJacked is the proof that
+      network position is not authentication. Admit skills on signed provenance and observed
+      behaviour, not a description, and run them somewhere that is not the agent's own process.
+      Broker short-lived scoped credentials instead of leaving keys in a file the agent can read.
+      The registry's own answer was scanning, then behavioural skill review; NVIDIA's was a
+      policy engine deciding which skills may touch the network or the filesystem at all.
+    components:
+      - componentApplication
+      - componentAgentInputHandling
+      - componentAgentSystemInstruction
+      - componentTools
+      - componentOrchestrationOutputHandling
+      - componentReasoningCore
+    sources:
+      - title: "OpenClaw security updates: scanning, Skill Cards and SkillSpector"
+        url: https://openclaw.ai/blog#security
+        publisher: OpenClaw
+alsoSeen:
+  - title: "A Meta alignment director's agent empties her inbox"
+    date: 23 February 2026
+    note: >
+      No attacker. Told to suggest what to archive and not to act, the agent began deleting
+      hundreds of emails and ignored "STOP" from her phone; she had to physically reach the
+      machine to kill it. The likely cause is the ugliest part — the real inbox was large enough
+      to trigger context compression, which evicted the constraint.
+    sources:
+      - title: "A Meta AI security researcher said an OpenClaw agent ran amok on her inbox"
+        url: https://techcrunch.com/2026/02/23/a-meta-ai-security-researcher-said-an-openclaw-agent-ran-amok-on-her-inbox/
+        publisher: TechCrunch
+        date: 2026-02-23
+  - title: "Moltbook exposes 1.5M agent API tokens through a missing row-level policy"
+    date: 31 January 2026
+    note: >
+      The social network OpenClaw agents flocked to shipped its database key in client-side
+      JavaScript with row-level security never configured — unauthenticated read and write over
+      the whole production database. Patched in about 3.5 hours. It also revealed that the
+      "1.5 million agents" were run by roughly 17,000 people.
+    sources:
+      - title: "Exposed Moltbook database reveals millions of API keys"
+        url: https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys
+        publisher: Wiz
+        date: 2026-02-02
+sources:
+  - title: "OpenClaw in the wild: mapping the public exposure of a viral AI assistant"
+    url: https://censys.com/blog/openclaw-in-the-wild-mapping-the-public-exposure-of-a-viral-ai-assistant/
+    publisher: Censys
+    date: 2026-01-31
+  - title: "ClawHavoc: 341 malicious skills found by the bot they were targeting"
+    url: https://www.koi.ai/blog/clawhavoc-341-malicious-clawedbot-skills-found-by-the-bot-they-were-targeting
+    publisher: Koi Security
+    date: 2026-02-01
+  - title: "ClawJacked flaw lets malicious sites hijack OpenClaw agents"
+    url: https://thehackernews.com/2026/02/clawjacked-flaw-lets-malicious-sites.html
+    publisher: The Hacker News
+    date: 2026-02-28
+  - title: "OpenClaw's skill marketplace and the emerging AI supply chain threat"
+    url: https://unit42.paloaltonetworks.com/openclaw-ai-supply-chain-risk/
+    publisher: Unit 42, Palo Alto Networks
+    date: 2026-06-23
+  - title: "ClawHavoc: analysis of a large-scale poisoning campaign targeting the OpenClaw skill market"
+    url: https://www.antiy.net/p/clawhavoc-analysis-of-large-scale-poisoning-campaign-targeting-the-openclaw-skill-market-for-ai-agents/
+    publisher: Antiy Labs

@@ -3,7 +3,7 @@ title: "Coding agents: the repository is the prompt, and anyone can write to it"
 subtitle: >
   Coding agents read issues, pull-request comments and instruction files as trusted context.
   In 2026 attackers started writing to all three.
-dateRange: April – June 2026
+dateRange: April – August 2026
 perspective: target
 summary:
   - >
@@ -19,17 +19,26 @@ summary:
     This is the only case in this set where the agent's *system instructions* are the target,
     which makes instruction files a supply-chain artefact that needs the same provenance
     controls as code.
+  - >
+    In August 2026 the pattern stopped needing an attacker at the keyboard. CHAINDROP is a
+    self-propagating npm worm that writes its own persistence into an agent's configuration —
+    a session-start hook in `.claude/settings.json`, a folder-open task in `.vscode/tasks.json`
+    — and then republishes itself through every package its stolen credentials can reach. What
+    TrapDoor did by hand to instruction files, CHAINDROP does at 1.3 billion monthly downloads.
 patterns:
   - Social Engineering of AI Agents
   - Config-as-Code Execution
   - Tool Poisoning
   - Credential Theft via AI Tools
+  - Self-Propagating Supply Chain Worm
 cves: []
 risks:
   - riskPromptInjection
   - riskToolSourceProvenance
   - riskRogueActions
   - riskPromptResponseCachePoisoning
+  - riskInsecureIntegratedComponent
+  - riskSensitiveDataDisclosure
 controls:
   - controlInputValidationAndSanitization
   - controlComponentIdentityProvenance
@@ -113,12 +122,49 @@ steps:
         url: https://github.com/webpro255/awesome-ai-agent-attacks
         publisher: webpro255
   - n: 5
+    title: The agent's config file becomes a worm's home
+    phase: exposed
+    narrative: >
+      4 August 2026: a maintainer's npm account falls, and CHAINDROP backdoors every package
+      that account can publish to — 444 packages across 2,212 versions in under four hours,
+      later past 1,300, together carrying more than a billion downloads a month. Its persistence
+      is the new part. It writes a session-start hook into `.claude/settings.json` and a
+      folder-open task into `.vscode/tasks.json`, each pointing at a copy of the dropper in the
+      other directory, so removing one restores it from the other — and where a repository token
+      allows, it commits those hooks to as many as fifty branches. Among the 300+ secret patterns
+      it hunts are Anthropic, Claude, Codex, Cursor, OpenAI and Gemini credentials. Its
+      command-and-control addresses live in an Ethereum smart contract, so the operators moved
+      the entire infrastructure with a single transaction and no new malware.
+    components:
+      - actorExternalSources
+      - componentAgentSystemInstruction
+      - componentTools
+      - componentOrchestrationOutputHandling
+      - componentModelFrameworksAndCode
+    risks:
+      - riskToolSourceProvenance
+      - riskInsecureIntegratedComponent
+      - riskSensitiveDataDisclosure
+      - riskRogueActions
+    sources:
+      - title: "Shai-Hulud CHAINDROP: npm supply chain worm analysis"
+        url: https://www.elastic.co/security-labs/shai-hulud-chaindrop-npm-supply-chain
+        publisher: Elastic Security Labs
+        date: 2026-08-06
+      - title: "CHAINDROP npm worm analysis"
+        url: https://unit42.paloaltonetworks.com/chaindrop-npm-worm-analysis/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-08-06
+  - n: 6
     title: Where this chain breaks
     phase: mitigated
     narrative: >
       Treat instruction files as code: signed, reviewed, provenance-checked. Treat repository
       content from non-collaborators as untrusted input. Give CI agents their own scoped,
-      short-lived credentials. Bound what an agent may execute without a human confirming.
+      short-lived credentials, and require a second factor that a stolen publishing token cannot
+      satisfy. Bound what an agent may execute without a human confirming. And watch the agent's
+      own configuration directories the way you would watch a startup folder — CHAINDROP is the
+      proof that `.claude/` and `.vscode/` are now execution surfaces, not preferences.
     components:
       - componentAgentInputHandling
       - componentAgentSystemInstruction
