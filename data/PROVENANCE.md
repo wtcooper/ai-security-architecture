@@ -155,6 +155,16 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   edges, sandboxes, and the governance plane itself. The endpoint personal-agent architecture
   draws no governance column at all, which is that diagram's finding. docs/AUDIT.md section 4d
   tables every block's anchor so the claims stay reviewable.
+- **Block titles are a standard vocabulary** where the same thing recurs, so a reader moving
+  between architectures never wonders whether two names hide a difference: **AI gateway** for
+  the customer-operated crossing that model and tool calls leave through (credential broker,
+  limits, audit tap — qualified only when ownership differs, e.g. the platform's "Shared AI
+  gateway" or a provider's "Managed tool gateway"), **Tool services** for the block where tool
+  or action calls land (its discipline — open tool plane vs deterministic action catalogue —
+  lives in the items and notes, not the title), **Model provider** for the opaque inference
+  boundary, and **Governance plane** for the governance column (qualified by who governs, e.g.
+  "Tenant governance"). Where a block deliberately differs from the standard concept, it gets a
+  different name — sameness of name is a claim of sameness of role.
 - **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
   inside the system, external content and actions, and dotted governance relationships.
 - **Numbered capability chips** are F5's design-requirements treatment carried by this

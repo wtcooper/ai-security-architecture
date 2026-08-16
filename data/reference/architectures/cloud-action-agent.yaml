@@ -17,9 +17,10 @@ description:
     order. The controls that matter are the ones that bound what can be done and make it undoable,
     not the ones that improve the odds of being right.
   - >
-    The action catalogue is the primary control and it should be deterministic. The model chooses
-    among named, parameter-validated actions rather than composing arbitrary calls, and each
-    action declares its own blast radius and its own compensating transaction. An agent that can
+    The tool services are the primary control, and here they should be a deterministic action
+    catalogue. The model chooses among named, parameter-validated actions rather than composing
+    arbitrary calls, and each action declares its own blast radius and its own compensating
+    transaction. An agent that can
     call an arbitrary API is not an agent with a policy problem; it is an agent with no policy
     surface at all.
   - >
@@ -34,7 +35,9 @@ description:
   - >
     The agent needs an identity of its own. Actions taken as a shared service account are neither
     attributable nor separately revocable, which turns every incident into a full-service outage
-    when the response is to disable the credential.
+    when the response is to disable the credential. And its calls leave through an AI gateway —
+    brokered credentials, budget limits and the audit tap — the same crossing the durable
+    multi-agent workflow draws, at single-agent scale.
 
 distinguishedBy:
   - >
@@ -137,16 +140,40 @@ blocks:
           Scoped to one case. Cross-case memory would let one requester's text influence
           another's outcome.
 
+  - id: gateway
+    kind: service
+    title: AI gateway
+    col: 3
+    row: 1
+    note: >
+      The one crossing every model and tool call leaves through. The agent tier holds no
+      standing credentials; the gateway brokers them per call, meters spend and writes the
+      audit trail as a tap on the crossing.
+    items:
+      - id: credBroker
+        label: Credential broker
+        icon: key
+        note: Short-lived credentials injected per call; the loop holds no standing keys.
+      - id: limits
+        label: Rate & budget limits
+        icon: clock
+        note: Caps token spend and action volume before a runaway loop becomes a bill.
+      - id: auditTap
+        label: Audit tap
+        icon: doc
+        note: Every call recorded as a side effect of the crossing, not a favour asked of the agent.
+
   - id: catalogue
     kind: service
-    title: Action catalogue
-    col: 3
+    title: Tool services
+    col: 4
     row: 1
     cosaiComponent: componentTools
     note: >
-      Named, parameter-validated actions rather than arbitrary calls, each declaring its blast
-      radius and its compensating transaction. The architecture's primary control, and a design
-      artifact rather than a configuration setting.
+      The tool surface, drawn as a deterministic action catalogue: named, parameter-validated
+      actions rather than arbitrary calls, each declaring its blast radius and its compensating
+      transaction. The architecture's primary control, and a design artifact rather than a
+      configuration setting.
     items:
       - id: actions
         label: Named actions
@@ -166,7 +193,7 @@ blocks:
   - id: provider
     kind: provider
     title: Model provider
-    col: 4
+    col: 5
     row: 0
     cosaiComponent: componentModelServing
     note: The published inference interface. What runs behind it is the provider's and is not drawn.
@@ -180,7 +207,7 @@ blocks:
     kind: external
     title: Business records
     cosaiComponent: componentDataStorage
-    col: 4
+    col: 5
     row: 2
     note: >
       The systems of record where effects land, and where reversal either exists or does not.
@@ -194,7 +221,7 @@ blocks:
   - id: governance
     kind: governance
     title: Governance plane
-    col: 5
+    col: 6
     row: 0
     rowSpan: 3
     note: >
@@ -241,13 +268,21 @@ edges:
       The requester's identity survives into the loop, or policy cannot scope actions to the
       account they concern.
   - from: planner
+    to: gateway
+    path: primary
+    bidir: true
+    label: model & tool calls
+    note: >
+      Every call out of the loop crosses here on a brokered, expiring credential. The agent
+      holds no standing keys of its own.
+  - from: gateway
     to: provider
     path: primary
     bidir: true
     route: vh
     note: >
-      Inference on a brokered, expiring credential. The response names an action and its
-      parameters — transport integrity says nothing about whose intent produced it.
+      Inference on the brokered credential. The response names an action and its parameters —
+      transport integrity says nothing about whose intent produced it.
   - from: planner
     to: stateRetrieval
     path: primary
@@ -263,7 +298,7 @@ edges:
     note: >
       Reads scoped to the account under discussion, which is what stops one requester's case from
       retrieving another's records into context.
-  - from: planner
+  - from: gateway
     to: catalogue
     path: primary
     label: proposed action
@@ -307,7 +342,7 @@ pins:
         Untrusted request text, a model choosing among real transactions, and a write path into
         records compound here.
     - risk: riskInsecureModelOutput
-      at: planner->provider
+      at: gateway->provider
       note: The completion names an action and its parameters, and it is unauthenticated content.
     - risk: riskAgenticDelegationConfusedDeputy
       at: planner
@@ -359,7 +394,7 @@ pins:
       at: stateRetrieval
       note: Case-scoped memory with hard boundaries — no cross-case reads, ever.
     - capability: capabilitySecretsManagement
-      at: planner->provider
+      at: planner->gateway
       note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing key.
     - capability: capabilityRateLimiting
       at: intake
@@ -382,9 +417,11 @@ scenarios:
         note: The loop starts with the requester's identity intact.
       - follow: planner->stateRetrieval
         note: Policy and the customer's history load as context, scoped to this account.
-      - follow: planner->provider
+      - follow: planner->gateway
+        note: The context leaves the loop through the gateway, on a brokered credential.
+      - follow: gateway->provider
         note: The model proposes an action and parameters from the catalogue.
-      - follow: planner->catalogue
+      - follow: gateway->catalogue
         note: The proposal is validated — well-formed, in policy, under the value threshold.
       - follow: catalogue->records
         note: The refund executes, with its compensating transaction on file.
@@ -396,9 +433,11 @@ scenarios:
         note: The text instructs the agent to ignore policy and refund in full. Classification flags what it can.
       - follow: intake->planner
         note: Whatever survives enters the same context window as the system instruction.
-      - follow: planner->provider
+      - follow: planner->gateway
+        note: Whatever survived classification rides out with the context.
+      - follow: gateway->provider
         note: A steered model proposes the most generous action available.
-      - follow: planner->catalogue
+      - follow: gateway->catalogue
         note: The catalogue does not care what steered the model — parameters and policy bounds hold.
       - follow: catalogue->records
         note: Below the threshold the action is compensable; above it the approval gate fires.
@@ -408,9 +447,11 @@ scenarios:
         note: The loop reads the case history like any other.
       - follow: stateRetrieval->records
         note: A note written into a record long ago, in someone else's case, comes back as context.
-      - follow: planner->provider
+      - follow: planner->gateway
+        note: The assembled context — injected note included — leaves for the model.
+      - follow: gateway->provider
         note: The model reads it beside the system instruction with nothing marking it apart.
-      - follow: planner->catalogue
+      - follow: gateway->catalogue
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
 
 sources:

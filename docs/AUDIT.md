@@ -709,7 +709,8 @@ Highlights below are Google's original mapping, not ours.
 | Autonomous action agent over business records | Intake | service | `componentApplicationInputHandling` |
 | Autonomous action agent over business records | Planning loop | service | `componentReasoningCore` |
 | Autonomous action agent over business records | Retrieval & case state | service | `componentDataStorage` |
-| Autonomous action agent over business records | Action catalogue | service | `componentTools` |
+| Autonomous action agent over business records | AI gateway | service | (none) |
+| Autonomous action agent over business records | Tool services | service | `componentTools` |
 | Autonomous action agent over business records | Model provider | provider | `componentModelServing` |
 | Autonomous action agent over business records | Business records | external | `componentDataStorage` |
 | Autonomous action agent over business records | Governance plane | governance | (none) |
@@ -722,7 +723,7 @@ Highlights below are Google's original mapping, not ours.
 | Durable multi-agent workflow | Application front end | service | `componentApplication` |
 | Durable multi-agent workflow | Agent orchestration | service | `componentReasoningCore` |
 | Durable multi-agent workflow | State & knowledge | service | `componentDataStorage` |
-| Durable multi-agent workflow | Agentic gateway | service | (none) |
+| Durable multi-agent workflow | AI gateway | service | (none) |
 | Durable multi-agent workflow | Model provider | provider | `componentModelServing` |
 | Durable multi-agent workflow | Tool services | service | `componentTools` |
 | Durable multi-agent workflow | Downstream services | external | `componentApplication` |
@@ -770,13 +771,13 @@ Highlights below are Google's original mapping, not ours.
 | Managed agent runtime | Customer governance | governance | (none) |
 | Managed model API consumption | Context from elsewhere | external | `componentDataSources` |
 | Managed model API consumption | Application services | service | `componentApplication` |
-| Managed model API consumption | Model gateway | service | (none) |
+| Managed model API consumption | AI gateway | service | (none) |
 | Managed model API consumption | Model provider | provider | `componentModelServing` |
 | Managed model API consumption | Governance plane | governance | (none) |
 | Embedded retrieval assistant | Application front end | service | `componentApplication` |
 | Embedded retrieval assistant | Query orchestration | service | `componentReasoningCore` |
 | Embedded retrieval assistant | Index & session state | service | `componentDataStorage` |
-| Embedded retrieval assistant | AI gateway & guardrails | service | (none) |
+| Embedded retrieval assistant | AI gateway | service | (none) |
 | Embedded retrieval assistant | Model provider | provider | `componentModelServing` |
 | Embedded retrieval assistant | Sources & ingest | service | `componentDataSources` |
 | Embedded retrieval assistant | Governance plane | governance | (none) |
@@ -796,7 +797,7 @@ Highlights below are Google's original mapping, not ours.
 | Sandboxed agentic execution service | Target systems | external | `componentDataStorage` |
 | Sandboxed agentic execution service | Governance plane | governance | (none) |
 | Self-hosted open-weights inference | Public model hub | external | `componentModelStorage` |
-| Self-hosted open-weights inference | Inference gateway | service | (none) |
+| Self-hosted open-weights inference | AI gateway | service | (none) |
 | Self-hosted open-weights inference | Model registry & weights | service | `componentModelStorage` |
 | Self-hosted open-weights inference | Serving runtime | service | `componentModelServing` |
 | Self-hosted open-weights inference | KV & prefix cache | service | `componentModelServing` |
