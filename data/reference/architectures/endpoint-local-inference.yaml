@@ -1,6 +1,6 @@
 id: archLocalInference
 surface: surfaceEndpoint
-rank: 6
+rank: 3
 title: Local model runtime
 abbrev: Local runtime
 
@@ -15,9 +15,9 @@ description:
     The reason people run this is sound: prompts and documents never leave the machine, there is
     no per-token cost, and it works offline. The architectural consequence is that the guardrails,
     rate limiting, abuse monitoring and content policy a hosted API applies on the way in and out
-    are simply absent, and nothing replaces them by default. The guardrail block in this drawing
-    is the target state; in the common install it does not exist, and raw model output goes
-    straight back to the caller.
+    are simply absent, and nothing replaces them by default. Guardrails here are a control the
+    device owner deploys on the request path, not a component the runtime ships — in the common
+    install nothing sits on that path, and raw model output goes straight back to the caller.
   - >
     The runtime is a local network service. It binds a port, speaks an HTTP API, and historically
     ships without authentication because the assumed caller is a process on the same machine. That
@@ -113,29 +113,10 @@ blocks:
         icon: globe
         note: A permissive CORS policy lets any web page the user visits drive local inference.
 
-  - id: guardrails
-    kind: service
-    title: Local guardrails
-    col: 2
-    row: 1
-    note: >
-      Input and output classification, deployed by the device owner because nobody else will. This
-      block is the target state — in the common install it does not exist, and its absence is the
-      archetype's defining property.
-    items:
-      - id: inputFilter
-        label: Input classification
-        icon: shield
-        note: The screening a hosted API would have applied on the way in.
-      - id: outputFilter
-        label: Output classification
-        icon: eye
-        note: The floor under model behaviour that the weights alone do not provide.
-
   - id: runtime
     kind: service
     title: Inference runtime
-    col: 3
+    col: 2
     row: 1
     cosaiComponent: componentTheModel
     note: >
@@ -153,9 +134,9 @@ blocks:
         note: Open weights with no provider-side guardrail, abuse monitoring or content policy.
 
   - id: weights
-    kind: service
-    title: Weights on disk
-    col: 3
+    kind: external
+    title: Storage
+    col: 2
     row: 2
     cosaiComponent: componentModelStorage
     note: >
@@ -171,7 +152,7 @@ blocks:
     kind: external
     title: Public model hub
     cosaiComponent: componentModelStorage
-    col: 4
+    col: 3
     row: 2
     note: >
       Distribution for open weights. Publisher identity ranges from verified to arbitrary, and
@@ -200,17 +181,12 @@ edges:
       The same endpoint, reached by callers nobody intended: a browser tab through CORS, or the
       network if the binding is routable. Locality is standing in for authorization.
   - from: api
-    to: guardrails
-    path: primary
-    bidir: true
-    note: >
-      Requests pass through classification on the way in and completions on the way out — when the
-      block exists at all.
-  - from: guardrails
     to: runtime
     path: primary
     bidir: true
-    note: Filtered prompts in, raw completions back. Without the guardrail block this is a straight pipe.
+    note: >
+      Prompts in, raw completions back. Input and output classification is a control deployed on
+      this path — in the common install it is a straight pipe.
   - from: runtime
     to: weights
     path: primary
@@ -252,12 +228,12 @@ pins:
       at: runtime
       note: The serving stack itself is fast-moving native code with its own CVE history, running unsandboxed.
     - risk: riskInsecureModelOutput
-      at: guardrails
+      at: api->runtime
       note: >
         Where this block is absent — the common case — raw model output goes straight to callers
         built expecting a hosted API's floor.
     - risk: riskModelEvasion
-      at: guardrails
+      at: runtime
       note: >
         With no provider-side safety layer, whatever refusal behaviour the weights carry is the
         whole of the defence, and it is removable by fine-tune.
@@ -272,7 +248,7 @@ pins:
       at: localApps->api
       note: Authenticate local callers rather than treating locality as authorization; a browser tab is local too.
     - capability: capabilityModelGuardrails
-      at: guardrails
+      at: api->runtime
       note: Deploy the input and output classification a hosted API would have applied — nothing supplies it here by default.
     - capability: capabilityRateLimiting
       at: api
@@ -292,7 +268,7 @@ pins:
       at: runtime
       note: Find the runtimes nobody registered, derived from the machine rather than self-reported.
     - capability: capabilityModelEvals
-      at: guardrails
+      at: runtime
       note: >
         Evaluate what the weights actually do before serving them to other software — there is no
         provider evaluation to inherit.
@@ -302,10 +278,10 @@ scenarios:
     steps:
       - follow: localApps->api
         note: A local tool calls the OpenAI-compatible endpoint as if it were hosted.
-      - follow: api->guardrails
-        note: The request crosses classification — if anyone deployed it.
-      - follow: guardrails->runtime
-        note: The model serves the completion with whatever behaviour the weights carry.
+      - follow: api->runtime
+        note: >
+          The request crosses whatever classification the owner deployed — often none — and the
+          model serves the completion with whatever behaviour the weights carry.
       - follow: api->localApps
         note: The response returns with no provider floor under it.
   - title: A poisoned checkpoint
@@ -320,10 +296,17 @@ scenarios:
     steps:
       - follow: unexpectedCallers->api
         note: A visited web page calls the local endpoint through a permissive cross-origin policy.
-      - follow: api->guardrails
-        note: Nothing distinguishes this caller from the intended ones.
-      - follow: guardrails->runtime
-        note: The page now drives local inference — for free, and invisibly to the user.
+      - follow: api->runtime
+        note: >
+          Nothing distinguishes this caller from the intended ones. The page now drives local
+          inference — for free, and invisibly to the user.
+
+deviations:
+  - subject: Guardrails are a control on the request path, not a block
+    reason: >
+      Input and output classification is something the device owner deploys, not a component of
+      the runtime — so it is pinned as a numbered control on the API-to-runtime path rather than
+      drawn as a service that does not exist in the common install.
 
 sources:
   - title: "MITRE ATLAS — machine learning supply chain and model artifact techniques"

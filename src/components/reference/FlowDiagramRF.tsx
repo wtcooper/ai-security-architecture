@@ -33,32 +33,37 @@ import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
 /**
- * The containment layer: which blocks each architecture draws inside a labelled frame. Only
- * architectures listed here offer the React Flow view; `rfDefault` makes it the default engine.
+ * The containment layer: which blocks each architecture draws inside a labelled frame.
+ * Architectures without an entry render frameless — every architecture gets the React Flow
+ * view either way.
  */
 const RF_CONFIG: Record<
   string,
-  { frameLabel: string; frameNote: string; members: string[]; hide: string[]; rfDefault?: boolean }
+  {
+    frameLabel: string;
+    frameNote: string;
+    members: string[];
+    hide: string[];
+    /** Where the frame's label tab sits; "bottom" when edge pins crowd the top edge. */
+    labelPos?: "top" | "bottom";
+  }
 > = {
-  archSandboxedExecution: {
-    frameLabel: "Disposable sandbox",
-    frameNote:
-      "Provisioned per task, destroyed after — untrusted code and untrusted content execute together inside.",
-    members: ["sandbox", "sourceContent"],
-    hide: [],
-  },
   archPersonalAgent: {
     frameLabel: "Sandbox",
     frameNote:
-      "MicroVM-class boundary: daemon, memory and tools run whole inside, with their own filesystem and network. The AI gateway is the only exit (target state).",
+      "MicroVM-class boundary: daemon, memory and local tools run whole inside, with their own filesystem and network. The AI gateway is the general-purpose exit; the one other opening is a read-only pull from the private package registry (target state).",
     members: ["bridges", "toolPlane", "harness", "memory"],
     hide: [],
-    rfDefault: true,
+  },
+  archCodingAgent: {
+    frameLabel: "Vendor application",
+    frameNote:
+      "The CLI or desktop GUI the vendor ships: the harness and its tool surface live inside the application, and tool capabilities and connectors are built in and configured there.",
+    members: ["client", "toolPlane"],
+    hide: [],
+    labelPos: "bottom",
   },
 };
-
-export const hasReactFlowVersion = (id: string) => id in RF_CONFIG;
-export const reactFlowIsDefault = (id: string) => Boolean(RF_CONFIG[id]?.rfDefault);
 
 const FRAME_PAD = 26;
 const FRAME_HEAD = 52;
@@ -178,7 +183,9 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   );
 }
 
-function FrameNode({ data }: NodeProps<Node<{ label: string; w: number; h: number }>>) {
+function FrameNode({
+  data,
+}: NodeProps<Node<{ label: string; w: number; h: number; labelPos?: "top" | "bottom" }>>) {
   return (
     <div
       style={{
@@ -193,7 +200,7 @@ function FrameNode({ data }: NodeProps<Node<{ label: string; w: number; h: numbe
       <div
         style={{
           position: "absolute",
-          top: -12,
+          ...(data.labelPos === "bottom" ? { bottom: -12 } : { top: -12 }),
           left: 18,
           background: "var(--ink, #333)",
           color: "#fff",
@@ -406,7 +413,7 @@ export function FlowDiagramRF({
         id: "__frame",
         type: "frame",
         position: { x: frame.x, y: frame.y },
-        data: { label: cfg.frameLabel, note: cfg.frameNote, w: frame.w, h: frame.h },
+        data: { label: cfg.frameLabel, note: cfg.frameNote, w: frame.w, h: frame.h, labelPos: cfg.labelPos },
         style: { width: frame.w, height: frame.h },
         draggable: true,
         selectable: false,

@@ -180,9 +180,23 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   chip is the statement. The one exception is a block whose role *is* a control surface — the
   AI gateway, the governance plane, an egress gate, the OS permission layer, an output
   validation stage, a secure service edge, a tool broker — whose items describe its function.
-  Endpoint agents share one Tool services item set: File & edit tools, Shell commands,
-  Local & remote MCP, Installed skills, and Computer use where the shell exposes it; cloud
-  agents share MCP servers, APIs & connectors, A2A peer agents.
+  Vendor-application agents (the coding and desktop agents) share one Tool services item set:
+  File & edit tools, Shell commands, Local & remote MCP, Installed skills, Computer use where
+  the shell exposes it, and Sandboxed tools — the in-application isolation where commands and
+  driven desktops run. The sandboxed personal agent keeps only the local surface inside its
+  boundary (File & edit tools, Shell commands, Installed skills) and reaches Remote MCP and
+  APIs & connectors as a separate Remote tool services block behind its gateway. Cloud agents
+  share MCP servers, APIs & connectors, A2A peer agents. **Downstream services items** come
+  from one vocabulary: Org data (systems of record), SaaS (mail, calendar and workspace
+  accounts — one item, mail icon), Web & APIs, Vectorstore (retrieval indexes), Package
+  registries, File storage, and Sandboxed tools where a remote execution service is the
+  destination; architecture-specific destinations (e.g. Paired devices) may extend the list
+  but never rename its members. **The permission gate is standard**: every architecture with
+  an agent harness and a tool surface pins `capabilityToolPermissionScoping` on the crossing
+  between them — the OS permission layer, per-tool grants and action-catalogue validation are
+  all this one control in surface-specific dress. Sandboxing is drawn as containment (a
+  labelled frame in the React Flow view, a Sandboxed tools item where it lives inside an
+  application), never as a standalone facility block.
 - **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
   inside the system, external content and actions, and dotted governance relationships.
 - **Numbered capability chips** are F5's design-requirements treatment carried by this
@@ -202,6 +216,13 @@ where the common deployment is weaker the observation lives in a note on the dra
 
 These are **target states** — the architecture as it should be built, not a description of what
 deployments typically look like.
+
+The catalogue is deliberately small. Most candidate architectures turned out to be an agent
+workflow with a different tool set, a single node, or a control drawn as a place — those are
+parked, not deleted: their YAML lives under `data/reference/architectures/disabled/`, excluded
+from the build, and `docs/full-ref-arch-catalog.md` records every active and disabled entry
+with the reason. A disabled architecture returns to the app only by an explicit decision to
+reactivate it.
 
 Named products appear only in each architecture's `exemplars`, each carrying a source and an
 `asOf` date, and are rendered as dated illustration. This is a deliberate departure from the

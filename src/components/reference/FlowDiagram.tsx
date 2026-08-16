@@ -21,12 +21,10 @@ import { blockTab, BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-s
 import { FlowIcon } from "./FlowIcons";
 
 /**
- * Renderer bake-off, round two: the architectures where containment matters offer an
- * experimental React Flow view (nested sandbox frame). Loaded on demand so the library ships
- * only when toggled.
+ * React Flow is the default engine for every architecture — it can draw containment frames
+ * and keeps the diagrams interactive. The SVG engine stays behind the toggle and still renders
+ * incident-step overlays, which the React Flow view does not carry yet.
  */
-const RF_IDS = new Set(["archSandboxedExecution", "archPersonalAgent"]);
-const RF_DEFAULT = new Set(["archPersonalAgent"]);
 const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
   ssr: false,
   loading: () => <div className="p-8 text-sm text-ink-3">Loading React Flow…</div>,
@@ -108,13 +106,13 @@ export function FlowDiagram({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
 
-  const [engine, setEngine] = useState<"svg" | "rf">(RF_DEFAULT.has(archetype.id) ? "rf" : "svg");
+  const [engine, setEngine] = useState<"svg" | "rf">("rf");
   const [lastId, setLastId] = useState(archetype.id);
   if (lastId !== archetype.id) {
     setLastId(archetype.id);
     setView({ k: 1, x: 0, y: 0 });
     setHover(null);
-    setEngine(RF_DEFAULT.has(archetype.id) ? "rf" : "svg");
+    setEngine("rf");
   }
 
   // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
@@ -279,7 +277,7 @@ export function FlowDiagram({
   const inScenario = scenario !== null || overlay !== null;
   const centre = { x: layout.width / 2, y: layout.height / 2 };
 
-  const rfAvailable = RF_IDS.has(archetype.id) && overlay === null;
+  const rfAvailable = overlay === null;
   const engineToggle = rfAvailable ? (
     <div className="absolute right-2 top-2 z-10 flex overflow-hidden rounded-md border border-ink-3/40 text-[11px]">
       {(["svg", "rf"] as const).map((e) => (

@@ -1,5 +1,14 @@
 # Node review — every block across the 29 reference architectures
 
+> **Superseded by the 2026-08-16 catalogue cleanup.** The review below drove it: the catalogue
+> shrank to 12 active architectures (see `docs/full-ref-arch-catalog.md` for the full
+> active/disabled list), the desktop assistant merged into "Coding and desktop agents",
+> sandboxing is now drawn as containment frames and a Sandboxed tools item (F1), Downstream
+> services items come from one vocabulary — Org data, SaaS, Web & APIs, Vectorstore, Package
+> registries, File storage, Sandboxed tools (F2) — and the permission gate is a standard pin
+> on every harness→tools crossing. The tables below describe the pre-cleanup catalogue and are
+> kept for the record.
+
 Generated from `data/reference/architectures/*.yaml` on 2026-08-16 for a systematic
 consistency review. Blocks are grouped by the role they play; within each group, rows sort by
 surface and rank. Items show `icon · label`. The standard vocabulary this is reviewed against

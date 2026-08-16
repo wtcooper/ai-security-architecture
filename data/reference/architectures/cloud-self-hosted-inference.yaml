@@ -1,44 +1,47 @@
 id: archSelfHostedInference
 surface: surfaceCloud
-rank: 13
+rank: 5
 title: Self-hosted open-weights inference
 abbrev: Self-hosted inference
 
 summary:
   - >
-    Open-weights models served on GPUs the organisation operates: weights fetched from public
-    hubs, scanned and promoted through a registry, loaded onto a shared accelerator fleet, and
-    exposed to internal callers through one AI gateway. The whole model-provider role
-    moves inside the boundary.
+    An open-weights model served on infrastructure the organisation operates — the same
+    inference runtime as the endpoint local model runtime, with an AI gateway in front of it and
+    a governance plane behind it. Weights land in storage from a public hub or the
+    organisation's own fine-tuning pipeline, and the whole model-provider role moves inside the
+    boundary.
 
 description:
   - >
     The trade is explicit: a data-disclosure risk goes away and a supply-chain, availability and
     safety risk arrives. There is no provider applying content policy, no provider absorbing a
     traffic spike, and no provider patching the serving stack. Every control a managed API
-    supplies by default is now a component this organisation runs or does without.
+    supplies by default is now a component this organisation runs or does without — which is why
+    the gateway and the governance plane are the blocks that separate this architecture from the
+    same software installed by one person on a workstation.
   - >
-    The supply chain is the distinctive risk. Weights are large artifacts from public hubs, and
-    several distribution formats execute code on load. The control is scanning and format policy
-    in the promotion pipeline, before an artifact reaches a node — a blocking gate, not a report.
-    The registry with provenance and that gate is what separates this architecture from the same
-    software installed by one person on a workstation.
+    The supply chain is the distinctive risk. Weights are large artifacts that arrive in storage
+    from a public hub or from the organisation's own fine-tuning pipeline, and several
+    distribution formats execute code on load. The control is scanning and format policy in the
+    promotion gate, before an artifact reaches the runtime — a blocking gate, not a report — and
+    digest verification at load, so the gate cannot be bypassed by writing to storage directly.
   - >
-    Multi-tenancy on accelerators has no equivalent elsewhere in this catalogue. Continuous
-    batching mixes tenants' requests in one forward pass, the KV cache holds their context, and
-    prefix caching across tenants is a performance feature that is also a disclosure path.
-    Whether cache entries may be shared across tenants is a serving-configuration flag with
-    data-protection consequences, and it rarely reaches a review.
+    Multi-tenancy inside the runtime has no equivalent elsewhere in this catalogue. Continuous
+    batching mixes tenants' requests in one forward pass on shared accelerators, the KV cache
+    holds their context, and prefix caching across tenants is a performance feature that is also
+    a disclosure path. Whether cache entries may be shared across tenants is a serving
+    configuration flag with data-protection consequences, and it rarely reaches a review.
   - >
-    Availability is a security property here in a way it is not with a managed API. GPU capacity
-    is finite and expensive, admission control at the gateway is what stops one caller becoming
+    Availability is a security property here in a way it is not with a managed API. Capacity is
+    finite and expensive, admission control at the gateway is what stops one caller becoming
     everyone else's outage, and quotas are a control rather than a billing feature.
 
 distinguishedBy:
   - >
-    Against an endpoint local runtime: identical software, entirely different operational
+    Against the endpoint local model runtime: identical software, entirely different operational
     position. There it was installed by one person and has no inventory entry; here it has a
-    pipeline, a network policy, an identity and someone on call.
+    gateway in front, a promotion pipeline, an identity and someone on call.
   - >
     Against consuming a managed model API: this architecture replaces one boundary crossing with
     a whole subsystem. The guardrails, abuse monitoring, capacity management and patching the
@@ -57,21 +60,6 @@ exemplars:
     asOf: "2026-08"
 
 blocks:
-  - id: modelHub
-    kind: external
-    title: Public model hub
-    cosaiComponent: componentModelStorage
-    col: 0
-    row: 0
-    note: >
-      Where the open weights are published. Publisher identity is verifiable to a degree; what an
-      artifact does on load is a property of its format, not its publisher.
-    items:
-      - id: openWeights
-        label: Published weights
-        icon: db
-        note: Multi-gigabyte artifacts, in formats some of which execute code on load.
-
   - id: consumers
     kind: actor
     title: Consuming applications
@@ -88,117 +76,104 @@ blocks:
     col: 1
     row: 1
     note: >
-      Model routing, admission control and per-tenant quotas in front of finite GPU capacity.
-      With no provider applying content policy, the guardrail checks here are a service the
-      organisation runs itself or does without.
+      The governed front door in front of finite capacity — the same gateway block every hosted
+      architecture in this catalogue routes through. With no provider applying content policy,
+      the guardrail checks enforced here are a service the organisation runs itself or does
+      without.
     items:
-      - id: admission
-        label: Admission & quotas
+      - id: broker
+        label: Credential broker
+        icon: key
+        note: Workload identity per calling tenant — the thing quotas and cache-isolation decisions key off.
+      - id: limits
+        label: Rate & budget limits
         icon: clock
         note: Per-tenant ceilings on finite capacity. What stops one caller becoming everyone's outage.
-      - id: guardrails
-        label: Guardrail checks
-        icon: shield
-        note: Content and injection classification on both legs, run inline rather than advisory.
-      - id: routing
-        label: Model routing
-        icon: gear
-        note: Which model version serves which tenant's request.
-
-  - id: artifacts
-    kind: service
-    title: Model registry & weights
-    col: 2
-    row: 0
-    cosaiComponent: componentModelStorage
-    note: >
-      Versioned artifacts with provenance, encrypted storage and a promotion gate. The single
-      control that separates this architecture from an ungoverned copy of the same software.
-    items:
-      - id: registry
-        label: Versioned registry
-        icon: gear
-        note: Provenance and promotion state per artifact. Nothing serves that was not promoted.
-      - id: weightStore
-        label: Weight storage
-        icon: folder
-        note: Expensive to reproduce, trivial to copy. Encryption and access control protect both facts.
+      - id: audit
+        label: Audit tap
+        icon: doc
+        note: Every request and completion recorded at the one crossing every caller shares.
 
   - id: runtime
     kind: service
-    title: Serving runtime
+    title: Inference runtime
     col: 2
     row: 1
     cosaiComponent: componentModelServing
     note: >
-      Continuous batching and paged attention across tenants. The batching that makes it
-      efficient is also what puts several tenants' context in one process, and the serving stack
-      itself is third-party code with its own CVE stream.
+      The same runtime the endpoint architecture draws — loading weights, batching requests,
+      serving completions — operated here as a shared service across tenants on shared
+      accelerators. The serving stack is third-party code with its own CVE stream.
     items:
+      - id: loader
+        label: Weight loader
+        icon: gear
+        note: Where a pickle-based format turns file opening into code execution — and where the registry digest is verified.
+      - id: model
+        label: Loaded model
+        icon: model
+        note: Open weights with no provider-side guardrail, abuse monitoring or content policy.
       - id: batching
         label: Continuous batching
-        icon: gear
-        note: Mixes tenants' requests in one forward pass. Efficiency and co-tenancy are the same mechanism.
-      - id: servingStack
-        label: Serving stack
-        icon: code
-        note: An open-source inference server with its own CVE stream and nobody upstream patching it for you.
-
-  - id: cache
-    kind: service
-    title: KV & prefix cache
-    cosaiComponent: componentModelServing
-    col: 2
-    row: 2
-    note: >
-      Recent context held to avoid recomputing it. Sharing prefixes across tenants is a
-      performance feature and a disclosure path, and the choice between them is a configuration
-      flag that rarely reaches a review.
-    items:
-      - id: kv
-        label: KV cache
+        icon: clock
+        note: Mixes tenants' requests in one forward pass on shared accelerators. Efficiency and co-tenancy are the same mechanism.
+      - id: cache
+        label: KV & prefix cache
         icon: db
-        note: Tenants' live context in accelerator memory.
-      - id: prefixes
-        label: Prefix sharing
-        icon: search
-        note: Cache hits across tenants cut latency and cross a data boundary in the same operation.
+        note: >
+          Tenants' live context, held to avoid recomputing it. Sharing prefixes across tenants
+          is a performance feature and a disclosure path in the same flag.
 
-  - id: gpuFleet
-    kind: service
-    title: Models on GPU
+  - id: storage
+    kind: external
+    title: Storage
     col: 3
-    row: 1
-    cosaiComponent: componentTheModel
+    row: 2
+    cosaiComponent: componentModelStorage
     note: >
-      The weights in memory across a shared node pool. A high-value exfiltration target — the
-      artifact is expensive and portable — and a shared physical substrate for every tenant at
-      once.
+      Versioned weight artifacts with provenance and a promotion state — expensive to reproduce,
+      trivial to copy. Nothing serves that was not promoted, provided the load path verifies the
+      digest.
     items:
-      - id: loadedWeights
-        label: Loaded weights
+      - id: files
+        label: Model files
+        icon: db
+        note: Multi-gigabyte artifacts whose format determines whether loading them is deserialization or execution.
+
+  - id: sources
+    kind: external
+    title: Model sources
+    col: 4
+    row: 2
+    cosaiComponent: componentModelStorage
+    note: >
+      Where the weights come from: a public hub, where publisher identity says nothing about
+      what the artifact does on load — or the organisation's own fine-tuning pipeline, which is
+      its own architecture in this catalogue.
+    items:
+      - id: hub
+        label: Public model hub
+        icon: globe
+        note: Declared behaviour and actual behaviour are separate facts.
+      - id: selfTrained
+        label: Self-trained model
         icon: model
-        note: Verified against the registry digest at load, or the promotion gate can be bypassed by writing to storage.
-      - id: nodePool
-        label: GPU node pool
-        icon: gear
-        note: Shared accelerators. Tenancy here is a hardware property, not a namespace one.
+        note: A checkpoint from the organisation's fine-tuning and model pipeline, promoted like any other artifact.
 
   - id: governance
     kind: governance
     title: Governance plane
-    col: 4
+    col: 3
     row: 0
-    rowSpan: 3
+    rowSpan: 2
     note: >
       The controls a managed provider would have supplied, now operated in-house: artifact
-      scanning, per-version evaluation, posture over serving configuration, and workload
-      identity for callers and pipeline alike.
+      scanning, per-version evaluation, and posture over serving configuration.
     items:
       - id: scanner
         label: Artifact scanning
         icon: shield
-        note: Format and content inspection as a blocking gate in the promotion pipeline, before any node opens the file.
+        note: Format and content inspection as a blocking gate in the promotion pipeline, before the runtime opens the file.
       - id: evals
         label: Evaluation & red teaming
         icon: scale
@@ -207,19 +182,8 @@ blocks:
         label: Posture & inventory
         icon: eye
         note: Which versions serve where, at what configuration — including whether cross-tenant cache sharing is on.
-      - id: workloadIdentity
-        label: Workload identity
-        icon: key
-        note: Short-lived credentials for callers and for the pipeline that promotes artifacts.
 
 edges:
-  - from: modelHub
-    to: artifacts
-    path: external
-    label: weights fetch
-    note: >
-      Provenance establishes who published the artifact and nothing about what it does on load —
-      which is why the scan gate sits between this edge and any node that will open the file.
   - from: consumers
     to: gateway
     path: primary
@@ -233,37 +197,33 @@ edges:
     path: primary
     bidir: true
     note: >
-      Admitted requests scheduled into the batch; completions back through the guardrail.
+      Admitted requests scheduled into the batch; completions back through the guardrail checks.
       Output-side policy is the half most often omitted when self-hosting.
   - from: runtime
-    to: gpuFleet
+    to: storage
     path: primary
     bidir: true
-    label: forward pass
-    note: The batch executes on shared accelerators, several tenants per pass.
-  - from: runtime
-    to: cache
-    path: primary
-    bidir: true
+    route: vh
+    label: fetch / load
     note: >
-      Context written and reused across requests. Whether a cache entry may serve another
-      tenant's request is the configuration decision that matters most on this edge.
-  - from: artifacts
-    to: gpuFleet
-    path: primary
-    label: verified load
+      Promoted artifacts load into the runtime, digest-verified against the promotion record.
+      Without that verification the gate can be bypassed by writing to storage directly.
+  - from: sources
+    to: storage
+    path: external
+    label: weights in
     note: >
-      The digest is verified at load time, which is what makes registry promotion meaningful.
-      Without it the gate can be bypassed by writing to storage directly.
+      Fetched from the hub or produced by the organisation's own training pipeline. Provenance
+      establishes who made the artifact and nothing about what it does on load.
   - from: governance
-    to: artifacts
+    to: storage
     path: governance
     label: scan & promotion gate
     note: >
       Scanning and evaluation gate promotion — blocking, not advisory. A scan that runs after
       deployment has documented an incident.
   - from: governance
-    to: gpuFleet
+    to: runtime
     path: governance
     label: posture & drift
     note: >
@@ -273,16 +233,18 @@ edges:
 pins:
   risks:
     - risk: riskModelSourceTampering
-      at: modelHub
+      at: sources
       note: Publisher identity is the only assurance the hub offers, and it says nothing about the artifact's behaviour.
     - risk: riskMaliciousLoaderDeserialization
-      at: modelHub->artifacts
-      note: Several weight formats execute code on load. Format policy on this edge is the only place that fact can be addressed once for everything downstream.
+      at: sources->storage
+      note: >
+        Several weight formats execute code on load. Format policy on this edge is the only
+        place that fact can be addressed once for everything downstream.
     - risk: riskModelExfiltration
-      at: artifacts
+      at: storage
       note: The stored artifact is expensive to reproduce and trivial to copy, which makes storage access control an asset-protection question.
     - risk: riskModelDeploymentTampering
-      at: artifacts->gpuFleet
+      at: runtime->storage
       note: A load path that skips digest verification turns the promotion gate into a suggestion.
     - risk: riskInsecureIntegratedComponent
       at: runtime
@@ -290,28 +252,30 @@ pins:
     - risk: riskCrossTenantCredentialPropagation
       at: runtime
       note: Batching puts several tenants' requests in one forward pass; isolation is a property of several configuration choices at once.
-    - risk: riskSensitiveDataDisclosure
-      at: cache
-      note: Cross-tenant prefix sharing puts one tenant's context where another's request can reach it, and it looks like a cache hit rather than an incident.
-    - risk: riskPromptResponseCachePoisoning
-      at: cache
-      note: A poisoned cache entry serves every later request that matches it.
     - risk: riskAcceleratorAndSystemSideChannels
-      at: gpuFleet
+      at: runtime
       note: Shared accelerators are a physical substrate common to every tenant, below every namespace boundary.
+    - risk: riskSensitiveDataDisclosure
+      at: gateway->runtime
+      note: >
+        Cross-tenant prefix sharing puts one tenant's context where another's request can reach
+        it, and it looks like a cache hit rather than an incident.
+    - risk: riskPromptResponseCachePoisoning
+      at: gateway->runtime
+      note: A poisoned cache entry serves every later request that matches it.
     - risk: riskDenialOfMLService
       at: consumers->gateway
-      note: GPU capacity is finite and there is no provider to absorb a spike. Admission control here is an availability control, not a billing feature.
+      note: Capacity is finite and there is no provider to absorb a spike. Admission control here is an availability control, not a billing feature.
     - risk: riskInsecureModelOutput
       at: gateway
       note: With no provider applying output policy, an unguarded return leg hands raw completions to every caller.
 
   capabilities:
     - capability: capabilityModelScanning
-      at: governance->artifacts
-      note: Format and content scanning as a blocking gate in the promotion pipeline, before any artifact reaches a node.
+      at: governance->storage
+      note: Format and content scanning as a blocking gate in the promotion pipeline, before any artifact reaches the runtime.
     - capability: capabilityModelEvals
-      at: governance->artifacts
+      at: governance->storage
       note: Safety and adversarial evaluation per model version — a new checkpoint is a new model with new behaviour.
     - capability: capabilityAiGateway
       at: gateway
@@ -323,7 +287,7 @@ pins:
       note: Workload identity per calling tenant, issued by the platform rather than a shared key in a config map.
     - capability: capabilityRateLimiting
       at: consumers->gateway
-      note: Per-tenant quotas on finite GPU capacity, enforced at admission rather than discovered at saturation.
+      note: Per-tenant quotas on finite capacity, enforced at admission rather than discovered at saturation.
     - capability: capabilityModelGuardrails
       at: gateway
       note: Content and injection classification on both legs, because no provider is applying policy for you.
@@ -331,40 +295,38 @@ pins:
       at: runtime
       note: Reviewed serving configuration — batching, cache sharing, tenancy flags — treated as security settings, not tuning knobs.
     - capability: capabilityMemoryProtection
-      at: cache
+      at: runtime
       note: Tenant-scoped cache keys, so a prefix hit can never cross a tenant boundary.
-    - capability: capabilityModelWeightProtection
-      at: artifacts
-      note: Encryption, access control and integrity digests on weights at rest, matched by verification at load.
+    - capability: capabilityConfidentialComputing
+      at: runtime
+      note: Hardware-backed isolation for the highest-sensitivity tenants where shared accelerators are not acceptable.
     - capability: capabilityAiVulnMgmt
       at: runtime
       note: Track and patch the serving stack's CVE stream on your own schedule, because nobody upstream will.
-    - capability: capabilityConfidentialComputing
-      at: gpuFleet
-      note: Hardware-backed isolation for the highest-sensitivity tenants where shared accelerators are not acceptable.
+    - capability: capabilityModelWeightProtection
+      at: storage
+      note: Encryption, access control and integrity digests on weights at rest, matched by verification at load.
     - capability: capabilityAiSpm
-      at: governance->gpuFleet
+      at: governance->runtime
       note: Continuous posture over which versions serve where and at what configuration, catching drift before an incident does.
 
 scenarios:
   - title: A new checkpoint is promoted
     steps:
-      - follow: modelHub->artifacts
-        note: The artifact is fetched with provenance recorded — who published it, not what it does.
-      - follow: governance->artifacts
+      - follow: sources->storage
+        note: The artifact arrives — fetched from the hub or produced by the training pipeline — with provenance recorded.
+      - follow: governance->storage
         note: Scanning and per-version evaluation gate the promotion. Blocking, or it is not a gate.
-      - follow: artifacts->gpuFleet
-        note: The promoted artifact loads onto nodes, digest-verified against the registry.
+      - follow: storage->runtime
+        note: The promoted artifact loads into the runtime, digest-verified against the promotion record.
   - title: A tenant calls the endpoint
     steps:
       - follow: consumers->gateway
         note: The workload identity on the request decides its quota and its cache scope.
       - follow: gateway->runtime
-        note: The admitted request is scheduled into a batch alongside other tenants' traffic.
-      - follow: runtime->cache
-        note: Prefix lookup — a hit is cheap, and tenant-scoped keying is what keeps it safe.
-      - follow: runtime->gpuFleet
-        note: The forward pass executes on shared accelerators.
+        note: >
+          The admitted request is scheduled into a batch alongside other tenants' traffic;
+          tenant-scoped cache keys are what keep the prefix lookup safe.
       - follow: gateway->consumers
         note: The completion returns through the guardrail's output leg, not around it.
   - title: A spike hits finite capacity
@@ -373,6 +335,18 @@ scenarios:
         note: Admission control decides who waits. There is no provider to absorb the spike.
       - follow: gateway->runtime
         note: Within-quota traffic is scheduled; everything else is shed at the front door rather than at the accelerator.
+
+deviations:
+  - subject: No separate GPU or cache blocks are drawn
+    reason: >
+      The accelerators, the batch and the KV cache are internals of the inference runtime — the
+      same block the endpoint architecture draws — so they appear as items inside it rather than
+      as blocks, and the multi-tenancy risks pin to the runtime and its serving path.
+  - subject: The model registry is folded into Storage and the promotion gate
+    reason: >
+      Registry semantics — versioning, provenance, promotion state — live in the storage block
+      and the governance plane's gate over it; drawing a separate registry service duplicated
+      the storage block it fronted.
 
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain, LLM06 unbounded consumption"
