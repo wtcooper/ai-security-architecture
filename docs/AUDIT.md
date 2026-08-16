@@ -676,8 +676,8 @@ Highlights below are Google's original mapping, not ours.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 6 — Agentic browser and AI extension, Vendor coding and coworker agent, Desktop assistant with computer use, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
-| Cloud & hosted | 16 — Autonomous action agent over business records, Agent-facing endpoint, Core agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Endpoint | 6 — Agentic browser and AI extension, Vendor coding agent, Desktop AI assistant, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
+| Cloud & hosted | 16 — Autonomous action agent over business records, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
 | Third-party SaaS | 6 — Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
 
 ### 4a. Risks no architecture pins — 3 of 36
@@ -719,14 +719,14 @@ Highlights below are Google's original mapping, not ours.
 | Agent-facing endpoint | Transaction processing | service | `componentApplication` |
 | Agent-facing endpoint | Orders & evidence | service | `componentDataStorage` |
 | Agent-facing endpoint | Governance plane | governance | (none) |
-| Core agent workflow | Application front end | service | `componentApplication` |
-| Core agent workflow | Agent orchestration | service | `componentReasoningCore` |
-| Core agent workflow | State & knowledge | service | `componentDataStorage` |
-| Core agent workflow | Agentic gateway | service | (none) |
-| Core agent workflow | Model provider | provider | `componentModelServing` |
-| Core agent workflow | Tool services | service | `componentTools` |
-| Core agent workflow | Downstream services | external | `componentApplication` |
-| Core agent workflow | Governance plane | governance | (none) |
+| Durable multi-agent workflow | Application front end | service | `componentApplication` |
+| Durable multi-agent workflow | Agent orchestration | service | `componentReasoningCore` |
+| Durable multi-agent workflow | State & knowledge | service | `componentDataStorage` |
+| Durable multi-agent workflow | Agentic gateway | service | (none) |
+| Durable multi-agent workflow | Model provider | provider | `componentModelServing` |
+| Durable multi-agent workflow | Tool services | service | `componentTools` |
+| Durable multi-agent workflow | Downstream services | external | `componentApplication` |
+| Durable multi-agent workflow | Governance plane | governance | (none) |
 | AI-augmented API backend | API contract | service | `componentApplicationInputHandling` |
 | AI-augmented API backend | Transformation | service | `componentApplication` |
 | AI-augmented API backend | Model provider | provider | `componentModelServing` |
@@ -824,18 +824,18 @@ Highlights below are Google's original mapping, not ours.
 | Agentic browser and AI extension | Browser profile | service | `componentDataStorage` |
 | Agentic browser and AI extension | Signed-in applications | external | `componentApplication` |
 | Agentic browser and AI extension | Open web | external | `componentDataSources` |
-| Vendor coding and coworker agent | Repository content | external | `componentDataSources` |
-| Vendor coding and coworker agent | Agent client | service | `componentReasoningCore` |
-| Vendor coding and coworker agent | Vendor service | provider | `componentModelServing` |
-| Vendor coding and coworker agent | Tools & servers | service | `componentTools` |
-| Vendor coding and coworker agent | Sandboxed execution | service | (none) |
-| Vendor coding and coworker agent | Remote services | external | `componentApplication` |
-| Desktop assistant with computer use | Docs & screen content | external | `componentDataSources` |
-| Desktop assistant with computer use | Model provider | provider | `componentModelServing` |
-| Desktop assistant with computer use | Assistant application | service | `componentReasoningCore` |
-| Desktop assistant with computer use | OS permission layer | service | (none) |
-| Desktop assistant with computer use | Contained desktop | service | `componentTools` |
-| Desktop assistant with computer use | Connected services | external | `componentApplication` |
+| Vendor coding agent | Repository content | external | `componentDataSources` |
+| Vendor coding agent | Agent client | service | `componentReasoningCore` |
+| Vendor coding agent | Vendor service | provider | `componentModelServing` |
+| Vendor coding agent | Tools & servers | service | `componentTools` |
+| Vendor coding agent | Sandboxed execution | service | (none) |
+| Vendor coding agent | Remote services | external | `componentApplication` |
+| Desktop AI assistant | Docs & screen content | external | `componentDataSources` |
+| Desktop AI assistant | Model provider | provider | `componentModelServing` |
+| Desktop AI assistant | Assistant application | service | `componentReasoningCore` |
+| Desktop AI assistant | OS permission layer | service | (none) |
+| Desktop AI assistant | Contained desktop | service | `componentTools` |
+| Desktop AI assistant | Connected services | external | `componentApplication` |
 | Local model runtime | Local HTTP API | service | `componentModelServing` |
 | Local model runtime | Local guardrails | service | (none) |
 | Local model runtime | Inference runtime | service | `componentTheModel` |
