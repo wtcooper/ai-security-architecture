@@ -173,9 +173,15 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   plane** (qualified by who governs, e.g. "Tenant governance"). Untrusted-content sources keep
   content-specific names ("Repository content", "Docs & screen content") because what the
   content is carries the threat model. Where a block deliberately differs from a standard
-  concept, it gets a different name — sameness of name is a claim of sameness of role. Controls
-  are not drawn as block items when they are already a pinned capability chip; the chip on the
-  edge is the statement.
+  concept, it gets a different name — sameness of name is a claim of sameness of role. Block
+  items name things that exist — transports, artifacts, stores, runtimes, published surfaces,
+  functions of the block. Control and policy statements are not items: the pinned capability
+  chip is the statement. The one exception is a block whose role *is* a control surface — the
+  AI gateway, the governance plane, an egress gate, the OS permission layer, an output
+  validation stage, a secure service edge, a tool broker — whose items describe its function.
+  Endpoint agents share one Tool services item set: File & edit tools, Shell commands,
+  Local & remote MCP, Installed skills, and Computer use where the shell exposes it; cloud
+  agents share MCP servers, APIs & connectors, A2A peer agents.
 - **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
   inside the system, external content and actions, and dotted governance relationships.
 - **Numbered capability chips** are F5's design-requirements treatment carried by this
@@ -205,3 +211,24 @@ that an undated one becomes a wrong claim. The architectures themselves name no 
 `docs/AUDIT.md` section 4 reports the coverage gaps: risks and capabilities not yet pinned by any
 flow-style architecture, and CoSAI components none anchors. Until the rebuild covers all three
 surfaces those gaps are the work list, not a regression.
+
+## Controls guidance
+
+`data/reference/guidance/` is original work: the rung below each reference architecture, for
+admins, architects and security teams — what an organisation enforces around that class of
+system. One document per architecture, named after the architecture's own file, plus a shared
+tool registry (`tools.yaml`). The audience split is deliberate: developer-facing setup guidance
+and secure starter templates live in the companion `ai-security-sdlc` project, not here.
+
+Two disciplines carry over from the layers above:
+
+- **Derivation.** Every guidance item cites at least one capability, and each must be pinned on
+  its architecture — guidance cannot recommend deploying something the drawing does not show.
+  `npm run data` fails otherwise; the fix is a pin, not an exception.
+- **Dated vendor facts.** The tool registry is the one place this layer names products, because
+  the option space there is narrow (a handful of dominant coding agents and desktop assistants,
+  each with one documented policy mechanism). Every entry carries an `asOf` date and cites the
+  vendor's own documentation, verified by fetching those pages on that date — never recalled
+  from model memory. `npm run audit` flags entries older than six months for re-verification,
+  and section 5 of `docs/AUDIT.md` tracks which architectures carry guidance and which pinned
+  capabilities each document has not yet addressed.
