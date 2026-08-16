@@ -101,6 +101,31 @@ export function FlowDiagram({
     setHover(null);
   }
 
+  // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
+  // a tall viewport and an initial zoom that fills it; pinch and pan take it from there.
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!mobile) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const s0 = svg.clientWidth / layout.width;
+    if (!s0) return;
+    const k = Math.min(3, svg.clientHeight / layout.height / s0);
+    if (k > 1.15) {
+      setView({ k, x: (layout.width / 2) * (1 - k), y: (layout.height / 2) * (1 - k) });
+    }
+    // Re-run per architecture; deliberately not on every resize, so a user's zoom survives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobile, archetype.id]);
+
   const toMap = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current;
     const ctm = svg?.getScreenCTM();
@@ -250,7 +275,11 @@ export function FlowDiagram({
       onPointerUp={endPan}
       onPointerCancel={endPan}
       onPointerLeave={() => setHover(null)}
-      style={{ touchAction: "none", cursor: panning ? "grabbing" : "grab" }}
+      style={{
+        touchAction: "none",
+        cursor: panning ? "grabbing" : "grab",
+        height: mobile ? "62vh" : undefined,
+      }}
     >
       <defs>
         {Object.entries(PATH_STYLE).map(([id, style]) => (

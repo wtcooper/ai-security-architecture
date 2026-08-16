@@ -80,6 +80,34 @@ export function RiskMap({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
 
+  // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
+  // a tall viewport and an initial zoom that fills it; pinch and pan take it from there.
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!mobile) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const s0 = svg.clientWidth / WIDTH;
+    if (!s0) return;
+    const k = Math.min(3, svg.clientHeight / (HEIGHT + TOP_MARGIN) / s0);
+    if (k > 1.15) {
+      setView((v) =>
+        v.k === 1 && v.x === 0 && v.y === 0
+          ? { k, x: (WIDTH / 2) * (1 - k), y: (HEIGHT / 2) * (1 - k) }
+          : v,
+      );
+    }
+     
+  }, [mobile]);
+
   /** Client coordinates -> the map's own coordinate space. */
   const toMap = useCallback((clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -199,7 +227,11 @@ export function RiskMap({
       onPointerMove={doPan}
       onPointerUp={endPan}
       onPointerCancel={endPan}
-      style={{ touchAction: "none", cursor: panning ? "grabbing" : "grab" }}
+      style={{
+        touchAction: "none",
+        cursor: panning ? "grabbing" : "grab",
+        height: mobile ? "62vh" : undefined,
+      }}
     >
       <defs>
         <marker
