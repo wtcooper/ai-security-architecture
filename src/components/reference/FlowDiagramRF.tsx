@@ -2,23 +2,25 @@
 
 /**
  * React Flow renderer for the flow-style architectures — the second leg of the renderer
- * bake-off, promoted to a full view where containment matters. Geometry is enforced exactly as
- * in the SVG engine: node positions are the build-time rects, and edges render the
- * build-computed path strings verbatim, so every pixel drawn is a pixel the collision checks
- * validated. Capability chips and risk tags sit at the same chipSpots/tagSpots the SVG uses;
- * the containment frame is the one thing this renderer can draw that the SVG cannot.
+ * bake-off, promoted to a full view where containment matters. Geometry is enforced the same
+ * way as the SVG engine: initial node positions are the build-time rects and edges render the
+ * build-computed path strings verbatim — but nodes are user-movable, and once an endpoint has
+ * been dragged its edges switch to live routing. Capability chips and risk tags sit at the
+ * same chipSpots/tagSpots the SVG uses and travel with the block they annotate. Hover cards
+ * replace persistent edge labels, which also keeps text off the drawing.
  */
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  applyNodeChanges,
   Background,
   BaseEdge,
-  EdgeLabelRenderer,
   Handle,
   Position,
   ReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
+  type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -40,14 +42,14 @@ const RF_CONFIG: Record<
   archSandboxedExecution: {
     frameLabel: "Disposable sandbox",
     frameNote:
-      "Provisioned per task, destroyed after — untrusted code and untrusted content execute together inside",
+      "Provisioned per task, destroyed after — untrusted code and untrusted content execute together inside.",
     members: ["sandbox", "sourceContent"],
     hide: [],
   },
   archPersonalAgent: {
     frameLabel: "Sandbox",
     frameNote:
-      "MicroVM-class boundary: daemon, memory and tools run whole inside, with their own filesystem and network. The AI gateway is the only exit (target state)",
+      "MicroVM-class boundary: daemon, memory and tools run whole inside, with their own filesystem and network. The AI gateway is the only exit (target state).",
     members: ["bridges", "toolPlane", "harness", "memory"],
     hide: [],
     rfDefault: true,
@@ -60,6 +62,13 @@ export const reactFlowIsDefault = (id: string) => Boolean(RF_CONFIG[id]?.rfDefau
 const FRAME_PAD = 26;
 const FRAME_HEAD = 52;
 
+interface HoverCard {
+  x: number;
+  y: number;
+  title: string;
+  body?: string;
+}
+
 type BlockNodeData = { block: ArchBlock; w: number; h: number; dim: boolean };
 
 function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
@@ -68,7 +77,6 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   const cells = itemCells(block, { x: 0, y: 0, w, h });
   return (
     <div
-      title={block.note}
       style={{
         width: w,
         height: h,
@@ -82,6 +90,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
         fontFamily: "inherit",
         opacity: dim ? 0.25 : 1,
         transition: "opacity 150ms",
+        cursor: "grab",
       }}
     >
       {(["t", "b", "l", "r"] as const).map((side) => {
@@ -139,7 +148,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
           return (
             <div
               key={item.id}
-              title={item.note}
+              title={item.note ? `${item.label} — ${item.note}` : item.label}
               style={{
                 position: "absolute",
                 left: cell.x + cell.w / 2,
@@ -168,7 +177,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   );
 }
 
-function FrameNode({ data }: NodeProps<Node<{ label: string; note: string; w: number; h: number }>>) {
+function FrameNode({ data }: NodeProps<Node<{ label: string; w: number; h: number }>>) {
   return (
     <div
       style={{
@@ -177,6 +186,7 @@ function FrameNode({ data }: NodeProps<Node<{ label: string; note: string; w: nu
         border: "2px dashed var(--ink-3, #999)",
         borderRadius: 12,
         background: "color-mix(in srgb, var(--ink-3, #999) 6%, transparent)",
+        cursor: "grab",
       }}
     >
       <div
@@ -195,27 +205,14 @@ function FrameNode({ data }: NodeProps<Node<{ label: string; note: string; w: nu
       >
         {data.label}
       </div>
-      <div
-        style={{
-          position: "absolute",
-          top: 8,
-          left: 18,
-          right: 18,
-          fontSize: 10,
-          color: "var(--ink-2, #555)",
-        }}
-      >
-        {data.note}
-      </div>
     </div>
   );
 }
 
-/** A numbered capability chip at a build-validated spot. */
-function ChipNode({ data }: NodeProps<Node<{ n: number; tip: string; dim: boolean }>>) {
+/** A numbered capability chip at a build-validated spot; travels with its block. */
+function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean }>>) {
   return (
     <div
-      title={data.tip}
       style={{
         width: 18,
         height: 18,
@@ -233,11 +230,10 @@ function ChipNode({ data }: NodeProps<Node<{ n: number; tip: string; dim: boolea
   );
 }
 
-/** A coded risk tag at a build-validated spot. */
-function TagNode({ data }: NodeProps<Node<{ code: string; w: number; tip: string; dim: boolean }>>) {
+/** A coded risk tag at a build-validated spot; travels with its block. */
+function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolean }>>) {
   return (
     <div
-      title={data.tip}
       style={{
         width: data.w,
         height: TAG_H,
@@ -256,37 +252,35 @@ function TagNode({ data }: NodeProps<Node<{ code: string; w: number; tip: string
 }
 
 /**
- * Renders the build-computed path verbatim, so the drawn geometry is exactly what the
- * collision checks validated.
+ * Renders the build-computed path verbatim until either endpoint has been dragged, then falls
+ * back to React Flow's live handle-to-handle routing so edges follow the user's layout.
  */
-function BuildPathEdge({ data, markerEnd, markerStart, label, style }: EdgeProps) {
-  const d = (data as { d: string; midX: number; midY: number }) ?? { d: "", midX: 0, midY: 0 };
+function BuildPathEdge(props: EdgeProps) {
+  const data = props.data as { d: string; live: boolean };
+  if (data?.live) {
+    const [sx, sy, tx, ty] = [props.sourceX, props.sourceY, props.targetX, props.targetY];
+    const midX = (sx + tx) / 2;
+    const path =
+      Math.abs(tx - sx) > Math.abs(ty - sy)
+        ? `M ${sx} ${sy} L ${midX} ${sy} L ${midX} ${ty} L ${tx} ${ty}`
+        : `M ${sx} ${sy} L ${sx} ${(sy + ty) / 2} L ${tx} ${(sy + ty) / 2} L ${tx} ${ty}`;
+    return <BaseEdge path={path} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />;
+  }
   return (
-    <>
-      <BaseEdge path={d.d} markerEnd={markerEnd} markerStart={markerStart} style={style} />
-      {label ? (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: "absolute",
-              transform: `translate(-50%, -50%) translate(${d.midX}px, ${d.midY - 10}px)`,
-              fontSize: 9,
-              color: "var(--ink-2, #555)",
-              background: "var(--paper, #fff)",
-              padding: "0 3px",
-              pointerEvents: "none",
-            }}
-          >
-            {label}
-          </div>
-        </EdgeLabelRenderer>
-      ) : null}
-    </>
+    <BaseEdge path={data?.d ?? ""} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />
   );
 }
 
 const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode };
 const edgeTypes = { buildPath: BuildPathEdge };
+
+/** Pick the facing handle pair from the two blocks' initial geometry. */
+function facing(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
+  const dx = b.x + b.w / 2 - (a.x + a.w / 2);
+  const dy = b.y + b.h / 2 - (a.y + a.h / 2);
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? (["r", "l-in"] as const) : (["l", "r-in"] as const);
+  return dy > 0 ? (["b", "t-in"] as const) : (["t", "b-in"] as const);
+}
 
 export function FlowDiagramRF({
   archetype,
@@ -298,16 +292,23 @@ export function FlowDiagramRF({
   className?: string;
 }) {
   const cfg = RF_CONFIG[archetype.id];
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [card, setCard] = useState<HoverCard | null>(null);
+  const [dragged, setDragged] = useState<ReadonlySet<string>>(new Set());
 
-  const { nodes, edges } = useMemo(() => {
+  const walk = scenario !== null ? archetype.scenarios?.[scenario] : undefined;
+  const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => s.follow) ?? []), [walk]);
+  const walkBlocks = useMemo(
+    () => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []),
+    [walk],
+  );
+  const inScenario = Boolean(walk);
+
+  const initialNodes = useMemo(() => {
     const { layout } = archetype;
     const hidden = new Set(cfg?.hide ?? []);
     const members = new Set(cfg?.members ?? []);
     const rects = layout.blocks;
-    const walk = scenario !== null ? archetype.scenarios?.[scenario] : undefined;
-    const walkEdges = new Set(walk?.steps.map((s) => s.follow) ?? []);
-    const walkBlocks = new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []);
-    const inScenario = Boolean(walk);
 
     let frame: { x: number; y: number; w: number; h: number } | null = null;
     if (cfg && cfg.members.length) {
@@ -327,7 +328,7 @@ export function FlowDiagramRF({
         position: { x: frame.x, y: frame.y },
         data: { label: cfg.frameLabel, note: cfg.frameNote, w: frame.w, h: frame.h },
         style: { width: frame.w, height: frame.h },
-        draggable: false,
+        draggable: true,
         selectable: false,
         zIndex: -1,
       });
@@ -341,20 +342,16 @@ export function FlowDiagramRF({
         type: "block",
         position: inFrame && frame ? { x: r.x - frame.x, y: r.y - frame.y } : { x: r.x, y: r.y },
         parentId: inFrame ? "__frame" : undefined,
-        extent: inFrame ? ("parent" as const) : undefined,
-        data: { block, w: r.w, h: r.h, dim: inScenario && !walkBlocks.has(block.id) },
-        draggable: false,
+        data: { block, w: r.w, h: r.h, dim: false },
+        draggable: true,
         style: { width: r.w, height: r.h },
       });
     }
 
-    // --- Pins: the same spots the SVG renderer and the build checks use ---------------
+    // Pins sit at the same spots the SVG renderer and the build checks use. Block-anchored
+    // pins are children of their block, so they travel when the user drags it.
     const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
     const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
-    const anchorArgs = (at: string) =>
-      at.includes("->")
-        ? { block: undefined, edge: edgeGeo.get(at) }
-        : { block: rects[at], edge: undefined };
 
     const chipGroups = new Map<string, { capability: string; note?: string }[]>();
     for (const pin of archetype.pins.capabilities) {
@@ -362,9 +359,11 @@ export function FlowDiagramRF({
       chipGroups.get(pin.at)!.push(pin);
     }
     for (const [at, pins] of chipGroups) {
-      const { block, edge } = anchorArgs(at);
-      if (!block && !edge) continue;
-      const spots = chipSpots(pins.length, block, edge);
+      const onBlock = !at.includes("->");
+      const blockRect = onBlock ? rects[at] : undefined;
+      const edge = onBlock ? undefined : edgeGeo.get(at);
+      if (!blockRect && !edge) continue;
+      const spots = chipSpots(pins.length, blockRect, edge);
       pins.forEach((pin, i) => {
         const spot = spots[i];
         if (!spot) return;
@@ -373,11 +372,16 @@ export function FlowDiagramRF({
         nodes.push({
           id: `chip:${at}:${pin.capability}`,
           type: "chip",
-          position: { x: spot.x - 9, y: spot.y - 9 },
+          position:
+            onBlock && blockRect
+              ? { x: spot.x - 9 - blockRect.x, y: spot.y - 9 - blockRect.y }
+              : { x: spot.x - 9, y: spot.y - 9 },
+          parentId: onBlock ? at : undefined,
           data: {
             n,
-            tip: `${n} · ${cap?.title ?? pin.capability}${pin.note ? ` — ${pin.note}` : ""}`,
-            dim: inScenario,
+            dim: false,
+            title: `${n} · ${cap?.title ?? pin.capability}`,
+            body: pin.note,
           },
           draggable: false,
           selectable: false,
@@ -392,10 +396,12 @@ export function FlowDiagramRF({
       tagGroups.get(pin.at)!.push(pin);
     }
     for (const [at, pins] of tagGroups) {
-      const { block, edge } = anchorArgs(at);
-      if (!block && !edge) continue;
+      const onBlock = !at.includes("->");
+      const blockRect = onBlock ? rects[at] : undefined;
+      const edge = onBlock ? undefined : edgeGeo.get(at);
+      if (!blockRect && !edge) continue;
       const codes = pins.map((p) => riskCode(p.risk));
-      const { rects: tagRects } = tagSpots(codes.map(tagWidth), block, edge);
+      const { rects: tagRects } = tagSpots(codes.map(tagWidth), blockRect, edge);
       pins.forEach((pin, i) => {
         const r = tagRects[i];
         if (!r) return;
@@ -403,12 +409,15 @@ export function FlowDiagramRF({
         nodes.push({
           id: `tag:${at}:${pin.risk}`,
           type: "tag",
-          position: { x: r.x, y: r.y },
+          position:
+            onBlock && blockRect ? { x: r.x - blockRect.x, y: r.y - blockRect.y } : { x: r.x, y: r.y },
+          parentId: onBlock ? at : undefined,
           data: {
             code: codes[i],
             w: r.w,
-            tip: `${codes[i]} · ${risk?.title ?? pin.risk}${pin.note ? ` — ${pin.note}` : ""}`,
-            dim: inScenario,
+            dim: false,
+            title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
+            body: pin.note,
           },
           draggable: false,
           selectable: false,
@@ -416,9 +425,49 @@ export function FlowDiagramRF({
         });
       });
     }
+    return nodes;
+  }, [archetype, cfg]);
 
-    // --- Edges: the build-computed paths, verbatim ------------------------------------
-    const edges: Edge[] = [];
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [lastId, setLastId] = useState(archetype.id);
+  if (lastId !== archetype.id) {
+    setLastId(archetype.id);
+    setNodes(initialNodes);
+    setDragged(new Set());
+    setCard(null);
+  }
+
+  // Scenario fade is derived at render time, so dragged positions survive scenario changes.
+  const displayNodes = useMemo(
+    () =>
+      nodes.map((n) => {
+        if (n.type === "block") {
+          const dim = inScenario && !walkBlocks.has(n.id);
+          return { ...n, data: { ...n.data, dim } };
+        }
+        if (n.type === "chip" || n.type === "tag") {
+          return { ...n, data: { ...n.data, dim: inScenario } };
+        }
+        return n;
+      }),
+    [nodes, inScenario, walkBlocks],
+  );
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
+    [],
+  );
+
+  const edges = useMemo(() => {
+    const { layout } = archetype;
+    const hidden = new Set(cfg?.hide ?? []);
+    const members = new Set(cfg?.members ?? []);
+    const rects = layout.blocks;
+    const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
+    // Dragging the frame moves every member block with it.
+    const moved = dragged.has("__frame") ? new Set([...dragged, ...members]) : dragged;
+
+    const out: Edge[] = [];
     for (const e of archetype.edges) {
       if (hidden.has(e.from) || hidden.has(e.to)) continue;
       const key = `${e.from}->${e.to}`;
@@ -426,13 +475,16 @@ export function FlowDiagramRF({
       if (!geo) continue;
       const style = PATH_STYLE[e.path];
       const dimmed = inScenario && !walkEdges.has(key);
-      edges.push({
+      const live = moved.has(e.from) || moved.has(e.to);
+      const [sh, th] = facing(rects[e.from], rects[e.to]);
+      out.push({
         id: key,
         source: e.from,
         target: e.to,
+        sourceHandle: sh,
+        targetHandle: th,
         type: "buildPath",
-        data: { d: geo.d, midX: geo.midX, midY: geo.midY },
-        label: e.label,
+        data: { d: geo.d, live, label: e.label, note: e.note },
         style: {
           stroke: style.stroke,
           strokeWidth: 1.8,
@@ -445,16 +497,51 @@ export function FlowDiagramRF({
           : undefined,
       });
     }
-    return { nodes, edges };
-  }, [archetype, cfg, scenario]);
+    return out;
+  }, [archetype, cfg, inScenario, walkEdges, dragged]);
+
+  const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setCard({
+      x: Math.min(event.clientX - rect.left + 12, rect.width - 280),
+      y: Math.min(event.clientY - rect.top + 12, rect.height - 120),
+      title,
+      body,
+    });
+  }, []);
 
   return (
-    <div className={className} style={{ height: "min(640px, 70vh)" }}>
+    <div ref={wrapRef} className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
       <ReactFlow
-        nodes={nodes}
+        nodes={displayNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onNodeDragStart={(_, n) => {
+          setDragged((prev) => new Set(prev).add(n.id));
+          setCard(null);
+        }}
+        onNodeMouseEnter={(event, node) => {
+          if (node.type === "block") {
+            const block = (node.data as BlockNodeData).block;
+            cardAt(event, block.title, block.note);
+          } else if (node.type === "chip" || node.type === "tag" || node.type === "frame") {
+            const d = node.data as { title?: string; label?: string; note?: string; body?: string };
+            cardAt(event, d.title ?? d.label ?? "", d.body ?? d.note);
+          }
+        }}
+        onNodeMouseLeave={() => setCard(null)}
+        onEdgeMouseEnter={(event, edge) => {
+          const d = edge.data as { label?: string; note?: string };
+          const e = archetype.edges.find((x) => `${x.from}->${x.to}` === edge.id);
+          const fromTitle = archetype.blocks.find((b) => b.id === e?.from)?.title ?? e?.from;
+          const toTitle = archetype.blocks.find((b) => b.id === e?.to)?.title ?? e?.to;
+          cardAt(event, d.label ?? `${fromTitle} → ${toTitle}`, d.note);
+        }}
+        onEdgeMouseLeave={() => setCard(null)}
+        onMoveStart={() => setCard(null)}
         fitView
         fitViewOptions={{ padding: 0.05 }}
         minZoom={0.2}
@@ -465,6 +552,32 @@ export function FlowDiagramRF({
       >
         <Background gap={24} size={1} />
       </ReactFlow>
+      {card && (
+        <div
+          style={{
+            position: "absolute",
+            left: card.x,
+            top: card.y,
+            width: 268,
+            zIndex: 30,
+            pointerEvents: "none",
+            background: "var(--paper, #fff)",
+            border: "1px solid var(--line, #ddd)",
+            borderRadius: 8,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.12)",
+            padding: "8px 10px",
+          }}
+        >
+          <div style={{ font: "600 11px/1.3 var(--font-body, sans-serif)", color: "var(--ink, #222)" }}>
+            {card.title}
+          </div>
+          {card.body && (
+            <div style={{ marginTop: 4, font: "400 10.5px/1.45 var(--font-body, sans-serif)", color: "var(--ink-2, #555)" }}>
+              {card.body}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
