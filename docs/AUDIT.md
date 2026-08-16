@@ -890,3 +890,25 @@ Highlights below are Google's original mapping, not ours.
 | In-app agent acting on vendor records | Vendor agent platform | provider | `componentApplication` |
 | In-app agent acting on vendor records | Downstream services | external | `componentApplication` |
 | In-app agent acting on vendor records | Tenant governance | governance | (none) |
+
+## 5. Controls-guidance coverage
+
+0 of 28 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+
+| Surface | With guidance | Without |
+| --- | --- | --- |
+| Endpoint | — | Agentic browser and AI extension, Vendor coding agent, Desktop AI assistant, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
+| Cloud & hosted | — | Single agent workflow, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Third-party SaaS | — | Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
+
+### 5a. Documents
+
+| Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
+| --- | --- | --- | --- | --- |
+
+### 5b. Tool registry
+
+Vendor-specific entries, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation.
+
+| Tool | Vendor | asOf | Referenced by | |
+| --- | --- | --- | --- | --- |
