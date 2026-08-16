@@ -1,0 +1,451 @@
+id: archChatAgent
+surface: surfaceCloud
+rank: 3
+title: Chat agent with tools
+abbrev: Chat agent
+
+summary:
+  - >
+    A hosted conversational agent where a human is in the loop for every turn: chat is the core
+    input, tools execute mid-conversation on the user's behalf, and consequential actions are
+    proposed in the thread before they run. The human-present counterpart of the single agent
+    workflow, and the shape most domain copilots take.
+
+description:
+  - >
+    The defining property is that the human reads every reply before the next action. That one
+    fact reorganises the control set: in-thread approval is the primary gate — an action is
+    proposed in the conversation, in words the user can read, before it executes — where the
+    single agent workflow, acting with nobody present, has to lean on compensating transactions
+    instead. The gate is only as good as the proposal text: an approval rendered as "OK to
+    proceed?" approves nothing in particular.
+  - >
+    Authority is on-behalf-of. The tools act as the conversing user, on a grant scoped to the
+    session, not as a workload identity with standing powers — the reachable set is what this
+    user may touch, decided per call. Sessions end and the grant ends with them; an agent tier
+    that accumulates authority across conversations has quietly become the single agent workflow
+    without its controls.
+  - >
+    The conversation itself is the persistence surface. Context accumulates across turns —
+    retrievals, tool results, uploaded files — and everything in it stands beside the system
+    instruction on the next model call. One poisoned tool result steers every later action in
+    the session, which is why memory is scoped to the conversation and why returned content is
+    classified on the way back in.
+  - >
+    Every model and tool call leaves through the AI gateway on brokered credentials, the same
+    crossing every agent architecture in this catalogue draws. The chat surface changes who is
+    watching, not how the calls leave.
+
+distinguishedBy:
+  - >
+    Against the embedded retrieval assistant: the same conversational surface with tools behind
+    it. The assistant's bright line — one mutating tool changes the entire control set — lands
+    here first: the retrieval-time controls stay, and the action controls arrive with the human
+    still present to gate them.
+  - >
+    Against the single agent workflow: the same loop with the human kept in the turns.
+    In-thread approval replaces the compensating transaction as the primary control; remove the
+    human from the turns and you are in that architecture, and should be reading its page.
+  - >
+    Against the realtime voice agent: the same conversational, acting shape over text — which
+    means there is time to deliberate. Filtering, in-thread approval and reconsideration are
+    exactly the controls the audio medium removes.
+
+exemplars:
+  - name: Domain support copilots
+    note: >
+      Customer-facing chat agents that look up accounts, draft remedies and execute them —
+      refunds, changes, escalations — with the customer or an agent confirming each
+      consequential step in the thread.
+    asOf: "2026-08"
+  - name: Internal operations copilots
+    note: >
+      Chat surfaces over internal systems — tickets, deployments, HR and finance requests —
+      where employees converse and approve, and the tools act on the systems of record.
+    asOf: "2026-08"
+  - name: Chat-framework deployments
+    note: >
+      The agent-SDK and chat-UI starter shape: a hosted loop, a tool list, and a streaming chat
+      front end. Structurally this architecture from the first commit, whatever it grows into.
+    asOf: "2026-08"
+
+blocks:
+  - id: user
+    kind: actor
+    title: End user
+    icon: person
+    col: 0
+    row: 1
+    note: >
+      Present for every turn, and the approval gate for the actions that matter. Also the
+      author of untrusted input — the conversation is model input written by the party the
+      actions will benefit.
+
+  - id: entry
+    kind: service
+    title: Application front end
+    col: 1
+    row: 1
+    cosaiComponent: componentApplication
+    note: >
+      The chat surface and its session machinery. The identity established here is the
+      authority every tool call downstream acts on.
+    items:
+      - id: api
+        label: App & API endpoint
+        icon: globe
+        note: The published chat surface — web, app or embedded widget.
+      - id: authn
+        label: Identity binding
+        icon: shield
+        note: Who is conversing, bound to the session before the loop runs — the identity the tools act as.
+
+  - id: agent
+    kind: service
+    title: Agent loop
+    col: 2
+    row: 1
+    cosaiComponent: componentReasoningCore
+    note: >
+      Plans within a turn, proposes actions in the thread, and carries the conversation's
+      accumulated context into every model call. Runs under its own workload identity but acts
+      on the user's grant.
+    items:
+      - id: loop
+        label: Agent loop
+        icon: agent
+        note: Reads the turn and the history, calls the model, proposes the next reply or action.
+      - id: context
+        label: Context assembly
+        icon: doc
+        note: >
+          Merges the turn, the conversation memory and the tool results into one prompt.
+          Everything merged stands beside the system instruction.
+
+  - id: memory
+    kind: service
+    title: Memory & state
+    col: 2
+    row: 2
+    cosaiComponent: componentDataStorage
+    note: >
+      The conversation's accumulated context and the retrieval index behind it. Scoped to the
+      session and the user — cross-conversation memory would let one user's text steer
+      another's actions.
+    items:
+      - id: conversation
+        label: Conversation state
+        icon: folder
+        cosaiComponent: componentMemory
+        note: Every turn, retrieval and tool result so far — read back on each call as context.
+      - id: index
+        label: Vector index
+        icon: search
+        cosaiComponent: componentRAGContent
+        note: Grounding content retrieved into the thread, with the permissions of the asking user.
+
+  - id: gateway
+    kind: service
+    title: AI gateway
+    col: 3
+    row: 1
+    note: >
+      The one crossing every model and tool call leaves through. The agent tier holds no
+      standing credentials; the gateway brokers them per call, meters spend and writes the
+      audit trail as a tap on the crossing.
+    items:
+      - id: credBroker
+        label: Credential broker
+        icon: key
+        note: Short-lived, user-scoped credentials injected per call; the loop holds no standing keys.
+      - id: limits
+        label: Rate & budget limits
+        icon: clock
+        note: Caps token spend per session and per user, before a long conversation becomes a bill.
+      - id: auditTap
+        label: Audit tap
+        icon: doc
+        note: Every call recorded as a side effect of the crossing, not a favour asked of the agent.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    col: 4
+    row: 0
+    cosaiComponent: componentModelServing
+    note: The published inference interface. What runs behind it is the provider's and is not drawn.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+        note: Returns the reply and the proposed tool calls — content the thread renders and the human reads.
+
+  - id: tools
+    kind: service
+    title: Tool services
+    col: 4
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      The action surface: MCP servers, plain APIs and connectors, and A2A peer agents — every
+      call carrying the conversing user's grant, not the service's authority.
+    items:
+      - id: mcp
+        label: MCP servers
+        icon: plug
+        note: Tool providers with declared scopes — admitted, never discovered.
+      - id: connectors
+        label: APIs & connectors
+        icon: plug
+        note: Business systems the conversation drives on the user's scoped grant.
+      - id: peers
+        label: A2A peer agents
+        icon: agent
+        note: Cross-org delegation over the A2A protocol. A peer's output enters the thread as input.
+
+  - id: downstream
+    kind: external
+    title: Downstream services
+    cosaiComponent: componentApplication
+    col: 4
+    row: 2
+    note: >
+      The systems the conversation actually changes — where an approved action becomes a real
+      one, and where the content that returns was authored by somebody else.
+    items:
+      - id: records
+        label: Business records
+        icon: db
+        note: The systems of record the approved actions land on.
+      - id: saas
+        label: Email & SaaS
+        icon: mail
+        note: Messages sent and tickets moved on the user's behalf, mid-conversation.
+      - id: apis
+        label: External APIs
+        icon: globe
+        note: Third-party services, and the untrusted content they return into the thread.
+
+  - id: governance
+    kind: governance
+    title: Governance plane
+    col: 5
+    row: 0
+    rowSpan: 3
+    note: >
+      Identity, admission, evaluation, audit and the stop — each outside the loop it governs.
+      The in-thread approval is a control the user operates; this column is the set the
+      operator does.
+    items:
+      - id: idp
+        label: Identity provider
+        icon: person
+        note: The user's identity and the agent's workload identity, issued and kept distinct.
+      - id: registry
+        label: Agent & tool registry
+        icon: gear
+        note: Which tools may be offered to the conversation. Admission, not discovery.
+      - id: evals
+        label: Evaluation gates
+        icon: scale
+        note: Behavioural checks in front of every model, prompt or tool change.
+      - id: auditSink
+        label: Audit sink
+        icon: eye
+        note: Append-only, off the agent's write path — the thread is not the audit trail.
+      - id: stop
+        label: Kill switch
+        icon: stop
+        note: Ends the sessions and revokes the agent's identity without a deploy.
+
+edges:
+  - from: user
+    to: entry
+    path: primary
+    bidir: true
+    label: conversation
+    note: >
+      Turn in, reply back — and the in-thread approval prompt when an action is consequential.
+      The human reads every reply before the next action runs.
+  - from: entry
+    to: agent
+    path: primary
+    bidir: true
+    note: >
+      The turn arrives with the user's identity attached; the reply and any action proposal
+      return on the same path.
+  - from: agent
+    to: memory
+    path: primary
+    bidir: true
+    note: >
+      The conversation so far reads back as context on every call, and each turn's results are
+      written forward — the session's persistence surface.
+  - from: agent
+    to: gateway
+    path: primary
+    bidir: true
+    label: model & tool calls
+    note: >
+      Every call out of the loop crosses here on a brokered credential scoped to the conversing
+      user. The agent holds no standing keys of its own.
+  - from: gateway
+    to: provider
+    path: primary
+    bidir: true
+    route: vh
+    note: >
+      Inference on the brokered credential. The completion proposes the reply and the tool
+      calls — content the human will read, and unauthenticated input all the same.
+  - from: gateway
+    to: tools
+    path: primary
+    bidir: true
+    note: >
+      Approved actions leave with the user's narrowed grant; tool results return into the
+      thread as context.
+  - from: tools
+    to: downstream
+    path: external
+    bidir: true
+    note: >
+      Actions land on real systems; whatever comes back — records, pages, API responses — is
+      untrusted content entering the conversation.
+  - from: governance
+    to: tools
+    path: governance
+    label: admission
+    note: Tools exist in the conversation only if the registry admitted them.
+  - from: governance
+    to: provider
+    path: governance
+    label: evaluation
+    note: Model and prompt changes pass an evaluation gate before they serve conversations.
+
+pins:
+  risks:
+    - risk: riskPromptInjection
+      at: user->entry
+      note: >
+        The conversation is model input authored by the party the actions benefit, and it
+        reaches the same context window as the system instruction.
+    - risk: riskPromptInjection
+      at: tools->downstream
+      note: >
+        Records, pages and API responses return into the thread — content somebody else
+        authored, standing beside the user's words on the next call.
+    - risk: riskPromptResponseCachePoisoning
+      at: memory
+      note: >
+        Conversation memory carries a poisoned turn forward: one bad retrieval steers every
+        later action in the session.
+    - risk: riskInsecureModelOutput
+      at: gateway->provider
+      note: The completion proposes the tool calls, and it is unauthenticated content.
+    - risk: riskRogueActions
+      at: tools->downstream
+      note: >
+        An action the human approved without reading is not an overseen action. Approval
+        fatigue is this architecture's version of no gate at all.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: agent
+      note: >
+        The agent acts for the user with the service's reach. Keeping every tool call on the
+        user's grant, not the workload's, is what closes the gap.
+    - risk: riskSensitiveDataDisclosure
+      at: agent->memory
+      note: >
+        The session accumulates everything retrieved on earlier turns; a late question can
+        surface records the current topic never needed.
+    - risk: riskEconomicDenialOfWallet
+      at: entry
+      note: Per-token inference behind a public chat surface makes unbounded conversation a spend problem.
+
+  capabilities:
+    - capability: capabilityHitlControls
+      at: user->entry
+      note: >
+        In-thread approval before consequential actions, with the proposal specific enough to
+        be worth reading — the architecture's primary control.
+    - capability: capabilityIga
+      at: user->entry
+      note: A delegated grant scoped to the session and the user, not a standing power the service holds.
+    - capability: capabilityToolPermissionScoping
+      at: gateway->tools
+      note: Every tool call bounded by what the conversing user may touch, decided per call.
+    - capability: capabilityNhiManagement
+      at: agent
+      note: A distinct workload identity for the agent tier, kept separate from the user grants it carries.
+    - capability: capabilitySecretsManagement
+      at: agent->gateway
+      note: Brokered, per-call, user-scoped credentials; the loop holds no standing keys.
+    - capability: capabilityMemoryProtection
+      at: memory
+      note: Conversation-scoped memory with hard boundaries — no cross-session reads, ever.
+    - capability: capabilityPromptInjectionDefense
+      at: tools->downstream
+      note: Returned content is classified before it re-enters the thread as context.
+    - capability: capabilityAiDlp
+      at: agent->memory
+      note: Redaction on what a session may accumulate, because the thread outlives the turn that needed it.
+    - capability: capabilityRateLimiting
+      at: entry
+      note: Session and per-user ceilings at the edge, before token spend and action volume are committed.
+    - capability: capabilityAuditLogging
+      at: governance
+      note: Every proposal, approval and action recorded off the agent's write path — the thread is not the audit trail.
+    - capability: capabilityKillSwitch
+      at: governance
+      note: A stop that ends live sessions and revokes the agent's identity without a deploy.
+
+scenarios:
+  - title: A turn that ends in an action
+    steps:
+      - follow: user->entry
+        note: The user asks for something consequential, in their own words.
+      - follow: entry->agent
+        note: The turn enters the loop with the user's identity attached.
+      - follow: agent->memory
+        note: The conversation so far loads as context.
+      - follow: agent->gateway
+        note: The context leaves the loop on a brokered, user-scoped credential.
+      - follow: gateway->provider
+        note: The model proposes a reply and a tool call.
+      - follow: entry->user
+        note: The proposal renders in the thread — specific enough to be worth reading — and the user approves.
+      - follow: gateway->tools
+        note: The approved action leaves with the user's grant, not the service's.
+      - follow: tools->downstream
+        note: The action lands on the system of record, attributable to the session that approved it.
+  - title: A tool result steers the next turn
+    steps:
+      - follow: gateway->tools
+        note: A routine lookup runs mid-conversation.
+      - follow: tools->downstream
+        note: The fetch reaches a record somebody else authored.
+      - follow: downstream->tools
+        note: An embedded instruction returns with the content.
+      - follow: agent->memory
+        note: It persists into conversation state like any other result.
+      - follow: gateway->provider
+        note: Every later call this session reads it beside the system instruction — the approval gate is now the control.
+  - title: The session outlives the topic
+    steps:
+      - follow: user->entry
+        note: An innocuous late question, many turns into the conversation.
+      - follow: agent->memory
+        note: Context assembly reads back everything earlier turns retrieved.
+      - follow: gateway->provider
+        note: Records the current question never needed travel with it.
+      - follow: entry->user
+        note: The reply can surface any of it — session-scoped memory and DLP on accumulation are what bound the answer.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI03 identity and privilege abuse"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Securing Agentic Applications Guide 1.0 — human-in-the-loop patterns"
+    url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+  - title: "CoSAI Shared Responsibility Framework V1.0 — autonomy levels and intervention tiers"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "Microsoft Azure Architecture Center — AI agent orchestration patterns"
+    url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns

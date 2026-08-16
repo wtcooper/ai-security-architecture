@@ -672,12 +672,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-28 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+29 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 6 — Agentic browser and AI extension, Vendor coding agent, Desktop AI assistant, Local model runtime, Local MCP and tool plane, Personal autonomous agent |
-| Cloud & hosted | 16 — Single agent workflow, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Cloud & hosted | 17 — Single agent workflow, Agent-facing endpoint, Durable multi-agent workflow, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Chat agent with tools, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
 | Third-party SaaS | 6 — Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
 
 ### 4a. Risks no architecture pins — 3 of 36
@@ -755,6 +755,14 @@ Highlights below are Google's original mapping, not ours.
 | Batch and offline AI pipeline | Derived data | service | `componentDataStorage` |
 | Batch and offline AI pipeline | Downstream consumers | external | `componentDataStorage` |
 | Batch and offline AI pipeline | Governance plane | governance | (none) |
+| Chat agent with tools | Application front end | service | `componentApplication` |
+| Chat agent with tools | Agent loop | service | `componentReasoningCore` |
+| Chat agent with tools | Memory & state | service | `componentDataStorage` |
+| Chat agent with tools | AI gateway | service | (none) |
+| Chat agent with tools | Model provider | provider | `componentModelServing` |
+| Chat agent with tools | Tool services | service | `componentTools` |
+| Chat agent with tools | Downstream services | external | `componentApplication` |
+| Chat agent with tools | Governance plane | governance | (none) |
 | Internal multi-tenant AI platform | Onboarding & templates | service | (none) |
 | Internal multi-tenant AI platform | Tenant workloads | service | `componentApplication` |
 | Internal multi-tenant AI platform | Shared AI gateway | service | (none) |
@@ -893,12 +901,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-4 of 28 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+4 of 29 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | Vendor coding agent, Desktop AI assistant, Personal autonomous agent | Agentic browser and AI extension, Local model runtime, Local MCP and tool plane |
-| Cloud & hosted | Durable multi-agent workflow | Single agent workflow, Agent-facing endpoint, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
+| Cloud & hosted | Durable multi-agent workflow | Single agent workflow, Agent-facing endpoint, AI-augmented API backend, AI gateway, router and guardrail plane, Text-to-SQL analytics agent, Batch and offline AI pipeline, Chat agent with tools, Internal multi-tenant AI platform, Managed agent runtime, Managed model API consumption, Embedded retrieval assistant, Remote MCP server you publish, Sandboxed agentic execution service, Self-hosted open-weights inference, Fine-tuning and model registry pipeline, Realtime voice agent |
 | Third-party SaaS | — | Enterprise AI chat with connectors, Vendor low-code agent builder, Shadow AI services and extensions, Tenant-wide assistant over your corpus, Third-party MCP server you consume, In-app agent acting on vendor records |
 
 ### 5a. Documents

@@ -259,7 +259,7 @@ separate when their control sets differ, not when their vendors do.
 | Surface | Architectures |
 | --- | --- |
 | **Endpoint** (6) | Coding agent (one engine — CLI, IDE extension, agent-first IDE, desktop wrapper), desktop AI assistant, personal autonomous agent (the OpenClaw class), agentic browser & AI extension, local MCP & tool plane, local model runtime |
-| **Cloud & hosted** (16) | Single agent workflow, durable multi-agent workflow, RAG assistant, AI API backend, remote MCP server, managed model API, AI gateway, batch pipeline, analytics agent, sandboxed execution, voice agent, self-hosted inference, managed agent runtime, training pipeline, internal AI platform, agent-facing endpoint |
+| **Cloud & hosted** (17) | Single agent workflow, durable multi-agent workflow, chat agent with tools, RAG assistant, AI API backend, remote MCP server, managed model API, AI gateway, batch pipeline, analytics agent, sandboxed execution, voice agent, self-hosted inference, managed agent runtime, training pipeline, internal AI platform, agent-facing endpoint |
 | **Third-party SaaS** (6) | Tenant assistant, vendor action agent, low-code agent builder, enterprise AI chat, third-party MCP, shadow AI |
 
 The drawing grammar is the one practitioners already read from vendor reference architectures
