@@ -18,29 +18,29 @@ export const PATH_STYLE: Record<PathClass, { stroke: string; dash?: string; labe
 /**
  * Block chrome per kind. The border says what kind of party runs the block — solid for
  * services, dashed grey for a provider you cannot see into, amber for the outside, dotted
- * slate for the management plane.
+ * slate for the management plane. Tab colours here are only the fallback when a block has no
+ * CoSAI anchor: a quiet dark grey, reserved for the security and governance machinery CoSAI
+ * does not model (gateways, identity edges, sandboxes, the governance plane itself).
  */
 export const BLOCK_STYLE: Record<
   Exclude<BlockKind, "actor">,
   { stroke: string; tab: string; dash?: string }
 > = {
-  service: { stroke: "var(--ink)", tab: "var(--ink)" },
+  service: { stroke: "var(--ink)", tab: "var(--ink-2)" },
   provider: { stroke: "var(--ink-3)", tab: "var(--ink-2)", dash: "6 4" },
-  // The amber lives on the dashed border and the external flows, never on the tab — a tab
-  // colour is a risk-map layer claim, and the outside world sits on no layer.
-  external: { stroke: "var(--band-data-rail)", tab: "var(--ink)", dash: "8 4" },
+  external: { stroke: "var(--band-data-rail)", tab: "var(--ink-2)", dash: "8 4" },
   governance: { stroke: "var(--ink-2)", tab: "var(--ink-2)", dash: "2 4" },
 };
 
 /**
  * The tab colour carries the risk-map layer: a block anchored to a CoSAI component takes its
- * band's rail colour, so a box here and a box on the risk map read as the same thing. Blocks
- * CoSAI has no component for — the agentic gateway, the governance plane — keep their kind's
- * neutral tab, and that neutrality is the finding.
+ * band's rail colour, so a box here and a box on the risk map read as the same thing. Nearly
+ * every block is anchored; the grey fallback is reserved for security and governance machinery
+ * CoSAI does not model.
  */
 export function blockTab(block: ArchBlock): string {
-  const fallback = BLOCK_STYLE[block.kind as Exclude<BlockKind, "actor">]?.tab ?? "var(--ink)";
-  if (block.kind === "external" || block.kind === "governance") return fallback;
+  const fallback = BLOCK_STYLE[block.kind as Exclude<BlockKind, "actor">]?.tab ?? "var(--ink-2)";
+  if (block.kind === "governance") return fallback;
   const id =
     block.cosaiComponent ?? block.items?.find((i) => i.cosaiComponent)?.cosaiComponent;
   const component = id ? componentById.get(id) : undefined;

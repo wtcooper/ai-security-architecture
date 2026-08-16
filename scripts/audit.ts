@@ -353,9 +353,9 @@ async function main() {
   p();
 
   // 4d. The full anchor table: what every block claims to be in CoSAI terms, and therefore
-  // which band colours its tab. "(none)" is a deliberate statement — CoSAI names no component
-  // for gateways, sandboxes, governance planes or anything outside the system — and it is
-  // exactly what the neutral tab on the diagram means.
+  // which band colours its tab. "(none)" is reserved for the security and governance machinery
+  // CoSAI does not model — gateways, identity edges, egress gates, sandboxes, the governance
+  // plane itself — which render with a quiet grey tab.
   p(`### 4d. Block anchors — what each drawing claims in CoSAI terms`);
   p();
   p("| Architecture | Block | Kind | CoSAI anchor |");

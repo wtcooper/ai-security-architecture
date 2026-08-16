@@ -208,10 +208,6 @@ export function ArchitecturesBrowser() {
                   {b.label}
                 </span>
               ))}
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2.5 w-2.5 rounded-[2px] bg-ink" />
-                <span className="text-ink-3">no CoSAI component</span>
-              </span>
             </span>
             <span className="text-ink-3">Hover anything · ⌘ or Ctrl + wheel to zoom</span>
           </div>

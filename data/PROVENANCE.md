@@ -143,9 +143,10 @@ never as a picture; `src/lib/flow-layout.ts` computes the geometry at build time
 reviewed is the claim rather than the drawing. The F5 grammar maps onto this framework directly:
 
 - **Blocks** are CoSAI components wherever CoSAI names one, anchored via `cosaiComponent` on the
-  block or its internals; a neutral dark tab means CoSAI names no component for the block,
-  which is a recorded finding, not a gap — gateways, sandboxes, semantic layers, governance
-  planes and everything outside the system carry it. The endpoint personal-agent architecture
+  block or its internals. Nearly every block is anchored — downstream systems as Application,
+  inbound content as Data Sources, model supply as Model Storage — and a quiet grey tab is
+  reserved for the security and governance machinery CoSAI does not model: gateways, identity
+  edges, sandboxes, and the governance plane itself. The endpoint personal-agent architecture
   draws no governance column at all, which is that diagram's finding. docs/AUDIT.md section 4d
   tables every block's anchor so the claims stay reviewable.
 - **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
