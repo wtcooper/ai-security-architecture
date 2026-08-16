@@ -131,12 +131,6 @@ blocks:
         label: Agent loop
         icon: agent
         note: Plans the next file operation or screen action from the task and everything read so far.
-      - id: fileTools
-        label: Local file tools
-        icon: folder
-        note: >
-          Read and often write across the user's documents. Folder selection is a preference, not
-          an enforced boundary.
       - id: approval
         label: Action approval
         icon: shield
@@ -144,10 +138,39 @@ blocks:
           The only authorization point available for GUI actions, because the applications being
           driven have none. Its coverage is a product decision.
 
+  - id: tools
+    kind: service
+    title: Tool services
+    col: 2
+    row: 1
+    cosaiComponent: componentTools
+    note: >
+      The assistant's action surface: local file tools, the standing connectors, and the
+      optional computer-use mode. Everything the loop can do runs through one of these three.
+    items:
+      - id: fileTools
+        label: Local file tools
+        icon: folder
+        note: >
+          Read and often write across the user's documents. Folder selection is a preference, not
+          an enforced boundary.
+      - id: connectors
+        label: Connectors
+        icon: plug
+        note: >
+          Standing OAuth grants into mail, calendar and storage, exercised by the vendor's
+          broker on the assistant's behalf.
+      - id: computerUse
+        label: Computer use
+        icon: gear
+        note: >
+          The opt-in mode that drives the GUI — routed through the OS grants into the contained
+          desktop.
+
   - id: osPerms
     kind: service
     title: OS permission layer
-    col: 2
+    col: 3
     row: 1
     note: >
       The operating system's consent prompts — file access, screen recording, input control — are
@@ -170,7 +193,7 @@ blocks:
   - id: vm
     kind: service
     title: Contained desktop
-    col: 3
+    col: 4
     row: 1
     cosaiComponent: componentTools
     note: >
@@ -193,10 +216,10 @@ blocks:
 
   - id: connected
     kind: external
-    title: Connected services
+    title: Downstream services
     cosaiComponent: componentApplication
-    col: 3
-    row: 0
+    col: 2
+    row: 2
     note: >
       Mail, calendar and storage reached through standing OAuth grants. Authorised once, scoped to
       a service rather than a task, and outliving the conversation that prompted them — this
@@ -235,6 +258,14 @@ edges:
       Document text and screenshots leave for inference — usually more than the user pictured —
       and the completion that returns drives a click on a real application.
   - from: assistant
+    to: tools
+    path: primary
+    bidir: true
+    label: tool calls
+    note: >
+      The plan becomes a file operation, a connector call or a screen action; whatever the tools
+      read comes back as context.
+  - from: tools
     to: osPerms
     path: primary
     bidir: true
@@ -250,13 +281,14 @@ edges:
     note: >
       Granted actions land in the contained desktop; screen content comes back as context. Without
       containment this edge points at the user's own session instead.
-  - from: provider
+  - from: tools
     to: connected
     path: external
     bidir: true
     note: >
-      The broker exercises standing grants; mail and documents return and re-enter context — the
-      same indirect injection path as retrieval, through a grant nobody is watching.
+      Standing grants exercised through the vendor's connector broker; mail and documents return
+      and re-enter context — the same indirect injection path as retrieval, through a grant
+      nobody is watching.
 
 pins:
   risks:
@@ -266,7 +298,7 @@ pins:
         Documents, mail and screenshots all reach the same context window, and the screenshot path
         carries text with no provenance at all.
     - risk: riskPromptInjection
-      at: provider->connected
+      at: tools->connected
       note: >
         Connector content — mail written by strangers, shared documents — re-enters context
         through a standing grant, on every turn.
@@ -287,7 +319,7 @@ pins:
         GUI applications carry whatever authority is already signed in, and cannot tell an agent
         from the person the session belongs to.
     - risk: riskExcessiveDataHandling
-      at: provider->connected
+      at: tools->connected
       note: >
         Standing grants scoped to a service, not a task. Each was consented to individually; the
         reach is their union, and nobody consented to that.
@@ -323,7 +355,7 @@ pins:
       at: vm
       note: Default-deny network from the contained desktop, so a hijacked session cannot deliver its findings.
     - capability: capabilityIga
-      at: provider->connected
+      at: tools->connected
       note: Review and narrow the standing connector grants; expire the ones no task has used.
     - capability: capabilityCredentialIsolation
       at: vm
@@ -351,7 +383,9 @@ scenarios:
         note: An instruction embedded in a shared document — or in a screenshot as pixels — enters context.
       - follow: assistant->provider
         note: The instruction shapes the completion, which the loop treats as the plan.
-      - follow: assistant->osPerms
+      - follow: assistant->tools
+        note: The plan becomes a screen action on the computer-use path.
+      - follow: tools->osPerms
         note: The grants were given weeks ago; no new consent is requested.
       - follow: osPerms->vm
         note: >
@@ -359,14 +393,23 @@ scenarios:
           uncontained, it is everything signed in.
   - title: The connector grant outlives the task
     steps:
-      - follow: assistant->provider
-        note: The assistant asks the broker for calendar context.
-      - follow: provider->connected
-        note: The standing grant reads the whole calendar, as it can on any turn.
-      - follow: connected->provider
-        note: Content authored by strangers returns through the broker.
-      - follow: provider->assistant
+      - follow: assistant->tools
+        note: The assistant asks for calendar context.
+      - follow: tools->connected
+        note: The standing grant reads the whole calendar — exercised by the vendor's broker.
+      - follow: connected->tools
+        note: Content authored by strangers returns through the same grant.
+      - follow: tools->assistant
         note: It re-enters context with the same standing as the user's words.
+
+deviations:
+  - subject: Connector traffic is drawn from Tool services, not the model provider
+    reason: >
+      The OAuth grants live with the vendor's connector broker, so the bytes flow
+      assistant-to-vendor-to-service. The drawing keeps the standard Tool services to
+      Downstream services reading — where the grant is exercised from the agent's point of
+      view — and names the broker on the edge, because the reader's question is what the
+      assistant can reach, not which datacentre the call transits.
 
 sources:
   - title: "OWASP Securing Agentic Applications Guide 1.0 — computer use and desktop agents"

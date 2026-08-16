@@ -155,16 +155,27 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   edges, sandboxes, and the governance plane itself. The endpoint personal-agent architecture
   draws no governance column at all, which is that diagram's finding. docs/AUDIT.md section 4d
   tables every block's anchor so the claims stay reviewable.
-- **Block titles are a standard vocabulary** where the same thing recurs, so a reader moving
-  between architectures never wonders whether two names hide a difference: **AI gateway** for
-  the customer-operated crossing that model and tool calls leave through (credential broker,
-  limits, audit tap — qualified only when ownership differs, e.g. the platform's "Shared AI
-  gateway" or a provider's "Managed tool gateway"), **Tool services** for the block where tool
-  or action calls land (its discipline — open tool plane vs deterministic action catalogue —
-  lives in the items and notes, not the title), **Model provider** for the opaque inference
-  boundary, and **Governance plane** for the governance column (qualified by who governs, e.g.
-  "Tenant governance"). Where a block deliberately differs from the standard concept, it gets a
-  different name — sameness of name is a claim of sameness of role.
+- **Block titles are a standard vocabulary** — the granular, architecture-level counterpart to
+  CoSAI's component list, so a reader moving between architectures never wonders whether two
+  names hide a difference. The standard nodes, used with these exact titles wherever the role
+  recurs: **Application front end** (where requests enter), **Agent loop** (the reasoning core;
+  qualified only when an architecture has several agents — "Supervisor agent", "Subagents" — or
+  when the shell is the architecture's identity, e.g. the coding agent's "Agent client", the
+  personal agent's "Agent harness"), **AI gateway** (the customer-operated crossing every model
+  and tool call leaves through — credential broker, limits, audit tap; qualified only when
+  ownership differs, e.g. "Shared AI gateway", "Managed tool gateway"), **Tool services** (the
+  actuation surface where tool or action calls land; its discipline — open tool plane vs
+  deterministic action catalogue — lives in the items and notes), **Memory & state** (working
+  state the agent reads back as context: memory files, journals, indexes, case state),
+  **Downstream services** (the backend systems where effects land — drawn directly beneath Tool
+  services, connected by a vertical external edge, on every architecture that has both),
+  **Model provider** (the opaque inference boundary), **Sandboxed execution**, and **Governance
+  plane** (qualified by who governs, e.g. "Tenant governance"). Untrusted-content sources keep
+  content-specific names ("Repository content", "Docs & screen content") because what the
+  content is carries the threat model. Where a block deliberately differs from a standard
+  concept, it gets a different name — sameness of name is a claim of sameness of role. Controls
+  are not drawn as block items when they are already a pinned capability chip; the chip on the
+  edge is the statement.
 - **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
   inside the system, external content and actions, and dotted governance relationships.
 - **Numbered capability chips** are F5's design-requirements treatment carried by this

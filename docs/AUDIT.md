@@ -706,9 +706,9 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
-| Single agent workflow | Intake | service | `componentApplicationInputHandling` |
-| Single agent workflow | Planning loop | service | `componentReasoningCore` |
-| Single agent workflow | Retrieval & case state | service | `componentDataStorage` |
+| Single agent workflow | Application front end | service | `componentApplicationInputHandling` |
+| Single agent workflow | Agent loop | service | `componentReasoningCore` |
+| Single agent workflow | Memory & state | service | `componentDataStorage` |
 | Single agent workflow | AI gateway | service | (none) |
 | Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Model provider | provider | `componentModelServing` |
@@ -723,7 +723,7 @@ Highlights below are Google's original mapping, not ours.
 | Durable multi-agent workflow | Application front end | service | `componentApplication` |
 | Durable multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
 | Durable multi-agent workflow | Subagents | service | `componentReasoningCore` |
-| Durable multi-agent workflow | State & knowledge | service | `componentDataStorage` |
+| Durable multi-agent workflow | Memory & state | service | `componentDataStorage` |
 | Durable multi-agent workflow | AI gateway | service | (none) |
 | Durable multi-agent workflow | Model provider | provider | `componentModelServing` |
 | Durable multi-agent workflow | Tool services | service | `componentTools` |
@@ -733,7 +733,7 @@ Highlights below are Google's original mapping, not ours.
 | AI-augmented API backend | Transformation | service | `componentApplication` |
 | AI-augmented API backend | Model provider | provider | `componentModelServing` |
 | AI-augmented API backend | Output validation | service | `componentApplicationOutputHandling` |
-| AI-augmented API backend | Systems of record | external | `componentDataStorage` |
+| AI-augmented API backend | Downstream services | external | `componentDataStorage` |
 | AI-augmented API backend | Governance plane | governance | (none) |
 | AI gateway, router and guardrail plane | Content inside prompts | external | `componentDataSources` |
 | AI gateway, router and guardrail plane | Gateway endpoint | service | (none) |
@@ -742,7 +742,7 @@ Highlights below are Google's original mapping, not ours.
 | AI gateway, router and guardrail plane | Provider egress | service | (none) |
 | AI gateway, router and guardrail plane | Model providers | provider | `componentModelServing` |
 | AI gateway, router and guardrail plane | Gateway control plane | governance | (none) |
-| Text-to-SQL analytics agent | Question interface | service | `componentApplication` |
+| Text-to-SQL analytics agent | Application front end | service | `componentApplication` |
 | Text-to-SQL analytics agent | Query generation | service | `componentReasoningCore` |
 | Text-to-SQL analytics agent | Model provider | provider | `componentModelServing` |
 | Text-to-SQL analytics agent | Semantic layer | service | `componentDataFilteringAndProcessing` |
@@ -768,7 +768,7 @@ Highlights below are Google's original mapping, not ours.
 | Managed agent runtime | Managed memory | provider | `componentDataStorage` |
 | Managed agent runtime | Managed sandbox | provider | (none) |
 | Managed agent runtime | Managed tool gateway | provider | (none) |
-| Managed agent runtime | Customer systems | external | `componentDataStorage` |
+| Managed agent runtime | Downstream services | external | `componentDataStorage` |
 | Managed agent runtime | Customer governance | governance | (none) |
 | Managed model API consumption | Context from elsewhere | external | `componentDataSources` |
 | Managed model API consumption | Application services | service | `componentApplication` |
@@ -777,7 +777,7 @@ Highlights below are Google's original mapping, not ours.
 | Managed model API consumption | Governance plane | governance | (none) |
 | Embedded retrieval assistant | Application front end | service | `componentApplication` |
 | Embedded retrieval assistant | Query orchestration | service | `componentReasoningCore` |
-| Embedded retrieval assistant | Index & session state | service | `componentDataStorage` |
+| Embedded retrieval assistant | Memory & state | service | `componentDataStorage` |
 | Embedded retrieval assistant | AI gateway | service | (none) |
 | Embedded retrieval assistant | Model provider | provider | `componentModelServing` |
 | Embedded retrieval assistant | Sources & ingest | service | `componentDataSources` |
@@ -794,8 +794,8 @@ Highlights below are Google's original mapping, not ours.
 | Sandboxed agentic execution service | Sandboxed runtime | service | `componentReasoningCore` |
 | Sandboxed agentic execution service | Repository & web content | external | `componentDataSources` |
 | Sandboxed agentic execution service | Model provider | provider | `componentModelServing` |
-| Sandboxed agentic execution service | Broker & action proxy | service | `componentTools` |
-| Sandboxed agentic execution service | Target systems | external | `componentDataStorage` |
+| Sandboxed agentic execution service | AI gateway | service | `componentTools` |
+| Sandboxed agentic execution service | Downstream services | external | `componentDataStorage` |
 | Sandboxed agentic execution service | Governance plane | governance | (none) |
 | Self-hosted open-weights inference | Public model hub | external | `componentModelStorage` |
 | Self-hosted open-weights inference | AI gateway | service | (none) |
@@ -816,28 +816,29 @@ Highlights below are Google's original mapping, not ours.
 | Realtime voice agent | Telephony edge | service | `componentAgentUserQuery` |
 | Realtime voice agent | Realtime session | service | `componentReasoningCore` |
 | Realtime voice agent | Model provider | provider | `componentModelServing` |
-| Realtime voice agent | In-session tools | service | `componentTools` |
-| Realtime voice agent | Customer records | service | `componentDataSources` |
+| Realtime voice agent | Tool services | service | `componentTools` |
+| Realtime voice agent | Downstream services | service | `componentDataSources` |
 | Realtime voice agent | Audio & transcripts | service | `componentDataStorage` |
 | Realtime voice agent | Governance plane | governance | (none) |
 | Agentic browser and AI extension | Agent loop | service | `componentReasoningCore` |
 | Agentic browser and AI extension | Model provider | provider | `componentModelServing` |
-| Agentic browser and AI extension | Browser runtime | service | `componentTools` |
+| Agentic browser and AI extension | Tool services | service | `componentTools` |
 | Agentic browser and AI extension | Browser profile | service | `componentDataStorage` |
-| Agentic browser and AI extension | Signed-in applications | external | `componentApplication` |
+| Agentic browser and AI extension | Downstream services | external | `componentApplication` |
 | Agentic browser and AI extension | Open web | external | `componentDataSources` |
 | Vendor coding agent | Repository content | external | `componentDataSources` |
 | Vendor coding agent | Agent client | service | `componentReasoningCore` |
 | Vendor coding agent | Vendor service | provider | `componentModelServing` |
-| Vendor coding agent | Tools & servers | service | `componentTools` |
+| Vendor coding agent | Tool services | service | `componentTools` |
 | Vendor coding agent | Sandboxed execution | service | (none) |
-| Vendor coding agent | Remote services | external | `componentApplication` |
+| Vendor coding agent | Downstream services | external | `componentApplication` |
 | Desktop AI assistant | Docs & screen content | external | `componentDataSources` |
 | Desktop AI assistant | Model provider | provider | `componentModelServing` |
 | Desktop AI assistant | Assistant application | service | `componentReasoningCore` |
+| Desktop AI assistant | Tool services | service | `componentTools` |
 | Desktop AI assistant | OS permission layer | service | (none) |
 | Desktop AI assistant | Contained desktop | service | `componentTools` |
-| Desktop AI assistant | Connected services | external | `componentApplication` |
+| Desktop AI assistant | Downstream services | external | `componentApplication` |
 | Local model runtime | Local HTTP API | service | `componentModelServing` |
 | Local model runtime | Local guardrails | service | (none) |
 | Local model runtime | Inference runtime | service | `componentTheModel` |
@@ -845,14 +846,14 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | Public model hub | external | `componentModelStorage` |
 | Local MCP and tool plane | Repo-supplied config | external | `componentDataSources` |
 | Local MCP and tool plane | Tool configuration | service | `componentDataStorage` |
-| Local MCP and tool plane | Local tool servers | service | `componentTools` |
+| Local MCP and tool plane | Tool services | service | `componentTools` |
 | Local MCP and tool plane | Package registry | external | `componentDataSources` |
-| Local MCP and tool plane | Fronted services | external | `componentApplication` |
+| Local MCP and tool plane | Downstream services | external | `componentApplication` |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |
-| Personal autonomous agent | Tools & skills | service | `componentTools` |
+| Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Sandboxed execution | service | (none) |
 | Personal autonomous agent | Public skill registry | external | `componentDataSources` |
 | Personal autonomous agent | Downstream services | external | `componentApplication` |
@@ -887,5 +888,5 @@ Highlights below are Google's original mapping, not ours.
 | Third-party MCP server you consume | Consumption governance | governance | (none) |
 | In-app agent acting on vendor records | Identity & network edge | service | (none) |
 | In-app agent acting on vendor records | Vendor agent platform | provider | `componentApplication` |
-| In-app agent acting on vendor records | Your downstream systems | external | `componentApplication` |
+| In-app agent acting on vendor records | Downstream services | external | `componentApplication` |
 | In-app agent acting on vendor records | Tenant governance | governance | (none) |
