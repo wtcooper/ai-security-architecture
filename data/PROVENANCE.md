@@ -158,7 +158,7 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
 - **Block titles are a standard vocabulary** — the granular, architecture-level counterpart to
   CoSAI's component list, so a reader moving between architectures never wonders whether two
   names hide a difference. The standard nodes, used with these exact titles wherever the role
-  recurs: **Application front end** (where requests enter), **Agent harness** (the reasoning core and its
+  recurs: **Application front end** (where requests enter — drawn only where human interaction is the core input; autonomous workflows draw their triggers straight into the harness instead), **Agent harness** (the reasoning core and its
   machinery — the agent loop, context assembly, and harness-specific components such as a
   heartbeat, stream handling or page extraction; qualified only when an architecture has
   several agents — "Supervisor agent", "Subagents" — or when the runtime is fused with another

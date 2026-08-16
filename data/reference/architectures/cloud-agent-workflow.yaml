@@ -6,15 +6,16 @@ abbrev: Multi-agent workflow
 
 summary:
   - >
-    A hosted agent system doing real work over business records: a front end takes requests, a
-    durable orchestration layer plans and delegates across subagents, and every tool call leaves
-    through one governed gateway. The shape agent deployments converge on once the work outlives
+    A hosted agent system doing real work over business records: requests, schedules and events
+    start it, a durable orchestration layer plans and delegates across subagents, and every tool
+    call leaves through one governed gateway. The shape agent deployments converge on once the work outlives
     a single request.
 
 description:
   - >
-    The spine is a request path: application front end, supervisor agent, subagents, AI
-    gateway, tool services, downstream systems. The architecture's security posture lives almost entirely
+    The spine is a trigger path: requests, schedules and events start the process, and it runs
+    through supervisor agent, subagents, AI gateway, tool services and downstream systems —
+    there is no user interface, because nobody is conversing with it. The architecture's security posture lives almost entirely
     in one decision — that agents do not hold credentials or reach tools directly. Every tool
     call, model call and connector call leaves through the gateway, which brokers short-lived
     credentials, enforces policy per call, applies rate and budget limits, and writes the audit
@@ -85,27 +86,10 @@ blocks:
     row: 0
     note: Timers, webhooks and queue messages that start work with no human in the room.
 
-  - id: entry
-    kind: service
-    title: Application front end
-    col: 1
-    row: 1
-    cosaiComponent: componentApplication
-    note: The only place a request is still a request, before it becomes a plan.
-    items:
-      - id: api
-        label: App & API endpoint
-        icon: globe
-        note: The published surface users and systems call.
-      - id: authn
-        label: Identity binding
-        icon: shield
-        note: Who is asking, settled before any agent runs.
-
   - id: orchestration
     kind: service
     title: Supervisor agent
-    col: 2
+    col: 1
     row: 1
     cosaiComponent: componentReasoningCore
     note: >
@@ -125,7 +109,7 @@ blocks:
   - id: subagents
     kind: service
     title: Subagents
-    col: 3
+    col: 2
     row: 1
     cosaiComponent: componentReasoningCore
     note: >
@@ -145,7 +129,7 @@ blocks:
   - id: state
     kind: service
     title: Memory & state
-    col: 2
+    col: 1
     row: 2
     cosaiComponent: componentDataStorage
     note: >
@@ -168,7 +152,7 @@ blocks:
   - id: gateway
     kind: service
     title: AI gateway
-    col: 4
+    col: 3
     row: 1
     note: >
       The one door. Agents hold no credentials and reach nothing directly; every model and tool
@@ -194,7 +178,7 @@ blocks:
   - id: provider
     kind: provider
     title: Model provider
-    col: 5
+    col: 4
     row: 0
     cosaiComponent: componentModelServing
     note: >
@@ -209,7 +193,7 @@ blocks:
   - id: tools
     kind: service
     title: Tool services
-    col: 5
+    col: 4
     row: 1
     cosaiComponent: componentTools
     note: >
@@ -234,7 +218,7 @@ blocks:
     kind: external
     title: Downstream services
     cosaiComponent: componentApplication
-    col: 5
+    col: 4
     row: 2
     note: The systems the workflow actually changes — where a wrong action becomes a real one.
     items:
@@ -254,7 +238,7 @@ blocks:
   - id: governance
     kind: governance
     title: Governance plane
-    col: 6
+    col: 5
     row: 0
     rowSpan: 3
     note: >
@@ -285,21 +269,18 @@ blocks:
 
 edges:
   - from: initiator
-    to: entry
-    path: primary
-    bidir: true
-    label: request / result
-    note: The human's request in, and the outcome back — often days later.
-  - from: events
-    to: entry
-    path: primary
-    label: trigger
-    note: Unattended starts. Most of this architecture's runs begin here, not with a person.
-  - from: entry
     to: orchestration
     path: primary
     bidir: true
-    note: An authenticated request becomes a goal; results and escalations flow back.
+    label: request / result
+    note: >
+      The human's request in — authenticated, with a scoped grant minted for it — and the
+      outcome back, often days later.
+  - from: events
+    to: orchestration
+    path: primary
+    label: trigger
+    note: Unattended starts. Most of this architecture's runs begin here, not with a person.
   - from: orchestration
     to: state
     path: primary
@@ -382,7 +363,7 @@ pins:
 
   capabilities:
     - capability: capabilityIga
-      at: initiator->entry
+      at: initiator->orchestration
       note: The user's identity and a delegated grant scoped to this request, not a standing power.
     - capability: capabilityNhiManagement
       at: orchestration
@@ -421,10 +402,10 @@ pins:
 scenarios:
   - title: A user asks the agent to act
     steps:
-      - follow: initiator->entry
-        note: The request is authenticated and a scoped grant is minted for it.
-      - follow: entry->orchestration
-        note: The supervisor decomposes the goal into work for specialists.
+      - follow: initiator->orchestration
+        note: >
+          The request arrives authenticated with a scoped grant; the supervisor decomposes the
+          goal into work for specialists.
       - follow: orchestration->subagents
         note: Each specialist takes its task with a narrowed grant, not the supervisor's authority.
       - follow: subagents->gateway
@@ -435,7 +416,7 @@ scenarios:
         note: Tool calls carry the narrowed per-step grant.
       - follow: tools->downstream
         note: The write lands — behind an approval gate when it is consequential.
-      - follow: entry->initiator
+      - follow: orchestration->initiator
         note: The result returns, possibly days after the request.
   - title: A step replays after a crash
     steps:
@@ -451,10 +432,10 @@ scenarios:
         note: Without fencing, the payment executes twice. The journal replays; the world does not.
   - title: An event fires days into the process
     steps:
-      - follow: events->entry
-        note: A timer or webhook resumes work with nobody watching.
-      - follow: entry->orchestration
-        note: The waiting step wakes days after the request that started the process.
+      - follow: events->orchestration
+        note: >
+          A timer or webhook resumes work with nobody watching — the waiting step wakes days
+          after the request that started the process.
       - follow: orchestration->subagents
         note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
       - follow: subagents->gateway

@@ -706,7 +706,6 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
-| Single agent workflow | Application front end | service | `componentApplicationInputHandling` |
 | Single agent workflow | Agent harness | service | `componentReasoningCore` |
 | Single agent workflow | Memory & state | service | `componentDataStorage` |
 | Single agent workflow | AI gateway | service | (none) |
@@ -720,7 +719,6 @@ Highlights below are Google's original mapping, not ours.
 | Agent-facing endpoint | Transaction processing | service | `componentApplication` |
 | Agent-facing endpoint | Orders & evidence | service | `componentDataStorage` |
 | Agent-facing endpoint | Governance plane | governance | (none) |
-| Durable multi-agent workflow | Application front end | service | `componentApplication` |
 | Durable multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
 | Durable multi-agent workflow | Subagents | service | `componentReasoningCore` |
 | Durable multi-agent workflow | Memory & state | service | `componentDataStorage` |

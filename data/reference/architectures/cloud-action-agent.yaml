@@ -85,31 +85,10 @@ blocks:
       Usually an authenticated customer, and usually the party who benefits from the action. Both
       the legitimate user and, on a bad day, the attacker.
 
-  - id: intake
-    kind: service
-    title: Application front end
-    col: 1
-    row: 1
-    cosaiComponent: componentApplicationInputHandling
-    note: >
-      Authenticates the requester, binds the request to an account, applies quotas and classifies
-      the text before the loop starts. Authentication says nothing about whether the ask is
-      honest. The human-facing surface is optional — an event-triggered deployment keeps the
-      binding and quota questions and drops the UI.
-    items:
-      - id: api
-        label: App & API endpoint
-        icon: globe
-        note: The published surface requests arrive on.
-      - id: authn
-        label: Identity & account binding
-        icon: shield
-        note: Who is asking, bound to the account the request concerns, settled before the agent runs.
-
   - id: planner
     kind: service
     title: Agent harness
-    col: 2
+    col: 1
     row: 1
     cosaiComponent: componentReasoningCore
     note: >
@@ -128,7 +107,7 @@ blocks:
   - id: stateRetrieval
     kind: service
     title: Memory & state
-    col: 2
+    col: 1
     row: 2
     cosaiComponent: componentDataStorage
     note: >
@@ -152,7 +131,7 @@ blocks:
   - id: gateway
     kind: service
     title: AI gateway
-    col: 3
+    col: 2
     row: 1
     note: >
       The one crossing every model and tool call leaves through. The agent tier holds no
@@ -175,7 +154,7 @@ blocks:
   - id: catalogue
     kind: service
     title: Tool services
-    col: 4
+    col: 3
     row: 1
     cosaiComponent: componentTools
     note: >
@@ -200,7 +179,7 @@ blocks:
   - id: provider
     kind: provider
     title: Model provider
-    col: 4
+    col: 3
     row: 0
     cosaiComponent: componentModelServing
     note: The published inference interface. What runs behind it is the provider's and is not drawn.
@@ -214,7 +193,7 @@ blocks:
     kind: external
     title: Downstream services
     cosaiComponent: componentDataStorage
-    col: 4
+    col: 3
     row: 2
     note: >
       The systems where effects land, and where reversal either exists or does not. Also the
@@ -236,7 +215,7 @@ blocks:
   - id: governance
     kind: governance
     title: Governance plane
-    col: 5
+    col: 4
     row: 0
     rowSpan: 3
     note: >
@@ -268,27 +247,22 @@ blocks:
 
 edges:
   - from: events
-    to: intake
+    to: planner
     path: primary
     label: trigger
     note: >
-      Unattended starts. The request that arrives on a queue still names an account, and still
-      carries text somebody else may have authored.
+      Unattended starts — queue messages, file drops, webhooks, timers. The request that
+      arrives on a queue still names an account, and still carries text somebody else may have
+      authored.
   - from: requester
-    to: intake
+    to: planner
     path: primary
     bidir: true
     label: request / outcome
     note: >
-      Free text, attachments and history, authored by the party who benefits from the outcome.
-      The remedy or refusal returns on the same path, usually within seconds.
-  - from: intake
-    to: planner
-    path: primary
-    bidir: true
-    note: >
-      The requester's identity survives into the loop, or policy cannot scope actions to the
-      account they concern.
+      Free text, attachments and history, authored by the party who benefits from the outcome —
+      authenticated and bound to an account before the loop reads it. The remedy or refusal
+      returns on the same path, usually within seconds.
   - from: planner
     to: gateway
     path: primary
@@ -349,7 +323,7 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: requester->intake
+      at: requester->planner
       note: >
         The request text is supplied by the person who benefits from the outcome, and it reaches
         the same context window as the system instruction.
@@ -384,8 +358,8 @@ pins:
       at: catalogue
       note: The catalogue is the policy surface; whoever can edit it programs the agent.
     - risk: riskEconomicDenialOfWallet
-      at: intake
-      note: Per-token inference behind a customer-facing surface makes unbounded requests a spend problem.
+      at: gateway
+      note: Per-token inference behind an open trigger surface makes unbounded requests a spend problem.
 
   capabilities:
     - capability: capabilityToolPermissionScoping
@@ -410,7 +384,7 @@ pins:
       at: stateRetrieval->records
       note: Entitlement-filtered retrieval scoped to the account under discussion, enforced before fetching.
     - capability: capabilityPromptInjectionDefense
-      at: requester->intake
+      at: requester->planner
       note: Classify request text before the loop; the caller cannot be trusted about their own request.
     - capability: capabilityMemoryProtection
       at: stateRetrieval
@@ -419,8 +393,8 @@ pins:
       at: planner->gateway
       note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing key.
     - capability: capabilityRateLimiting
-      at: intake
-      note: Quotas and cost ceilings at the edge, before token spend and action volume are committed.
+      at: gateway
+      note: Quotas and cost ceilings on the crossing, before token spend and action volume are committed.
     - capability: capabilityAuditLogging
       at: governance
       note: >
@@ -433,10 +407,8 @@ pins:
 scenarios:
   - title: A customer asks for a refund
     steps:
-      - follow: requester->intake
-        note: The request is authenticated, bound to an account, and classified.
-      - follow: intake->planner
-        note: The loop starts with the requester's identity intact.
+      - follow: requester->planner
+        note: The request arrives authenticated and bound to an account; the loop starts with that identity intact.
       - follow: planner->stateRetrieval
         note: Policy and the customer's history load as context, scoped to this account.
       - follow: planner->gateway
@@ -447,14 +419,14 @@ scenarios:
         note: The proposal is validated — well-formed, in policy, under the value threshold.
       - follow: catalogue->records
         note: The refund executes, with its compensating transaction on file.
-      - follow: intake->requester
+      - follow: planner->requester
         note: The outcome returns within seconds; the audit holds the reasoning.
   - title: The request text is the attack
     steps:
-      - follow: requester->intake
-        note: The text instructs the agent to ignore policy and refund in full. Classification flags what it can.
-      - follow: intake->planner
-        note: Whatever survives enters the same context window as the system instruction.
+      - follow: requester->planner
+        note: >
+          The text instructs the agent to ignore policy and refund in full; whatever survives
+          classification enters the same context window as the system instruction.
       - follow: planner->gateway
         note: Whatever survived classification rides out with the context.
       - follow: gateway->provider
