@@ -39,7 +39,7 @@ export const BLOCK_STYLE: Record<
  */
 export const REF_LAYERS = [
   { label: "Application", color: "var(--band-app-rail)" },
-  { label: "Model & infrastructure", color: "var(--band-infra-rail)" },
+  { label: "Model", color: "var(--band-infra-rail)" },
   { label: "Data", color: "var(--band-data-rail)" },
 ] as const;
 
