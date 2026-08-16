@@ -24,11 +24,19 @@ description:
     instruction — one successful injection written into memory survives restarts and re-executes
     on the schedule.
   - >
-    What the drawing does not contain is the finding: there is no governance plane. No agent
-    identity distinct from the user, no policy engine consulted per tool call, no audit sink, no
-    registry deciding what may be installed, no kill switch beyond killing the process. Every
-    numbered capability on this page is something the endpoint has to impose, because the
-    architecture supplies none of it.
+    The target state wraps the harness whole. A microVM-class sandbox contains the daemon, its
+    memory and its tool plane together — its own filesystem, packages and network — and the only
+    way out is an egress proxy at the boundary: an AI gateway doing per-destination allow/deny,
+    injecting credentials at the crossing so the sandbox itself holds no secrets, and writing
+    the audit tap. Channels are egress too: the bridges reach only approved messaging platforms,
+    and package installs reach only a private, organisation-maintained registry. Products now
+    ship exactly this wrap for the popular harnesses; the drawing is that pattern,
+    vendor-neutral.
+  - >
+    What the drawing still does not contain is a governance plane. No agent identity distinct
+    from the user, no policy engine consulted per tool call, no audit sink beyond the gateway's
+    tap, no kill switch beyond killing the process. The sandbox bounds the blast radius; it does
+    not govern the agent.
 
 distinguishedBy:
   - >
@@ -102,7 +110,7 @@ blocks:
   - id: provider
     kind: provider
     title: Model provider
-    col: 2
+    col: 4
     row: 0
     cosaiComponent: componentModelServing
     note: >
@@ -139,12 +147,6 @@ blocks:
         label: Context assembly
         icon: doc
         note: Merges the message, the memory and the tool results into one prompt.
-      - id: secrets
-        label: Secrets store
-        icon: key
-        note: >
-          Long-lived provider keys and channel tokens in a config file the agent's own tools can
-          read. A store, not a broker — the same secret every time, revocable only by hand.
 
   - id: memory
     kind: service
@@ -169,8 +171,8 @@ blocks:
   - id: toolPlane
     kind: service
     title: Tool services
-    col: 3
-    row: 1
+    col: 2
+    row: 0
     cosaiComponent: componentTools
     note: >
       Everything here runs as the user. The authority is the user account, not a scoped grant, so
@@ -202,40 +204,53 @@ blocks:
           Prose plus executable code loaded into the daemon's own process. A skill has whatever
           the agent has.
 
-  - id: sandbox
+  - id: gateway
     kind: service
-    title: Sandboxed execution
-    col: 4
+    title: AI gateway
+    col: 3
     row: 1
     note: >
-      Where code execution goes when isolation is turned on. Drawn because it is the single most
-      effective structural mitigation — and opt-in in most deployments.
+      The egress proxy at the sandbox boundary, and the only way out. Per-destination
+      allow/deny, credentials injected at the crossing so the sandbox holds no secrets, and the
+      audit tap on everything that leaves.
     items:
-      - id: runtime
-        label: Isolated runtime
+      - id: allowlist
+        label: Egress allowlist
         icon: shield
-        note: A container or VM whose own configuration the agent must not be able to reach.
+        note: Deny by default; models, tools, channels and registries each named explicitly.
+      - id: credInjection
+        label: Credential injection
+        icon: key
+        note: >
+          Secrets live outside the boundary and are injected per call — the loop and its tools
+          never hold a key at rest.
+      - id: auditTap
+        label: Audit tap
+        icon: doc
+        note: Every crossing recorded as a side effect — the only audit trail this architecture has.
 
   - id: registry
     kind: external
-    title: Public skill registry
+    title: Private pkg registry
     cosaiComponent: componentDataSources
     col: 4
-    row: 0
+    row: 1
     note: >
-      An open marketplace of prose-plus-code extensions. Admission is publisher self-attestation;
-      declared behaviour and actual behaviour are separate facts.
+      The organisation-maintained mirror of approved packages and skills — the only registry the
+      allowlist admits. The common state is an open community marketplace where admission is
+      publisher self-attestation; the provenance risk stays pinned here because a private mirror
+      moves the review, it does not remove it.
     items:
       - id: hub
-        label: Community skills
+        label: Approved packages
         icon: db
-        note: Scanners that read declared behaviour have been bypassed repeatedly.
+        note: Reviewed, pinned and mirrored by the organisation before the agent can fetch them.
 
   - id: downstream
     kind: external
     title: Downstream services
     cosaiComponent: componentApplication
-    col: 3
+    col: 4
     row: 2
     note: >
       What the tools reach with the user's credentials — and where fetched content comes back in
@@ -276,12 +291,21 @@ edges:
     bidir: true
     note: Normalised messages in; rendered replies out, to wherever the agent addresses them.
   - from: harness
+    to: gateway
+    path: primary
+    bidir: true
+    label: model & egress calls
+    note: >
+      Every call out of the loop crosses the boundary here, on a credential the gateway injects.
+      The completion that comes back is unauthenticated content that drives tool calls.
+  - from: gateway
     to: provider
     path: primary
     bidir: true
+    route: vh
     note: >
-      A bearer token from the local secrets store, unscoped and long-lived. The completion that
-      comes back is unauthenticated content that drives tool calls.
+      Inference on an injected credential — reachable because the allowlist names it, and logged
+      at the crossing.
   - from: harness
     to: memory
     path: primary
@@ -294,25 +318,31 @@ edges:
     path: primary
     bidir: true
     note: Tool calls out, results back into context. No policy decision sits on this path by default.
-  - from: toolPlane
-    to: sandbox
-    path: primary
-    note: Only present when isolation is enabled. The common deployment runs without it.
-  - from: registry
-    to: toolPlane
+  - from: gateway
+    to: registry
     path: external
-    route: hv
-    label: install
+    bidir: true
+    label: approved packages
     note: >
-      No signature the runtime verifies against a trusted root, and no admission decision by
-      anyone but the installing user.
+      Installs reach only the private registry the allowlist names. Provenance and behavioural
+      review happen there, before a package is mirrored.
   - from: toolPlane
+    to: gateway
+    path: primary
+    bidir: true
+    route: hv
+    label: remote calls
+    note: >
+      Remote MCP, web fetches and every action that leaves the machine cross the boundary here —
+      or not at all.
+  - from: gateway
     to: downstream
     path: external
     bidir: true
+    route: vh
     note: >
-      Actions out with the user's credentials; fetched content back in as context. The primary
-      injection path once the agent is running.
+      Actions land on real accounts through allowlisted destinations; whatever comes back
+      re-enters the loop as context.
 
 pins:
   risks:
@@ -325,7 +355,7 @@ pins:
         Memory is prose the next turn treats as instruction. One injection that writes here
         survives restarts and re-executes on the heartbeat.
     - risk: riskPromptInjection
-      at: toolPlane->downstream
+      at: gateway->downstream
       note: Fetched content re-enters the loop as context indistinguishable from the user's words.
     - risk: riskShadowAndUnknownAgents
       at: harness
@@ -337,9 +367,11 @@ pins:
       note: The heartbeat restarts the loop unattended; nothing bounds what a bad turn spends.
     - risk: riskSensitiveDataDisclosure
       at: harness
-      note: Credentials sit at rest inside the same blast radius as the code that reads them.
+      note: >
+        In the common deployment, credentials sit at rest inside the same blast radius as the
+        code that reads them; the target state moves them behind the gateway's injection.
     - risk: riskToolSourceProvenance
-      at: registry->toolPlane
+      at: gateway->registry
       note: Admission is publisher self-attestation, for artifacts that are prose plus code.
     - risk: riskInsecureIntegratedComponent
       at: toolPlane
@@ -350,10 +382,10 @@ pins:
         The MCP config file is agent-writable in most deployments, which makes tool registration
         a self-service operation for an attacker with code execution.
     - risk: riskInsecureModelOutput
-      at: harness->provider
+      at: gateway->provider
       note: The completion is unauthenticated content, and it drives the tool calls.
     - risk: riskRogueActions
-      at: toolPlane->downstream
+      at: gateway->downstream
       note: Unattended triggering, unscoped authority and no approval gate compound here.
     - risk: riskCovertChannelsInModelOutputs
       at: bridges->harness
@@ -369,8 +401,10 @@ pins:
       at: bridges
       note: One sender-admission decision enforced for every bridge, not re-implemented per channel.
     - capability: capabilitySecretsManagement
-      at: harness
-      note: Replace pasted long-lived keys with brokered, short-lived, scoped credentials.
+      at: gateway
+      note: >
+        Credentials injected at the boundary, short-lived and scoped; nothing inside the sandbox
+        holds a key at rest.
     - capability: capabilityMemoryProtection
       at: harness->memory
       note: Treat memory as untrusted input on read; scope and review what gets written.
@@ -378,16 +412,20 @@ pins:
       at: harness->toolPlane
       note: Per-tool grants instead of the user's full authority.
     - capability: capabilityAgentSandboxing
-      at: toolPlane->sandbox
-      note: Make the isolated runtime the default execution path, not an option.
+      at: harness
+      note: >
+        Wrap the harness whole — daemon, memory and tools in one microVM-class boundary with its
+        own filesystem and network, not a per-command box.
     - capability: capabilityMcpToolSecurity
-      at: registry->toolPlane
+      at: gateway->registry
       note: Provenance and behavioural review before a skill or server is admitted.
     - capability: capabilityEgressControl
-      at: toolPlane->downstream
-      note: An allowlist on where the agent may send data, enforced outside the loop.
+      at: gateway
+      note: >
+        Deny-by-default egress at the boundary — models, tools, channels and registries each
+        named — enforced outside the loop it contains.
     - capability: capabilityHitlControls
-      at: toolPlane->downstream
+      at: gateway->downstream
       note: A human approval gate on consequential actions, because no one saw the plan.
     - capability: capabilityKillSwitch
       at: harness
@@ -400,11 +438,15 @@ scenarios:
         note: The message arrives from an unbounded set of senders. The allowlist is the gate.
       - follow: bridges->harness
         note: The body enters the loop as model input.
-      - follow: harness->provider
+      - follow: harness->gateway
+        note: The turn's model call crosses the boundary on an injected credential.
+      - follow: gateway->provider
         note: The model plans; the completion comes back and is treated as the plan.
       - follow: harness->toolPlane
-        note: Tool calls execute with the user's authority — no human sees the plan first.
-      - follow: toolPlane->downstream
+        note: Tool calls execute inside the sandbox — no human sees the plan first.
+      - follow: toolPlane->gateway
+        note: Anything that leaves the machine has to be on the allowlist.
+      - follow: gateway->downstream
         note: Actions land on real accounts; anything fetched re-enters as context.
       - follow: bridges->owner
         note: The reply goes wherever the agent addresses it.
@@ -412,20 +454,29 @@ scenarios:
     steps:
       - follow: memory->harness
         note: The tick re-reads memory — including anything an attacker wrote there last week.
-      - follow: harness->provider
+      - follow: harness->gateway
+        note: The unattended turn's calls cross the boundary like any other.
+      - follow: gateway->provider
         note: Recalled prose becomes the instruction for this turn.
       - follow: harness->toolPlane
-        note: The loop acts, unattended.
-      - follow: toolPlane->downstream
-        note: A one-time injection has become a recurring implant on the schedule.
+        note: The loop acts, unattended, inside the sandbox.
+      - follow: gateway->downstream
+        note: A one-time injection has become a recurring implant — bounded now by the allowlist.
   - title: A skill is installed
     steps:
-      - follow: registry->toolPlane
-        note: Prose plus code, admitted on the strength of the publisher's own description.
+      - follow: toolPlane->gateway
+        note: The install is an egress call, and only the private registry is reachable.
+      - follow: gateway->registry
+        note: The package was reviewed and mirrored before the agent could ever fetch it.
       - follow: toolPlane->harness
-        note: It loads into the daemon's process with everything the agent has.
+        note: It still loads into the daemon's process with everything the agent has.
 
 deviations:
+  - subject: The sandbox boundary is drawn as containment, not as a block
+    reason: >
+      The wrap-the-whole-harness product is a boundary around the daemon, its memory and its
+      tools, with the AI gateway as its only exit. The React Flow view draws that frame
+      literally; the SVG view shows the same blocks and edges without the enclosure.
   - subject: No governance plane is drawn
     reason: >
       This archetype has none — no agent identity, no policy engine, no audit sink, no registry,
@@ -434,6 +485,8 @@ deviations:
       misrepresent the pattern.
 
 sources:
+  - title: "Docker Sandboxes — microVM isolation, egress proxy and credential handling for agent harnesses"
+    url: https://docs.docker.com/ai/sandboxes/
   - title: "OpenClaw documentation — gateway architecture and channel model"
     url: https://docs.openclaw.ai/concepts/architecture
   - title: "OpenClaw documentation — gateway security and network binding"

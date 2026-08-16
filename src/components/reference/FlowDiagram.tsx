@@ -26,6 +26,7 @@ import { FlowIcon } from "./FlowIcons";
  * only when toggled.
  */
 const RF_IDS = new Set(["archSandboxedExecution", "archPersonalAgent"]);
+const RF_DEFAULT = new Set(["archPersonalAgent"]);
 const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
   ssr: false,
   loading: () => <div className="p-8 text-sm text-ink-3">Loading React Flow…</div>,
@@ -107,13 +108,13 @@ export function FlowDiagram({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
 
-  const [engine, setEngine] = useState<"svg" | "rf">("svg");
+  const [engine, setEngine] = useState<"svg" | "rf">(RF_DEFAULT.has(archetype.id) ? "rf" : "svg");
   const [lastId, setLastId] = useState(archetype.id);
   if (lastId !== archetype.id) {
     setLastId(archetype.id);
     setView({ k: 1, x: 0, y: 0 });
     setHover(null);
-    setEngine("svg");
+    setEngine(RF_DEFAULT.has(archetype.id) ? "rf" : "svg");
   }
 
   // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
@@ -298,7 +299,7 @@ export function FlowDiagram({
     return (
       <div className="relative w-full">
         {engineToggle}
-        <FlowDiagramRFLazy archetype={archetype} className={className} />
+        <FlowDiagramRFLazy archetype={archetype} scenario={scenario} className={className} />
       </div>
     );
   }

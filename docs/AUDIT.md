@@ -860,8 +860,8 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |
 | Personal autonomous agent | Tool services | service | `componentTools` |
-| Personal autonomous agent | Sandboxed execution | service | (none) |
-| Personal autonomous agent | Public skill registry | external | `componentDataSources` |
+| Personal autonomous agent | AI gateway | service | (none) |
+| Personal autonomous agent | Private pkg registry | external | `componentDataSources` |
 | Personal autonomous agent | Downstream services | external | `componentApplication` |
 | Enterprise AI chat with connectors | Chat surface & uploads | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Identity & secure edge | service | (none) |
