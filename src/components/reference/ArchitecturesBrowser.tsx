@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
@@ -43,7 +43,6 @@ export function ArchitecturesBrowser() {
   const [surface, setSurface] = useState<string | null>(
     linkedSurface && surfaces.some((s) => s.id === linkedSurface) ? linkedSurface : null,
   );
-  const [query, setQuery] = useState("");
   const [scenario, setScenario] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
 
@@ -56,16 +55,7 @@ export function ArchitecturesBrowser() {
     window.history.replaceState(null, "", `?archetype=${archetypeId}`);
   }, [archetypeId]);
 
-  const q = query.trim().toLowerCase();
-  const shown = useMemo(
-    () =>
-      archetypesInOrder.filter(
-        (a) =>
-          (!surface || a.surface === surface) &&
-          (!q || haystack.get(a.id)?.includes(q)),
-      ),
-    [surface, q],
-  );
+  const shown = archetypesInOrder.filter((a) => !surface || a.surface === surface);
 
   if (!archetype) return null;
 
@@ -86,29 +76,9 @@ export function ArchitecturesBrowser() {
       />
 
       <div className="mx-auto w-full max-w-[1500px] px-6 py-8">
-        {/* --- Picker: search, surface filter, name pills grouped by surface ---------- */}
+        {/* --- Picker: surface filter pills + a searchable dropdown -------------------- */}
         <div className="rounded-xl border border-line bg-paper px-5 py-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
-            <div className="relative">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                aria-hidden
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
-              >
-                <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path d="M 15 15 L 20.5 20.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name or description…"
-                aria-label="Search architectures by name or description"
-                className="w-64 rounded-lg border border-line bg-mist py-1.5 pl-8 pr-3 text-[13px] text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
-              />
-            </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="flex flex-wrap gap-1.5">
               <FilterPill active={!surface} onClick={() => setSurface(null)}>
                 All
@@ -126,41 +96,7 @@ export function ArchitecturesBrowser() {
                 </FilterPill>
               ))}
             </div>
-            {q && (
-              <span className="text-[12px] text-ink-3">
-                {shown.length} match{shown.length === 1 ? "" : "es"}
-              </span>
-            )}
-          </div>
-
-          <div className="mt-3 space-y-2.5">
-            {surfaces.map((s) => {
-              const group = shown.filter((a) => a.surface === s.id);
-              if (!group.length) return null;
-              return (
-                // A fixed label column with the pills wrapping beside it — a shared flex-wrap
-                // row would drop the whole pill block under the label once it cannot fit.
-                <div key={s.id} className="grid grid-cols-[8rem_minmax(0,1fr)] items-baseline gap-x-3">
-                  <span className="eyebrow whitespace-nowrap">{s.title}</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.map((a) => (
-                      <NamePill
-                        key={a.id}
-                        archetype={a}
-                        active={a.id === archetype.id}
-                        onClick={() => select(a.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {!shown.length && (
-              <p className="text-[13px] text-ink-3">
-                Nothing matches “{query}” — try a component, risk or scenario word from a
-                description, or clear the surface filter.
-              </p>
-            )}
+            <ArchPicker options={shown} current={archetype} onSelect={select} />
           </div>
         </div>
 
@@ -171,9 +107,18 @@ export function ArchitecturesBrowser() {
               {surfaces.find((s) => s.id === archetype.surface)?.title} ·{" "}
               {SURFACE_TAGLINE[archetype.surface]}
             </p>
-            <h2 className="display mt-1 text-[20px] font-bold leading-tight text-ink">
-              {archetype.title}
-            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h2 className="display text-[20px] font-bold leading-tight text-ink">
+                {archetype.title}
+              </h2>
+              <span
+                title="Every reference architecture in this catalogue is under active review — treat the drawing, pins and mappings as draft rather than finalised."
+                className="ident cursor-help rounded-full border px-2 py-[3px] text-[10.5px] font-semibold"
+                style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}
+              >
+                Under review
+              </span>
+            </div>
             <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">{summary}</p>
             <p className="mt-2 flex flex-wrap gap-x-3 text-[11.5px] text-ink-3">
               <span>{archetype.blocks.length} blocks</span>
@@ -247,28 +192,118 @@ export function ArchitecturesBrowser() {
   );
 }
 
-/** A compact name-only pill, the F5 building-block row applied to the catalogue. */
-function NamePill({
-  archetype,
-  active,
-  onClick,
+/**
+ * The architecture selector: one compact button opening a searchable list, grouped by surface.
+ * Pills for 28 names took a third of a phone screen; a combobox takes one row anywhere.
+ */
+function ArchPicker({
+  options,
+  current,
+  onSelect,
 }: {
-  archetype: Archetype;
-  active: boolean;
-  onClick: () => void;
+  /** Already surface-filtered, in display order. */
+  options: Archetype[];
+  current: Archetype;
+  onSelect: (id: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const matches = options.filter((a) => !q || haystack.get(a.id)?.includes(q));
+
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+  const pick = (id: string) => {
+    onSelect(id);
+    close();
+  };
+
   return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      title={typeof archetype.summary[0] === "string" ? archetype.summary[0] : undefined}
-      className={`rounded-full border px-3 py-1 text-[12.5px] leading-snug transition-colors ${
-        active
-          ? "border-ink bg-ink font-semibold text-white"
-          : "border-line bg-paper text-ink-2 hover:border-line-strong hover:text-ink"
-      }`}
-    >
-      {archetype.abbrev ?? archetype.title}
-    </button>
+    <div className="relative w-full sm:ml-auto sm:w-[360px]">
+      <button
+        onClick={() => (open ? close() : setOpen(true))}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="flex w-full items-center justify-between gap-3 rounded-lg bg-ink px-4 py-2.5 text-left text-[13.5px] font-semibold text-white"
+      >
+        <span className="truncate">{current.title}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          aria-hidden
+          className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <path
+            d="M 2 4 L 6 8 L 10 4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          {/* Click-away backdrop, as the site header menu does it. */}
+          <button aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={close} />
+          <div className="absolute z-20 mt-1.5 w-full rounded-xl border border-line bg-paper shadow-lg">
+            <div className="border-b border-line p-2">
+              <input
+                autoFocus
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") close();
+                  if (e.key === "Enter" && matches.length) pick(matches[0].id);
+                }}
+                placeholder="Search name or description…"
+                aria-label="Search architectures by name or description"
+                className="w-full rounded-md border border-line bg-mist px-3 py-1.5 text-[13px] text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
+              />
+            </div>
+            <ul role="listbox" className="max-h-[55vh] overflow-y-auto p-1.5">
+              {surfaces.map((s) => {
+                const group = matches.filter((a) => a.surface === s.id);
+                if (!group.length) return null;
+                return (
+                  <li key={s.id}>
+                    <p className="eyebrow px-2.5 pb-1 pt-2">{s.title}</p>
+                    <ul>
+                      {group.map((a) => (
+                        <li key={a.id}>
+                          <button
+                            role="option"
+                            aria-selected={a.id === current.id}
+                            onClick={() => pick(a.id)}
+                            className={`block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] leading-snug transition-colors ${
+                              a.id === current.id
+                                ? "bg-ink font-semibold text-white"
+                                : "text-ink-2 hover:bg-mist hover:text-ink"
+                            }`}
+                          >
+                            {a.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
+              {!matches.length && (
+                <li className="px-3 py-2.5 text-[13px] text-ink-3">
+                  Nothing matches &ldquo;{query}&rdquo; — try a component, risk or scenario word,
+                  or clear the surface filter.
+                </li>
+              )}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
