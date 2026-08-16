@@ -29,21 +29,46 @@ export function IncidentExplorer() {
       <aside className="lg:w-[430px] xl:w-[470px] shrink-0 bg-paper border-b lg:border-b-0 lg:border-r border-line flex flex-col">
         <div className="border-b border-line px-6 pt-5 pb-4">
           <p className="eyebrow">Real incidents on the CoSAI map</p>
-          <label className="sr-only" htmlFor="incident">
+          <label
+            className="mt-2 block text-[11.5px] font-semibold uppercase tracking-[0.08em] text-ink-3"
+            htmlFor="incident"
+          >
             Choose an incident
           </label>
-          <select
-            id="incident"
-            value={incidentId}
-            onChange={(e) => selectIncident(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-line bg-paper px-3 py-2 text-[13.5px] font-medium text-ink hover:border-line-strong transition-colors"
-          >
-            {incidents.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.title}
-              </option>
-            ))}
-          </select>
+          {/* A dark, chevroned control: the picker is the first thing a visitor must use, and
+              as a hairline-bordered white box it read as a title rather than a control. */}
+          <div className="relative mt-1.5">
+            <select
+              id="incident"
+              value={incidentId}
+              onChange={(e) => selectIncident(e.target.value)}
+              className="w-full cursor-pointer appearance-none rounded-lg border border-ink bg-ink py-2.5 pl-3.5 pr-10 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-introduced focus:ring-offset-2"
+            >
+              {incidents.map((i, n) => (
+                <option key={i.id} value={i.id} className="bg-paper text-ink">
+                  {n + 1}. {i.title}
+                </option>
+              ))}
+            </select>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              aria-hidden
+              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-white"
+            >
+              <path
+                d="M 2 4 L 6 8 L 10 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+          <p className="mt-1.5 text-[11.5px] text-ink-3">
+            {incidents.length} incidents · each replayed step by step on the map
+          </p>
 
           <h1 className="display mt-4 text-[23px] font-bold leading-[1.2] text-ink">
             {incident.title}
