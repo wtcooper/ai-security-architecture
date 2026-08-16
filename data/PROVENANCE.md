@@ -158,10 +158,11 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
 - **Block titles are a standard vocabulary** — the granular, architecture-level counterpart to
   CoSAI's component list, so a reader moving between architectures never wonders whether two
   names hide a difference. The standard nodes, used with these exact titles wherever the role
-  recurs: **Application front end** (where requests enter), **Agent loop** (the reasoning core;
-  qualified only when an architecture has several agents — "Supervisor agent", "Subagents" — or
-  when the shell is the architecture's identity, e.g. the coding agent's "Agent client", the
-  personal agent's "Agent harness"), **AI gateway** (the customer-operated crossing every model
+  recurs: **Application front end** (where requests enter), **Agent harness** (the reasoning core and its
+  machinery — the agent loop, context assembly, and harness-specific components such as a
+  heartbeat, stream handling or page extraction; qualified only when an architecture has
+  several agents — "Supervisor agent", "Subagents" — or when the runtime is fused with another
+  role, e.g. "Sandboxed runtime", the provider-owned "Managed runtime"), **AI gateway** (the customer-operated crossing every model
   and tool call leaves through — credential broker, limits, audit tap; qualified only when
   ownership differs, e.g. "Shared AI gateway", "Managed tool gateway"), **Tool services** (the
   actuation surface where tool or action calls land; its discipline — open tool plane vs

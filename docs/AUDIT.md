@@ -707,7 +707,7 @@ Highlights below are Google's original mapping, not ours.
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
 | Single agent workflow | Application front end | service | `componentApplicationInputHandling` |
-| Single agent workflow | Agent loop | service | `componentReasoningCore` |
+| Single agent workflow | Agent harness | service | `componentReasoningCore` |
 | Single agent workflow | Memory & state | service | `componentDataStorage` |
 | Single agent workflow | AI gateway | service | (none) |
 | Single agent workflow | Tool services | service | `componentTools` |
@@ -756,7 +756,7 @@ Highlights below are Google's original mapping, not ours.
 | Batch and offline AI pipeline | Downstream consumers | external | `componentDataStorage` |
 | Batch and offline AI pipeline | Governance plane | governance | (none) |
 | Chat agent with tools | Application front end | service | `componentApplication` |
-| Chat agent with tools | Agent loop | service | `componentReasoningCore` |
+| Chat agent with tools | Agent harness | service | `componentReasoningCore` |
 | Chat agent with tools | Memory & state | service | `componentDataStorage` |
 | Chat agent with tools | AI gateway | service | (none) |
 | Chat agent with tools | Model provider | provider | `componentModelServing` |
@@ -822,27 +822,27 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Serving & consumers | external | `componentModelServing` |
 | Fine-tuning and model registry pipeline | Governance plane | governance | (none) |
 | Realtime voice agent | Telephony edge | service | `componentAgentUserQuery` |
-| Realtime voice agent | Realtime session | service | `componentReasoningCore` |
+| Realtime voice agent | Agent harness | service | `componentReasoningCore` |
 | Realtime voice agent | Model provider | provider | `componentModelServing` |
 | Realtime voice agent | Tool services | service | `componentTools` |
 | Realtime voice agent | Downstream services | service | `componentDataSources` |
 | Realtime voice agent | Audio & transcripts | service | `componentDataStorage` |
 | Realtime voice agent | Governance plane | governance | (none) |
-| Agentic browser and AI extension | Agent loop | service | `componentReasoningCore` |
+| Agentic browser and AI extension | Agent harness | service | `componentReasoningCore` |
 | Agentic browser and AI extension | Model provider | provider | `componentModelServing` |
 | Agentic browser and AI extension | Tool services | service | `componentTools` |
 | Agentic browser and AI extension | Browser profile | service | `componentDataStorage` |
 | Agentic browser and AI extension | Downstream services | external | `componentApplication` |
 | Agentic browser and AI extension | Open web | external | `componentDataSources` |
 | Vendor coding agent | Repository content | external | `componentDataSources` |
-| Vendor coding agent | Agent client | service | `componentReasoningCore` |
+| Vendor coding agent | Agent harness | service | `componentReasoningCore` |
 | Vendor coding agent | Vendor service | provider | `componentModelServing` |
 | Vendor coding agent | Tool services | service | `componentTools` |
 | Vendor coding agent | Sandboxed execution | service | (none) |
 | Vendor coding agent | Downstream services | external | `componentApplication` |
 | Desktop AI assistant | Docs & screen content | external | `componentDataSources` |
 | Desktop AI assistant | Model provider | provider | `componentModelServing` |
-| Desktop AI assistant | Assistant application | service | `componentReasoningCore` |
+| Desktop AI assistant | Agent harness | service | `componentReasoningCore` |
 | Desktop AI assistant | Tool services | service | `componentTools` |
 | Desktop AI assistant | OS permission layer | service | (none) |
 | Desktop AI assistant | Contained desktop | service | `componentTools` |
@@ -888,7 +888,7 @@ Highlights below are Google's original mapping, not ours.
 | Tenant-wide assistant over your corpus | Vendor assistant | provider | `componentApplication` |
 | Tenant-wide assistant over your corpus | Systems of record | service | `componentDataSources` |
 | Tenant-wide assistant over your corpus | Tenant governance | governance | (none) |
-| Third-party MCP server you consume | Consuming agent | service | `componentReasoningCore` |
+| Third-party MCP server you consume | Agent harness | service | `componentReasoningCore` |
 | Third-party MCP server you consume | Tool broker | service | (none) |
 | Third-party MCP server you consume | Egress inspection | service | (none) |
 | Third-party MCP server you consume | Vendor MCP server | provider | `componentTools` |
