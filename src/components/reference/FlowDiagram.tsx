@@ -17,6 +17,7 @@ import { chipSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Phase, Rect } from "@/lib/types";
 import dynamic from "next/dynamic";
 
+import { downloadArchetypeHtml } from "./export-html";
 import { blockTab, BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
@@ -278,6 +279,14 @@ export function FlowDiagram({
   if (overlay === null) {
     return (
       <div className="relative w-full">
+        <button
+          type="button"
+          onClick={() => void downloadArchetypeHtml(archetype)}
+          className="absolute right-2 top-2 z-10 rounded-md border border-ink-3/40 bg-paper px-2.5 py-1 text-[11px] text-ink-2 hover:bg-paper-2"
+          title="Download this diagram as a standalone interactive HTML file"
+        >
+          Export HTML
+        </button>
         <FlowDiagramRFLazy archetype={archetype} scenario={scenario} className={className} />
       </div>
     );

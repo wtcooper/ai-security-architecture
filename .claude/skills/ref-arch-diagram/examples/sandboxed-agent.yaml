@@ -1,0 +1,216 @@
+# A worked example exercising every feature of the schema: a sandboxed agent workflow with
+# a containment frame, a gateway, block- and edge-anchored pins, and two scenario walks.
+# Build it:   node engine/build.mjs examples/sandboxed-agent.yaml
+# Render it:  node engine/render-html.mjs examples/sandboxed-agent.yaml out.html
+id: sandboxedAgent
+title: Sandboxed agent workflow
+summary: >
+  An agent loop and its local tools contained in a sandbox, with an AI gateway as the only
+  exit to the model provider and downstream systems.
+
+blocks:
+  - id: user
+    kind: actor
+    title: User
+    icon: person
+    col: 0
+    row: 1
+    note: States the task and approves the actions that matter.
+
+  - id: harness
+    kind: service
+    title: Agent harness
+    layer: app
+    col: 1
+    row: 1
+    note: The loop that plans, calls tools and reads results back as context.
+    items:
+      - id: loop
+        label: Agent loop
+        icon: agent
+        note: Decides the next action from the task and everything read so far.
+      - id: context
+        label: Context assembly
+        icon: doc
+        note: Merges instruction, memory and tool results into one prompt.
+
+  - id: tools
+    kind: service
+    title: Tool services
+    layer: app
+    col: 1
+    row: 0
+    note: The local tool surface inside the sandbox.
+    items:
+      - id: files
+        label: File & edit tools
+        icon: folder
+      - id: shell
+        label: Shell commands
+        icon: code
+
+  - id: memory
+    kind: service
+    title: Memory & state
+    layer: data
+    col: 1
+    row: 2
+    note: Written by the agent, read back as instruction on every later turn.
+    items:
+      - id: memoryFiles
+        label: Memory files
+        icon: folder
+
+  - id: gateway
+    kind: service
+    title: AI gateway
+    col: 2
+    row: 1
+    note: The only exit from the sandbox — allowlist, credential injection, audit tap.
+    items:
+      - id: allowlist
+        label: Egress allowlist
+        icon: shield
+      - id: creds
+        label: Credential injection
+        icon: key
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    layer: model
+    col: 3
+    row: 0
+    note: The published inference interface. Everything behind it is the provider's.
+    items:
+      - id: inference
+        label: Inference API
+        icon: model
+
+  - id: downstream
+    kind: external
+    title: Downstream services
+    col: 3
+    row: 2
+    note: Where actions land, and where fetched content comes back in as context.
+    items:
+      - id: orgData
+        label: Org data
+        icon: db
+      - id: web
+        label: Web & APIs
+        icon: globe
+
+edges:
+  - from: user
+    to: harness
+    path: primary
+    bidir: true
+    label: task / approval
+    note: The task in and the approvals back.
+  - from: harness
+    to: tools
+    path: primary
+    bidir: true
+    note: Local tool calls out, results back into context.
+  - from: harness
+    to: memory
+    path: primary
+    bidir: true
+    note: What the loop learns, read back as instruction later.
+  - from: harness
+    to: gateway
+    path: primary
+    bidir: true
+    label: model & egress calls
+    note: Every call out of the sandbox crosses here on an injected credential.
+  - from: gateway
+    to: provider
+    path: primary
+    bidir: true
+    route: vh
+    note: Inference on an injected credential; the completion drives the tool calls.
+  - from: gateway
+    to: downstream
+    path: external
+    bidir: true
+    route: vh
+    note: Actions land on real systems; whatever comes back re-enters as context.
+
+frames:
+  - label: Sandbox
+    note: The boundary — its own filesystem and network; the gateway is the only exit.
+    members: [harness, tools, memory]
+
+riskLegend:
+  - id: promptInjection
+    code: R01
+    title: Prompt injection
+    note: Untrusted content enters the same context window as the instruction.
+  - id: insecureOutput
+    code: R02
+    title: Insecure model output
+    note: The completion is unauthenticated content, and it drives the tool calls.
+  - id: dataDisclosure
+    code: R03
+    title: Sensitive data disclosure
+    note: What leaves the boundary and where it lands.
+
+capabilityLegend:
+  - id: sandboxing
+    title: Agent execution sandboxing
+    note: Contain the loop, its memory and its tools in one boundary.
+  - id: egressControl
+    title: Egress allowlisting
+    note: Deny by default; every destination named.
+  - id: toolPermissions
+    title: Tool permission scoping
+    note: Per-tool grants instead of the user's full authority.
+  - id: hitl
+    title: Human-in-the-loop approval
+    note: A human gate on consequential actions.
+
+pins:
+  risks:
+    - risk: promptInjection
+      at: gateway->downstream
+      note: Fetched content re-enters the loop as context.
+    - risk: promptInjection
+      at: memory
+      note: Memory is prose the next turn treats as instruction.
+    - risk: insecureOutput
+      at: gateway->provider
+    - risk: dataDisclosure
+      at: gateway->downstream
+  capabilities:
+    - capability: sandboxing
+      at: harness
+    - capability: toolPermissions
+      at: harness->tools
+    - capability: egressControl
+      at: gateway
+    - capability: hitl
+      at: gateway->downstream
+      note: Because nobody saw the plan before the tools executed.
+
+scenarios:
+  - title: A task becomes an action
+    steps:
+      - follow: user->harness
+        note: The task is stated.
+      - follow: harness->gateway
+        note: The model call crosses the boundary.
+      - follow: gateway->provider
+        note: The completion comes back and is treated as the plan.
+      - follow: harness->tools
+        note: Local tools execute inside the sandbox.
+      - follow: gateway->downstream
+        note: The action lands on a real system.
+  - title: Fetched content steers the loop
+    steps:
+      - follow: downstream->gateway
+        note: Attacker-writable content comes back through the gateway.
+      - follow: harness->memory
+        note: The loop writes what it read.
+      - follow: memory->harness
+        note: A later turn reads it back as instruction.

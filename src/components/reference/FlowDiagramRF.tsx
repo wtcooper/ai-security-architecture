@@ -32,41 +32,7 @@ import type { ArchBlock, Archetype } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
-/**
- * The containment layer: which blocks each architecture draws inside a labelled frame.
- * Architectures without an entry render frameless — every architecture gets the React Flow
- * view either way.
- */
-const RF_CONFIG: Record<
-  string,
-  {
-    frameLabel: string;
-    frameNote: string;
-    members: string[];
-    hide: string[];
-    /** Where the frame's label tab sits; "bottom" when edge pins crowd the top edge. */
-    labelPos?: "top" | "bottom";
-  }
-> = {
-  archPersonalAgent: {
-    frameLabel: "Sandbox",
-    frameNote:
-      "MicroVM-class boundary: daemon, memory and local tools run whole inside, with their own filesystem and network. The AI gateway is the general-purpose exit; the one other opening is a read-only pull from the private package registry (target state).",
-    members: ["bridges", "toolPlane", "harness", "memory"],
-    hide: [],
-  },
-  archCodingAgent: {
-    frameLabel: "Vendor application",
-    frameNote:
-      "The CLI or desktop GUI the vendor ships: the harness and its tool surface live inside the application, and tool capabilities and connectors are built in and configured there.",
-    members: ["client", "toolPlane"],
-    hide: [],
-    labelPos: "bottom",
-  },
-};
-
-const FRAME_PAD = 26;
-const FRAME_HEAD = 52;
+import { FRAME_HEAD, FRAME_PAD, RF_CONFIG } from "./rf-config";
 
 interface HoverCard {
   x: number;

@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>__TITLE__ — reference architecture</title>
+<link rel="stylesheet" href="https://unpkg.com/@xyflow/react@12.11.3/dist/style.css" />
+<style>
+  :root {
+    --ink: #1c1e21; --ink-2: #4a4e55; --ink-3: #9a9ea6;
+    --paper: #ffffff; --paper-2: #f4f4f2; --line: #dddddd;
+    --app: #3667c4; --model: #2e7d54; --data: #b07a1e;
+    --chip: #4a5fd0; --chip-soft: #eef1fc;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--paper); }
+  header { padding: 14px 20px 10px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { color: var(--ink-2); font-size: 12.5px; max-width: 720px; }
+  main { display: flex; height: calc(100vh - 58px); }
+  #canvas { flex: 1; position: relative; min-width: 0; }
+  aside { width: 300px; border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 16px; font-size: 12.5px; }
+  aside h2 { font: 700 10.5px/1 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 18px 0 8px; }
+  aside h2:first-child { margin-top: 2px; }
+  .walk { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); cursor: pointer; font: inherit; color: var(--ink); }
+  .walk.active { border-color: var(--ink); background: var(--paper-2); font-weight: 600; }
+  .row { display: flex; gap: 8px; margin: 0 0 7px; align-items: baseline; }
+  .chipn { flex: none; width: 18px; height: 18px; border-radius: 9px; background: var(--paper); border: 1.5px solid var(--chip); color: var(--chip); font: 700 10px/15px ui-monospace, monospace; text-align: center; }
+  .tagc { flex: none; padding: 1px 6px; border-radius: 3px; background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-2); font: 600 9.5px/1.5 ui-monospace, monospace; }
+  .note { color: var(--ink-2); }
+  .hovercard { position: absolute; width: 268px; z-index: 30; pointer-events: none; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 8px 10px; }
+  .hovercard b { font-size: 11px; }
+  .hovercard p { margin: 4px 0 0; font-size: 10.5px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>__TITLE__</h1>
+  <span class="sub" id="summary"></span>
+</header>
+<main>
+  <div id="canvas"></div>
+  <aside id="rail"></aside>
+</main>
+
+<script id="arch-data" type="application/json">__ARCH_JSON__</script>
+<script type="module">
+import React from "https://esm.sh/react@19.2.0";
+import { createRoot } from "https://esm.sh/react-dom@19.2.0/client";
+import { createPortal } from "https://esm.sh/react-dom@19.2.0?deps=react@19.2.0";
+import {
+  ReactFlow, Background, BaseEdge, EdgeLabelRenderer, Handle, Position, applyNodeChanges,
+} from "https://esm.sh/@xyflow/react@12.11.3?deps=react@19.2.0,react-dom@19.2.0";
+import htm from "https://esm.sh/htm@3.1.1";
+
+const h = htm.bind(React.createElement);
+const { useState, useMemo, useCallback } = React;
+const MODEL = JSON.parse(document.getElementById("arch-data").textContent);
+
+/* --- Icon vocabulary: hand-drawn strokes in a 24x24 box ------------------------------ */
+const ICONS = {
+  person: '<circle cx="12" cy="8" r="3.6"/><path d="M 5 21 C 5 15.5 19 15.5 19 21"/>',
+  people: '<circle cx="9" cy="8.5" r="3.2"/><path d="M 3 20.5 C 3 15.5 15 15.5 15 20.5"/><circle cx="16.5" cy="8" r="2.6"/><path d="M 15.8 13.6 C 19.5 14 21 16.6 21 19"/>',
+  agent: '<rect x="6" y="8" width="12" height="9" rx="2"/><path d="M 12 8 V 4.5 M 10 4.5 H 14"/><circle cx="9.5" cy="12" r="0.9" fill="currentColor" stroke="none"/><circle cx="14.5" cy="12" r="0.9" fill="currentColor" stroke="none"/><path d="M 9.5 20 V 17 M 14.5 20 V 17"/>',
+  model: '<path d="M 9.5 4.5 C 6.5 4.5 5.5 7 6 9 C 4 10 4 13.5 6 14.5 C 5.5 17.5 7.5 19.5 10 19 C 10.8 20.2 13.2 20.2 14 19 C 16.5 19.5 18.5 17.5 18 14.5 C 20 13.5 20 10 18 9 C 18.5 7 17.5 4.5 14.5 4.5 C 13.4 3.6 10.6 3.6 9.5 4.5 Z"/><path d="M 12 4 V 20 M 8.6 9 H 12 M 12 13 H 15.4"/>',
+  chat: '<path d="M 4 6 H 20 V 16 H 10 L 6 19.5 V 16 H 4 Z"/><path d="M 8 10 H 16 M 8 12.8 H 13"/>',
+  clock: '<circle cx="12" cy="12" r="8"/><path d="M 12 7 V 12 L 15.5 14"/>',
+  folder: '<path d="M 3.5 6 H 9.5 L 11.5 8.5 H 20.5 V 18.5 H 3.5 Z"/>',
+  db: '<ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M 5 6 V 18 C 5 19.5 8 20.8 12 20.8 C 16 20.8 19 19.5 19 18 V 6"/><path d="M 5 12 C 5 13.5 8 14.8 12 14.8 C 16 14.8 19 13.5 19 12"/>',
+  key: '<circle cx="8" cy="9" r="4"/><path d="M 11 12 L 19 20 M 16 17 L 18.5 14.5 M 13.5 14.5 L 15.5 12.5"/>',
+  shield: '<path d="M 12 3.5 L 19 6 V 12 C 19 16.5 16 19.5 12 21 C 8 19.5 5 16.5 5 12 V 6 Z"/><path d="M 8.8 12 L 11 14.2 L 15.4 9.5"/>',
+  plug: '<path d="M 9 3.5 V 8 M 15 3.5 V 8"/><path d="M 6.5 8 H 17.5 V 11 C 17.5 14 15.5 16 12 16 C 8.5 16 6.5 14 6.5 11 Z"/><path d="M 12 16 V 20.5"/>',
+  code: '<path d="M 8.5 7 L 3.5 12 L 8.5 17 M 15.5 7 L 20.5 12 L 15.5 17"/><path d="M 13.4 5 L 10.6 19"/>',
+  globe: '<circle cx="12" cy="12" r="8.2"/><path d="M 3.8 12 H 20.2 M 12 3.8 C 8 8 8 16 12 20.2 C 16 16 16 8 12 3.8"/>',
+  doc: '<path d="M 6 3.5 H 14.5 L 18 7 V 20.5 H 6 Z"/><path d="M 14.5 3.5 V 7 H 18 M 9 11 H 15 M 9 14 H 15 M 9 17 H 12.5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M 12 4 V 6.5 M 12 17.5 V 20 M 4 12 H 6.5 M 17.5 12 H 20 M 6.3 6.3 L 8.1 8.1 M 15.9 15.9 L 17.7 17.7 M 17.7 6.3 L 15.9 8.1 M 8.1 15.9 L 6.3 17.7"/>',
+  phone: '<rect x="7.5" y="3.5" width="9" height="17" rx="2"/><path d="M 10.5 18 H 13.5"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M 15 15 L 20.5 20.5"/>',
+  mail: '<rect x="3.5" y="6" width="17" height="12.5" rx="1.5"/><path d="M 4 7 L 12 13 L 20 7"/>',
+  scale: '<path d="M 12 4.5 V 19.5 M 8.5 19.5 H 15.5 M 5 7.5 H 19"/><path d="M 6.5 7.5 L 4 13 C 4 14.6 9 14.6 9 13 L 6.5 7.5 M 17.5 7.5 L 15 13 C 15 14.6 20 14.6 20 13 L 17.5 7.5"/>',
+  eye: '<path d="M 3 12 C 6 6.5 18 6.5 21 12 C 18 17.5 6 17.5 3 12 Z"/><circle cx="12" cy="12" r="2.6"/>',
+  stop: '<circle cx="12" cy="12" r="8.2"/><rect x="8.8" y="8.8" width="6.4" height="6.4" rx="0.8"/>',
+};
+
+function Icon({ name, size, color = "var(--ink-2)" }) {
+  const html = ICONS[name] ?? "";
+  return h`<svg width=${size} height=${size} viewBox="0 0 24 24" style=${{ color }}>
+    <g fill="none" stroke=${color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+       dangerouslySetInnerHTML=${{ __html: html }} />
+  </svg>`;
+}
+
+/* --- Visual language ------------------------------------------------------------------ */
+const KIND_STYLE = {
+  service: { stroke: "var(--ink)", dash: false },
+  provider: { stroke: "var(--ink-3)", dash: true },
+  external: { stroke: "var(--data)", dash: true },
+  governance: { stroke: "var(--ink-2)", dash: true },
+};
+const PATH_STYLE = {
+  primary: { stroke: "var(--model)" },
+  external: { stroke: "var(--data)" },
+  governance: { stroke: "var(--ink-3)", dash: "3 4" },
+};
+/* Tab colour: authored layer wins; external blocks are data-amber by rule (the outside is
+   data — whatever runs behind the boundary, what crosses back is content); grey otherwise. */
+function tabColor(block) {
+  if (block.layer === "app") return "var(--app)";
+  if (block.layer === "model") return "var(--model)";
+  if (block.layer === "data" || block.kind === "external") return "var(--data)";
+  return "var(--ink-2)";
+}
+
+/* --- Node components ------------------------------------------------------------------ */
+function BlockNode({ data }) {
+  const { block, dim } = data;
+  const style = KIND_STYLE[block.kind];
+  const handles = ["t", "b", "l", "r"].map((side) => {
+    const pos = side === "t" ? Position.Top : side === "b" ? Position.Bottom : side === "l" ? Position.Left : Position.Right;
+    return h`<span key=${side}>
+      <${Handle} type="source" id=${side} position=${pos} style=${{ opacity: 0 }} />
+      <${Handle} type="target" id=${side + "-in"} position=${pos} style=${{ opacity: 0 }} />
+    </span>`;
+  });
+  if (block.kind === "actor") {
+    return h`<div style=${{ width: block.w, height: block.h, opacity: dim ? 0.25 : 1, transition: "opacity 150ms", cursor: "grab",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11 }}>
+      ${handles}
+      <${Icon} name=${block.icon ?? "person"} size=${30} color="var(--ink)" />
+      <span style=${{ fontWeight: 600 }}>${block.title}</span>
+    </div>`;
+  }
+  return h`<div style=${{ width: block.w, height: block.h, background: "var(--paper)", borderRadius: 8, position: "relative",
+      border: `${block.kind === "governance" ? 1 : 1.5}px ${style.dash ? "dashed" : "solid"} ${style.stroke}`,
+      opacity: dim ? 0.25 : 1, transition: "opacity 150ms", cursor: "grab" }}>
+    ${handles}
+    <div style=${{ position: "absolute", top: -11, left: "50%", transform: "translateX(-50%)", background: tabColor(block),
+        color: "#fff", font: "600 10px/1 ui-monospace, monospace", letterSpacing: ".08em", textTransform: "uppercase",
+        padding: "6px 10px", borderRadius: 3, whiteSpace: "nowrap" }}>${block.title}</div>
+    ${(block.items ?? []).map((item) => h`<div key=${item.id} title=${item.note ? item.label + " — " + item.note : item.label}
+        style=${{ position: "absolute", left: item.x + item.w / 2, top: item.y + item.h / 2, transform: "translate(-50%,-50%)",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 3, width: item.w, textAlign: "center",
+          fontSize: 10, lineHeight: 1.25, color: "var(--ink-2)" }}>
+      <${Icon} name=${item.icon} size=${20} />
+      <span>${item.label}</span>
+    </div>`)}
+  </div>`;
+}
+
+function FrameNode({ data }) {
+  return h`<div style=${{ width: data.w, height: data.h, border: "2px dashed var(--ink-3)", borderRadius: 12,
+      background: "rgba(154,158,166,.07)", cursor: "grab" }}>
+    <div style=${{ position: "absolute", [data.labelPos === "bottom" ? "bottom" : "top"]: -12, left: 18,
+        background: "var(--ink)", color: "#fff", font: "600 10px/1 ui-monospace, monospace", letterSpacing: ".08em",
+        textTransform: "uppercase", padding: "6px 10px", borderRadius: 3 }}>${data.label}</div>
+  </div>`;
+}
+
+function ChipNode({ data }) {
+  return h`<div style=${{ width: 18, height: 18, borderRadius: 9, background: "var(--paper)", border: "1.5px solid var(--chip)",
+      color: "var(--chip)", font: "700 10px/15px ui-monospace, monospace", textAlign: "center",
+      opacity: data.dim ? 0 : 1 }}>${data.n}</div>`;
+}
+
+function TagNode({ data }) {
+  return h`<div style=${{ width: data.w, height: 17, borderRadius: 3, background: "var(--paper-2)", border: "1px solid var(--line)",
+      color: "var(--ink-2)", font: "600 9.5px/15px ui-monospace, monospace", textAlign: "center",
+      opacity: data.dim ? 0 : 1 }}>${data.code}</div>`;
+}
+
+/* Renders the build-computed path verbatim until either endpoint is dragged, then live
+   orthogonal routing. The edge's own chips and tags render here, offset from the current
+   midpoint, so they travel with the arrow. */
+function BuildPathEdge(props) {
+  const data = props.data ?? {};
+  let path = data.d ?? "";
+  let midX = data.midX ?? 0;
+  let midY = data.midY ?? 0;
+  if (data.live) {
+    const [sx, sy, tx, ty] = [props.sourceX, props.sourceY, props.targetX, props.targetY];
+    if (Math.abs(tx - sx) > Math.abs(ty - sy)) {
+      const ex = (sx + tx) / 2;
+      path = `M ${sx} ${sy} L ${ex} ${sy} L ${ex} ${ty} L ${tx} ${ty}`;
+      midX = ex; midY = (sy + ty) / 2;
+    } else {
+      const ey = (sy + ty) / 2;
+      path = `M ${sx} ${sy} L ${sx} ${ey} L ${tx} ${ey} L ${tx} ${ty}`;
+      midX = (sx + tx) / 2; midY = ey;
+    }
+  }
+  const pins = data.pins ?? [];
+  return h`<${React.Fragment}>
+    <${BaseEdge} path=${path} markerEnd=${props.markerEnd} markerStart=${props.markerStart} style=${props.style} />
+    ${pins.length ? h`<${EdgeLabelRenderer}>
+      ${pins.map((pin, i) => h`<div key=${i}
+          onMouseEnter=${(e) => data.onPinEnter(e, pin.title, pin.note)} onMouseLeave=${data.onPinLeave}
+          style=${pin.kind === "chip"
+            ? { position: "absolute", transform: `translate(${midX + pin.dx - 9}px, ${midY + pin.dy - 9}px)`,
+                width: 18, height: 18, borderRadius: 9, background: "var(--paper)", border: "1.5px solid var(--chip)",
+                color: "var(--chip)", font: "700 10px/15px ui-monospace, monospace", textAlign: "center",
+                opacity: data.pinsDim ? 0 : 1, pointerEvents: "all", zIndex: 10 }
+            : { position: "absolute", transform: `translate(${midX + pin.dx}px, ${midY + pin.dy}px)`,
+                width: pin.w, height: 17, borderRadius: 3, background: "var(--paper-2)", border: "1px solid var(--line)",
+                color: "var(--ink-2)", font: "600 9.5px/15px ui-monospace, monospace", textAlign: "center",
+                opacity: data.pinsDim ? 0 : 1, pointerEvents: "all", zIndex: 10 }}>
+        ${pin.kind === "chip" ? pin.n : pin.code}
+      </div>`)}
+    </${EdgeLabelRenderer}>` : null}
+  </${React.Fragment}>`;
+}
+
+const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode };
+const edgeTypes = { buildPath: BuildPathEdge };
+
+/* Pick the facing handle pair from the two blocks' initial geometry. */
+function facing(a, b) {
+  const dx = b.x + b.w / 2 - (a.x + a.w / 2);
+  const dy = b.y + b.h / 2 - (a.y + a.h / 2);
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? ["r", "l-in"] : ["l", "r-in"];
+  return dy > 0 ? ["b", "t-in"] : ["t", "b-in"];
+}
+
+/* --- The viewer ----------------------------------------------------------------------- */
+function Viewer() {
+  const [card, setCard] = useState(null);
+  const [dragged, setDragged] = useState(new Set());
+  const [scenario, setScenario] = useState(null);
+
+  const walk = scenario !== null ? MODEL.scenarios[scenario] : null;
+  const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => {
+    const e = MODEL.edges.find((x) => x.id === s.follow) ??
+      MODEL.edges.find((x) => x.id === s.follow.split("->").reverse().join("->"));
+    return e?.id;
+  }) ?? []), [walk]);
+  const walkBlocks = useMemo(() => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []), [walk]);
+  const inScenario = Boolean(walk);
+
+  const cardAt = useCallback((event, title, note) => {
+    const wrap = event.target.closest("#canvas");
+    const rect = wrap?.getBoundingClientRect();
+    if (!rect) return;
+    setCard({
+      x: Math.min(event.clientX - rect.left + 12, rect.width - 280),
+      y: Math.min(event.clientY - rect.top + 12, rect.height - 120),
+      title, note,
+    });
+  }, []);
+  const clearCard = useCallback(() => setCard(null), []);
+
+  const initialNodes = useMemo(() => {
+    const nodes = [];
+    const memberOf = new Map();
+    MODEL.frames.forEach((f, i) => {
+      const id = "__frame" + i;
+      f.members.forEach((m) => memberOf.set(m, { id, x: f.x, y: f.y }));
+      nodes.push({ id, type: "frame", position: { x: f.x, y: f.y },
+        data: { label: f.label, note: f.note, labelPos: f.labelPos, w: f.w, h: f.h },
+        style: { width: f.w, height: f.h }, draggable: true, selectable: false, zIndex: -1 });
+    });
+    for (const block of MODEL.blocks) {
+      const frame = memberOf.get(block.id);
+      nodes.push({ id: block.id, type: "block",
+        position: frame ? { x: block.x - frame.x, y: block.y - frame.y } : { x: block.x, y: block.y },
+        parentId: frame?.id, data: { block, dim: false }, draggable: true,
+        style: { width: block.w, height: block.h } });
+    }
+    // Block-anchored pins are children of their block, so they travel when it is dragged.
+    for (const pin of MODEL.blockPins) {
+      nodes.push({ id: `pin:${pin.parent}:${pin.kind}:${pin.n ?? pin.code}:${pin.x}`, parentId: pin.parent,
+        type: pin.kind, position: pin.kind === "chip" ? { x: pin.x - 9, y: pin.y - 9 } : { x: pin.x, y: pin.y },
+        data: { ...pin, dim: false }, draggable: false, selectable: false, zIndex: 10 });
+    }
+    return nodes;
+  }, []);
+
+  const [nodes, setNodes] = useState(initialNodes);
+  const onNodesChange = useCallback((changes) => setNodes((ns) => applyNodeChanges(changes, ns)), []);
+
+  // Scenario fade is derived at render time so dragged positions survive scenario changes.
+  const displayNodes = useMemo(() => nodes.map((n) => {
+    if (n.type === "block") return { ...n, data: { ...n.data, dim: inScenario && !walkBlocks.has(n.id) } };
+    if (n.type === "chip" || n.type === "tag") return { ...n, data: { ...n.data, dim: inScenario } };
+    return n;
+  }), [nodes, inScenario, walkBlocks]);
+
+  const edges = useMemo(() => {
+    const frameMembers = new Set(MODEL.frames.flatMap((f) => f.members));
+    const frameDragged = [...dragged].some((id) => id.startsWith("__frame"));
+    const moved = frameDragged ? new Set([...dragged, ...frameMembers]) : dragged;
+    const rectOf = Object.fromEntries(MODEL.blocks.map((b) => [b.id, b]));
+    const pinsByEdge = new Map();
+    for (const pin of MODEL.edgePins) {
+      (pinsByEdge.get(pin.edge) ?? pinsByEdge.set(pin.edge, []).get(pin.edge)).push(pin);
+    }
+    return MODEL.edges.map((e) => {
+      const style = PATH_STYLE[e.path];
+      const dimmed = inScenario && !walkEdges.has(e.id);
+      const [sh, th] = facing(rectOf[e.from], rectOf[e.to]);
+      return {
+        id: e.id, source: e.from, target: e.to, sourceHandle: sh, targetHandle: th, type: "buildPath",
+        data: { d: e.d, live: moved.has(e.from) || moved.has(e.to), midX: e.midX, midY: e.midY,
+          label: e.label, note: e.note, pins: pinsByEdge.get(e.id) ?? [], pinsDim: inScenario,
+          onPinEnter: cardAt, onPinLeave: clearCard },
+        style: { stroke: style.stroke, strokeWidth: 1.8, strokeDasharray: style.dash, opacity: dimmed ? 0.15 : 1 },
+        markerEnd: { type: "arrowclosed", color: style.stroke, width: 14, height: 14 },
+        markerStart: e.bidir ? { type: "arrowclosed", color: style.stroke, width: 14, height: 14 } : undefined,
+      };
+    });
+  }, [dragged, inScenario, walkEdges, cardAt, clearCard]);
+
+  const canvas = h`<div id="rf" style=${{ width: "100%", height: "100%" }}>
+    <${ReactFlow} nodes=${displayNodes} edges=${edges} nodeTypes=${nodeTypes} edgeTypes=${edgeTypes}
+      onNodesChange=${onNodesChange}
+      onNodeDragStart=${(_, n) => { setDragged((prev) => new Set(prev).add(n.id)); setCard(null); }}
+      onNodeMouseEnter=${(event, node) => {
+        if (node.type === "block") cardAt(event, node.data.block.title, node.data.block.note);
+        else if (node.type === "chip" || node.type === "tag") cardAt(event, (node.data.n ? node.data.n + " · " : node.data.code + " · ") + node.data.title, node.data.note);
+        else if (node.type === "frame") cardAt(event, node.data.label, node.data.note);
+      }}
+      onNodeMouseLeave=${clearCard}
+      onEdgeMouseEnter=${(event, edge) => {
+        const d = edge.data ?? {};
+        const from = MODEL.blocks.find((b) => b.id === edge.source)?.title;
+        const to = MODEL.blocks.find((b) => b.id === edge.target)?.title;
+        cardAt(event, d.label ?? `${from} → ${to}`, d.note);
+      }}
+      onEdgeMouseLeave=${clearCard}
+      onMoveStart=${clearCard}
+      fitView fitViewOptions=${{ padding: 0.05 }} minZoom=${0.2} maxZoom=${4}
+      nodesConnectable=${false} elementsSelectable=${false}>
+      <${Background} gap=${24} size=${1} />
+    </${ReactFlow}>
+    ${card ? h`<div class="hovercard" style=${{ left: card.x, top: card.y }}>
+      <b>${card.title}</b>${card.note ? h`<p>${card.note}</p>` : null}
+    </div>` : null}
+  </div>`;
+
+  const rail = h`<${React.Fragment}>
+    ${MODEL.scenarios.length ? h`<h2>Scenario walks</h2>
+      ${MODEL.scenarios.map((s, i) => h`<button key=${i} class=${"walk" + (scenario === i ? " active" : "")}
+          onClick=${() => setScenario(scenario === i ? null : i)}>${s.title} · ${s.steps.length} steps</button>`)}` : null}
+    ${MODEL.legend.capabilities.length ? h`<h2>Capabilities to deploy · ${MODEL.legend.capabilities.length}</h2>
+      ${MODEL.legend.capabilities.map((c) => h`<div key=${c.n} class="row" title=${c.note ?? ""}>
+        <span class="chipn">${c.n}</span><span>${c.title}</span></div>`)}` : null}
+    ${MODEL.legend.risks.length ? h`<h2>Risks on the drawing · ${MODEL.legend.risks.length}</h2>
+      ${MODEL.legend.risks.map((r) => h`<div key=${r.code} class="row" title=${r.note ?? ""}>
+        <span class="tagc">${r.code}</span><span>${r.title}</span></div>`)}` : null}
+    ${walk ? h`<h2>Steps</h2>${walk.steps.map((s, i) => h`<div key=${i} class="row">
+      <span class="chipn" style=${{ borderColor: "var(--model)", color: "var(--model)" }}>${i + 1}</span>
+      <span class="note">${s.note ?? s.follow}</span></div>`)}` : null}
+  </${React.Fragment}>`;
+
+  return { canvas, rail };
+}
+
+if (MODEL.summary) document.getElementById("summary").textContent = MODEL.summary;
+
+/* One component tree with the side rail portalled into its column, so the canvas and the
+   rail share scenario state. */
+function Shell() {
+  const { canvas, rail } = Viewer();
+  return h`<${React.Fragment}>
+    ${canvas}
+    ${createPortal(rail, document.getElementById("rail"))}
+  </${React.Fragment}>`;
+}
+createRoot(document.getElementById("canvas")).render(h`<${Shell} />`);
+</script>
+</body>
+</html>
