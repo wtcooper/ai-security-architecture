@@ -722,7 +722,7 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | AI gateway | service | (none) |
 | Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Model provider | provider | `componentModelServing` |
-| Single agent workflow | Downstream services | external | `componentApplication` |
+| Single agent workflow | Downstream services | external | `componentDataSources` |
 | Single agent workflow | Governance plane | governance | (none) |
 | Durable multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
 | Durable multi-agent workflow | Subagents | service | `componentReasoningCore` |
@@ -730,7 +730,7 @@ Highlights below are Google's original mapping, not ours.
 | Durable multi-agent workflow | AI gateway | service | (none) |
 | Durable multi-agent workflow | Model provider | provider | `componentModelServing` |
 | Durable multi-agent workflow | Tool services | service | `componentTools` |
-| Durable multi-agent workflow | Downstream services | external | `componentApplication` |
+| Durable multi-agent workflow | Downstream services | external | `componentDataSources` |
 | Durable multi-agent workflow | Governance plane | governance | (none) |
 | Chat agent with tools | Application front end | service | `componentApplication` |
 | Chat agent with tools | Agent harness | service | `componentReasoningCore` |
@@ -738,7 +738,7 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | AI gateway | service | (none) |
 | Chat agent with tools | Model provider | provider | `componentModelServing` |
 | Chat agent with tools | Tool services | service | `componentTools` |
-| Chat agent with tools | Downstream services | external | `componentApplication` |
+| Chat agent with tools | Downstream services | external | `componentDataSources` |
 | Chat agent with tools | Governance plane | governance | (none) |
 | Remote MCP server you publish | Authorization server | service | (none) |
 | Remote MCP server you publish | Protocol endpoint | service | `componentApplicationInputHandling` |
@@ -765,7 +765,7 @@ Highlights below are Google's original mapping, not ours.
 | Coding and desktop agents | Tool services | service | `componentTools` |
 | Coding and desktop agents | Vendor service | provider | (none) |
 | Coding and desktop agents | Model provider | provider | `componentModelServing` |
-| Coding and desktop agents | Downstream services | external | `componentApplication` |
+| Coding and desktop agents | Downstream services | external | `componentDataSources` |
 | Local model runtime | Local HTTP API | service | `componentModelServing` |
 | Local model runtime | Inference runtime | service | `componentTheModel` |
 | Local model runtime | Storage | external | `componentModelStorage` |
@@ -778,7 +778,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | AI gateway | service | (none) |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
 | Personal autonomous agent | Remote tool services | service | `componentTools` |
-| Personal autonomous agent | Downstream services | external | `componentApplication` |
+| Personal autonomous agent | Downstream services | external | `componentDataSources` |
 | Enterprise AI chat with connectors | Chat surface & uploads | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Identity & secure edge | service | (none) |
 | Enterprise AI chat with connectors | Consumer product | external | `componentApplication` |
@@ -796,5 +796,5 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Managed memory | provider | `componentDataStorage` |
 | API/SDK managed agent runtime | Managed sandbox | provider | (none) |
 | API/SDK managed agent runtime | Managed tool gateway | provider | (none) |
-| API/SDK managed agent runtime | Downstream services | external | `componentApplication` |
+| API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Customer governance | governance | (none) |

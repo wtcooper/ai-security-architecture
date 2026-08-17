@@ -21,9 +21,9 @@ import { blockTab, BLOCK_STYLE, CHIP, PATH_STYLE, TAG, tagWidth } from "./flow-s
 import { FlowIcon } from "./FlowIcons";
 
 /**
- * React Flow is the default engine for every architecture — it can draw containment frames
- * and keeps the diagrams interactive. The SVG engine stays behind the toggle and still renders
- * incident-step overlays, which the React Flow view does not carry yet.
+ * React Flow is the only engine for browsing — it draws containment frames and keeps the
+ * diagrams interactive. The SVG renderer below survives for one job: incident-step overlays,
+ * which the React Flow view does not carry yet.
  */
 const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
   ssr: false,
@@ -106,13 +106,11 @@ export function FlowDiagram({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
 
-  const [engine, setEngine] = useState<"svg" | "rf">("rf");
   const [lastId, setLastId] = useState(archetype.id);
   if (lastId !== archetype.id) {
     setLastId(archetype.id);
     setView({ k: 1, x: 0, y: 0 });
     setHover(null);
-    setEngine("rf");
   }
 
   // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
@@ -277,26 +275,9 @@ export function FlowDiagram({
   const inScenario = scenario !== null || overlay !== null;
   const centre = { x: layout.width / 2, y: layout.height / 2 };
 
-  const rfAvailable = overlay === null;
-  const engineToggle = rfAvailable ? (
-    <div className="absolute right-2 top-2 z-10 flex overflow-hidden rounded-md border border-ink-3/40 text-[11px]">
-      {(["svg", "rf"] as const).map((e) => (
-        <button
-          key={e}
-          type="button"
-          onClick={() => setEngine(e)}
-          className={e === engine ? "bg-ink px-2.5 py-1 font-semibold text-paper" : "bg-paper px-2.5 py-1 text-ink-2"}
-        >
-          {e === "svg" ? "SVG" : "React Flow"}
-        </button>
-      ))}
-    </div>
-  ) : null;
-
-  if (rfAvailable && engine === "rf") {
+  if (overlay === null) {
     return (
       <div className="relative w-full">
-        {engineToggle}
         <FlowDiagramRFLazy archetype={archetype} scenario={scenario} className={className} />
       </div>
     );
@@ -304,7 +285,6 @@ export function FlowDiagram({
 
   return (
     <div className="relative w-full">
-    {engineToggle}
     <svg
       ref={svgRef}
       viewBox={`0 0 ${layout.width} ${layout.height}`}

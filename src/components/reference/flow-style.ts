@@ -57,6 +57,10 @@ const LAYER_COLOR: Record<BandId, string> = {
 export function blockTab(block: ArchBlock): string {
   const fallback = BLOCK_STYLE[block.kind as Exclude<BlockKind, "actor">]?.tab ?? "var(--ink-2)";
   if (block.kind === "governance") return fallback;
+  // The outside is data: everything an external block holds or returns — downstream records,
+  // fetched content, stored artifacts — re-enters the system as data, so external blocks are
+  // amber by rule, whatever CoSAI would call the system behind them.
+  if (block.kind === "external") return LAYER_COLOR.dataInfrastructure;
   const id =
     block.cosaiComponent ?? block.items?.find((i) => i.cosaiComponent)?.cosaiComponent;
   const component = id ? componentById.get(id) : undefined;
