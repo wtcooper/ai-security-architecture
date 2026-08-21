@@ -5,11 +5,12 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { archetypeById, archetypesInOrder, surfaces } from "@/lib/data";
+import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces } from "@/lib/data";
 import type { Archetype, Paragraph } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
 import { FlowLegend } from "./FlowLegend";
+import { GuidancePanel } from "./GuidancePanel";
 import { InsightRail } from "./InsightRail";
 
 const SURFACE_TAGLINE: Record<string, string> = {
@@ -125,6 +126,9 @@ export function ArchitecturesBrowser() {
               <span>{archetype.capabilities.length} capabilities</span>
               <span>{archetype.risks.length} risks</span>
               <span>{archetype.scenarios?.length ?? 0} scenario walks</span>
+              {guidanceByArchetype.has(archetype.id) && (
+                <span>{guidanceByArchetype.get(archetype.id)!.items.length} controls-guidance items</span>
+              )}
             </p>
           </div>
         </div>
@@ -162,6 +166,12 @@ export function ArchitecturesBrowser() {
         <div className="mt-6">
           <ArchetypeDetail archetype={archetype} />
         </div>
+
+        {guidanceByArchetype.has(archetype.id) && (
+          <div className="mt-8">
+            <GuidancePanel archetype={archetype} />
+          </div>
+        )}
       </div>
     </>
   );

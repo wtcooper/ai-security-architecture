@@ -35,6 +35,9 @@ export const {
   surfaces,
   capabilities,
   archetypes,
+  guidance,
+  guidanceTools,
+  guidanceAttribution,
   meta,
 } = dataset;
 
@@ -311,3 +314,10 @@ export function controlsForArchetype(archetypeId: string): Control[] {
   const ids = new Set(capabilitiesForArchetype(archetypeId).flatMap((c) => c.controls));
   return controls.filter((c) => ids.has(c.id));
 }
+
+// --- Controls guidance -----------------------------------------------------------
+
+/** The controls-guidance document for an architecture, where one has been authored. */
+export const guidanceByArchetype = new Map(guidance.map((g) => [g.archetype, g]));
+
+export const guidanceToolById = index(guidanceTools);

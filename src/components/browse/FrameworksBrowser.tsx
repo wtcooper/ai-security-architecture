@@ -55,7 +55,7 @@ export function FrameworksBrowser() {
       <PageHeader
         eyebrow="Cross-reference"
         title="Frameworks"
-        lead="CoSAI maps its risks, controls and personas onto external frameworks, and two more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map."
+        lead="CoSAI maps its risks, controls and personas onto external frameworks, and three more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map."
       >
         <div className="mt-6 flex flex-wrap gap-1.5">
           {visibleFrameworks.map((f) => {

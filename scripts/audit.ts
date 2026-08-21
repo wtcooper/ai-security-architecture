@@ -9,6 +9,9 @@
  *                          CoSAI's own tour prose alongside so a reviewer can check them.
  *   4. Archetype coverage — which risks, capabilities and components no reference architecture
  *                          reaches, and which classes of control the catalogue requires.
+ *   5. Controls-guidance coverage — which architectures carry a guidance document, which pinned
+ *                          capabilities each document has not yet addressed, and which dated
+ *                          tool entries are due re-verification.
  *
  *   npm run audit
  */
@@ -24,6 +27,8 @@ import type {
   Capability,
   Component,
   Control,
+  Guidance,
+  GuidanceTool,
   Paragraph,
   Risk,
   Surface,
@@ -294,7 +299,13 @@ async function main() {
   // expected to be large until the rebuild lands — they are the work list, not a regression.
   const dataset = JSON.parse(
     await readFile(join(ROOT, "src/data/generated/dataset.json"), "utf8"),
-  ) as { archetypes: Archetype[]; capabilities: Capability[]; surfaces: Surface[] };
+  ) as {
+    archetypes: Archetype[];
+    capabilities: Capability[];
+    surfaces: Surface[];
+    guidance: Guidance[];
+    guidanceTools: GuidanceTool[];
+  };
   const archetypes = dataset.archetypes ?? [];
 
   p("## 4. Architecture coverage");
@@ -372,13 +383,88 @@ async function main() {
   }
   p();
 
+  // --- 5. Controls-guidance coverage ---------------------------------------------------
+  // The guidance layer is authored one architecture at a time, so absence is the expected
+  // state while it rolls out; the lists below are its work list. Staleness matters more than
+  // coverage here: tool entries carry dated vendor facts that rot silently.
+  const guidance = dataset.guidance ?? [];
+  const guidanceTools = dataset.guidanceTools ?? [];
+  const guidanceByArchetype = new Map(guidance.map((g) => [g.archetype, g]));
+
+  p("## 5. Controls-guidance coverage");
+  p();
+  p(
+    `${guidance.length} of ${archetypes.length} architectures carry a controls-guidance ` +
+      "document (data/reference/guidance/), each validated against the drawing: every item " +
+      "must cite a capability pinned on its architecture.",
+  );
+  p();
+
+  p("| Surface | With guidance | Without |");
+  p("| --- | --- | --- |");
+  for (const surface of dataset.surfaces) {
+    const named = archetypes.filter((a) => a.surface === surface.id);
+    const covered = named.filter((a) => guidanceByArchetype.has(a.id));
+    const uncovered = named.filter((a) => !guidanceByArchetype.has(a.id));
+    p(
+      `| ${surface.title} | ${covered.map((a) => a.title).join(", ") || "—"} | ` +
+        `${uncovered.map((a) => a.title).join(", ") || "—"} |`,
+    );
+  }
+  p();
+
+  p("### 5a. Documents");
+  p();
+  p("| Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |");
+  p("| --- | --- | --- | --- | --- |");
+  const capTitle = new Map(dataset.capabilities.map((c) => [c.id, c.title]));
+  for (const a of archetypes) {
+    const g = guidanceByArchetype.get(a.id);
+    if (!g) continue;
+    const addressed = new Set(g.items.flatMap((i) => i.capabilities));
+    const missing = a.capabilities.filter((id) => !addressed.has(id));
+    p(
+      `| ${a.title} | ${g.mode} | ${g.status} | ${g.items.length} | ` +
+        `${missing.map((id) => capTitle.get(id) ?? id).join(", ") || "_none_"} |`,
+    );
+  }
+  p();
+
+  p("### 5b. Tool registry");
+  p();
+  p(
+    "Vendor-specific entries, each dated. An entry older than six months is due a " +
+      "re-verification pass against the vendor's current documentation.",
+  );
+  p();
+  const referencedBy = (toolId: string) =>
+    guidance
+      .filter((g) => g.items.some((i) => (i.tools ?? []).includes(toolId)))
+      .map((g) => archetypes.find((a) => a.id === g.archetype)?.title ?? g.archetype);
+  // Staleness is measured against the build date; six months is the stated cadence.
+  const now = new Date();
+  const staleBefore = `${now.getFullYear() - (now.getMonth() < 6 ? 1 : 0)}-${String(
+    ((now.getMonth() - 6 + 12) % 12) + 1,
+  ).padStart(2, "0")}`;
+  p("| Tool | Vendor | asOf | Referenced by | |");
+  p("| --- | --- | --- | --- | --- |");
+  for (const tool of guidanceTools) {
+    const stale = tool.asOf < staleBefore;
+    p(
+      `| ${tool.name} | ${tool.vendor} | ${tool.asOf} | ${referencedBy(tool.id).join(", ")} | ` +
+        `${stale ? "**stale — re-verify**" : ""} |`,
+    );
+  }
+  p();
+
   await mkdir(join(ROOT, "docs"), { recursive: true });
   await writeFile(join(ROOT, "docs", "AUDIT.md"), out.join("\n"));
   console.log(
     `docs/AUDIT.md: ${components.length} components, ${EDGES.length} edges, ` +
       `${authored.length} authored + ${seeded.length} seeded overlays, ` +
       `${archetypes.length} flow-style architectures (${unreachedRisks.length} risks and ` +
-      `${unusedCaps.length} capabilities not yet pinned)`,
+      `${unusedCaps.length} capabilities not yet pinned), ` +
+      `${guidance.length} guidance docs (${guidanceTools.length} tools)`,
   );
 }
 

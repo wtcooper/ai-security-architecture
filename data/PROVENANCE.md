@@ -55,9 +55,12 @@ the Frameworks tab shows `AML.M0003` with nothing to read. Each block records it
   (`OWASP-GenAI-LLM-Top-10-2026-v1.0.pdf`, Version 2026, published 4 August 2026, CC BY-SA
   4.0). Labels and descriptions are the opening of each entry's own Description section,
   trimmed to the definitional sentences.
+- **OWASP MCP Top 10** — titles and definitional sentences from the OWASP MCP Top 10 project
+  page (`owasp.org/www-project-mcp-top-10/`), version 0.1, CC BY-NC-SA 4.0. CoSAI does not
+  carry this framework at all; see below.
 
 `npm run data` fails if CoSAI maps to an identifier with no entry, and reports any entry
-nothing maps to — except for the two OWASP LLM editions, STRIDE and OWASP Agentic,
+nothing maps to — except for the two OWASP LLM editions, STRIDE, OWASP Agentic and OWASP MCP,
 where the full published list is shown on purpose so unmapped entries read as gaps.
 
 ## Framework material that is not CoSAI's
@@ -80,6 +83,14 @@ from the vendored CoSAI snapshot and badged in the UI so the two are never confu
   carried onto its 2026 identifier one-for-one. No mapping was created, dropped or
   reinterpreted. LLM09:2026 has nothing mapped to it, inheriting the same gap CoSAI leaves at
   LLM08:2025.
+- **OWASP MCP Top 10 (MCP01–MCP10:2025)** is a framework CoSAI does not carry, and nothing
+  in CoSAI's risks, controls or personas references an MCP identifier. The framework is
+  OWASP's; the 21 risk and 17 control mappings onto it are judgements made here. A risk is
+  mapped only where the entry describes it as it occurs on the MCP tool plane — the 15 CoSAI
+  risks that live elsewhere are left unmapped, as are runaway tool loops and economic denial
+  of wallet, which have no counterpart in a list carrying no unbounded-consumption entry. It
+  is version 0.1 and still in beta, so its numbering should be expected to move; OWASP
+  publishes no release date for it, so none is claimed here.
 - **CoSAI's 2025 edition is no longer offered as a lens**, having been superseded. Its data
   stays — it is what CoSAI publishes, the build still requires reference text for every
   identifier CoSAI maps to, and the crosswalk is derived from it. The 2026 view carries

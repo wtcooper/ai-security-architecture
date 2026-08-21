@@ -23,6 +23,7 @@ export const FULL_LIST_FRAMEWORKS = [
   "owasp-llm-2026",
   "stride",
   "owasp-agentic",
+  "owasp-mcp",
 ];
 
 /** A paragraph of CoSAI prose, already split from the YAML block scalars. */
@@ -402,6 +403,78 @@ export interface Archetype {
   layout: ArchLayout;
 }
 
+/**
+ * ------------------------------------------------------------------ Controls guidance
+ *
+ * The rung below a reference architecture, for admins, architects and security teams: what an
+ * organisation enforces around this class of system, and how. Authored in this repository
+ * (data/reference/guidance/), one document per architecture. Developer-facing setup guidance
+ * and starter templates deliberately live elsewhere (the ai-security-sdlc project); this layer
+ * is the org-controls side only.
+ */
+
+/**
+ * Whether the organisation's teams build this class of system or consume a vendor's. Framing
+ * only — the audience is admins either way.
+ */
+export type GuidanceMode = "build" | "use" | "hybrid";
+
+/** Maturity of one guidance document, rendered as a chip like the catalogue's review state. */
+export type GuidanceStatus = "draft" | "reviewed";
+
+export interface GuidanceLink {
+  title: string;
+  url: string;
+}
+
+/** Product-specific detail inside a tool entry: one admin-controlled surface of that product. */
+export interface GuidanceToolItem {
+  title: string;
+  body: Paragraph[];
+  links?: GuidanceLink[];
+}
+
+/**
+ * One product in the shared tool registry (data/reference/guidance/tools.yaml). Tools are the
+ * one place this layer goes vendor-specific, because the option space is narrow; the exemplar
+ * rule applies — every entry is dated and cites the vendor's own documentation.
+ */
+export interface GuidanceTool {
+  id: string;
+  name: string;
+  vendor: string;
+  /** When these facts were verified against the vendor's docs, e.g. "2026-08". */
+  asOf: string;
+  summary: Paragraph[];
+  items: GuidanceToolItem[];
+  sources: GuidanceLink[];
+}
+
+export interface GuidanceItem {
+  title: string;
+  /**
+   * The capabilities this guidance directs the organisation to deploy. Each must be pinned on
+   * the architecture — guidance cannot recommend something the drawing does not show, the same
+   * discipline controlsForArchetype() applies to controls.
+   */
+  capabilities: string[];
+  body: Paragraph[];
+  /** Refs into the tool registry, where product specifics exist. */
+  tools?: string[];
+  links?: GuidanceLink[];
+}
+
+export interface Guidance {
+  /** The architecture this document implements; also fixes the filename. */
+  archetype: string;
+  mode: GuidanceMode;
+  status: GuidanceStatus;
+  attribution: string;
+  overview: Paragraph[];
+  items: GuidanceItem[];
+  sources: GuidanceLink[];
+}
+
 /** Resolved highlight sets for one risk, per phase. */
 export interface RiskOverlay {
   risk: string;
@@ -495,4 +568,8 @@ export interface Dataset {
   /** Provenance statement for the capabilities overlay, carried for YAML round-tripping. */
   capabilitiesAttribution: string;
   archetypes: Archetype[];
+  guidance: Guidance[];
+  guidanceTools: GuidanceTool[];
+  /** Provenance statement for the tool registry; each guidance document carries its own. */
+  guidanceAttribution: string;
 }

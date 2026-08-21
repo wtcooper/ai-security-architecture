@@ -22,6 +22,8 @@ import type {
   Framework,
   FrameworkEntryInfo,
   FrameworkNote,
+  Guidance,
+  GuidanceTool,
   Incident,
   Persona,
   Rect,
@@ -64,18 +66,49 @@ async function loadIncidents(): Promise<Incident[]> {
 }
 
 /** One file per architecture, so each stays reviewable on its own. */
-async function loadArchetypes(): Promise<AuthoredArchetype[]> {
+async function loadArchetypes(): Promise<{ file: string; arch: AuthoredArchetype }[]> {
   const dir = join(ROOT, "data", "reference", "architectures");
   const files = (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort();
   return Promise.all(
     files.map(async (f) => {
       try {
-        return await loadYaml<AuthoredArchetype>(join(dir, f));
+        return { file: f, arch: await loadYaml<AuthoredArchetype>(join(dir, f)) };
       } catch (e) {
         throw new Error(`architectures/${f}: ${(e as Error).message}`);
       }
     }),
   );
+}
+
+/**
+ * The controls-guidance layer: one document per architecture plus the shared tool registry.
+ * Guidance files are named after the architecture file they implement, so the pairing is
+ * visible in a directory listing.
+ */
+async function loadGuidance(): Promise<{
+  docs: { file: string; doc: Guidance }[];
+  tools: GuidanceTool[];
+  toolsAttribution: string;
+}> {
+  const dir = join(ROOT, "data", "reference", "guidance");
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort();
+  const docs: { file: string; doc: Guidance }[] = [];
+  let tools: GuidanceTool[] = [];
+  let toolsAttribution = "";
+  for (const f of files) {
+    try {
+      if (f === "tools.yaml") {
+        const doc = await loadYaml<{ attribution?: string; tools?: GuidanceTool[] }>(join(dir, f));
+        tools = doc.tools ?? [];
+        toolsAttribution = doc.attribution ?? "";
+      } else {
+        docs.push({ file: f, doc: await loadYaml<Guidance>(join(dir, f)) });
+      }
+    } catch (e) {
+      throw new Error(`guidance/${f}: ${(e as Error).message}`);
+    }
+  }
+  return { docs, tools, toolsAttribution };
 }
 
 /**
@@ -109,7 +142,8 @@ async function main() {
     loadIncidents(),
   ]);
 
-  const authoredArchetypes = await loadArchetypes();
+  const archetypeFiles = await loadArchetypes();
+  const authoredArchetypes = archetypeFiles.map((e) => e.arch);
 
   const entriesDoc = await loadYaml<{
     frameworks: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>;
@@ -206,6 +240,13 @@ async function main() {
     mapTargets,
   });
 
+  // --- Controls guidance ---------------------------------------------------------
+  const guidanceLoaded = await loadGuidance();
+  const guidance = checkGuidance(guidanceLoaded, {
+    archetypes,
+    archetypeFileById: new Map(archetypeFiles.map((e) => [e.arch.id, e.file])),
+  });
+
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
   await checkAgainstSaifSeed(overlays, risks);
@@ -255,6 +296,8 @@ async function main() {
         incidents: incidents.length,
         capabilities: capabilitiesDoc.capabilities.length,
         archetypes: archetypes.length,
+        guidance: guidance.length,
+        guidanceTools: guidanceLoaded.tools.length,
       },
     },
     componentCategories: componentsDoc.categories,
@@ -277,6 +320,9 @@ async function main() {
     capabilities: capabilitiesDoc.capabilities,
     capabilitiesAttribution: capabilitiesDoc.attribution ?? "",
     archetypes,
+    guidance,
+    guidanceTools: guidanceLoaded.tools,
+    guidanceAttribution: guidanceLoaded.toolsAttribution,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -287,7 +333,8 @@ async function main() {
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
       `${incidents.length} incidents, ${capabilitiesDoc.capabilities.length} capabilities, ` +
-      `${archetypes.length} archetypes`,
+      `${archetypes.length} archetypes, ${guidance.length} guidance docs ` +
+      `(${guidanceLoaded.tools.length} tools)`,
   );
 }
 
@@ -563,6 +610,120 @@ function checkArchetypes(
       (emptySurfaces.length ? ` — no architecture yet for: ${emptySurfaces.join(", ")}` : ""),
   );
   return out;
+}
+
+/**
+ * The controls-guidance layer: what an organisation enforces around each architecture, for
+ * admins, architects and security teams. Same contract as everything else here — a dangling
+ * id fails the build — plus the rules that encode this layer's editorial discipline:
+ *
+ *   - Every guidance item cites at least one capability, and each must be pinned on its
+ *     architecture. Guidance cannot recommend deploying something the drawing does not show;
+ *     when it needs to, the fix is a pin, exactly as controlsForArchetype() treats controls.
+ *   - Tool entries are the one place the layer goes vendor-specific, so they carry the
+ *     exemplar rule: dated (asOf) and sourced from the vendor's own documentation.
+ *   - An unreferenced tool entry fails: the registry exists to serve the guidance documents,
+ *     not to grow a freestanding product catalogue.
+ */
+const GUIDANCE_MODES = new Set(["build", "use", "hybrid"]);
+const GUIDANCE_STATUSES = new Set(["draft", "reviewed"]);
+
+function checkGuidance(
+  loaded: {
+    docs: { file: string; doc: Guidance }[];
+    tools: GuidanceTool[];
+    toolsAttribution: string;
+  },
+  ctx: {
+    archetypes: Archetype[];
+    archetypeFileById: Map<string, string>;
+  },
+): Guidance[] {
+  const archetypeById = new Map(ctx.archetypes.map((a) => [a.id, a]));
+
+  const checkLinks = (where: string, links: { title?: string; url?: string }[] | undefined) => {
+    for (const link of links ?? []) {
+      if (!link.title?.trim() || !link.url?.trim()) fail(`${where}: link needs a title and a url`);
+    }
+  };
+
+  const toolIds = new Set<string>();
+  if (loaded.tools.length && !loaded.toolsAttribution.trim()) {
+    fail("guidance tools: attribution is required");
+  }
+  for (const tool of loaded.tools) {
+    const where = `guidance tool ${tool.id}`;
+    if (!/^tool[A-Z]/.test(tool.id ?? "")) fail(`${where}: id must match ^tool[A-Z]`);
+    if (toolIds.has(tool.id)) fail(`${where}: duplicate id`);
+    toolIds.add(tool.id);
+    if (!tool.name?.trim()) fail(`${where}: needs a name`);
+    if (!tool.vendor?.trim()) fail(`${where}: needs a vendor`);
+    // Product configuration surfaces age as fast as the products; an undated claim silently
+    // becomes a wrong one, the same rule exemplars carry.
+    if (!tool.asOf?.trim()) fail(`${where}: needs an asOf date`);
+    if (!tool.summary?.length) fail(`${where}: needs a summary`);
+    if (!tool.items?.length) fail(`${where}: needs at least one item`);
+    for (const item of tool.items ?? []) {
+      if (!item.title?.trim()) fail(`${where}: an item needs a title`);
+      if (!item.body?.length) fail(`${where} item "${item.title}": needs a body`);
+      checkLinks(`${where} item "${item.title}"`, item.links);
+    }
+    if (!tool.sources?.length) fail(`${where}: needs at least one vendor documentation source`);
+    checkLinks(where, tool.sources);
+  }
+
+  const seenArchetypes = new Set<string>();
+  const referencedTools = new Set<string>();
+  for (const { file, doc } of loaded.docs) {
+    const where = `guidance ${file}`;
+    const archetype = archetypeById.get(doc.archetype);
+    if (!archetype) {
+      fail(`${where}: unknown architecture ${doc.archetype}`);
+      continue;
+    }
+    if (seenArchetypes.has(doc.archetype)) fail(`${where}: second document for ${doc.archetype}`);
+    seenArchetypes.add(doc.archetype);
+    const archetypeFile = ctx.archetypeFileById.get(doc.archetype);
+    if (archetypeFile && archetypeFile !== file) {
+      fail(`${where}: must be named ${archetypeFile} after its architecture's file`);
+    }
+
+    if (!GUIDANCE_MODES.has(doc.mode)) {
+      fail(`${where}: mode must be one of ${[...GUIDANCE_MODES].join(", ")}`);
+    }
+    if (!GUIDANCE_STATUSES.has(doc.status)) {
+      fail(`${where}: status must be one of ${[...GUIDANCE_STATUSES].join(", ")}`);
+    }
+    if (!doc.attribution?.trim()) fail(`${where}: attribution is required`);
+    if (!doc.overview?.length) fail(`${where}: needs an overview`);
+    if (!doc.items?.length) fail(`${where}: needs at least one item`);
+    for (const item of doc.items ?? []) {
+      const at = `${where} item "${item.title}"`;
+      if (!item.title?.trim()) fail(`${where}: an item needs a title`);
+      if (!item.body?.length) fail(`${at}: needs a body`);
+      if (!item.capabilities?.length) fail(`${at}: needs at least one capability`);
+      for (const id of item.capabilities ?? []) {
+        if (!archetype.capabilities.includes(id)) {
+          fail(`${at}: ${id} is not pinned on ${archetype.id} — add a pin or drop the claim`);
+        }
+      }
+      for (const id of item.tools ?? []) {
+        if (!toolIds.has(id)) fail(`${at}: unknown tool ${id}`);
+        referencedTools.add(id);
+      }
+      checkLinks(at, item.links);
+    }
+    if (!doc.sources?.length) fail(`${where}: needs at least one source`);
+    checkLinks(where, doc.sources);
+  }
+
+  for (const tool of loaded.tools) {
+    if (!referencedTools.has(tool.id)) {
+      fail(`guidance tool ${tool.id}: referenced by no guidance document`);
+    }
+  }
+
+  return loaded.docs.map((e) => e.doc);
 }
 
 /**

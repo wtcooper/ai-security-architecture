@@ -73,7 +73,8 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
   );
 }
 
-function Section({
+/** Collapsible prose section, shared with the guidance panel below this component. */
+export function Section({
   title,
   count,
   defaultOpen = false,

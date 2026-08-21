@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { frameworkById } from "@/lib/data";
-import { frameworkHref } from "@/lib/frameworks";
+import { FRAMEWORK_ORDER, frameworkHref } from "@/lib/frameworks";
 import type { Mappings } from "@/lib/types";
 
 export function Chip({
@@ -27,15 +27,6 @@ export function Chip({
     </span>
   );
 }
-
-const FRAMEWORK_ORDER = [
-  "owasp-llm-2026",
-  "owasp-agentic",
-  "mitre-atlas",
-  "stride",
-  "nist-ai-rmf",
-  "iso-22989",
-];
 
 /**
  * Renders framework mappings as compact, linked identifier badges.

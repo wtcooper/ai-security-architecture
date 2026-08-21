@@ -1,0 +1,88 @@
+# Controls guidance for the durable multi-agent workflow archetype. Audience: admins,
+# architects and security teams. This is a build pattern, so the guidance is the controls an
+# organisation requires of what its teams build, kept pattern-level: the stack space is wide
+# and vendor specifics would rot. Developer-facing starters live in the ai-security-sdlc
+# project. The build's derivation check fails this document if its cited capabilities stop
+# being pinned on the architecture.
+archetype: archAgentWorkflow
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; no vendor facts to date.
+
+overview:
+  - >-
+    This is the pattern most organisations mean by "hosting agents": a durable orchestration
+    loop with subagents, calling tools across business data connectors, running on
+    infrastructure you operate. Because it is built rather than bought, the organisation's
+    controls are architectural requirements — properties the design must have before it
+    ships, enforced in review and in the platform the workload runs on.
+  - >-
+    The neighbouring archetype matters for scoping: the single agent workflow — one agent
+    on one fast path, reading a request, deciding and writing to systems of record in
+    seconds, with no supervisor, journal or replay — is not a contrast to this pattern but
+    a nesting: each subagent here is that diagram one level down. The requirements below
+    are the durability-and-supervision layer this pattern adds; the single-agent pattern's
+    own controls (the action catalogue, reversibility thresholds, compensating
+    transactions) still apply inside every subagent and get their own guidance.
+
+items:
+  - title: Route every tool call through one governed gateway
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentRegistry]
+    body:
+      - >-
+        Require a single choke point between agents and tools: one gateway that owns the
+        tool catalogue, scopes each agent to the least set of tools its job needs, and is
+        the only path — a subagent with its own side-channel to a connector is the design
+        smell to reject in review. The registry behind the gateway is the inventory of
+        record: which agents exist, which tools each may call, and who approved the pairing.
+
+  - title: Give agents their own identity and short-lived credentials
+    capabilities: [capabilityNhiManagement, capabilityIga, capabilitySecretsManagement]
+    body:
+      - >-
+        Each agent and subagent acts as a non-human identity of its own — never a shared
+        service account, and never a borrowed human session. Connector access is granted to
+        that identity, scoped and revocable in the directory; credentials are issued
+        ephemerally at call time from a secrets service rather than living in the agent's
+        environment or prompt. The test worth applying in review: when this agent is
+        compromised, what standing access does the attacker hold? The right answer is close
+        to none.
+
+  - title: Authorize actions at runtime, keep humans on the escalation path, and meter it
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityHitlControls, capabilityRateLimiting]
+    body:
+      - >-
+        The model's plan is a proposal; a policy layer outside the model decides. Require
+        runtime authorization on tool calls (policy on the action, its arguments and its
+        target, not just on tool identity), human approval on the classes of action the
+        organisation names as irreversible or sensitive, and rate, quota and spend limits
+        per agent — an agent loop that can retry is a denial-of-wallet incident waiting for
+        a bug.
+
+  - title: Treat retrieved content as input, and inspect what leaves
+    capabilities: [capabilityPromptInjectionDefense, capabilityAiDlp]
+    body:
+      - >-
+        Everything the connectors return — documents, records, messages — enters the context
+        window as unauthenticated content that can steer the loop. Require injection
+        screening on retrieved content and on inter-agent messages, and data-loss inspection
+        on what flows out through responses and tool calls, at the gateway where both
+        directions already pass.
+
+  - title: Log for reconstruction, and build the stop before you need it
+    capabilities: [capabilityAuditLogging, capabilityKillSwitch]
+    body:
+      - >-
+        The audit requirement is reconstruction: from any effect on a business system, walk
+        back through the tool call, the agent, the triggering context and the originating
+        request. Structured, tamper-resistant logs at the gateway make that a query rather
+        than an investigation. Pair it with a stop path that is designed, not improvised —
+        quarantine one agent, revoke its identity and credentials, drain or halt its queued
+        work — and exercise it before the first incident does.
+
+sources:
+  - title: OWASP GenAI Security Project — Agentic Security Initiative
+    url: https://genai.owasp.org/initiatives/agentic-security-initiative/
+  - title: CoSAI secure-ai-tooling (risk and control taxonomy this catalogue builds on)
+    url: https://github.com/cosai-oasis/secure-ai-tooling

@@ -1,0 +1,99 @@
+# Controls guidance for the personal autonomous agent archetype. Audience: admins, architects
+# and security teams. Every item cites capabilities pinned on the architecture; product facts
+# live in tools.yaml entries, dated.
+archetype: archPersonalAgent
+mode: use
+status: draft
+attribution: >-
+  Authored in this repository. Vendor and product facts are confined to the dated tool
+  entries and their cited documentation, verified at authoring time.
+
+overview:
+  - >-
+    An always-on personal agent is a daemon a person runs with their own credentials, taking
+    ambient instructions from messaging channels and acting without a human in the loop. The
+    organisation rarely operates it — someone installs it because it is useful — so governing
+    this archetype means publishing a sanctioned way to run it that is safer than the default,
+    and making the unsanctioned way visibly out of policy.
+  - >-
+    The archetype's exposure is concentrated in two places: the runtime (what the agent can
+    execute, read and reach) and the control plane (the gateway that admits instructions and
+    holds the operator's authority). Both have hardened configurations that exist today; the
+    controls below are about making those configurations the required path.
+
+items:
+  - title: Sanction a hardened runtime, or people will pick their own
+    capabilities: [capabilityAgentSandboxing, capabilityToolPermissionScoping]
+    tools: [toolOpenclaw, toolHermes]
+    body:
+      - >-
+        Take a position on which runtimes are acceptable and publish it. A bare-host install —
+        the agent executing shell commands directly on the operating system with the user's
+        full profile — is not an acceptable posture for a daemon that takes instructions from
+        inbound messages. The sanctioned configurations are the containerised ones: an
+        OpenClaw-class agent with its sandbox backend enabled (tool execution isolated in a
+        container with no network, a read-only root and dropped capabilities) or run inside a
+        purpose-built sandbox product that adds an egress proxy; or a Hermes-class runtime
+        whose execution goes through per-command approval and one of its isolated terminal
+        backends.
+      - >-
+        Pair the runtime position with a tool-policy floor: high-risk tools (arbitrary shell,
+        browser control, unrestricted fetch) disabled unless the deployment has a stated need,
+        and per-agent tool policies rather than one permissive default.
+
+  - title: Lock down the control plane and keep credentials out of the agent
+    capabilities: [capabilityEgressControl, capabilitySecretsManagement]
+    tools: [toolOpenclaw]
+    body:
+      - >-
+        The gateway is the operator's authority; treat its exposure as the incident. Require
+        loopback-only binding with token authentication, and set a version floor at the
+        release that closed the control-plane token-exfiltration CVE — the exposed-instance
+        scans that followed it are the case for making this a hard requirement rather than a
+        recommendation.
+      - >-
+        Keep provider keys and account credentials out of the agent's own environment where
+        the tooling allows it: sandbox egress through a proxy that injects API keys on the way
+        out, so a compromised agent process has nothing durable to leak, and default-deny
+        network egress from the execution sandbox with an explicit allowlist for what the
+        agent legitimately needs to reach.
+
+  - title: Keep a human between the agent and anything hard to undo
+    capabilities: [capabilityHitlControls, capabilityAgentRuntimeEnforcement, capabilityKillSwitch]
+    tools: [toolOpenclaw, toolHermes]
+    body:
+      - >-
+        Unattended operation is the archetype's point, so the approval budget has to be spent
+        precisely: dangerous-command detection with a blocking approval step, pairing codes or
+        allowlists before an unknown sender can instruct the agent at all, and mention-gating
+        in group channels. These are runtime-enforced policies in the current tooling, not
+        etiquette.
+      - >-
+        Decide the quarantine path before the first incident: who can stop a personal agent,
+        what stopping means (revoking the gateway token, killing the daemon, expiring its
+        channel pairings), and how a compromised agent's standing access is enumerated
+        afterwards.
+
+  - title: Govern what the agent loads and what it remembers
+    capabilities: [capabilityMcpToolSecurity, capabilityMemoryProtection, capabilityPromptInjectionDefense]
+    body:
+      - >-
+        Personal agents grow by acquiring skills, tools and server connections from public
+        registries, and they keep long-lived memory. Both are injection surfaces: a fetched
+        skill is unreviewed code admitted into the operator's session, and ambient-message
+        instructions can write durable state into memory that outlives the message. Require
+        vetting before third-party skills or tool servers are admitted, and treat memory as
+        contaminated-by-default when the agent ingests content from senders who are not the
+        operator.
+
+sources:
+  - title: OpenClaw docs — Gateway security model
+    url: https://docs.openclaw.ai/gateway/security
+  - title: OpenClaw docs — Sandboxing
+    url: https://docs.openclaw.ai/gateway/sandboxing
+  - title: "Docker: Run OpenClaw securely in Docker Sandboxes"
+    url: https://www.docker.com/blog/run-openclaw-securely-in-docker-sandboxes/
+  - title: NVD — CVE-2026-25253 (OpenClaw Control UI token exfiltration)
+    url: https://nvd.nist.gov/vuln/detail/CVE-2026-25253
+  - title: Hermes Agent (Nous Research)
+    url: https://hermes-agent.nousresearch.com/

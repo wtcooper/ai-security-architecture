@@ -1,0 +1,166 @@
+# Controls guidance for the coding and desktop agents archetype — the CLIs, IDE agents and
+# desktop assistant apps, which share one engine and one policy story. Audience: admins,
+# architects and security teams. Every item cites capabilities pinned on the architecture;
+# product facts live in tools.yaml entries, dated.
+archetype: archCodingAgent
+mode: use
+status: draft
+attribution: >-
+  Authored in this repository. Vendor and product facts are confined to the dated tool
+  entries and their cited documentation, verified at authoring time.
+
+overview:
+  - >-
+    Nobody builds their own Claude Code — this archetype is consumed, so the organisation's
+    leverage is the policy tier each vendor ships. Every major coding agent now has one: a
+    managed configuration channel that outranks whatever the developer sets locally,
+    deliverable through MDM, an OS policy store, or the vendor's own admin console. Governing
+    the archetype means using that tier deliberately, and holding one posture across four or
+    five different products rather than five postures.
+  - >-
+    The guidance below is organised by control, not by product; the dated tool entries under
+    each item carry the product-specific mechanics. Where vendors differ in strength — a
+    console-delivered setting one vendor calls a client-side control versus an OS-enforced
+    sandbox — the difference is called out, because it changes what the control is worth.
+
+items:
+  - title: Deploy policy through the managed tier, not through documentation
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls]
+    tools: [toolClaudeCode, toolCodex, toolCursor, toolGithubCopilot]
+    body:
+      - >-
+        Each vendor's managed tier can pin permission rules, approval behaviour and feature
+        availability so the local user cannot loosen them: managed settings for Claude Code,
+        an enforced requirements file for Codex, dashboard-plus-MDM policies for Cursor, and
+        enterprise policies for Copilot. Treat a written standard with no managed-tier
+        enforcement as not yet deployed.
+      - >-
+        Two properties are worth demanding everywhere: the auto-approval escape hatch is
+        removable (the mode where the agent stops asking), and the policy channel fails
+        closed — both Claude Code and Codex can refuse to start when the managed policy
+        cannot be fetched, which turns a lost policy server into a stop rather than an
+        unmanaged fleet.
+      - >-
+        Watch the conflict semantics per vendor: Copilot resolves a user's multiple
+        organisations to the least restrictive setting within an enterprise, so a lockdown
+        only holds when set at the enterprise level.
+
+  - title: Constrain the tool plane with allowlists backed by a registry
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity]
+    tools: [toolClaudeCode, toolCodex, toolCursor, toolGithubCopilot]
+    body:
+      - >-
+        The configuration file that admits tool servers arrives with the repository clone,
+        which is why the allowlist has to be enforced outside it. Every one of the four
+        vendors now supports centrally-managed MCP server allowlists; the shared semantics to
+        get right are the empty-list case (for Claude Code and Codex an empty managed list is
+        a full MCP lockdown, which is the correct starting state) and the matching strength —
+        prefer the mechanisms that match on executable, URL or command rather than display
+        name, since name-only matching is bypassable by design.
+      - >-
+        The allowlist is the enforcement point; the registry behind it is the decision
+        record. Admit a server after a supply-chain review of its source, and keep the
+        approved set somewhere reviewable rather than in a dashboard nobody diffs.
+
+  - title: Sandbox execution and default-deny the network
+    capabilities: [capabilityAgentSandboxing, capabilityEgressControl]
+    tools: [toolCodex, toolClaudeCode, toolCursor]
+    body:
+      - >-
+        The strongest available posture is OS-enforced sandboxing with the network off by
+        default and a domain-filtered proxy where egress is genuinely needed — Codex ships
+        exactly this shape, and its managed tier can forbid the profiles that escape it.
+        Where a product's controls are weaker, the vendor's own documentation often says so:
+        Cursor labels its terminal allowlist best-effort rather than a security boundary.
+        Read those admissions as design guidance — pair weak in-product controls with
+        endpoint-level egress filtering rather than treating them as equivalent.
+      - >-
+        Protect the paths that hold standing credentials from the agent regardless of
+        sandbox: enforced deny-read patterns for key material and dotfiles are available in
+        the managed tier (Codex's filesystem rules; Claude Code permission deny rules) and
+        cost nothing to deploy fleet-wide.
+
+  - title: Bind sessions to the organisation and export the audit trail
+    capabilities: [capabilityCredentialIsolation, capabilityAuditLogging]
+    tools: [toolClaudeCode, toolCodex, toolCursor, toolGithubCopilot]
+    body:
+      - >-
+        Force organisational login so every session maps to a directory identity — Claude
+        Code and the Codex clients can both pin the login method and organisation, and block
+        ambient personal API keys — and broker model credentials through managed helpers
+        rather than long-lived keys in the environment.
+      - >-
+        Know what each audit surface actually captures before relying on it: Claude Code's
+        managed OpenTelemetry emits per-session tool-decision events fleet-wide; Codex local
+        usage exports through the workspace Compliance API; Cursor's Enterprise audit log
+        records admin and account events but explicitly not agent output; Copilot's org
+        audit log covers policy and licensing changes and the cloud agent's actions, not
+        IDE prompts. The gaps define what endpoint or gateway logging still has to cover.
+
+  - title: Deploy the desktop apps managed and govern connectors at the organisation, not the user
+    capabilities: [capabilityIga, capabilityToolPermissionScoping]
+    tools: [toolClaudeDesktop, toolChatgptDesktop]
+    body:
+      - >-
+        The desktop-shaped shells of this archetype reach the enterprise through the same
+        door as any desktop software — someone installs one — but they connect to mail,
+        files, calendars and internal services through per-user connector grants that no one
+        sums. Both major desktop assistants now ship enterprise installers and honour
+        device-level policy (MDM configuration profiles and policy registries), and both
+        have org-level admission controls for what the assistant may connect to —
+        allowlists for desktop extensions and role-scoped app and plugin enablement. The
+        defaults differ in a way that matters: one vendor's extension allowlist ships
+        disabled (everything available until an admin turns it on) while the other disables
+        plugins by default on enterprise workspaces. Check the default, don't assume it.
+      - >-
+        Where managed connector authorization through the IdP is available, prefer it over
+        per-user OAuth grants: it makes the connector's scope an administered decision and
+        keeps revocation in the directory rather than in each employee's settings.
+
+  - title: Contain what the desktop shells can reach from the device
+    capabilities: [capabilityAiDlp, capabilityEgressControl]
+    tools: [toolClaudeDesktop, toolChatgptDesktop]
+    body:
+      - >-
+        Device policies can turn off the highest-risk local surfaces — local MCP server
+        connections, computer-use and record modes, unmanaged workspace folders — and pin
+        updates to managed channels. What the policies cannot see is content leaving through
+        sanctioned chat, which is why this archetype pairs the vendor controls with
+        interaction-level data loss prevention and network egress telemetry; the compliance
+        export APIs both vendors ship are the hook for that monitoring, with source
+        retention short enough that continuous export is part of the deployment, not an
+        afterthought.
+
+  - title: Discover what you did not deploy, and assume the repo is hostile input
+    capabilities: [capabilityShadowAiDiscovery, capabilityPromptInjectionDefense]
+    body:
+      - >-
+        The managed tier only governs the clients you deployed; developers can install
+        others, and IDE forks and extensions ship agent capability by default now. Discovery
+        — endpoint software inventory, extension allowlists, egress telemetry to known
+        vendor endpoints — is what makes the sanctioned-tools list a fact rather than an
+        aspiration.
+      - >-
+        Prompt injection for this archetype arrives with the working tree: source files,
+        manifests, issue text and tool output all enter the context window without being the
+        developer's instruction. That is an argument for keeping approval gates meaningful
+        (a gate that fires on everything trains reflexive acceptance) and for treating
+        repo-supplied configuration — hooks, tool manifests, agent instruction files — as
+        untrusted until reviewed, which is what the managed hook and sideload restrictions
+        in the vendor policy tiers exist to enforce.
+
+sources:
+  - title: Claude Code settings and managed configuration
+    url: https://code.claude.com/docs/en/settings
+  - title: Codex managed configuration
+    url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+  - title: Cursor enterprise documentation
+    url: https://cursor.com/docs/enterprise
+  - title: Managing policies for Copilot in your enterprise
+    url: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer/enterprises/managing-policies-and-features-for-copilot-in-your-enterprise
+  - title: Enterprise configuration for Claude Desktop
+    url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+  - title: ChatGPT desktop Windows deployment
+    url: https://learn.chatgpt.com/docs/enterprise/windows-deployment
+  - title: Apps and plugin controls for ChatGPT workspaces
+    url: https://help.openai.com/en/articles/11509118

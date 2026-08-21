@@ -798,3 +798,36 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Managed tool gateway | provider | (none) |
 | API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Customer governance | governance | (none) |
+
+## 5. Controls-guidance coverage
+
+3 of 12 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+
+| Surface | With guidance | Without |
+| --- | --- | --- |
+| Endpoint | Coding and desktop agents, Personal autonomous agent | Local model runtime |
+| Cloud & hosted | Durable multi-agent workflow | Single agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
+| Third-party SaaS | — | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
+
+### 5a. Documents
+
+| Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
+| --- | --- | --- | --- | --- |
+| Durable multi-agent workflow | build | draft | 5 | _none_ |
+| Coding and desktop agents | use | draft | 7 | _none_ |
+| Personal autonomous agent | use | draft | 4 | _none_ |
+
+### 5b. Tool registry
+
+Vendor-specific entries, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation.
+
+| Tool | Vendor | asOf | Referenced by | |
+| --- | --- | --- | --- | --- |
+| Claude Code | Anthropic | 2026-08 | Coding and desktop agents |  |
+| Cursor | Anysphere | 2026-08 | Coding and desktop agents |  |
+| GitHub Copilot | GitHub | 2026-08 | Coding and desktop agents |  |
+| Codex | OpenAI | 2026-08 | Coding and desktop agents |  |
+| ChatGPT desktop app | OpenAI | 2026-08 | Coding and desktop agents |  |
+| Claude Desktop | Anthropic | 2026-08 | Coding and desktop agents |  |
+| OpenClaw | OpenClaw (open source) | 2026-08 | Personal autonomous agent |  |
+| Hermes Agent | Nous Research | 2026-08 | Personal autonomous agent |  |

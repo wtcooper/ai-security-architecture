@@ -1,0 +1,452 @@
+# The shared tool registry for the controls-guidance layer: the one place this layer goes
+# vendor-specific, because the option space is narrow. Every entry is dated (asOf) and every
+# fact below was verified against the cited vendor documentation on that date — the exemplar
+# rule from the architecture catalogue, applied to configuration facts. An entry older than
+# six months is flagged for re-verification by `npm run audit`.
+attribution: >-
+  Authored in this repository. Facts are distilled from each vendor's own documentation,
+  fetched and verified on the asOf date recorded per entry; nothing here is recalled from
+  model memory. Verify against the vendor's current pages before enforcing.
+
+tools:
+  - id: toolClaudeCode
+    name: Claude Code
+    vendor: Anthropic
+    asOf: "2026-08"
+    summary:
+      - >-
+        Two admin channels share one top-precedence managed tier: endpoint-managed settings
+        delivered as files or OS policies via MDM/GPO, and server-managed settings configured
+        in the claude.ai admin console (Teams/Enterprise, Owner roles) and fetched by clients
+        at login with hourly polling. Managed settings outrank command-line flags and all
+        user and project files.
+    items:
+      - title: Managed settings via MDM, GPO or the admin console
+        body:
+          - >-
+            Endpoint paths: macOS /Library/Application Support/ClaudeCode/managed-settings.json
+            (plus a managed-settings.d/ drop-in directory), Linux and WSL
+            /etc/claude-code/managed-settings.json, Windows
+            C:\Program Files\ClaudeCode\managed-settings.json — the legacy ProgramData path is
+            no longer supported as of v2.1.75. OS-policy channels: the macOS managed-preference
+            domain com.anthropic.claudecode and the Windows registry key
+            HKLM\SOFTWARE\Policies\ClaudeCode.
+          - >-
+            Server-managed settings cover the same keys from the console, with a caveat the
+            docs state plainly: it is a client-side control, not a security boundary, and it is
+            unavailable when routing through Bedrock, Vertex or a custom base URL. Endpoint
+            management via MDM is the stronger channel; forceRemoteSettingsRefresh makes the
+            server channel fail closed at startup.
+        links:
+          - title: Claude Code settings reference (precedence, paths, keys)
+            url: https://code.claude.com/docs/en/settings
+          - title: Server-managed settings
+            url: https://code.claude.com/docs/en/server-managed-settings
+      - title: Permission, MCP and hook lockdown
+        body:
+          - >-
+            Pin permission rules with permissions.allow / deny / ask, and set
+            allowManagedPermissionRulesOnly to block user- and project-level rules entirely.
+            disableAutoMode removes the auto-approval mode from the mode cycle (the settings
+            reference's current name; older pages still show disableBypassPermissionsMode).
+          - >-
+            MCP admission: allowedMcpServers is the allowlist — undefined means unrestricted
+            and an empty array is a full lockdown — with deniedMcpServers winning on conflict,
+            allowManagedMcpServersOnly, and a managed-mcp.json file for exclusive control of
+            MCP configuration. Hooks and sideloading close the remaining gaps:
+            allowManagedHooksOnly, disableAllHooks, allowedHttpHookUrls, and
+            disableSideloadFlags to reject --plugin-dir and --mcp-config at the command line.
+        links:
+          - title: Claude Code settings reference
+            url: https://code.claude.com/docs/en/settings
+      - title: Forced login, credentials and audit telemetry
+        body:
+          - >-
+            forceLoginMethod and forceLoginOrgUUID pin sessions to the organisation;
+            forceLoginOrgUUID also blocks startup on ambient API-key credentials (v2.1.146+).
+            apiKeyHelper substitutes a managed credential script for stored keys.
+          - >-
+            Fleet-wide audit: set CLAUDE_CODE_ENABLE_TELEMETRY=1 and the OTEL_* exporter
+            variables in the managed env block; when the exporter endpoint comes from managed
+            settings, conflicting developer-set OTel variables are removed at startup
+            (v2.1.217+). Sessions then emit per-tool decision events, prompt and API events
+            (text redacted by default) and usage metrics to the organisation's collector.
+        links:
+          - title: Authentication and IAM
+            url: https://code.claude.com/docs/en/iam
+          - title: Monitoring and OpenTelemetry
+            url: https://code.claude.com/docs/en/monitoring-usage
+    sources:
+      - title: Claude Code settings reference
+        url: https://code.claude.com/docs/en/settings
+      - title: Claude Code server-managed settings
+        url: https://code.claude.com/docs/en/server-managed-settings
+      - title: Claude Code monitoring
+        url: https://code.claude.com/docs/en/monitoring-usage
+
+  - id: toolCursor
+    name: Cursor
+    vendor: Anysphere
+    asOf: "2026-08"
+    summary:
+      - >-
+        Enterprise governance spans SAML SSO with SCIM, MDM device policies, org-enforced
+        Privacy Mode, model and MCP access control, agent run-mode policies, Enterprise-only
+        audit logs with SIEM streaming, and a Basic-auth Admin API. Most controls are labelled
+        Enterprise-tier in the documentation.
+    items:
+      - title: Identity and device management
+        body:
+          - >-
+            SAML 2.0 SSO (password auth can be blocked), SCIM provisioning with group sync,
+            and three dashboard roles. MDM policies for macOS and Windows cover Allowed Team
+            IDs (blocks personal-account login on corporate devices), an Allowed Extensions
+            allowlist (Cursor 2.1+) and Workspace Trust enforcement.
+        links:
+          - title: Cursor enterprise identity and access management
+            url: https://cursor.com/docs/enterprise/identity-and-access-management
+      - title: Privacy, model and MCP control
+        body:
+          - >-
+            Privacy Mode is default-on for Enterprise teams and admins can enforce it so
+            members cannot disable it; model access is set per team and per organisation
+            group, and BYOK API keys can be blocked. MCP servers are governed by a dashboard
+            allowlist with wildcard matching, per-server tool restrictions and per-server
+            network policies, distributable to endpoints as ~/.cursor/permissions.json via
+            MDM — admin settings take precedence over the local file and editor settings.
+        links:
+          - title: Model and integration management
+            url: https://cursor.com/docs/enterprise/model-and-integration-management
+          - title: Privacy and data governance
+            url: https://cursor.com/docs/enterprise/privacy-and-data-governance
+      - title: Agent run-mode policies and audit
+        body:
+          - >-
+            Enterprise Run Mode policies (Cursor 3.6+) set the terminal posture — Auto-review,
+            Allowlist, or Run Everything — and the docs are candid that the allowlist is
+            best-effort, not a security boundary; hooks can scan prompts, block commands and
+            redact secrets, and .cursorignore is likewise documented as not a boundary.
+            Enterprise audit logs record admin and account events (explicitly not agent
+            responses or generated code), stream to SIEM, and the Admin API exposes members,
+            usage, spend, repo blocklists and model access.
+        links:
+          - title: LLM safety and controls
+            url: https://cursor.com/docs/enterprise/llm-safety-and-controls
+          - title: Compliance and monitoring
+            url: https://cursor.com/docs/enterprise/compliance-and-monitoring
+    sources:
+      - title: Cursor enterprise documentation hub
+        url: https://cursor.com/docs/enterprise
+      - title: Cursor admin API
+        url: https://cursor.com/docs/account/teams/admin-api
+
+  - id: toolGithubCopilot
+    name: GitHub Copilot
+    vendor: GitHub
+    asOf: "2026-08"
+    summary:
+      - >-
+        Governance runs through the enterprise AI-controls tab and organisation Copilot
+        settings: Feature, Privacy and Models policies set enterprise-first (enable, disable,
+        or let organisations decide), with content exclusion and MCP governance layered on for
+        Business and Enterprise plans.
+    items:
+      - title: Enterprise and organisation policy framework
+        body:
+          - >-
+            Policies gate which Copilot features, agents and models users can access — named
+            policies include MCP servers in Copilot, restricting MCP to registry servers,
+            allowed models, custom models, web search, Copilot Memory and
+            suggestions-matching-public-code (blocked by default for Business seats).
+            Conflict rules matter for design: within one enterprise the least restrictive
+            setting wins across a user's organisations, so a lockdown must be set at the
+            enterprise level to be a lockdown.
+        links:
+          - title: Copilot policy concepts
+            url: https://docs.github.com/en/copilot/concepts/policies
+          - title: Supported surfaces for policies
+            url: https://docs.github.com/en/copilot/reference/supported-surfaces-for-policies
+      - title: MCP governance and content exclusion
+        body:
+          - >-
+            The MCP policy gates whether MCP servers run at all across Copilot clients; server
+            allowlisting comes in two strengths — a GitHub-hosted Managed Settings File (GA,
+            matched on name, URL and stdio command, not user-bypassable) and a Custom MCP
+            Registry (preview, name matching only, bypassable by editing local config).
+            Content exclusion (Business and Enterprise) applies at repository, organisation
+            and enterprise scope with fnmatch patterns, but is not honoured by Copilot CLI or
+            by agent and edit modes of Chat — scope guidance accordingly.
+        links:
+          - title: MCP management concepts
+            url: https://docs.github.com/en/copilot/concepts/mcp-management
+          - title: Excluding content from Copilot
+            url: https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
+      - title: Audit surface and network posture
+        body:
+          - >-
+            The organisation audit log records Copilot licensing, settings and policy changes
+            (action:copilot) and the cloud agent's website activity (actor:Copilot) with
+            180-day retention — it does not capture client-side prompts, so IDE-level
+            telemetry needs its own answer. Proxy and firewall allowlists are documented
+            per-plan, with a /meta API endpoint for the current domain set.
+        links:
+          - title: Reviewing audit logs for Copilot Business
+            url: https://docs.github.com/en/copilot/how-tos/administer/organizations/reviewing-activity-related-to-github-copilot-in-your-organization/reviewing-audit-logs-for-copilot-business
+          - title: Proxy and firewall settings for Copilot
+            url: https://docs.github.com/en/copilot/reference/proxy-server-and-firewall-settings-for-copilot
+    sources:
+      - title: Managing policies for Copilot in your enterprise
+        url: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer/enterprises/managing-policies-and-features-for-copilot-in-your-enterprise
+      - title: Copilot content exclusion concepts
+        url: https://docs.github.com/en/copilot/concepts/content-exclusion
+
+  - id: toolCodex
+    name: Codex
+    vendor: OpenAI
+    asOf: "2026-08"
+    summary:
+      - >-
+        One agent across the CLI, the IDE extension and the ChatGPT desktop app, configured
+        through TOML with a documented precedence chain and a genuine enterprise enforcement
+        layer: an admin-authored requirements.toml that constrains approval policies, sandbox
+        profiles, network, MCP servers and feature flags, and that users cannot override.
+    items:
+      - title: Admin-enforced requirements.toml
+        body:
+          - >-
+            Requirements arrive by system file (/etc/codex/requirements.toml on Unix,
+            %ProgramData%\OpenAI\Codex\requirements.toml on Windows), as a cloud-managed
+            policy bundle assigned from chatgpt.com and delivered at sign-in, or via macOS
+            MDM under com.openai.codex (base64-encoded TOML; the highest-precedence channel).
+            If the cloud policy fetch fails with no valid cache, the client refuses to start
+            unmanaged rather than failing open.
+          - >-
+            Enforceable keys cover the surfaces that matter: allowed_approval_policies and
+            allowed_permission_profiles with default_permissions (e.g. pin ":workspace" and
+            allow only read-only and workspace profiles), filesystem deny_read patterns for
+            secrets paths, prefix command rules, managed hooks with
+            allow_managed_hooks_only, experimental network domain allow/deny lists, and
+            feature pins that disable computer use and browser surfaces org-wide.
+        links:
+          - title: Codex managed configuration
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+          - title: Codex admin setup and rollout
+            url: https://learn.chatgpt.com/docs/enterprise/admin-setup
+      - title: Sandbox, approvals and network posture
+        body:
+          - >-
+            Sandboxing is OS-enforced (Seatbelt on macOS, bwrap plus seccomp on Linux, a
+            native Windows sandbox) with permission profiles from read-only through
+            workspace-write to an explicit danger-full-access escape hatch. The agent runs
+            with network access off by default; enabling it can route through a
+            domain-filtering proxy, and .git, .codex and .agents stay read-only inside
+            writable roots. Codex cloud blocks internet access during the agent phase by
+            default, with per-environment allowlists and method restrictions.
+        links:
+          - title: Codex approvals and security
+            url: https://learn.chatgpt.com/docs/agent-approvals-security
+          - title: Codex cloud internet access
+            url: https://learn.chatgpt.com/docs/cloud/internet-access
+      - title: Workspace gating and compliance export
+        body:
+          - >-
+            Workspace admins gate Codex Local (desktop app, CLI and IDE extension together)
+            and Codex cloud separately, assign access by role with SCIM-synced groups, and
+            set starting model defaults — enforced requirements still win. Codex usage,
+            including the local clients, exports through the Compliance API and the
+            immutable Compliance Logs Platform alongside workspace audit and authentication
+            logs.
+        links:
+          - title: Using Codex with your ChatGPT plan
+            url: https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
+          - title: Compliance API
+            url: https://learn.chatgpt.com/docs/enterprise/compliance-api
+    sources:
+      - title: Codex managed configuration
+        url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+      - title: Codex approvals and security
+        url: https://learn.chatgpt.com/docs/agent-approvals-security
+      - title: Codex config file reference
+        url: https://learn.chatgpt.com/docs/config-file/config-basic
+
+  - id: toolChatgptDesktop
+    name: ChatGPT desktop app
+    vendor: OpenAI
+    asOf: "2026-08"
+    summary:
+      - >-
+        The current desktop app bundles Chat, Work and Codex, and is governed by the same
+        managed-configuration system as Codex — requirements.toml cloud policies and the
+        com.openai.codex MDM domain — plus workspace admin controls for plugins, apps,
+        memory and identity from the ChatGPT admin panel.
+    items:
+      - title: Managed deployment and update control
+        body:
+          - >-
+            Windows ships only as a Store-signed MSIX (no MSI or standalone EXE), deployable
+            via Intune, MECM or winget with offline packages available; macOS deploys from
+            the enterprise DMG, with device management arriving through the com.openai.codex
+            MDM payload rather than a dedicated packaging guide. The built-in updater is
+            disabled with an enforced requirements.toml feature pin, targeted by group, user
+            or platform from the managed-configs console.
+        links:
+          - title: Windows deployment
+            url: https://learn.chatgpt.com/docs/enterprise/windows-deployment
+          - title: Managing app updates
+            url: https://learn.chatgpt.com/docs/enterprise/manage-app-updates
+      - title: Workspace controls over connectors, apps and memory
+        body:
+          - >-
+            On Enterprise and Edu workspaces, plugins and their underlying apps are disabled
+            by default and enabled per role, with per-app configuration for real-time
+            access, actions, approvals and domain restrictions — one control set that
+            applies across web, mobile, desktop and Codex. Memory and record mode are
+            workspace-level toggles (record off by default), and the Compliance Logs
+            Platform exports immutable audit, authentication and usage events with 30-day
+            source retention, so longer retention requires continuous export.
+        links:
+          - title: Apps and plugin controls for workspaces
+            url: https://help.openai.com/en/articles/11509118
+          - title: Compliance APIs and audit logs
+            url: https://help.openai.com/en/articles/9261474
+    sources:
+      - title: ChatGPT desktop Windows deployment
+        url: https://learn.chatgpt.com/docs/enterprise/windows-deployment
+      - title: Codex/ChatGPT managed configuration
+        url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+      - title: ChatGPT Enterprise release notes
+        url: https://help.openai.com/en/articles/10128477-chatgpt-enterprise-edu-release-notes
+
+  - id: toolClaudeDesktop
+    name: Claude Desktop
+    vendor: Anthropic
+    asOf: "2026-08"
+    summary:
+      - >-
+        Enterprise installers (macOS PKG, Windows per-user MSIX) deploy via Jamf, Kandji,
+        Intune, SCCM or GPO, with device-level policies covering extensions, local MCP,
+        auto-updates and forced org login, plus an in-console desktop-extension allowlist and
+        org-wide managed connector authorization for Team and Enterprise plans.
+    items:
+      - title: Managed deployment and device policies
+        body:
+          - >-
+            Device policies live in the macOS configuration-profile domain
+            com.anthropic.claudefordesktop and the Windows HKLM policy registry. The keys that
+            matter for control: isDesktopExtensionEnabled and
+            isDesktopExtensionDirectoryEnabled (kill switches for extensions and the
+            directory), isLocalDevMcpEnabled (local MCP server connections),
+            isClaudeCodeForDesktopEnabled, forceLoginOrgUUID, allowedWorkspaceFolders and
+            auto-update enforcement. Device-level policy overrides the in-app allowlist.
+        links:
+          - title: Enterprise configuration for Claude Desktop
+            url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+      - title: Extension allowlist and managed connector authorization
+        body:
+          - >-
+            Team and Enterprise Owners can turn on the desktop extension allowlist
+            (Organization settings → Connectors → Desktop). It ships disabled — every
+            extension is available until it is enabled — and enabling it force-deletes
+            existing non-allowlisted installs; custom org-scoped extensions upload in .mcpb
+            format. Managed authorization (beta) lets admins authorize MCP connectors
+            org-wide through the IdP, assign them by role and scope their permissions.
+        links:
+          - title: Desktop extension allowlist
+            url: https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
+          - title: Org-wide MCP connector authorization
+            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+    sources:
+      - title: Deploy Claude Desktop for macOS
+        url: https://support.claude.com/en/articles/12611117-deploy-claude-desktop-for-macos
+      - title: Deploy Claude Desktop for Windows
+        url: https://support.claude.com/en/articles/12622703-deploy-claude-desktop-for-windows
+      - title: Enterprise configuration for Claude Desktop
+        url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+
+  - id: toolOpenclaw
+    name: OpenClaw
+    vendor: OpenClaw (open source)
+    asOf: "2026-08"
+    summary:
+      - >-
+        A self-hosted personal agent whose gateway is the control plane — channels, tool
+        policy and auth under an explicit single-trusted-operator model. Official hardening
+        is real and specific: loopback-plus-token gateway auth, DM pairing, high-risk tools
+        disabled or sandboxed, and a container sandbox whose defaults are no network, a
+        read-only root and all capabilities dropped.
+    items:
+      - title: Gateway lockdown and the version floor
+        body:
+          - >-
+            The gateway defaults to loopback binding; the docs say plainly never to expose it
+            unauthenticated on 0.0.0.0, and token auth is the recommended mode. DM hardening
+            is dmPolicy pairing (time-limited codes for unknown senders), contact allowlists
+            and requireMention in groups; `openclaw security audit` checks a deployment and
+            can apply safe fixes. Enforce a version floor of 2026.1.29: earlier Control UI
+            builds auto-connected to an attacker-supplied gatewayUrl and sent the operator
+            token (CVE-2026-25253, CVSS 8.8), and internet scans found thousands of exposed
+            instances.
+        links:
+          - title: OpenClaw gateway security model
+            url: https://docs.openclaw.ai/gateway/security
+          - title: NVD — CVE-2026-25253
+            url: https://nvd.nist.gov/vuln/detail/CVE-2026-25253
+      - title: Sandbox defaults and proxy-injected credentials
+        body:
+          - >-
+            With the Docker sandbox backend enabled, tool execution runs in a container whose
+            defaults are network none, readOnlyRoot true, all capabilities dropped and a
+            non-root user, with the workspace mounted read-only or read-write by policy;
+            per-agent sandbox and tool-policy overrides layer on top, and the docs warn never
+            to mount the Docker socket into a sandbox. Docker's own Sandboxes product wraps
+            the same agent with a configurable egress proxy that denies arbitrary hosts and
+            injects provider API keys at the proxy, so the agent process never holds them.
+        links:
+          - title: OpenClaw sandboxing
+            url: https://docs.openclaw.ai/gateway/sandboxing
+          - title: "Docker: Run OpenClaw securely in Docker Sandboxes"
+            url: https://www.docker.com/blog/run-openclaw-securely-in-docker-sandboxes/
+    sources:
+      - title: OpenClaw gateway security model
+        url: https://docs.openclaw.ai/gateway/security
+      - title: OpenClaw sandboxing
+        url: https://docs.openclaw.ai/gateway/sandboxing
+      - title: GitHub advisory GHSA-g8p2-7wf7-98mq
+        url: https://github.com/advisories/GHSA-g8p2-7wf7-98mq
+
+  - id: toolHermes
+    name: Hermes Agent
+    vendor: Nous Research
+    asOf: "2026-08"
+    summary:
+      - >-
+        An open-source (MIT) personal agent runtime — a competing product to OpenClaw, not a
+        variant of it, with a one-command migration from it. Its posture centres on
+        per-command approval with dangerous-command detection, DM pairing, fully isolated
+        per-profile state, and sandboxed execution across multiple terminal backends.
+    items:
+      - title: Approval-first execution and isolated state
+        body:
+          - >-
+            Execution goes through command approval with dangerous-command detection —
+            blocked actions return a tool error naming the denied command rather than
+            silently proceeding — and the first DM claims exclusive access to a deployment.
+            Profiles are fully isolated (own memory store, session database and skills
+            directory), subagents run isolated, and sandboxed execution spans local, Docker,
+            SSH, Singularity, Modal, Daytona and Vercel Sandbox backends with container
+            hardening and namespace isolation.
+          - >-
+            The governance trade-off to weigh: Hermes is a self-improving agent that writes
+            its own skills from experience, which is also the feature demanding the most
+            trust — an organisation sanctioning it should decide whether self-modification is
+            acceptable and pin the approval policy accordingly.
+        links:
+          - title: Hermes Agent — official site
+            url: https://hermes-agent.nousresearch.com/
+          - title: Hermes Agent FAQ (approvals, pairing, profile isolation)
+            url: https://github.com/NousResearch/hermes-agent/blob/main/website/docs/reference/faq.md
+    sources:
+      - title: Hermes Agent — official site
+        url: https://hermes-agent.nousresearch.com/
+      - title: NousResearch/hermes-agent repository
+        url: https://github.com/NousResearch/hermes-agent

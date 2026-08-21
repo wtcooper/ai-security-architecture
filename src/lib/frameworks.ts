@@ -205,6 +205,26 @@ function hasAnyMapping(frameworkId: string): boolean {
 }
 
 /**
+ * Display order, wherever frameworks are listed together. The data's own order is CoSAI's
+ * six followed by whatever is authored here, which buries the OWASP lists most people arrive
+ * looking for. Anything not named falls to the end, so a new framework appears rather than
+ * vanishing.
+ */
+export const FRAMEWORK_ORDER = [
+  "owasp-llm-2026",
+  "owasp-agentic",
+  "owasp-mcp",
+  "mitre-atlas",
+  "stride",
+  "nist-ai-rmf",
+  "iso-22989",
+];
+const orderOf = (id: string) => {
+  const i = FRAMEWORK_ORDER.indexOf(id);
+  return i === -1 ? FRAMEWORK_ORDER.length : i;
+};
+
+/**
  * The frameworks offered as a lens. Two kinds are withheld:
  *
  *   - a superseded edition, which keeps its data because CoSAI's mappings still name it, but
@@ -215,9 +235,9 @@ function hasAnyMapping(frameworkId: string): boolean {
  * Both are data-driven, so a framework returns to the tab the moment mappings appear for it —
  * there is no list of exclusions to remember to update.
  */
-export const visibleFrameworks = frameworks.filter(
-  (f) => !f.superseded && hasAnyMapping(f.id),
-);
+export const visibleFrameworks = frameworks
+  .filter((f) => !f.superseded && hasAnyMapping(f.id))
+  .sort((a, b) => orderOf(a.id) - orderOf(b.id));
 const visibleIds = new Set(visibleFrameworks.map((f) => f.id));
 export const isVisibleFramework = (id: string) => visibleIds.has(id);
 
