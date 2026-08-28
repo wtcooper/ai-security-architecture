@@ -27,13 +27,17 @@ description:
   - >
     The target state wraps the harness whole. A microVM-class sandbox contains the daemon, its
     memory and a deliberately local tool surface — files, shell and skills, with their own
-    filesystem, packages and network — and remote reach is pushed outside the boundary. The AI
-    gateway is the general-purpose exit: per-destination allow/deny, credentials injected at the
-    crossing so the sandbox itself holds no secrets, and the audit tap. Remote MCP servers and
-    external APIs sit behind the gateway as their own tool surface, and only they touch
-    downstream services. The one other opening is a read-only pull from a private,
-    organisation-maintained package registry. Products now ship exactly this wrap for the
-    popular harnesses; the drawing is that pattern, vendor-neutral.
+    kernel, filesystem, packages and network — and remote reach is pushed outside the boundary.
+    The AI gateway is the general-purpose exit: deny-by-default egress for all outbound
+    traffic, credentials injected at the crossing so the sandbox itself holds no secrets, and
+    the audit tap. Remote MCP servers and external APIs sit behind the gateway as their own
+    tool surface, and only they touch downstream services. Two other openings exist: a
+    read-only pull from a private, organisation-maintained package registry, and the owner's
+    workspace folders, shared into the sandbox explicitly and nothing else. The boundary is
+    also what the approval prompts traded away — shipped sandboxes run the agent approval-free
+    inside, on the position that isolation, egress policy and credential injection replace
+    per-command consent. Products now ship exactly this wrap for the popular harnesses; the
+    drawing is that pattern, vendor-neutral.
   - >
     What the drawing still does not contain is a governance plane. No agent identity distinct
     from the user, no policy engine consulted per tool call, no audit sink beyond the gateway's
@@ -125,7 +129,9 @@ blocks:
       - id: editTools
         label: File & edit tools
         icon: folder
-        note: Read and write on the sandbox's own filesystem — not the user's home directory.
+        note: >
+          Read and write on the sandbox's own filesystem and the mounted workspace folders —
+          never the rest of the host.
       - id: shell
         label: Shell commands
         icon: code
@@ -174,7 +180,8 @@ blocks:
     note: >
       Cross-session plain-text files plus the embedded search over them. Written by the agent,
       read back as instruction on every subsequent turn including the unattended ones. This is
-      the persistence primitive.
+      the persistence primitive. It lives on the sandbox's own filesystem — surviving restarts,
+      removed with the sandbox — so quarantine and memory wipe are the same operation.
     items:
       - id: memoryFiles
         label: Memory files
@@ -184,6 +191,26 @@ blocks:
         label: Search index
         icon: search
         note: Retrieval over everything the agent has ever kept.
+
+  - id: workspace
+    kind: external
+    title: Owner workspace
+    cosaiComponent: componentDataSources
+    col: 0
+    row: 2
+    note: >
+      The host folders the owner chooses to share into the sandbox — mounted at their real
+      paths, and the only part of the host filesystem that exists in there. Direct mode mounts
+      them read-write, so an edit is on the host the moment it is made; clone mode mounts them
+      read-only and the agent works on a private copy whose changes return by git. The
+      enterprise posture is clone mode.
+    items:
+      - id: sharedPaths
+        label: Shared folders
+        icon: folder
+        note: >
+          Explicitly listed paths only. The home directory, keychains and dotfiles are not
+          hidden from the agent — they are simply not there.
 
   - id: registry
     kind: external
@@ -208,20 +235,23 @@ blocks:
     col: 3
     row: 1
     note: >
-      The egress proxy at the sandbox boundary, and the general-purpose exit. Per-destination
-      allow/deny, credentials injected at the crossing so the sandbox holds no secrets, and the
-      audit tap on everything that leaves.
+      The egress proxy at the sandbox boundary, and the general-purpose exit. Deny-by-default
+      for all outbound traffic, credentials injected into request headers at the crossing so
+      the sandbox holds no secrets, and the audit tap on everything that leaves.
     items:
       - id: allowlist
         label: Egress allowlist
         icon: shield
-        note: Deny by default; models, tools, channels and registries each named explicitly.
+        note: >
+          All outbound traffic denied by default, not just the web; models, tools, channels and
+          registries each named explicitly.
       - id: credInjection
         label: Credential injection
         icon: key
         note: >
-          Secrets live outside the boundary and are injected per call — the loop and its tools
-          never hold a key at rest.
+          Secrets stay in the host's keychain and are injected into headers at the proxy —
+          inside the boundary the agent sees only placeholder values, so there is no key to
+          read, log or exfiltrate.
       - id: auditTap
         label: Audit tap
         icon: doc
@@ -360,7 +390,16 @@ edges:
     label: read-only pull
     note: >
       The install path: shell package pulls reach the private registry and nothing else, with no
-      write permission in either direction. The sandbox's one opening besides the gateway.
+      write permission in either direction.
+  - from: toolPlane
+    to: workspace
+    path: external
+    bidir: true
+    label: workspace mount
+    note: >
+      The third opening. In direct mode a written file is a host file immediately — including
+      files the host executes implicitly, like git hooks, CI configuration and IDE task
+      definitions. Clone mode turns the crossing into a git fetch the owner performs.
 
 pins:
   risks:
@@ -407,6 +446,11 @@ pins:
     - risk: riskRogueActions
       at: remoteTools->downstream
       note: Unattended triggering, unscoped authority and no approval gate compound here.
+    - risk: riskRogueActions
+      at: toolPlane->workspace
+      note: >
+        Direct-mode edits land on the host as they happen. A modified git hook or CI file
+        executes outside the boundary the sandbox was supposed to hold.
     - risk: riskCovertChannelsInModelOutputs
       at: bridges->harness
       note: >
@@ -436,11 +480,17 @@ pins:
       note: >
         Tool permissions evaluated at the boundary against the agent's identity — what this
         agent may call, per destination, decided outside the loop it governs.
+    - capability: capabilityToolPermissionScoping
+      at: toolPlane->workspace
+      note: >
+        Share named folders only, and prefer the read-only clone mode — the mount list is a
+        permission grant on the host filesystem.
     - capability: capabilityAgentSandboxing
       at: harness
       note: >
         Wrap the harness whole — daemon, memory and local tools in one microVM-class boundary
-        with its own filesystem and network, not a per-command box.
+        with its own kernel, filesystem and network, not a per-command box. This boundary is
+        what makes approval-free unattended operation defensible at all.
     - capability: capabilityMcpToolSecurity
       at: gateway->remoteTools
       note: Provenance and behavioural review before a remote server is admitted; pin what the allowlist names.
@@ -490,6 +540,8 @@ scenarios:
         note: Recalled prose becomes the instruction for this turn.
       - follow: harness->toolPlane
         note: The loop acts, unattended, inside the sandbox.
+      - follow: toolPlane->workspace
+        note: Edits reach the shared folders — in direct mode, that is the host, immediately.
       - follow: remoteTools->downstream
         note: A one-time injection has become a recurring implant — bounded now by the allowlist.
   - title: A skill is installed
@@ -513,7 +565,15 @@ deviations:
       Remote MCP and external APIs are reachable only through the gateway, so they are drawn
       behind it as "Remote tool services" — the same transports the cloud architectures call
       Tool services — while the in-sandbox Tool services block keeps only the local surface:
-      files, shell and skills.
+      files, shell and skills. The shipped products document the caveat this drawing encodes:
+      a local stdio MCP server runs on the host with host permissions, outside the boundary,
+      which is why the target state admits remote transports only behind the gateway.
+  - subject: The workspace mount is drawn as a third opening
+    reason: >
+      Shipped sandboxes share the owner's chosen folders into the microVM, read-write by
+      default. That crossing is real attack surface — a direct-mode edit to a file the host
+      executes implicitly leaves the boundary without ever touching the gateway — so the
+      drawing refuses the fiction of a two-opening sandbox.
   - subject: The registry pull is drawn from Tool services, not the harness
     reason: >
       Installs happen through shell commands, so the drawing runs the read-only pull from the
@@ -521,13 +581,19 @@ deviations:
   - subject: No governance plane is drawn
     reason: >
       This archetype has none — no agent identity, no policy engine, no audit sink, no registry,
-      no kill switch. The other architectures in this catalogue draw a governance column; the
-      empty space where it would be is this diagram's finding, and inventing one would
-      misrepresent the pattern.
+      no kill switch. The sandbox products have begun selling one — centrally managed policies
+      over a fleet's network, filesystem and tool access — but that plane governs the sandbox,
+      not the agent, and the archetype as assembled still has nothing. The other architectures
+      in this catalogue draw a governance column; the empty space where it would be is this
+      diagram's finding, and inventing one would misrepresent the pattern.
 
 sources:
   - title: "Docker Sandboxes — microVM isolation, egress proxy and credential handling for agent harnesses"
     url: https://docs.docker.com/ai/sandboxes/
+  - title: "Docker Sandboxes — threat model: the microVM as the primary trust boundary"
+    url: https://docs.docker.com/ai/sandboxes/security
+  - title: "Docker — why microVMs: the isolation architecture behind agent sandboxes"
+    url: https://www.docker.com/blog/why-microvms-the-architecture-behind-docker-sandboxes/
   - title: "OpenClaw documentation — gateway architecture and channel model"
     url: https://docs.openclaw.ai/concepts/architecture
   - title: "OpenClaw documentation — gateway security and network binding"

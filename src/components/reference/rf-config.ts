@@ -16,7 +16,7 @@ export const RF_CONFIG: Record<string, RfFrameConfig> = {
   archPersonalAgent: {
     frameLabel: "Sandbox",
     frameNote:
-      "MicroVM-class boundary: daemon, memory and local tools run whole inside, with their own filesystem and network. The AI gateway is the general-purpose exit; the one other opening is a read-only pull from the private package registry (target state).",
+      "MicroVM-class boundary: bridges, daemon, memory and local tools run whole inside, with their own kernel, filesystem and network — and no approval prompts, because the boundary replaces them. Three openings: the AI gateway as the general-purpose exit, a read-only pull from the private package registry, and the owner's explicitly shared workspace folders (target state).",
     members: ["bridges", "toolPlane", "harness", "memory"],
     hide: [],
   },
