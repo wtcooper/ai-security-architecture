@@ -1,0 +1,85 @@
+# Controls guidance for the chat agent with tools archetype. Audience: admins, architects and
+# security teams. This is a build pattern: the human in the thread is the primary control, so
+# most requirements exist to keep that gate real rather than nominal. The build's derivation
+# check fails this document if its cited capabilities stop being pinned on the architecture.
+archetype: archChatAgent
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; no vendor facts to date.
+
+overview:
+  - >-
+    A chat agent's security posture rests on one fact: the human reads every reply before the
+    next action. Every requirement below either protects that gate (proposals worth reading,
+    prompts rare enough to read), respects the delegated authority model (the tools act as the
+    conversing user, never as the service), or bounds the conversation itself — which is a
+    persistence surface where one poisoned tool result steers every later turn.
+  - >-
+    The bright line to police in review: remove the human from the turns — a scheduled run, an
+    auto-approve setting, a background continuation — and the deployment has silently become
+    the single agent workflow and must meet that pattern's requirements instead. The most
+    common governance failure in this archetype is not a missing control; it is a chat agent
+    that stopped being one without anybody re-reviewing it.
+
+items:
+  - title: Keep the in-thread approval worth reading
+    capabilities: [capabilityHitlControls]
+    body:
+      - >-
+        The approval is only a control if the proposal is specific — "OK to proceed?" approves
+        nothing in particular. Require action proposals that name the operation, the target and
+        the consequence, and keep them rare: a gate that fires on every step trains the user to
+        accept, which is this architecture's version of no gate at all. Assessment probe: read
+        a week of approval prompts and count how many a reviewer could distinguish.
+
+  - title: Every tool call carries the user's grant, not the service's reach
+    capabilities: [capabilityIga, capabilityToolPermissionScoping, capabilityNhiManagement, capabilitySecretsManagement]
+    body:
+      - >-
+        Authority is on-behalf-of: a delegated grant scoped to the session and the user,
+        evaluated per call, ending when the session ends. The agent tier keeps its own workload
+        identity — distinct from the users it serves — and holds no standing keys; the gateway
+        brokers user-scoped credentials per call. Assessment probe: a user who cannot read a
+        record directly asks the agent for it; the tool call must fail with the user's
+        entitlement, not succeed with the service's.
+
+  - title: Treat the conversation as a persistence surface
+    capabilities: [capabilityMemoryProtection, capabilityAiDlp, capabilityPromptInjectionDefense]
+    body:
+      - >-
+        Context accumulates — retrievals, tool results, uploads — and all of it stands beside
+        the system instruction on every later call. Scope memory to the conversation and the
+        user with no cross-session reads; classify returned content before it re-enters the
+        thread; and redact what a session may accumulate, because a late question can surface
+        records the current topic never needed. Assessment probe: plant an instruction in a
+        record the agent will retrieve, and verify classification catches it before the next
+        model call.
+
+  - title: Render output as content, and bound where it can go
+    capabilities: [capabilityOutputEncoding, capabilityEgressControl]
+    body:
+      - >-
+        The thread renders model output in a browser: sanitise markup and links before
+        display, because a rendered image URL exfiltrates the conversation without a click.
+        On the action side, tools reach named destinations only — the documented exfiltration
+        chains in this archetype end at an attacker's collection endpoint that an egress
+        allowlist would have refused.
+
+  - title: Meter the edge, audit off the thread, and be able to stop
+    capabilities: [capabilityRateLimiting, capabilityAuditLogging, capabilityKillSwitch]
+    body:
+      - >-
+        Session and per-user ceilings sit at the entry point, because per-token inference
+        behind a public chat surface is a spend problem before it is anything else. The audit
+        trail — proposal, approval, action — is recorded off the agent's write path; the thread
+        the user sees is not the audit record. The stop ends live sessions and revokes the
+        agent's identity without a deploy.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI03 identity and privilege abuse"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "OWASP Securing Agentic Applications Guide 1.0 — human-in-the-loop patterns"
+    url: https://genai.owasp.org/resource/securing-agentic-applications-guide-1-0/
+  - title: "CoSAI Shared Responsibility Framework V1.0 — autonomy levels and intervention tiers"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf

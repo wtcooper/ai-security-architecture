@@ -1,0 +1,96 @@
+# Controls guidance for the fine-tuning and model registry pipeline archetype. Audience:
+# admins, architects and security teams. This is a build pattern: the pipeline is a build
+# system whose artifact cannot be read, so input control and evaluation substitute for code
+# review. The build's derivation check fails this document if its cited capabilities stop
+# being pinned on the architecture.
+archetype: archTrainingPipeline
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; research findings are cited, vendors
+  are not named in the items.
+
+overview:
+  - >-
+    Treat the pipeline as a build system and hold it to build-system controls: reproducible
+    runs, provenance, signed artifacts, and a promotion gate nothing bypasses. Where the
+    analogy breaks — the artifact cannot be diffed or read for backdoors — the substitutes
+    are the two things that can be examined: what went into the training set, and how the
+    result behaves. Every requirement below serves one of those two.
+  - >-
+    Scale the paranoia correctly: published results show a near-constant few hundred poisoned
+    documents backdoor models regardless of size, backdoors in a base model survive tuning
+    and the benchmarks that do not know their trigger, and fine-tuning on entirely benign
+    data measurably erodes safety alignment. None of that is exotic; all of it is priced into
+    the gates below.
+
+items:
+  - title: Curate in front, with provenance captured at ingestion
+    capabilities: [capabilityDataSanitization, capabilityDataProvenance]
+    body:
+      - >-
+        Curation is the last point where a poisoned or improperly sourced example is a
+        deletion rather than a retraining decision — filtering happens before the corpus, and
+        per-example source and licence are recorded at ingestion because they cannot be
+        reconstructed later. Lineage from every promoted model back to its exact dataset
+        version is what makes a poisoning discovered months later scopeable at all. Include
+        the labelling workforce in scope: labels steer behaviour directly and typically get
+        no scrutiny relative to that influence.
+
+  - title: Gate corpus access, and scope every job to its approved dataset
+    capabilities: [capabilityDataAccessGovernance]
+    body:
+      - >-
+        Corpus read access is the union of everything the organisation decided a model should
+        learn, and it defaults to a broad platform role — gate reads and writes separately,
+        and scope each training job to the dataset version approved for that run so a job
+        cannot quietly widen its own inputs. Restricted-access content in the corpus becomes
+        part of an artifact served far more widely than the dataset ever was; decide who may
+        read the corpus with that in mind.
+
+  - title: Evaluation blocks promotion — and tests for what tuning broke
+    capabilities: [capabilityModelEvals, capabilityAiRedTeaming, capabilityPetTooling]
+    body:
+      - >-
+        The gate is blocking or it is not a gate: capability and safety benchmarks with
+        regression against the previous version, adversarial probing for triggers and
+        behavioural anomalies, and extraction plus membership-inference testing before
+        promotion. Require the safety evaluation even when the tuning data was benign —
+        alignment erosion from ordinary instruction tuning is well replicated, so the
+        post-tune eval is re-establishing a property the tuning degraded, not checking for
+        sabotage alone. And treat a clean pass as necessary, never sufficient: a targeted
+        backdoor passes every benchmark that does not know its trigger, which is why the
+        input-side controls exist.
+
+  - title: Sign outside the build, promote with separated duties
+    capabilities: [capabilityModelWeightProtection, capabilityHitlControls, capabilityEncryptionKeyManagement, capabilityAiBom]
+    body:
+      - >-
+        Whoever runs training cannot promote unilaterally, and the signing key lives outside
+        the training environment so a compromised job cannot sign its own output — the
+        default configuration usually violates both, so check rather than assume. Sign with
+        the standardised model-signing tooling at promotion, verify at load, and keep the
+        registry's own platform in scope: the common self-hosted trackers ship without
+        authentication and have been exploited in the wild. The lineage record — dataset
+        version, code, base model, run — is maintained for every artifact in the registry.
+
+  - title: Scan what comes in from upstream, and roll out what goes downstream
+    capabilities: [capabilityModelScanning, capabilityStagedRollout]
+    body:
+      - >-
+        Base checkpoints and training frameworks arrive from outside and execute with access
+        to the corpus and the artifact: scan them before use, prefer formats that cannot
+        execute on load, and treat scanner output as advisory next to format policy, because
+        scanner bypasses are documented. Downstream, promotion is gradual — traffic split,
+        signature verified at load, rollback target retained — because the last clean
+        checkpoint is the incident response.
+
+sources:
+  - title: "Anthropic — a small, near-constant number of samples poisons models of any size"
+    url: https://www.anthropic.com/research/small-samples-poison
+  - title: "OpenSSF Model Signing — standardised signing and provenance for model artifacts"
+    url: https://openssf.org/projects/model-signing/
+  - title: "NIST SP 800-218A — secure software development practices for generative AI"
+    url: https://csrc.nist.gov/pubs/sp/800/218/a/final
+  - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning"
+    url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/

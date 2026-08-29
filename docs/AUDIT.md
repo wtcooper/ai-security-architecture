@@ -740,11 +740,13 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | Tool services | service | `componentTools` |
 | Chat agent with tools | Downstream services | external | `componentDataSources` |
 | Chat agent with tools | Governance plane | governance | (none) |
+| Remote MCP server you publish | Enterprise IdP | external | (none) |
 | Remote MCP server you publish | Authorization server | service | (none) |
-| Remote MCP server you publish | Protocol endpoint | service | `componentApplicationInputHandling` |
+| Remote MCP server you publish | Service edge | service | (none) |
+| Remote MCP server you publish | MCP service | service | `componentApplication` |
 | Remote MCP server you publish | Tool definitions | service | `componentTools` |
-| Remote MCP server you publish | Tool handlers | service | `componentApplication` |
 | Remote MCP server you publish | Tenant data | service | `componentDataStorage` |
+| Remote MCP server you publish | Downstream services | external | `componentDataSources` |
 | Remote MCP server you publish | Governance plane | governance | (none) |
 | Self-hosted open-weights inference | AI gateway | service | (none) |
 | Self-hosted open-weights inference | Inference runtime | service | `componentModelServing` |
@@ -762,6 +764,7 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Governance plane | governance | (none) |
 | Coding and desktop agents | Repos, docs & screen | external | `componentDataSources` |
 | Coding and desktop agents | Agent harness | service | `componentReasoningCore` |
+| Coding and desktop agents | Memory & state | service | `componentDataStorage` |
 | Coding and desktop agents | Tool services | service | `componentTools` |
 | Coding and desktop agents | Vendor service | provider | (none) |
 | Coding and desktop agents | Model provider | provider | `componentModelServing` |
@@ -774,6 +777,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |
+| Personal autonomous agent | Owner workspace | external | `componentDataSources` |
 | Personal autonomous agent | Private pkg registry | external | `componentDataSources` |
 | Personal autonomous agent | AI gateway | service | (none) |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
@@ -801,21 +805,30 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-3 of 12 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+12 of 12 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | Coding and desktop agents, Personal autonomous agent | Local model runtime |
-| Cloud & hosted | Durable multi-agent workflow | Single agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
-| Third-party SaaS | — | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
+| Endpoint | Coding and desktop agents, Local model runtime, Personal autonomous agent | — |
+| Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline | — |
+| Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
 ### 5a. Documents
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
-| Durable multi-agent workflow | build | draft | 5 | _none_ |
-| Coding and desktop agents | use | draft | 7 | _none_ |
+| Single agent workflow | build | draft | 5 | _none_ |
+| Durable multi-agent workflow | build | draft | 5 | Network segmentation & egress control, Agent execution sandboxing |
+| Chat agent with tools | build | draft | 5 | _none_ |
+| Remote MCP server you publish | build | draft | 5 | Human-in-the-loop approval & escalation, Output encoding & safe rendering |
+| Self-hosted open-weights inference | build | draft | 4 | _none_ |
+| Fine-tuning and model registry pipeline | build | draft | 5 | _none_ |
+| Coding and desktop agents | use | draft | 7 | Agent memory & context protection |
+| Local model runtime | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 4 | _none_ |
+| Enterprise AI chat with connectors | use | draft | 5 | _none_ |
+| UI/low-code managed agent runtime | use | draft | 5 | _none_ |
+| API/SDK managed agent runtime | hybrid | draft | 5 | _none_ |
 
 ### 5b. Tool registry
 

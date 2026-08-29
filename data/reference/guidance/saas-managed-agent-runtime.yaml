@@ -1,0 +1,97 @@
+# Controls guidance for the API/SDK managed agent runtime archetype. Audience: admins,
+# architects and security teams. This is a hybrid pattern: engineers build the agent
+# definitions and code, the vendor runs the loop — so half the controls are build
+# requirements on what teams ship, and half are configuration of a platform nobody here
+# operates. The build's derivation check fails this document if its cited capabilities stop
+# being pinned on the architecture.
+archetype: archManagedAgentRuntime
+mode: hybrid
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; platforms are named only in cited
+  sources, not in the items.
+
+overview:
+  - >-
+    Every provider converged on the same decomposition — runtime, memory, tool gateway,
+    identity, sandbox, observability, evaluation, policy — which means the governance plane
+    most self-built agent architectures never get is exactly what these platforms sell. The
+    organisation's job splits accordingly: require teams to actually use the supplied
+    controls (the platform makes them available, not mandatory), and configure the
+    customer-owned half deliberately rather than accepting defaults.
+  - >-
+    The consequential engineering choice is between the declarative harness and the code
+    escape hatch. The first inherits the platform's guardrails automatically; the second
+    inherits only what it explicitly calls. Teams start declarative, hit a limitation, move
+    to code, and do not notice which controls stopped applying — make that transition a
+    review event, because the platform will not.
+
+items:
+  - title: Use the per-agent identities the platform mints, and carry the user's
+    capabilities: [capabilityNhiManagement, capabilityIga]
+    body:
+      - >-
+        The platforms supply first-class, revocable principals per agent — and teams
+        routinely collapse everything back onto one shared service principal, which undoes
+        attribution and per-agent revocation in one stroke. Require the distinct principal
+        per agent, and require the user's identity to travel from the front end to the tool
+        call: dropping it on the way is the confused-deputy failure this architecture makes
+        easy to avoid and easy to commit. Assessment probe: revoke one agent's principal and
+        confirm exactly one agent stops.
+
+  - title: The escape hatch is a review event, and gateway coverage is the checklist
+    capabilities: [capabilityToolPermissionScoping, capabilityModelGuardrails]
+    body:
+      - >-
+        Tool brokering, scoping, logging and guardrails reach a declarative agent
+        automatically and reach custom code only where it calls the gateway. Where enforcement
+        sits is the platform-evaluation question: the strongest platforms enforce default-deny
+        policy and guardrails at the tool gateway, outside agent code, with floor settings a
+        builder cannot lower — on others the same controls are code the builder must remember
+        to call. Require an explicit coverage check whenever a team takes the code path:
+        which calls route through the gateway, which guardrails still apply, and who verified
+        it.
+
+  - title: Memory scope is a reviewed decision, never a default
+    capabilities: [capabilityMemoryProtection]
+    body:
+      - >-
+        Managed memory's scope — per session, per user, or shared across users — is a
+        configuration flag with a data-protection consequence: cross-user scope means one
+        user's content shapes another's turn, and it looks like a feature. Session or
+        per-user scope is the default posture; cross-user scope is a design exception with a
+        named owner and a written justification.
+
+  - title: Admit definitions like code, and evaluate before every alias move
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals]
+    body:
+      - >-
+        An agent definition — instructions, tool bindings, or loop code — is a deployable
+        artifact that decides what the agent may do; it gets the same review, inventory and
+        provenance as application code, and the population inventory matters because a
+        managed runtime makes agents cheap enough to sprawl. No definition change reaches a
+        production alias without adversarial evaluation, because the definition is the
+        attack surface prompt injection negotiates with.
+
+  - title: Turn on everything observable, export it, and assure the rest
+    capabilities: [capabilityAgentObservability, capabilityAuditLogging, capabilityAiGovernancePlatform, capabilityAiTprm]
+    body:
+      - >-
+        The loop is not inspectable; traces are the only window, so all of it is on — steps,
+        tool calls, decisions — and exported out of the provider's console, where it can be
+        correlated with everything else and retained on your schedule. Policy and guardrail
+        configuration is authored through governed intake, not console edits. What remains —
+        the sandbox isolation claim, the runtime's own supply chain — cannot be tested from
+        your side: assure it like any critical vendor dependency, and note the direction of
+        travel toward sandboxes and compute in the customer's own perimeter where the claim
+        is not acceptable.
+
+sources:
+  - title: "CoSAI Shared Responsibility Framework V1.0 — AI and agent PaaS operating model"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
+  - title: "AWS — Cedar-based default-deny policy enforced at the AgentCore gateway"
+    url: https://aws.amazon.com/blogs/security/why-policy-in-amazon-bedrock-agentcore-chose-cedar-for-securing-agentic-workflows/
+  - title: "Google Cloud — Model Armor floor settings: admin-enforced guardrail minimums"
+    url: https://cloud.google.com/security-command-center/docs/model_armor_floor_settings
+  - title: "Microsoft Learn — agent identity and Entra Agent ID"
+    url: https://learn.microsoft.com/en-us/entra/agent-id/what-are-agent-identities

@@ -1,0 +1,81 @@
+# Controls guidance for the self-hosted open-weights inference archetype. Audience: admins,
+# architects and security teams. This is a build pattern: the organisation has taken over the
+# model-provider role, and every requirement below is a control a managed API used to supply.
+# The build's derivation check fails this document if its cited capabilities stop being pinned.
+archetype: archSelfHostedInference
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; serving products are named only in
+  cited sources, not in the items.
+
+overview:
+  - >-
+    Self-hosting open weights trades a data-disclosure risk for a supply-chain, availability
+    and safety risk: no provider applies content policy, absorbs spikes, or patches the
+    serving stack. The requirements below are the provider role, written down — and the two
+    facts that shape them are that the serving stacks assume a trusted network (auth is
+    partial, auxiliary endpoints and distributed control planes ship open by design), and
+    that multi-tenancy inside the runtime is a set of configuration flags with
+    data-protection consequences.
+  - >-
+    The review posture: treat serving configuration as security configuration. Continuous
+    batching, cache sharing, tenancy scoping and network binding are tuning knobs to the
+    platform team and controls to the security team; the gap between those two readings is
+    where the incidents in this archetype live.
+
+items:
+  - title: Nothing reaches the runtime except through the gateway
+    capabilities: [capabilityAiGateway, capabilityNhiManagement, capabilityRateLimiting]
+    body:
+      - >-
+        The serving stack is not safe as an exposed edge service and its own API keys guard
+        only part of the surface — so the gateway in front is mandatory, not optional: one
+        governed door carrying workload identity per calling tenant, per-tenant quotas sized
+        for finite capacity, and admission control that sheds load at the front rather than
+        at the accelerator. The distributed control plane behind it — job APIs, inter-node
+        channels — ships unauthenticated by design; network isolation is the control there,
+        not a version bump. Assessment probe: enumerate every listening endpoint on the
+        serving tier and demand the auth story for each.
+
+  - title: A blocking promotion gate, and digest verification at load
+    capabilities: [capabilityModelScanning, capabilityModelEvals, capabilityModelWeightProtection]
+    body:
+      - >-
+        Weights reach the runtime only through the promotion pipeline: format policy and
+        scanning as a blocking gate, per-version evaluation because a new checkpoint is a new
+        model, and a digest verified at load so the gate cannot be bypassed by writing to
+        storage directly. Weights at rest get encryption, access control and integrity
+        digests — the artifact is expensive to reproduce and trivial to copy.
+
+  - title: Tenancy is a configuration review, not a default
+    capabilities: [capabilityMlSecureDefaults, capabilityMemoryProtection, capabilityConfidentialComputing]
+    body:
+      - >-
+        Continuous batching mixes tenants in one forward pass; the KV and prefix caches hold
+        their live context. Require tenant-scoped cache keys — published attacks reconstruct
+        other tenants' prompts from cache-hit timing alone, so cross-tenant prefix sharing is
+        off unless a review explicitly accepts it. For the highest-sensitivity tenants,
+        hardware-backed isolation on the accelerators is the answer where shared silicon is
+        not acceptable. Assessment probe: read the serving configuration and name which flags
+        a tenant boundary depends on; anyone who cannot has not reviewed it.
+
+  - title: Own the patch stream and the posture, including the gateway's
+    capabilities: [capabilityAiVulnMgmt, capabilityAiSpm, capabilityModelGuardrails]
+    body:
+      - >-
+        The serving stack is fast-moving third-party code with a live CVE stream, and nobody
+        upstream patches it on your behalf — track it like any other exposed tier, and treat
+        the gateway itself as supply chain: it is third-party code holding every tenant's
+        credentials, an incident class with recent precedent. Posture management watches
+        serving configuration for drift — versions, cache flags, bindings — and the guardrail
+        checks a provider would have run are deployed at the gateway on both legs, because
+        the output side is the half most often omitted.
+
+sources:
+  - title: "vLLM security guide — API-key limits, unauthenticated auxiliary endpoints and trusted-network assumptions"
+    url: https://docs.vllm.ai/en/stable/usage/security/
+  - title: "Selective KV-cache sharing — cross-tenant prompt reconstruction from cache-timing side channels"
+    url: https://arxiv.org/abs/2508.08438
+  - title: "CISA and NSA — deploying AI systems securely"
+    url: https://www.cisa.gov/resources-tools/resources/deploying-ai-systems-securely

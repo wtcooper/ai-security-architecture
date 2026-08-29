@@ -1,0 +1,89 @@
+# Controls guidance for the single agent workflow archetype. Audience: admins, architects and
+# security teams. This is a build pattern: each item is a property the design must have before
+# an unattended agent writes to systems of record. The build's derivation check fails this
+# document if its cited capabilities stop being pinned on the architecture.
+archetype: archActionAgent
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; no vendor facts to date.
+
+overview:
+  - >-
+    This is the architecture where the agent writes: a request arrives, a decision happens,
+    and an effect lands on a system of record in seconds with nobody between them. The
+    organisation's requirements therefore centre on reversibility rather than accuracy — the
+    review question for every design is not "how often is it right" but "what happens when it
+    is wrong, and who can undo it, and how fast."
+  - >-
+    The requirements below assume the multi-agent workflow's guidance as a sibling: each
+    subagent there is this pattern one level down, and everything here applies inside every
+    one of them. What this pattern adds is the concentrated question of a single fast path —
+    the action catalogue, the approval threshold and the compensating transaction carry the
+    weight a human carries in the chat pattern and durability machinery carries in the
+    workflow pattern.
+
+items:
+  - title: Make the action catalogue the policy surface — no arbitrary calls
+    capabilities: [capabilityToolPermissionScoping, capabilityAgentRuntimeEnforcement]
+    body:
+      - >-
+        Require a deterministic catalogue: named, parameter-validated actions, each declaring
+        its blast radius and its compensating transaction. An agent that can compose arbitrary
+        API calls has no policy surface at all — reject that design in review, whatever the
+        framework makes convenient. Enforcement is per invocation, outside the loop: this
+        action, this record, this value, now — evaluated by a policy engine the agent cannot
+        edit, not a session-time grant. Evidence: the catalogue definition, and a denied-call
+        log showing the bounds actually fire.
+
+  - title: Tie approval to consequence, and reversal to everything else
+    capabilities: [capabilityHitlControls]
+    body:
+      - >-
+        The approval threshold is keyed to irreversibility and value, never to model
+        confidence — and it must be rare enough that a human actually reads what fires.
+        Below the threshold, the control is the compensating transaction: an action with no
+        reversal path does not belong in the catalogue below the gate. Assessment probe: list
+        the catalogue's actions and demand the compensating transaction for each; any blank
+        cell below the threshold fails the review.
+
+  - title: Give the agent an identity, and broker every credential
+    capabilities: [capabilityNhiManagement, capabilitySecretsManagement]
+    body:
+      - >-
+        A distinct, revocable workload identity per agent — actions taken as a shared service
+        account are neither attributable nor separately revocable, and turn every incident
+        response into a full-service outage. The agent tier holds no standing keys: model and
+        tool credentials are brokered at the gateway per call, short-lived and scoped.
+        Assessment probe: revoke the agent's identity and confirm the loop stops without
+        touching any other service.
+
+  - title: Scope what the loop reads, because the requester is the attacker
+    capabilities: [capabilityPromptInjectionDefense, capabilityDataAccessGovernance, capabilityMemoryProtection]
+    body:
+      - >-
+        The request text is authored by the party who benefits from the outcome, and record
+        content written months earlier re-enters as context — both are injection paths with a
+        short path to money. Classify inbound text before the loop, scope retrieval to the
+        account under discussion rather than to what the service can reach, and keep case
+        memory hard-scoped to one case. Assessment probe: a request against account A that
+        attempts to retrieve account B's records into context.
+
+  - title: Bound the spend, the destinations, and the time to stop
+    capabilities: [capabilityRateLimiting, capabilityEgressControl, capabilityAuditLogging, capabilityKillSwitch]
+    body:
+      - >-
+        Rate and budget ceilings sit at the gateway, sized for a loop that retries in seconds;
+        the write path reaches named destinations only, because unbounded egress is the
+        exfiltration channel a steered agent looks for. The decision audit records action,
+        reasoning, inputs and identity where the agent can append and cannot amend — the basis
+        for reversal and dispute. And the stop must halt the agent and revoke its identity
+        without a deploy, because the loop acts faster than a pipeline ships.
+
+sources:
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI02 tool misuse"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "AWS Well-Architected Agentic AI Lens — bounded autonomy and human oversight"
+    url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentic-ai-lens.html
+  - title: "CoSAI Shared Responsibility Framework V1.0 — autonomy levels and intervention tiers"
+    url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
