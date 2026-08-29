@@ -41,7 +41,14 @@ interface HoverCard {
   body?: string;
 }
 
-type BlockNodeData = { block: ArchBlock; w: number; h: number; dim: boolean };
+type BlockNodeData = {
+  block: ArchBlock;
+  w: number;
+  h: number;
+  dim: boolean;
+  /** Shows the shared hover card — items use it so each icon can explain itself. */
+  onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
+};
 
 function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   const { block, w, h, dim } = data;
@@ -120,7 +127,8 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
           return (
             <div
               key={item.id}
-              title={item.note ? `${item.label} — ${item.note}` : item.label}
+              onMouseEnter={(e) => data.onItemEnter(e, item.label, item.note)}
+              onMouseLeave={(e) => data.onItemEnter(e, block.title, block.note)}
               style={{
                 position: "absolute",
                 left: cell.x + cell.w / 2,
@@ -357,6 +365,19 @@ export function FlowDiagramRF({
   );
   const inScenario = Boolean(walk);
 
+  const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
+    const wrap = (event.target as HTMLElement).closest("[data-rfwrap]");
+    const rect = wrap?.getBoundingClientRect();
+    if (!rect) return;
+    setCard({
+      x: Math.min(event.clientX - rect.left + 12, rect.width - 280),
+      y: Math.min(event.clientY - rect.top + 12, rect.height - 120),
+      title,
+      body,
+    });
+  }, []);
+  const onPinLeave = useCallback(() => setCard(null), []);
+
   const initialNodes = useMemo(() => {
     const { layout } = archetype;
     const hidden = new Set(cfg?.hide ?? []);
@@ -395,7 +416,7 @@ export function FlowDiagramRF({
         type: "block",
         position: inFrame && frame ? { x: r.x - frame.x, y: r.y - frame.y } : { x: r.x, y: r.y },
         parentId: inFrame ? "__frame" : undefined,
-        data: { block, w: r.w, h: r.h, dim: false },
+        data: { block, w: r.w, h: r.h, dim: false, onItemEnter: cardAt },
         draggable: true,
         style: { width: r.w, height: r.h },
       });
@@ -472,7 +493,7 @@ export function FlowDiagramRF({
       });
     }
     return nodes;
-  }, [archetype, cfg]);
+  }, [archetype, cfg, cardAt]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [lastId, setLastId] = useState(archetype.id);
@@ -503,19 +524,6 @@ export function FlowDiagramRF({
     (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
     [],
   );
-
-  const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
-    const wrap = (event.target as HTMLElement).closest("[data-rfwrap]");
-    const rect = wrap?.getBoundingClientRect();
-    if (!rect) return;
-    setCard({
-      x: Math.min(event.clientX - rect.left + 12, rect.width - 280),
-      y: Math.min(event.clientY - rect.top + 12, rect.height - 120),
-      title,
-      body,
-    });
-  }, []);
-  const onPinLeave = useCallback(() => setCard(null), []);
 
   const edges = useMemo(() => {
     const { layout } = archetype;
