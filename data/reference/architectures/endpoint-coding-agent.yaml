@@ -6,9 +6,9 @@ abbrev: Coding & desktop
 
 summary:
   - >
-    A vendor-built agent application driven by a person who is present — a terminal CLI, an IDE
-    extension, or a desktop GUI, all the same engine in a different shell. The harness and its
-    tool surface ship inside the vendor's application: file and edit tools, a shell, MCP servers,
+    An agent application driven by a person who is present — a vendor's terminal CLI, IDE
+    extension or desktop GUI, or an open-source harness, all the same engine in a different
+    shell. The harness and its tool surface ship inside the application: file and edit tools, a shell, MCP servers,
     installed skills, and optionally computer use, with sandboxed execution for the tools that
     need containing. The shell changes the review surface, not the security architecture.
     Remote steering, scheduled runs and agent-written memory are now opt-in features of the
@@ -195,7 +195,7 @@ blocks:
     kind: service
     title: Tool services
     col: 2
-    row: 1
+    row: 2
     cosaiComponent: componentTools
     note: >
       The application's action surface, running as the user on a machine that also holds their
@@ -236,6 +236,18 @@ blocks:
           Where builds, tests, shell commands and driven desktops run when isolation is on — a
           container or VM whose own configuration the agent must not be able to reach. The
           control that turns "approve every command" into "approve the ones that leave the box".
+
+  - id: ownerDevices
+    kind: actor
+    title: Owner's other devices
+    icon: phone
+    col: 3
+    row: 2
+    note: >
+      The phone, browser and chat surfaces that steer the local session through the vendor's
+      relay. Bound to the owner's vendor account — except chat channels, where anyone the
+      channel admits can raise a session of their own — and the whole path is a toggle in the
+      admin console.
 
   - id: vendor
     kind: provider
@@ -291,7 +303,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     col: 2
-    row: 2
+    row: 3
     note: >
       What the tool plane reaches over the network: registries, the web, and the SaaS accounts
       behind standing connector grants — and where fetched content comes back in as context
@@ -351,6 +363,26 @@ edges:
       The application session on a vendor-issued, session-scoped credential that expires on its
       own. Code, documents and screenshots leave for inference; the completion that comes back is
       unauthenticated content, and it drives the tool calls.
+  - from: ownerDevices
+    to: vendor
+    path: primary
+    route: vh
+    label: remote steering
+    note: >
+      Instructions from away arrive through the vendor relay: the local harness polls
+      outbound, no inbound port opens, and only the owner's account can address it. The trade
+      is that the session's admission decision now lives with the vendor's identity system —
+      and with whatever a chat channel admits.
+  - from: client
+    to: provider
+    path: external
+    route: hv
+    label: OSS variant — direct on a user-held key
+    note: >
+      The open-source harnesses' model path: no vendor service, no session credential — the
+      harness calls the provider directly on a pasted, long-lived key that usually sits in
+      plaintext on disk. The enterprise target state puts an AI gateway at this crossing; the
+      common state has nothing.
   - from: vendor
     to: provider
     path: primary
@@ -424,6 +456,18 @@ pins:
       note: >
         The machine also holds SSH keys, cloud credentials and browser sessions, and outside the
         sandbox nothing separates them from the agent's shell on the way out.
+    - risk: riskSensitiveDataDisclosure
+      at: client->provider
+      note: >
+        The open-source variant's credential story: a long-lived key pasted into configuration,
+        plaintext on disk in most of the harnesses, revocable by nobody but the user who
+        pasted it.
+    - risk: riskStaleAgentIdentityBinding
+      at: ownerDevices->vendor
+      note: >
+        The remote channel is only as good as the account and device binding behind it — a
+        stale login or an unenrolled device steering a machine full of credentials is an
+        account-compromise blast radius, not a UX feature.
     - risk: riskToolSourceProvenance
       at: toolPlane->remote
       note: >
@@ -461,6 +505,17 @@ pins:
       note: >
         Keep the user's SSH keys, cloud credentials and browser profile outside the agent's
         reachable filesystem and environment.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: ownerDevices->vendor
+      note: >
+        Trusted-device enrolment and the admin toggle decide which surfaces may steer at all —
+        enforced at the relay, outside the machine being steered.
+    - capability: capabilitySecretsManagement
+      at: client->provider
+      note: >
+        Where no vendor brokers the credential, vault it: keychain-backed storage, short-lived
+        keys where the provider offers them, and never a plaintext key in a dotfile a repo
+        script can read.
     - capability: capabilityAgentRegistry
       at: vendor
       note: >
@@ -523,6 +578,25 @@ scenarios:
       - follow: toolPlane->remote
         note: The exfiltration attempt has to cross the egress allowlist — the last control standing.
 
+  - title: A phone steers the session
+    steps:
+      - follow: ownerDevices->vendor
+        note: The instruction is written on a phone or in a chat thread; the vendor relay authenticates the owner's account.
+      - follow: vendor->client
+        note: The local harness picks it up on its outbound poll — no port opened, nothing for a scanner to find.
+      - follow: client->toolPlane
+        note: Execution is local, with the machine's full context — the person just is not at the keyboard.
+      - follow: client->vendor
+        note: Results stream back through the relay; approvals can be answered from the phone.
+  - title: The same engine without the vendor
+    steps:
+      - follow: developer->client
+        note: An open-source harness, installed from a community registry, run by a developer who is present.
+      - follow: client->provider
+        note: The model call goes direct, on a pasted key — no session credential, no managed settings, no audit export.
+      - follow: client->toolPlane
+        note: The same tool surface as the vendor products, admitted by configuration files on the same disk the agent can edit.
+
 deviations:
   - subject: The desktop assistant is folded into this architecture rather than drawn separately
     reason: >
@@ -531,9 +605,9 @@ deviations:
       computer-use toggle — all items on this diagram, not different architectures.
   - subject: The application boundary is drawn as a containment frame, not a block
     reason: >
-      The harness and tool services ship inside the vendor's CLI or GUI; the React Flow view
-      draws that as a labelled frame around both, because the application is a boundary things
-      live in, not a service things call.
+      The harness and tool services ship inside one application — a vendor's CLI or GUI, or an
+      open-source harness; the React Flow view draws that as a labelled frame around both,
+      because the application is a boundary things live in, not a service things call.
   - subject: The OS permission layer is a control on the harness-to-tools path, not a block
     reason: >
       One-time OS consent dialogs gate file access, screen recording and input control, but they
@@ -541,11 +615,13 @@ deviations:
       live with the permission-scoping capability on that edge.
   - subject: The open-source harnesses are drawn on this architecture, not their own
     reason: >
-      An opencode/Crush-class harness is this graph with the vendor service column absent: the
-      model edge runs direct on a user-held key, governance defaults to files the agent itself
-      can edit, and the binary ships through community registries. Those are credential-custody
-      and distribution differences — notes and pins, not different blocks — so they live here
-      as a variant, the way the desktop assistant does.
+      An opencode/Crush-class harness is this graph with the vendor service column absent, and
+      its one structural difference is drawn: the amber crossing from the harness straight to
+      the model provider, on a user-held key. Everything else — governance defaulting to files
+      the agent can edit, distribution through community registries — is credential-custody
+      and supply-chain difference, carried as notes and pins the way the desktop assistant's
+      differences are. A reader should take one diagram with an either/or model path, not two
+      architectures.
   - subject: Connector traffic is drawn from Tool services, not the vendor
     reason: >
       The OAuth grants live with the vendor's connector broker, so the bytes flow through the

@@ -21,9 +21,9 @@ export const RF_CONFIG: Record<string, RfFrameConfig> = {
     hide: [],
   },
   archCodingAgent: {
-    frameLabel: "Vendor application",
+    frameLabel: "Agent application",
     frameNote:
-      "The CLI or desktop GUI the vendor ships: the harness and its tool surface live inside the application, and tool capabilities and connectors are built in and configured there.",
+      "The application the harness ships in — a vendor's CLI, IDE extension or desktop app, or an open-source harness. The harness and its tool surface live inside it, and tool capabilities and connectors are built in and configured there.",
     members: ["client", "toolPlane"],
     hide: [],
     labelPos: "bottom",
