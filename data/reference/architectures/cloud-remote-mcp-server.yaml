@@ -25,14 +25,30 @@ description:
     been steered by content it read elsewhere. Scopes therefore need to be narrow enough that a
     hijacked agent's blast radius is bounded, and consequential operations need confirmation
     semantics the protocol can express, rather than relying on the client to prompt its user.
+    In an enterprise deployment the identity work is federated rather than invented: the user
+    signs in at the IdP the organisation already governs, an identity assertion is exchanged
+    for an audience-bound token, and admin policy and revocation stay where the organisation
+    already enforces them. Client registration is pre-arranged or metadata-document based —
+    the self-service dynamic registration of the early protocol is deprecated.
   - >
-    The operational shape is otherwise a well-understood multi-tenant service, and the ordinary
-    disciplines apply with unusual force: every read and write checks both that the scope
-    permits the operation and that the tenant on the token matches the tenant on the record;
-    rate limits are sized for machine callers that retry, loop and parallelise; and results are
-    bounded in size, because an oversized result is both a cost problem for the caller and a way
-    to crowd their context window. There is no model anywhere in this service — every
-    distinctive control follows from the client being one.
+    The deployment shape is deliberately conventional: a service edge in front terminating
+    hostile machine traffic, one stateless application behind it, data and upstream systems
+    behind that. The protocol is stateless by design — there are no sessions to bind, only
+    server-minted state handles whose possession proves nothing — so the service scales
+    horizontally like any web tier, and every request re-verifies authorization from the
+    token. The ordinary multi-tenant disciplines apply with unusual force: every read and
+    write checks both that the scope permits the operation and that the tenant on the token
+    matches the tenant on the record; rate limits are sized for machine callers that retry,
+    loop and parallelise; and results are bounded in size, because an oversized result is
+    both a cost problem for the caller and a way to crowd their context window. There is no
+    model anywhere in this service — every distinctive control follows from the client being
+    one.
+  - >
+    The one rule with no exceptions is at the back: the caller's token never travels upstream.
+    A handler that reaches another system does so as its own OAuth client, on a credential a
+    secrets manager issued to this service — passing the inbound token onward is the confused
+    deputy the protocol documents by name, and it turns one compromised agent into a
+    multi-service problem.
 
 distinguishedBy:
   - >
@@ -54,6 +70,12 @@ exemplars:
     note: >
       The same pattern inside one organisation, exposing internal systems to internal agents.
       Same architecture, and the temptation to skip the authorization work is much stronger.
+    asOf: "2026-08"
+  - name: Gateway-fronted fleets
+    note: >
+      Organisations publishing many servers behind one API-management or MCP gateway tier, with
+      identity, metering and audit centralised at the edge. The protocol's routing headers were
+      designed for exactly this mediation.
     asOf: "2026-08"
 
 blocks:
@@ -77,10 +99,33 @@ blocks:
       Someone else's agent, with arguments composed by a model that may have read hostile
       content. A non-human caller that is neither a person nor a bot to block.
 
+  - id: idp
+    kind: external
+    title: Enterprise IdP
+    col: 1
+    row: 0
+    note: >
+      The identity provider the consuming organisation already governs. Users sign in here, and
+      an identity assertion is exchanged for an audience-bound token — so admin policy,
+      workforce lifecycle and revocation stay in the one place the organisation already
+      enforces them, instead of being reinvented per server.
+    items:
+      - id: sso
+        label: SSO & policy
+        icon: person
+        note: The sign-in and the admin policy every delegated grant traces back to.
+      - id: tokenExchange
+        label: Token exchange
+        icon: key
+        note: >
+          The identity assertion swapped for a token bound to this server's authorization
+          server — the enterprise-managed authorization profile, standardised so it works the
+          same across servers.
+
   - id: authServer
     kind: service
     title: Authorization server
-    col: 1
+    col: 2
     row: 0
     note: >
       Issues scoped, expiring, audience-restricted tokens to named clients. The one place a
@@ -92,31 +137,78 @@ blocks:
         note: >
           Short-lived and audience-restricted — a token other resource servers accept turns one
           compromised agent into a multi-service problem.
+      - id: registration
+        label: Client registration
+        icon: gear
+        note: >
+          Pre-registered clients or client-ID metadata documents. The early protocol's
+          self-service dynamic registration is deprecated — anonymous clients were the cost.
       - id: consent
         label: Consent records
         icon: doc
         note: Which user authorised which client for which scopes, and when.
 
-  - id: endpoint
+  - id: edge
     kind: service
-    title: Protocol endpoint
-    cosaiComponent: componentApplicationInputHandling
+    title: Service edge
     col: 1
     row: 1
     note: >
-      The published MCP surface where agent traffic arrives, is authenticated, throttled and
-      given a session. Session handling here is a security surface, not plumbing.
+      The front door that terminates hostile machine traffic before the application sees it —
+      an API gateway or MCP gateway tier. The protocol's routing headers exist so this tier can
+      route, meter and rate-limit per tool without parsing request bodies.
     items:
-      - id: transport
-        label: MCP transport
+      - id: waf
+        label: WAF & DDoS
+        icon: shield
+        note: The commodity protections, in front because the callers are machines at machine rates.
+      - id: rateLimits
+        label: Rate limits & quotas
+        icon: scale
+        note: >
+          Per-client and per-tenant, sized for callers that retry, loop and parallelise.
+          Limits tuned for human clients are not limits here.
+      - id: headerRouting
+        label: Header routing
         icon: plug
         note: >
-          Session identifiers that can be guessed or replayed hand one caller another's
-          context.
-      - id: sessions
-        label: Session handling
+          Method and tool names ride request headers so the gateway can route and meter
+          without reading bodies — mediation the current protocol was redesigned for.
+
+  - id: service
+    kind: service
+    title: MCP service
+    cosaiComponent: componentApplication
+    col: 2
+    row: 1
+    note: >
+      The application a team actually deploys: transport, tool router and handler code in one
+      stateless service. Every request arrives self-contained and is re-authorized from the
+      token — there is no session to inherit trust from.
+    items:
+      - id: endpoint
+        label: Protocol endpoint
+        icon: plug
+        cosaiComponent: componentApplicationInputHandling
+        note: >
+          Streamable HTTP on a single POST endpoint, Origin validated, stateless by protocol
+          design — which is what lets the tier scale horizontally.
+      - id: stateHandles
+        label: State handles
+        icon: key
+        note: >
+          Server-minted names for cross-call state, bound to the token's subject and
+          re-authorized on every request. Possession of a handle is not authentication.
+      - id: handlers
+        label: Tool handlers
+        icon: code
+        note: Execute with the request's brokered identity, never a standing service account.
+      - id: argValidation
+        label: Input validation
         icon: shield
-        note: Binds each session to the authenticated client and user, never to a guessable id.
+        note: >
+          Arguments arrive model-generated, so validation assumes plausible nonsense — and a
+          handler that re-resolves the tenant from an argument is trusting a model to name it.
 
   - id: toolDefs
     kind: service
@@ -143,33 +235,6 @@ blocks:
           Operations marked as requiring the caller to confirm with its user. The server cannot
           enforce it; declaring it is the only lever it has.
 
-  - id: handlers
-    kind: service
-    title: Tool handlers
-    col: 2
-    row: 1
-    cosaiComponent: componentApplication
-    note: >
-      The implementations. Arguments arrive model-generated, so validation assumes plausible
-      nonsense rather than the malformed input a conventional client produces.
-    items:
-      - id: implementations
-        label: Handler code
-        icon: code
-        note: Executes with the request's brokered identity, never a standing service account.
-      - id: argValidation
-        label: Argument validation
-        icon: shield
-        note: >
-          A handler that re-resolves the tenant from an argument is trusting a model to name
-          it. Client, user and tenant travel with the request.
-      - id: resultShaping
-        label: Result shaping
-        icon: doc
-        note: >
-          Bounds size and structure. An oversized result costs the caller money and crowds
-          their context window.
-
   - id: tenantData
     kind: service
     title: Tenant data
@@ -189,6 +254,26 @@ blocks:
         icon: shield
         note: A discipline across every handler, not one component's job.
 
+  - id: downstream
+    kind: external
+    title: Downstream services
+    cosaiComponent: componentDataSources
+    col: 2
+    row: 3
+    note: >
+      The systems the tools actually wrap — most published servers are a thin governed surface
+      over existing APIs. Reached on the server's own credential, issued by a secrets manager,
+      to named destinations only. The caller's token stops at the service.
+    items:
+      - id: apis
+        label: Web & APIs
+        icon: globe
+        note: The internal and partner APIs the handlers call as this service, never as the caller.
+      - id: saas
+        label: SaaS
+        icon: mail
+        note: Vendor systems reached on standing service credentials the secrets manager scopes and rotates.
+
   - id: governance
     kind: governance
     title: Governance plane
@@ -196,8 +281,8 @@ blocks:
     row: 0
     rowSpan: 3
     note: >
-      Scope design, description review, audit and revocation — the controls that decide a
-      hijacked agent's blast radius long before any call arrives.
+      Scope design, description review, registry listing, audit and revocation — the controls
+      that decide a hijacked agent's blast radius long before any call arrives.
     items:
       - id: scopeCatalogue
         label: Scope catalogue
@@ -205,6 +290,13 @@ blocks:
         note: >
           What each scope permits. Coarse scopes are the difference between a hijacked agent
           doing one thing and doing everything the user could.
+      - id: registryListing
+        label: Registry listing
+        icon: db
+        note: >
+          The server published to the registry or private subregistry clients are allowed to
+          admit from, versions pinned — so consumers can detect a definition that quietly
+          changed after approval.
       - id: descriptionReview
         label: Description review
         icon: doc
@@ -215,8 +307,9 @@ blocks:
         label: Call audit
         icon: eye
         note: >
-          Which client, for which user, called what with which arguments and what came back.
-          Also the only way to answer a customer asking what their agent did here.
+          Which client, for which user, called what with which arguments and what came back —
+          with trace context propagated, because the protocol now carries it. Also the only way
+          to answer a customer asking what their agent did here.
       - id: revocation
         label: Revocation & kill
         icon: stop
@@ -224,14 +317,23 @@ blocks:
 
 edges:
   - from: delegatingUser
-    to: authServer
+    to: idp
     path: primary
-    label: consent
+    label: SSO & consent
     note: >
-      The user authorises a named client for named scopes. The last point at which a human
-      decides anything in this architecture — every subsequent call happens without them.
+      The user signs in where the organisation already governs identity, and consents to a
+      named client with named scopes. The last point at which a human decides anything in this
+      architecture — every subsequent call happens without them.
+  - from: idp
+    to: authServer
+    path: external
+    label: token exchange
+    note: >
+      The IdP's identity assertion is exchanged for a token audience-bound to this server.
+      Central policy and revocation ride this edge — disable the user at the IdP and the
+      delegation chain dies with them.
   - from: callingAgent
-    to: endpoint
+    to: edge
     path: primary
     bidir: true
     label: tool call / result
@@ -239,28 +341,22 @@ edges:
       Model-composed arguments in; bounded results back into the caller's context window. The
       identity check cannot establish whether the agent was steered by content it read
       elsewhere.
+  - from: edge
+    to: service
+    path: primary
+    label: routed call
+    note: >
+      Routed and metered on the protocol's method and tool-name headers, throttled before the
+      application spends anything on it.
   - from: authServer
-    to: endpoint
+    to: service
     path: primary
     label: token validation
     note: >
-      Every call is validated against the issued token — client, user, scopes, audience,
-      expiry — before it reaches a handler.
-  - from: toolDefs
-    to: callingAgent
-    path: external
-    label: schema into caller's context
-    note: >
-      Tool text crossing into another organisation's model, where it executes as instruction.
-      No authentication applies to what a description means.
-  - from: endpoint
-    to: handlers
-    path: primary
-    label: authorised call
-    note: >
-      Client, user and tenant travel with the request rather than being re-derived. A handler
-      that re-resolves the tenant from an argument is trusting a model to name it.
-  - from: handlers
+      Every request is validated against the issued token — client, user, scopes, audience,
+      expiry — before it reaches a handler. The service re-verifies even when the edge
+      pre-checks, because audience validation is this server's own obligation.
+  - from: service
     to: tenantData
     path: primary
     bidir: true
@@ -269,6 +365,22 @@ edges:
       Two checks on every operation: the scope permits it, and the tenant on the token matches
       the tenant on the record. Skipping the second is how cross-tenant access happens in
       practice.
+  - from: service
+    to: downstream
+    path: external
+    bidir: true
+    label: server's own credential
+    note: >
+      The rule with no exceptions: the caller's token never travels upstream. Handlers call
+      out as this service, on secrets-managed credentials, to named destinations only —
+      egress anywhere else is an exfiltration path, not a feature.
+  - from: toolDefs
+    to: callingAgent
+    path: external
+    label: schema into caller's context
+    note: >
+      Tool text crossing into another organisation's model, where it executes as instruction.
+      No authentication applies to what a description means.
   - from: governance
     to: authServer
     path: governance
@@ -297,7 +409,7 @@ pins:
         Tool text treated as editable copy rather than a versioned artifact — a quiet edit
         changes how every consuming agent behaves.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: callingAgent->endpoint
+      at: callingAgent->edge
       note: >
         The token proves a user consented; it cannot prove the agent still represents their
         intent. Scope design is the whole of the answer.
@@ -307,42 +419,56 @@ pins:
         Long-lived or unrevocable tokens keep a decommissioned or compromised client alive.
         Expiry and revocation are the only levers after issuance.
     - risk: riskMCPTransportHijacking
-      at: endpoint
+      at: service
       note: >
-        Session identifiers that can be guessed or replayed hand one caller another's context
-        and tenant.
+        The stateless protocol renamed the threat, not the stakes: a state handle that is
+        guessable, or honoured without re-checking the token it was minted for, hands one
+        caller another's context and tenant.
     - risk: riskDenialOfMLService
-      at: endpoint
+      at: edge
       note: >
         Machine callers retry, loop and parallelise. Limits tuned for human clients are not
-        limits here.
+        limits here — and they belong in front of the application, not inside it.
     - risk: riskRogueActions
-      at: handlers
+      at: service
       note: >
         Arguments are model-generated plausible nonsense, and the user is not present to be
         asked. Confirmation semantics are declared, not enforced, by this side.
     - risk: riskCrossTenantCredentialPropagation
-      at: handlers->tenantData
+      at: service->tenantData
       note: >
         Every read and write needs the tenant on the token checked against the tenant on the
         record. It is a discipline across all handlers, not one component's job.
+    - risk: riskCrossTenantCredentialPropagation
+      at: service->downstream
+      note: >
+        Passing the caller's token upstream is the confused deputy the protocol forbids by
+        name — it converts one compromised agent into access at every system that accepts the
+        token.
     - risk: riskSensitiveDataDisclosure
-      at: handlers->tenantData
+      at: service->tenantData
       note: >
         The read path carries the volume. A coarse scope plus a broad query returns everything
         the user could see, to an agent that may have been steered.
     - risk: riskInsecureModelOutput
-      at: endpoint->callingAgent
+      at: edge->callingAgent
       note: >
         Results enter the caller's context as content. An oversized or manipulative result is a
         denial-of-service against a model rather than a server.
+    - risk: riskZombieShadowMCPServers
+      at: governance
+      note: >
+        A server nobody listed, versioned or watches is still reachable and still trusted by
+        every client that once admitted it. Registry listing and pinning are how consumers
+        notice a change — or a corpse.
 
   capabilities:
     - capability: capabilityIga
-      at: delegatingUser->authServer
+      at: delegatingUser->idp
       note: >
-        Bind consent to a named client and named scopes, recorded and reviewable — the delegated
-        grant every later call traces back to.
+        Bind consent to a named client and named scopes at the IdP the organisation already
+        governs — the delegated grant every later call traces back to, revocable where the
+        workforce already is.
     - capability: capabilityNhiManagement
       at: authServer
       note: >
@@ -353,21 +479,31 @@ pins:
       note: >
         Design scopes narrow enough that a hijacked agent's blast radius is one operation, not
         everything the user could do.
-    - capability: capabilityTransportSecurity
-      at: endpoint
-      note: >
-        TLS, unguessable session identifiers, and sessions bound to the authenticated client —
-        session handling is where transport hijacking is decided.
     - capability: capabilityRateLimiting
-      at: endpoint
+      at: edge
       note: >
         Per-client and per-tenant limits sized for machine callers, with idempotency keys
-        because agents retry.
+        because agents retry — enforced at the edge on the protocol's routing headers.
+    - capability: capabilityTransportSecurity
+      at: service
+      note: >
+        TLS, Origin validation, and state handles bound to the authenticated subject with
+        authorization re-verified per request — possession of a handle proves nothing.
     - capability: capabilityDataAccessGovernance
-      at: handlers->tenantData
+      at: service->tenantData
       note: >
         Enforce both checks on every operation: scope permits it, and token tenant matches
         record tenant — on reads as well as writes.
+    - capability: capabilitySecretsManagement
+      at: service->downstream
+      note: >
+        Upstream credentials issued by a secrets manager to this service, scoped and rotated —
+        never embedded in configuration, and never the caller's token.
+    - capability: capabilityEgressControl
+      at: service->downstream
+      note: >
+        Handlers reach named upstreams and nothing else. Unbounded egress from a tool server
+        is the exfiltration path a steered agent is looking for.
     - capability: capabilityMcpToolSecurity
       at: toolDefs
       note: >
@@ -379,46 +515,58 @@ pins:
         Adversarially review descriptions and error text before release — the question is what a
         model will do with the words, not what a human reads into them.
     - capability: capabilityHitlControls
-      at: handlers
+      at: service
       note: >
         Declare confirmation semantics on consequential tools so the caller must confirm with
         its user. Declaring it is the only lever this side of the boundary has.
     - capability: capabilityOutputEncoding
-      at: endpoint->callingAgent
+      at: edge->callingAgent
       note: >
         Bound result size and structure before it leaves — what returns becomes part of another
         organisation's prompt.
     - capability: capabilityAuditLogging
       at: governance
       note: >
-        Record client, user, tool, arguments and result per call — the trail that answers a
-        customer asking what their agent did here.
+        Record client, user, tool, arguments and result per call, with trace context — the
+        trail that answers a customer asking what their agent did here.
 
 scenarios:
   - title: A user authorises a client
     steps:
-      - follow: delegatingUser->authServer
-        note: Consent binds a named client to named scopes. The last human decision in the flow.
-      - follow: callingAgent->endpoint
+      - follow: delegatingUser->idp
+        note: Consent happens at the IdP the organisation already governs. The last human decision in the flow.
+      - follow: idp->authServer
+        note: The identity assertion is exchanged for a token audience-bound to this server.
+      - follow: callingAgent->edge
         note: The agent calls in with its scoped token; the user is no longer present.
-      - follow: authServer->endpoint
-        note: Client, user, scopes, audience and expiry are validated per call.
-      - follow: endpoint->handlers
-        note: The authorised identity travels with the request — nothing is re-derived from arguments.
-      - follow: handlers->tenantData
+      - follow: edge->service
+        note: Routed and metered at the edge before the application spends anything.
+      - follow: authServer->service
+        note: Client, user, scopes, audience and expiry are validated per request.
+      - follow: service->tenantData
         note: Scope check plus tenant-match check, on this and every subsequent operation.
   - title: A hijacked agent calls in
     steps:
-      - follow: callingAgent->endpoint
+      - follow: callingAgent->edge
         note: >
-          The agent was steered by content it read elsewhere. Its token is valid and every
-          identity check passes.
-      - follow: endpoint->handlers
-        note: Rate limits and argument validation constrain the mechanics, not the intent.
-      - follow: handlers->tenantData
+          The agent was steered by content it read elsewhere. Its token is valid, and the rate
+          limits constrain the mechanics, not the intent.
+      - follow: edge->service
+        note: Every identity check passes; argument validation assumes plausible nonsense.
+      - follow: service->tenantData
         note: The tenant check bounds reach to the one tenant; the scope bounds it to named operations.
-      - follow: endpoint->callingAgent
+      - follow: edge->callingAgent
         note: The blast radius was decided by scope design long before this call arrived.
+  - title: A handler reaches upstream
+    steps:
+      - follow: callingAgent->edge
+        note: The tool call arrives on the caller's audience-bound token.
+      - follow: edge->service
+        note: The handler runs with the request's brokered identity.
+      - follow: service->downstream
+        note: >
+          The caller's token stops here. The handler calls upstream as this service, on a
+          secrets-managed credential, to a named destination — nothing else is reachable.
   - title: A description edit ships
     steps:
       - follow: governance->toolDefs
@@ -426,12 +574,39 @@ scenarios:
       - follow: toolDefs->callingAgent
         note: The new wording lands in every consuming agent's context on their next session.
 
+deviations:
+  - subject: The service is drawn as one application block, not protocol stages
+    reason: >
+      Transport, router and handlers deploy as one stateless service, so they are one block
+      with items — the thing a team ships and scales. Tool definitions stay separate because
+      they are a different artifact class: versioned content with a review pipeline, whose
+      distinctive edge runs into the caller's context rather than through the service.
+  - subject: An enterprise IdP is drawn even though the protocol does not require one
+    reason: >
+      The target state federates identity to the provider the organisation already governs —
+      the standardised enterprise-managed authorization profile — because per-server identity
+      silos are how revocation gets missed. A consumer-facing server without an enterprise IdP
+      collapses this edge into the authorization server and keeps everything else.
+  - subject: Sessions are gone because the protocol removed them
+    reason: >
+      The current protocol revision deleted sessions and the initialize handshake; cross-call
+      state is explicit server-minted handles carried as arguments. The old session-hijacking
+      risk is drawn as state-handle hijacking on the service instead.
+
 sources:
-  - title: "Model Context Protocol — authorization"
+  - title: "Model Context Protocol — authorization (2026-07-28)"
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
-  - title: "Model Context Protocol — security best practices"
+  - title: "Model Context Protocol — security best practices (state handles, confused deputy, token passthrough)"
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
-  - title: "OWASP — a practical guide for secure MCP server development"
-    url: https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/
+  - title: "Model Context Protocol — Streamable HTTP transport and gateway routing headers"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http
+  - title: "MCP auth extensions — enterprise-managed authorization (identity-assertion token exchange)"
+    url: https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/enterprise-managed-authorization.mdx
+  - title: "OWASP MCP Top 10 — MCP01 token mismanagement, MCP07 authentication, MCP09 shadow servers"
+    url: https://github.com/OWASP/www-project-mcp-top-10
+  - title: "MCP Registry — upstream source for private enterprise subregistries"
+    url: https://registry.modelcontextprotocol.io/
+  - title: "Microsoft — MCP security guide: gateway-fronted, IdP-federated reference deployment"
+    url: https://microsoft.github.io/mcp-azure-security-guide/
   - title: "OWASP Top 10 for Agentic Applications 2026 — ASI02, ASI07 insecure inter-agent communication"
     url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/

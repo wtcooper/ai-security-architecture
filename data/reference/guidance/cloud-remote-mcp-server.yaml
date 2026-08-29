@@ -1,0 +1,116 @@
+# Controls guidance for the remote MCP server archetype. Audience: the teams building and
+# publishing servers, and the risk/assessment teams setting the requirements they build to.
+# This is a build pattern: each item is a property the design must have before it ships, with
+# the assurance evidence the risk team collects. The build's derivation check fails this
+# document if its cited capabilities stop being pinned on the architecture.
+archetype: archRemoteMcpServer
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Protocol claims follow the 2026-07-28 MCP revision and its
+  stable extensions; pattern-level by design.
+
+overview:
+  - >-
+    A published MCP server is an OAuth resource server whose clients are language models:
+    conventional multi-tenant service engineering, plus a small set of inversions that follow
+    from the caller being a model. The tool descriptions you publish execute as instruction
+    inside somebody else's agent; the arguments you receive were composed by a model that may
+    have been steered; and the user who consented is not present at call time. Every
+    requirement below is either ordinary service discipline applied with unusual force, or a
+    direct consequence of one of those three facts.
+  - >-
+    The deployment shape to require is boring on purpose: a service edge in front, identity
+    federated to the enterprise IdP, one stateless application, a secrets manager behind it,
+    and a governance plane that owns scopes, tool text, registry listing, audit and
+    revocation. Teams should not be designing novel session schemes or token flows — the
+    protocol deleted sessions and specifies the auth model; the review question is whether
+    the build matches it.
+
+items:
+  - title: Front the endpoint and federate identity — before any tool code is written
+    capabilities: [capabilityRateLimiting, capabilityIga, capabilityNhiManagement]
+    body:
+      - >-
+        Require a gateway tier in front of the service: WAF, per-client and per-tenant rate
+        limits sized for machine callers, and routing on the protocol's method and tool-name
+        headers so metering never needs to parse bodies. Require identity to be federated,
+        not invented: users consent at the enterprise IdP, the assertion is exchanged for an
+        audience-bound token (the enterprise-managed authorization profile), and clients are
+        pre-registered or use client-ID metadata documents — dynamic client registration is
+        deprecated and should fail review. Evidence: the gateway config, the IdP federation
+        record, and a token from a test client showing audience, expiry and scopes.
+      - >-
+        Tokens are validated on every request — client, user, scopes, audience, expiry — and
+        audience validation is the server's own obligation even when the gateway pre-checks.
+        A server that accepts a token issued for any other audience fails the assessment.
+
+  - title: Build stateless; a state handle is a name, not a capability
+    capabilities: [capabilityTransportSecurity]
+    body:
+      - >-
+        The current protocol has no sessions: every request is self-contained, which is what
+        makes the tier horizontally scalable. Where tools need cross-call state, the server
+        mints opaque handles — high-entropy, bound to the token's subject, expiring, and
+        re-authorized against the presenting token on every request. Possession of a handle
+        must prove nothing. Reject designs that carry trust in the handle, vary tool listings
+        per connection, or reimplement session affinity. Require Origin validation and TLS
+        termination evidence at the edge. Assessment probe: present a valid handle with a
+        different subject's token and confirm the request fails.
+
+  - title: The caller's token never travels upstream
+    capabilities: [capabilitySecretsManagement, capabilityEgressControl, capabilityDataAccessGovernance]
+    body:
+      - >-
+        Most servers wrap existing systems, and the one rule with no exceptions is at that
+        boundary: handlers call upstream as this service, on credentials a secrets manager
+        issues, scopes and rotates — never by forwarding the inbound token. Token passthrough
+        is the confused deputy the protocol forbids by name, and it is also the finding most
+        often discovered in production. Bound egress to named upstream destinations;
+        unbounded outbound reach from a tool server is the exfiltration path a steered agent
+        is looking for.
+      - >-
+        On the data path, require the dual check on every operation — the scope permits it,
+        and the tenant on the token matches the tenant on the record — enforced in a shared
+        layer rather than re-implemented per handler. Assessment probe: a valid token for
+        tenant A requesting tenant B's record by identifier, on a read as well as a write.
+
+  - title: Ship tool text like code, and list the server like a dependency
+    capabilities: [capabilityMcpToolSecurity, capabilityAiRedTeaming]
+    body:
+      - >-
+        Descriptions, schemas and error text execute inside the caller's model, so they ship
+        through the same pipeline as code: versioned, reviewed as a security artifact,
+        adversarially read for what a model will do with the words, and published with
+        provenance. Publish to the registry or private subregistry consuming clients admit
+        from, with versions pinned, so a definition that changes after approval is detectable
+        by the people trusting it. Mark consequential tools with confirmation semantics —
+        declaration is the only lever the server holds — and keep results bounded in size,
+        because output lands in someone else's context window.
+
+  - title: Audit per call, and design revocation before launch
+    capabilities: [capabilityAuditLogging, capabilityToolPermissionScoping]
+    body:
+      - >-
+        The audit record is per tool call — client, user, tenant, tool, arguments, result,
+        with trace context propagated — because it is both the incident trail and the answer
+        to a customer asking what their agent did. Scope design is where a hijacked agent's
+        blast radius is decided: a catalogue of narrow scopes owned outside the service, no
+        omnibus scope, and step-up challenges rather than over-asking at consent. Revocation
+        must work at three grains without a deploy: a user (at the IdP), a client (at the
+        authorization server), and a tool (at the definition layer). Assessment probe:
+        revoke a test client and confirm its next call fails within the token lifetime.
+
+sources:
+  - title: "Model Context Protocol — authorization (2026-07-28)"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  - title: "Model Context Protocol — security best practices"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
+  - title: "MCP auth extensions — enterprise-managed authorization"
+    url: https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/enterprise-managed-authorization.mdx
+  - title: "OWASP MCP Top 10"
+    url: https://github.com/OWASP/www-project-mcp-top-10
+  - title: "Microsoft — MCP security guide (Azure reference deployment)"
+    url: https://microsoft.github.io/mcp-azure-security-guide/
+  - title: "MCP Registry"
+    url: https://registry.modelcontextprotocol.io/
