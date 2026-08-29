@@ -103,7 +103,9 @@ blocks:
     note: >
       The same runtime the endpoint architecture draws — loading weights, batching requests,
       serving completions — operated here as a shared service across tenants on shared
-      accelerators. The serving stack is third-party code with its own CVE stream.
+      accelerators. The serving stack is third-party code with its own CVE stream, and its
+      distributed control plane assumes a trusted network: job APIs and inter-node channels
+      ship unauthenticated by design, so network isolation is a control, not a hardening step.
     items:
       - id: loader
         label: Weight loader
@@ -249,6 +251,12 @@ pins:
     - risk: riskInsecureIntegratedComponent
       at: runtime
       note: The serving stack is third-party code with its own CVE stream, and no provider is patching it on anyone's behalf.
+    - risk: riskInsecureIntegratedComponent
+      at: gateway
+      note: >
+        The gateway is third-party code holding every tenant's brokered credentials — a
+        compromised release of the gateway itself is the whole credential portfolio, a supply
+        chain incident class with recent precedent.
     - risk: riskCrossTenantCredentialPropagation
       at: runtime
       note: Batching puts several tenants' requests in one forward pass; isolation is a property of several configuration choices at once.
@@ -259,7 +267,9 @@ pins:
       at: gateway->runtime
       note: >
         Cross-tenant prefix sharing puts one tenant's context where another's request can reach
-        it, and it looks like a cache hit rather than an incident.
+        it, and it looks like a cache hit rather than an incident — a hit is measurable from
+        outside as latency, and published attacks reconstruct other tenants' prompts from that
+        timing alone.
     - risk: riskPromptResponseCachePoisoning
       at: gateway->runtime
       note: A poisoned cache entry serves every later request that matches it.
@@ -351,6 +361,10 @@ deviations:
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain, LLM06 unbounded consumption"
     url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
+  - title: "vLLM security guide — API-key limits, unauthenticated auxiliary endpoints and trusted-network assumptions"
+    url: https://docs.vllm.ai/en/stable/usage/security/
+  - title: "Selective KV-cache sharing — cross-tenant prompt reconstruction from cache-timing side channels"
+    url: https://arxiv.org/abs/2508.08438
   - title: "MITRE ATLAS — model artifact and supply chain techniques"
     url: https://atlas.mitre.org/
   - title: "CISA and NSA — deploying AI systems securely"

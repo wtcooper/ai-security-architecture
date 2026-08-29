@@ -29,8 +29,11 @@ description:
     The supply chain is the axis specific to this archetype. Weights are large binaries fetched
     from public hubs, and several serialization formats execute code on load — the format matters
     more than the source, because a safe-by-construction tensor format from an unknown publisher
-    beats a pickle-based one from a known publisher. The scan has to sit in front of the fetch,
-    because the runtime is usually the thing doing the fetching.
+    beats a pickle-based one from a known publisher. Safe-by-construction has limits of its own:
+    the formats that cannot execute on load are still opened by fast-moving native parsers whose
+    memory bugs are a code-execution class of their own, and one popular format embeds chat
+    templates that execute at inference time, past every static scan. The scan has to sit in
+    front of the fetch, because the runtime is usually the thing doing the fetching.
   - >
     There is no governance column, and that absence is the finding: no model inventory, no weight
     scanning pipeline, no policy on binding or sources exists anywhere in the default deployment.
@@ -94,9 +97,10 @@ blocks:
     row: 1
     cosaiComponent: componentModelServing
     note: >
-      An OpenAI-compatible endpoint on a local port, frequently unauthenticated because the caller
-      is assumed trusted by virtue of being local. Which interface it binds and who may call it
-      are this architecture's admission decisions.
+      An OpenAI-compatible endpoint on a local port, unauthenticated by design in the flagship
+      runtimes — the vendors point at VPNs and reverse proxies rather than shipping auth. Which
+      interface it binds and who may call it are this architecture's admission decisions, and
+      exposure scans keep finding the runtimes that made neither.
     items:
       - id: endpoint
         label: Completion endpoint
@@ -127,7 +131,10 @@ blocks:
       - id: loader
         label: Weight loader
         icon: gear
-        note: Where a pickle-based format turns file opening into code execution.
+        note: >
+          Where a pickle-based format turns file opening into code execution — and where a
+          malformed file in a "safe" format exercises the native parser, a different bug class
+          with the same outcome.
       - id: model
         label: Loaded model
         icon: model
@@ -226,7 +233,9 @@ pins:
         release presumes someone knows this runtime exists.
     - risk: riskInsecureIntegratedComponent
       at: runtime
-      note: The serving stack itself is fast-moving native code with its own CVE history, running unsandboxed.
+      note: >
+        The serving stack itself is fast-moving native code with its own CVE history, running
+        unsandboxed — and patched over an auto-update channel that is part of the attack surface.
     - risk: riskInsecureModelOutput
       at: api->runtime
       note: >
@@ -290,8 +299,9 @@ scenarios:
         note: A well-reviewed model name, a compromised artifact — the download verifies transport, not behaviour.
       - follow: weights->runtime
         note: >
-          The runtime opens the file. In a pickle-class format, the load is the execution event,
-          with the user's privileges.
+          The runtime opens the file. In a pickle-class format the load is the execution event;
+          in a safe format, a malformed header exercises the parser instead — either way, with
+          the user's privileges.
   - title: A browser tab finds the port
     steps:
       - follow: unexpectedCallers->api
@@ -311,6 +321,10 @@ deviations:
 sources:
   - title: "MITRE ATLAS — machine learning supply chain and model artifact techniques"
     url: https://atlas.mitre.org/
+  - title: "Cisco Talos — detecting exposed LLM servers: a Shodan case study on Ollama"
+    url: https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama
+  - title: "llama.cpp security advisories — GGUF parser memory-safety class"
+    url: https://github.com/ggml-org/llama.cpp/security
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain"
     url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
   - title: "CISA and NSA — deploying AI systems securely"
