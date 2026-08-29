@@ -166,11 +166,35 @@ blocks:
         icon: doc
         note: Merges the instruction, the memory and the tool results into one prompt.
 
+  - id: remoteDevice
+    kind: service
+    title: Remote device
+    cosaiComponent: componentAgentUserQuery
+    col: 0
+    row: 0
+    note: >
+      The steering surfaces away from the machine: the phone, the browser, the chat thread.
+      Everything they send reaches the harness through the vendor's relay on the owner's
+      account — which makes this box, not the machine, the place remote-control policy is
+      enforced: trusted-device enrolment, fresh sign-in requirements, and the admin toggle
+      that turns the path off.
+    items:
+      - id: phoneWeb
+        label: Phone & web apps
+        icon: phone
+        note: The owner's own surfaces, signed into the same vendor account as the harness.
+      - id: chatChannels
+        label: Chat channels
+        icon: chat
+        note: >
+          The @-mention surfaces — and the widest admission decision here, because whoever
+          the channel admits can raise a session of their own.
+
   - id: memory
     kind: service
     title: Memory & state
-    col: 0
-    row: 0
+    col: 1
+    row: 3
     cosaiComponent: componentDataStorage
     note: >
       The cross-session layer the products converged on: notes the agent writes itself and
@@ -236,18 +260,6 @@ blocks:
           Where builds, tests, shell commands and driven desktops run when isolation is on — a
           container or VM whose own configuration the agent must not be able to reach. The
           control that turns "approve every command" into "approve the ones that leave the box".
-
-  - id: ownerDevices
-    kind: actor
-    title: Owner's other devices
-    icon: phone
-    col: 3
-    row: 2
-    note: >
-      The phone, browser and chat surfaces that steer the local session through the vendor's
-      relay. Bound to the owner's vendor account — except chat channels, where anyone the
-      channel admits can raise a session of their own — and the whole path is a toggle in the
-      admin console.
 
   - id: vendor
     kind: provider
@@ -363,10 +375,16 @@ edges:
       The application session on a vendor-issued, session-scoped credential that expires on its
       own. Code, documents and screenshots leave for inference; the completion that comes back is
       unauthenticated content, and it drives the tool calls.
-  - from: ownerDevices
+  - from: developer
+    to: remoteDevice
+    path: primary
+    label: away from the machine
+    note: >
+      The same person, not at the keyboard: the instruction is written on a phone, in a
+      browser, or in a chat thread instead of the terminal.
+  - from: remoteDevice
     to: vendor
     path: primary
-    route: vh
     label: remote steering
     note: >
       Instructions from away arrive through the vendor relay: the local harness polls
@@ -463,7 +481,7 @@ pins:
         plaintext on disk in most of the harnesses, revocable by nobody but the user who
         pasted it.
     - risk: riskStaleAgentIdentityBinding
-      at: ownerDevices->vendor
+      at: remoteDevice->vendor
       note: >
         The remote channel is only as good as the account and device binding behind it — a
         stale login or an unenrolled device steering a machine full of credentials is an
@@ -506,7 +524,7 @@ pins:
         Keep the user's SSH keys, cloud credentials and browser profile outside the agent's
         reachable filesystem and environment.
     - capability: capabilityAgentRuntimeEnforcement
-      at: ownerDevices->vendor
+      at: remoteDevice->vendor
       note: >
         Trusted-device enrolment and the admin toggle decide which surfaces may steer at all —
         enforced at the relay, outside the machine being steered.
@@ -580,8 +598,10 @@ scenarios:
 
   - title: A phone steers the session
     steps:
-      - follow: ownerDevices->vendor
-        note: The instruction is written on a phone or in a chat thread; the vendor relay authenticates the owner's account.
+      - follow: developer->remoteDevice
+        note: The person steps away from the machine; the instruction is written on a phone or in a chat thread.
+      - follow: remoteDevice->vendor
+        note: The vendor relay authenticates the owner's account — and the trusted-device policy fires here or nowhere.
       - follow: vendor->client
         note: The local harness picks it up on its outbound poll — no port opened, nothing for a scanner to find.
       - follow: client->toolPlane
