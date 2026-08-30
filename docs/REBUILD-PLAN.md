@@ -26,7 +26,7 @@ Status key: `todo` · `research pending` · `done` · `needs decision`
 | # | Instruction | Disposition |
 |---|---|---|
 | E7 | The **sandbox was dropped** in the zone migration; it is the core recommendation for personal autonomous agents on managed endpoints. Restore it | **CHALLENGE-A** — needs a representation decision |
-| E8 | Add the sandbox to first-party coding agents too, for egress and access controls | todo, same decision |
+| E8 | ~~Add the sandbox to first-party coding agents too~~ | **DROPPED 2026-08-30.** Sandbox goes on the personal autonomous agent only — that is the worrisome category. Vendor coding agents ship built-in command-level sandboxing and the organisation is comfortable with that. See the note under Wave C. |
 | E9 | Research and model on OpenClaw, Hermes, Docker microVM sandboxes | research pending |
 
 ### Endpoint · first-party coding & desktop agents
@@ -113,7 +113,7 @@ Status key: `todo` · `research pending` · `done` · `needs decision`
 | T3 | Really it is a browser on the managed endpoint going to the vendor platform | todo |
 | T4 | The endpoint component is just the browser — **don't call it a "surface"** | todo |
 | T5 | **Never add a zone just to have it represented; drop unused zones** — catalogue-wide | todo — see CHALLENGE-B |
-| T6 | Keep the Enterprise cloud zone here: AI gateway → tool services, so the 3p chat can reach our own MCP servers | todo |
+| T6 | Keep the Enterprise cloud zone here: AI gateway → tool services, so the 3p chat can reach our own MCP servers **over a secure tunnel** — vendor-supplied software the organisation runs to connect to its MCP | todo — terminology is *tunnel*, not *channel* |
 | T7 | BYOK required in that scenario | todo — pin |
 | T8 | Vendor service reaches **both** our cloud tool services **and** external tool services | todo |
 | T9 | The vendor service stays a **single component**; don't model their internals | agree — matches rule 8 |
@@ -763,9 +763,15 @@ dependency order, leaving the ones told to "follow the patterns established by t
 
 1. **Third-party** (E1–E6): direct SSO path primary, gateway path secondary, `aiGateway→provider`
    added, mutual exclusivity recorded as a deviation, Cursor contrast in exemplars.
-2. **Sandbox** (E7–E9): a `boundary` container on the personal agent and first-party, four
-   openings named in its note, credential-injection-at-the-proxy pinned, and the MCP-servers-run-
-   on-the-host gap pinned rather than hidden by drawing a clean boundary.
+2. **Sandbox** (E7, E9) — **personal autonomous agent only**: a `boundary` container, four
+   openings named in its note, credential-injection-at-the-proxy pinned, and the
+   MCP-servers-run-on-the-host gap pinned rather than hidden by drawing a clean boundary.
+   *Scope note:* dropped from first-party per your decision. Recorded so the reasoning survives —
+   the justification given (Claude Code, Cursor and Codex ship built-in command sandboxing)
+   applies to the **third-party** category; the first-party OSS harnesses are the ones the
+   research found weakest here (OpenClaw's `sandbox.mode` defaults to `off`; Hermes states its
+   deny rules are *"not a sandbox against a deliberately adversarial process"*). Revisit if that
+   category's posture changes.
 3. **First-party** (E10–E14): relay/tunnel component on the remote path, direct-port case pinned
    as the risk, Local API server item, LangChain deep agents dropped as an exemplar.
 4. **Local runtime** (E15–E19): egress control removed, band disappears, terminology aligned with
@@ -803,6 +809,58 @@ dependency order, leaving the ones told to "follow the patterns established by t
 
 - Flip the provenance test from report-only to error.
 - Regenerate the audit, update the catalogue doc and the ontology audit.
+
+---
+
+## Part 6 — Task register
+
+The thing to check against so nothing in this plan is forgotten. Tick as landed.
+
+### Wave A — ontology and build
+- [ ] A1 Remove the crossing rule and `crossing: true`; replace with a non-blocking report
+- [ ] A2 Provenance test for components (report-only), then error in Wave F
+- [ ] A3 Retire `Egress control` and `Service edge` with `deprecated:` redirects
+- [ ] A4 A2A into `toolServicesRemote` (cloud, vendor, external)
+- [ ] A5 Full controls-as-components audit across all 13 using the provenance test
+- [ ] A6 Revert the "frame inside a band" deviation in ONTOLOGY.md
+
+### Wave B — grammar and renderer (**in progress**)
+- [ ] B1 `parent:` on blocks — recursive containment, unlimited depth
+- [ ] B2 `kind: boundary` — dashed container, no items, not on the data path
+- [ ] B3 `kind: origin` — invisible anchor for an anonymous edge source
+- [ ] B4 Recursive layout sizing (children on a local grid, parent derived)
+- [ ] B5 Per-container collision scoping
+- [ ] B6 Retire `RF_CONFIG`; containment becomes data
+- [ ] B7 Nested rendering in `FlowDiagramRF` **and** the standalone HTML exporter
+- [ ] B8 Derive the governance row from the tallest content band (fixes 402px / 222px gaps)
+- [ ] B9 Minimum band width so an actor-only band leaves no 76px gutter
+- [ ] B10 Pin placement: inside a block or on a band edge; never between bands; never open a gap for a pin
+- [ ] B11 Re-measure all 13; every inter-band gap uniform
+
+### Wave C — endpoint
+- [ ] C-1 Third-party: direct SSO path primary, gateway path secondary, `aiGateway→provider` added, remote-control/gateway exclusivity as a deviation, Cursor contrast in exemplars
+- [ ] C-2 Personal agent: sandbox `boundary`, four openings, credential-injection pin, MCP-straddle pin
+- [ ] C-3 First-party: relay/tunnel on the remote path, direct-port risk pin, Local API server item, drop LangChain deep agents as an exemplar
+- [ ] C-4 Local runtime: egress control removed, band disappears, terminology aligned to the cloud page
+
+### Wave D — cloud
+- [ ] D-1 Inference pair aligned; renamed off "open weights"; prefix-cache side channel + model signing pinned
+- [ ] D-2 Fine-tuning narrowed to seven components; curation / evaluation / registry-gate / serving removed; earlier accepted judgment overturned in writing
+- [ ] D-3 Agent trio: harness-local tools, checkpointer database, supervisor+subagents nested as real blocks, A2A via gateway, "durable" dropped
+- [ ] D-4 Chat agent: human, browser application layer, **scheduling trigger**, same skeleton as single-agent
+- [ ] D-5 MCP server rebuilt small; anonymous origin into the gateway; July 2026 spec pin set
+
+### Wave E — third-party
+- [ ] E-1 Enterprise chat: browser-only endpoint block, vendor as one component, our cloud reduced to gateway + tool services, **secure tunnel** path, CMEK trade-off pinned, tenant-capture pin
+- [ ] E-2 API/SDK runtime: vendor hosts the harness, three return paths, vault edges pinned, ZDR/HIPAA ineligibility recorded
+- [ ] E-3 Low-code **last**: vendor calls its own provider externally; our gateway carries tools and data only; maker-credential ambient authority; DLP publish gate
+
+### Wave F — enforcement and close-out
+- [ ] F-1 Provenance test report-only → error
+- [ ] F-2 `npm run audit` regenerated; catalogue doc and ontology audit updated
+- [ ] F-3 Playwright pass over all 13 against the success criteria below
+
+---
 
 **Success criteria (P1–P5), gating each architecture individually:**
 
