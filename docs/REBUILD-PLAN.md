@@ -868,7 +868,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] D-5 MCP server rebuilt: five blocks, anonymous origin into the gateway, 13-control pin set from the July 2026 revision
 
 ### Wave E — third-party
-- [ ] E-1 Enterprise chat: browser-only endpoint block, vendor as one component, our cloud reduced to gateway + tool services, **secure tunnel** path, CMEK trade-off pinned, tenant-capture pin
+- [x] E-1 Enterprise chat rebuilt: browser only on the endpoint, vendor as one component, tunnel connector into our gateway, CMEK trade-off and tenant capture pinned, SSE absorption recorded instead of inventing a component
 - [ ] E-2 API/SDK runtime: vendor hosts the harness, three return paths, vault edges pinned, ZDR/HIPAA ineligibility recorded
 - [ ] E-3 Low-code **last**: vendor calls its own provider externally; our gateway carries tools and data only; maker-credential ambient authority; DLP publish gate
 

@@ -860,11 +860,14 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
 | Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Downstream services | external | `componentDataSources` |
-| Enterprise AI chat with connectors | Chat surface & uploads | service | `componentAgentUserQuery` |
-| Enterprise AI chat with connectors | Identity & secure edge | service | (none) |
-| Enterprise AI chat with connectors | Consumer product | external | `componentApplication` |
+| Enterprise AI chat with connectors | Browser | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Vendor chat service | provider | `componentApplication` |
-| Enterprise AI chat with connectors | User-connected systems | service | `componentDataSources` |
+| Enterprise AI chat with connectors | Tunnel connector | service | `componentAgentUserQuery` |
+| Enterprise AI chat with connectors | AI gateway | service | (none) |
+| Enterprise AI chat with connectors | Tool services | service | `componentTools` |
+| Enterprise AI chat with connectors | Enterprise data | external | `componentDataSources` |
+| Enterprise AI chat with connectors | Consumer product | external | `componentApplication` |
+| Enterprise AI chat with connectors | Tool services | service | `componentTools` |
 | Enterprise AI chat with connectors | Identity services | governance | (none) |
 | Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
 | Enterprise AI chat with connectors | Supply-chain assurance | governance | (none) |
@@ -915,7 +918,7 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | use | draft | 7 | Runtime action authorization, Third-party risk management platform for AI vendors, Agent memory & context protection, Secrets management & ephemeral credentials |
 | Local model runtime | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 4 | Inter-component & inter-agent transport security, Agent credential isolation & delegation control, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Shadow AI discovery |
-| Enterprise AI chat with connectors | use | draft | 5 | Third-party risk management platform for AI vendors, Agent & tool registry, Encryption & key management for AI assets |
+| Enterprise AI chat with connectors | use | draft | 5 | Third-party risk management platform for AI vendors, Encryption & key management for AI assets, Secrets management & ephemeral credentials, Tool permission scoping & least agency, Agent & tool registry |
 | UI/low-code managed agent runtime | use | draft | 5 | Network segmentation & egress control, Shadow AI discovery, Kill switch, quarantine & decommissioning |
 | API/SDK managed agent runtime | hybrid | draft | 5 | Kill switch, quarantine & decommissioning, Secrets management & ephemeral credentials, Encryption & key management for AI assets, Network segmentation & egress control |
 
