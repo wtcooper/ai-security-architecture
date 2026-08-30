@@ -79,50 +79,49 @@ exemplars:
     asOf: "2026-08"
 
 zones:
-  - id: zoneUser
-    owner: user
-    note: >
-      The consuming side, seen from the publisher's chair: the person who delegates and the
-      agent that calls on their behalf. Neither is ours, and the whole architecture is about
-      admitting them safely.
   - id: zoneCloud
     owner: cloud
     note: >
-      The service we publish and everything behind it — the front door, the authorization
-      server, the application, the tool definitions it serves, and the tenant records it
-      reaches.
+      Everything we build and run. This architecture is drawn from the publisher's chair, so
+      almost all of it is ours — which is unusual in this catalogue and is the reason it earns
+      a page: the controls that matter when you *publish* an MCP server have nowhere else to
+      live.
   - id: zoneExternal
     owner: external
-    note: What our own service reaches outward on its own credential, where the caller's delegation no longer bounds anything.
+    note: What our own implementation reaches outward on its own credential, past the point the caller's delegation bounds anything.
   - id: zoneGovernance
     owner: governance
     note: >
-      Drawn across every band because it governs every band. For a published server the
-      governance question is what the catalogue admits and what the descriptions say, because
-      both execute inside somebody else's model.
+      Deliberately light. For a published server the governed questions are what the catalogue
+      admits and what the tool descriptions say — because both execute inside somebody else's
+      model.
 
 blocks:
-  - id: delegatingUser
-    kind: actor
-    title: Delegating user
-    icon: person
-    zone: zoneUser
-    col: 0
-    row: 0
-    note: >
-      The person the calling agent acts for, and the source of the authorization. Not present at
-      call time, which is why consequential operations cannot rely on them being asked.
-
-  - id: callingAgent
-    kind: actor
-    title: Calling agent
-    icon: agent
-    zone: zoneUser
+  - id: callers
+    kind: origin
+    title: Callers
+    zone: zoneCloud
     col: 0
     row: 1
     note: >
-      Someone else's agent, with arguments composed by a model that may have read hostile
-      content. A non-human caller that is neither a person nor a bot to block.
+      Deliberately unnamed. Agents, chat products and other services all reach a published
+      server the same way, and naming any one of them would make the drawing about that
+      integration rather than about the server we are building.
+
+  - id: gateway
+    kind: service
+    title: AI gateway
+    zone: zoneCloud
+    col: 1
+    row: 1
+    note: >
+      The entry point, and for the first time genuinely useful on MCP traffic. The 2026-07
+      revision requires every request to mirror its method and tool name into `Mcp-Method` and
+      `Mcp-Name` headers, so this tier can route, meter and authorize **per tool** without
+      parsing bodies. That only holds if it enforces the matching rule: a server that processes
+      the body must reject any request whose headers disagree with it, because a gateway
+      routing on the header while the server executes the body is a policy-bypass primitive.
+    pack: aiGatewayTraffic
 
   - id: authServer
     kind: service
@@ -131,47 +130,23 @@ blocks:
     col: 2
     row: 0
     note: >
-      Issues scoped, expiring, audience-restricted tokens to named clients. The one place a
-      compromised agent's access can be withdrawn without redeploying anything.
+      Token issuance for the server we publish, and the component the consuming organisation's
+      identity provider federates into. Under the enterprise-managed profile the client never
+      visits an authorization page here at all: it exchanges a corporate SSO assertion at its
+      own IdP for a short-lived grant, and that grant for an access token — which is what
+      removes the per-server consent screen and puts revocation back in one place.
     items:
-      - id: issuance
+      - id: tokenIssuance
         label: Token issuance
         icon: key
-        note: >
-          Short-lived and audience-restricted — a token other resource servers accept turns one
-          compromised agent into a multi-service problem.
-      - id: registration
+        note: Audience-bound to this server by name, so a token minted for another is refused.
+      - id: clientReg
         label: Client registration
         icon: gear
         note: >
-          Pre-registered clients or client-ID metadata documents. The early protocol's
-          self-service dynamic registration is deprecated — anonymous clients were the cost.
-      - id: consent
-        label: Consent records
-        icon: doc
-        note: Which user authorised which client for which scopes, and when.
-
-  - id: edge
-    kind: service
-    title: Service edge
-    zone: zoneCloud
-    col: 1
-    row: 1
-    note: >
-      The front door that terminates hostile machine traffic before the application sees it —
-      an API gateway or MCP gateway tier. The protocol's routing headers exist so this tier can
-      route, meter and rate-limit per tool without parsing request bodies.
-    items:
-      - id: waf
-        label: App & API endpoint
-        icon: globe
-        note: The published front door, in front because the callers are machines at machine rates.
-      - id: headerRouting
-        label: Header routing
-        icon: plug
-        note: >
-          Method and tool names ride request headers so the gateway can route and meter
-          without reading bodies — mediation the current protocol was redesigned for.
+          Dynamic registration is deprecated in favour of client metadata documents, where the
+          client's identifier is a URL we fetch — which quietly makes this component an
+          outbound HTTP client, and a new SSRF surface.
 
   - id: service
     kind: service
@@ -181,63 +156,64 @@ blocks:
     col: 2
     row: 1
     note: >
-      The application a team actually deploys: transport, tool router and handler code in one
-      stateless service. Every request arrives self-contained and is re-authorized from the
-      token — there is no session to inherit trust from.
+      A stateless HTTP application — in practice an ASGI app, mounted on its own or inside an
+      existing API. Stateless is not a style choice: sticky sessions do not work reliably with
+      MCP clients, so horizontal scale requires it. The 2026-07 revision removed protocol
+      sessions entirely, which moved a security burden out of the transport and into this
+      application, where it is the most likely thing to get wrong.
     items:
       - id: endpoint
         label: Protocol endpoint
         icon: plug
-        cosaiComponent: componentApplicationInputHandling
-        note: >
-          Streamable HTTP on a single POST endpoint, Origin validated, stateless by protocol
-          design — which is what lets the tier scale horizontally.
-      - id: stateHandles
+        note: One POST endpoint. GET and DELETE are gone, along with the session header and stream resumability.
+      - id: handles
         label: State handles
         icon: key
         note: >
-          Server-minted names for cross-call state, bound to the token's subject and
-          re-authorized on every request. Possession of a handle is not authentication.
+          Server-minted, opaque, expiring, and bound to the authenticated principal. Possession
+          is not authentication — the protocol will not enforce that for us.
       - id: handlers
         label: Tool handlers
         icon: code
-        note: Execute with the request's brokered identity, never a standing service account.
+        note: Ordinary application code behind the protocol, and ordinary attack surface.
 
   - id: toolDefs
     kind: service
     title: Tool definitions
-    zone: zoneCloud
-    col: 1
-    row: 2
     cosaiComponent: componentTools
+    zone: zoneCloud
+    col: 2
+    row: 2
     note: >
-      Names, descriptions and schemas — not documentation, but text the calling model treats as
-      instruction. Changing them is changing somebody else's prompt.
+      Names, descriptions and schemas. Versioned content that executes as instruction inside a
+      caller's model, which makes a wording change a release rather than a copy edit. The spec
+      gives no integrity mechanism and no tool-level version field, so pinning by hash at the
+      gateway is something we build rather than something we get.
     items:
       - id: descriptions
         label: Tool descriptions
         icon: doc
-        note: Versioned, reviewed artifacts, because they execute inside another organisation's model.
+        note: Text that lands in somebody else's context window and steers their agent.
       - id: schemas
         label: Input schemas
         icon: code
-        note: The contract model-generated arguments are validated against.
+        note: What the server will accept — and, where a parameter is header-mirrored, what a gateway can route on.
 
-  - id: tenantData
+  - id: orgData
     kind: external
     title: Enterprise data
+    cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 3
-    row: 1
-    cosaiComponent: componentDataStorage
+    row: 2
     note: >
-      Per-tenant records the tools reach. Isolation here is the claim consuming organisations
-      cannot verify and will ask about in assurance.
+      The records the service reaches on the caller's behalf. Per-tenant scoping is entirely
+      ours to build: the protocol has no notion of a tenant, so nothing is isolated by default.
     items:
       - id: records
         label: Org data
         icon: db
-        note: Every read and write checks the tenant on the token against the tenant on the record.
+        note: Reached only within the delegation the presented token carries.
 
   - id: downstream
     kind: external
@@ -245,36 +221,12 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
-    row: 2
+    row: 1
+    pack: downstreamPublic
     note: >
-      The systems the tools actually wrap — most published servers are a thin governed surface
-      over existing APIs. Reached on the server's own credential, issued by a secrets manager,
-      to named destinations only. The caller's token stops at the service.
-    items:
-      - id: apis
-        label: Web & APIs
-        icon: globe
-        note: The internal and partner APIs the handlers call as this service, never as the caller.
-      - id: saas
-        label: SaaS
-        icon: mail
-        note: Vendor systems reached on standing service credentials the secrets manager scopes and rotates.
-
-  - id: egress
-    kind: service
-    title: Egress control
-    zone: zoneCloud
-    col: 3
-    row: 2
-    note: >
-      Where our own service leaves for the internet on its own credential. Drawn because the
-      caller's delegation bounds nothing past this point: whatever our implementation reaches
-      outward, it reaches as itself.
-    items:
-      - id: outbound
-        label: Outbound connector
-        icon: plug
-        note: Admission and inspection for the destinations our implementation depends on.
+      What our implementation depends on. Reached on **our** credential, not the caller's — the
+      spec forbids forwarding a caller's token — which is exactly why this hop is where the
+      delegation chain stops bounding anything.
 
   - id: govIdentity
     kind: governance
@@ -282,12 +234,13 @@ blocks:
     icon: person
     zone: zoneGovernance
     col: 1
-    row: 5
+    row: 3
     capabilities: [capabilityIga, capabilityNhiManagement]
     note: >
-      The scope catalogue and the delegation model. A published server's identity story is
-      mostly somebody else's — the win of the enterprise-managed profile is that their admin
-      policy, lifecycle and revocation keep working without us reinventing any of it.
+      Scope design and the delegation model. The scopes we publish should be the minimal set
+      for basic function, with more granted by step-up — a wildcard or omnibus scope is the
+      named anti-pattern, and claimed scopes in a token are never sufficient without our own
+      authorization logic behind them.
 
   - id: govPolicy
     kind: governance
@@ -295,12 +248,12 @@ blocks:
     icon: scale
     zone: zoneGovernance
     col: 2
-    row: 5
-    capabilities: [capabilityRateLimiting, capabilitySse, capabilityToolPermissionScoping]
+    row: 3
+    capabilities: [capabilityRateLimiting, capabilityToolPermissionScoping, capabilityTransportSecurity]
     note: >
-      Per-client and per-tenant limits sized for callers that retry, loop and parallelise —
-      limits tuned for human clients are not limits here — and the scopes each token is bound
-      to.
+      Per-tenant limits sized for callers that retry, loop and parallelise — limits tuned for
+      human clients are not limits here — plus origin validation against DNS rebinding and the
+      egress controls that keep our own discovery fetches off internal addresses.
 
   - id: govSupplyChain
     kind: governance
@@ -308,12 +261,12 @@ blocks:
     icon: db
     zone: zoneGovernance
     col: 3
-    row: 5
-    capabilities: [capabilityMcpToolSecurity, capabilityAppSecTesting]
+    row: 3
+    capabilities: [capabilityMcpToolSecurity, capabilityAppSecTesting, capabilityAiRedTeaming]
     note: >
-      Registry listing and description review. Our tool descriptions execute as instruction
-      inside other people's models, so what they say is a security property of somebody else's
-      system, reviewed like code rather than like copy.
+      Description review and definition pinning. Our tool text is a security property of
+      somebody else's system, so it is reviewed like code; and behind the protocol this is a
+      published application that deserves ordinary application testing.
 
   - id: govObservability
     kind: governance
@@ -321,330 +274,211 @@ blocks:
     icon: eye
     zone: zoneGovernance
     col: 4
-    row: 5
+    row: 3
     capabilities: [capabilityAuditLogging, capabilityKillSwitch]
     note: >
-      Per-call audit attributable to a tenant and a delegation, and the revocation that ends a
-      caller's access without a deploy.
+      Per-call audit attributable to a tenant and a delegation, and revocation that reaches
+      tokens already minted rather than only future ones.
 
 edges:
-  - from: delegatingUser
-    to: authServer
+  - from: callers
+    to: gateway
     path: primary
     bidir: true
-    label: SSO & consent
+    label: tool calls
     note: >
-      The person signs in and consents at our front door. Their own organisation's identity
-      provider is behind that exchange; what reaches us is an assertion we swap for an
-      audience-bound token, so their admin policy and revocation stay where they already are.
-  - from: edge
-    to: authServer
-    path: primary
-    bidir: true
-    route: vh
-    label: token exchange
-    note: >
-      The assertion becomes a token bound to this server, under the enterprise-managed
-      authorization profile — standardised so it works the same across every server a customer
-      adopts.
-  - from: callingAgent
-    to: edge
-    path: primary
-    bidir: true
-    label: tool call / result
-    note: >
-      Machine traffic at machine rates, terminated at the front door before the application
-      sees it. The result carries our tool descriptions back into the caller's model context,
-      which is the reverse direction that matters most.
-  - from: edge
+      Whoever they are. Machine traffic at machine rates, arriving with the method and tool
+      name mirrored into headers so this tier can act on them without reading bodies.
+  - from: gateway
     to: service
     path: primary
     bidir: true
     label: routed call
-    note: >
-      Method and tool names ride request headers so this hop can route and meter without
-      reading bodies — mediation the current protocol was redesigned for.
+    note: The admitted request reaches the application, and the result — including our tool descriptions — returns.
   - from: service
     to: authServer
     path: primary
     bidir: true
     label: token validation
     note: >
-      Audience, scope and subject checked per call. A token minted for another server, or for
-      a broader scope, is refused here.
+      The resource server introspects; the authorization server does not call in to announce a
+      check. Audience, scope and subject are verified per request, because there is no session
+      left to verify them once.
   - from: toolDefs
     to: service
     path: primary
-    bidir: true
     label: published schemas
-    note: >
-      The names, descriptions and schemas the service publishes. They are versioned content
-      that executes as instruction inside a caller's model, which makes a description change a
-      release rather than a copy edit.
+    note: Versioned content loaded by the service and served to callers as instruction.
   - from: service
-    to: tenantData
+    to: orgData
     path: primary
     bidir: true
     label: scoped read / write
     note: >
-      Every access bounded by the delegation the token carries. One tenant's agent reaching
-      another tenant's records is this architecture's defining failure.
+      Bounded by the delegation the token carries. One tenant's agent reaching another tenant's
+      records is this architecture's defining failure, and nothing in the protocol prevents it.
   - from: service
-    to: egress
-    path: primary
-    bidir: true
-    route: vh
-    label: server's own credential
-    note: >
-      Where our service calls outward on its own authority rather than the caller's — the
-      point at which the delegation chain stops bounding anything, and the crossing is all
-      that does.
-  - from: egress
     to: downstream
     path: external
     bidir: true
-    note: Third-party services our implementation depends on, admitted and inspected at the crossing.
+    label: our own credential
+    note: >
+      Where our implementation calls outward as itself. The spec is explicit that we must not
+      forward the caller's token, so we hold a separate one — and past this point the careful
+      delegation chain is gone.
 
 pins:
   risks:
     - risk: riskPromptInjection
-      at: callingAgent->edge
+      at: gateway->service
       note: >
-        This server is on the causing side. Its descriptions, errors and results all land in a
-        caller's context, so its output hygiene is somebody else's input security.
-    - risk: riskToolSourceProvenance
-      at: toolDefs
-      note: >
-        Tool text treated as editable copy rather than a versioned artifact — a quiet edit
-        changes how every consuming agent behaves.
-    - risk: riskAgenticDelegationConfusedDeputy
-      at: callingAgent->edge
-      note: >
-        The token proves a user consented; it cannot prove the agent still represents their
-        intent. Scope design is the whole of the answer.
-    - risk: riskStaleAgentIdentityBinding
-      at: authServer
-      note: >
-        Long-lived or unrevocable tokens keep a decommissioned or compromised client alive.
-        Expiry and revocation are the only levers after issuance.
-    - risk: riskMCPTransportHijacking
-      at: service
-      note: >
-        The stateless protocol renamed the threat, not the stakes: a state handle that is
-        guessable, or honoured without re-checking the token it was minted for, hands one
-        caller another's context and tenant.
-    - risk: riskDenialOfMLService
-      at: edge
-      note: >
-        Machine callers retry, loop and parallelise. Limits tuned for human clients are not
-        limits here — and they belong in front of the application, not inside it.
-    - risk: riskRogueActions
-      at: service
-      note: >
-        Arguments are model-generated plausible nonsense, and the user is not present to be
-        asked. Confirmation semantics are declared, not enforced, by this side.
-    - risk: riskCrossTenantCredentialPropagation
-      at: service->tenantData
-      note: >
-        Every read and write needs the tenant on the token checked against the tenant on the
-        record. It is a discipline across all handlers, not one component's job.
-    - risk: riskCrossTenantCredentialPropagation
-      at: service->egress
-      note: >
-        Passing the caller's token upstream is the confused deputy the protocol forbids by
-        name — it converts one compromised agent into access at every system that accepts the
-        token.
-    - risk: riskSensitiveDataDisclosure
-      at: service->tenantData
-      note: >
-        The read path carries the volume. A coarse scope plus a broad query returns everything
-        the user could see, to an agent that may have been steered.
-    - risk: riskInsecureModelOutput
-      at: edge->callingAgent
-      note: >
-        Results enter the caller's context as content. An oversized or manipulative result is a
-        denial-of-service against a model rather than a server.
-    - risk: riskZombieShadowMCPServers
-      at: govObservability
-      note: >
-        A server nobody listed, versioned or watches is still reachable and still trusted by
-        every client that once admitted it. Registry listing and pinning are how consumers
-        notice a change — or a corpse.
-
-  capabilities:
-    - capability: capabilitySse
-      at: callingAgent->edge
-      note: >
-        The front door terminates hostile machine traffic before the application sees it —
-        commodity protections, in front, because the callers are machines at machine rates.
-    - capability: capabilityAppSecTesting
-      at: service
-      note: >
-        This is a published application before it is anything AI-specific: the handlers behind
-        the protocol are ordinary attack surface and deserve ordinary application testing.
-    - capability: capabilityKillSwitch
-      at: service->authServer
-      note: >
-        Revocation that ends a caller's access without a deploy — and reaches tokens already
-        minted, not just future ones.
-    - capability: capabilityIga
-      at: delegatingUser->authServer
-      note: >
-        Bind consent to a named client and named scopes at the IdP the organisation already
-        governs — the delegated grant every later call traces back to, revocable where the
-        workforce already is.
-    - capability: capabilityNhiManagement
-      at: authServer
-      note: >
-        Named clients with short-lived, audience-restricted tokens and working revocation. The
-        calling agent is a non-human identity you did not create but must manage.
-    - capability: capabilityToolPermissionScoping
-      at: service->authServer
-      note: >
-        Design scopes narrow enough that a hijacked agent's blast radius is one operation, not
-        everything the user could do.
-    - capability: capabilityRateLimiting
-      at: edge
-      note: >
-        Per-client and per-tenant limits sized for machine callers, with idempotency keys
-        because agents retry — enforced at the edge on the protocol's routing headers.
-    - capability: capabilityTransportSecurity
-      at: service
-      note: >
-        TLS, Origin validation, and state handles bound to the authenticated subject with
-        authorization re-verified per request — possession of a handle proves nothing.
-    - capability: capabilityDataAccessGovernance
-      at: service->tenantData
-      note: >
-        Enforce both checks on every operation: scope permits it, and token tenant matches
-        record tenant — on reads as well as writes.
-    - capability: capabilitySecretsManagement
-      at: service->egress
-      note: >
-        Upstream credentials issued by a secrets manager to this service, scoped and rotated —
-        never embedded in configuration, and never the caller's token.
-    - capability: capabilityEgressControl
-      at: service->egress
-      note: >
-        Handlers reach named upstreams and nothing else. Unbounded egress from a tool server
-        is the exfiltration path a steered agent is looking for.
-    - capability: capabilityMcpToolSecurity
-      at: toolDefs
-      note: >
-        Treat definitions as versioned security artifacts: schema-pinned, change-controlled, and
-        published with provenance callers can check.
-    - capability: capabilityAiRedTeaming
+        The reverse direction is the dangerous one: what we return is read as instruction by a
+        model we do not operate. Our tool descriptions are the payload.
+    - risk: riskToolRegistryTampering
       at: toolDefs->service
       note: >
-        Adversarially review descriptions and error text before release — the question is what a
-        model will do with the words, not what a human reads into them.
-    - capability: capabilityHitlControls
+        A changed description changes somebody else's agent behaviour. The protocol offers no
+        integrity mechanism and no version field, so an unnoticed edit is a silent change to a
+        system we do not run.
+    - risk: riskCrossTenantCredentialPropagation
+      at: service->orgData
+      note: >
+        The protocol has no notion of a tenant. Every isolation guarantee here is application
+        code we wrote, and the failure is one caller reaching another's records.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: service->authServer
+      note: >
+        A static client identifier in front of a third-party authorization server, with no
+        per-user record of which clients a user already approved, is the classic confused
+        deputy. Consent must be per client and recorded before the flow proceeds.
+    - risk: riskSensitiveDataDisclosure
+      at: service->downstream
+      note: >
+        Our credential, not theirs. Whatever we reach outward, we reach with our own authority
+        regardless of who asked, and the audit trail downstream shows us rather than them.
+    - risk: riskEconomicDenialOfWallet
+      at: callers->gateway
+      note: >
+        The spec has no quotas and no back-pressure. A looping agent will hammer a tool until
+        the backend behind it falls over, and nothing in the protocol slows it down.
+    - risk: riskZombieShadowMCPServers
       at: service
+      note: A published server that outlives the team that wrote it, still holding live grants into org data.
+
+  capabilities:
+    - capability: capabilityIga
+      at: service->authServer
       note: >
-        Declare confirmation semantics on consequential tools so the caller must confirm with
-        its user. Declaring it is the only lever this side of the boundary has.
-    - capability: capabilityOutputEncoding
-      at: edge->callingAgent
+        Tokens audience-bound to this server by name, and refused if minted for anything else.
+        Under the enterprise-managed profile the consuming organisation's own policy decides
+        issuance, which is what makes revocation immediate and central.
+    - capability: capabilityNhiManagement
+      at: callers->gateway
+      note: The caller is a machine identity; treat it as one, with its own lifecycle rather than a shared key.
+    - capability: capabilityRateLimiting
+      at: callers->gateway
       note: >
-        Bound result size and structure before it leaves — what returns becomes part of another
-        organisation's prompt.
+        Per-client and per-tenant, sized for callers that retry and parallelise. This is ours to
+        build entirely — the protocol provides no quota mechanism at all.
+    - capability: capabilityTransportSecurity
+      at: callers->gateway
+      note: >
+        HTTPS throughout, `Origin` validated against DNS rebinding, and our own outbound
+        discovery fetches blocked from private and metadata addresses — a surface the move to
+        client metadata documents newly created.
+    - capability: capabilityToolPermissionScoping
+      at: gateway->service
+      note: >
+        Minimal scopes with step-up rather than an omnibus grant, and the whole set needed for
+        an operation emitted in one challenge instead of drip-fed.
+    - capability: capabilityMcpToolSecurity
+      at: toolDefs->service
+      note: >
+        Pin definitions by hash and alert on any change between sessions. The spec gives no
+        integrity mechanism, so this is built at the gateway or it does not exist.
+    - capability: capabilityAppSecTesting
+      at: service
+      note: Behind the protocol this is a published application, and its handlers are ordinary attack surface.
+    - capability: capabilityDataAccessGovernance
+      at: service->orgData
+      note: Per-tenant scoping enforced in our own code, because the protocol has no tenants.
+    - capability: capabilitySecretsManagement
+      at: service->downstream
+      note: >
+        A separate credential for each upstream we call, never the caller's token forwarded —
+        which the spec forbids outright, because forwarding breaks audit, rate limiting and the
+        trust boundary in one move.
+    - capability: capabilityEgressControl
+      at: service->downstream
+      note: Named destinations only for the calls our implementation makes as itself.
     - capability: capabilityAuditLogging
       at: govObservability
-      note: >
-        Record client, user, tool, arguments and result per call, with trace context — the
-        trail that answers a customer asking what their agent did here.
+      note: Every invocation with its parameters, its tenant and its delegation, retained where an incident can query it.
+    - capability: capabilityKillSwitch
+      at: govObservability
+      note: Revocation that reaches tokens already issued, not merely future ones.
+    - capability: capabilityAiRedTeaming
+      at: govSupplyChain
+      note: Probe our own descriptions the way an adversarial caller would, since they run in somebody else's model.
 
 flows:
   - id: F1
-    title: Delegation
-    moves: A person's consent, exchanged for a token bound to this server and this scope.
-    path: [delegatingUser->authServer, delegatingUser->authServer]
-    threats: [A token minted for one server replayed at another, Consent screens that describe less than the grant allows, Scope broader than the task]
-    controls: [capabilityIga, capabilityToolPermissionScoping]
-    note: >
-      The flow the enterprise-managed profile exists for: the consuming organisation's admin
-      policy, lifecycle and revocation keep working, and we reinvent none of it.
-  - id: F2
     title: A tool call
-    moves: Machine traffic in; results — and our tool descriptions — back into a caller's model.
-    path: [callingAgent->edge, edge->service, service->authServer]
-    threats: [Callers that retry, loop and parallelise at machine rates, A token for another audience or a wider scope, Our descriptions steering somebody else's agent]
-    controls: [capabilitySse, capabilityRateLimiting, capabilityMcpToolSecurity]
+    moves: A request in; a result — and our tool descriptions — back into a caller's model.
+    path: [callers->gateway, gateway->service, service->authServer]
+    threats: [Callers that retry and parallelise at machine rates, A token minted for another audience, Our descriptions steering an agent we do not operate]
+    controls: [capabilityRateLimiting, capabilityIga, capabilityToolPermissionScoping]
     note: >
-      The reverse direction is the one that matters most: what we return is read as instruction
-      by a model we do not operate. Limits tuned for human clients are not limits here.
-  - id: F3
-    title: Tenant data
+      Every request carries its own credentials and is authorized on its own, because the
+      revision removed sessions. The return direction matters more than the outbound one.
+  - id: F2
+    title: Reaching tenant data
     moves: Reads and writes bounded by the delegation the token carries.
-    path: [service->tenantData]
-    threats: [One tenant's agent reaching another tenant's records, Handler trusting the caller's stated identity over the token's]
-    controls: [capabilityDataAccessGovernance, capabilityAuditLogging]
+    path: [service->orgData]
+    threats: [One caller reaching another caller's records, A handler trusting stated identity over the token's]
+    controls: [capabilityDataAccessGovernance]
     note: >
-      This architecture's defining failure is cross-tenant reach, and the only thing preventing
-      it is that every access is bounded by the token rather than by the handler's own
-      authority.
-  - id: F4
+      The defining failure of a published server, and the protocol contributes nothing to
+      preventing it — there is no tenant concept to lean on.
+  - id: F3
     title: Where delegation stops
     moves: Our own service calling outward on its own credential.
-    path: [service->egress, egress->downstream]
-    threats: [The caller's delegation no longer bounding anything, One tenant's request spending another's upstream quota, A compromised upstream reaching every tenant at once]
-    controls: [capabilityEgressControl, capabilitySecretsManagement]
+    path: [service->downstream]
+    threats: [The caller's delegation bounding nothing past this hop, One tenant's request spending another's upstream quota]
+    controls: [capabilitySecretsManagement, capabilityEgressControl]
     note: >
-      The hop most easily missed when publishing a server: past this point the careful
-      delegation chain is gone and our own credential is doing the work.
-  - id: F5
+      The hop most easily missed when publishing a server. Forwarding the caller's token here
+      would be simpler and is explicitly forbidden, for exactly the reasons it is tempting.
+  - id: F4
     title: What the descriptions say
     moves: Names, descriptions and schemas, published into other people's model context.
-    path: [toolDefs->service, service->edge, edge->callingAgent]
-    threats: [A description change altering somebody else's agent behaviour, Schema drift between what is declared and what is accepted]
-    controls: [capabilityMcpToolSecurity, capabilityAppSecTesting]
+    path: [toolDefs->service, gateway->service]
+    threats: [A wording change altering somebody else's agent behaviour, Schema drift between what is declared and what is accepted]
+    controls: [capabilityMcpToolSecurity, capabilityAiRedTeaming]
     note: >
-      Versioned content that executes as instruction inside a caller's model. That makes a
-      wording change a release, reviewed like code rather than like copy.
+      Versioned content that executes as instruction elsewhere. The protocol gives it no
+      version field and no integrity mechanism, so pinning is ours to build.
 
 scenarios:
-  - title: A user authorises a client
+  - title: A caller invokes a tool
     steps:
-      - follow: delegatingUser->authServer
-        note: Consent happens at the IdP the organisation already governs. The last human decision in the flow.
-      - follow: delegatingUser->authServer
-        note: The identity assertion is exchanged for a token audience-bound to this server.
-      - follow: callingAgent->edge
-        note: The agent calls in with its scoped token; the user is no longer present.
-      - follow: edge->service
-        note: Routed and metered at the edge before the application spends anything.
+      - follow: callers->gateway
+        note: The request arrives with its method and tool name mirrored into headers.
+      - follow: gateway->service
+        note: Routed and metered per tool without the body being parsed — provided the headers are checked against it.
       - follow: service->authServer
-        note: Client, user, scopes, audience and expiry are validated per request.
-      - follow: service->tenantData
-        note: Scope check plus tenant-match check, on this and every subsequent operation.
-  - title: A hijacked agent calls in
-    steps:
-      - follow: callingAgent->edge
-        note: >
-          The agent was steered by content it read elsewhere. Its token is valid, and the rate
-          limits constrain the mechanics, not the intent.
-      - follow: edge->service
-        note: Every identity check passes; argument validation assumes plausible nonsense.
-      - follow: service->tenantData
-        note: The tenant check bounds reach to the one tenant; the scope bounds it to named operations.
-      - follow: edge->callingAgent
-        note: The blast radius was decided by scope design long before this call arrived.
-  - title: A handler reaches upstream
-    steps:
-      - follow: callingAgent->edge
-        note: The tool call arrives on the caller's audience-bound token.
-      - follow: edge->service
-        note: The handler runs with the request's brokered identity.
-      - follow: service->egress
-        note: >
-          The caller's token stops here. The handler calls upstream as this service, on a
-          secrets-managed credential, to a named destination — nothing else is reachable.
+        note: Audience, scope and subject validated for this request, because there is no session to have validated once.
+      - follow: service->orgData
+        note: The read happens inside the delegation the token carries, and not one record wider.
   - title: A description edit ships
     steps:
       - follow: toolDefs->service
-        note: The edit is reviewed as an interface change — text a model will act on, not copy.
-      - follow: callingAgent->edge
-        note: The new wording lands in every consuming agent's context on their next session.
+        note: A wording change is deployed like any other content change.
+      - follow: gateway->service
+        note: >
+          And lands in every consuming agent's context on their next call. Nothing in the
+          protocol versions this, which is why the pin is a hash we hold rather than a field we
+          read.
 
 deviations:
   - subject: The service is drawn as one application block, not protocol stages

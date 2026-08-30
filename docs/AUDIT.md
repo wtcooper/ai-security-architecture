@@ -704,12 +704,13 @@ Highlights below are Google's original mapping, not ours.
 - SaaS security posture management for AI features (`capabilityVendorAssurance`)
 - Threat modelling tooling for AI systems (`capabilityThreatModeling`)
 
-### 4c. CoSAI components no architecture anchors — 8 of 23
+### 4c. CoSAI components no architecture anchors — 9 of 23
 
 - Data Filtering and Processing (`componentDataFilteringAndProcessing`)
 - Model Frameworks and Code (`componentModelFrameworksAndCode`)
 - Model Evaluation (`componentModelEvaluation`)
 - Model Output Handling (`componentApplicationOutputHandling`)
+- Model Input Handling (`componentApplicationInputHandling`)
 - Orchestration Output (`componentOrchestrationOutputHandling`)
 - Orchestration Input (`componentOrchestrationInputHandling`)
 - Perception (`componentAgentInputHandling`)
@@ -769,13 +770,13 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | Policy & authorization | governance | (none) |
 | Chat agent with tools | Supply-chain assurance | governance | (none) |
 | Chat agent with tools | Observability & response | governance | (none) |
+| Remote MCP server you publish | Callers | origin | (none) |
+| Remote MCP server you publish | AI gateway | service | (none) |
 | Remote MCP server you publish | Authorization server | service | (none) |
-| Remote MCP server you publish | Service edge | service | (none) |
 | Remote MCP server you publish | MCP service | service | `componentApplication` |
 | Remote MCP server you publish | Tool definitions | service | `componentTools` |
-| Remote MCP server you publish | Enterprise data | external | `componentDataStorage` |
+| Remote MCP server you publish | Enterprise data | external | `componentDataSources` |
 | Remote MCP server you publish | Downstream services | external | `componentDataSources` |
-| Remote MCP server you publish | Egress control | service | (none) |
 | Remote MCP server you publish | Identity services | governance | (none) |
 | Remote MCP server you publish | Policy & authorization | governance | (none) |
 | Remote MCP server you publish | Supply-chain assurance | governance | (none) |
@@ -907,7 +908,7 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | build | draft | 5 | Identity & access management for AI applications, Agent & tool registry, Model & agent evaluation harnesses |
 | Multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
 | Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
-| Remote MCP server you publish | build | draft | 5 | Secure service edge for AI services, Application security testing for AI systems, Kill switch, quarantine & decommissioning, Human-in-the-loop approval & escalation, Output encoding & safe rendering |
+| Remote MCP server you publish | build | draft | 5 | Application security testing for AI systems, Kill switch, quarantine & decommissioning |
 | Self-hosted model inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
 | Fine-tuning and model registry pipeline | build | draft | 4 | Audit logging & non-repudiation, Model registry & documentation generation |
 | First-party coding & desktop agents | use | draft | 4 | Identity & access management for AI applications, Data loss prevention for AI interactions, Agent & tool registry, Audit logging & non-repudiation |

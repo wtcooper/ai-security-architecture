@@ -865,7 +865,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] D-2 Fine-tuning narrowed to five blocks — curation, evaluation, registry-gate and serving removed; guidance updated in the same change
 - [ ] D-3 Agent trio: harness-local tools, checkpointer database, supervisor+subagents nested as real blocks, A2A via gateway, "durable" dropped
 - [x] D-4 Chat agent: browser application layer kept, scheduling trigger added with the note that it removes the in-thread approval the page leans on
-- [ ] D-5 MCP server rebuilt small; anonymous origin into the gateway; July 2026 spec pin set
+- [x] D-5 MCP server rebuilt: five blocks, anonymous origin into the gateway, 13-control pin set from the July 2026 revision
 
 ### Wave E — third-party
 - [ ] E-1 Enterprise chat: browser-only endpoint block, vendor as one component, our cloud reduced to gateway + tool services, **secure tunnel** path, CMEK trade-off pinned, tenant-capture pin
