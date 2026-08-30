@@ -109,12 +109,17 @@ export function buildViewerModel(archetype: Archetype) {
   const bandBottom = colRects.length ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD : 0;
   const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
   const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
+  const cols = layout.columns ?? [];
   const zones = (archetype.zones ?? []).flatMap((zone) => {
     const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
     if (!rs.length) return [];
     const isGov = zone.owner === "governance";
-    const x0 = isGov ? fullLeft : Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
-    const x1 = isGov ? fullRight : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
+    // Band width comes from the grid columns, matching the on-screen renderer exactly.
+    const cs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => b.col);
+    const lo = cols[Math.min(...cs)];
+    const hi = cols[Math.max(...cs)];
+    const x0 = isGov ? fullLeft : (lo ? lo.x - ZONE_PAD : Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
+    const x1 = isGov ? fullRight : (hi ? hi.x + hi.w + ZONE_PAD : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
     const y0 = isGov ? Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : bandTop;
     const y1 = isGov ? Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD : bandBottom;
     return [{ title: zone.title, owner: zone.owner, note: zone.note, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }];

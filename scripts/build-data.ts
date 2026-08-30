@@ -427,7 +427,7 @@ function checkCapabilities(
  *   - Scenario steps walk real edges. A step may follow a bidirectional edge in reverse; a
  *     one-way edge walked backwards is a wrong diagram, not a wrong scenario.
  */
-const BLOCK_KINDS = new Set(["actor", "service", "provider", "external", "governance"]);
+const BLOCK_KINDS = new Set(["actor", "service", "provider", "external", "governance", "boundary", "origin"]);
 const PATH_CLASSES = new Set(["primary", "external", "governance"]);
 const ICONS = new Set<string>(ICON_NAMES);
 

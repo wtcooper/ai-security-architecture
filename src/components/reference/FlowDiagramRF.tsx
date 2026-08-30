@@ -570,12 +570,23 @@ export function FlowDiagramRF({
       : 0;
     const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
     const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
+    // A band spans the GRID COLUMNS its members occupy, not the members' own rects. A band
+    // holding only a narrow actor figure used to draw 108px wide against a 176px column and
+    // leave a visible gutter beside it; deriving from the column closes that.
+    const cols = archetype.layout.columns ?? [];
+    const spanOf = (zoneId: string) => {
+      const cs = archetype.blocks.filter((b) => b.zone === zoneId).map((b) => b.col);
+      const lo = cols[Math.min(...cs)];
+      const hi = cols[Math.max(...cs)];
+      return lo && hi ? { x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD } : null;
+    };
     for (const zone of archetype.zones ?? []) {
       const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
       if (!rs.length) continue;
       const isGov = zone.owner === "governance";
-      const x0 = isGov ? fullLeft : Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
-      const x1 = isGov ? fullRight : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
+      const span = spanOf(zone.id);
+      const x0 = isGov ? fullLeft : (span?.x0 ?? Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
+      const x1 = isGov ? fullRight : (span?.x1 ?? Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
       const y0 = isGov ? Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : bandTop;
       const y1 = isGov ? Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD : bandBottom;
       nodes.push({

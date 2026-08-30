@@ -243,7 +243,16 @@ export interface Capability {
  * outside the system that the agent reads or acts on; `governance` is the management plane;
  * `actor` is a person or peer system, drawn unboxed.
  */
-export type BlockKind = "actor" | "service" | "provider" | "external" | "governance";
+export type BlockKind =
+  | "actor"
+  | "service"
+  | "provider"
+  | "external"
+  | "governance"
+  /** Pure containment — a sandbox, a shipped application, a tenant. Dashed, no items of its own. */
+  | "boundary"
+  /** An anonymous edge source: occupies a cell, draws nothing, so a line starts in empty space. */
+  | "origin";
 
 /** An icon-plus-label sub-component inside a block, as in F5's block internals. */
 export interface ArchBlockItem {
@@ -327,7 +336,15 @@ export interface ArchBlock {
   zone?: string;
   /** For actor blocks and blocks without items. */
   icon?: string;
-  /** Authored coarse grid position; the build turns it into pixels. */
+  /**
+   * Containment. A block naming a `parent` is drawn inside it, on a grid local to that parent,
+   * and nests to any depth — a sandbox holding a harness that itself holds a supervisor and its
+   * subagents is three levels through one mechanism. Nested blocks stay ordinary blocks: they
+   * keep their edges, pins, items and capability chips, which is what makes containment
+   * expressible without breaking the flows.
+   */
+  parent?: string;
+  /** Authored coarse grid position, within the parent when there is one. */
   col: number;
   row: number;
   /** Vertical span, for tall side columns like a governance plane. */
@@ -431,6 +448,12 @@ export interface ArchLayout {
   width: number;
   height: number;
   blocks: Record<string, Rect>;
+  /**
+   * Horizontal extent of each top-level grid column. Ownership bands derive their rects from
+   * these rather than from member blocks, so a band holding only a narrow actor figure spans
+   * its column instead of leaving a gutter beside it. Empty columns have zero width.
+   */
+  columns: { x: number; w: number }[];
   edges: {
     from: string;
     to: string;

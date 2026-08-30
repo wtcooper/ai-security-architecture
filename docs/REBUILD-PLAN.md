@@ -573,8 +573,24 @@ you asked for.
 
 ### Third-party chat (T1–T10) — one correction you will want
 
-**The "secure channel" does not exist for enterprise chat, and this is the sharpest finding in
-the whole research pass.** claude.ai connects to a custom MCP server **from Anthropic's cloud
+**CORRECTED 2026-08-30 — OpenAI ships a tunnel, and it is real.** My first research pass got
+this wrong because OpenAI's docs returned 403 to the fetcher. The component is **OpenAI Secure
+MCP Tunnel**: `openai/tunnel-client`, an Apache-2.0 Go daemon the organisation runs inside its
+own network. Topology is inverted and outbound-only — the client long-polls
+`/v1/tunnels/{id}/poll` and posts responses back, so **no inbound firewall rule is required and
+the MCP server stays on RFC1918**. The connector in ChatGPT targets an OpenAI-hosted URL
+(`/v1/mcp/{tunnel_id}`), never ours. Auth is a runtime control-plane API key with optional mTLS.
+
+Two things to pin, both from OpenAI's own architecture doc: choosing the tunnel *"does not make
+MCP authentication or MCP data flow fully local"* — requests, responses and auth artifacts still
+traverse OpenAI, so a private listener is not a local data plane — and the runtime API key on
+the tunnel host is the load-bearing credential.
+
+**The vendor asymmetry is the finding worth drawing.** OpenAI ships this; Anthropic's MCP
+tunnels are explicitly *not* available for claude.ai. So the same architecture has an
+outbound-only path for one vendor and a public-endpoint-plus-IP-allowlist path for the other.
+
+The original, now-superseded finding was: claude.ai connects to a custom MCP server **from Anthropic's cloud
 infrastructure, not from the user's device** — so *"servers hosted on a private corporate
 network, behind a VPN, or blocked by a firewall won't connect."* The documented remedy is
 **allowlisting the vendor's IP ranges to a publicly reachable endpoint**.

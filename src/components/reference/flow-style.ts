@@ -29,6 +29,10 @@ export const BLOCK_STYLE: Record<
   provider: { stroke: "var(--ink-3)", tab: "var(--ink-2)", dash: "6 4" },
   external: { stroke: "var(--band-data-rail)", tab: "var(--ink-2)", dash: "8 4" },
   governance: { stroke: "var(--ink-2)", tab: "var(--ink-2)", dash: "2 4" },
+  // Containment, not a party: a dashed frame around whatever runs inside it.
+  boundary: { stroke: "var(--ink-3)", tab: "var(--ink)", dash: "7 5" },
+  // Deliberately unnamed source. Drawn as nothing; only its anchor point matters.
+  origin: { stroke: "transparent", tab: "transparent" },
 };
 
 /**

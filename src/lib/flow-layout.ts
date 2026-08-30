@@ -87,50 +87,152 @@ const overlap = (a0: number, a1: number, b0: number, b1: number): [number, numbe
   return hi - lo > 24 ? [lo, hi] : null;
 };
 
-export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
-  const cols = Math.max(...arch.blocks.map((b) => b.col)) + 1;
-  const rows = Math.max(...arch.blocks.map((b) => b.row + (b.rowSpan ?? 1) - 1)) + 1;
-  const width = MARGIN_X * 2 + cols * COL_W + (cols - 1) * COL_GAP;
+/** Padding inside a container, and the room its title tab needs above its children. */
+const NEST_PAD = 20;
+const NEST_HEAD = 34;
+/** An anonymous origin occupies a cell but draws nothing; the line starts in empty space. */
+const ORIGIN_W = 8;
 
-  // Row heights come from the single-row blocks; spanning blocks then grow their last row if
-  // the span still cannot hold them.
-  const rowH = Array.from({ length: rows }, () => 64);
-  for (const b of arch.blocks) {
-    if ((b.rowSpan ?? 1) === 1) rowH[b.row] = Math.max(rowH[b.row], naturalHeight(b));
+type Placed = { block: ArchBlock; w: number; h: number; kids: Placed[]; inner?: GridResult };
+type GridResult = {
+  width: number;
+  height: number;
+  /** Position of each member relative to the grid's own origin. */
+  at: Map<string, Rect>;
+  colX: number[];
+  colW: number[];
+};
+
+const blockWidth = (b: ArchBlock) =>
+  b.kind === "actor" ? 64 : b.kind === "origin" ? ORIGIN_W : COL_W;
+
+/**
+ * Lay a set of siblings out on their own grid.
+ *
+ * Column widths and row heights come from what is actually placed, and **empty tracks
+ * collapse to nothing**. That single property is what removes the dead space a sparse
+ * authored grid used to produce — a governance band authored at row 5 with content ending at
+ * row 2 no longer drags three empty rows of gutter behind it.
+ */
+function gridLayout(items: Placed[]): GridResult {
+  if (!items.length) return { width: 0, height: 0, at: new Map(), colX: [], colW: [] };
+  const cols = Math.max(...items.map((p) => p.block.col)) + 1;
+  const rows = Math.max(...items.map((p) => p.block.row + (p.block.rowSpan ?? 1) - 1)) + 1;
+
+  const used = { col: new Set<number>(), row: new Set<number>() };
+  for (const p of items) {
+    used.col.add(p.block.col);
+    for (let r = p.block.row; r < p.block.row + (p.block.rowSpan ?? 1); r++) used.row.add(r);
   }
-  for (const b of arch.blocks) {
-    const span = b.rowSpan ?? 1;
+
+  const colW = Array.from({ length: cols }, (_, c) =>
+    used.col.has(c) ? Math.max(COL_W, ...items.filter((p) => p.block.col === c).map((p) => p.w)) : 0,
+  );
+  const rowH: number[] = Array.from({ length: rows }, (_, r) => (used.row.has(r) ? 64 : 0));
+  for (const p of items) {
+    if ((p.block.rowSpan ?? 1) === 1) rowH[p.block.row] = Math.max(rowH[p.block.row], p.h);
+  }
+  for (const p of items) {
+    const span = p.block.rowSpan ?? 1;
     if (span === 1) continue;
-    const have =
-      rowH.slice(b.row, b.row + span).reduce((s, h) => s + h, 0) + ROW_GAP * (span - 1);
-    const need = naturalHeight(b) - have;
-    if (need > 0) rowH[b.row + span - 1] += need;
+    const gaps = ROW_GAP * (span - 1);
+    const have = rowH.slice(p.block.row, p.block.row + span).reduce((s, h) => s + h, 0) + gaps;
+    if (p.h > have) rowH[p.block.row + span - 1] += p.h - have;
   }
 
+  const colX: number[] = [];
+  let x = 0;
+  for (let c = 0; c < cols; c++) {
+    colX.push(x);
+    if (colW[c]) x += colW[c] + COL_GAP;
+  }
   const rowY: number[] = [];
-  let y = MARGIN_TOP;
+  let y = 0;
   for (let r = 0; r < rows; r++) {
     rowY.push(y);
-    y += rowH[r] + ROW_GAP;
+    if (rowH[r]) y += rowH[r] + ROW_GAP;
   }
-  const height = y - ROW_GAP + MARGIN_BOTTOM;
+
+  const at = new Map<string, Rect>();
+  for (const p of items) {
+    const span = p.block.rowSpan ?? 1;
+    const spanH =
+      rowH.slice(p.block.row, p.block.row + span).reduce((s, h) => s + h, 0) + ROW_GAP * (span - 1);
+    const h = span > 1 ? Math.max(p.h, spanH) : p.h;
+    const top = span > 1 ? rowY[p.block.row] : rowY[p.block.row] + (rowH[p.block.row] - h) / 2;
+    // Narrow things (an actor figure, an anonymous origin) centre in their column so flows
+    // attach to the figure rather than to the edge of an invisible full-width cell.
+    at.set(p.block.id, { x: colX[p.block.col] + (colW[p.block.col] - p.w) / 2, y: top, w: p.w, h });
+  }
+  return {
+    width: x ? x - COL_GAP : 0,
+    height: y ? y - ROW_GAP : 0,
+    at,
+    colX,
+    colW,
+  };
+}
+
+export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
+  // --- Containment tree ------------------------------------------------------------
+  // `parent` makes containment data rather than config, and it nests to any depth: a sandbox
+  // holding a harness that itself holds a supervisor and its subagents is three levels and
+  // needs no special case. Children stay ordinary blocks, so they keep their edges and pins.
+  const kidsOf = new Map<string, ArchBlock[]>();
+  for (const b of arch.blocks) {
+    const p = b.parent;
+    if (!p) continue;
+    if (!kidsOf.has(p)) kidsOf.set(p, []);
+    kidsOf.get(p)!.push(b);
+  }
+
+  const measure = (b: ArchBlock): Placed => {
+    const kids = (kidsOf.get(b.id) ?? []).map(measure);
+    if (!kids.length) return { block: b, w: blockWidth(b), h: naturalHeight(b), kids };
+    const inner = gridLayout(kids);
+    return {
+      block: b,
+      w: inner.width + NEST_PAD * 2,
+      h: inner.height + NEST_HEAD + NEST_PAD,
+      kids,
+      inner,
+    };
+  };
+
+  const roots = arch.blocks.filter((b) => !b.parent).map(measure);
+  const top = gridLayout(roots);
+
+  // Risk tags stack upward from a block's top edge, so the first drawn row needs headroom for
+  // the tallest stack it carries. Collapsing empty rows removed the accidental slack that used
+  // to hide this. The margin is derived rather than fixed so no author has to leave a blank row
+  // as packing material.
+  const tagsOn = new Map<string, number>();
+  for (const pin of arch.pins?.risks ?? []) {
+    if (!pin.at.includes("->")) tagsOn.set(pin.at, (tagsOn.get(pin.at) ?? 0) + 1);
+  }
+  const firstRow = Math.min(...roots.map((p) => p.block.row));
+  const deepestStack = Math.max(
+    0,
+    ...roots.filter((p) => p.block.row === firstRow).map((p) => tagsOn.get(p.block.id) ?? 0),
+  );
+  const marginTop = Math.max(MARGIN_TOP, TAG_GAP * deepestStack + TAG_H + 8);
 
   const blocks: Record<string, Rect> = {};
-  for (const b of arch.blocks) {
-    const span = b.rowSpan ?? 1;
-    const x = MARGIN_X + b.col * (COL_W + COL_GAP);
-    const spanH =
-      rowH.slice(b.row, b.row + span).reduce((s, h) => s + h, 0) + ROW_GAP * (span - 1);
-    const h = span > 1 ? spanH : naturalHeight(b);
-    // Centre a short block in its row; a spanning block takes the whole span.
-    const top = span > 1 ? rowY[b.row] : rowY[b.row] + (rowH[b.row] - h) / 2;
-    // An actor is drawn as a small icon, not a box — shrink its rect so flows attach to the
-    // figure instead of floating at the edge of an invisible full-width cell.
-    blocks[b.id] =
-      b.kind === "actor"
-        ? { x: x + (COL_W - 64) / 2, y: top, w: 64, h }
-        : { x, y: top, w: COL_W, h };
-  }
+  const place = (items: Placed[], grid: GridResult, ox: number, oy: number) => {
+    for (const p of items) {
+      const r = grid.at.get(p.block.id)!;
+      const abs = { x: ox + r.x, y: oy + r.y, w: r.w, h: r.h };
+      blocks[p.block.id] = abs;
+      if (p.inner) place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + NEST_HEAD);
+    }
+  };
+  place(roots, top, MARGIN_X, marginTop);
+
+  const width = MARGIN_X * 2 + top.width;
+  const height = marginTop + top.height + MARGIN_BOTTOM;
+  // Column extents let the renderer derive band rects from the grid rather than from member
+  // rects, so a band holding only a narrow actor no longer leaves a gutter beside it.
+  const columns = top.colX.map((x, i) => ({ x: MARGIN_X + x, w: top.colW[i] }));
 
   // --- Edges ---------------------------------------------------------------------
   // Every arrow gets its own anchor point. Without this, edges attaching to the same side of
@@ -232,7 +334,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     };
   });
 
-  return { width, height, blocks, edges };
+  return { width, height, blocks, edges, columns };
 }
 
 // --- Pin placement -----------------------------------------------------------------
