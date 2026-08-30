@@ -63,10 +63,22 @@ vendor-hosted agent cannot touch our systems except through a component we run.
    edge (reverse legal on bidirectional edges); every `moves` statement is present; every
    capability a flow claims is pinned on the drawing.
 
-Because the rule is a failure rather than a warning, it surfaces missing controls at authoring
-time: drawing the vendored coding agent in this grammar immediately exposes that the harness
-talks to the vendor's cloud with nothing of the organisation's on the path, and forces the
-secure edge into the picture.
+### What the crossing band is *not*
+
+The rule says every path out of the workload crosses something we operate. It does **not** say
+every path is inspected or brokered — the crossing band holds controls with three different
+jobs, and conflating them produces architectures nobody would build:
+
+| Destination | Job of the crossing | Typical component |
+| --- | --- | --- |
+| An **approved vendor's own service** under an enterprise agreement | Destination admission. The vendor's endpoints are allowlisted because third-party risk management cleared them; the session is not inspected, and on a pinned TLS session it cannot be. | Firewall / egress allowlist |
+| **Arbitrary destinations** — registries, the open web, third-party servers | Admission *and* inspection, because nothing vouches for what comes back | Egress proxy, SSE, CASB |
+| **Our own systems and data** | Brokered access: scoped short-lived grants, our keys, our audit | MCP gateway / API gateway |
+
+Drawing an inspection point on a sanctioned vendor path asserts a control nobody operates.
+What governs that path is the assessment behind the allowlist entry, the tenant binding in
+managed settings, and the agreement itself — pinned as vendor assurance and egress control on
+the edge, not drawn as a proxy in the middle of it.
 
 ## What stays from the main grammar
 
@@ -88,7 +100,7 @@ broker tiers should split the block and keep the flows unchanged.
 | Architecture | id | What it tests |
 | --- | --- | --- |
 | Personal agent — zone map | `archPersonalAgentZones` | The endpoint surface: an always-on loop whose every path out is a crossing |
-| Coding & desktop agents — zone map | `archCodingAgentZones` | The same grammar against a vendored product, where the workload band is ours but the vendor's cloud is external — and the crossing rule exposes the egress control the main drawing never made explicit |
+| Coding & desktop agents — zone map | `archCodingAgentZones` | The same grammar against a vendored product, where the workload band is ours but the vendor's cloud is external — and the three crossing jobs are visible on one page: an approved vendor admitted by allowlist, the open internet admitted and inspected, our own systems brokered |
 
 Both sit alongside their main-grammar originals rather than replacing them, so the two
 readings of the same archetype can be compared directly.

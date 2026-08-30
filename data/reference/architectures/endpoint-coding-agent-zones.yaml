@@ -13,19 +13,20 @@ summary:
 
 description:
   - >
-    The bands do something here the main drawing does not. In that one the harness talks to the
-    vendor's cloud directly and the organisation's own controls appear only where somebody
-    thought to pin them. Under the crossing rule that edge is illegal — the workload band may
-    not touch anything external — so drawing this archetype in the spike grammar immediately
-    exposes the missing component and forces it onto the page: a secure edge the organisation
-    operates, through which the vendor session, the model traffic and the web egress all pass.
-    That is the strongest argument for the grammar. The rule found a control that was absent.
+    The bands make one thing explicit that the main drawing leaves implicit: every path out of
+    the endpoint crosses a control the organisation operates, and that control does a different
+    job depending on where the path goes. Traffic to the vendor's own service is a sanctioned
+    product path under an enterprise agreement — the crossing there is destination admission,
+    an allowlist entry that exists because third-party risk management cleared the vendor, and
+    the session is not inspected because a pinned TLS session cannot be. Traffic to registries,
+    the open web and third-party servers is arbitrary, and gets admission and inspection both.
   - >
-    The second band split matters just as much. The vendor's service is external — it is
-    outside the company, whatever the contract says — while our repositories, internal MCP
-    servers and org data sit in their own band. So the drawing distinguishes the agent reaching
-    our systems from the agent reaching the internet, and puts a different crossing on each:
-    the MCP gateway for ours, the secure edge for theirs.
+    The band split matters just as much. The vendor's service is external — outside the company,
+    whatever the contract says — while our repositories, internal MCP servers and org data sit
+    in their own band. So the drawing distinguishes three crossings with three different jobs:
+    admission for the approved vendor, admission plus inspection for the open internet, and
+    brokered scoped grants through the MCP gateway for our own systems. That distinction is
+    what a risk owner needs and what a single "gateway" box hides.
   - >
     The vendor's own control plane — managed settings, connector brokering, audit export,
     remote and scheduled sessions — stays inside the vendor block as items. Under the
@@ -36,8 +37,9 @@ description:
 distinguishedBy:
   - >
     Against the coding and desktop agents in the main grammar: same archetype and the same
-    exemplars, different organising principle — and one substantive difference the grammar
-    forced, which is the secure edge between the endpoint and the vendor's cloud.
+    exemplars, different organising principle — and one thing made explicit that the main
+    drawing leaves to a pin, which is that the vendor session, the internet and our own systems
+    are three different crossings with three different enforcement jobs.
   - >
     Against the personal agent zone map, its sibling in this spike: the same five bands on an
     archetype with a vendor in it. There the workload is assembled by the owner with no vendor
@@ -78,8 +80,9 @@ zones:
     title: Enterprise crossing
     owner: crossing
     note: >
-      What the organisation operates and can change: the secure edge every outbound session
-      passes, and the MCP gateway that admits agents into our own systems.
+      What the organisation operates and can change: the egress control every outbound path
+      crosses — admitting the approved vendor, admitting and inspecting everything else — and
+      the MCP gateway that admits agents into our own systems.
   - id: zoneEnterprise
     title: Enterprise systems & data
     owner: enterprise
@@ -196,34 +199,39 @@ blocks:
         icon: shield
         note: Where builds, tests and driven desktops run when isolation is on.
 
-  - id: secureEdge
+  - id: egressControl
     kind: service
-    title: Secure edge
+    title: Egress control
     zone: zoneCrossing
     col: 3
     row: 1
     note: >
-      The component the crossing rule exposed. Every session the endpoint opens to the vendor's
-      cloud, every model call inside it and every web fetch the tools make passes here — which
-      is the only place the organisation can see or stop any of it. Absent in most real
-      deployments, which is this drawing's finding.
+      The organisation's firewall and proxy tier — the crossing every outbound path from the
+      endpoint takes, doing a different job on each. To the approved vendor it is destination
+      admission: the vendor's endpoints are in the allowlist because third-party risk
+      management put them there, and the session itself is not inspected. To the open internet
+      it is admission and inspection both.
     items:
-      - id: egress
+      - id: approvedDestinations
+        label: Approved destinations
+        icon: scale
+        note: >
+          The vendor endpoints an assessment cleared. The allowlist entry is where the approval
+          decision is actually enforced — and its absence is what stops an unapproved tool.
+      - id: allowlist
         label: Egress allowlist
         icon: shield
-        note: Deny by default — the vendor's endpoints, the registries and nothing else.
-      - id: identity
-        label: Identity & device posture
-        icon: person
-        note: Which user, on which managed device, may open a session at all.
-      - id: dlp
+        note: Deny by default for everything else — registries, the web, third-party servers each named.
+      - id: inspection
         label: Content inspection
         icon: eye
-        note: What code and documents may leave for inference, inspected on the way out.
+        note: >
+          Applied to the arbitrary-destination traffic, not to the vendor session — a pinned
+          TLS session cannot be inspected, and breaking it breaks the product.
       - id: edgeAudit
         label: Audit tap
         icon: doc
-        note: The organisation's own record of sessions, independent of the vendor's export.
+        note: Our own record of what left and where it went, independent of the vendor's export.
 
   - id: mcpGateway
     kind: service
@@ -367,7 +375,7 @@ edges:
     label: away from the machine
     note: The same person, not at the keyboard — or, on a chat surface, not necessarily the same person.
   - from: remoteDevice
-    to: secureEdge
+    to: egressControl
     path: primary
     bidir: true
     label: remote steering
@@ -375,23 +383,24 @@ edges:
       Steering from away reaches the vendor's relay through the organisation's edge, so a
       session raised from a phone is a session the organisation can see and refuse.
   - from: harness
-    to: secureEdge
+    to: egressControl
     path: primary
     bidir: true
     label: app session & inference
     note: >
-      The application session and every model call inside it. The main-grammar drawing runs
-      this edge straight to the vendor; the crossing rule refuses that, and this component is
-      what the refusal produces.
-  - from: secureEdge
+      The application session and every model call inside it, leaving for an allowlisted
+      destination. The control here is that the vendor is approved and named — not inspection,
+      which the pinned session forbids and the agreement makes unnecessary.
+  - from: egressControl
     to: vendorService
     path: external
     bidir: true
     route: vh
-    label: to the vendor cloud
+    label: to the approved vendor
     note: >
-      Out to the vendor's backend on a session-scoped credential — inspected, allowlisted and
-      logged on our side before it leaves.
+      Out to the vendor's backend on a session-scoped credential. This destination is in the
+      allowlist because an assessment cleared it, and the enterprise agreement — retention,
+      training terms, tenancy — is what governs the data once it arrives.
   - from: vendorService
     to: provider
     path: external
@@ -410,7 +419,7 @@ edges:
     label: tool calls
     note: Tool calls out with whatever scope the permission model granted; results back into context.
   - from: toolPlane
-    to: secureEdge
+    to: egressControl
     path: primary
     bidir: true
     route: hv
@@ -427,7 +436,7 @@ edges:
     note: >
       The path into our own systems: connectors the marketplace admits, on grants scoped to the
       developer rather than to the machine.
-  - from: secureEdge
+  - from: egressControl
     to: mcpGateway
     path: primary
     bidir: true
@@ -450,7 +459,7 @@ edges:
     route: vh
     label: scoped reads & writes
     note: Business systems reached under the developer's scope, logged by us rather than by the vendor.
-  - from: secureEdge
+  - from: egressControl
     to: downstream
     path: external
     bidir: true
@@ -478,30 +487,30 @@ pins:
         Configuration admits the whole tool plane and can arrive with the clone. Injecting into
         it and swapping it after approval are the disclosed paths.
     - risk: riskInsecureModelOutput
-      at: harness->secureEdge
+      at: harness->egressControl
       note: The completion is unauthenticated content, and it drives file writes, commands and clicks.
     - risk: riskExcessiveDataHandlingDuringInference
-      at: secureEdge->vendorService
+      at: egressControl->vendorService
       note: >
         Code, documents and screenshots leave the company here — usually more than the
         developer pictured sharing, and only the edge can see how much.
     - risk: riskStaleAgentIdentityBinding
-      at: remoteDevice->secureEdge
+      at: remoteDevice->egressControl
       note: >
         A remote channel is only as good as the account and device binding behind it; a stale
         login steering a machine full of credentials is an account-compromise blast radius.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: secureEdge->mcpGateway
+      at: egressControl->mcpGateway
       note: >
         A hosted session arriving with a connector grant is the vendor's infrastructure
         exercising our authority — the grant is what bounds it, and our gateway issues it.
     - risk: riskSensitiveDataDisclosure
-      at: toolPlane->secureEdge
+      at: toolPlane->egressControl
       note: >
         The machine also holds SSH keys, cloud credentials and browser sessions; outside the
         sandbox nothing separates them from the agent's shell on the way out.
     - risk: riskToolSourceProvenance
-      at: secureEdge->downstream
+      at: egressControl->downstream
       note: >
         Dependencies and remote servers arrive on publisher self-attestation, and their
         descriptions and contents are read into context as model input.
@@ -516,18 +525,26 @@ pins:
 
   capabilities:
     - capability: capabilityIga
-      at: remoteDevice->secureEdge
+      at: remoteDevice->egressControl
       note: >
         Bind the session to a named user on a managed device before it reaches the vendor's
         relay — the admission decision belongs to us, not to the account alone.
     - capability: capabilityAgentRuntimeEnforcement
-      at: harness->secureEdge
+      at: harness->egressControl
       note: Session admission and per-call policy evaluated at the edge, outside the application being governed.
+    - capability: capabilityAiTprm
+      at: egressControl->vendorService
+      note: >
+        The assessment behind the allowlist entry. On this path the vendor's own controls,
+        retention terms and tenancy are the substance of the review — because once the
+        destination is approved and named, the session itself is not something we inspect.
     - capability: capabilityAiDlp
-      at: secureEdge->vendorService
-      note: Inspect and redact what code, documents and screen content may leave for inference.
+      at: toolPlane->egressControl
+      note: >
+        Inspection belongs on the arbitrary-destination path, where the agent fetches from
+        registries and the open web — not on the pinned vendor session.
     - capability: capabilityEgressControl
-      at: secureEdge->downstream
+      at: egressControl->downstream
       note: Default-deny outbound with an allowlist — the vendor's endpoints and the approved registries, nothing else.
     - capability: capabilityToolPermissionScoping
       at: harness->toolPlane
@@ -565,7 +582,7 @@ pins:
         A managed allowlist of connectors and tool servers, enforced from our gateway rather
         than from the configuration file it governs.
     - capability: capabilityAuditLogging
-      at: secureEdge
+      at: egressControl
       note: >
         Our own session record, fused with the vendor's export — only the combination covers
         what the vendor's console cannot see.
@@ -584,7 +601,7 @@ flows:
   - id: F2
     title: Remote steering
     moves: Instructions and approvals from a phone, a browser or a chat thread, and the results back.
-    path: [developer->remoteDevice, remoteDevice->secureEdge, secureEdge->vendorService]
+    path: [developer->remoteDevice, remoteDevice->egressControl, egressControl->vendorService]
     threats: [Stale account or device binding, Chat channels admitting more than the owner]
     controls: [capabilityIga, capabilityAgentRuntimeEnforcement]
     note: >
@@ -593,12 +610,13 @@ flows:
   - id: F3
     title: Model inference
     moves: Code, documents and screenshots out for inference; the completion that drives the next action back.
-    path: [harness->secureEdge, secureEdge->vendorService, vendorService->provider]
-    threats: [Excessive data leaving the company, Unapproved models, Injection reaching the model]
-    controls: [capabilityAiDlp, capabilityAgentRuntimeEnforcement, capabilityEgressControl]
+    path: [harness->egressControl, egressControl->vendorService, vendorService->provider]
+    threats: [Unapproved vendor or model, Excessive data under the agreement, Tenant drift to a personal account]
+    controls: [capabilityAiTprm, capabilityEgressControl, capabilityAgentRuntimeEnforcement]
     note: >
-      The flow the crossing rule exposed: in the main drawing this runs endpoint-to-vendor with
-      nothing of ours on it.
+      A sanctioned path: the vendor is approved, its endpoints are allowlisted, and the
+      agreement governs the data once it arrives. What we enforce here is that the destination
+      is the approved one and the session belongs to our tenant — not what is inside it.
   - id: F4
     title: Repository and document content
     moves: Clones, file reads, issue text and documents — read into context as though instruction.
@@ -625,14 +643,14 @@ flows:
   - id: F7
     title: Internet egress
     moves: Dependency fetches, web reads and third-party SaaS calls.
-    path: [toolPlane->secureEdge, secureEdge->downstream]
+    path: [toolPlane->egressControl, egressControl->downstream]
     threats: [Web-borne injection, Exfiltration to an attacker endpoint, Malicious dependencies]
-    controls: [capabilityEgressControl, capabilityAuditLogging]
+    controls: [capabilityEgressControl, capabilityAiDlp, capabilityAuditLogging]
     note: Everything fetched here re-enters the loop as context, which is why the allowlist is a security control.
   - id: F8
     title: Hosted sessions reach back
     moves: Requests from cloud and scheduled sessions running in the vendor's environment into our systems.
-    path: [vendorService->secureEdge, secureEdge->mcpGateway, mcpGateway->orgData]
+    path: [vendorService->egressControl, egressControl->mcpGateway, mcpGateway->orgData]
     threats: [Vendor infrastructure exercising our authority, Standing org credentials in a vendor cloud]
     controls: [capabilitySecretsManagement, capabilityAgentRegistry, capabilityHitlControls]
     note: >
@@ -641,9 +659,9 @@ flows:
   - id: F9
     title: Vendor control plane
     moves: Managed settings and allowlists down; session audit export back.
-    path: [secureEdge->vendorService]
+    path: [egressControl->vendorService]
     threats: [Unmanaged install with no policy or audit, Settings left at default]
-    controls: [capabilityAuditLogging, capabilityShadowAiDiscovery]
+    controls: [capabilityAuditLogging, capabilityShadowAiDiscovery, capabilityAiTprm]
     note: >
       The vendor's plane, not ours — assured rather than drawn. What we own is fusing its
       export with our edge's record, and finding the installs that never enrolled.
@@ -653,9 +671,9 @@ scenarios:
     steps:
       - follow: developer->harness
         note: The task is stated by a human who will stay for the session.
-      - follow: harness->secureEdge
-        note: Context leaves the endpoint through our edge — inspected and allowlisted before it goes anywhere.
-      - follow: secureEdge->vendorService
+      - follow: harness->egressControl
+        note: Context leaves for an allowlisted destination — the vendor our assessment approved, and no other.
+      - follow: egressControl->vendorService
         note: The vendor's service takes the session and calls the model behind it.
       - follow: harness->toolPlane
         note: Edits and commands execute with whatever scope the permission model granted.
@@ -665,26 +683,27 @@ scenarios:
     steps:
       - follow: mcpGateway->repos
         note: A hidden instruction in a source file or document is read into context.
-      - follow: harness->secureEdge
+      - follow: harness->egressControl
         note: The instruction shapes the completion, which the loop treats as the plan.
-      - follow: toolPlane->secureEdge
+      - follow: toolPlane->egressControl
         note: The exfiltration attempt has to cross the egress allowlist — the last control standing.
   - title: A hosted session reaches back
     steps:
-      - follow: vendorService->secureEdge
+      - follow: vendorService->egressControl
         note: A cloud or scheduled session asks for org data; nobody's laptop is involved.
-      - follow: secureEdge->mcpGateway
+      - follow: egressControl->mcpGateway
         note: Our edge hands it to our gateway rather than letting the vendor's cloud reach in.
       - follow: mcpGateway->orgData
         note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and we record it.
 
 deviations:
-  - subject: The secure edge is drawn although most deployments lack it
+  - subject: The vendor session crosses the egress control but is not inspected there
     reason: >
-      The crossing rule makes an endpoint-to-vendor edge illegal, and the honest resolution is
-      the component a governed deployment would have: a secure edge the organisation operates.
-      The main-grammar drawing shows the ungoverned reality; this one shows the target state,
-      and the difference between them is the finding.
+      An approved vendor's own service is a sanctioned destination: the allowlist entry exists
+      because third-party risk management cleared it, and the session is pinned TLS that cannot
+      be inspected without breaking the product. Drawing an inspection point on that path would
+      assert a control nobody operates. The controls that do apply are the approval behind the
+      allowlist entry, the tenant binding in managed settings, and the agreement itself.
   - subject: The vendor's cloud sits in the external band
     reason: >
       A vendor's backend is outside the company whatever the contract says, so it belongs with
