@@ -716,21 +716,37 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
+| Single agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
+| Single agent workflow | Application front end | service | `componentApplication` |
 | Single agent workflow | Agent harness | service | `componentReasoningCore` |
 | Single agent workflow | Memory & state | service | `componentDataStorage` |
 | Single agent workflow | AI gateway | service | (none) |
 | Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Model provider | provider | `componentModelServing` |
+| Single agent workflow | Enterprise data | external | `componentDataSources` |
+| Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Downstream services | external | `componentDataSources` |
-| Single agent workflow | Governance plane | governance | (none) |
+| Single agent workflow | Identity services | governance | (none) |
+| Single agent workflow | Secrets & key management | governance | (none) |
+| Single agent workflow | Policy & authorization | governance | (none) |
+| Single agent workflow | Supply-chain assurance | governance | (none) |
+| Single agent workflow | Observability & response | governance | (none) |
+| Durable multi-agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
+| Durable multi-agent workflow | Application front end | service | `componentApplication` |
 | Durable multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
 | Durable multi-agent workflow | Subagents | service | `componentReasoningCore` |
 | Durable multi-agent workflow | Memory & state | service | `componentDataStorage` |
 | Durable multi-agent workflow | AI gateway | service | (none) |
 | Durable multi-agent workflow | Model provider | provider | `componentModelServing` |
 | Durable multi-agent workflow | Tool services | service | `componentTools` |
+| Durable multi-agent workflow | Enterprise data | external | `componentDataSources` |
+| Durable multi-agent workflow | Tool services | service | `componentTools` |
 | Durable multi-agent workflow | Downstream services | external | `componentDataSources` |
-| Durable multi-agent workflow | Governance plane | governance | (none) |
+| Durable multi-agent workflow | Identity services | governance | (none) |
+| Durable multi-agent workflow | Secrets & key management | governance | (none) |
+| Durable multi-agent workflow | Policy & authorization | governance | (none) |
+| Durable multi-agent workflow | Supply-chain assurance | governance | (none) |
+| Durable multi-agent workflow | Observability & response | governance | (none) |
 | Chat agent with tools | Application front end | service | `componentApplication` |
 | Chat agent with tools | Agent harness | service | `componentReasoningCore` |
 | Chat agent with tools | Memory & state | service | `componentDataStorage` |
@@ -862,8 +878,8 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 5 | _none_ |
-| Durable multi-agent workflow | build | draft | 5 | Network segmentation & egress control, Agent execution sandboxing |
+| Single agent workflow | build | draft | 5 | Identity & access management for AI applications, Agent & tool registry, Model & agent evaluation harnesses |
+| Durable multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
 | Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
 | Remote MCP server you publish | build | draft | 5 | Human-in-the-loop approval & escalation, Output encoding & safe rendering |
 | Self-hosted open-weights inference | build | draft | 4 | _none_ |

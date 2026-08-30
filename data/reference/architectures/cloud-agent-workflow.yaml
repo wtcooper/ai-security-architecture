@@ -67,11 +67,34 @@ exemplars:
       as discrete products behind one control plane.
     asOf: "2026-08"
 
+zones:
+  - id: zoneUser
+    owner: user
+    note: >
+      The initiator — present to start the process and absent for the rest of it. The approval
+      they gave at the start is the only human decision until something escalates.
+  - id: zoneCloud
+    owner: cloud
+    note: >
+      Everything we operate: the surface the request arrives on, what triggers the workflow
+      when nobody sends one, the supervisor and its specialists, the durable state beneath
+      them, the crossing every call leaves through, and our own tool servers and data.
+  - id: zoneExternal
+    owner: external
+    note: Outside the company — the model provider, third-party tool servers, and where effects land.
+  - id: zoneGovernance
+    owner: governance
+    note: >
+      Drawn across every band because it governs every band. A workflow that runs for days with
+      nobody watching has no in-flight human gate, so this band carries the whole of the
+      oversight.
+
 blocks:
   - id: initiator
     kind: actor
     title: Initiator
     icon: person
+    zone: zoneUser
     col: 0
     row: 1
     note: >
@@ -79,17 +102,48 @@ blocks:
       the only human decision until something escalates.
 
   - id: events
-    kind: actor
-    title: Schedules & events
-    icon: clock
-    col: 0
+    kind: service
+    title: Triggers & schedules
+    cosaiComponent: componentAgentUserQuery
+    zone: zoneCloud
+    col: 1
     row: 0
-    note: Timers, webhooks and queue messages that start work with no human in the room.
+    note: >
+      Timers, webhooks and queue messages that start work with no human in the room — and the
+      resumptions that wake a workflow which has been suspended for hours or days.
+    items:
+      - id: schedules
+        label: Schedules & events
+        icon: clock
+        note: The timer or queue message that starts a run, and the signal that resumes a suspended one.
+
+  - id: entry
+    kind: service
+    title: Application front end
+    cosaiComponent: componentApplication
+    zone: zoneCloud
+    col: 1
+    row: 1
+    note: >
+      Where a request arrives and the initiator's identity is bound to the workflow it starts.
+      That binding has to outlive the session, because the work does.
+    items:
+      - id: api
+        label: App & API endpoint
+        icon: globe
+        note: The published surface a process is started from.
+      - id: authn
+        label: Identity binding
+        icon: shield
+        note: >
+          Whose authority the workflow carries for its whole life — days, in some deployments,
+          after the person who granted it has gone.
 
   - id: orchestration
     kind: service
     title: Supervisor agent
-    col: 1
+    zone: zoneCloud
+    col: 2
     row: 1
     cosaiComponent: componentReasoningCore
     note: >
@@ -98,7 +152,7 @@ blocks:
       every hop.
     items:
       - id: supervisor
-        label: Planning loop
+        label: Agent loop
         icon: agent
         note: Decomposes the goal and routes work to specialists.
       - id: engine
@@ -109,7 +163,8 @@ blocks:
   - id: subagents
     kind: service
     title: Subagents
-    col: 2
+    zone: zoneCloud
+    col: 3
     row: 2
     cosaiComponent: componentReasoningCore
     note: >
@@ -129,6 +184,7 @@ blocks:
   - id: state
     kind: service
     title: Memory & state
+    zone: zoneCloud
     col: 1
     row: 2
     cosaiComponent: componentDataStorage
@@ -152,39 +208,21 @@ blocks:
   - id: gateway
     kind: service
     title: AI gateway
+    zone: zoneCloud
     col: 3
     row: 1
     note: >
       The one door. Agents hold no credentials and reach nothing directly; every model and tool
-      call is brokered, policy-checked, rate-limited and logged here.
-    items:
-      - id: broker
-        label: Credential broker
-        icon: key
-        note: Short-lived, scoped credentials fetched at step time — never held for the process's life.
-      - id: policy
-        label: Policy enforcement
-        icon: shield
-        note: A per-call decision about this agent, this tool, this argument — not a standing grant.
-      - id: limits
-        label: Rate & budget limits
-        icon: clock
-        note: The brake on loops and runaway spend, enforced outside the loop it limits.
-      - id: audit
-        label: Audit taps
-        icon: eye
-        note: The trail is recorded by the gateway, not volunteered by the agent.
-      - id: allowlist
-        label: Egress allowlist
-        icon: shield
-        note: >
-          Deny by default; models, tools and destinations each named. The chip on the
-          downstream path marks the last boundary; this is the component that owns the policy.
+      call is brokered, policy-checked, rate-limited and logged here. Its items are the traffic
+      classes it brokers — the checks it runs are the numbered pins on this block and its
+      edges, and the call-outs beneath.
+    pack: aiGatewayTraffic
 
   - id: provider
     kind: provider
     title: Model provider
-    col: 4
+    zone: zoneExternal
+    col: 5
     row: 0
     cosaiComponent: componentModelServing
     note: >
@@ -196,172 +234,230 @@ blocks:
         icon: model
         note: Reached only through the gateway, on brokered credentials.
 
-  - id: tools
+  - id: internalTools
     kind: service
     title: Tool services
+    zone: zoneCloud
     col: 4
-    row: 1
+    row: 3
     cosaiComponent: componentTools
-    note: >
-      The action surface: MCP servers, plain APIs and connectors, and A2A peer agents.
-      Everything here is admitted by
-      the registry and reached only through the gateway.
+    pack: toolServicesRemote
     items:
-      - id: mcp
-        label: MCP servers
-        icon: plug
-        note: Tool providers with declared scopes, admitted against the registry.
-      - id: connectors
-        label: APIs & connectors
-        icon: plug
-        note: Vendor-side capabilities the workflow drives on scoped grants.
-      - id: peers
-        label: A2A peer agents
-        icon: agent
-        note: Cross-org delegation over the A2A protocol. A peer's output enters this graph as input.
       - id: sandboxedTools
         label: Sandboxed tools
         icon: shield
         note: >
           Code execution and browsing in an isolated runtime, admitted by the registry like any
           other tool — the agents write code; only the sandbox should run it.
+    note: >
+      Our own action surface, admitted by the registry and reached only through the gateway.
+      The same component as the external surface, at a different band.
+
+  - id: orgData
+    kind: external
+    title: Enterprise data
+    zone: zoneCloud
+    col: 4
+    row: 4
+    cosaiComponent: componentDataSources
+    note: >
+      The systems of record the agents write to — where a wrong action becomes a real one, and
+      where a workflow that ran for two days did most of its damage before anyone looked.
+    items:
+      - id: records
+        label: Org data
+        icon: db
+        note: The authoritative state the workflow changes.
+      - id: fileStorage
+        label: File storage
+        icon: folder
+        note: Artifacts a step produced and a later step reads back as context.
+
+  - id: extTools
+    kind: service
+    title: Tool services
+    zone: zoneExternal
+    col: 5
+    row: 2
+    cosaiComponent: componentTools
+    pack: toolServicesRemote
+    items:
+      - id: peers
+        label: A2A peer agents
+        icon: agent
+        note: Cross-org delegation over the A2A protocol. A peer's output enters this graph as input.
+    note: >
+      Third-party servers, connectors and peer agents, out where nobody we contracted with
+      operates them. Admitted by assessment at the crossing, or refused there.
 
   - id: downstream
     kind: external
     title: Downstream services
     cosaiComponent: componentDataSources
-    col: 4
-    row: 2
-    note: The systems the workflow actually changes — where a wrong action becomes a real one.
-    items:
-      - id: records
-        label: Org data
-        icon: db
-        note: The systems of record the agents write to.
-      - id: saas
-        label: SaaS
-        icon: mail
-        note: Mail sent, tickets moved and calendar entries written on the organisation's behalf.
-      - id: apis
-        label: Web & APIs
-        icon: globe
-        note: Third-party services, and the untrusted content they return.
-
-  - id: governance
-    kind: governance
-    title: Governance plane
+    zone: zoneExternal
     col: 5
-    row: 0
-    rowSpan: 3
+    row: 3
+    pack: downstreamPublic
     note: >
-      The column the personal-agent archetype is missing. Identity, admission, evaluation, audit
-      and the ability to stop a running process — each its own service, none of them inside the
-      loop they govern.
-    items:
-      - id: idp
-        label: Identity provider
-        icon: person
-        note: A workload identity per agent, distinct from any user.
-      - id: registry
-        label: Agent & tool registry
-        icon: gear
-        note: What may run, and which tools it may be offered. Admission, not discovery.
-      - id: evals
-        label: Evaluation gates
-        icon: scale
-        note: Behavioural checks in front of every model, prompt or tool change.
-      - id: auditSink
-        label: Audit sink
-        icon: eye
-        note: Append-only, off the agents' write path, able to reconstruct the delegation chain.
-      - id: stop
-        label: Kill switch
-        icon: stop
-        note: Stops a mid-flight process without waiting for it to finish misbehaving.
+      Where effects land outside the company, and where the untrusted content that returns
+      enters a graph in which one confused agent propagates to all the others.
+
+  - id: govIdentity
+    kind: governance
+    title: Identity services
+    icon: person
+    zone: zoneGovernance
+    col: 1
+    row: 5
+    capabilities: [capabilityIga, capabilityNhiManagement]
+    note: >
+      One workload identity per agent, so a supervisor and its specialists are distinguishable
+      in the audit and revocable separately. A graph of agents sharing one identity is a graph
+      with no accountability in it.
+
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 2
+    row: 5
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
+    note: >
+      Short-lived credentials fetched at step time rather than held for the process's life —
+      which matters more here than anywhere, because the process's life may be days.
+
+  - id: govPolicy
+    kind: governance
+    title: Policy & authorization
+    icon: scale
+    zone: zoneGovernance
+    col: 3
+    row: 5
+    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting]
+    note: >
+      A per-call decision about this agent, this tool, this argument — never a standing grant,
+      and the brake on a loop that would otherwise be metered only by the invoice.
+
+  - id: govSupplyChain
+    kind: governance
+    title: Supply-chain assurance
+    icon: db
+    zone: zoneGovernance
+    col: 4
+    row: 5
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals]
+    note: >
+      Which agents and tools exist at all. In a multi-agent graph the registry is also the
+      inventory: an agent nobody registered is an agent nobody can revoke.
+
+  - id: govObservability
+    kind: governance
+    title: Observability & response
+    icon: eye
+    zone: zoneGovernance
+    col: 5
+    row: 5
+    capabilities: [capabilityAuditLogging, capabilityKillSwitch, capabilityAgentObservability]
+    note: >
+      The trail is recorded by the gateway, not volunteered by the agents — and the stop has to
+      reach a workflow that is suspended mid-flight, not just one that is currently running.
 
 edges:
   - from: initiator
-    to: orchestration
+    to: entry
     path: primary
     bidir: true
     label: request / result
     note: >
-      The human's request in — authenticated, with a scoped grant minted for it — and the
-      outcome back, often days later.
+      The process is started and the initiator's identity is bound to it. They are absent for
+      everything that follows.
+  - from: entry
+    to: orchestration
+    path: primary
+    bidir: true
+    note: The request reaches the supervisor carrying whose authority the workflow will run on.
   - from: events
     to: orchestration
     path: primary
     label: trigger
-    note: Unattended starts. Most of this architecture's runs begin here, not with a person.
+    note: >
+      Timers, webhooks and queue messages that start work with no human in the room — and the
+      signals that resume a workflow suspended for hours or days.
   - from: orchestration
     to: state
     path: primary
     bidir: true
+    route: vh
     note: >
-      Steps journal their results and read shared state back as context — the replay and
-      persistence surface.
+      The journal, the shared memory and the retrieval context. Durable by design, which is why
+      everything a step returns is persisted — including things that should not be.
   - from: orchestration
     to: subagents
     path: primary
     bidir: true
-    route: hv
+    route: vh
     label: delegate / results
     note: >
-      Work lands with a narrowed slice of the supervisor's authority; results return as model
-      output another agent will read as input.
-  - from: subagents
-    to: gateway
-    path: primary
-    bidir: true
-    route: hv
-    note: Every model and tool call the subagents make leaves through here. There is no side door.
-  - from: orchestration
-    to: gateway
-    path: primary
-    bidir: true
-    note: >
-      The supervisor's own planning calls take the same door as its specialists' — brokered,
-      limited and logged per call, with no side door for anyone.
+      Work handed down and results handed back. A specialist's output becomes the supervisor's
+      input, which is how one confused agent propagates through the graph.
   - from: subagents
     to: state
     path: primary
     bidir: true
+    note: Specialists read and write the same durable state the supervisor does.
+  - from: orchestration
+    to: gateway
+    path: primary
+    bidir: true
+    label: model & tool calls
+    note: Every call the supervisor makes crosses here on a brokered, step-scoped credential.
+  - from: subagents
+    to: gateway
+    path: primary
+    bidir: true
     note: >
-      Specialists journal their steps and read shared memory back as context — the same
-      persistence surface as the supervisor's, and the same secrets sink.
+      Specialists reach nothing directly either. The gateway is the one door for every agent in
+      the graph, which is what keeps the fan-out from multiplying the reachable set.
   - from: gateway
     to: provider
-    path: primary
+    path: external
     bidir: true
-    route: vh
-    note: Inference on brokered credentials, with limits and logging applied per call.
+    note: Inference on the brokered credential, for every agent in the graph.
   - from: gateway
-    to: tools
+    to: internalTools
     path: primary
     bidir: true
-    note: Tool calls carry the narrowed, per-step grant — not the supervisor's authority.
-  - from: tools
+    route: hv
+    label: internal tool calls
+    note: Admitted against the registry and narrowed to a scoped grant before anything executes.
+  - from: internalTools
+    to: orgData
+    path: primary
+    bidir: true
+    label: scoped reads & writes
+    note: >
+      Where the workflow's effects land on systems of record, and where artifacts a later step
+      reads back as context are stored.
+  - from: gateway
+    to: extTools
+    path: external
+    bidir: true
+    route: hv
+    label: brokered external calls
+    note: Third-party servers and peer agents, reached only through the crossing that admitted them.
+  - from: extTools
     to: downstream
     path: external
     bidir: true
     note: >
-      Actions land on real systems; whatever comes back — records, pages, API responses — is
-      untrusted content entering agent context.
-  - from: governance
-    to: tools
-    path: governance
-    label: admission
-    note: Tools and servers exist here only if the registry admitted them.
-  - from: governance
-    to: provider
-    path: governance
-    label: evaluation
-    note: Model and prompt changes pass an evaluation gate before they serve traffic.
+      Effects landing outside the company, and untrusted content returning into a graph where
+      it becomes several agents' input at once.
 
 pins:
   risks:
     - risk: riskPromptInjection
-      at: tools->downstream
+      at: internalTools->orgData
       note: >
         Records, documents and API responses read over the process's lifetime are chances to
         steer an agent whose output another agent will trust.
@@ -380,7 +476,7 @@ pins:
         Specialists journal too — every subagent's steps persist to the same store, so the
         secrets-sink risk multiplies with the agent count.
     - risk: riskRogueActions
-      at: tools->downstream
+      at: internalTools->orgData
       note: >
         Consequential writes with no human present — and replay can execute a non-idempotent one
         twice.
@@ -396,12 +492,33 @@ pins:
       at: gateway->provider
       note: Inference called many times across days of process is a spend surface worth a brake.
     - risk: riskToolRegistryTampering
-      at: governance->tools
+      at: gateway->internalTools
       note: The admission list is the tool supply chain; whoever writes it programs the agents.
 
   capabilities:
+    - capability: capabilityMemoryProtection
+      at: state
+      note: >
+        Shared memory is what lets one branch of the graph steer another. Scoping it per run,
+        and treating what a step wrote as untrusted when a later step reads it, is the control.
+    - capability: capabilityCredentialIsolation
+      at: state
+      note: >
+        Everything a step returns is persisted in the journal, so a returned credential is a
+        stored one. Keeping secrets out of step returns is the control; the journal cannot
+        un-learn them.
+    - capability: capabilityModelEvals
+      at: gateway->provider
+      note: >
+        Behavioural checks in front of every model, prompt or agent change — the last point at
+        which a change can be caught before it runs unattended for days.
+    - capability: capabilityAgentObservability
+      at: orchestration->subagents
+      note: >
+        The delegation graph has to be legible after the fact: which agent decided what, on
+        whose behalf, and what it passed to the next one.
     - capability: capabilityIga
-      at: initiator->orchestration
+      at: initiator->entry
       note: The user's identity and a delegated grant scoped to this request, not a standing power.
     - capability: capabilityNhiManagement
       at: orchestration
@@ -418,13 +535,13 @@ pins:
       at: gateway
       note: A policy decision on every tool call — agent, tool, arguments — outside the loop.
     - capability: capabilityToolPermissionScoping
-      at: gateway->tools
+      at: gateway->internalTools
       note: Each delegation hop carries a narrower grant than its parent.
     - capability: capabilityRateLimiting
       at: gateway->provider
       note: Rate and budget ceilings that end loops the agents cannot end themselves.
     - capability: capabilityPromptInjectionDefense
-      at: tools->downstream
+      at: internalTools->orgData
       note: Returned content is classified before it re-enters any agent's context.
     - capability: capabilityAiDlp
       at: orchestration->state
@@ -433,32 +550,96 @@ pins:
       at: subagents->state
       note: The same redaction on the specialists' journaling path — every writer to the journal is in scope.
     - capability: capabilityHitlControls
-      at: tools->downstream
+      at: internalTools->orgData
       note: An approval gate on consequential writes, sized to the blast radius.
     - capability: capabilityEgressControl
-      at: tools->downstream
+      at: internalTools->orgData
       note: >
         Named destinations only — over a process that runs for days, unbounded egress gives a
         steered agent all the time it needs to find the exit.
     - capability: capabilityAgentSandboxing
-      at: tools
+      at: internalTools
       note: >
         Generated code and browsing run in an isolated runtime with its own filesystem and
         network — never on the orchestration tier.
     - capability: capabilityAgentRegistry
-      at: governance->tools
+      at: gateway->internalTools
       note: Admission for agents and tools — nothing runs or is offered by default.
     - capability: capabilityAuditLogging
-      at: governance
+      at: govObservability
       note: An append-only trail that can reconstruct who delegated what to whom.
     - capability: capabilityKillSwitch
-      at: governance
+      at: govObservability
       note: A stop that works mid-flight, because these processes run for days.
+
+flows:
+  - id: F1
+    title: The process is started
+    moves: A request in, a result back — days later, in some deployments.
+    path: [initiator->entry, entry->orchestration]
+    threats: [Authority granted once and carried for the workflow's whole life, Initiator absent for everything that follows]
+    controls: [capabilityIga, capabilityNhiManagement]
+    note: >
+      The approval given here is the only human decision until something escalates, which is
+      what makes the identity binding outlive the session that created it.
+  - id: F2
+    title: A run nobody started
+    moves: Timers, webhooks and queue messages — including the signal that resumes a suspended workflow.
+    path: [events->orchestration]
+    threats: [A resumption waking work nobody is watching, Trigger content read as instruction]
+    controls: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability]
+    note: >
+      Durability means a workflow can sleep for hours and wake up still holding its authority.
+      The resumption is a trigger like any other, and deserves the same admission.
+  - id: F3
+    title: Delegation
+    moves: Work handed down to specialists; their results handed back up.
+    path: [orchestration->subagents]
+    threats: [One confused agent propagating through the graph, Model output becoming model input with nothing between, Agents sharing one identity and so one blast radius]
+    controls: [capabilityAgentObservability, capabilityNhiManagement, capabilityAgentRegistry]
+    note: >
+      The flow that makes this its own architecture. A specialist's output is the supervisor's
+      input, so an injection that lands anywhere in the graph reaches everywhere in it — and
+      the only thing that makes the propagation legible afterwards is per-agent identity.
+  - id: F4
+    title: Model inference, for every agent
+    moves: Each agent's context out; each agent's next step back.
+    path: [orchestration->gateway, gateway->provider]
+    threats: [Fan-out multiplying spend with no ceiling, A model change affecting every agent at once]
+    controls: [capabilityRateLimiting, capabilityModelEvals]
+    note: >
+      Supervisor and specialists use the same door, which is what stops the fan-out from
+      multiplying the reachable set along with the call volume.
+  - id: F5
+    title: Enterprise systems
+    moves: Admitted, scoped actions into our own systems of record.
+    path: [orchestration->gateway, gateway->internalTools, internalTools->orgData]
+    threats: [Standing grants held for the process's life, Writes accumulating unnoticed over a long run]
+    controls: [capabilityToolPermissionScoping, capabilitySecretsManagement, capabilityHitlControls]
+    note: >
+      The canonical chain. Credentials are fetched at step time rather than held, because here
+      "the process's life" can mean days.
+  - id: F6
+    title: Outside the company
+    moves: Effects landing on third-party services, and the content that returns.
+    path: [gateway->extTools, extTools->downstream]
+    threats: [Exfiltration over a long unattended run, Untrusted content becoming several agents' input at once]
+    controls: [capabilityEgressControl, capabilityPromptInjectionDefense, capabilityAuditLogging]
+    note: Whatever returns here does not enter one context — it enters the graph.
+  - id: F7
+    title: The journal
+    moves: Every step's inputs and returns, persisted for replay and resumption.
+    path: [orchestration->state, subagents->state]
+    threats: [A returned credential becoming a stored credential, Shared memory letting one branch steer another]
+    controls: [capabilityCredentialIsolation, capabilityMemoryProtection]
+    note: >
+      The journal is a reliability feature and a secrets sink in the same breath: durability
+      means everything a step returned is still there, and the journal cannot un-learn it.
 
 scenarios:
   - title: A user asks the agent to act
     steps:
-      - follow: initiator->orchestration
+      - follow: initiator->entry
         note: >
           The request arrives authenticated with a scoped grant; the supervisor decomposes the
           goal into work for specialists.
@@ -468,11 +649,11 @@ scenarios:
         note: Every call the agents make funnels through the one door.
       - follow: gateway->provider
         note: Inference on brokered credentials, limits applied.
-      - follow: gateway->tools
+      - follow: gateway->internalTools
         note: Tool calls carry the narrowed per-step grant.
-      - follow: tools->downstream
+      - follow: internalTools->orgData
         note: The write lands — behind an approval gate when it is consequential.
-      - follow: orchestration->initiator
+      - follow: entry->initiator
         note: The result returns, possibly days after the request.
   - title: A step replays after a crash
     steps:
@@ -482,9 +663,9 @@ scenarios:
         note: Replayed steps land on their specialists again.
       - follow: subagents->gateway
         note: Replayed steps re-request credentials; nothing survives from the first run.
-      - follow: gateway->tools
+      - follow: gateway->internalTools
         note: Idempotency fencing decides whether the side effect may run again.
-      - follow: tools->downstream
+      - follow: internalTools->orgData
         note: Without fencing, the payment executes twice. The journal replays; the world does not.
   - title: An event fires days into the process
     steps:
@@ -496,7 +677,7 @@ scenarios:
         note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
       - follow: subagents->gateway
         note: Credentials are fetched now — the ones from day one would be stale authority.
-      - follow: gateway->tools
+      - follow: gateway->internalTools
         note: The action proceeds under the same per-call policy as an attended run.
 
 deviations:

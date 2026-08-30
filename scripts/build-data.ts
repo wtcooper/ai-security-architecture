@@ -889,9 +889,11 @@ function checkPatterns(
             `${arch.id}: ${name} requires an edge ${leg.from}${leg.fromBand ? `[${leg.fromBand}]` : ""} -> ${leg.to}${leg.toBand ? `[${leg.toBand}]` : ""}, which is not drawn`,
           ];
         const drift: string[] = [];
+        // Path class, direction and label are what the pattern means. `route` is a layout hint
+        // for collision avoidance — two drawings can legitimately need different routing for
+        // the same chain, so enforcing it would set the registry against the collision checker.
         if (leg.path && found.path !== leg.path) drift.push(`path ${found.path} (pattern says ${leg.path})`);
         if (leg.bidir && !found.bidir) drift.push("not bidirectional (pattern is)");
-        if (leg.route && found.route !== leg.route) drift.push(`route ${found.route ?? "default"} (pattern says ${leg.route})`);
         if (leg.label && found.label !== leg.label)
           drift.push(`label "${found.label ?? ""}" (pattern says "${leg.label}")`);
         return drift.length

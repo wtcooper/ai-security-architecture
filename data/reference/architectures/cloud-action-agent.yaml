@@ -65,21 +65,71 @@ exemplars:
       existing business transactions that already have reversal semantics.
     asOf: "2026-08"
 
+zones:
+  - id: zoneUser
+    owner: user
+    note: >
+      The requester — usually an authenticated customer, and usually the party who benefits
+      from the action. Present at the start and absent for the rest of it.
+  - id: zoneCloud
+    owner: cloud
+    note: >
+      Everything we operate: the surface the request arrives on, what triggers the loop when
+      nobody sends one, the loop itself, its state, the crossing every call leaves through, and
+      our own tool servers and systems of record.
+  - id: zoneExternal
+    owner: external
+    note: Outside the company — the model provider, third-party tool servers, and the services an action lands on.
+  - id: zoneGovernance
+    owner: governance
+    note: >
+      Drawn across every band because it governs every band. With no human in the loop, this
+      band is the whole of the oversight — there is no in-thread approval to fall back on.
+
 blocks:
   - id: events
-    kind: actor
-    title: Schedules & events
-    icon: clock
-    col: 0
+    kind: service
+    title: Triggers & schedules
+    cosaiComponent: componentAgentUserQuery
+    zone: zoneCloud
+    col: 1
     row: 0
     note: >
       Queue messages, file drops, webhooks and timers that start the loop with no human in the
-      room. In many deployments this is the common trigger and the front end is the exception.
+      room. In many deployments this is the common trigger and the front end is the exception,
+      which is the fact that reorganises this architecture's whole control set.
+    items:
+      - id: schedules
+        label: Schedules & events
+        icon: clock
+        note: The timer or queue message that starts a run nobody asked for interactively.
+
+  - id: entry
+    kind: service
+    title: Application front end
+    cosaiComponent: componentApplication
+    zone: zoneCloud
+    col: 1
+    row: 1
+    note: >
+      The surface a request arrives on, and where the requester's identity is bound before the
+      loop runs. Drawn even though triggers are the common path, because when a human does
+      start a run this is the component that decides whose authority it carries.
+    items:
+      - id: api
+        label: App & API endpoint
+        icon: globe
+        note: The published request surface.
+      - id: authn
+        label: Identity binding
+        icon: shield
+        note: Who is asking, bound before the loop runs — the identity the actions are taken on behalf of.
 
   - id: requester
     kind: actor
     title: Requester
     icon: person
+    zone: zoneUser
     col: 0
     row: 1
     note: >
@@ -89,7 +139,8 @@ blocks:
   - id: planner
     kind: service
     title: Agent harness
-    col: 1
+    zone: zoneCloud
+    col: 2
     row: 1
     cosaiComponent: componentReasoningCore
     note: >
@@ -108,7 +159,8 @@ blocks:
   - id: stateRetrieval
     kind: service
     title: Memory & state
-    col: 1
+    zone: zoneCloud
+    col: 2
     row: 2
     cosaiComponent: componentDataStorage
     note: >
@@ -117,7 +169,7 @@ blocks:
       context.
     items:
       - id: retrieval
-        label: Policy & record retrieval
+        label: Search index
         icon: search
         cosaiComponent: componentRAGContent
         note: Reads scoped to the account under discussion, not to what the service can reach.
@@ -132,62 +184,37 @@ blocks:
   - id: gateway
     kind: service
     title: AI gateway
-    col: 2
+    zone: zoneCloud
+    col: 3
     row: 1
     note: >
       The one crossing every model and tool call leaves through. The agent tier holds no
       standing credentials; the gateway brokers them per call, meters spend and writes the
-      audit trail as a tap on the crossing.
-    items:
-      - id: credBroker
-        label: Credential broker
-        icon: key
-        note: Short-lived credentials injected per call; the loop holds no standing keys.
-      - id: limits
-        label: Rate & budget limits
-        icon: clock
-        note: Caps token spend and action volume before a runaway loop becomes a bill.
-      - id: auditTap
-        label: Audit tap
-        icon: doc
-        note: Every call recorded as a side effect of the crossing, not a favour asked of the agent.
-      - id: allowlist
-        label: Egress allowlist
-        icon: shield
-        note: >
-          Deny by default; models, tools and destinations each named. The chip on the write
-          path marks the last boundary; this is the component that owns the policy.
+      audit trail as a tap on the crossing. Its items are the traffic classes it brokers — the
+      checks it runs are the numbered pins on this block and its edges, and the call-outs
+      beneath.
+    pack: aiGatewayTraffic
 
-  - id: catalogue
+  - id: internalTools
     kind: service
     title: Tool services
-    col: 3
-    row: 1
+    zone: zoneCloud
+    col: 4
+    row: 3
     cosaiComponent: componentTools
+    pack: toolServicesRemote
     note: >
-      The action surface: MCP servers, plain APIs and connectors, and A2A peer agents. Whatever
-      the transport, what is admitted here should form a deterministic catalogue — named,
-      parameter-validated actions with a declared blast radius and a compensating transaction —
-      rather than arbitrary calls. The architecture's primary control.
-    items:
-      - id: mcp
-        label: MCP servers
-        icon: plug
-        note: Tool providers with declared scopes — admitted, never discovered.
-      - id: connectors
-        label: APIs & connectors
-        icon: plug
-        note: Business transactions and vendor capabilities the agent drives on scoped grants.
-      - id: peers
-        label: A2A peer agents
-        icon: agent
-        note: Cross-org delegation over the A2A protocol. A peer's output enters the loop as input.
+      Our own action surface, and this architecture's primary control. Whatever the transport,
+      what is admitted here should form a deterministic catalogue — named, parameter-validated
+      actions with a declared blast radius and a compensating transaction — rather than
+      arbitrary calls. With no human in the loop, this is what stands in for approval.
 
   - id: provider
     kind: provider
     title: Model provider
-    col: 3
-    row: 0
+    zone: zoneExternal
+    col: 5
+    row: 1
     cosaiComponent: componentModelServing
     note: The published inference interface. What runs behind it is the provider's and is not drawn.
     items:
@@ -196,61 +223,115 @@ blocks:
         icon: model
         note: Returns the chosen action and its parameters — content the catalogue validates rather than trusts.
 
-  - id: records
+  - id: orgData
     kind: external
-    title: Downstream services
+    title: Enterprise data
+    zone: zoneCloud
+    col: 4
+    row: 4
     cosaiComponent: componentDataSources
-    col: 3
-    row: 2
     note: >
       The systems where effects land, and where reversal either exists or does not. Also the
-      source retrieval reads back into context.
+      source retrieval reads back into context — record content written by requesters and staff
+      is this architecture's second injection path.
     items:
       - id: transactions
         label: Org data
         icon: db
         note: Orders, accounts and entitlements — the authoritative state the agent changes.
-      - id: saas
-        label: SaaS
-        icon: mail
-        note: Mail sent, tickets moved and calendar entries written on the requester's behalf.
-      - id: apis
-        label: Web & APIs
-        icon: globe
-        note: Third-party services, and the untrusted content they return.
+      - id: fileStorage
+        label: File storage
+        icon: folder
+        note: Case documents and attachments, read back into context on a later run.
 
-  - id: governance
-    kind: governance
-    title: Governance plane
-    col: 4
-    row: 0
-    rowSpan: 3
-    note: >
-      Identity, per-call policy, the approval threshold, the decision audit and the stop — each
-      outside the loop it governs, because the loop is the thing that may be misbehaving.
+  - id: extTools
+    kind: service
+    title: Tool services
+    zone: zoneExternal
+    col: 5
+    row: 2
+    cosaiComponent: componentTools
+    pack: toolServicesRemote
     items:
-      - id: idp
-        label: Identity provider
-        icon: person
-        note: Issues the agent's workload identity and the requester's, and keeps them distinct.
-      - id: policyEngine
-        label: Action policy
-        icon: scale
-        note: The bounds the catalogue enforces per invocation, authored and changed outside the loop.
-      - id: approval
-        label: Approval threshold
-        icon: eye
-        note: >
-          Keyed to irreversibility and value, not model confidence. Rare enough that somebody
-          actually reads it.
-      - id: audit
-        label: Decision audit
-        icon: doc
-        note: Every action with the reasoning, the inputs and the identity behind it — the basis for reversal and dispute.
-      - id: stop
-        label: Kill switch
-        icon: stop
-        note: Halts the agent and revokes its identity without a deploy.
+      - id: peers
+        label: A2A peer agents
+        icon: agent
+        note: Cross-org delegation over the A2A protocol. A peer's output enters the loop as input.
+    note: >
+      Third-party servers, connectors and peer agents, out where nobody we contracted with
+      operates them. Admitted by assessment at the crossing, or refused there.
+
+  - id: downstream
+    kind: external
+    title: Downstream services
+    cosaiComponent: componentDataSources
+    zone: zoneExternal
+    col: 5
+    row: 3
+    pack: downstreamPublic
+    note: >
+      Where an action lands outside the company — mail sent, tickets moved, calendar entries
+      written on the requester's behalf — and where the untrusted content that returns enters
+      the next model call.
+
+  - id: govIdentity
+    kind: governance
+    title: Identity services
+    icon: person
+    zone: zoneGovernance
+    col: 1
+    row: 5
+    capabilities: [capabilityIga, capabilityNhiManagement]
+    note: >
+      Issues the agent's workload identity and the requester's, and keeps them distinct. The
+      loop runs as itself and acts on the requester's grant — conflating the two is how an
+      unattended agent quietly acquires standing authority.
+
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 2
+    row: 5
+    capabilities: [capabilitySecretsManagement]
+    note: Short-lived credentials minted per call, so a loop running with nobody watching holds no standing keys.
+
+  - id: govPolicy
+    kind: governance
+    title: Policy & authorization
+    icon: scale
+    zone: zoneGovernance
+    col: 3
+    row: 5
+    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting]
+    note: >
+      The bounds the tool surface enforces per invocation, authored and changed outside the
+      loop — because the loop is the thing that may be misbehaving.
+
+  - id: govSupplyChain
+    kind: governance
+    title: Supply-chain assurance
+    icon: db
+    zone: zoneGovernance
+    col: 4
+    row: 5
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals]
+    note: >
+      Which actions exist at all — admission, not discovery — and the behavioural checks in
+      front of every model, prompt or catalogue change.
+
+  - id: govObservability
+    kind: governance
+    title: Observability & response
+    icon: eye
+    zone: zoneGovernance
+    col: 5
+    row: 5
+    capabilities: [capabilityAuditLogging, capabilityKillSwitch, capabilityHitlControls]
+    note: >
+      The decision audit and the stop, plus the approval threshold — keyed to irreversibility
+      and value rather than model confidence, and rare enough that somebody actually reads it.
 
 edges:
   - from: events
@@ -258,89 +339,89 @@ edges:
     path: primary
     label: trigger
     note: >
-      Unattended starts — queue messages, file drops, webhooks, timers. The request that
-      arrives on a queue still names an account, and still carries text somebody else may have
-      authored.
+      A timer, queue message, file drop or webhook starts a run with nobody in the room. In
+      many deployments this is the common path and the request surface is the exception.
   - from: requester
-    to: planner
+    to: entry
     path: primary
     bidir: true
     label: request / outcome
     note: >
-      Free text, attachments and history, authored by the party who benefits from the outcome —
-      authenticated and bound to an account before the loop reads it. The remedy or refusal
-      returns on the same path, usually within seconds.
+      When a human does start a run, this is where their identity is bound — and the outcome
+      is what they see rather than the reasoning that produced it.
+  - from: entry
+    to: planner
+    path: primary
+    bidir: true
+    note: The request arrives with the requester's identity attached; the outcome returns the same way.
+  - from: planner
+    to: stateRetrieval
+    path: primary
+    bidir: true
+    note: >
+      Business policy, the customer's history and the working state of this case, read back as
+      context and written forward as the run proceeds.
   - from: planner
     to: gateway
     path: primary
     bidir: true
     label: model & tool calls
     note: >
-      Every call out of the loop crosses here on a brokered, expiring credential. The agent
-      holds no standing keys of its own.
+      Every call out of the loop crosses here on a brokered credential. The agent tier holds no
+      standing keys of its own.
   - from: gateway
     to: provider
+    path: external
+    bidir: true
+    note: >
+      Inference on the brokered credential. The completion names the action and its parameters
+      — content the tool surface validates rather than trusts.
+  - from: gateway
+    to: internalTools
     path: primary
     bidir: true
     route: vh
+    label: internal tool calls
     note: >
-      Inference on the brokered credential. The response names an action and its parameters —
-      transport integrity says nothing about whose intent produced it.
-  - from: planner
-    to: stateRetrieval
+      The proposed action, admitted against the catalogue and narrowed to a scoped grant before
+      anything executes.
+  - from: internalTools
+    to: orgData
     path: primary
     bidir: true
+    label: scoped reads & writes
     note: >
-      Policy, history and case state read back as context — including the second injection path,
-      record content written long before this case opened.
-  - from: stateRetrieval
-    to: records
-    path: external
-    bidir: true
-    label: scoped read
-    note: >
-      Reads scoped to the account under discussion, which is what stops one requester's case from
-      retrieving another's records into context.
+      Where the effect lands and where reversal either exists or does not — and where record
+      content written by requesters and staff is read back into a later run as context.
   - from: gateway
-    to: catalogue
-    path: primary
-    label: proposed action
-    note: The model's choice arrives here as a proposal, not a command. Validation is the boundary.
-  - from: catalogue
-    to: records
+    to: extTools
     path: external
-    label: validated write
+    bidir: true
+    route: vh
+    label: brokered external calls
+    note: Third-party servers and peer agents, reached only through the crossing that admitted them.
+  - from: extTools
+    to: downstream
+    path: external
+    bidir: true
     note: >
-      The point at which the agent's output stops being text. Whether a wrong action is
-      survivable is decided here: an action with no compensating transaction should not be in the
-      catalogue below the approval threshold.
-  - from: governance
-    to: catalogue
-    path: governance
-    label: policy & approval
-    note: >
-      Per-invocation bounds and the above-threshold approval gate, authored outside the loop and
-      enforced at the catalogue.
-  - from: governance
-    to: provider
-    path: governance
-    label: evaluation
-    note: Model and prompt changes pass an evaluation gate before they serve traffic.
+      Actions landing outside the company, and the untrusted content that returns into the next
+      model call with nobody reading it first.
 
 pins:
   risks:
     - risk: riskPromptInjection
-      at: requester->planner
+      at: requester->entry
       note: >
         The request text is supplied by the person who benefits from the outcome, and it reaches
         the same context window as the system instruction.
     - risk: riskPromptInjection
-      at: stateRetrieval->records
+      at: internalTools->orgData
       note: >
         Record content is the harder injection path — written months earlier, by someone handling
         a different case, re-entering as context now.
     - risk: riskRogueActions
-      at: catalogue->records
+      at: internalTools->orgData
       note: >
         Untrusted request text, a model choosing among real transactions, and a write path into
         records compound here.
@@ -353,7 +434,7 @@ pins:
         The agent acts on a requester's behalf using authority broader than theirs. Keeping the
         requester's context alive through the loop is what closes the gap.
     - risk: riskSensitiveDataDisclosure
-      at: stateRetrieval->records
+      at: internalTools->orgData
       note: Reads not scoped to the account under discussion pull other customers' records into context.
     - risk: riskRunawayAgentToolLoops
       at: planner
@@ -362,25 +443,40 @@ pins:
       at: stateRetrieval
       note: Case memory keyed loosely enough to collide across cases lets one requester's text steer another's outcome.
     - risk: riskToolRegistryTampering
-      at: catalogue
+      at: internalTools
       note: The catalogue is the policy surface; whoever can edit it programs the agent.
     - risk: riskEconomicDenialOfWallet
       at: gateway
       note: Per-token inference behind an open trigger surface makes unbounded requests a spend problem.
 
   capabilities:
+    - capability: capabilityIga
+      at: requester->entry
+      note: >
+        Who is asking, established before the loop runs — the identity every downstream action
+        is taken on behalf of, and the thing that bounds the reachable set.
+    - capability: capabilityAgentRegistry
+      at: gateway->internalTools
+      note: >
+        Actions exist because the catalogue admitted them, not because a model named them.
+        Admission, not discovery — the primary control in an architecture with no human gate.
+    - capability: capabilityModelEvals
+      at: gateway->provider
+      note: >
+        Behavioural checks in front of every model, prompt or catalogue change, because with
+        nobody watching a run there is no later opportunity to notice the change was wrong.
     - capability: capabilityToolPermissionScoping
-      at: gateway->catalogue
+      at: gateway->internalTools
       note: >
         Named, parameter-validated actions with declared blast radius and a compensating
         transaction each — the deterministic surface everything else assumes.
     - capability: capabilityHitlControls
-      at: catalogue->records
+      at: internalTools->orgData
       note: >
         An approval gate keyed to irreversibility and value, rare enough to be read; below it,
         reversal rather than review.
     - capability: capabilityAgentRuntimeEnforcement
-      at: governance->catalogue
+      at: gateway->internalTools
       note: >
         A per-invocation policy decision — this action, this record, this value, now — rather
         than a session-time grant.
@@ -388,10 +484,10 @@ pins:
       at: planner
       note: A distinct, revocable workload identity per agent, so actions are attributable and separately revocable.
     - capability: capabilityDataAccessGovernance
-      at: stateRetrieval->records
+      at: internalTools->orgData
       note: Entitlement-filtered retrieval scoped to the account under discussion, enforced before fetching.
     - capability: capabilityPromptInjectionDefense
-      at: requester->planner
+      at: requester->entry
       note: Classify request text before the loop; the caller cannot be trusted about their own request.
     - capability: capabilityMemoryProtection
       at: stateRetrieval
@@ -403,24 +499,82 @@ pins:
       at: gateway
       note: Quotas and cost ceilings on the crossing, before token spend and action volume are committed.
     - capability: capabilityEgressControl
-      at: catalogue->records
+      at: internalTools->orgData
       note: >
         Named destinations only. The catalogue bounds what can be done; the egress allowlist
         bounds where it can land — the last boundary between a content-borne injection and an
         attacker's collection endpoint.
     - capability: capabilityAuditLogging
-      at: governance
+      at: govObservability
       note: >
         Every action with reasoning, inputs and identity, written where the agent can append and
         cannot amend.
     - capability: capabilityKillSwitch
-      at: governance
+      at: govObservability
       note: A halt that also revokes the agent's identity, and does not require a deploy.
+
+flows:
+  - id: F1
+    title: A run nobody started
+    moves: A timer, queue message, file drop or webhook, straight into the loop.
+    path: [events->planner]
+    threats: [A trigger nobody reviewed starting a run with real authority, File and webhook content read as instruction]
+    controls: [capabilityNhiManagement, capabilityAgentRuntimeEnforcement]
+    note: >
+      The defining flow. In many deployments this is the common path and the request surface is
+      the exception — which removes the human gate the chat agent leans on and pushes the whole
+      control set onto the catalogue and the governance band.
+  - id: F2
+    title: A run a person started
+    moves: A request in, the outcome back — with the requester's identity bound to it.
+    path: [requester->entry, entry->planner]
+    threats: [The request text is written by the party the action benefits, Identity of convenience rather than of the asker]
+    controls: [capabilityIga, capabilityHitlControls]
+    note: >
+      The exception path, drawn because when a human does start a run this is where the
+      authority it carries is decided.
+  - id: F3
+    title: Model inference
+    moves: The request and everything read so far out; the chosen action and its parameters back.
+    path: [planner->gateway, gateway->provider]
+    threats: [Completion treated as a decision rather than a proposal, Runaway loop metered only by the invoice]
+    controls: [capabilityModelEvals, capabilityRateLimiting]
+    note: >
+      What returns names an action. It is validated against the catalogue rather than trusted,
+      which is the difference between this architecture and a script with a model in it.
+  - id: F4
+    title: The action lands
+    moves: A validated, scoped action into our systems of record — and what it reads back.
+    path: [planner->gateway, gateway->internalTools, internalTools->orgData]
+    threats: [Irreversible effect with no compensating transaction, Grant wider than the case, Record content re-entering a later run as instruction]
+    controls: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAgentRegistry]
+    note: >
+      The canonical chain, and where this archetype's real question is settled: whether the
+      effect can be reversed. The approval threshold is keyed to irreversibility and value, not
+      to model confidence.
+  - id: F5
+    title: Outside the company
+    moves: Actions landing on third-party services, and the content that returns.
+    path: [gateway->extTools, extTools->downstream]
+    threats: [Exfiltration with nobody reading the output, Untrusted content returning into the next model call, A peer agent's output entering the loop as input]
+    controls: [capabilityEgressControl, capabilityPromptInjectionDefense, capabilityAuditLogging]
+    note: >
+      The same shape as every other architecture's external leg, and more dangerous here for
+      one reason: no human reads what comes back before the next action runs on it.
+  - id: F6
+    title: The case persists
+    moves: Policy, customer history and working state, read back and written forward.
+    path: [planner->stateRetrieval]
+    threats: [Cross-case memory letting one requester's text influence another's outcome, Record content as the second injection path]
+    controls: [capabilityMemoryProtection, capabilityDataAccessGovernance]
+    note: >
+      Reads scoped to the account under discussion rather than to what the service can reach.
+      That distinction is the whole of the control.
 
 scenarios:
   - title: A customer asks for a refund
     steps:
-      - follow: requester->planner
+      - follow: requester->entry
         note: The request arrives authenticated and bound to an account; the loop starts with that identity intact.
       - follow: planner->stateRetrieval
         note: Policy and the customer's history load as context, scoped to this account.
@@ -428,15 +582,15 @@ scenarios:
         note: The context leaves the loop through the gateway, on a brokered credential.
       - follow: gateway->provider
         note: The model proposes an action and parameters from the catalogue.
-      - follow: gateway->catalogue
+      - follow: gateway->internalTools
         note: The proposal is validated — well-formed, in policy, under the value threshold.
-      - follow: catalogue->records
+      - follow: internalTools->orgData
         note: The refund executes, with its compensating transaction on file.
-      - follow: planner->requester
+      - follow: entry->requester
         note: The outcome returns within seconds; the audit holds the reasoning.
   - title: The request text is the attack
     steps:
-      - follow: requester->planner
+      - follow: requester->entry
         note: >
           The text instructs the agent to ignore policy and refund in full; whatever survives
           classification enters the same context window as the system instruction.
@@ -444,21 +598,21 @@ scenarios:
         note: Whatever survived classification rides out with the context.
       - follow: gateway->provider
         note: A steered model proposes the most generous action available.
-      - follow: gateway->catalogue
+      - follow: gateway->internalTools
         note: The catalogue does not care what steered the model — parameters and policy bounds hold.
-      - follow: catalogue->records
+      - follow: internalTools->orgData
         note: Below the threshold the action is compensable; above it the approval gate fires.
   - title: The injection was written months ago
     steps:
       - follow: planner->stateRetrieval
         note: The loop reads the case history like any other.
-      - follow: stateRetrieval->records
+      - follow: internalTools->orgData
         note: A note written into a record long ago, in someone else's case, comes back as context.
       - follow: planner->gateway
         note: The assembled context — injected note included — leaves for the model.
       - follow: gateway->provider
         note: The model reads it beside the system instruction with nothing marking it apart.
-      - follow: gateway->catalogue
+      - follow: gateway->internalTools
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
 
 sources:
