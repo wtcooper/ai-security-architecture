@@ -56,6 +56,9 @@ const ACTOR_H = 66;
 function naturalHeight(block: ArchBlock): number {
   if (block.kind === "actor") return ACTOR_H;
   const items = block.items?.length ?? 0;
+  // A call-out block — an icon plus the chip numbers of the controls it delivers — needs room
+  // for both. Governance-band services are drawn this way.
+  if (!items && block.icon) return 78;
   if (!items) return 58;
   // Tall side columns stack items vertically, one per row; everything else packs two across.
   const stacked = (block.rowSpan ?? 1) > 1;

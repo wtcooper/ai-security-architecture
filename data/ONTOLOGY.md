@@ -152,9 +152,30 @@ to any architecture can be checked against them without reading the whole docume
    services".)*
 8. **Vendor internals are assured, not drawn.** What a vendor implements inside their
    environment gets `capabilityAiTprm` on the vendor block and nothing else.
-9. **Every claim is checkable.** An item or block that claims a capability must reference one
+9. **A shared pattern is drawn identically everywhere it appears, and a change to it
+   propagates in the same commit.** Two architectures of the same family should differ only
+   where they genuinely differ; everything else — component names, the order of the chain,
+   the positions — matches, so a reader flipping between them sees the differences and
+   nothing else. The canonical chain for reaching data is
+   `harness -> AI gateway -> Tool services -> Enterprise data`, at every band and in every
+   architecture that has one. If you change that shape in one drawing, change it in all of
+   them before committing; if you cannot, the drawings have diverged and one of them is
+   wrong. *(Failed as: the coding agent reaching Enterprise data straight from the gateway
+   while the personal agent went through Tool services, and as an Egress control component
+   existing in one drawing and not the other.)*
+10. **Every claim is checkable.** An item or block that claims a capability must reference one
    actually pinned; a flow step must follow a real edge; guidance must cite pinned
    capabilities. If a claim cannot be checked by the build, say why in a deviation.
+
+### Families that must stay in step
+
+| Family | Members | May differ in |
+| --- | --- | --- |
+| Endpoint agents | personal autonomous agent, vendored coding agent, open-source coding agent | The vendor band and its relay; the messaging bridges and unbounded sender set; the heartbeat, scheduling and memory emphasis of an always-on daemon versus a human-triggered session. Nothing else. |
+
+Everything outside that column — the local session path, the tool-services chain, the gateway,
+the enterprise data behind it, the governance call-outs, the band set and the positions — is
+the same drawing twice, and a difference is a defect in one of them until proven otherwise.
 
 ## 7. Authoring checklist (every new or changed architecture)
 
@@ -169,5 +190,8 @@ to any architecture can be checked against them without reading the whole docume
    supply-chain ingress → R07 + scanning or pinning; governance plane → audit + kill).
 4. At least two scenario walks — one happy path, one adversarial.
 5. Sources dated; guidance document created or updated in the same change, mode declared.
-6. `npm run data` clean; vocabulary warnings triaged; `npm run audit` regenerated; the
+6. **Sibling check** — if the architecture belongs to a family above, open its siblings and
+   confirm the shared patterns still match. A change to a shared pattern lands in every member
+   in the same commit, never "later".
+7. `npm run data` clean; vocabulary warnings triaged; `npm run audit` regenerated; the
    catalogue document and NODE-REVIEW.md updated when structure changed.
