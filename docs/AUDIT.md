@@ -688,7 +688,7 @@ Highlights below are Google's original mapping, not ours.
 - Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
 - Orchestrator/Route Hijack (`riskOrchestratorRouteHijacking`)
 
-### 4b. Capabilities no architecture pins — 12 of 56
+### 4b. Capabilities no architecture pins — 10 of 56
 
 - Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
 - Groundedness & output verification (`capabilityGroundednessChecking`)
@@ -698,10 +698,8 @@ Highlights below are Google's original mapping, not ours.
 - Agent behavioural & goal-drift detection (`capabilityBehavioralDriftDetection`)
 - AI-aware detection & response (`capabilityAiDetectionResponse`)
 - Endpoint detection & response (`capabilityEdr`)
-- Application security testing for AI systems (`capabilityAppSecTesting`)
 - SaaS security posture management for AI features (`capabilityVendorAssurance`)
 - Threat modelling tooling for AI systems (`capabilityThreatModeling`)
-- Model registry & documentation generation (`capabilityModelDocumentation`)
 
 ### 4c. CoSAI components no architecture anchors — 6 of 23
 
@@ -761,28 +759,40 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | Policy & authorization | governance | (none) |
 | Chat agent with tools | Supply-chain assurance | governance | (none) |
 | Chat agent with tools | Observability & response | governance | (none) |
-| Remote MCP server you publish | Enterprise IdP | external | (none) |
 | Remote MCP server you publish | Authorization server | service | (none) |
 | Remote MCP server you publish | Service edge | service | (none) |
 | Remote MCP server you publish | MCP service | service | `componentApplication` |
 | Remote MCP server you publish | Tool definitions | service | `componentTools` |
-| Remote MCP server you publish | Tenant data | service | `componentDataStorage` |
+| Remote MCP server you publish | Enterprise data | external | `componentDataStorage` |
 | Remote MCP server you publish | Downstream services | external | `componentDataSources` |
-| Remote MCP server you publish | Governance plane | governance | (none) |
+| Remote MCP server you publish | Egress control | service | (none) |
+| Remote MCP server you publish | Identity services | governance | (none) |
+| Remote MCP server you publish | Policy & authorization | governance | (none) |
+| Remote MCP server you publish | Supply-chain assurance | governance | (none) |
+| Remote MCP server you publish | Observability & response | governance | (none) |
+| Self-hosted open-weights inference | Consuming applications | service | (none) |
 | Self-hosted open-weights inference | AI gateway | service | (none) |
 | Self-hosted open-weights inference | Inference runtime | service | `componentModelServing` |
 | Self-hosted open-weights inference | Storage | external | `componentModelStorage` |
 | Self-hosted open-weights inference | Model sources | external | `componentModelStorage` |
-| Self-hosted open-weights inference | Governance plane | governance | (none) |
+| Self-hosted open-weights inference | Egress control | service | (none) |
+| Self-hosted open-weights inference | Supply-chain assurance | governance | (none) |
+| Self-hosted open-weights inference | Policy & authorization | governance | (none) |
+| Self-hosted open-weights inference | Secrets & key management | governance | (none) |
+| Self-hosted open-weights inference | Observability & response | governance | (none) |
 | Fine-tuning and model registry pipeline | Training content origins | external | `componentDataSources` |
 | Fine-tuning and model registry pipeline | Curation & filtering | service | `componentDataFilteringAndProcessing` |
+| Fine-tuning and model registry pipeline | Egress control | service | (none) |
 | Fine-tuning and model registry pipeline | Training corpus | service | `componentTrainingData` |
 | Fine-tuning and model registry pipeline | Base model & deps | external | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Training job | service | `componentModelTrainingTuning` |
 | Fine-tuning and model registry pipeline | Evaluation & red teaming | service | `componentModelEvaluation` |
 | Fine-tuning and model registry pipeline | Model registry | service | `componentModelStorage` |
-| Fine-tuning and model registry pipeline | Serving & consumers | external | `componentModelServing` |
-| Fine-tuning and model registry pipeline | Governance plane | governance | (none) |
+| Fine-tuning and model registry pipeline | Serving & consumers | service | `componentModelServing` |
+| Fine-tuning and model registry pipeline | Supply-chain assurance | governance | (none) |
+| Fine-tuning and model registry pipeline | Policy & authorization | governance | (none) |
+| Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
+| Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
 | First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
 | First-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
@@ -881,9 +891,9 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | build | draft | 5 | Identity & access management for AI applications, Agent & tool registry, Model & agent evaluation harnesses |
 | Durable multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
 | Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
-| Remote MCP server you publish | build | draft | 5 | Human-in-the-loop approval & escalation, Output encoding & safe rendering |
-| Self-hosted open-weights inference | build | draft | 4 | _none_ |
-| Fine-tuning and model registry pipeline | build | draft | 5 | _none_ |
+| Remote MCP server you publish | build | draft | 5 | Secure service edge for AI services, Application security testing for AI systems, Kill switch, quarantine & decommissioning, Human-in-the-loop approval & escalation, Output encoding & safe rendering |
+| Self-hosted open-weights inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
+| Fine-tuning and model registry pipeline | build | draft | 5 | Model registry & documentation generation, Audit logging & non-repudiation |
 | First-party coding & desktop agents | use | draft | 4 | Identity & access management for AI applications, Data loss prevention for AI interactions, Agent & tool registry, Audit logging & non-repudiation |
 | Third-party coding & desktop agents | use | draft | 7 | Runtime action authorization, Third-party risk management platform for AI vendors, Agent memory & context protection, Secrets management & ephemeral credentials |
 | Local model runtime | use | draft | 4 | _none_ |

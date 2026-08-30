@@ -665,13 +665,18 @@ function checkArchetypes(
       const spans = BAND_ORDER.filter((o) => spanByOwner.has(o)).map(
         (o) => [o, spanByOwner.get(o)!] as const,
       );
+      // Overlap is a rendering defect and always fails. Left-to-right band ORDER is a strong
+      // convention rather than a law: an ingest-shaped architecture (a training pipeline) has
+      // its outside world on the left because that is where the material comes from, and
+      // forcing external to the right would make the drawing lie about direction.
       for (let i = 0; i < spans.length; i++) {
         for (let j = i + 1; j < spans.length; j++) {
           const [aOwner, a] = spans[i];
           const [bOwner, b] = spans[j];
-          if (a.hi >= b.lo)
+          const overlaps = a.lo <= b.hi && b.lo <= a.hi;
+          if (overlaps)
             fail(
-              `${where}: the ${aOwner} band spans columns ${a.lo}-${a.hi} and the ${bOwner} band spans ${b.lo}-${b.hi} — they overlap, so the bands will draw on top of each other. Assign columns left to right in band order (${BAND_ORDER.join(" -> ")}).`,
+              `${where}: the ${aOwner} band spans columns ${a.lo}-${a.hi} and the ${bOwner} band spans ${b.lo}-${b.hi} — they overlap, so the bands will draw on top of each other. Give each band its own contiguous run of columns.`,
             );
         }
       }

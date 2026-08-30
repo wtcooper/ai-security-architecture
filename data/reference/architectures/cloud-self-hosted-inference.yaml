@@ -59,10 +59,28 @@ exemplars:
       reason organisations take on this architecture.
     asOf: "2026-08"
 
+zones:
+  - id: zoneCloud
+    owner: cloud
+    note: >
+      Everything we operate. This architecture is almost entirely one band, which is the point:
+      the organisation took the model in-house and inherited every control the provider was
+      applying on the way in and out.
+  - id: zoneExternal
+    owner: external
+    note: Outside the company — the public hubs and pipelines the weights arrive from.
+  - id: zoneGovernance
+    owner: governance
+    note: >
+      Drawn across every band because it governs every band. With no vendor and no human in the
+      request path, admission of the artifact and inventory of the runtime are most of what
+      governance can do here.
+
 blocks:
   - id: consumers
-    kind: actor
+    kind: service
     title: Consuming applications
+    zone: zoneCloud
     icon: code
     col: 0
     row: 1
@@ -73,30 +91,21 @@ blocks:
   - id: gateway
     kind: service
     title: AI gateway
+    zone: zoneCloud
     col: 1
     row: 1
     note: >
       The governed front door in front of finite capacity — the same gateway block every hosted
       architecture in this catalogue routes through. With no provider applying content policy,
       the guardrail checks enforced here are a service the organisation runs itself or does
-      without.
-    items:
-      - id: broker
-        label: Credential broker
-        icon: key
-        note: Workload identity per calling tenant — the thing quotas and cache-isolation decisions key off.
-      - id: limits
-        label: Rate & budget limits
-        icon: clock
-        note: Per-tenant ceilings on finite capacity. What stops one caller becoming everyone's outage.
-      - id: audit
-        label: Audit tap
-        icon: doc
-        note: Every request and completion recorded at the one crossing every caller shares.
+      without. Its items are the traffic classes it brokers — the checks it runs are the
+      numbered pins on this block and its edges, and the call-outs beneath.
+    pack: aiGatewayTraffic
 
   - id: runtime
     kind: service
     title: Inference runtime
+    zone: zoneCloud
     col: 2
     row: 1
     cosaiComponent: componentModelServing
@@ -117,7 +126,7 @@ blocks:
         note: Open weights with no provider-side guardrail, abuse monitoring or content policy.
       - id: batching
         label: Continuous batching
-        icon: clock
+        icon: gear
         note: Mixes tenants' requests in one forward pass on shared accelerators. Efficiency and co-tenancy are the same mechanism.
       - id: cache
         label: KV & prefix cache
@@ -129,6 +138,7 @@ blocks:
   - id: storage
     kind: external
     title: Storage
+    zone: zoneCloud
     col: 3
     row: 2
     cosaiComponent: componentModelStorage
@@ -145,6 +155,7 @@ blocks:
   - id: sources
     kind: external
     title: Model sources
+    zone: zoneExternal
     col: 4
     row: 2
     cosaiComponent: componentModelStorage
@@ -154,36 +165,81 @@ blocks:
       its own architecture in this catalogue.
     items:
       - id: hub
-        label: Public model hub
-        icon: globe
+        label: Open-weights catalogue
+        icon: db
         note: Declared behaviour and actual behaviour are separate facts.
       - id: selfTrained
         label: Self-trained model
         icon: model
         note: A checkpoint from the organisation's fine-tuning and model pipeline, promoted like any other artifact.
 
-  - id: governance
-    kind: governance
-    title: Governance plane
+  - id: egress
+    kind: service
+    title: Egress control
+    zone: zoneCloud
     col: 3
-    row: 0
-    rowSpan: 2
+    row: 1
     note: >
-      The controls a managed provider would have supplied, now operated in-house: artifact
-      scanning, per-version evaluation, and posture over serving configuration.
+      The proxy tier the weights arrive through, and the only customer-operated component
+      between a public hub and a runtime that will open the file. A hub is an arbitrary
+      destination, so the job here is admission and inspection — the scan is a blocking gate in
+      front of the fetch rather than a check afterwards, because for several formats opening
+      the file is the execution event.
     items:
-      - id: scanner
-        label: Artifact scanning
-        icon: shield
-        note: Format and content inspection as a blocking gate in the promotion pipeline, before the runtime opens the file.
-      - id: evals
-        label: Evaluation & red teaming
-        icon: scale
-        note: Per model version, because a new checkpoint from the same publisher is a new model nobody else has tested.
-      - id: posture
-        label: Posture & inventory
-        icon: eye
-        note: Which versions serve where, at what configuration — including whether cross-tenant cache sharing is on.
+      - id: outbound
+        label: Outbound connector
+        icon: plug
+        note: Where the fetch is admitted by destination and the artifact is scanned before it reaches storage.
+
+  - id: govSupplyChain
+    kind: governance
+    title: Supply-chain assurance
+    icon: db
+    zone: zoneGovernance
+    col: 1
+    row: 5
+    capabilities: [capabilityModelScanning, capabilityAiBom]
+    note: >
+      Format and content inspection as a blocking gate in the promotion pipeline, and the
+      record of which artifact is actually serving. The control a managed provider would have
+      supplied, now operated in-house.
+
+  - id: govPolicy
+    kind: governance
+    title: Policy & authorization
+    icon: scale
+    zone: zoneGovernance
+    col: 2
+    row: 5
+    capabilities: [capabilityRateLimiting, capabilityModelGuardrails]
+    note: >
+      Per-tenant ceilings on finite capacity — what stops one caller becoming everyone's outage
+      — and the content policy no provider is applying any more.
+
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 3
+    row: 5
+    capabilities: [capabilitySecretsManagement, capabilityModelWeightProtection]
+    note: >
+      Workload identity per calling tenant, and the weights themselves treated as an asset
+      worth protecting rather than a file on a disk.
+
+  - id: govObservability
+    kind: governance
+    title: Observability & response
+    icon: eye
+    zone: zoneGovernance
+    col: 4
+    row: 5
+    capabilities: [capabilityAuditLogging, capabilityAiSpm, capabilityAiRedTeaming]
+    note: >
+      Which versions serve where and at what configuration — including whether cross-tenant
+      cache sharing is on — plus per-version red teaming, because a new checkpoint from the
+      same publisher is a new model nobody else has tested.
 
 edges:
   - from: consumers
@@ -211,34 +267,27 @@ edges:
       Promoted artifacts load into the runtime, digest-verified against the promotion record.
       Without that verification the gate can be bypassed by writing to storage directly.
   - from: sources
-    to: storage
+    to: egress
+    route: vh
     path: external
     label: weights in
     note: >
       Fetched from the hub or produced by the organisation's own training pipeline. Provenance
       establishes who made the artifact and nothing about what it does on load.
-  - from: governance
+  - from: egress
     to: storage
     path: governance
     label: scan & promotion gate
     note: >
       Scanning and evaluation gate promotion — blocking, not advisory. A scan that runs after
       deployment has documented an incident.
-  - from: governance
-    to: runtime
-    path: governance
-    label: posture & drift
-    note: >
-      Posture watches serving configuration for drift, including the cache-sharing flags. A
-      posture tool that can read the cache has joined the data path it was meant to observe.
-
 pins:
   risks:
     - risk: riskModelSourceTampering
       at: sources
       note: Publisher identity is the only assurance the hub offers, and it says nothing about the artifact's behaviour.
     - risk: riskMaliciousLoaderDeserialization
-      at: sources->storage
+      at: sources->egress
       note: >
         Several weight formats execute code on load. Format policy on this edge is the only
         place that fact can be addressed once for everything downstream.
@@ -281,11 +330,29 @@ pins:
       note: With no provider applying output policy, an unguarded return leg hands raw completions to every caller.
 
   capabilities:
+    - capability: capabilityAiBom
+      at: egress->storage
+      note: >
+        The record of which artifact is actually serving — publisher, version, format and the
+        scan that cleared it. Without it the question "what is running" has no answer.
+    - capability: capabilitySecretsManagement
+      at: gateway
+      note: >
+        Workload identity per calling tenant, which is what per-tenant quotas and
+        cache-isolation decisions key off.
+    - capability: capabilityAuditLogging
+      at: gateway
+      note: Every request and completion recorded at the one crossing every caller shares.
+    - capability: capabilityAiRedTeaming
+      at: runtime
+      note: >
+        Per model version, because a new checkpoint from the same publisher is a new model
+        nobody else has tested — and there is no provider doing it on our behalf.
     - capability: capabilityModelScanning
-      at: governance->storage
+      at: egress->storage
       note: Format and content scanning as a blocking gate in the promotion pipeline, before any artifact reaches the runtime.
     - capability: capabilityModelEvals
-      at: governance->storage
+      at: egress->storage
       note: Safety and adversarial evaluation per model version — a new checkpoint is a new model with new behaviour.
     - capability: capabilityAiGateway
       at: gateway
@@ -317,15 +384,46 @@ pins:
       at: storage
       note: Encryption, access control and integrity digests on weights at rest, matched by verification at load.
     - capability: capabilityAiSpm
-      at: governance->runtime
+      at: gateway->runtime
       note: Continuous posture over which versions serve where and at what configuration, catching drift before an incident does.
+
+flows:
+  - id: F1
+    title: An internal call
+    moves: Prompts from our own services in; completions back.
+    path: [consumers->gateway, gateway->runtime]
+    threats: [No provider guardrail on either direction, One caller exhausting finite shared capacity, Raw output returned to a service that assumed a hosted API's floor]
+    controls: [capabilityRateLimiting, capabilityModelGuardrails, capabilityAuditLogging]
+    note: >
+      The flow the deployment exists for, and the one where taking the model in-house shows its
+      bill: every check a provider was applying on the way in and out is now a service we run
+      or do without.
+  - id: F2
+    title: Weights arrive
+    moves: Checkpoints from a public hub or our own pipeline, admitted and scanned before they land.
+    path: [sources->egress, egress->storage, runtime->storage]
+    threats: [Serialization format that executes on load, A new checkpoint from a known publisher being a new model nobody tested, Weights swapped underneath a running tier]
+    controls: [capabilityModelScanning, capabilityAiBom, capabilityModelWeightProtection]
+    note: >
+      The supply chain, and the reason the scan is a blocking gate in front of the fetch rather
+      than a check after it: for several formats, opening the file is the execution event.
+  - id: F3
+    title: Co-tenancy
+    moves: Several tenants' requests mixed in one forward pass on shared accelerators.
+    path: [gateway->runtime]
+    threats: [Cross-tenant leakage through a shared prefix cache, Efficiency settings that are also isolation settings]
+    controls: [capabilitySecretsManagement, capabilityAiSpm]
+    note: >
+      Continuous batching and prefix caching are efficiency features and co-tenancy risks in
+      the same mechanism — which is why whether cache sharing is on is a posture question, not
+      a tuning one.
 
 scenarios:
   - title: A new checkpoint is promoted
     steps:
-      - follow: sources->storage
+      - follow: sources->egress
         note: The artifact arrives — fetched from the hub or produced by the training pipeline — with provenance recorded.
-      - follow: governance->storage
+      - follow: egress->storage
         note: Scanning and per-version evaluation gate the promotion. Blocking, or it is not a gate.
       - follow: storage->runtime
         note: The promoted artifact loads into the runtime, digest-verified against the promotion record.
