@@ -869,7 +869,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 
 ### Wave E — third-party
 - [x] E-1 Enterprise chat rebuilt: browser only on the endpoint, vendor as one component, tunnel connector into our gateway, CMEK trade-off and tenant capture pinned, SSE absorption recorded instead of inventing a component
-- [ ] E-2 API/SDK runtime: vendor hosts the harness, three return paths, vault edges pinned, ZDR/HIPAA ineligibility recorded
+- [x] E-2 API/SDK runtime rebuilt: vendor hosts the loop, the definition is the contract, vault edges and ZDR/BAA ineligibility pinned
 - [ ] E-3 Low-code **last**: vendor calls its own provider externally; our gateway carries tools and data only; maker-credential ambient authority; DLP publish gate
 
 ### Wave F — enforcement and close-out

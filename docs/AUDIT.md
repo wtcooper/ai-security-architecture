@@ -680,7 +680,7 @@ Highlights below are Google's original mapping, not ours.
 | Cloud & hosted | 6 — Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
-### 4a. Risks no architecture pins — 6 of 36
+### 4a. Risks no architecture pins — 7 of 36
 
 - Model Reverse Engineering (`riskModelReverseEngineering`)
 - Inferred Sensitive Data (`riskInferredSensitiveData`)
@@ -688,6 +688,7 @@ Highlights below are Google's original mapping, not ours.
 - Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
 - Orchestrator/Route Hijack (`riskOrchestratorRouteHijacking`)
 - Evaluation/Benchmark Manipulation (`riskEvaluationBenchmarkManipulation`)
+- Agent Delegation Chain Opacity (`riskAgentDelegationChainOpacity`)
 
 ### 4b. Capabilities no architecture pins — 12 of 56
 
@@ -880,18 +881,15 @@ Highlights below are Google's original mapping, not ours.
 | UI/low-code managed agent runtime | Policy & authorization | governance | (none) |
 | UI/low-code managed agent runtime | Supply-chain assurance | governance | (none) |
 | UI/low-code managed agent runtime | Observability & response | governance | (none) |
-| API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
-| API/SDK managed agent runtime | Application front end | service | `componentApplication` |
 | API/SDK managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
-| API/SDK managed agent runtime | Managed memory | provider | `componentDataStorage` |
-| API/SDK managed agent runtime | Managed sandbox | provider | (none) |
-| API/SDK managed agent runtime | Managed tool gateway | provider | (none) |
+| API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
 | API/SDK managed agent runtime | AI gateway | service | (none) |
+| API/SDK managed agent runtime | Tool services | service | `componentTools` |
+| API/SDK managed agent runtime | Enterprise data | external | `componentDataSources` |
 | API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Identity services | governance | (none) |
 | API/SDK managed agent runtime | Secrets & key management | governance | (none) |
 | API/SDK managed agent runtime | Policy & authorization | governance | (none) |
-| API/SDK managed agent runtime | Supply-chain assurance | governance | (none) |
 | API/SDK managed agent runtime | Observability & response | governance | (none) |
 
 ## 5. Controls-guidance coverage
@@ -920,7 +918,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | use | draft | 4 | Inter-component & inter-agent transport security, Agent credential isolation & delegation control, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Shadow AI discovery |
 | Enterprise AI chat with connectors | use | draft | 5 | Third-party risk management platform for AI vendors, Encryption & key management for AI assets, Secrets management & ephemeral credentials, Tool permission scoping & least agency, Agent & tool registry |
 | UI/low-code managed agent runtime | use | draft | 5 | Network segmentation & egress control, Shadow AI discovery, Kill switch, quarantine & decommissioning |
-| API/SDK managed agent runtime | hybrid | draft | 5 | Kill switch, quarantine & decommissioning, Secrets management & ephemeral credentials, Encryption & key management for AI assets, Network segmentation & egress control |
+| API/SDK managed agent runtime | hybrid | draft | 5 | Secrets management & ephemeral credentials, Encryption & key management for AI assets, Human-in-the-loop approval & escalation, Network segmentation & egress control |
 
 ### 5b. Tool registry
 
