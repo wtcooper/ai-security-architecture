@@ -43,6 +43,29 @@ findings that existed at adoption. Status is updated as waves land.
   customer component can sit on a SaaS-to-SaaS grant path. Wave C (inline/naming/icons):
   findings 8-13. `npm run data` reports vocabulary: conformant as of Wave C.
 
+## Open backlog — controls drawn as items (2026-08-30)
+
+A rule added after the spike review: a control is a numbered pin and, where useful, a call-out
+in the security and governance band — never an item inside the component it governs. The two
+spike architectures were cleaned when the rule landed. The build warns on the rest, which are
+deferred by decision:
+
+| Architecture | Instances |
+| --- | --- |
+| archAgentWorkflow | 5 |
+| archChatAgent | 4 |
+| archActionAgent | 4 |
+| archSelfHostedInference | 3 |
+| archRemoteMcpServer | 3 |
+| archPersonalAgent | 3 |
+| archOssCodingAgent | 3 |
+| archManagedAgentRuntime | 2 |
+| archLowCodeAgentBuilder | 2 |
+| archCodingAgent | 2 |
+
+These are cleared when the grammar decision is made, so the work is done once rather than
+twice.
+
 ## Flip-to-error criterion
 
 Vocabulary warnings become build failures when this table reaches zero open findings and

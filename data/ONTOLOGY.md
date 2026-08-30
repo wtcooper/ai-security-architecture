@@ -90,10 +90,14 @@ customer-owned component on it is an audit finding.
 
 ## 4. Representation rules
 
-- **Components** are blocks with items; items name things that exist. Control or policy
-  statements are not items — the pinned chip is the statement. Exception: blocks whose role
-  IS a control surface (AI gateway, Service edge, egress control, governance plane, OS permission layer, output validation stage, tool broker) — their items describe
-  function.
+- **Components** are blocks with items; items name things that exist. **A control is never an
+  item.** It is a numbered pin where it is enforced, and — where useful — a call-out in the
+  security and governance band naming the technology that delivers it. Writing it a third time
+  as an item inside the component it governs states the same control in two grammars and is
+  what makes a drawing feel arbitrary. This applies to control-surface components too: an AI
+  gateway's items name **the traffic classes it brokers** (model proxy, MCP and tool broker,
+  skills broker), not the checks it runs (egress allowlist, audit tap, credential broker). The
+  build warns on the known control labels listed in `vocabulary.yaml`.
 - **Controls** are numbered capability chips: the number is per-diagram (position in the
   architecture's derived capability list); the catalogue-stable code (C-number, the
   capability's position in capabilities.yaml) appears in the legend and hover so a reader
@@ -121,7 +125,38 @@ services on a vertical external edge; Memory & state adjacent to the harness; cu
 crossings (egress control and AI gateway) between the workload column and what they govern.
 These are conventions checked in review, not by the build — the build checks collisions.
 
-## 6. Authoring checklist (every new or changed architecture)
+## 6. The rules, in one place
+
+Every one of these exists because it failed at least once. They are listed together so a change
+to any architecture can be checked against them without reading the whole document.
+
+1. **One name per thing.** Block titles, item labels and band titles come from
+   `vocabulary.yaml`. A new name is a registry entry made in the same change, never a local
+   choice. *(Failed as: MCP gateway vs AI gateway; Owner surfaces vs Developer surfaces.)*
+2. **A dimension states the axis it measures.** Zones measure who operates an environment and
+   nothing else. Functional properties belong to components. *(Failed as: "Agent workload" and
+   "Enterprise crossing" sitting among locational bands.)*
+3. **A control is a pin, not an item, and not a box** unless data flows through it. Inline
+   controls are components; embedded controls are pins; management controls are call-outs in
+   the security and governance band. *(Failed as: egress allowlist and audit tap drawn as
+   gateway items while also pinned.)*
+4. **Crossing-ness is a component property.** Any edge entering or leaving a band we operate
+   terminates at a component marked `crossing: true`.
+5. **Risks pin where they materialize; controls pin where they are enforced.** A governance
+   call-out cites a control's number; it does not claim to be the enforcement point.
+6. **Either/or edges are banned.** A variant needing a conditional edge is its own
+   architecture. *(Failed as: the vendored/OSS coding agent sharing one drawing.)*
+7. **The same kind of thing keeps the same name across bands.** Tool services are Tool
+   services on the endpoint, in our cloud, at a vendor and on the internet; the band says
+   where, the item pack says what. *(Failed as: "Internal MCP & APIs" and "Remote tool
+   services".)*
+8. **Vendor internals are assured, not drawn.** What a vendor implements inside their
+   environment gets `capabilityAiTprm` on the vendor block and nothing else.
+9. **Every claim is checkable.** An item or block that claims a capability must reference one
+   actually pinned; a flow step must follow a real edge; guidance must cite pinned
+   capabilities. If a claim cannot be checked by the build, say why in a deviation.
+
+## 7. Authoring checklist (every new or changed architecture)
 
 1. Block titles, item labels and zone bands from vocabulary.yaml — the build warns on an
    unregistered component name and fails on a non-standard zone title. A genuinely new

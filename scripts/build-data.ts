@@ -710,13 +710,14 @@ function checkArchetypes(
  * capabilities need an embodying component or a deviation recording the absorption.
  */
 /** Canonical band titles and the components that may terminate a band crossing. */
-const { ZONE_TITLES, CROSSING_TITLES } = (() => {
+const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS } = (() => {
   try {
     const v = parseYaml(
       readFileSync(join(ROOT, "data", "reference", "vocabulary.yaml"), "utf8"),
     ) as {
       zones?: Record<string, { title: string }>;
       components?: { title: string; crossing?: boolean }[];
+      controlItemLabels?: string[];
     };
     return {
       ZONE_TITLES: Object.fromEntries(
@@ -725,9 +726,14 @@ const { ZONE_TITLES, CROSSING_TITLES } = (() => {
       CROSSING_TITLES: new Set(
         (v.components ?? []).filter((c) => c.crossing).map((c) => c.title),
       ),
+      CONTROL_ITEM_LABELS: new Set(v.controlItemLabels ?? []),
     };
   } catch {
-    return { ZONE_TITLES: {} as Record<string, string>, CROSSING_TITLES: new Set<string>() };
+    return {
+      ZONE_TITLES: {} as Record<string, string>,
+      CROSSING_TITLES: new Set<string>(),
+      CONTROL_ITEM_LABELS: new Set<string>(),
+    };
   }
 })();
 
@@ -759,6 +765,10 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
       if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor")
         warnings.push(`${arch.id}: block "${block.title}" is kind ${block.kind}, vocabulary says ${canon.kind}`);
       for (const item of block.items ?? []) {
+        if (CONTROL_ITEM_LABELS.has(item.label))
+          warnings.push(
+            `${arch.id}: item "${block.title}.${item.label}" names a control — controls belong as numbered pins where they are enforced, and as call-outs in the security and governance band, not as items inside the component they govern`,
+          );
         const icon = iconByLabel.get(item.label);
         if (icon && item.icon !== icon)
           warnings.push(`${arch.id}: item "${item.label}" uses icon ${item.icon}, vocabulary says ${icon}`);

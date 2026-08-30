@@ -772,7 +772,11 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop agents — zone map (spike) | Vendor service | provider | (none) |
 | Coding & desktop agents — zone map (spike) | Model provider | provider | `componentModelServing` |
 | Coding & desktop agents — zone map (spike) | Downstream services | external | `componentDataSources` |
-| Coding & desktop agents — zone map (spike) | Governance plane | governance | (none) |
+| Coding & desktop agents — zone map (spike) | Identity services | governance | (none) |
+| Coding & desktop agents — zone map (spike) | Secrets & key management | governance | (none) |
+| Coding & desktop agents — zone map (spike) | Policy & authorization | governance | (none) |
+| Coding & desktop agents — zone map (spike) | Supply-chain assurance | governance | (none) |
+| Coding & desktop agents — zone map (spike) | Observability & response | governance | (none) |
 | Coding and desktop agents | Repos, docs & screen | external | `componentDataSources` |
 | Coding and desktop agents | Agent harness | service | `componentReasoningCore` |
 | Coding and desktop agents | Remote device | service | `componentAgentUserQuery` |
@@ -803,12 +807,16 @@ Highlights below are Google's original mapping, not ours.
 | Personal agent — zone map (spike A) | Owner workspace | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Messaging relay | service | (none) |
 | Personal agent — zone map (spike A) | AI gateway | service | (none) |
-| Personal agent — zone map (spike A) | Governance plane | governance | (none) |
-| Personal agent — zone map (spike A) | Internal MCP & APIs | service | `componentTools` |
+| Personal agent — zone map (spike A) | Identity services | governance | (none) |
+| Personal agent — zone map (spike A) | Secrets & key management | governance | (none) |
+| Personal agent — zone map (spike A) | Policy & authorization | governance | (none) |
+| Personal agent — zone map (spike A) | Supply-chain assurance | governance | (none) |
+| Personal agent — zone map (spike A) | Observability & response | governance | (none) |
+| Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
 | Personal agent — zone map (spike A) | Enterprise data | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Messaging platform | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Model provider | provider | `componentModelServing` |
-| Personal agent — zone map (spike A) | Remote tool services | service | `componentTools` |
+| Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
 | Personal agent — zone map (spike A) | Downstream services | external | `componentDataSources` |
 | Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
