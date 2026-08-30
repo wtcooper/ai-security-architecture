@@ -21,9 +21,17 @@ export const RF_CONFIG: Record<string, RfFrameConfig> = {
     hide: [],
   },
   archCodingAgent: {
+    frameLabel: "Vendor application",
+    frameNote:
+      "The CLI or desktop GUI the vendor ships: the harness and its tool surface live inside the application, and tool capabilities and connectors are built in and configured there.",
+    members: ["client", "toolPlane"],
+    hide: [],
+    labelPos: "bottom",
+  },
+  archOssCodingAgent: {
     frameLabel: "Agent application",
     frameNote:
-      "The application the harness ships in — a vendor's CLI, IDE extension or desktop app, or an open-source harness. The harness and its tool surface live inside it, and tool capabilities and connectors are built in and configured there.",
+      "The open-source harness the developer installs: the loop, its serve mode and its tool surface in one application, configured by files on the same disk — including files that arrive with the repository.",
     members: ["client", "toolPlane"],
     hide: [],
     labelPos: "bottom",

@@ -12,13 +12,25 @@ workflow with a different tool set, a single node, or a control drawn as a place
 
 ## Active — 12
 
-### Endpoint (3)
+### Endpoint (4)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
-| 1 | Coding and desktop agents | `archCodingAgent` | `endpoint-coding-agent.yaml` |
-| 2 | Personal autonomous agent | `archPersonalAgent` | `endpoint-personal-agent.yaml` |
-| 3 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
+| 1 | Coding and desktop agents (vendored) | `archCodingAgent` | `endpoint-coding-agent.yaml` |
+| 2 | Open-source coding & desktop agents | `archOssCodingAgent` | `endpoint-oss-coding-agent.yaml` |
+| 3 | Personal autonomous agent | `archPersonalAgent` | `endpoint-personal-agent.yaml` |
+| 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
+
+- **The vendored/OSS split (2026-08)** replaced a single coding-agent diagram that carried an
+  either/or model path. The ontology bans conditional edges: the OSS harnesses differ in
+  custody (pasted keys vs session credentials), supply chain (community registries deliver
+  the harness itself), remote admission (bearer-secret serve ports, relay tunnels and chat
+  bridges vs an owner-bound vendor relay) and the absence of any control plane — four
+  graph-level differences, so two architectures. All three agent architectures on this
+  surface now draw the standard **Remote device** block on the user's path; its admission
+  model degrades across the surface (vendor account → bearer secret / platform identity →
+  raw platform identity from an unbounded sender set), which is the endpoint story in one
+  comparison.
 
 - **Coding and desktop agents** absorbs the former Desktop AI assistant: same engine, different
   GUI, slightly different tool and sandbox controls. The vendor application is drawn as a
