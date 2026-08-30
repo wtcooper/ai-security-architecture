@@ -487,6 +487,18 @@ edges:
     label: local tool calls
     note: Tool calls out with whatever scope the permission model granted; results back into context.
   - from: harness
+    to: vendorService
+    path: external
+    bidir: true
+    route: vh
+    label: SSO session
+    note: >
+      The primary and vendor-recommended path, and the one most of our users are on: the
+      application authenticates to the vendor's own service and calls it directly. Enterprise
+      SSO happens at the vendor's account layer, so this leg is what makes the sign-in work at
+      all — the client has to reach them. What governs it is the tenant binding behind that
+      account and the assessment behind the allowlist entry, not an inspection point we run.
+  - from: harness
     to: aiGateway
     path: primary
     bidir: true
@@ -518,6 +530,16 @@ edges:
     path: external
     bidir: true
     note: The vendor's service calls the model provider; everything behind that interface is theirs.
+  - from: aiGateway
+    to: provider
+    path: external
+    bidir: true
+    route: hv
+    label: our keys
+    note: >
+      The alternative path, and a real one: inference on credentials we hold, brokered at our
+      own tier, with the vendor out of the loop entirely. Every gateway in the catalogue that
+      carries inference reaches a provider — this one was simply missing.
   - from: aiGateway
     to: hostedTools
     path: primary
@@ -689,7 +711,9 @@ flows:
           Straight to the vendor's relay. This hop never touches anything we operate — a
           personal device on a cell network has no reason to cross the corporate egress and no
           way to be made to — so admission here is the vendor's account binding, not our
-          firewall.
+          firewall. Note what this flow depends on: the relay runs on the vendor's own API, so
+          an organisation that routes inference through its gateway does not have this flow at
+          all.
       - follow: vendorService->aiGateway
         note: >
           The relay hands the work down the connection the endpoint already opened, and that
@@ -725,9 +749,9 @@ flows:
     controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
     note: The attended path, and the one the archetype's whole posture assumes is the normal case.
   - id: F3
-    title: Model inference
+    title: Model inference, the SSO path
     moves: Code, documents and screenshots out for inference; the completion that drives the next action back.
-    path: [harness->aiGateway, aiGateway->vendorService, vendorService->provider]
+    path: [harness->vendorService, vendorService->provider]
     threats: [Unapproved vendor or model, Excessive data under the agreement, Tenant drift to a personal account]
     controls: [capabilityAiTprm, capabilityEgressControl, capabilityAgentRuntimeEnforcement]
     note: >
@@ -735,20 +759,32 @@ flows:
       agreement governs the data once it arrives. What we enforce here is that the destination
       is the approved one and the session belongs to our tenant — not what is inside it.
   - id: F4
+    title: Model inference, the gateway path
+    moves: The same context, brokered on credentials we hold, with the vendor out of the loop.
+    path: [harness->aiGateway, aiGateway->provider]
+    threats: [Loss of the vendor's remote relay and its owner-bound admission, Our tier becomes the single point every developer depends on]
+    controls: [capabilitySecretsManagement, capabilityEgressControl, capabilityAuditLogging]
+    note: >
+      The alternative, and the trade-off is real rather than theoretical. This path buys
+      credential custody, egress policy and an audit trail we own. It costs the vendor's remote
+      relay outright — F1 does not exist for an organisation on this path — along with
+      server-side web search and the long prompt cache.
+
+  - id: F5
     title: Repository and document content
     moves: Clones, file reads, issue text and documents — read into context as though instruction.
     path: [toolPlane->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
     threats: [Indirect prompt injection, Tool config arriving with the clone]
     controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity]
     note: The content is ours and still untrusted — many hands wrote it, and none of them are authenticated.
-  - id: F5
+  - id: F6
     title: Local execution and memory
     moves: Commands, edits and generated files; the notes and rules the next session reads back.
     path: [harness->toolPlane, harness->memory]
     threats: [Command execution with the developer's authority, Memory poisoning, Credential harvesting]
     controls: [capabilityAgentSandboxing, capabilityCredentialIsolation, capabilityMemoryProtection]
     note: The machine holds the developer's keys and sessions; the sandbox is what stands between them and the loop.
-  - id: F6
+  - id: F7
     title: Enterprise systems
     moves: Calls into our internal connectors, and the records they read and change.
     path: [harness->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
@@ -757,14 +793,14 @@ flows:
     note: >
       The flow the deployment exists for — and the one where our gateway, not the vendor's
       console, decides what the agent may touch.
-  - id: F7
+  - id: F8
     title: Internet egress
     moves: Dependency fetches, web reads and third-party SaaS calls.
     path: [toolPlane->aiGateway, aiGateway->extTools, extTools->downstream]
     threats: [Web-borne injection, Exfiltration to an attacker endpoint, Malicious dependencies]
     controls: [capabilityEgressControl, capabilityAiDlp, capabilityAuditLogging]
     note: Everything fetched here re-enters the loop as context, which is why the allowlist is a security control.
-  - id: F8
+  - id: F9
     title: Hosted sessions reach back
     moves: Requests from cloud and scheduled sessions running in the vendor's environment into our systems.
     path: [vendorService->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
@@ -773,7 +809,7 @@ flows:
     note: >
       Nobody's laptop is involved in this one. It is the crossing that most often has no
       component on it at all, and the reason the AI gateway is drawn.
-  - id: F9
+  - id: F10
     title: Vendor control plane
     moves: Managed settings and allowlists down; session audit export back.
     path: [aiGateway->vendorService]
@@ -816,6 +852,28 @@ scenarios:
         note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and we record it.
 
 deviations:
+  - subject: Two model paths are drawn, and an organisation does not get both at once
+    reason: >
+      Both are real and both are in use here, so this is not a banned either/or edge — it is
+      two populations. The SSO path, where the application authenticates to the vendor and
+      calls it directly, is the vendor-recommended one and the one most of our users are on.
+      The gateway path, inference on our own keys with the vendor out of the loop, is the
+      documented alternative.
+      They are not freely composable, and the trade-off belongs on the page: the vendor's
+      remote-control relay requires the vendor's own API, so pointing the client at a gateway
+      disables remote steering entirely, along with server-side web search and the long prompt
+      cache. Route through your gateway and gain credential control, egress policy and audit;
+      lose the relay that flow F1 is about.
+  - subject: The vendor's own path is admitted, not inspected
+    reason: >
+      A pinned TLS session to an approved vendor cannot be inspected without breaking the
+      product, and drawing an inspection point on it would assert a control nobody operates.
+      What governs that path is the assessment behind the allowlist entry, the tenant binding
+      in managed settings, and the agreement — pinned as vendor assurance rather than drawn.
+      Note the contrast worth carrying into product selection: not every vendor in this
+      category offers a path that removes them from inference. One major competitor routes
+      every request through its own backend by design, including when the customer supplies
+      their own keys, which additionally voids that vendor's zero-retention terms.
   - subject: The vendor session crosses the egress control but is not inspected there
     reason: >
       An approved vendor's own service is a sanctioned destination: the allowlist entry exists

@@ -14,20 +14,20 @@ Status key: `todo` · `research pending` · `done` · `needs decision`
 
 | # | Instruction | Disposition |
 |---|---|---|
-| E1 | Harness→gateway exists and is real (used for some Claude Code users), but **SSO-based harness→vendor service direct is the primary and recommended path** | todo — add direct edge, make it primary |
-| E2 | Also keep harness→gateway→provider for inference on our own keys | todo — both paths coexist |
-| E3 | **Every AI gateway must connect to a model provider, across the whole catalogue.** 3p gateway isn't even hooked up | todo — audit all 9 gateway architectures |
+| E1 ✅ | Harness→gateway exists and is real (used for some Claude Code users), but **SSO-based harness→vendor service direct is the primary and recommended path** | todo — add direct edge, make it primary |
+| E2 ✅ | Also keep harness→gateway→provider for inference on our own keys | todo — both paths coexist |
+| E3 ✅ | **Every AI gateway must connect to a model provider, across the whole catalogue.** 3p gateway isn't even hooked up | todo — audit all 9 gateway architectures |
 | E4 | Core flow: phone → vendor service → relayed back to agent harness | **done** (2026-08-30, commit ac821e5) |
-| E5 | User straight to the agent in the application is fine | already drawn |
-| E6 | Model on Claude Code and Cursor; research the web | research pending |
+| E5 ✅ | User straight to the agent in the application is fine | already drawn |
+| E6 ✅ | Model on Claude Code and Cursor; research the web | research pending |
 
 ### Endpoint · sandbox
 
 | # | Instruction | Disposition |
 |---|---|---|
-| E7 | The **sandbox was dropped** in the zone migration; it is the core recommendation for personal autonomous agents on managed endpoints. Restore it | **CHALLENGE-A** — needs a representation decision |
+| E7 ✅ | The **sandbox was dropped** in the zone migration; it is the core recommendation for personal autonomous agents on managed endpoints. Restore it | **CHALLENGE-A** — needs a representation decision |
 | E8 | ~~Add the sandbox to first-party coding agents too~~ | **DROPPED 2026-08-30.** Sandbox goes on the personal autonomous agent only — that is the worrisome category. Vendor coding agents ship built-in command-level sandboxing and the organisation is comfortable with that. See the note under Wave C. |
-| E9 | Research and model on OpenClaw, Hermes, Docker microVM sandboxes | research pending |
+| E9 ✅ | Research and model on OpenClaw, Hermes, Docker microVM sandboxes | research pending |
 
 ### Endpoint · first-party coding & desktop agents
 
@@ -855,7 +855,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] B11 Re-measured all 13 in the browser; gaps uniform within every architecture; every inter-band gap uniform
 
 ### Wave C — endpoint
-- [ ] C-1 Third-party: direct SSO path primary, gateway path secondary, `aiGateway→provider` added, remote-control/gateway exclusivity as a deviation, Cursor contrast in exemplars
+- [x] C-1 Third-party: SSO path drawn as primary, gateway path kept, `aiGateway→provider` added, exclusivity and the vendor contrast recorded as deviations, inference split into two flows
 - [x] C-2 Personal agent: sandbox restored as a `boundary` container — four openings named, credential-injection-at-the-proxy pinned, MCP-straddle pinned as a risk rather than hidden
 - [ ] C-3 First-party: relay/tunnel on the remote path, direct-port risk pin, Local API server item, drop LangChain deep agents as an exemplar
 - [ ] C-4 Local runtime: egress control removed, band disappears, terminology aligned to the cloud page
