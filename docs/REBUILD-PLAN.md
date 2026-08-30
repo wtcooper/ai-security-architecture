@@ -864,7 +864,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] D-1 Inference pair aligned — shared `Inference API`, renamed to "Self-hosted model inference", prefix-cache side channel and model signing pinned, egress control removed
 - [x] D-2 Fine-tuning narrowed to five blocks — curation, evaluation, registry-gate and serving removed; guidance updated in the same change
 - [ ] D-3 Agent trio: harness-local tools, checkpointer database, supervisor+subagents nested as real blocks, A2A via gateway, "durable" dropped
-- [ ] D-4 Chat agent: human, browser application layer, **scheduling trigger**, same skeleton as single-agent
+- [x] D-4 Chat agent: browser application layer kept, scheduling trigger added with the note that it removes the in-thread approval the page leans on
 - [ ] D-5 MCP server rebuilt small; anonymous origin into the gateway; July 2026 spec pin set
 
 ### Wave E — third-party

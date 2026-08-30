@@ -190,14 +190,18 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     kidsOf.get(p)!.push(b);
   }
 
+  // A container may also carry its own items — an agent harness keeps its loop and context
+  // assembly while holding a supervisor and subagents inside it. Items occupy a band under the
+  // title tab and the children's grid starts below them, so the two never overlap.
+  const itemsHeight = (b: ArchBlock) => (b.items?.length ? naturalHeight(b) - TAB_H / 2 : 0);
   const measure = (b: ArchBlock): Placed => {
     const kids = (kidsOf.get(b.id) ?? []).map(measure);
     if (!kids.length) return { block: b, w: blockWidth(b), h: naturalHeight(b), kids };
     const inner = gridLayout(kids);
     return {
       block: b,
-      w: inner.width + NEST_PAD * 2,
-      h: inner.height + NEST_HEAD + NEST_PAD,
+      w: Math.max(inner.width + NEST_PAD * 2, blockWidth(b)),
+      h: NEST_HEAD + itemsHeight(b) + inner.height + NEST_PAD,
       kids,
       inner,
     };
@@ -227,7 +231,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       const r = grid.at.get(p.block.id)!;
       const abs = { x: ox + r.x, y: oy + r.y, w: r.w, h: r.h };
       blocks[p.block.id] = abs;
-      if (p.inner) place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + NEST_HEAD);
+      if (p.inner) place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + NEST_HEAD + itemsHeight(p.block));
     }
   };
   place(roots, top, MARGIN_X, marginTop);

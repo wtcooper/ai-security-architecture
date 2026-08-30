@@ -1,8 +1,8 @@
 id: archAgentWorkflow
 surface: surfaceCloud
 rank: 2
-title: Durable multi-agent workflow
-abbrev: Multi-agent workflow
+title: Multi-agent workflow
+abbrev: Multi-agent
 
 summary:
   - >
@@ -139,12 +139,51 @@ blocks:
           Whose authority the workflow carries for its whole life — days, in some deployments,
           after the person who granted it has gone.
 
-  - id: orchestration
+  - id: harness
     kind: service
-    title: Supervisor agent
+    title: Agent harness
+    cosaiComponent: componentReasoningCore
     zone: zoneCloud
     col: 2
     row: 1
+    note: >
+      One runtime, not a fleet of services. A supervisor and its specialists are objects in the
+      same process, dispatched by the graph's own scheduler — no service boundary, no network
+      hop, no separate identity, unless somebody deliberately introduces one. Drawing them
+      nested says that, where drawing them side by side implied a deployment that does not
+      exist.
+
+  - id: localTools
+    kind: service
+    title: Tool services
+    cosaiComponent: componentTools
+    zone: zoneCloud
+    parent: harness
+    col: 0
+    row: 1
+    note: >
+      The tools compiled into the application itself — decorated functions running in the
+      loop's own process, under its identity, with its egress and its secrets. This is the
+      default way a tool gets attached, and the reason it is drawn: **the in-process tool set
+      is invisible to any gateway**. Only what leaves over the network appears at a chokepoint,
+      so whatever lives here is governed by code review or by nothing.
+    items:
+      - id: inProcess
+        label: Tool handlers
+        icon: code
+        note: Functions in the application, holding whatever the application holds.
+      - id: connectors
+        label: APIs & connectors
+        icon: plug
+        note: Ordinary outbound calls the application makes itself, with no broker in front.
+
+  - id: orchestration
+    kind: service
+    parent: harness
+    title: Supervisor agent
+    zone: zoneCloud
+    col: 0
+    row: 0
     cosaiComponent: componentReasoningCore
     note: >
       Decomposes the goal, routes work to the subagents and owns the process; the durable
@@ -164,8 +203,9 @@ blocks:
     kind: service
     title: Subagents
     zone: zoneCloud
-    col: 3
-    row: 2
+    parent: harness
+    col: 1
+    row: 0
     cosaiComponent: componentReasoningCore
     note: >
       The specialists the supervisor drives, each with its own context and tool set.
@@ -373,18 +413,18 @@ edges:
       The process is started and the initiator's identity is bound to it. They are absent for
       everything that follows.
   - from: entry
-    to: orchestration
+    to: harness
     path: primary
     bidir: true
     note: The request reaches the supervisor carrying whose authority the workflow will run on.
   - from: events
-    to: orchestration
+    to: harness
     path: primary
     label: trigger
     note: >
       Timers, webhooks and queue messages that start work with no human in the room — and the
       signals that resume a workflow suspended for hours or days.
-  - from: orchestration
+  - from: harness
     to: state
     path: primary
     bidir: true
@@ -401,24 +441,12 @@ edges:
     note: >
       Work handed down and results handed back. A specialist's output becomes the supervisor's
       input, which is how one confused agent propagates through the graph.
-  - from: subagents
-    to: state
-    path: primary
-    bidir: true
-    note: Specialists read and write the same durable state the supervisor does.
-  - from: orchestration
+  - from: harness
     to: gateway
     path: primary
     bidir: true
     label: model & tool calls
     note: Every call the supervisor makes crosses here on a brokered, step-scoped credential.
-  - from: subagents
-    to: gateway
-    path: primary
-    bidir: true
-    note: >
-      Specialists reach nothing directly either. The gateway is the one door for every agent in
-      the graph, which is what keeps the fan-out from multiplying the reachable set.
   - from: gateway
     to: provider
     path: external
@@ -468,10 +496,10 @@ pins:
       at: orchestration->subagents
       note: A subagent that inherits its parent's full authority is privilege distribution, not delegation.
     - risk: riskSensitiveDataDisclosure
-      at: orchestration->state
+      at: state
       note: The journal records everything a step returns. A returned secret is a persisted one.
     - risk: riskSensitiveDataDisclosure
-      at: subagents->state
+      at: state
       note: >
         Specialists journal too — every subagent's steps persist to the same store, so the
         secrets-sink risk multiplies with the agent count.
@@ -544,10 +572,10 @@ pins:
       at: internalTools->orgData
       note: Returned content is classified before it re-enters any agent's context.
     - capability: capabilityAiDlp
-      at: orchestration->state
+      at: state
       note: Redaction on what steps may journal, because the journal outlives the process.
     - capability: capabilityAiDlp
-      at: subagents->state
+      at: state
       note: The same redaction on the specialists' journaling path — every writer to the journal is in scope.
     - capability: capabilityHitlControls
       at: internalTools->orgData
@@ -576,7 +604,7 @@ flows:
   - id: F1
     title: A run nobody started
     moves: Timers, webhooks and queue messages — including the signal that resumes a suspended workflow.
-    path: [events->orchestration]
+    path: [events->harness]
     threats: [A resumption waking work nobody is watching, Trigger content read as instruction]
     controls: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability]
     note: >
@@ -585,7 +613,7 @@ flows:
   - id: F2
     title: The process is started
     moves: A request in, a result back — days later, in some deployments.
-    path: [initiator->entry, entry->orchestration]
+    path: [initiator->entry, entry->harness]
     threats: [Authority granted once and carried for the workflow's whole life, Initiator absent for everything that follows]
     controls: [capabilityIga, capabilityNhiManagement]
     note: >
@@ -604,7 +632,7 @@ flows:
   - id: F4
     title: Model inference, for every agent
     moves: Each agent's context out; each agent's next step back.
-    path: [orchestration->gateway, subagents->gateway, gateway->provider]
+    path: [harness->gateway, gateway->provider]
     threats: [Fan-out multiplying spend with no ceiling, A model change affecting every agent at once]
     controls: [capabilityRateLimiting, capabilityModelEvals]
     note: >
@@ -613,7 +641,7 @@ flows:
   - id: F5
     title: Enterprise systems
     moves: Admitted, scoped actions into our own systems of record.
-    path: [orchestration->gateway, subagents->gateway, gateway->internalTools, internalTools->orgData]
+    path: [harness->gateway, gateway->internalTools, internalTools->orgData]
     threats: [Standing grants held for the process's life, Writes accumulating unnoticed over a long run]
     controls: [capabilityToolPermissionScoping, capabilitySecretsManagement, capabilityHitlControls]
     note: >
@@ -622,14 +650,14 @@ flows:
   - id: F6
     title: Outside the company
     moves: Effects landing on third-party services, and the content that returns.
-    path: [orchestration->gateway, gateway->extTools, extTools->downstream]
+    path: [harness->gateway, gateway->extTools, extTools->downstream]
     threats: [Exfiltration over a long unattended run, Untrusted content becoming several agents' input at once]
     controls: [capabilityEgressControl, capabilityPromptInjectionDefense, capabilityAuditLogging]
     note: Whatever returns here does not enter one context — it enters the graph.
   - id: F7
     title: The journal
     moves: Every step's inputs and returns, persisted for replay and resumption.
-    path: [orchestration->state, subagents->state]
+    path: [harness->state, harness->state]
     threats: [A returned credential becoming a stored credential, Shared memory letting one branch steer another]
     controls: [capabilityCredentialIsolation, capabilityMemoryProtection]
     note: >
@@ -645,7 +673,7 @@ scenarios:
           goal into work for specialists.
       - follow: orchestration->subagents
         note: Each specialist takes its task with a narrowed grant, not the supervisor's authority.
-      - follow: subagents->gateway
+      - follow: harness->gateway
         note: Every call the agents make funnels through the one door.
       - follow: gateway->provider
         note: Inference on brokered credentials, limits applied.
@@ -657,11 +685,11 @@ scenarios:
         note: The result returns, possibly days after the request.
   - title: A step replays after a crash
     steps:
-      - follow: state->orchestration
+      - follow: state->harness
         note: The engine rebuilds state from the journal — including anything a step persisted.
       - follow: orchestration->subagents
         note: Replayed steps land on their specialists again.
-      - follow: subagents->gateway
+      - follow: harness->gateway
         note: Replayed steps re-request credentials; nothing survives from the first run.
       - follow: gateway->internalTools
         note: Idempotency fencing decides whether the side effect may run again.
@@ -669,13 +697,13 @@ scenarios:
         note: Without fencing, the payment executes twice. The journal replays; the world does not.
   - title: An event fires days into the process
     steps:
-      - follow: events->orchestration
+      - follow: events->harness
         note: >
           A timer or webhook resumes work with nobody watching — the waiting step wakes days
           after the request that started the process.
       - follow: orchestration->subagents
         note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
-      - follow: subagents->gateway
+      - follow: harness->gateway
         note: Credentials are fetched now — the ones from day one would be stale authority.
       - follow: gateway->internalTools
         note: The action proceeds under the same per-call policy as an attended run.

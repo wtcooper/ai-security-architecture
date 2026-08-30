@@ -677,7 +677,7 @@ Highlights below are Google's original mapping, not ours.
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 4 — First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
-| Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
+| Cloud & hosted | 6 — Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
 ### 4a. Risks no architecture pins — 6 of 36
@@ -721,6 +721,7 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- | --- | --- |
 | Single agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
 | Single agent workflow | Application front end | service | `componentApplication` |
+| Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Agent harness | service | `componentReasoningCore` |
 | Single agent workflow | Memory & state | service | `componentDataStorage` |
 | Single agent workflow | AI gateway | service | (none) |
@@ -734,23 +735,27 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | Policy & authorization | governance | (none) |
 | Single agent workflow | Supply-chain assurance | governance | (none) |
 | Single agent workflow | Observability & response | governance | (none) |
-| Durable multi-agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
-| Durable multi-agent workflow | Application front end | service | `componentApplication` |
-| Durable multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
-| Durable multi-agent workflow | Subagents | service | `componentReasoningCore` |
-| Durable multi-agent workflow | Memory & state | service | `componentDataStorage` |
-| Durable multi-agent workflow | AI gateway | service | (none) |
-| Durable multi-agent workflow | Model provider | provider | `componentModelServing` |
-| Durable multi-agent workflow | Tool services | service | `componentTools` |
-| Durable multi-agent workflow | Enterprise data | external | `componentDataSources` |
-| Durable multi-agent workflow | Tool services | service | `componentTools` |
-| Durable multi-agent workflow | Downstream services | external | `componentDataSources` |
-| Durable multi-agent workflow | Identity services | governance | (none) |
-| Durable multi-agent workflow | Secrets & key management | governance | (none) |
-| Durable multi-agent workflow | Policy & authorization | governance | (none) |
-| Durable multi-agent workflow | Supply-chain assurance | governance | (none) |
-| Durable multi-agent workflow | Observability & response | governance | (none) |
+| Multi-agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
+| Multi-agent workflow | Application front end | service | `componentApplication` |
+| Multi-agent workflow | Agent harness | service | `componentReasoningCore` |
+| Multi-agent workflow | Tool services | service | `componentTools` |
+| Multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
+| Multi-agent workflow | Subagents | service | `componentReasoningCore` |
+| Multi-agent workflow | Memory & state | service | `componentDataStorage` |
+| Multi-agent workflow | AI gateway | service | (none) |
+| Multi-agent workflow | Model provider | provider | `componentModelServing` |
+| Multi-agent workflow | Tool services | service | `componentTools` |
+| Multi-agent workflow | Enterprise data | external | `componentDataSources` |
+| Multi-agent workflow | Tool services | service | `componentTools` |
+| Multi-agent workflow | Downstream services | external | `componentDataSources` |
+| Multi-agent workflow | Identity services | governance | (none) |
+| Multi-agent workflow | Secrets & key management | governance | (none) |
+| Multi-agent workflow | Policy & authorization | governance | (none) |
+| Multi-agent workflow | Supply-chain assurance | governance | (none) |
+| Multi-agent workflow | Observability & response | governance | (none) |
+| Chat agent with tools | Triggers & schedules | service | `componentAgentUserQuery` |
 | Chat agent with tools | Application front end | service | `componentApplication` |
+| Chat agent with tools | Tool services | service | `componentTools` |
 | Chat agent with tools | Agent harness | service | `componentReasoningCore` |
 | Chat agent with tools | Memory & state | service | `componentDataStorage` |
 | Chat agent with tools | AI gateway | service | (none) |
@@ -892,7 +897,7 @@ Highlights below are Google's original mapping, not ours.
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
-| Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
+| Cloud & hosted | Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
 ### 5a. Documents
@@ -900,7 +905,7 @@ Highlights below are Google's original mapping, not ours.
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
 | Single agent workflow | build | draft | 5 | Identity & access management for AI applications, Agent & tool registry, Model & agent evaluation harnesses |
-| Durable multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
+| Multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
 | Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
 | Remote MCP server you publish | build | draft | 5 | Secure service edge for AI services, Application security testing for AI systems, Kill switch, quarantine & decommissioning, Human-in-the-loop approval & escalation, Output encoding & safe rendering |
 | Self-hosted model inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
