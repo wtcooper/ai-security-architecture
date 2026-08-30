@@ -834,6 +834,7 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | Observability & response | governance | (none) |
 | Local model runtime | Public model hub | external | `componentModelStorage` |
 | Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
+| Personal autonomous agent | Sandbox | boundary | (none) |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |

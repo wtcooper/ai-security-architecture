@@ -855,7 +855,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 
 ### Wave C — endpoint
 - [ ] C-1 Third-party: direct SSO path primary, gateway path secondary, `aiGateway→provider` added, remote-control/gateway exclusivity as a deviation, Cursor contrast in exemplars
-- [ ] C-2 Personal agent: sandbox `boundary`, four openings, credential-injection pin, MCP-straddle pin
+- [x] C-2 Personal agent: sandbox restored as a `boundary` container — four openings named, credential-injection-at-the-proxy pinned, MCP-straddle pinned as a risk rather than hidden
 - [ ] C-3 First-party: relay/tunnel on the remote path, direct-port risk pin, Local API server item, drop LangChain deep agents as an exemplar
 - [ ] C-4 Local runtime: egress control removed, band disappears, terminology aligned to the cloud page
 

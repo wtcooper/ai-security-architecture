@@ -142,6 +142,27 @@ blocks:
         icon: globe
         note: The gateway's dashboard, and a documented token-exfiltration surface.
 
+  - id: sandbox
+    kind: boundary
+    title: Sandbox
+    zone: zoneEndpoint
+    col: 1
+    row: 2
+    note: >
+      A microVM-class boundary around the loop, its state and its local tools — the core
+      recommendation for this archetype, and the control that bounds every other failure on
+      this page. Its own kernel, filesystem and network, and no approval prompts inside,
+      because the boundary replaces them.
+      Four openings are deliberate and each is a control decision. The workspace is mounted
+      directly at the same path and propagates both ways, so a read-only clone is the safer
+      default. Skills persist across sandboxes and are therefore a contamination channel
+      between them. Egress leaves through a host-side proxy whose allowlist ships with broad
+      wildcards worth pruning. And local MCP servers run on the host with host privileges,
+      outside this boundary entirely — the gap every implementation shares.
+      What earns the boundary its keep: the model credential is injected into request headers
+      by that host-side proxy, so the key never enters the sandbox and an agent that can
+      exfiltrate cannot steal it.
+
   - id: bridges
     kind: service
     title: Channel bridges
@@ -168,9 +189,10 @@ blocks:
     kind: service
     title: Agent harness
     cosaiComponent: componentReasoningCore
+    parent: sandbox
     zone: zoneEndpoint
-    col: 1
-    row: 2
+    col: 0
+    row: 0
     note: >
       The long-lived loop that plans, calls tools and reads results back as context, with the
       heartbeat that starts it when nobody is watching.
@@ -192,9 +214,10 @@ blocks:
     kind: service
     title: Memory & state
     cosaiComponent: componentDataStorage
+    parent: sandbox
     zone: zoneEndpoint
-    col: 1
-    row: 3
+    col: 0
+    row: 1
     note: >
       Cross-session files the agent writes and reads back as instruction — the persistence
       primitive, and the reason an injection outlives the message that carried it.
@@ -212,9 +235,10 @@ blocks:
     kind: service
     title: Tool services
     cosaiComponent: componentTools
+    parent: sandbox
     zone: zoneEndpoint
-    col: 2
-    row: 3
+    col: 1
+    row: 1
     note: >
       The local surface inside the sandbox — files, shell and skills. Remote transports are not
       here: they live behind the enterprise crossing by construction.
@@ -244,7 +268,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneEndpoint
     col: 2
-    row: 4
+    row: 3
     note: >
       The host folders shared into the sandbox — mounted read-only with a private clone in the
       enterprise posture, so an agent edit is a reviewable diff rather than a host write.
@@ -616,6 +640,13 @@ edges:
       pinned — and from nowhere else.
 pins:
   risks:
+    - risk: riskInsecureIntegratedComponent
+      at: toolPlane
+      note: >
+        The boundary is not as clean as it looks. Local MCP servers, plugins and skills run on
+        the host with host privileges, outside the isolation — true of Docker Sandboxes,
+        OpenClaw and Hermes alike. So the tool surface straddles the boundary rather than
+        sitting inside it, and third-party code in that half has the user's full authority.
     - risk: riskPromptInjection
       at: senders->platform
       note: The message body is model input, from a set the platform bounds and the organisation does not.
@@ -687,10 +718,12 @@ pins:
       at: harness->memory
       note: Treat memory as untrusted input on read; scan what is written; scope what is kept.
     - capability: capabilityAgentSandboxing
-      at: harness
+      at: sandbox
       note: >
-        Wrap the harness whole in a microVM-class boundary with its own kernel, filesystem and
-        network — the operator owns the spec, and the agent cannot edit it.
+        The boundary itself, with its own kernel, filesystem and network — the operator owns
+        the spec and the agent cannot edit it. Note what this buys beyond containment: with the
+        model credential injected at the host-side proxy, the key never enters the boundary, so
+        an agent that can exfiltrate has nothing to exfiltrate.
     - capability: capabilityToolPermissionScoping
       at: harness->toolPlane
       note: Per-tool grants on the local surface instead of the daemon's full authority.
@@ -699,7 +732,10 @@ pins:
       note: Share named folders read-only with a private clone; the home directory and its keys stay out.
     - capability: capabilitySecretsManagement
       at: harness->gateway
-      note: Credentials brokered per call at the crossing, short-lived and scoped; nothing at rest inside.
+      note: >
+        Credentials brokered per call at the crossing and injected into request headers by the
+        host-side proxy, so nothing is at rest inside the boundary and the loop never holds a
+        key it could leak.
     - capability: capabilityEgressControl
       at: gateway
       note: Deny-by-default egress at the one crossing — models, tools and destinations each named.

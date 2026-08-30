@@ -1265,12 +1265,14 @@ function checkDiagramCollisions(
   };
 
   const checkSpots = (kind: string, at: string, rects: Rect[], ownBlock?: string) => {
+    // Whatever the pin is anchored to — a block, or an edge's two endpoints — a container of
+    // any of those necessarily overlaps the pin and cannot be said to obstruct it.
+    const anchors = ownBlock ? [ownBlock] : at.split("->");
     for (const r of rects) {
       if (r.y < 2) fail(`${where}: ${kind} at ${at} runs off the top of the canvas — fewer pins there, or move the block down a row`);
       for (const [id, rect] of blockRects) {
         if (id === ownBlock) continue;
-        // A pin on a nested block sits inside that block's container by construction.
-        if (ownBlock && encloses(id, ownBlock)) continue;
+        if (anchors.some((a) => encloses(id, a))) continue;
         if (hits(r, inflate(rect, -2))) {
           fail(`${where}: ${kind} at ${at} lands on block ${id} — pin it elsewhere or adjust the grid`);
         }
