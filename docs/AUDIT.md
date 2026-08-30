@@ -873,10 +873,13 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
 | Enterprise AI chat with connectors | Supply-chain assurance | governance | (none) |
 | Enterprise AI chat with connectors | Observability & response | governance | (none) |
-| UI/low-code managed agent runtime | Enterprise data | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
-| UI/low-code managed agent runtime | Connected systems | service | `componentDataSources` |
+| UI/low-code managed agent runtime | Tool services | service | `componentTools` |
+| UI/low-code managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
+| UI/low-code managed agent runtime | Enterprise data | external | `componentDataSources` |
+| UI/low-code managed agent runtime | Model provider | provider | `componentModelServing` |
+| UI/low-code managed agent runtime | Tool services | service | `componentTools` |
 | UI/low-code managed agent runtime | Identity services | governance | (none) |
 | UI/low-code managed agent runtime | Policy & authorization | governance | (none) |
 | UI/low-code managed agent runtime | Supply-chain assurance | governance | (none) |
@@ -917,7 +920,7 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 4 | Inter-component & inter-agent transport security, Agent credential isolation & delegation control, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Shadow AI discovery |
 | Enterprise AI chat with connectors | use | draft | 5 | Third-party risk management platform for AI vendors, Encryption & key management for AI assets, Secrets management & ephemeral credentials, Tool permission scoping & least agency, Agent & tool registry |
-| UI/low-code managed agent runtime | use | draft | 5 | Network segmentation & egress control, Shadow AI discovery, Kill switch, quarantine & decommissioning |
+| UI/low-code managed agent runtime | use | draft | 5 | Encryption & key management for AI assets |
 | API/SDK managed agent runtime | hybrid | draft | 5 | Secrets management & ephemeral credentials, Encryption & key management for AI assets, Human-in-the-loop approval & escalation, Network segmentation & egress control |
 
 ### 5b. Tool registry

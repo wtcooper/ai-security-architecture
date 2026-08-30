@@ -22,10 +22,16 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
 
 - **All four are on the zone grammar** (`data/ONTOLOGY.md` §4a and §4b): ownership bands as
-  full-height columns with a build-enforced crossing rule, numbered first-class data flows
-  carrying what moves and the threats and controls that ride them, and five standalone
-  governance call-outs across the bottom band. The two `-zones` research-preview files that
-  proved the grammar have been folded into their originals and no longer exist.
+  full-height columns, numbered first-class data flows carrying what moves and the threats and
+  controls that ride them, and standalone governance call-outs across the bottom band. The two
+  `-zones` research-preview files that proved the grammar have been folded into their originals
+  and no longer exist.
+
+  The crossing rule these were first built under is gone. It required a component at every band
+  crossing, and the only way four drawings could satisfy it was to invent an `Egress control`
+  box — a control wearing a component's name, which the rest of the ontology forbids. What
+  stands in its place is the provenance test: a block must be a tier somebody runs. That is a
+  build failure, and the count is zero.
 
 - **First-party vs third-party (2026-08)** renamed what had been the OSS/vendored split, and
   the names now say what actually differs: who supplies the harness. The first-party drawing is
@@ -52,9 +58,10 @@ workflow with a different tool set, a single node, or a control drawn as a place
 - **Personal autonomous agent** is the always-on harness: local tools on the managed endpoint,
   the AI gateway as the general-purpose exit, and the messaging leg — bridges, relay, platform
   and an unbounded sender set — that no other endpoint architecture has.
-- **Local model runtime** is the crossing rule's smallest demonstration: the loopback API is a
-  registered crossing because it is the endpoint's admission surface, and the weight fetch
-  goes through the egress tier.
+- **Local model runtime** is the catalogue's smallest drawing, and the point of it is one
+  block: the loopback inference API, which authenticates nothing by default on any of the three
+  runtimes in common use. The weight fetch from a public hub is the other half — an unsigned
+  artifact arriving over the same path.
 
 ### Cloud & hosted (6)
 
@@ -93,6 +100,14 @@ workflow with a different tool set, a single node, or a control drawn as a place
   AI chat is the only architecture using all five bands — and its sharpest control, that the
   same client with a personal login is the consumer product carrying none of the enterprise
   terms, is now a visible band crossing rather than a sentence in a note.
+
+- **The low-code builder is the catalogue's one exception to the model path.** Everywhere else
+  the AI gateway is where inference crosses. There, the vendor calls its own model on its own
+  key, and our gateway carries tools and data only — so `patternModelPath` gained a
+  precondition (`requiresItem: Model proxy`) rather than an exception list. Two deviations on
+  the file record why, including why the platform is one block: with no customer-hosted runtime
+  on offer, drawing its orchestrator, harness and sandbox separately would imply a visibility
+  we do not have.
 
 ## Disabled — 17
 

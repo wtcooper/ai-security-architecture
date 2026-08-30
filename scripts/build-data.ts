@@ -36,7 +36,7 @@ import type {
 } from "../src/lib/types";
 import { CAPABILITY_STATUSES, FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { chipSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
 import {
   ACTOR_IDS,
   BANDS,
@@ -781,8 +781,6 @@ function checkArchetypes(
  * labels that may never be items, the named item packs a block can reference by name, and the
  * retirement redirects that point an author at the surviving name for a concept.
  */
-/** Collected across all architectures and reported once (see checkDiagramCollisions). */
-const pinGutterWarnings: string[] = [];
 /** Band crossings with no inline control pinned at either end. Observation, never a failure. */
 const uncontrolledCrossings: string[] = [];
 
@@ -1069,16 +1067,15 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   }
   const once = (m: Map<string, number>) => [...m.values()].filter((n) => n === 1).length;
   const zoned = archs.filter((a) => a.zones?.length).length;
+  // The provenance test, an error since the rebuild took the backlog from six to zero. A
+  // component is a tier somebody runs; a name that only describes a check is a control, and a
+  // control belongs on the drawing as a pin and in the governance band as a call-out.
   if (controlBlocks.length) {
-    console.log(`controls drawn as components: ${controlBlocks.length} (rebuild backlog)`);
     for (const w of controlBlocks) console.log(`  ~ ${w}`);
+    fail(`${controlBlocks.length} control(s) drawn as components — pin them instead`);
   }
   if (uncontrolledCrossings.length) {
     console.log(`band crossings with no inline control pinned: ${uncontrolledCrossings.length} (observation)`);
-  }
-  if (pinGutterWarnings.length) {
-    console.log(`pin placement: ${pinGutterWarnings.length} pin(s) in a band gutter`);
-    for (const w of pinGutterWarnings) console.log(`  ~ ${w}`);
   }
   console.log(
     `vocabulary census: ${titles.size} distinct block titles (${once(titles)} used once), ` +
@@ -1306,30 +1303,40 @@ function checkDiagramCollisions(
     );
   }
 
-  // A pin anchored on an edge whose midpoint falls in the gutter between two bands puts a
-  // control in no-man's-land: it belongs inside a band, or on a band's edge, or nowhere.
-  // Reported rather than failed while the catalogue is rebuilt; flips to an error in Wave F.
+  // Where an edge-anchored pin may legibly sit. The first version of this check demanded the
+  // midpoint fall inside some band, and it fired on all four of the catalogue's crossings —
+  // which is the one place a control most belongs, since a band crossing is by construction
+  // the gutter between two bands. The check was contradicting its own stated intent ("inside a
+  // band, or on a band's edge"). What it should test is that the pin sits somewhere along the
+  // run the edge actually covers: between the outer edges of its two endpoints' bands. A pin
+  // outside that span has drifted off its own arrow, which is the real defect.
   const ZONE_PAD = 16;
-  const bandSpans = (arch.zones ?? [])
-    .filter((z) => z.owner !== "governance")
-    .flatMap((z) => {
-      const cs = arch.blocks.filter((b) => b.zone === z.id && !b.parent).map((b) => b.col);
-      const cols = layout.columns ?? [];
-      if (!cs.length || !cols.length) return [];
-      const lo = cols[Math.min(...cs)];
-      const hi = cols[Math.max(...cs)];
-      return lo && hi ? [{ x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD }] : [];
-    });
-  if (bandSpans.length) {
+  const cols = layout.columns ?? [];
+  const spanOfZone = new Map<string, { x0: number; x1: number }>();
+  for (const z of arch.zones ?? []) {
+    const cs = arch.blocks.filter((b) => b.zone === z.id && !b.parent).map((b) => b.col);
+    if (!cs.length || !cols.length) continue;
+    const lo = cols[Math.min(...cs)];
+    const hi = cols[Math.max(...cs)];
+    if (lo && hi) spanOfZone.set(z.id, { x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD });
+  }
+  if (spanOfZone.size) {
+    const zoneOfBlock = new Map(arch.blocks.map((b) => [b.id, b.zone ?? ""]));
     const pinnedEdges = new Set(
       [...arch.pins.capabilities, ...arch.pins.risks].map((p) => p.at).filter((at) => at.includes("->")),
     );
     for (const e of layout.edges) {
       const ref = `${e.from}->${e.to}`;
       if (!pinnedEdges.has(ref) && !pinnedEdges.has(`${e.to}->${e.from}`)) continue;
-      if (bandSpans.some((b) => e.midX >= b.x0 && e.midX <= b.x1)) continue;
-      pinGutterWarnings.push(
-        `${where}: pin on ${ref} sits in the gutter between bands — move a block so the edge's midpoint falls inside a band, or re-anchor the pin`,
+      const ends = [e.from, e.to]
+        .map((id) => spanOfZone.get(zoneOfBlock.get(id) ?? ""))
+        .filter(Boolean) as { x0: number; x1: number }[];
+      if (ends.length < 2) continue;
+      const x0 = Math.min(...ends.map((s) => s.x0));
+      const x1 = Math.max(...ends.map((s) => s.x1));
+      if (e.midX >= x0 && e.midX <= x1) continue;
+      fail(
+        `${where}: pin on ${ref} sits outside the bands its edge connects — move a block so the edge's midpoint falls on the run, or re-anchor the pin`,
       );
     }
   }
@@ -1342,6 +1349,26 @@ function checkDiagramCollisions(
     // Tag width depends on the code ("R01"), which is constant-width here.
     const { rects } = tagSpots(Array.from({ length: n }, () => 32), layout.blocks[at], edgeGeoOf(at));
     checkSpots("risk tag", at, rects, layout.blocks[at] ? at : undefined);
+  }
+
+  // Flow badges were the one pin class nobody checked, and it showed: the personal agent had an
+  // F4 sitting across the Downstream services title bar. Their geometry is fixed by the
+  // renderer — a 28x17 pill at the edge midpoint, stepping right for each additional flow on
+  // the same edge — so the same collision test applies.
+  const flowsByEdge = new Map<string, number>();
+  for (const f of arch.flows ?? []) {
+    for (const raw of f.path) {
+      const ref = typeof raw === "string" ? raw : raw.follow;
+      const found =
+        layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
+        layout.edges.find((e) => `${e.to}->${e.from}` === ref);
+      if (!found) continue;
+      const key = `${found.from}->${found.to}`;
+      flowsByEdge.set(key, (flowsByEdge.get(key) ?? 0) + 1);
+    }
+  }
+  for (const [key, n] of flowsByEdge) {
+    checkSpots("flow badge", key, flowBadgeSpots(n, edgeGeoOf(key)!));
   }
 }
 

@@ -873,9 +873,9 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] E-3 Low-code **last**: vendor calls its own provider externally; our gateway carries tools and data only; maker-credential ambient authority; DLP publish gate
 
 ### Wave F — enforcement and close-out
-- [ ] F-1 Provenance test report-only → error
-- [ ] F-2 `npm run audit` regenerated; catalogue doc and ontology audit updated
-- [ ] F-3 Final Playwright pass over all 13 against the success criteria below
+- [x] F-1 Provenance test report-only → error
+- [x] F-2 `npm run audit` regenerated; catalogue doc and ontology audit updated
+- [x] F-3 Final Playwright pass over all 13 against the success criteria below
 
 ---
 
@@ -901,3 +901,49 @@ Per architecture, in order:
 | Pins | Every pin inside a block or on a band edge; none floating between two bands |
 | Standards | Zero controls-as-components under the provenance test; no zone present without content; no component invented to satisfy a rule |
 | Fidelity | Each architecture's exemplars name the researched technology, and the flows match the topology the research established |
+
+
+## Wave F closeout (2026-08-30)
+
+**F-1 — both report-only checks are errors.** The provenance test (`controlBlockTitles`) fails
+the build; verified by renaming a block to `Egress control` and watching it fail. The
+pin-placement check was rewritten before flipping: it demanded an edge-anchored pin's midpoint
+fall *inside* a band, and fired on all four of the catalogue's band crossings — the one place a
+control most belongs. It now requires the pin to sit within the run its own edge covers, which
+is what its own comment always claimed, and it fails the build.
+
+**A third check was added that nobody had asked for, because the visual pass found what it
+catches.** Flow badges were the one pin class with no collision test, and twenty of them were
+sitting on blocks — including an `F4` across the personal agent's *Downstream services* title
+bar. Placement now comes from a shared `flowBadgeSpots()` so the checker and the renderer
+cannot drift, and both orientations stack in a column: a 44px gutter fits one badge across, not
+two. Count is zero.
+
+**F-2 — docs regenerated.** `npm run audit` diffed clean apart from the low-code rebuild, with
+one real catch: `riskRetrievalVectorStorePoisoning` had dropped out of the catalogue when the
+old *Connected systems* block went. Re-pinned on `orgData`, where the poisoning actually
+happens — the retrieval source, not the model. Unpinned risks are back to 7 of 36, the
+pre-rebuild baseline.
+
+`vocabulary.yaml` had two self-contradictions left over from the crossing rule: `Service edge`
+and `Identity & secure edge` were registered as valid components *and* denylisted as controls.
+Both are now retirement redirects, and the capability-embodiment lists no longer name blocks
+that can never be drawn.
+
+**F-3 — all 13 inspected in the browser.** Bands render in order, governance spans the bottom,
+nesting reads as containment (the multi-agent supervisor, the personal agent's sandbox, the
+single agent's in-process tool set), both model paths are traceable on the third-party coding
+agent, and the anonymous origin on the MCP publisher draws as an arrow from nothing.
+
+### The density criterion was not met, and should be retired
+
+Stated target: ink density ≥30%. **Measured: 15.6%–25.6%, mean 20.3%** — up from 14.5% before
+the grid retune and 19.0% before `ROW_GAP` came down from 68 to 54.
+
+The target was set before anything was measured, and it is not reachable for this class of
+drawing. Blocks fill roughly 80% of their column width but far less of their row height,
+because a row is sized by its tallest member and most rows have one. The remaining whitespace
+is doing work: it is the gutter the arrows route through and the pins hang in. Squeezing
+further trades legibility — which the per-architecture inspection is there to protect — for a
+number. The honest criterion is the one the visual pass actually applies: no collisions, every
+arrow traceable, and the whole drawing readable in one screen. All 13 meet that.

@@ -27,7 +27,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
@@ -778,25 +778,34 @@ export function FlowDiagramRF({
       pinsByEdge.set(at, list);
     }
 
-    // Spike grammar: the numbered flow tags each edge carries, stacked under the midpoint.
+    // The numbered flow badges each edge carries. Placement comes from flowBadgeSpots so the
+    // build's collision check and this renderer cannot drift: below the midpoint on a
+    // horizontal arrow, beside it on a vertical one.
+    const flowsByEdge = new Map<string, typeof archetype.flows>();
     for (const f of archetype.flows ?? []) {
       for (const raw of f.path) {
         const ref = typeof raw === "string" ? raw : raw.follow;
         const geo = edgeGeo.get(ref) ?? edgeGeo.get(ref.split("->").reverse().join("->"));
         if (!geo) continue;
         const key = `${geo.from}->${geo.to}`;
-        const list = pinsByEdge.get(key) ?? [];
-        const nth = list.filter((p) => p.kind === "flow").length;
+        flowsByEdge.set(key, [...(flowsByEdge.get(key) ?? []), f]);
+      }
+    }
+    for (const [key, fs] of flowsByEdge) {
+      const geo = edgeGeo.get(key)!;
+      const spots = flowBadgeSpots(fs!.length, geo);
+      const list = pinsByEdge.get(key) ?? [];
+      fs!.forEach((f, i) => {
         list.push({
           kind: "flow",
-          dx: -14 + nth * 30,
-          dy: 16,
+          dx: spots[i].x - geo.midX,
+          dy: spots[i].y - geo.midY,
           code: f.id,
           title: `${f.id} · ${f.title}`,
           body: f.moves,
         });
-        pinsByEdge.set(key, list);
-      }
+      });
+      pinsByEdge.set(key, list);
     }
 
     const out: Edge[] = [];

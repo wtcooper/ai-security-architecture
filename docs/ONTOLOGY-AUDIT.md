@@ -108,9 +108,50 @@ entitlements` → `Identity services`.
 ### Constraints learned during the migration
 
 - Columns must give each band a contiguous run — now build-enforced.
-- Bands replace frames; `RF_CONFIG` is empty by design.
+- Bands replace frames; `rf-config.ts` was deleted once every drawing carried them.
 - Check `npm run audit` after any fold: dropping a block can orphan a risk pinned nowhere else,
-  which is how `riskCovertChannelsInModelOutputs` was nearly lost from the catalogue.
-- `Egress control` went from registered-but-unused to four uses. When the crossing rule bit on
-  an artifact fetch, the honest answer was already in the registry — which is the reuse rule
-  working rather than a coincidence.
+  which is how `riskCovertChannelsInModelOutputs` was nearly lost from the catalogue, and how
+  `riskRetrievalVectorStorePoisoning` was caught during the low-code rebuild.
+
+## The rebuild (2026-08-30)
+
+The migration above put every drawing on the grammar. The rebuild that followed asked a harder
+question of each one — whether it is *true* — and rewrote all thirteen against research rather
+than against the previous drawing. Three rules changed as a result, and each change was made
+because a drawing showed the rule was wrong, not because a drawing was inconvenient.
+
+**The crossing rule was removed.** It required a component at every band crossing, and the
+catalogue satisfied it four times by inventing an `Egress control` box — a control wearing a
+component's name, which is exactly what the rest of the ontology forbids. The rule was
+manufacturing the violations it was meant to prevent. It is replaced by an observation that
+reports crossings with no inline control pinned; that count is currently zero, so nothing was
+lost by removing the coercion.
+
+**The provenance test replaced it, and is now an error.** A component must be a tier somebody
+runs. "No controls as components" cannot be taken literally — it would delete the AI gateway,
+which is a real tier running real software — so the test is provenance, not vocabulary. The
+denylist (`controlBlockTitles`) fails the build; the rebuild took it from six drawn controls to
+zero.
+
+**Nesting is unlimited.** `parent:` on a block, at any depth, with `kind: boundary` for pure
+containment and `kind: origin` for an anonymous edge source. The sandbox came back on the
+personal autonomous agent — the archetype where it is the point — without needing a special
+case, and band spans exclude nested blocks because a nested `col` is parent-local.
+
+**Two more checks became errors** once the backlog they tracked reached zero: the provenance
+test above, and the pin-placement check. The latter was rewritten first: it demanded an
+edge-anchored pin's midpoint fall inside some band, and fired on all four of the catalogue's
+band crossings — the one place a control most belongs. It now requires only that the pin sit
+within the run its own edge covers, which is what its comment always claimed.
+
+**One pattern gained a precondition.** `patternModelPath` now carries `requiresItem: Model
+proxy`. The low-code builder is the single architecture where our gateway brokers no inference
+— the vendor calls its own model — and the honest signal for that is the gateway's contents
+rather than an exception list.
+
+| | After migration | After rebuild |
+| --- | --- | --- |
+| Distinct block titles | 68 — 48 used once | **57 — 36 used once** |
+| Distinct item labels | 111 — 78 used once | **84 — 47 used once** |
+| Controls drawn as components | 6 | **0, and a build failure** |
+| Crossings with no inline control | not measured | **0** |

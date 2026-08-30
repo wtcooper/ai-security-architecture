@@ -43,7 +43,7 @@ export const ICON_NAMES = [
 // architecture in one glance, with short arrows between things that talk to each other.
 const COL_W = 176;
 const COL_GAP = 44;
-const ROW_GAP = 68;
+const ROW_GAP = 54;
 const MARGIN_X = 18;
 /** Room above the first row for tabs and risk-tag stacks; grown further when a stack is deep. */
 const MARGIN_TOP = 60;
@@ -375,6 +375,29 @@ export function chipSpots(
       ? { x: edge.midX + off, y: edge.midY }
       : { x: edge.midX, y: edge.midY + off };
   });
+}
+
+/**
+ * The numbered flow badges an edge carries. Both orientations stack the badges in a column,
+ * because the space an edge midpoint sits in is a gutter: 44px wide between columns, and a
+ * second badge laid alongside the first needs 58. Below the midpoint on a horizontal arrow,
+ * beside it on a vertical one — on the right, since risk tags take the left. The first version
+ * ran every stack rightward and downward from the midpoint regardless, which walked twenty
+ * badges onto the blocks underneath them.
+ */
+export const FLOW_BADGE_W = 28;
+export const FLOW_BADGE_H = 17;
+export function flowBadgeSpots(n: number, edge: PinEdgeGeo): Rect[] {
+  return Array.from({ length: n }, (_, i) =>
+    edge.horizontal
+      ? { x: edge.midX - 14, y: edge.midY + 16 + i * 21, w: FLOW_BADGE_W, h: FLOW_BADGE_H }
+      : {
+          x: edge.midX + 12,
+          y: edge.midY - (n * 21 - 4) / 2 + i * 21,
+          w: FLOW_BADGE_W,
+          h: FLOW_BADGE_H,
+        },
+  );
 }
 
 /**
