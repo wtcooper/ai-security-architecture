@@ -467,6 +467,10 @@ function checkArchetypes(
     if (!arch.description?.length) fail(`${where}: needs a description`);
     if (!arch.sources?.length) fail(`${where}: needs at least one source`);
     if (!arch.blocks?.length) fail(`${where}: needs blocks`);
+    // Every architecture declares its ownership bands. Mandatory since the 2026-08-30
+    // migration: the whole catalogue is on this grammar, so a drawing without bands is an
+    // unfinished drawing rather than an older one.
+    if (!arch.zones?.length) fail(`${where}: needs zones (data/ONTOLOGY.md §4a)`);
     if (!arch.edges?.length) fail(`${where}: needs edges`);
     for (const ex of arch.exemplars ?? []) {
       // Named products age fast. An undated one silently becomes a wrong claim.
@@ -1024,9 +1028,17 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
       `${labels.size} distinct item labels (${once(labels)} used once), ` +
       `${zoned}/${archs.length} architectures on the zone grammar`,
   );
+  // Conformance became a build failure on 2026-08-30, when the migration reached zero
+  // warnings across all 13 architectures. The criterion recorded in docs/ONTOLOGY-AUDIT.md
+  // was "the backlog is empty and one full authoring cycle has passed without a false
+  // positive"; the first-party coding agent was that cycle, and the three false positives it
+  // did surface were fixed in the checker rather than waived in the data.
   if (warnings.length) {
-    console.log(`vocabulary: ${warnings.length} conformance warning(s)`);
     for (const w of warnings) console.log(`  ~ ${w}`);
+    fail(
+      `vocabulary: ${warnings.length} conformance violation(s) — reuse a canonical name, ` +
+        "register a new one in data/reference/vocabulary.yaml in this change, or record a deviation",
+    );
   } else {
     console.log("vocabulary: conformant");
   }

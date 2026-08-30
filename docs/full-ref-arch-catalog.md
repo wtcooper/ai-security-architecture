@@ -10,7 +10,7 @@ re-run `npm run data`).
 Most of the parked entries fell to one test: *is this a distinct architecture, or an agent
 workflow with a different tool set, a single node, or a control drawn as a place?*
 
-## Active — 12
+## Active — 13
 
 ### Endpoint (4)
 
@@ -34,28 +34,27 @@ workflow with a different tool set, a single node, or a control drawn as a place
   sits the private package registry, because in that archetype the supply chain delivers the
   agent itself.
 
-- **The vendored/OSS split (2026-08)** replaced a single coding-agent diagram that carried an
-  either/or model path. The ontology bans conditional edges: the OSS harnesses differ in
-  custody (pasted keys vs session credentials), supply chain (community registries deliver
-  the harness itself), remote admission (bearer-secret serve ports, relay tunnels and chat
-  bridges vs an owner-bound vendor relay) and the absence of any control plane — four
-  graph-level differences, so two architectures. All three agent architectures on this
-  surface now draw the standard **Remote device** block on the user's path; its admission
-  model degrades across the surface (vendor account → bearer secret / platform identity →
-  raw platform identity from an unbounded sender set), which is the endpoint story in one
+  It replaced a single diagram that carried an either/or model path, which the ontology bans:
+  the two differ in custody, supply chain, remote admission and the absence of any control
+  plane — four graph-level differences, so two architectures. All three agent architectures on
+  this surface draw the standard **Remote device** block on the user's path, and its admission
+  model degrades across them (vendor account → bearer secret or platform identity → raw
+  platform identity from an unbounded sender set), which is the endpoint story in one
   comparison.
 
-- **Coding and desktop agents** absorbs the former Desktop AI assistant: same engine, different
-  GUI, slightly different tool and sandbox controls. The vendor application is drawn as a
-  containment frame around the harness and tool services; sandboxed tools are an item inside
-  Tool services; the OS permission layer became the standard permission control on the
+- **Third-party coding & desktop agents** absorbs the former Desktop AI assistant: same engine,
+  different GUI. The vendor band carries its control plane; sandboxed tools are an item inside
+  Tool services; the OS permission layer is the standard permission control on the
   harness→tools edge.
-- **Personal autonomous agent** is the sandbox-wrapped harness: local tools only inside the
-  boundary (files, shell, skills), the AI gateway as the general-purpose exit to the model
-  provider and remote tool services, and a read-only pull from the private package registry as
-  the only other opening.
-- **Local model runtime** dropped its "Local guardrails" block — guardrails are a control on
-  the API→runtime path — and its weights block is now the standard amber **Storage**.
+- **First-party coding & desktop agents** is that drawing with the vendor band deleted, and
+  the private package registry standing where the vendor column was — in this archetype the
+  supply chain delivers the agent itself.
+- **Personal autonomous agent** is the always-on harness: local tools on the managed endpoint,
+  the AI gateway as the general-purpose exit, and the messaging leg — bridges, relay, platform
+  and an unbounded sender set — that no other endpoint architecture has.
+- **Local model runtime** is the crossing rule's smallest demonstration: the loopback API is a
+  registered crossing because it is the endpoint's admission surface, and the weight fetch
+  goes through the egress tier.
 
 ### Cloud & hosted (6)
 
@@ -68,10 +67,12 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 5 | Self-hosted open-weights inference | `archSelfHostedInference` | `cloud-self-hosted-inference.yaml` |
 | 6 | Fine-tuning and model registry pipeline | `archTrainingPipeline` | `cloud-training-pipeline.yaml` |
 
-- **Self-hosted inference** is the local model runtime with an AI gateway in front (standard
-  gateway items) and a governance plane behind; GPU fleet, batch and KV cache are items of the
-  Inference runtime; weights live in amber **Storage**, fed by a public hub or a self-trained
-  model from the fine-tuning pipeline.
+- **All six are on the zone grammar.** The three agent architectures — single, chat and
+  multi-agent — are deliberately one drawing three times, differing only in their trigger and
+  their fan-out. The other three each stress the grammar somewhere different: the MCP server
+  inverts the band mapping because it is drawn from the publisher's chair, the training
+  pipeline draws external on the left because it is an ingest pipeline, and self-hosted
+  inference is the local model runtime with an AI gateway in front of it.
 
 ### Third-party SaaS (3)
 
@@ -85,6 +86,13 @@ workflow with a different tool set, a single node, or a control drawn as a place
   runtime the customer configures — and split by author surface: **UI/low-code** (builder UIs:
   Copilot Studio / Foundry class) vs **API/SDK** (Anthropic managed agents, hosted background
   coding agents, hyperscaler SDK runtimes).
+
+- **This is where the vendor band earns its keep**, and where ONTOLOGY §3's three-zone rule
+  stops being prose and becomes geometry: zone 1 is inside the vendor block and never drawn,
+  zone 2 is the pins on it, zone 3 is the band boundary where our own gateway sits. Enterprise
+  AI chat is the only architecture using all five bands — and its sharpest control, that the
+  same client with a personal login is the consumer product carrying none of the enterprise
+  terms, is now a visible band crossing rather than a sentence in a note.
 
 ## Disabled — 17
 
