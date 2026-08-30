@@ -857,13 +857,18 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | Consumer product | external | `componentApplication` |
 | Enterprise AI chat with connectors | Vendor chat service | provider | `componentApplication` |
 | Enterprise AI chat with connectors | User-connected systems | service | `componentDataSources` |
-| Enterprise AI chat with connectors | Tenant governance | governance | (none) |
-| UI/low-code managed agent runtime | Identity & entitlements | service | (none) |
-| UI/low-code managed agent runtime | Attached knowledge | external | `componentDataSources` |
+| Enterprise AI chat with connectors | Identity services | governance | (none) |
+| Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
+| Enterprise AI chat with connectors | Supply-chain assurance | governance | (none) |
+| Enterprise AI chat with connectors | Observability & response | governance | (none) |
+| UI/low-code managed agent runtime | Enterprise data | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
 | UI/low-code managed agent runtime | Connected systems | service | `componentDataSources` |
-| UI/low-code managed agent runtime | Maker governance | governance | (none) |
+| UI/low-code managed agent runtime | Identity services | governance | (none) |
+| UI/low-code managed agent runtime | Policy & authorization | governance | (none) |
+| UI/low-code managed agent runtime | Supply-chain assurance | governance | (none) |
+| UI/low-code managed agent runtime | Observability & response | governance | (none) |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
 | API/SDK managed agent runtime | Application front end | service | `componentApplication` |
 | API/SDK managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
@@ -872,7 +877,11 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Managed tool gateway | provider | (none) |
 | API/SDK managed agent runtime | AI gateway | service | (none) |
 | API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
-| API/SDK managed agent runtime | Customer governance | governance | (none) |
+| API/SDK managed agent runtime | Identity services | governance | (none) |
+| API/SDK managed agent runtime | Secrets & key management | governance | (none) |
+| API/SDK managed agent runtime | Policy & authorization | governance | (none) |
+| API/SDK managed agent runtime | Supply-chain assurance | governance | (none) |
+| API/SDK managed agent runtime | Observability & response | governance | (none) |
 
 ## 5. Controls-guidance coverage
 
@@ -898,9 +907,9 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | use | draft | 7 | Runtime action authorization, Third-party risk management platform for AI vendors, Agent memory & context protection, Secrets management & ephemeral credentials |
 | Local model runtime | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 4 | Inter-component & inter-agent transport security, Agent credential isolation & delegation control, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Shadow AI discovery |
-| Enterprise AI chat with connectors | use | draft | 5 | Encryption & key management for AI assets |
-| UI/low-code managed agent runtime | use | draft | 5 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 5 | Secrets management & ephemeral credentials, Encryption & key management for AI assets, Network segmentation & egress control |
+| Enterprise AI chat with connectors | use | draft | 5 | Third-party risk management platform for AI vendors, Agent & tool registry, Encryption & key management for AI assets |
+| UI/low-code managed agent runtime | use | draft | 5 | Network segmentation & egress control, Shadow AI discovery, Kill switch, quarantine & decommissioning |
+| API/SDK managed agent runtime | hybrid | draft | 5 | Kill switch, quarantine & decommissioning, Secrets management & ephemeral credentials, Encryption & key management for AI assets, Network segmentation & egress control |
 
 ### 5b. Tool registry
 
