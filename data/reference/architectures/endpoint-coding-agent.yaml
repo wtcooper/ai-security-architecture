@@ -257,6 +257,30 @@ blocks:
           container or VM whose own configuration the agent must not be able to reach. The
           control that turns "approve every command" into "approve the ones that leave the box".
 
+  - id: mcpGateway
+    kind: service
+    title: MCP gateway
+    col: 3
+    row: 1
+    note: >
+      The customer-operated crossing where the vendor's cloud and scheduled sessions are
+      admitted back into org systems — the connector marketplace on the organisation's own
+      gateway tier. The hosted agent gets the data it needs through here, or it does not get
+      it at all.
+    items:
+      - id: marketplace
+        label: Connector marketplace
+        icon: db
+        note: Which org connectors a vendor-hosted session may be offered — admission, not discovery.
+      - id: scopedGrants
+        label: Scoped grants & BYOK
+        icon: key
+        note: Short-lived, audience-bound grants on the organisation's keys — never a standing org credential parked in the vendor's cloud.
+      - id: gwAudit
+        label: Audit tap
+        icon: doc
+        note: The org-side record of every hosted-session call into org systems.
+
   - id: vendor
     kind: provider
     title: Vendor service
@@ -388,6 +412,22 @@ edges:
       is that the session's admission decision now lives with the vendor's identity system —
       and with whatever a chat channel admits.
   - from: vendor
+    to: mcpGateway
+    path: external
+    label: hosted sessions reach back
+    note: >
+      The cloud and scheduled sessions run in the vendor's environment and need org data —
+      repositories, tickets, documents. That reach exists only through the organisation's
+      own marketplace, on grants the organisation issued and can revoke.
+  - from: mcpGateway
+    to: remote
+    path: primary
+    route: vh
+    label: scoped org reach
+    note: >
+      Admitted connectors land on org systems under audience-bound grants — the org-side
+      audit records what the vendor's environment actually touched.
+  - from: vendor
     to: provider
     path: primary
     bidir: true
@@ -460,6 +500,11 @@ pins:
       note: >
         The machine also holds SSH keys, cloud credentials and browser sessions, and outside the
         sandbox nothing separates them from the agent's shell on the way out.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: vendor->mcpGateway
+      note: >
+        A hosted session arriving with an org connector grant is the vendor's infrastructure
+        exercising the organisation's authority — steered or not, the grant is what bounds it.
     - risk: riskStaleAgentIdentityBinding
       at: remoteDevice->vendor
       note: >
@@ -503,6 +548,12 @@ pins:
       note: >
         Keep the user's SSH keys, cloud credentials and browser profile outside the agent's
         reachable filesystem and environment.
+    - capability: capabilitySecretsManagement
+      at: mcpGateway
+      note: >
+        Org access for hosted sessions rides short-lived, connector-scoped grants issued at
+        the marketplace, on the organisation's own keys — the vendor's cloud never holds a
+        standing org credential.
     - capability: capabilityAgentRuntimeEnforcement
       at: remoteDevice->vendor
       note: >
@@ -582,6 +633,15 @@ scenarios:
         note: Execution is local, with the machine's full context — the person just is not at the keyboard.
       - follow: client->vendor
         note: Results stream back through the relay; approvals can be answered from the phone.
+  - title: A hosted session reaches back
+    steps:
+      - follow: remoteDevice->vendor
+        note: A cloud or scheduled session is raised in the vendor's environment — nobody's laptop is involved.
+      - follow: vendor->mcpGateway
+        note: The hosted agent asks for org data through the organisation's own marketplace — the only door there is.
+      - follow: mcpGateway->remote
+        note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and the org-side audit records it.
+
 deviations:
   - subject: The desktop assistant is folded into this architecture rather than drawn separately
     reason: >

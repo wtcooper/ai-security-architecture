@@ -213,12 +213,38 @@ blocks:
         icon: plug
         note: The tool population the customer admits — the part of the tool plane the customer owns.
 
+  - id: mcpGateway
+    kind: service
+    title: MCP gateway
+    col: 3
+    row: 2
+    note: >
+      The customer-operated crossing where the vendor's hosted agents are admitted into org
+      tools and data — the connector marketplace on the organisation's own gateway tier. The
+      only way those agents get the access they need, and the place that access is governed:
+      which connectors exist, on what scoped grants, recorded by whom.
+    items:
+      - id: marketplace
+        label: Connector marketplace
+        icon: db
+        note: The connectors and MCP servers hosted agents may be offered — admission, not discovery.
+      - id: scopedGrants
+        label: Scoped grants & BYOK
+        icon: key
+        note: >
+          Short-lived, audience-bound grants issued per connector, backed by the
+          organisation's own keys where the vendor supports it.
+      - id: gwAudit
+        label: Audit tap
+        icon: doc
+        note: Every vendor-side call into org systems recorded on the customer's side of the boundary.
+
   - id: downstream
     kind: external
     title: Downstream services
     cosaiComponent: componentDataSources
     col: 3
-    row: 2
+    row: 3
     note: >
       The records the agent acts on under grants the customer issues, and the external content
       it reads — which comes back as context nothing has authenticated.
@@ -317,13 +343,22 @@ edges:
       Automatic for a declarative agent, opt-in for custom code. The controls on this edge are
       the ones the escape hatch silently drops.
   - from: toolGateway
-    to: downstream
+    to: mcpGateway
     path: external
     bidir: true
-    label: tool calls / content
+    label: vendor boundary
     note: >
-      Actions land on customer systems under per-tool grants; whatever is read comes back as
-      context indistinguishable from instruction.
+      The zone-three crossing: the vendor's environment ends here. Tool calls arrive from
+      infrastructure the customer cannot inspect and are admitted — or refused — by a
+      component the customer runs.
+  - from: mcpGateway
+    to: downstream
+    path: primary
+    bidir: true
+    label: scoped tool calls / content
+    note: >
+      Actions land on customer systems under the marketplace's scoped grants; whatever is
+      read comes back as context indistinguishable from instruction.
   - from: governance
     to: toolGateway
     path: governance
@@ -355,11 +390,17 @@ pins:
       at: managedMemory
       note: Cross-user memory scope puts one user's content in another user's turn, selected by a configuration flag.
     - risk: riskPromptInjection
-      at: toolGateway->downstream
+      at: mcpGateway->downstream
       note: Content read through tools re-enters the loop as context; the platform's guardrails see it, nothing authenticates it.
     - risk: riskRogueActions
-      at: toolGateway->downstream
-      note: Consequential writes on customer systems from a loop nobody watches, bounded only by the grants and policy the customer configured.
+      at: mcpGateway->downstream
+      note: Consequential writes on customer systems from a loop nobody watches, bounded only by the grants the marketplace issued.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: toolGateway->mcpGateway
+      note: >
+        A hosted agent arriving with a connector grant is the vendor's infrastructure
+        exercising the customer's authority — the crossing where a steered agent's request
+        is indistinguishable from a legitimate one.
     - risk: riskStaleAgentIdentityBinding
       at: governance->toolGateway
       note: Revocable per-agent principals only help if revocation actually happens when agents are retired or repurposed.
@@ -377,6 +418,22 @@ pins:
     - capability: capabilityIga
       at: endUser->frontEnd
       note: Establish the user's identity here and propagate it to the tool call, so authorization stays per-user.
+    - capability: capabilitySecretsManagement
+      at: mcpGateway
+      note: >
+        Grants issued at the marketplace are short-lived, connector-scoped and backed by the
+        organisation's own keys — the vendor's environment never holds a standing org
+        credential it could lose.
+    - capability: capabilityEncryptionKeyManagement
+      at: governance
+      note: >
+        BYOK everywhere the platform supports it — the grants the marketplace issues and the
+        data the vendor holds both sit on keys the organisation can revoke.
+    - capability: capabilityEgressControl
+      at: mcpGateway->downstream
+      note: >
+        Hosted agents reach the connectors the marketplace names and nothing else — the org
+        side of the boundary is deny-by-default.
     - capability: capabilityToolPermissionScoping
       at: managedRuntime->toolGateway
       note: >
@@ -422,9 +479,11 @@ scenarios:
         note: The invocation carries two identities — the application's and the user's.
       - follow: managedRuntime->toolGateway
         note: The loop plans; the tool call leaves under the agent's own principal, scoped per tool.
-      - follow: toolGateway->downstream
-        note: The action lands on customer systems under the grant the customer issued.
-      - follow: downstream->toolGateway
+      - follow: toolGateway->mcpGateway
+        note: The call crosses the vendor boundary and is admitted by the customer's own marketplace.
+      - follow: mcpGateway->downstream
+        note: The action lands on customer systems under the scoped, BYOK-backed grant the marketplace issued.
+      - follow: downstream->mcpGateway
         note: Whatever was read returns as context nothing has authenticated.
       - follow: managedRuntime->frontEnd
         note: The response comes back; output handling is still the application's job.

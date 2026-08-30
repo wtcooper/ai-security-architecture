@@ -145,11 +145,35 @@ blocks:
         icon: plug
         note: The vendor's integration layer. Its authorisation model — author or invoker credentials — decides whether publishing an agent is also a privilege grant.
 
+  - id: mcpGateway
+    kind: service
+    title: MCP gateway
+    col: 2
+    row: 2
+    note: >
+      The customer-operated crossing between the vendor's connector framework and the
+      organisation's systems — internal APIs and data fronted by the organisation's own
+      gateway tier, so platform connectors arrive as governed, scoped calls rather than
+      direct reach.
+    items:
+      - id: marketplace
+        label: Connector marketplace
+        icon: db
+        note: Which org systems the platform's agents may be offered at all — admission, not discovery.
+      - id: scopedGrants
+        label: Scoped grants & BYOK
+        icon: key
+        note: Per-connector, per-invoker grants issued on the org's side of the boundary, on the org's keys.
+      - id: gwAudit
+        label: Audit tap
+        icon: doc
+        note: The org-side record of every agent call into org systems — independent of the platform's run history.
+
   - id: connectedData
     kind: service
     title: Connected systems
     col: 2
-    row: 2
+    row: 3
     cosaiComponent: componentDataSources
     note: >
       Whatever the connectors reach. The union across all published agents is the platform's real
@@ -226,13 +250,23 @@ edges:
       Attached knowledge enters agent context as instruction. The write permissions on the source
       folder are the only gate, and they were never designed as one.
   - from: platform
-    to: connectedData
-    path: primary
+    to: mcpGateway
+    path: external
     bidir: true
     label: connector read / write
     note: >
-      The archetype's decisive crossing. Author-delegated grants lend the author's access to every
-      user; invoker-delegated grants preserve the access model the organisation already has.
+      The archetype's decisive crossing, and the vendor boundary. Author-delegated grants lend
+      the author's access to every user; invoker-delegated grants preserve the access model the
+      organisation already has — and the gateway is where the organisation can tell the
+      difference.
+  - from: mcpGateway
+    to: connectedData
+    path: primary
+    bidir: true
+    label: scoped reach
+    note: >
+      Agents reach what the marketplace admitted, on grants the org issued — the union across
+      the population becomes something the org can enumerate instead of discover.
   - from: governance
     to: platform
     path: governance
@@ -246,12 +280,12 @@ edges:
 pins:
   risks:
     - risk: riskAgenticDelegationConfusedDeputy
-      at: platform->connectedData
+      at: platform->mcpGateway
       note: >
         An agent running on its author's credentials lends that access to every colleague who
         invokes it — publishing becomes a privilege grant nobody intended.
     - risk: riskRogueActions
-      at: platform->connectedData
+      at: mcpGateway->connectedData
       note: Agents with write connectors act on production data with no review between authoring and effect.
     - risk: riskShadowAndUnknownAgents
       at: platform
@@ -292,7 +326,7 @@ pins:
       at: platform
       note: Turn on the publication gate so review stands between an author and an audience — the nearest available thing to code review.
     - capability: capabilityNhiManagement
-      at: platform->connectedData
+      at: mcpGateway
       note: Treat every connection an agent holds as a managed non-human identity — owned, scoped, expiring, and revocable as a class.
     - capability: capabilityDataAccessGovernance
       at: connectedData
@@ -324,22 +358,24 @@ scenarios:
         note: The publication gate reviews it — if the platform offers one and an administrator turned it on.
       - follow: consumer->idp
         note: A colleague invokes the shared agent.
-      - follow: platform->connectedData
-        note: The connector executes on the author's credentials — the consumer just read a table they were never entitled to.
+      - follow: platform->mcpGateway
+        note: The connector call crosses the vendor boundary — and the gateway can see whose credentials it carries.
+      - follow: mcpGateway->connectedData
+        note: On author-delegated grants the consumer just read a table they were never entitled to; per-invoker grants are what stop it here.
   - title: A shared drive becomes an instruction channel
     steps:
       - follow: knowledge->platform
         note: Someone writes a document with embedded instructions into the folder an agent uses as grounding.
-      - follow: platform->connectedData
+      - follow: platform->mcpGateway
         note: The injected instruction exercises the agent's connectors — reading what it can reach, sending what it can send.
-      - follow: connectedData->platform
+      - follow: mcpGateway->platform
         note: Retrieved data flows back into the agent's response, for every user who asks.
   - title: The author leaves
     steps:
       - follow: governance->platform
         note: Inventory shows agents whose author has departed — still published, still triggered, still holding grants.
-      - follow: platform->connectedData
-        note: Author-delegated connections keep executing until ownership is transferred or the grants are revoked as a class.
+      - follow: platform->mcpGateway
+        note: Author-delegated connections keep executing until ownership is transferred or the grants are revoked as a class — at the gateway, in one place.
 
 sources:
   - title: "OWASP Top 10 for Agentic Applications 2026 — ASI03 identity and privilege abuse, ASI10 rogue agents"
