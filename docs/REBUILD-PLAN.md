@@ -851,6 +851,7 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] B8 Derive the governance row from the tallest content band (fixes 402px / 222px gaps)
 - [x] B9 Band width from grid columns so an actor-only band leaves no 76px gutter
 - [x] B10 Pin placement — gutter **check** added (report-only; 7 existing violations fixed per architecture during rebuild, flips to error in Wave F). Auto-nudging was tried and abandoned: it moved pins onto blocks, and hiding a placement problem is worse than reporting it: inside a block or on a band edge; never between bands; never open a gap for a pin
+- [x] B12 Grid constants retuned — row gap 116→68, column gap 64→44, margins trimmed. Mean ink density 14.5% → 19.6% with no collisions
 - [x] B11 Re-measured all 13 in the browser; gaps uniform within every architecture; every inter-band gap uniform
 
 ### Wave C — endpoint
@@ -896,6 +897,7 @@ Per architecture, in order:
 |---|---|
 | Build | `npm run data` conformant; `npx tsc --noEmit` clean; `npm run audit` diffed for orphaned risks |
 | Layout | Playwright screenshot of **each** of the 13; inter-band gaps uniform; no gap between the content bands and the governance band; no band-width whitespace without content |
+| **Density** | **Ink density ≥ 30%**, and the whole architecture legible in one glance. Blocks that talk to each other sit adjacent so the arrow between them is short and straight. A block two rows and two columns from the thing it connects to is a layout defect, not a style choice. Baseline before this work was 14.5%; the grid retune took it to 19.6%; the rest comes from re-authoring positions as each architecture is rebuilt. |
 | Pins | Every pin inside a block or on a band edge; none floating between two bands |
 | Standards | Zero controls-as-components under the provenance test; no zone present without content; no component invented to satisfy a rule |
 | Fidelity | Each architecture's exemplars name the researched technology, and the flows match the topology the research established |

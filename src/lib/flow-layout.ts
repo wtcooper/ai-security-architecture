@@ -37,13 +37,17 @@ export const ICON_NAMES = [
   "stop",
 ] as const;
 
+// Gaps are sized for what actually has to fit in them — an orthogonal edge run and its label —
+// not for visual breathing room. Generous gaps pushed connected blocks far apart and left the
+// mean canvas 85% empty, which is the opposite of legible: a reader wants the whole
+// architecture in one glance, with short arrows between things that talk to each other.
 const COL_W = 176;
-const COL_GAP = 64;
-const ROW_GAP = 116;
-const MARGIN_X = 22;
-/** Room above the first row for tabs and risk-tag stacks. */
-const MARGIN_TOP = 68;
-const MARGIN_BOTTOM = 48;
+const COL_GAP = 44;
+const ROW_GAP = 68;
+const MARGIN_X = 18;
+/** Room above the first row for tabs and risk-tag stacks; grown further when a stack is deep. */
+const MARGIN_TOP = 60;
+const MARGIN_BOTTOM = 32;
 
 export const TAB_H = 20;
 /** Items pack two per row inside a standard block. */
@@ -128,7 +132,7 @@ function gridLayout(items: Placed[]): GridResult {
   const colW = Array.from({ length: cols }, (_, c) =>
     used.col.has(c) ? Math.max(COL_W, ...items.filter((p) => p.block.col === c).map((p) => p.w)) : 0,
   );
-  const rowH: number[] = Array.from({ length: rows }, (_, r) => (used.row.has(r) ? 64 : 0));
+  const rowH: number[] = Array.from({ length: rows }, (_, r) => (used.row.has(r) ? 52 : 0));
   for (const p of items) {
     if ((p.block.rowSpan ?? 1) === 1) rowH[p.block.row] = Math.max(rowH[p.block.row], p.h);
   }
