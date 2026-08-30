@@ -12,31 +12,14 @@ export interface RfFrameConfig {
   labelPos?: "top" | "bottom";
 }
 
-export const RF_CONFIG: Record<string, RfFrameConfig> = {
-  archPersonalAgent: {
-    frameLabel: "Sandbox",
-    frameNote:
-      "MicroVM-class boundary: bridges, daemon, memory and local tools run whole inside, with their own kernel, filesystem and network — and no approval prompts, because the boundary replaces them. Three openings: the AI gateway as the general-purpose exit, a read-only pull from the private package registry, and the owner's explicitly shared workspace folders (target state).",
-    members: ["bridges", "toolPlane", "harness", "memory"],
-    hide: [],
-  },
-  archCodingAgent: {
-    frameLabel: "Vendor application",
-    frameNote:
-      "The CLI or desktop GUI the vendor ships: the harness and its tool surface live inside the application, and tool capabilities and connectors are built in and configured there.",
-    members: ["client", "toolPlane"],
-    hide: [],
-    labelPos: "bottom",
-  },
-  archOssCodingAgent: {
-    frameLabel: "Agent application",
-    frameNote:
-      "The open-source harness the developer installs: the loop, its serve mode and its tool surface in one application, configured by files on the same disk — including files that arrive with the repository.",
-    members: ["client", "toolPlane"],
-    hide: [],
-    labelPos: "bottom",
-  },
-};
+/**
+ * Empty by design, not by neglect. Every architecture now declares ownership bands, and a
+ * containment frame drawn inside a band reads as a second boundary of the same kind — so a
+ * zoned drawing states its sandbox on the component and enforces it with the sandboxing
+ * capability instead (data/ONTOLOGY.md §4a). The machinery below stays for any future
+ * architecture that has a real boundary and no bands to carry it.
+ */
+export const RF_CONFIG: Record<string, RfFrameConfig> = {};
 
 export const FRAME_PAD = 26;
 export const FRAME_HEAD = 52;

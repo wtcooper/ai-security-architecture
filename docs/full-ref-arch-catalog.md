@@ -12,29 +12,27 @@ workflow with a different tool set, a single node, or a control drawn as a place
 
 ## Active — 12
 
-### Endpoint (6)
+### Endpoint (4)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
-| 1 | Coding and desktop agents (vendored) | `archCodingAgent` | `endpoint-coding-agent.yaml` |
-| 2 | Open-source coding & desktop agents | `archOssCodingAgent` | `endpoint-oss-coding-agent.yaml` |
+| 1 | Third-party coding & desktop agents | `archCodingAgentThirdParty` | `endpoint-coding-agent-third-party.yaml` |
+| 2 | First-party coding & desktop agents | `archCodingAgentFirstParty` | `endpoint-coding-agent-first-party.yaml` |
 | 3 | Personal autonomous agent | `archPersonalAgent` | `endpoint-personal-agent.yaml` |
 | 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
-| 5 | Personal agent — zone map (spike) | `archPersonalAgentZones` | `endpoint-personal-agent-zones.yaml` |
-| 6 | Coding & desktop agents — zone map (spike) | `archCodingAgentZones` | `endpoint-coding-agent-zones.yaml` |
 
-- **Ranks 5 and 6 are the gold standards**, and the grammar they proved is now the catalogue
-  standard (`data/ONTOLOGY.md` §4a and §4b). They are being folded back into their
-  main-grammar originals — rank 5 into `archPersonalAgent`, rank 6 into the third-party coding
-  agent — after which both `-zones` files and their ids disappear and every remaining
-  architecture migrates onto the same grammar. What they established: five standard
-  ownership bands as full-height columns with a build-enforced crossing rule, and numbered
-  first-class data flows carrying what moves, the threats and the controls. Both sit alongside
-  their main-grammar originals so the two readings can be compared directly. The zone set —
-  principal, workload, crossing, enterprise, external — is designed to hold on every surface,
-  with the SaaS mapping (vendor runtime in `workload`, our data in `enterprise`) the case that
-  earns it. The coding-agent variant is the demonstration: the crossing rule makes the
-  endpoint-to-vendor edge illegal and forces the secure edge onto the page.
+- **All four are on the zone grammar** (`data/ONTOLOGY.md` §4a and §4b): ownership bands as
+  full-height columns with a build-enforced crossing rule, numbered first-class data flows
+  carrying what moves and the threats and controls that ride them, and five standalone
+  governance call-outs across the bottom band. The two `-zones` research-preview files that
+  proved the grammar have been folded into their originals and no longer exist.
+
+- **First-party vs third-party (2026-08)** renamed what had been the OSS/vendored split, and
+  the names now say what actually differs: who supplies the harness. The first-party drawing is
+  the third-party drawing with the vendor band deleted, deliberately identical everywhere else
+  so that the missing column is the only thing a reader comparing them sees — and in its place
+  sits the private package registry, because in that archetype the supply chain delivers the
+  agent itself.
 
 - **The vendored/OSS split (2026-08)** replaced a single coding-agent diagram that carried an
   either/or model path. The ontology bans conditional edges: the OSS harnesses differ in

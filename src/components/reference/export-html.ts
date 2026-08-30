@@ -43,6 +43,12 @@ export function buildViewerModel(archetype: Archetype) {
       icon: b.icon,
       layer: layerOf(b),
       note: b.note,
+      // A governance call-out has no items and no edges — the chip numbers of the controls it
+      // implements are its entire content, so without these it exports as an empty box.
+      caps: (b.capabilities ?? []).map((id) => ({
+        n: capNumber.get(id) ?? 0,
+        title: capabilityById.get(id)?.title ?? id,
+      })),
       ...rect,
       items: (b.items ?? []).map((item, i) => ({
         id: item.id,

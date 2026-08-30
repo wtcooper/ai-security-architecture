@@ -672,11 +672,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-15 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+13 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 6 — Coding & desktop agents — zone map (spike), Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal agent — zone map (spike A), Personal autonomous agent |
+| Endpoint | 4 — First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
 | Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
@@ -762,73 +762,64 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Model registry | service | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Serving & consumers | external | `componentModelServing` |
 | Fine-tuning and model registry pipeline | Governance plane | governance | (none) |
-| Coding & desktop agents — zone map (spike) | Remote device | service | `componentAgentUserQuery` |
-| Coding & desktop agents — zone map (spike) | Agent harness | service | `componentReasoningCore` |
-| Coding & desktop agents — zone map (spike) | Memory & state | service | `componentDataStorage` |
-| Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
-| Coding & desktop agents — zone map (spike) | AI gateway | service | (none) |
-| Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
-| Coding & desktop agents — zone map (spike) | Enterprise data | external | `componentDataSources` |
-| Coding & desktop agents — zone map (spike) | Vendor service | provider | (none) |
-| Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
-| Coding & desktop agents — zone map (spike) | Model provider | provider | `componentModelServing` |
-| Coding & desktop agents — zone map (spike) | Downstream services | external | `componentDataSources` |
-| Coding & desktop agents — zone map (spike) | Identity services | governance | (none) |
-| Coding & desktop agents — zone map (spike) | Secrets & key management | governance | (none) |
-| Coding & desktop agents — zone map (spike) | Policy & authorization | governance | (none) |
-| Coding & desktop agents — zone map (spike) | Supply-chain assurance | governance | (none) |
-| Coding & desktop agents — zone map (spike) | Observability & response | governance | (none) |
-| Coding and desktop agents | Repos, docs & screen | external | `componentDataSources` |
-| Coding and desktop agents | Agent harness | service | `componentReasoningCore` |
-| Coding and desktop agents | Remote device | service | `componentAgentUserQuery` |
-| Coding and desktop agents | Memory & state | service | `componentDataStorage` |
-| Coding and desktop agents | Tool services | service | `componentTools` |
-| Coding and desktop agents | AI gateway | service | (none) |
-| Coding and desktop agents | Vendor service | provider | (none) |
-| Coding and desktop agents | Model provider | provider | `componentModelServing` |
-| Coding and desktop agents | Downstream services | external | `componentDataSources` |
+| First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
+| First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
+| First-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
+| First-party coding & desktop agents | Tool services | service | `componentTools` |
+| First-party coding & desktop agents | AI gateway | service | (none) |
+| First-party coding & desktop agents | Tool services | service | `componentTools` |
+| First-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
+| First-party coding & desktop agents | Private pkg registry | external | `componentDataSources` |
+| First-party coding & desktop agents | Tool services | service | `componentTools` |
+| First-party coding & desktop agents | Model provider | provider | `componentModelServing` |
+| First-party coding & desktop agents | Downstream services | external | `componentDataSources` |
+| First-party coding & desktop agents | Identity services | governance | (none) |
+| First-party coding & desktop agents | Secrets & key management | governance | (none) |
+| First-party coding & desktop agents | Policy & authorization | governance | (none) |
+| First-party coding & desktop agents | Supply-chain assurance | governance | (none) |
+| First-party coding & desktop agents | Observability & response | governance | (none) |
+| Third-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
+| Third-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
+| Third-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
+| Third-party coding & desktop agents | Tool services | service | `componentTools` |
+| Third-party coding & desktop agents | AI gateway | service | (none) |
+| Third-party coding & desktop agents | Tool services | service | `componentTools` |
+| Third-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
+| Third-party coding & desktop agents | Vendor service | provider | (none) |
+| Third-party coding & desktop agents | Tool services | service | `componentTools` |
+| Third-party coding & desktop agents | Model provider | provider | `componentModelServing` |
+| Third-party coding & desktop agents | Downstream services | external | `componentDataSources` |
+| Third-party coding & desktop agents | Identity services | governance | (none) |
+| Third-party coding & desktop agents | Secrets & key management | governance | (none) |
+| Third-party coding & desktop agents | Policy & authorization | governance | (none) |
+| Third-party coding & desktop agents | Supply-chain assurance | governance | (none) |
+| Third-party coding & desktop agents | Observability & response | governance | (none) |
+| Local model runtime | Local applications | service | (none) |
 | Local model runtime | Local HTTP API | service | `componentModelServing` |
 | Local model runtime | Inference runtime | service | `componentTheModel` |
 | Local model runtime | Storage | external | `componentModelStorage` |
+| Local model runtime | Egress control | service | (none) |
+| Local model runtime | Supply-chain assurance | governance | (none) |
+| Local model runtime | Observability & response | governance | (none) |
 | Local model runtime | Public model hub | external | `componentModelStorage` |
-| Open-source coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
-| Open-source coding & desktop agents | Repos, docs & screen | external | `componentDataSources` |
-| Open-source coding & desktop agents | Agent harness | service | `componentReasoningCore` |
-| Open-source coding & desktop agents | Memory & state | service | `componentDataStorage` |
-| Open-source coding & desktop agents | Tool services | service | `componentTools` |
-| Open-source coding & desktop agents | AI gateway | service | (none) |
-| Open-source coding & desktop agents | Model provider | provider | `componentModelServing` |
-| Open-source coding & desktop agents | Private pkg registry | external | `componentDataSources` |
-| Open-source coding & desktop agents | Downstream services | external | `componentDataSources` |
-| Personal agent — zone map (spike A) | Remote device | service | `componentAgentUserQuery` |
-| Personal agent — zone map (spike A) | Channel bridges | service | `componentAgentUserQuery` |
-| Personal agent — zone map (spike A) | Agent harness | service | `componentReasoningCore` |
-| Personal agent — zone map (spike A) | Memory & state | service | `componentDataStorage` |
-| Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
-| Personal agent — zone map (spike A) | Owner workspace | external | `componentDataSources` |
-| Personal agent — zone map (spike A) | Messaging relay | service | (none) |
-| Personal agent — zone map (spike A) | AI gateway | service | (none) |
-| Personal agent — zone map (spike A) | Identity services | governance | (none) |
-| Personal agent — zone map (spike A) | Secrets & key management | governance | (none) |
-| Personal agent — zone map (spike A) | Policy & authorization | governance | (none) |
-| Personal agent — zone map (spike A) | Supply-chain assurance | governance | (none) |
-| Personal agent — zone map (spike A) | Observability & response | governance | (none) |
-| Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
-| Personal agent — zone map (spike A) | Enterprise data | external | `componentDataSources` |
-| Personal agent — zone map (spike A) | Messaging platform | external | `componentDataSources` |
-| Personal agent — zone map (spike A) | Model provider | provider | `componentModelServing` |
-| Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
-| Personal agent — zone map (spike A) | Downstream services | external | `componentDataSources` |
 | Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
-| Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |
+| Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Owner workspace | external | `componentDataSources` |
-| Personal autonomous agent | Private pkg registry | external | `componentDataSources` |
+| Personal autonomous agent | Messaging relay | service | (none) |
 | Personal autonomous agent | AI gateway | service | (none) |
+| Personal autonomous agent | Identity services | governance | (none) |
+| Personal autonomous agent | Secrets & key management | governance | (none) |
+| Personal autonomous agent | Policy & authorization | governance | (none) |
+| Personal autonomous agent | Supply-chain assurance | governance | (none) |
+| Personal autonomous agent | Observability & response | governance | (none) |
+| Personal autonomous agent | Tool services | service | `componentTools` |
+| Personal autonomous agent | Enterprise data | external | `componentDataSources` |
+| Personal autonomous agent | Messaging platform | external | `componentDataSources` |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
-| Personal autonomous agent | Remote tool services | service | `componentTools` |
+| Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Downstream services | external | `componentDataSources` |
 | Enterprise AI chat with connectors | Chat surface & uploads | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Identity & secure edge | service | (none) |
@@ -854,11 +845,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-13 of 15 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+13 of 13 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent | Coding & desktop agents — zone map (spike), Personal agent — zone map (spike A) |
+| Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
 | Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
@@ -872,10 +863,10 @@ Highlights below are Google's original mapping, not ours.
 | Remote MCP server you publish | build | draft | 5 | Human-in-the-loop approval & escalation, Output encoding & safe rendering |
 | Self-hosted open-weights inference | build | draft | 4 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 5 | _none_ |
-| Coding and desktop agents | use | draft | 7 | Agent memory & context protection, Secrets management & ephemeral credentials, Runtime action authorization |
+| First-party coding & desktop agents | use | draft | 4 | Identity & access management for AI applications, Data loss prevention for AI interactions, Agent & tool registry, Audit logging & non-repudiation |
+| Third-party coding & desktop agents | use | draft | 7 | Runtime action authorization, Third-party risk management platform for AI vendors, Agent memory & context protection, Secrets management & ephemeral credentials |
 | Local model runtime | use | draft | 4 | _none_ |
-| Open-source coding & desktop agents | use | draft | 4 | _none_ |
-| Personal autonomous agent | use | draft | 4 | _none_ |
+| Personal autonomous agent | use | draft | 4 | Inter-component & inter-agent transport security, Agent credential isolation & delegation control, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Shadow AI discovery |
 | Enterprise AI chat with connectors | use | draft | 5 | Encryption & key management for AI assets |
 | UI/low-code managed agent runtime | use | draft | 5 | _none_ |
 | API/SDK managed agent runtime | hybrid | draft | 5 | Secrets management & ephemeral credentials, Encryption & key management for AI assets, Network segmentation & egress control |
@@ -886,11 +877,11 @@ Vendor-specific entries, each dated. An entry older than six months is due a re-
 
 | Tool | Vendor | asOf | Referenced by | |
 | --- | --- | --- | --- | --- |
-| Claude Code | Anthropic | 2026-08 | Coding and desktop agents |  |
-| Cursor | Anysphere | 2026-08 | Coding and desktop agents |  |
-| GitHub Copilot | GitHub | 2026-08 | Coding and desktop agents |  |
-| Codex | OpenAI | 2026-08 | Coding and desktop agents |  |
-| ChatGPT desktop app | OpenAI | 2026-08 | Coding and desktop agents |  |
-| Claude Desktop | Anthropic | 2026-08 | Coding and desktop agents |  |
+| Claude Code | Anthropic | 2026-08 | Third-party coding & desktop agents |  |
+| Cursor | Anysphere | 2026-08 | Third-party coding & desktop agents |  |
+| GitHub Copilot | GitHub | 2026-08 | Third-party coding & desktop agents |  |
+| Codex | OpenAI | 2026-08 | Third-party coding & desktop agents |  |
+| ChatGPT desktop app | OpenAI | 2026-08 | Third-party coding & desktop agents |  |
+| Claude Desktop | Anthropic | 2026-08 | Third-party coding & desktop agents |  |
 | OpenClaw | OpenClaw (open source) | 2026-08 | Personal autonomous agent |  |
 | Hermes Agent | Nous Research | 2026-08 | Personal autonomous agent |  |

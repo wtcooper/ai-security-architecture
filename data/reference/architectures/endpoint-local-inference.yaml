@@ -68,12 +68,38 @@ exemplars:
       artifact does on load is a property of its format, not its publisher.
     asOf: "2026-08"
 
+zones:
+  - id: zoneEndpoint
+    owner: endpoint
+    note: >
+      The machine and everything the runtime puts on it: the local API, the process that loads
+      the weights, and the artifacts on disk. The whole architecture lives here, which is why
+      the one band that matters is the boundary around it.
+  - id: zoneCloud
+    owner: cloud
+    note: >
+      Infrastructure we operate. Only one component sits here, and it is the only thing
+      standing between a multi-gigabyte artifact from a public hub and a process that will
+      execute it on load.
+  - id: zoneExternal
+    owner: external
+    note: >
+      Outside the company: the public hubs the weights come from, and the callers nobody
+      intended who find a port that was assumed to be private.
+  - id: zoneGovernance
+    owner: governance
+    note: >
+      Sparse here by comparison with the agent architectures, and deliberately so — there is
+      no gateway, no vendor and no identity on the data path, so what governance can do is
+      decide which artifacts are allowed and notice the runtimes nobody registered.
+
 blocks:
   - id: unexpectedCallers
     kind: actor
     title: Unexpected callers
     icon: globe
-    col: 0
+    zone: zoneExternal
+    col: 4
     row: 0
     note: >
       Anything on the machine that can open a socket — including a browser tab, where the runtime
@@ -81,9 +107,10 @@ blocks:
       them apart.
 
   - id: localApps
-    kind: actor
+    kind: service
     title: Local applications
     icon: code
+    zone: zoneEndpoint
     col: 0
     row: 1
     note: >
@@ -93,6 +120,7 @@ blocks:
   - id: api
     kind: service
     title: Local HTTP API
+    zone: zoneEndpoint
     col: 1
     row: 1
     cosaiComponent: componentModelServing
@@ -120,6 +148,7 @@ blocks:
   - id: runtime
     kind: service
     title: Inference runtime
+    zone: zoneEndpoint
     col: 2
     row: 1
     cosaiComponent: componentTheModel
@@ -143,6 +172,7 @@ blocks:
   - id: weights
     kind: external
     title: Storage
+    zone: zoneEndpoint
     col: 2
     row: 2
     cosaiComponent: componentModelStorage
@@ -155,11 +185,56 @@ blocks:
         icon: db
         note: Readable by any process with the user's privileges, and swappable by the same.
 
+  - id: egress
+    kind: service
+    title: Egress control
+    zone: zoneCloud
+    col: 3
+    row: 2
+    note: >
+      The organisation's proxy and firewall tier — the only customer-operated component this
+      architecture has, and the only place the weight fetch can be admitted, scanned and
+      recorded. A public hub is an arbitrary destination, so the job here is admission *and*
+      inspection, not the destination admission a contracted vendor would get. Target state:
+      the common install fetches straight from the hub and nothing sees it.
+    items:
+      - id: outbound
+        label: Outbound connector
+        icon: plug
+        note: Where the fetch is admitted by destination and the artifact is scanned before it reaches a loader.
+
+  - id: govSupplyChain
+    kind: governance
+    title: Supply-chain assurance
+    icon: db
+    zone: zoneGovernance
+    col: 1
+    row: 4
+    capabilities: [capabilityModelScanning, capabilityAiBom]
+    note: >
+      The whole governance story of this archetype, and the reason the scan sits in front of
+      the fetch rather than after it: the runtime is the thing doing the fetching, and for
+      several formats opening the file is the execution event.
+
+  - id: govObservability
+    kind: governance
+    title: Observability & response
+    icon: eye
+    zone: zoneGovernance
+    col: 2
+    row: 4
+    capabilities: [capabilityShadowAiDiscovery, capabilityAiGovernancePlatform, capabilityModelEvals]
+    note: >
+      Every control named on this page presumes someone first learns the runtime exists. It is
+      installed by one person in an afternoon and appears in no inventory, so discovery is not
+      a supporting control here — it is the precondition for all the others.
+
   - id: hub
     kind: external
     title: Public model hub
     cosaiComponent: componentModelStorage
-    col: 3
+    zone: zoneExternal
+    col: 4
     row: 2
     note: >
       Distribution for open weights. Publisher identity ranges from verified to arbitrary, and
@@ -203,12 +278,20 @@ edges:
       The runtime fetches artifacts to disk and loads them at start. For several formats the load
       is an execution event, which makes this the supply chain's last step.
   - from: hub
-    to: weights
+    to: egress
     path: external
     label: weight download
     note: >
       Transport is authenticated and the publisher may be verifiable. Neither says what the
-      artifact does when opened.
+      artifact does when opened, which is why the crossing scans the format rather than
+      checking the source.
+  - from: egress
+    to: weights
+    path: primary
+    label: scanned artifact
+    note: >
+      The admitted, scanned artifact lands on disk. In the common install this component does
+      not exist and the runtime fetches directly — the deviation records the distance.
 
 pins:
   risks:
@@ -218,7 +301,7 @@ pins:
         Pickle-class formats execute code on load. The risk is a property of the artifact format,
         not of the publisher.
     - risk: riskModelSourceTampering
-      at: hub->weights
+      at: hub->egress
       note: Publisher identity at publish time, nothing at load time — and a hub account is a takeover target.
     - risk: riskDenialOfMLService
       at: unexpectedCallers->api
@@ -249,7 +332,7 @@ pins:
 
   capabilities:
     - capability: capabilityModelScanning
-      at: hub->weights
+      at: hub->egress
       note: >
         Format and content inspection in front of the fetch — a scan that runs after the runtime
         opens the file has documented an incident, not prevented one.
@@ -282,6 +365,36 @@ pins:
         Evaluate what the weights actually do before serving them to other software — there is no
         provider evaluation to inherit.
 
+flows:
+  - id: F1
+    title: The intended call
+    moves: Prompts and documents from local software; raw completions back.
+    path: [localApps->api, api->runtime]
+    threats: [Raw output returned with no classification, No per-caller quota on a shared local service]
+    controls: [capabilityModelGuardrails, capabilityRateLimiting]
+    note: >
+      The flow the runtime exists for. Everything a hosted API would have applied on the way in
+      and out is absent unless the device owner deploys it here.
+  - id: F2
+    title: The call nobody intended
+    moves: The same completion request, from a caller the deployment never meant to serve.
+    path: [unexpectedCallers->api]
+    threats: [Runtime bound to a routable interface, Permissive CORS letting a web page drive inference, Locality standing in for authorization]
+    controls: [capabilityTransportSecurity, capabilityRateLimiting]
+    note: >
+      Same endpoint, same lack of authentication, different caller — and nothing on the path
+      tells them apart. This is the flow the exposure scans keep finding.
+  - id: F3
+    title: Weights arrive and are loaded
+    moves: Multi-gigabyte artifacts from a public hub, onto disk, and into a process.
+    path: [hub->egress, egress->weights, runtime->weights]
+    threats: [Serialization format that executes on load, Native parser bug in a safe-by-construction format, Chat template that executes at inference time]
+    controls: [capabilityModelScanning, capabilityAiBom, capabilityModelWeightProtection]
+    note: >
+      The archetype's defining flow. The scan sits in front of the fetch because the runtime is
+      the thing doing the fetching, and for several formats opening the file *is* the execution
+      event — so a control placed after the download has already been bypassed.
+
 scenarios:
   - title: An application asks for a completion
     steps:
@@ -295,7 +408,7 @@ scenarios:
         note: The response returns with no provider floor under it.
   - title: A poisoned checkpoint
     steps:
-      - follow: hub->weights
+      - follow: hub->egress
         note: A well-reviewed model name, a compromised artifact — the download verifies transport, not behaviour.
       - follow: weights->runtime
         note: >

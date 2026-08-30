@@ -650,6 +650,32 @@ function checkArchetypes(
         if (!b.zone) fail(`${where}: block ${b.id} has no zone (this architecture declares zones)`);
         else if (!zoneIds.has(b.zone)) fail(`${where}: block ${b.id} has unknown zone ${b.zone}`);
       }
+      // Band geometry. The renderer derives each band's rect from the min..max column of its
+      // members, so a band whose columns are not contiguous stretches across the drawing and
+      // swallows its neighbours. Bands must also appear left-to-right in owner order, because
+      // that ordering is what makes a crossing read as a horizontal move.
+      const BAND_ORDER = ["user", "endpoint", "cloud", "vendor", "external"];
+      const spanByOwner = new Map<string, { lo: number; hi: number }>();
+      for (const b of arch.blocks) {
+        const owner = zoneOwner.get(b.zone ?? "");
+        if (!owner || owner === "governance") continue;
+        const s = spanByOwner.get(owner) ?? { lo: b.col, hi: b.col };
+        spanByOwner.set(owner, { lo: Math.min(s.lo, b.col), hi: Math.max(s.hi, b.col) });
+      }
+      const spans = BAND_ORDER.filter((o) => spanByOwner.has(o)).map(
+        (o) => [o, spanByOwner.get(o)!] as const,
+      );
+      for (let i = 0; i < spans.length; i++) {
+        for (let j = i + 1; j < spans.length; j++) {
+          const [aOwner, a] = spans[i];
+          const [bOwner, b] = spans[j];
+          if (a.hi >= b.lo)
+            fail(
+              `${where}: the ${aOwner} band spans columns ${a.lo}-${a.hi} and the ${bOwner} band spans ${b.lo}-${b.hi} — they overlap, so the bands will draw on top of each other. Assign columns left to right in band order (${BAND_ORDER.join(" -> ")}).`,
+            );
+        }
+      }
+
       // The crossing rule. Bands say where a thing lives; whether a thing may terminate a
       // band crossing is a property of the component. Any edge that enters or leaves a band
       // WE operate must land on a component the vocabulary marks `crossing: true`.
