@@ -587,6 +587,50 @@ function checkArchetypes(
       }
     }
 
+    // --- Zones and flows (spike grammar, data/ONTOLOGY-SPIKE.md) --------------
+    const zoneIds = new Set((arch.zones ?? []).map((z) => z.id));
+    const zoneOwner = new Map((arch.zones ?? []).map((z) => [z.id, z.owner]));
+    if (arch.zones?.length) {
+      if (zoneIds.size !== arch.zones.length) fail(`${where}: duplicate zone id`);
+      for (const b of arch.blocks) {
+        if (!b.zone) fail(`${where}: block ${b.id} has no zone (this architecture declares zones)`);
+        else if (!zoneIds.has(b.zone)) fail(`${where}: block ${b.id} has unknown zone ${b.zone}`);
+      }
+      // The crossing rule: an endpoint-zone block may not reach an external-zone block
+      // directly — an enterprise-zone broker has to terminate the crossing.
+      const ownerOf = new Map(arch.blocks.map((b) => [b.id, zoneOwner.get(b.zone ?? "")]));
+      for (const e of arch.edges) {
+        const from = ownerOf.get(e.from);
+        const to = ownerOf.get(e.to);
+        const crosses =
+          (from === "endpoint" && to === "external") || (from === "external" && to === "endpoint");
+        if (crosses)
+          fail(
+            `${where}: edge ${e.from}->${e.to} crosses endpoint to external directly — the crossing must terminate in an enterprise zone`,
+          );
+      }
+    }
+    const flowIds = new Set<string>();
+    for (const flow of arch.flows ?? []) {
+      const at = `${where} flow ${flow.id}`;
+      if (!/^F\d+$/.test(flow.id ?? "")) fail(`${at}: id must match ^F\\d+$`);
+      if (flowIds.has(flow.id)) fail(`${at}: duplicate flow id`);
+      flowIds.add(flow.id);
+      if (!flow.moves?.trim()) fail(`${at}: needs a "moves" statement`);
+      if (!flow.path?.length) fail(`${at}: has no path`);
+      for (const ref of flow.path ?? []) {
+        if (edgeKeys.has(ref)) continue;
+        const [a, b] = (ref ?? "").split("->");
+        if (a && b && bidir.has(`${b}->${a}`)) continue;
+        fail(`${at}: path step "${ref}" follows no edge (reverse needs bidir: true)`);
+      }
+      for (const id of flow.controls ?? []) {
+        if (!capabilityById.has(id)) fail(`${at}: unknown capability ${id}`);
+        else if (!capabilities.includes(id))
+          fail(`${at}: capability ${id} is not pinned on this architecture`);
+      }
+    }
+
     const resolved = { ...arch, risks, capabilities };
     const layout = layoutArchetype(resolved);
     checkDiagramCollisions(where, resolved, layout);

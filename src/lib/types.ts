@@ -256,11 +256,44 @@ export interface ArchBlockItem {
   cosaiComponent?: string;
 }
 
+/**
+ * Spike grammar (data/ONTOLOGY-SPIKE.md): an ownership zone. Zones are drawn as labelled
+ * background bands and carry the crossing rule — nothing in an `endpoint` zone may reach an
+ * `external` zone without terminating in an `enterprise` zone first.
+ */
+export interface ArchZone {
+  id: string;
+  title: string;
+  owner: "user" | "endpoint" | "enterprise" | "external";
+  note?: string;
+}
+
+/**
+ * Spike grammar: a numbered data flow with its own identity. Flows are first-class here —
+ * they carry what moves, the threats that ride them, and the controls that must apply — so a
+ * reviewer designs the flow rather than inferring it from the connectors left between blocks.
+ */
+export interface ArchFlow {
+  /** "F1", "F2" … stable within the architecture. */
+  id: string;
+  title: string;
+  /** What actually moves along this flow. */
+  moves: string;
+  /** Ordered edge refs, "from->to", each of which must be a real edge. */
+  path: string[];
+  threats?: string[];
+  /** Capability ids that must apply to this flow; each must also be pinned on the drawing. */
+  controls?: string[];
+  note?: string;
+}
+
 export interface ArchBlock {
   id: string;
   kind: BlockKind;
   /** Drawn as the tab on the block's top edge, uppercased. */
   title: string;
+  /** Spike grammar: the ownership zone this block sits in. */
+  zone?: string;
   /** For actor blocks and blocks without items. */
   icon?: string;
   /** Authored coarse grid position; the build turns it into pixels. */
@@ -389,6 +422,10 @@ export interface Archetype {
   exemplars?: ArchetypeExemplar[];
   blocks: ArchBlock[];
   edges: ArchEdge[];
+  /** Spike grammar only: ownership zones drawn as background bands. */
+  zones?: ArchZone[];
+  /** Spike grammar only: numbered first-class data flows. */
+  flows?: ArchFlow[];
   pins: { risks: RiskPin[]; capabilities: CapabilityPin[] };
   scenarios?: Scenario[];
   /**

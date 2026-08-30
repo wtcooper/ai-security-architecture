@@ -12,7 +12,7 @@ workflow with a different tool set, a single node, or a control drawn as a place
 
 ## Active — 12
 
-### Endpoint (4)
+### Endpoint (6)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
@@ -20,6 +20,15 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 2 | Open-source coding & desktop agents | `archOssCodingAgent` | `endpoint-oss-coding-agent.yaml` |
 | 3 | Personal autonomous agent | `archPersonalAgent` | `endpoint-personal-agent.yaml` |
 | 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
+| 5 | Personal agent — zone map (spike A) | `archPersonalAgentZones` | `endpoint-personal-agent-zones.yaml` |
+| 6 | Personal agent — one door (spike B) | `archPersonalAgentHub` | `endpoint-personal-agent-hub.yaml` |
+
+- **Ranks 5 and 6 are a research preview**, not additions to the catalogue proper. They redraw
+  the personal autonomous agent in the spike grammar (`data/ONTOLOGY-SPIKE.md`): ownership
+  zones as geometry with a build-enforced crossing rule, and nine numbered first-class data
+  flows carrying what moves, the threats and the controls. Two variants are published for A/B
+  comparison — a fine-grained zone map and a coarse one-door hub. The intent is to keep one,
+  retire the other and its ontology document, or promote the grammar over the main one.
 
 - **The vendored/OSS split (2026-08)** replaced a single coding-agent diagram that carried an
   either/or model path. The ontology bans conditional edges: the OSS harnesses differ in

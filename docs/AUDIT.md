@@ -672,11 +672,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-13 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+15 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 4 — Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent |
+| Endpoint | 6 — Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal agent — one door (spike B), Personal agent — zone map (spike A), Personal autonomous agent |
 | Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
@@ -784,6 +784,27 @@ Highlights below are Google's original mapping, not ours.
 | Open-source coding & desktop agents | Model provider | provider | `componentModelServing` |
 | Open-source coding & desktop agents | Private pkg registry | external | `componentDataSources` |
 | Open-source coding & desktop agents | Downstream services | external | `componentDataSources` |
+| Personal agent — one door (spike B) | Remote device | service | `componentAgentUserQuery` |
+| Personal agent — one door (spike B) | AI gateway | service | (none) |
+| Personal agent — one door (spike B) | Agent runtime | service | `componentReasoningCore` |
+| Personal agent — one door (spike B) | Memory & state | service | `componentDataStorage` |
+| Personal agent — one door (spike B) | Control plane | governance | (none) |
+| Personal agent — one door (spike B) | Model provider | provider | `componentModelServing` |
+| Personal agent — one door (spike B) | Remote tool services | service | `componentTools` |
+| Personal agent — one door (spike B) | Downstream services | external | `componentDataSources` |
+| Personal agent — zone map (spike A) | Remote device | service | `componentAgentUserQuery` |
+| Personal agent — zone map (spike A) | Channel bridges | service | `componentAgentUserQuery` |
+| Personal agent — zone map (spike A) | Agent harness | service | `componentReasoningCore` |
+| Personal agent — zone map (spike A) | Memory & state | service | `componentDataStorage` |
+| Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
+| Personal agent — zone map (spike A) | Owner workspace | service | `componentDataSources` |
+| Personal agent — zone map (spike A) | Messaging relay | service | (none) |
+| Personal agent — zone map (spike A) | AI gateway | service | (none) |
+| Personal agent — zone map (spike A) | Control plane | governance | (none) |
+| Personal agent — zone map (spike A) | Messaging platform | external | `componentDataSources` |
+| Personal agent — zone map (spike A) | Model provider | provider | `componentModelServing` |
+| Personal agent — zone map (spike A) | Remote tool services | service | `componentTools` |
+| Personal agent — zone map (spike A) | Downstream services | external | `componentDataSources` |
 | Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Tool services | service | `componentTools` |
@@ -819,11 +840,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-13 of 13 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+13 of 15 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent | — |
+| Endpoint | Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent | Personal agent — one door (spike B), Personal agent — zone map (spike A) |
 | Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 

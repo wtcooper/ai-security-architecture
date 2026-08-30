@@ -157,6 +157,49 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   );
 }
 
+/** Spike grammar: an ownership zone drawn as a labelled background band. */
+const ZONE_TINT: Record<string, { fill: string; line: string; ink: string }> = {
+  user: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
+  endpoint: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
+  enterprise: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
+  external: { fill: "#f3eef9", line: "#a894ce", ink: "#6f4bb5" },
+};
+
+function ZoneNode({
+  data,
+}: NodeProps<Node<{ title: string; owner: string; w: number; h: number }>>) {
+  const tint = ZONE_TINT[data.owner] ?? ZONE_TINT.user;
+  return (
+    <div
+      style={{
+        width: data.w,
+        height: data.h,
+        background: tint.fill,
+        border: `1.5px solid ${tint.line}`,
+        borderRadius: 14,
+        position: "relative",
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          font: "700 10px/1 var(--font-mono, monospace)",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          color: tint.ink,
+        }}
+      >
+        {data.title}
+      </div>
+    </div>
+  );
+}
+
 function FrameNode({
   data,
 }: NodeProps<Node<{ label: string; w: number; h: number; labelPos?: "top" | "bottom" }>>) {
@@ -234,7 +277,7 @@ function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolea
 }
 
 interface EdgePin {
-  kind: "chip" | "tag";
+  kind: "chip" | "tag" | "flow";
   dx: number;
   dy: number;
   n?: number;
@@ -291,7 +334,23 @@ function BuildPathEdge(props: EdgeProps) {
               onMouseEnter={(e) => data.onPinEnter(e, pin.title, pin.body)}
               onMouseLeave={data.onPinLeave}
               style={
-                pin.kind === "chip"
+                pin.kind === "flow"
+                  ? {
+                      position: "absolute",
+                      transform: `translate(${midX + pin.dx}px, ${midY + pin.dy}px)`,
+                      height: 17,
+                      padding: "0 7px",
+                      borderRadius: 9,
+                      background: "var(--ink, #1c1e21)",
+                      color: "#fff",
+                      font: "700 9.5px/17px var(--font-mono, monospace)",
+                      letterSpacing: "0.04em",
+                      textAlign: "center",
+                      opacity: data.pinsDim ? 0 : 1,
+                      pointerEvents: "all",
+                      zIndex: 11,
+                    }
+                  : pin.kind === "chip"
                   ? {
                       position: "absolute",
                       transform: `translate(${midX + pin.dx - 9}px, ${midY + pin.dy - 9}px)`,
@@ -325,6 +384,7 @@ function BuildPathEdge(props: EdgeProps) {
               }
             >
               {pin.kind === "chip" ? pin.n : pin.code}
+
             </div>
           ))}
         </EdgeLabelRenderer>
@@ -333,7 +393,7 @@ function BuildPathEdge(props: EdgeProps) {
   );
 }
 
-const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode };
+const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode, zone: ZoneNode };
 const edgeTypes = { buildPath: BuildPathEdge };
 
 /** Pick the facing handle pair from the two blocks' initial geometry. */
@@ -347,10 +407,13 @@ function facing(a: { x: number; y: number; w: number; h: number }, b: { x: numbe
 export function FlowDiagramRF({
   archetype,
   scenario = null,
+  flow = null,
   className,
 }: {
   archetype: Archetype;
   scenario?: number | null;
+  /** Spike grammar: the highlighted numbered flow, by id. */
+  flow?: string | null;
   className?: string;
 }) {
   const cfg = RF_CONFIG[archetype.id];
@@ -364,6 +427,23 @@ export function FlowDiagramRF({
     [walk],
   );
   const inScenario = Boolean(walk);
+
+  // Spike grammar: the active numbered flow, and the edge set it runs over (either direction).
+  const activeFlow = flow ? archetype.flows?.find((f) => f.id === flow) : undefined;
+  const flowEdges = useMemo(() => {
+    const s = new Set<string>();
+    for (const ref of activeFlow?.path ?? []) {
+      s.add(ref);
+      const [a, b] = ref.split("->");
+      if (a && b) s.add(`${b}->${a}`);
+    }
+    return s;
+  }, [activeFlow]);
+  const inFlow = Boolean(activeFlow);
+  const flowBlocks = useMemo(
+    () => new Set((activeFlow?.path ?? []).flatMap((ref) => ref.split("->"))),
+    [activeFlow],
+  );
 
   const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
     const wrap = (event.target as HTMLElement).closest("[data-rfwrap]");
@@ -395,6 +475,27 @@ export function FlowDiagramRF({
     }
 
     const nodes: Node[] = [];
+    // Spike grammar: ownership zones as background bands, sized from their members.
+    const ZONE_PAD = 22;
+    const ZONE_HEAD = 30;
+    for (const zone of archetype.zones ?? []) {
+      const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
+      if (!rs.length) continue;
+      const x0 = Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
+      const y0 = Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD;
+      const x1 = Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
+      const y1 = Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD;
+      nodes.push({
+        id: `__zone_${zone.id}`,
+        type: "zone",
+        position: { x: x0, y: y0 },
+        data: { title: zone.title, owner: zone.owner, note: zone.note, w: x1 - x0, h: y1 - y0 },
+        style: { width: x1 - x0, height: y1 - y0 },
+        draggable: false,
+        selectable: false,
+        zIndex: -3,
+      });
+    }
     if (frame && cfg) {
       nodes.push({
         id: "__frame",
@@ -509,7 +610,8 @@ export function FlowDiagramRF({
     () =>
       nodes.map((n) => {
         if (n.type === "block") {
-          const dim = inScenario && !walkBlocks.has(n.id);
+          const dim =
+            (inScenario && !walkBlocks.has(n.id)) || (inFlow && !flowBlocks.has(n.id));
           return { ...n, data: { ...n.data, dim } };
         }
         if (n.type === "chip" || n.type === "tag") {
@@ -517,7 +619,7 @@ export function FlowDiagramRF({
         }
         return n;
       }),
-    [nodes, inScenario, walkBlocks],
+    [nodes, inScenario, walkBlocks, inFlow, flowBlocks],
   );
 
   const onNodesChange = useCallback(
@@ -594,6 +696,26 @@ export function FlowDiagramRF({
       pinsByEdge.set(at, list);
     }
 
+    // Spike grammar: the numbered flow tags each edge carries, stacked under the midpoint.
+    for (const f of archetype.flows ?? []) {
+      for (const ref of f.path) {
+        const geo = edgeGeo.get(ref) ?? edgeGeo.get(ref.split("->").reverse().join("->"));
+        if (!geo) continue;
+        const key = `${geo.from}->${geo.to}`;
+        const list = pinsByEdge.get(key) ?? [];
+        const nth = list.filter((p) => p.kind === "flow").length;
+        list.push({
+          kind: "flow",
+          dx: -14 + nth * 30,
+          dy: 16,
+          code: f.id,
+          title: `${f.id} · ${f.title}`,
+          body: f.moves,
+        });
+        pinsByEdge.set(key, list);
+      }
+    }
+
     const out: Edge[] = [];
     for (const e of archetype.edges) {
       if (hidden.has(e.from) || hidden.has(e.to)) continue;
@@ -601,7 +723,7 @@ export function FlowDiagramRF({
       const geo = edgeGeo.get(key);
       if (!geo) continue;
       const style = PATH_STYLE[e.path];
-      const dimmed = inScenario && !walkEdges.has(key);
+      const dimmed = (inScenario && !walkEdges.has(key)) || (inFlow && !flowEdges.has(key));
       const live = moved.has(e.from) || moved.has(e.to);
       const [sh, th] = facing(rects[e.from], rects[e.to]);
       out.push({
@@ -636,7 +758,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, cfg, inScenario, walkEdges, dragged, cardAt, onPinLeave]);
+  }, [archetype, cfg, inScenario, walkEdges, inFlow, flowEdges, dragged, cardAt, onPinLeave]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>

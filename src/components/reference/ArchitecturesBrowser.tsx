@@ -45,6 +45,7 @@ export function ArchitecturesBrowser() {
     linkedSurface && surfaces.some((s) => s.id === linkedSurface) ? linkedSurface : null,
   );
   const [scenario, setScenario] = useState<number | null>(null);
+  const [flow, setFlow] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
@@ -139,6 +140,7 @@ export function ArchitecturesBrowser() {
               <FlowDiagram
                 archetype={archetype}
                 scenario={scenario}
+                flow={flow}
                 highlight={highlight}
                 onHighlight={setHighlight}
                 className="w-full"
@@ -152,12 +154,20 @@ export function ArchitecturesBrowser() {
               scenario={scenario}
               onScenario={(i) => {
                 setScenario(i);
+                setFlow(null);
+                setHighlight(null);
+              }}
+              flow={flow}
+              onFlow={(id) => {
+                setFlow(id);
+                setScenario(null);
                 setHighlight(null);
               }}
               highlight={highlight}
               onHighlight={(h) => {
                 setHighlight(h);
                 setScenario(null);
+                setFlow(null);
               }}
             />
           </div>

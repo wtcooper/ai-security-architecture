@@ -17,6 +17,9 @@ interface InsightRailProps {
   archetype: Archetype;
   scenario: number | null;
   onScenario: (index: number | null) => void;
+  /** Spike grammar: the highlighted numbered flow, by id. */
+  flow?: string | null;
+  onFlow?: (id: string | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
 }
@@ -25,6 +28,8 @@ export function InsightRail({
   archetype,
   scenario,
   onScenario,
+  flow = null,
+  onFlow,
   highlight,
   onHighlight,
 }: InsightRailProps) {
@@ -44,6 +49,51 @@ export function InsightRail({
 
   return (
     <div className="space-y-5">
+      {(archetype.flows?.length ?? 0) > 0 && (
+        <section>
+          <p className="eyebrow">Data flows</p>
+          <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
+            Numbered flows are the spine of this drawing: each one carries what moves, the
+            threats that ride it, and the controls that must apply. Select one to trace it.
+          </p>
+          <div className="mt-2 space-y-1.5">
+            {archetype.flows!.map((f) => {
+              const active = flow === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => onFlow?.(active ? null : f.id)}
+                  className={`block w-full rounded-lg border px-2.5 py-2 text-left text-[12px] leading-snug transition ${
+                    active
+                      ? "border-ink bg-mist text-ink"
+                      : "border-line text-ink-2 hover:border-ink-3 hover:text-ink"
+                  }`}
+                >
+                  <span className="ident mr-1.5 rounded bg-ink px-1.5 py-[2px] text-[10px] font-bold text-paper">
+                    {f.id}
+                  </span>
+                  <span className="font-semibold">{f.title}</span>
+                  <span className="mt-1 block text-[11px] text-ink-3">{f.moves}</span>
+                  {active && (
+                    <>
+                      {(f.threats?.length ?? 0) > 0 && (
+                        <span className="mt-1.5 block text-[11px] text-ink-2">
+                          <span className="font-semibold">Threats: </span>
+                          {f.threats!.join(" · ")}
+                        </span>
+                      )}
+                      {f.note && (
+                        <span className="mt-1 block text-[11px] text-ink-2">{f.note}</span>
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {(archetype.scenarios?.length ?? 0) > 0 && (
         <section>
           <p className="eyebrow">Scenario walks</p>
