@@ -357,7 +357,7 @@ edges:
       After training it is in the weights.
   - from: labelling
     to: curation
-    path: primary
+    path: external
     label: labels & preferences
     note: >
       Frequently an outsourced workforce with a direct influence on model behaviour and very
@@ -398,6 +398,13 @@ edges:
     note: >
       Write-once and candidate-only — a job cannot overwrite a promoted artifact, and cannot
       sign anything.
+  - from: registry
+    to: evalGate
+    path: primary
+    label: candidate under test
+    note: >
+      The candidate is handed to the gate. Without this hop the gate emits a verdict about an
+      artifact it was never given — a call-out wearing a stage's clothes.
   - from: evalGate
     to: registry
     path: governance
@@ -571,7 +578,7 @@ flows:
   - id: F4
     title: The gate
     moves: Candidates through capability, safety, backdoor and memorisation testing.
-    path: [evalGate->registry]
+    path: [registry->evalGate, evalGate->registry]
     threats: [A backdoor that only triggers on a phrase nobody tested, Memorised training data recoverable from outputs, Promotion by schedule rather than by result]
     controls: [capabilityModelEvals, capabilityAiRedTeaming, capabilityHitlControls]
     note: >
@@ -609,8 +616,10 @@ scenarios:
         note: Serving pulls the promoted artifact and verifies the signature at load.
   - title: A poisoning is discovered months later
     steps:
-      - follow: evalGate->registry
-        note: Lineage maps the poisoned examples to every model version that learned from them.
+      - follow: trainJob->registry
+        note: >
+          Lineage maps the poisoned examples to every model version that learned from them —
+          recorded at promotion, not reconstructed afterwards.
       - follow: registry->serving
         note: Affected versions are rolled back to the last clean checkpoint.
       - follow: curation->corpus

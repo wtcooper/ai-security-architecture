@@ -329,7 +329,7 @@ blocks:
 
 edges:
   - from: delegatingUser
-    to: edge
+    to: authServer
     path: primary
     bidir: true
     label: SSO & consent
@@ -364,8 +364,8 @@ edges:
     note: >
       Method and tool names ride request headers so this hop can route and meter without
       reading bodies — mediation the current protocol was redesigned for.
-  - from: authServer
-    to: service
+  - from: service
+    to: authServer
     path: primary
     bidir: true
     label: token validation
@@ -483,12 +483,12 @@ pins:
         This is a published application before it is anything AI-specific: the handlers behind
         the protocol are ordinary attack surface and deserve ordinary application testing.
     - capability: capabilityKillSwitch
-      at: authServer->service
+      at: service->authServer
       note: >
         Revocation that ends a caller's access without a deploy — and reaches tokens already
         minted, not just future ones.
     - capability: capabilityIga
-      at: delegatingUser->edge
+      at: delegatingUser->authServer
       note: >
         Bind consent to a named client and named scopes at the IdP the organisation already
         governs — the delegated grant every later call traces back to, revocable where the
@@ -499,7 +499,7 @@ pins:
         Named clients with short-lived, audience-restricted tokens and working revocation. The
         calling agent is a non-human identity you did not create but must manage.
     - capability: capabilityToolPermissionScoping
-      at: authServer->service
+      at: service->authServer
       note: >
         Design scopes narrow enough that a hijacked agent's blast radius is one operation, not
         everything the user could do.
@@ -558,7 +558,7 @@ flows:
   - id: F1
     title: Delegation
     moves: A person's consent, exchanged for a token bound to this server and this scope.
-    path: [delegatingUser->edge, edge->authServer]
+    path: [delegatingUser->authServer, delegatingUser->authServer]
     threats: [A token minted for one server replayed at another, Consent screens that describe less than the grant allows, Scope broader than the task]
     controls: [capabilityIga, capabilityToolPermissionScoping]
     note: >
@@ -567,7 +567,7 @@ flows:
   - id: F2
     title: A tool call
     moves: Machine traffic in; results — and our tool descriptions — back into a caller's model.
-    path: [callingAgent->edge, edge->service, authServer->service]
+    path: [callingAgent->edge, edge->service, service->authServer]
     threats: [Callers that retry, loop and parallelise at machine rates, A token for another audience or a wider scope, Our descriptions steering somebody else's agent]
     controls: [capabilitySse, capabilityRateLimiting, capabilityMcpToolSecurity]
     note: >
@@ -595,7 +595,7 @@ flows:
   - id: F5
     title: What the descriptions say
     moves: Names, descriptions and schemas, published into other people's model context.
-    path: [toolDefs->service]
+    path: [toolDefs->service, service->edge, edge->callingAgent]
     threats: [A description change altering somebody else's agent behaviour, Schema drift between what is declared and what is accepted]
     controls: [capabilityMcpToolSecurity, capabilityAppSecTesting]
     note: >
@@ -605,15 +605,15 @@ flows:
 scenarios:
   - title: A user authorises a client
     steps:
-      - follow: delegatingUser->edge
+      - follow: delegatingUser->authServer
         note: Consent happens at the IdP the organisation already governs. The last human decision in the flow.
-      - follow: edge->authServer
+      - follow: delegatingUser->authServer
         note: The identity assertion is exchanged for a token audience-bound to this server.
       - follow: callingAgent->edge
         note: The agent calls in with its scoped token; the user is no longer present.
       - follow: edge->service
         note: Routed and metered at the edge before the application spends anything.
-      - follow: authServer->service
+      - follow: service->authServer
         note: Client, user, scopes, audience and expiry are validated per request.
       - follow: service->tenantData
         note: Scope check plus tenant-match check, on this and every subsequent operation.
@@ -653,12 +653,14 @@ deviations:
       with items — the thing a team ships and scales. Tool definitions stay separate because
       they are a different artifact class: versioned content with a review pipeline, whose
       distinctive edge runs into the caller's context rather than through the service.
-  - subject: An enterprise IdP is drawn even though the protocol does not require one
+  - subject: The consuming organisation's identity provider is not drawn
     reason: >
-      The target state federates identity to the provider the organisation already governs —
-      the standardised enterprise-managed authorization profile — because per-server identity
-      silos are how revocation gets missed. A consumer-facing server without an enterprise IdP
-      collapses this edge into the authorization server and keeps everything else.
+      The customer's IdP sits behind the consent exchange rather than on our drawing: what
+      reaches us is an assertion we swap for an audience-bound token, and their admin policy,
+      lifecycle and revocation keep working without us drawing or operating any of it. Drawing
+      it would put a block we neither run nor can control in the middle of our own
+      architecture. The federation is stated on the authorization server and pinned as
+      identity governance instead.
   - subject: Sessions are gone because the protocol removed them
     reason: >
       The current protocol revision deleted sessions and the initialize handshake; cross-call

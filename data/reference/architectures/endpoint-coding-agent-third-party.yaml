@@ -497,6 +497,7 @@ edges:
   - from: toolPlane
     to: aiGateway
     path: primary
+    bidir: true
     route: hv
     label: brokered calls
     note: >
@@ -736,7 +737,7 @@ flows:
   - id: F4
     title: Repository and document content
     moves: Clones, file reads, issue text and documents — read into context as though instruction.
-    path: [toolPlane->aiGateway, hostedTools->orgData]
+    path: [toolPlane->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
     threats: [Indirect prompt injection, Tool config arriving with the clone]
     controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity]
     note: The content is ours and still untrusted — many hands wrote it, and none of them are authenticated.
@@ -750,7 +751,7 @@ flows:
   - id: F6
     title: Enterprise systems
     moves: Calls into our internal connectors, and the records they read and change.
-    path: [toolPlane->aiGateway, hostedTools->orgData]
+    path: [harness->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
     threats: [Over-scoped internal grants, Bulk reads of org data, Writes with no approval]
     controls: [capabilitySecretsManagement, capabilityHitlControls, capabilityAgentRegistry]
     note: >
@@ -759,14 +760,14 @@ flows:
   - id: F7
     title: Internet egress
     moves: Dependency fetches, web reads and third-party SaaS calls.
-    path: [toolPlane->aiGateway, extTools->downstream]
+    path: [toolPlane->aiGateway, aiGateway->extTools, extTools->downstream]
     threats: [Web-borne injection, Exfiltration to an attacker endpoint, Malicious dependencies]
     controls: [capabilityEgressControl, capabilityAiDlp, capabilityAuditLogging]
     note: Everything fetched here re-enters the loop as context, which is why the allowlist is a security control.
   - id: F8
     title: Hosted sessions reach back
     moves: Requests from cloud and scheduled sessions running in the vendor's environment into our systems.
-    path: [vendorService->aiGateway, aiGateway->vendorService, hostedTools->orgData]
+    path: [vendorService->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
     threats: [Vendor infrastructure exercising our authority, Standing org credentials in a vendor cloud]
     controls: [capabilitySecretsManagement, capabilityAgentRegistry, capabilityHitlControls]
     note: >
@@ -807,8 +808,10 @@ scenarios:
     steps:
       - follow: vendorService->aiGateway
         note: A cloud or scheduled session asks for org data; nobody's laptop is involved.
-      - follow: aiGateway->vendorService
-        note: Our edge hands it to our gateway rather than letting the vendor's cloud reach in.
+      - follow: aiGateway->hostedTools
+        note: >
+          Our gateway admits it to our own tool surface rather than letting the vendor's cloud
+          reach past into the data directly.
       - follow: hostedTools->orgData
         note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and we record it.
 
