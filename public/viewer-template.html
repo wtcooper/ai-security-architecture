@@ -96,6 +96,8 @@ const KIND_STYLE = {
   provider: { stroke: "var(--ink-3)", dash: true },
   external: { stroke: "var(--data)", dash: true },
   governance: { stroke: "var(--ink-2)", dash: true },
+  boundary: { stroke: "var(--ink-3)", dash: true },
+  origin: { stroke: "transparent", dash: false },
 };
 const PATH_STYLE = {
   primary: { stroke: "var(--model)" },
@@ -122,6 +124,9 @@ function BlockNode({ data }) {
       <${Handle} type="target" id=${side + "-in"} position=${pos} style=${{ opacity: 0 }} />
     </span>`;
   });
+  if (block.kind === "origin") {
+    return h`<div style=${{ width: block.w, height: block.h, opacity: 0 }}>${handles}</div>`;
+  }
   if (block.kind === "actor") {
     return h`<div style=${{ width: block.w, height: block.h, opacity: dim ? 0.25 : 1, transition: "opacity 150ms", cursor: "grab",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 11 }}>
@@ -290,21 +295,28 @@ function Viewer() {
         data: { title: z.title, owner: z.owner, note: z.note, w: z.w, h: z.h },
         style: { width: z.w, height: z.h }, draggable: false, selectable: false, zIndex: -3 });
     });
-    const memberOf = new Map();
-    MODEL.frames.forEach((f, i) => {
-      const id = "__frame" + i;
-      f.members.forEach((m) => memberOf.set(m, { id, x: f.x, y: f.y }));
-      nodes.push({ id, type: "frame", position: { x: f.x, y: f.y },
-        data: { label: f.label, note: f.note, labelPos: f.labelPos, w: f.w, h: f.h },
-        style: { width: f.w, height: f.h }, draggable: true, selectable: false, zIndex: -1 });
-    });
-    for (const block of MODEL.blocks) {
-      const frame = memberOf.get(block.id);
-      nodes.push({ id: block.id, type: "block",
-        position: frame ? { x: block.x - frame.x, y: block.y - frame.y } : { x: block.x, y: block.y },
-        parentId: frame?.id, data: { block, dim: false, onItemEnter: cardAt }, draggable: true,
-        style: { width: block.w, height: block.h } });
+    // Containment by `parent`, to any depth. Parents are emitted first because React Flow
+    // requires it, and a container sits behind whatever it contains.
+    const byId = new Map(MODEL.blocks.map((b) => [b.id, b]));
+    const kidsOf = new Map();
+    for (const b of MODEL.blocks) {
+      if (!b.parent) continue;
+      if (!kidsOf.has(b.parent)) kidsOf.set(b.parent, []);
+      kidsOf.get(b.parent).push(b.id);
     }
+    const emit = (id, depth) => {
+      const block = byId.get(id);
+      if (!block) return;
+      const p = block.parent ? byId.get(block.parent) : null;
+      nodes.push({ id, type: "block",
+        position: p ? { x: block.x - p.x, y: block.y - p.y } : { x: block.x, y: block.y },
+        parentId: block.parent, data: { block, dim: false, onItemEnter: cardAt },
+        draggable: true, selectable: false,
+        zIndex: kidsOf.has(id) ? -2 + depth : depth,
+        style: { width: block.w, height: block.h } });
+      for (const kid of kidsOf.get(id) ?? []) emit(kid, depth + 1);
+    };
+    for (const b of MODEL.blocks) if (!b.parent) emit(b.id, 0);
     // Block-anchored pins are children of their block, so they travel when it is dragged.
     for (const pin of MODEL.blockPins) {
       nodes.push({ id: `pin:${pin.parent}:${pin.kind}:${pin.n ?? pin.code}:${pin.x}`, parentId: pin.parent,
@@ -325,9 +337,9 @@ function Viewer() {
   }), [nodes, inScenario, walkBlocks]);
 
   const edges = useMemo(() => {
-    const frameMembers = new Set(MODEL.frames.flatMap((f) => f.members));
-    const frameDragged = [...dragged].some((id) => id.startsWith("__frame"));
-    const moved = frameDragged ? new Set([...dragged, ...frameMembers]) : dragged;
+    // Dragging a container carries everything nested inside it, however deep.
+    const kids = (id) => MODEL.blocks.filter((b) => b.parent === id).flatMap((b) => [b.id, ...kids(b.id)]);
+    const moved = new Set([...dragged, ...[...dragged].flatMap(kids)]);
     const rectOf = Object.fromEntries(MODEL.blocks.map((b) => [b.id, b]));
     const pinsByEdge = new Map();
     for (const pin of MODEL.edgePins) {

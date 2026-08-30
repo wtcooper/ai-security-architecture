@@ -32,7 +32,6 @@ import type { ArchBlock, Archetype } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
-import { FRAME_HEAD, FRAME_PAD, RF_CONFIG } from "./rf-config";
 
 interface HoverCard {
   x: number;
@@ -52,8 +51,29 @@ type BlockNodeData = {
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
 };
 
+const HANDLE_POS = {
+  t: Position.Top,
+  b: Position.Bottom,
+  l: Position.Left,
+  r: Position.Right,
+} as const;
+
 function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   const { block, w, h, dim } = data;
+  // A deliberately unnamed source: it anchors an edge and draws nothing, so the line appears
+  // to begin in empty space. Handles still render, which is the entire point of the node.
+  if (block.kind === "origin") {
+    return (
+      <div style={{ width: w, height: h, opacity: 0 }}>
+        {(["t", "b", "l", "r"] as const).map((side) => (
+          <span key={side}>
+            <Handle type="source" id={side} position={HANDLE_POS[side]} style={{ opacity: 0 }} />
+            <Handle type="target" id={`${side}-in`} position={HANDLE_POS[side]} style={{ opacity: 0 }} />
+          </span>
+        ))}
+      </div>
+    );
+  }
   const style = block.kind === "actor" ? null : BLOCK_STYLE[block.kind];
   const cells = itemCells(block, { x: 0, y: 0, w, h });
   return (
@@ -261,41 +281,6 @@ function ZoneNode({
   );
 }
 
-function FrameNode({
-  data,
-}: NodeProps<Node<{ label: string; w: number; h: number; labelPos?: "top" | "bottom" }>>) {
-  return (
-    <div
-      style={{
-        width: data.w,
-        height: data.h,
-        border: "2px dashed var(--ink-3, #999)",
-        borderRadius: 12,
-        background: "color-mix(in srgb, var(--ink-3, #999) 6%, transparent)",
-        cursor: "grab",
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          ...(data.labelPos === "bottom" ? { bottom: -12 } : { top: -12 }),
-          left: 18,
-          background: "var(--ink, #333)",
-          color: "#fff",
-          font: "600 10px/1 var(--font-mono, monospace)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          padding: "6px 10px",
-          borderRadius: 3,
-        }}
-      >
-        {data.label}
-      </div>
-    </div>
-  );
-}
-
-/** A numbered capability chip at a build-validated spot; travels with its block. */
 function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean }>>) {
   return (
     <div
@@ -454,7 +439,7 @@ function BuildPathEdge(props: EdgeProps) {
   );
 }
 
-const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode, zone: ZoneNode };
+const nodeTypes = { block: BlockNode, chip: ChipNode, tag: TagNode, zone: ZoneNode };
 const edgeTypes = { buildPath: BuildPathEdge };
 
 /** Pick the facing handle pair from the two blocks' initial geometry. */
@@ -477,7 +462,6 @@ export function FlowDiagramRF({
   flow?: string | null;
   className?: string;
 }) {
-  const cfg = RF_CONFIG[archetype.id];
   const [card, setCard] = useState<HoverCard | null>(null);
   const [dragged, setDragged] = useState<ReadonlySet<string>>(new Set());
   // Hovering one arrow pulls it out of the bundle — the interactive half of the answer to
@@ -530,24 +514,19 @@ export function FlowDiagramRF({
 
   const initialNodes = useMemo(() => {
     const { layout } = archetype;
-    const hidden = new Set(cfg?.hide ?? []);
-    const members = new Set(cfg?.members ?? []);
-    const rects = layout.blocks;
-
-    let frame: { x: number; y: number; w: number; h: number } | null = null;
-    if (cfg && cfg.members.length) {
-      const rs = cfg.members.map((id) => rects[id]).filter(Boolean);
-      const x0 = Math.min(...rs.map((r) => r.x)) - FRAME_PAD;
-      const y0 = Math.min(...rs.map((r) => r.y)) - FRAME_PAD - FRAME_HEAD;
-      const x1 = Math.max(...rs.map((r) => r.x + r.w)) + FRAME_PAD;
-      const y1 = Math.max(...rs.map((r) => r.y + r.h)) + FRAME_PAD;
-      frame = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    // Containment comes from the architecture's own `parent` links now, at any depth.
+    const kidsOf = new Map<string, string[]>();
+    for (const b of archetype.blocks) {
+      if (!b.parent) continue;
+      if (!kidsOf.has(b.parent)) kidsOf.set(b.parent, []);
+      kidsOf.get(b.parent)!.push(b.id);
     }
-
+    const rects = layout.blocks;
     const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
 
     const nodes: Node[] = [];
-    // Spike grammar: ownership zones as full-height background columns. The horizontal extent
+
+    // Ownership bands as full-height background columns. The horizontal extent
     // comes from each zone's own members; the vertical extent is shared across every zone, so
     // the bands read as columns and a crossing is a horizontal move between two of them.
     const ZONE_PAD = 22;
@@ -600,32 +579,29 @@ export function FlowDiagramRF({
         zIndex: -3,
       });
     }
-    if (frame && cfg) {
+    // Blocks are emitted parents-first, because React Flow requires a parent node to appear
+    // before its children. Depth is unbounded — the walk recurses.
+    const byId = new Map(archetype.blocks.map((b) => [b.id, b]));
+    const emit = (id: string, depth: number) => {
+      const block = byId.get(id);
+      if (!block) return;
+      const r = rects[id];
+      const parentRect = block.parent ? rects[block.parent] : undefined;
       nodes.push({
-        id: "__frame",
-        type: "frame",
-        position: { x: frame.x, y: frame.y },
-        data: { label: cfg.frameLabel, note: cfg.frameNote, w: frame.w, h: frame.h, labelPos: cfg.labelPos },
-        style: { width: frame.w, height: frame.h },
-        draggable: true,
-        selectable: false,
-        zIndex: -1,
-      });
-    }
-    for (const block of archetype.blocks) {
-      if (hidden.has(block.id)) continue;
-      const r = rects[block.id];
-      const inFrame = frame && members.has(block.id);
-      nodes.push({
-        id: block.id,
+        id,
         type: "block",
-        position: inFrame && frame ? { x: r.x - frame.x, y: r.y - frame.y } : { x: r.x, y: r.y },
-        parentId: inFrame ? "__frame" : undefined,
+        position: parentRect ? { x: r.x - parentRect.x, y: r.y - parentRect.y } : { x: r.x, y: r.y },
+        parentId: block.parent,
         data: { block, w: r.w, h: r.h, dim: false, onItemEnter: cardAt, capNumber },
         draggable: true,
+        selectable: false,
+        // A container sits behind what it contains, deeper nesting drawing progressively above.
+        zIndex: kidsOf.has(id) ? -2 + depth : depth,
         style: { width: r.w, height: r.h },
       });
-    }
+      for (const kid of kidsOf.get(id) ?? []) emit(kid, depth + 1);
+    };
+    for (const block of archetype.blocks) if (!block.parent) emit(block.id, 0);
 
     // Pins sit at the same spots the SVG renderer and the build checks use. Block-anchored
     // pins are children of their block, so they travel when the user drags it.
@@ -697,7 +673,7 @@ export function FlowDiagramRF({
       });
     }
     return nodes;
-  }, [archetype, cfg, cardAt]);
+  }, [archetype, cardAt]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [lastId, setLastId] = useState(archetype.id);
@@ -732,12 +708,14 @@ export function FlowDiagramRF({
 
   const edges = useMemo(() => {
     const { layout } = archetype;
-    const hidden = new Set(cfg?.hide ?? []);
-    const members = new Set(cfg?.members ?? []);
+    const descendants = (id: string): string[] => {
+      const kids = archetype.blocks.filter((b) => b.parent === id).map((b) => b.id);
+      return kids.flatMap((k) => [k, ...descendants(k)]);
+    };
     const rects = layout.blocks;
     const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
-    // Dragging the frame moves every member block with it.
-    const moved = dragged.has("__frame") ? new Set([...dragged, ...members]) : dragged;
+    // Dragging a container carries everything nested inside it, however deep.
+    const moved = new Set([...dragged, ...[...dragged].flatMap(descendants)]);
 
     // Edge-anchored pins, as offsets from the build midpoint — the edge component re-bases
     // them on the live midpoint once an endpoint moves, so they travel with the arrow.
@@ -822,7 +800,6 @@ export function FlowDiagramRF({
 
     const out: Edge[] = [];
     for (const e of archetype.edges) {
-      if (hidden.has(e.from) || hidden.has(e.to)) continue;
       const key = `${e.from}->${e.to}`;
       const geo = edgeGeo.get(key);
       if (!geo) continue;
@@ -865,7 +842,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, cfg, inScenario, walkEdges, inFlow, flowEdges, hoveredEdge, dragged, cardAt, onPinLeave]);
+  }, [archetype, inScenario, walkEdges, inFlow, flowEdges, hoveredEdge, dragged, cardAt, onPinLeave]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
@@ -883,7 +860,7 @@ export function FlowDiagramRF({
           if (node.type === "block") {
             const block = (node.data as BlockNodeData).block;
             cardAt(event, block.title, block.note);
-          } else if (node.type === "chip" || node.type === "tag" || node.type === "frame") {
+          } else if (node.type === "chip" || node.type === "tag") {
             const d = node.data as { title?: string; label?: string; note?: string; body?: string };
             cardAt(event, d.title ?? d.label ?? "", d.body ?? d.note);
           }

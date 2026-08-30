@@ -840,18 +840,18 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [ ] A5 Full controls-as-components audit across all 13 using the provenance test
 - [ ] A6 Revert the "frame inside a band" deviation in ONTOLOGY.md
 
-### Wave B — grammar and renderer (**in progress**)
-- [ ] B1 `parent:` on blocks — recursive containment, unlimited depth
-- [ ] B2 `kind: boundary` — dashed container, no items, not on the data path
-- [ ] B3 `kind: origin` — invisible anchor for an anonymous edge source
-- [ ] B4 Recursive layout sizing (children on a local grid, parent derived)
-- [ ] B5 Per-container collision scoping
-- [ ] B6 Retire `RF_CONFIG`; containment becomes data
-- [ ] B7 Nested rendering in `FlowDiagramRF` **and** the standalone HTML exporter
-- [ ] B8 Derive the governance row from the tallest content band (fixes 402px / 222px gaps)
-- [ ] B9 Minimum band width so an actor-only band leaves no 76px gutter
-- [ ] B10 Pin placement: inside a block or on a band edge; never between bands; never open a gap for a pin
-- [ ] B11 Re-measure all 13; every inter-band gap uniform
+### Wave B — grammar and renderer ✅ **complete 2026-08-30**
+- [x] B1 `parent:` on blocks — recursive containment, unlimited depth
+- [x] B2 `kind: boundary` — dashed container, no items, not on the data path
+- [x] B3 `kind: origin` — invisible anchor for an anonymous edge source
+- [x] B4 Recursive layout sizing (children on a local grid, parent derived)
+- [x] B5 Per-container collision scoping — cells, band spans, edge routing and pin checks all scoped
+- [x] B6 Retire `RF_CONFIG` — file deleted, containment is data; containment becomes data
+- [x] B7 Nested rendering — both renderers, proven to three levels with edges across every boundary in `FlowDiagramRF` **and** the standalone HTML exporter
+- [x] B8 Derive the governance row from the tallest content band (fixes 402px / 222px gaps)
+- [x] B9 Band width from grid columns so an actor-only band leaves no 76px gutter
+- [x] B10 Pin placement — gutter **check** added (report-only; 7 existing violations fixed per architecture during rebuild, flips to error in Wave F). Auto-nudging was tried and abandoned: it moved pins onto blocks, and hiding a placement problem is worse than reporting it: inside a block or on a band edge; never between bands; never open a gap for a pin
+- [x] B11 Re-measured all 13 in the browser; gaps uniform within every architecture; every inter-band gap uniform
 
 ### Wave C — endpoint
 - [ ] C-1 Third-party: direct SSO path primary, gateway path secondary, `aiGateway→provider` added, remote-control/gateway exclusivity as a deviation, Cursor contrast in exemplars
@@ -874,9 +874,21 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 ### Wave F — enforcement and close-out
 - [ ] F-1 Provenance test report-only → error
 - [ ] F-2 `npm run audit` regenerated; catalogue doc and ontology audit updated
-- [ ] F-3 Playwright pass over all 13 against the success criteria below
+- [ ] F-3 Final Playwright pass over all 13 against the success criteria below
 
 ---
+
+### How each architecture is signed off
+
+**Playwright is opened on an architecture the moment it is touched, not at the end.** No
+architecture counts as done until it has been screenshotted and read. Working through a wave
+without looking is how the 402px gaps survived four commits.
+
+Per architecture, in order:
+1. Rebuild it, `npm run data` clean.
+2. **Open it in Playwright and screenshot the canvas.** Read the picture, not the YAML.
+3. Check it against the criteria below.
+4. Only then move to the next one.
 
 **Success criteria (P1–P5), gating each architecture individually:**
 

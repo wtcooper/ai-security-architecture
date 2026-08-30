@@ -541,12 +541,13 @@ function checkArchetypes(
       }
     }
     // No two blocks may claim the same grid cell — overlap is a wrong drawing, not a layout bug.
+    // Scoped per container, because a nested block's col/row address its parent's local grid.
     const cells = new Map<string, string>();
     for (const block of arch.blocks ?? []) {
       for (let r = block.row; r < block.row + (block.rowSpan ?? 1); r++) {
-        const key = `${block.col},${r}`;
+        const key = `${block.parent ?? ""}|${block.col},${r}`;
         const holder = cells.get(key);
-        if (holder) fail(`${where}: blocks ${holder} and ${block.id} both occupy grid cell ${key}`);
+        if (holder) fail(`${where}: blocks ${holder} and ${block.id} both occupy grid cell ${key.split("|")[1]}${block.parent ? ` inside ${block.parent}` : ""}`);
         cells.set(key, block.id);
       }
     }
@@ -661,6 +662,7 @@ function checkArchetypes(
       const BAND_ORDER = ["user", "endpoint", "cloud", "vendor", "external"];
       const spanByOwner = new Map<string, { lo: number; hi: number }>();
       for (const b of arch.blocks) {
+        if (b.parent) continue; // nested blocks sit on a local grid, not the band grid
         const owner = zoneOwner.get(b.zone ?? "");
         if (!owner || owner === "governance") continue;
         const s = spanByOwner.get(owner) ?? { lo: b.col, hi: b.col };
@@ -772,6 +774,9 @@ function checkArchetypes(
  * labels that may never be items, the named item packs a block can reference by name, and the
  * retirement redirects that point an author at the surviving name for a concept.
  */
+/** Collected across all architectures and reported once (see checkDiagramCollisions). */
+const pinGutterWarnings: string[] = [];
+
 const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS, ITEM_PACKS, DEPRECATED_TITLES, KNOWN_LABELS } =
   (() => {
     try {
@@ -1023,6 +1028,10 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   }
   const once = (m: Map<string, number>) => [...m.values()].filter((n) => n === 1).length;
   const zoned = archs.filter((a) => a.zones?.length).length;
+  if (pinGutterWarnings.length) {
+    console.log(`pin placement: ${pinGutterWarnings.length} pin(s) in a band gutter`);
+    for (const w of pinGutterWarnings) console.log(`  ~ ${w}`);
+  }
   console.log(
     `vocabulary census: ${titles.size} distinct block titles (${once(titles)} used once), ` +
       `${labels.size} distinct item labels (${once(labels)} used once), ` +
@@ -1179,6 +1188,13 @@ function checkDiagramCollisions(
   const hits = (r: Rect, s: Rect) =>
     r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h;
   const blockRects = Object.entries(layout.blocks);
+  // Is `outer` an ancestor of `inner`? A container's rect covers its children by construction,
+  // so it can never be said to obstruct an edge that starts or ends inside it.
+  const parentOf = new Map(arch.blocks.map((b) => [b.id, b.parent]));
+  const encloses = (outer: string, inner: string) => {
+    for (let p = parentOf.get(inner); p; p = parentOf.get(p)) if (p === outer) return true;
+    return false;
+  };
 
   // Flows through blocks. Path data is our own "M x y L x y ..." — parse the segments back.
   for (const edge of layout.edges) {
@@ -1192,6 +1208,7 @@ function checkDiagramCollisions(
       };
       for (const [id, rect] of blockRects) {
         if (id === edge.from || id === edge.to) continue;
+        if (encloses(id, edge.from) || encloses(id, edge.to)) continue;
         if (hits(seg, inflate(rect, -2))) {
           fail(
             `${where}: flow ${edge.from}->${edge.to} passes through block ${id} — ` +
@@ -1216,6 +1233,8 @@ function checkDiagramCollisions(
       if (r.y < 2) fail(`${where}: ${kind} at ${at} runs off the top of the canvas — fewer pins there, or move the block down a row`);
       for (const [id, rect] of blockRects) {
         if (id === ownBlock) continue;
+        // A pin on a nested block sits inside that block's container by construction.
+        if (ownBlock && encloses(id, ownBlock)) continue;
         if (hits(r, inflate(rect, -2))) {
           fail(`${where}: ${kind} at ${at} lands on block ${id} — pin it elsewhere or adjust the grid`);
         }
@@ -1237,6 +1256,34 @@ function checkDiagramCollisions(
     );
   }
 
+  // A pin anchored on an edge whose midpoint falls in the gutter between two bands puts a
+  // control in no-man's-land: it belongs inside a band, or on a band's edge, or nowhere.
+  // Reported rather than failed while the catalogue is rebuilt; flips to an error in Wave F.
+  const ZONE_PAD = 22;
+  const bandSpans = (arch.zones ?? [])
+    .filter((z) => z.owner !== "governance")
+    .flatMap((z) => {
+      const cs = arch.blocks.filter((b) => b.zone === z.id && !b.parent).map((b) => b.col);
+      const cols = layout.columns ?? [];
+      if (!cs.length || !cols.length) return [];
+      const lo = cols[Math.min(...cs)];
+      const hi = cols[Math.max(...cs)];
+      return lo && hi ? [{ x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD }] : [];
+    });
+  if (bandSpans.length) {
+    const pinnedEdges = new Set(
+      [...arch.pins.capabilities, ...arch.pins.risks].map((p) => p.at).filter((at) => at.includes("->")),
+    );
+    for (const e of layout.edges) {
+      const ref = `${e.from}->${e.to}`;
+      if (!pinnedEdges.has(ref) && !pinnedEdges.has(`${e.to}->${e.from}`)) continue;
+      if (bandSpans.some((b) => e.midX >= b.x0 && e.midX <= b.x1)) continue;
+      pinGutterWarnings.push(
+        `${where}: pin on ${ref} sits in the gutter between bands — move a block so the edge's midpoint falls inside a band, or re-anchor the pin`,
+      );
+    }
+  }
+
   const tagGroups = new Map<string, number>();
   for (const pin of arch.pins.risks) {
     tagGroups.set(pin.at, (tagGroups.get(pin.at) ?? 0) + 1);
@@ -1244,7 +1291,7 @@ function checkDiagramCollisions(
   for (const [at, n] of tagGroups) {
     // Tag width depends on the code ("R01"), which is constant-width here.
     const { rects } = tagSpots(Array.from({ length: n }, () => 32), layout.blocks[at], edgeGeoOf(at));
-    checkSpots("risk tag", at, rects);
+    checkSpots("risk tag", at, rects, layout.blocks[at] ? at : undefined);
   }
 }
 

@@ -3,7 +3,7 @@
  * the ref-arch-diagram skill renders (public/viewer-template.html is a copy of the skill's
  * template). The app resolves everything the viewer needs into a self-contained "render
  * model": rects and path strings from the build layout, pin titles and codes from the
- * risk/capability registries, frames from RF_CONFIG. Block pins are relative to their
+ * risk/capability registries, containment from each block's own `parent`. Block pins are relative to their
  * block, edge pins are offsets from the edge midpoint — the two conventions that let the
  * viewer keep pins riding blocks and arrows when the reader drags them.
  */
@@ -13,7 +13,6 @@ import { chipSpots, itemCells, tagSpots } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 
 import { tagWidth } from "./flow-style";
-import { frameRect, RF_CONFIG } from "./rf-config";
 
 /** The viewer's `layer` (tab colour) from the block's CoSAI anchor — blockTab's rules. */
 function layerOf(block: ArchBlock): "app" | "model" | "data" | undefined {
@@ -39,6 +38,7 @@ export function buildViewerModel(archetype: Archetype) {
     return {
       id: b.id,
       kind: b.kind,
+      parent: b.parent,
       title: b.title,
       icon: b.icon,
       layer: layerOf(b),
@@ -79,17 +79,6 @@ export function buildViewerModel(archetype: Archetype) {
       horizontal: geo.horizontal,
     };
   });
-
-  const cfg = RF_CONFIG[archetype.id];
-  const frames = cfg
-    ? [{
-        label: cfg.frameLabel,
-        note: cfg.frameNote,
-        labelPos: cfg.labelPos ?? "top",
-        members: cfg.members,
-        ...frameRect(cfg.members.map((id) => rects[id])),
-      }]
-    : [];
 
   // Ownership bands, mirroring FlowDiagramRF exactly: each band's horizontal extent comes from
   // its own members, the vertical extent is shared so the bands read as columns and a crossing
@@ -200,7 +189,6 @@ export function buildViewerModel(archetype: Archetype) {
     height: layout.height,
     blocks,
     edges,
-    frames,
     zones,
     blockPins,
     edgePins,
