@@ -9,6 +9,7 @@ import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces } from 
 import type { Archetype, Paragraph } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
+import { FlowSequence } from "./FlowSequence";
 import { FlowLegend } from "./FlowLegend";
 import { GuidancePanel } from "./GuidancePanel";
 import { InsightRail } from "./InsightRail";
@@ -147,6 +148,9 @@ export function ArchitecturesBrowser() {
               />
             </div>
             <FlowLegend className="mt-3 px-1" />
+            {flow && (
+              <FlowSequence archetype={archetype} flowId={flow} className="mt-5" />
+            )}
           </div>
           <div className="self-start rounded-xl border border-line bg-paper p-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <InsightRail

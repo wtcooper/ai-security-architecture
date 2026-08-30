@@ -25,7 +25,7 @@ description:
     whatever the contract says — while our repositories, internal MCP servers and org data sit
     in their own band. So the drawing distinguishes three crossings with three different jobs:
     admission for the approved vendor, admission plus inspection for the open internet, and
-    brokered scoped grants through the MCP gateway for our own systems. That distinction is
+    brokered scoped grants through the AI gateway for our own systems. That distinction is
     what a risk owner needs and what a single "gateway" box hides.
   - >
     The vendor's own control plane — managed settings, connector brokering, audit export,
@@ -82,7 +82,7 @@ zones:
     note: >
       What the organisation operates and can change: the egress control every outbound path
       crosses — admitting the approved vendor, admitting and inspecting everything else — and
-      the MCP gateway that admits agents into our own systems.
+      the AI gateway that admits agents into our own systems.
   - id: zoneEnterprise
     title: Enterprise systems & data
     owner: enterprise
@@ -233,9 +233,9 @@ blocks:
         icon: doc
         note: Our own record of what left and where it went, independent of the vendor's export.
 
-  - id: mcpGateway
+  - id: aiGateway
     kind: service
-    title: MCP gateway
+    title: AI gateway
     zone: zoneCrossing
     col: 3
     row: 3
@@ -257,16 +257,17 @@ blocks:
         icon: doc
         note: The org-side record of everything an agent touched in our systems.
 
-  - id: repos
+  - id: orgSystems
     kind: external
-    title: Repos & documents
+    title: Enterprise systems
     cosaiComponent: componentDataSources
     zone: zoneEnterprise
     col: 4
     row: 3
     note: >
-      Our source control and document stores. The content is ours; it is also contributed to by
-      many hands, which makes a clone untrusted input the moment it lands on the endpoint.
+      Our repositories, internal tool servers and the systems of record behind them. The
+      content is ours and still untrusted — many hands wrote it, and none of them are
+      authenticated — so a clone is instruction-bearing input the moment it lands.
     items:
       - id: code
         label: Code & project docs
@@ -276,22 +277,10 @@ blocks:
         label: Tool config dotfile
         icon: gear
         note: The tool-server declaration that ships with the code — the most attacked artifact here.
-
-  - id: orgData
-    kind: external
-    title: Enterprise data
-    cosaiComponent: componentDataSources
-    zone: zoneEnterprise
-    col: 4
-    row: 4
-    note: >
-      The systems of record behind our internal connectors — tickets, documents and business
-      data the agent reads and changes through the gateway.
-    items:
       - id: records
         label: Org data
         icon: db
-        note: Reached under the developer's scope, never a standing service account.
+        note: Business systems reached under the developer's scope, never a standing service account.
       - id: fileStorage
         label: File storage
         icon: folder
@@ -428,7 +417,7 @@ edges:
       Dependency fetches and web reads leave through the same edge — the last boundary between
       a content-borne injection and an attacker's collection endpoint.
   - from: toolPlane
-    to: mcpGateway
+    to: aiGateway
     path: primary
     bidir: true
     route: hv
@@ -437,28 +426,21 @@ edges:
       The path into our own systems: connectors the marketplace admits, on grants scoped to the
       developer rather than to the machine.
   - from: egressControl
-    to: mcpGateway
+    to: aiGateway
     path: primary
     bidir: true
     label: hosted sessions inbound
     note: >
       Cloud and scheduled sessions running in the vendor's environment come back through the
       edge and are admitted to org systems by our own gateway — never directly.
-  - from: mcpGateway
-    to: repos
+  - from: aiGateway
+    to: orgSystems
     path: primary
     bidir: true
-    label: source & documents
-    note: >
-      Repository and document reads, and the writes that become pull requests — recorded on our
-      side of the boundary.
-  - from: mcpGateway
-    to: orgData
-    path: primary
-    bidir: true
-    route: vh
     label: scoped reads & writes
-    note: Business systems reached under the developer's scope, logged by us rather than by the vendor.
+    note: >
+      Repository reads, the writes that become pull requests, and business-system calls — all
+      on grants the gateway scoped to the developer, and all recorded on our side.
   - from: egressControl
     to: downstream
     path: external
@@ -472,7 +454,7 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: mcpGateway->repos
+      at: aiGateway->orgSystems
       note: >
         Source files, manifests, issue text and documents are unrelated paths into the same
         context window, none of which is the developer's instruction.
@@ -500,7 +482,7 @@ pins:
         A remote channel is only as good as the account and device binding behind it; a stale
         login steering a machine full of credentials is an account-compromise blast radius.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: egressControl->mcpGateway
+      at: egressControl->aiGateway
       note: >
         A hosted session arriving with a connector grant is the vendor's infrastructure
         exercising our authority — the grant is what bounds it, and our gateway issues it.
@@ -515,7 +497,7 @@ pins:
         Dependencies and remote servers arrive on publisher self-attestation, and their
         descriptions and contents are read into context as model input.
     - risk: riskRogueActions
-      at: mcpGateway->orgData
+      at: aiGateway->orgSystems
       note: Writes into systems of record from a loop whose plan nobody reviewed.
     - risk: riskShadowAndUnknownAgents
       at: harness
@@ -563,21 +545,21 @@ pins:
       at: harness->memory
       note: Treat memory and rules as untrusted input on read; a repo-committed rules change is a code change.
     - capability: capabilityPromptInjectionDefense
-      at: mcpGateway->repos
+      at: aiGateway->orgSystems
       note: Treat repository and document content as untrusted; it cannot be authenticated, only bounded.
     - capability: capabilitySecretsManagement
-      at: mcpGateway
+      at: aiGateway
       note: >
         Org access rides short-lived, connector-scoped grants issued at the marketplace on our
         own keys — the vendor's cloud never holds a standing org credential.
     - capability: capabilityMcpToolSecurity
-      at: toolPlane->mcpGateway
+      at: toolPlane->aiGateway
       note: Provenance and behavioural review before a server is admitted; pin versions so an update is a decision.
     - capability: capabilityHitlControls
-      at: mcpGateway->orgData
+      at: aiGateway->orgSystems
       note: Non-overridable approval on consequential writes, kept rare enough that each prompt is read.
     - capability: capabilityAgentRegistry
-      at: mcpGateway
+      at: aiGateway
       note: >
         A managed allowlist of connectors and tool servers, enforced from our gateway rather
         than from the configuration file it governs.
@@ -599,14 +581,46 @@ flows:
     controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
     note: The attended path, and the one the archetype's whole posture assumes is the normal case.
   - id: F2
-    title: Remote steering
-    moves: Instructions and approvals from a phone, a browser or a chat thread, and the results back.
-    path: [developer->remoteDevice, remoteDevice->egressControl, egressControl->vendorService]
-    threats: [Stale account or device binding, Chat channels admitting more than the owner]
-    controls: [capabilityIga, capabilityAgentRuntimeEnforcement]
+    title: Remote steering, and the relay back
+    moves: >
+      An instruction typed on a phone, out to the vendor's relay, back down to the session on
+      the developer's own machine — and the result all the way back.
+    path:
+      - follow: developer->remoteDevice
+        note: The developer types the instruction on a phone, in a browser, or in a chat thread.
+      - follow: remoteDevice->egressControl
+        note: >
+          It leaves for the vendor's relay through our firewall, which is where the device and
+          the user are checked and where an unapproved surface would be refused.
+      - follow: egressControl->vendorService
+        note: Out to the vendor's cloud on the allowlisted path — the session the relay will route.
+      - follow: vendorService->egressControl
+        note: >
+          The relay hands the work back down. Note the direction: the vendor is not reaching
+          into the endpoint — it is answering a connection the endpoint already opened.
+      - follow: egressControl->harness
+        note: >
+          The instruction arrives at the session running on the developer's own machine. No
+          port was opened to receive it.
+      - follow: harness->toolPlane
+        note: The work happens locally, with the developer's files, credentials and sessions around it.
+      - follow: harness->egressControl
+        note: The result goes back up the same outbound connection.
+      - follow: egressControl->vendorService
+        note: Through the vendor's relay again, which is holding the other end of the conversation.
+      - follow: egressControl->remoteDevice
+        note: >
+          And back to the phone. Nine steps, one crossing used four times in four directions —
+          which is why this reads as a sequence and not as an arrow.
+    threats: [Stale account or device binding, Chat channels admitting more than the owner, Approval answered on a low-assurance surface]
+    controls: [capabilityIga, capabilityAgentRuntimeEnforcement, capabilityAiTprm]
     note: >
-      Outbound relay, no inbound port — but the admission decision now lives with the vendor's
-      identity system unless our edge makes it ours too.
+      The round trip is the point: nothing listens on the endpoint, so the work reaches the
+      machine only because the machine is already holding a connection open to the vendor. The
+      instruction leaves the company, comes back, executes locally with the developer's own
+      credentials around it, and the answer retraces the path. Read this one as a sequence — a
+      single arrow on the drawing cannot show that the same crossing is used four times in
+      four different directions.
   - id: F3
     title: Model inference
     moves: Code, documents and screenshots out for inference; the completion that drives the next action back.
@@ -620,7 +634,7 @@ flows:
   - id: F4
     title: Repository and document content
     moves: Clones, file reads, issue text and documents — read into context as though instruction.
-    path: [toolPlane->mcpGateway, mcpGateway->repos]
+    path: [toolPlane->aiGateway, aiGateway->orgSystems]
     threats: [Indirect prompt injection, Tool config arriving with the clone]
     controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity]
     note: The content is ours and still untrusted — many hands wrote it, and none of them are authenticated.
@@ -634,7 +648,7 @@ flows:
   - id: F6
     title: Enterprise systems
     moves: Calls into our internal connectors, and the records they read and change.
-    path: [toolPlane->mcpGateway, mcpGateway->orgData]
+    path: [toolPlane->aiGateway, aiGateway->orgSystems]
     threats: [Over-scoped internal grants, Bulk reads of org data, Writes with no approval]
     controls: [capabilitySecretsManagement, capabilityHitlControls, capabilityAgentRegistry]
     note: >
@@ -650,12 +664,12 @@ flows:
   - id: F8
     title: Hosted sessions reach back
     moves: Requests from cloud and scheduled sessions running in the vendor's environment into our systems.
-    path: [vendorService->egressControl, egressControl->mcpGateway, mcpGateway->orgData]
+    path: [vendorService->egressControl, egressControl->aiGateway, aiGateway->orgSystems]
     threats: [Vendor infrastructure exercising our authority, Standing org credentials in a vendor cloud]
     controls: [capabilitySecretsManagement, capabilityAgentRegistry, capabilityHitlControls]
     note: >
       Nobody's laptop is involved in this one. It is the crossing that most often has no
-      component on it at all, and the reason the MCP gateway is drawn.
+      component on it at all, and the reason the AI gateway is drawn.
   - id: F9
     title: Vendor control plane
     moves: Managed settings and allowlists down; session audit export back.
@@ -677,11 +691,11 @@ scenarios:
         note: The vendor's service takes the session and calls the model behind it.
       - follow: harness->toolPlane
         note: Edits and commands execute with whatever scope the permission model granted.
-      - follow: toolPlane->mcpGateway
+      - follow: toolPlane->aiGateway
         note: Anything reaching our systems is admitted by our marketplace, on our grants.
   - title: A poisoned document phones home
     steps:
-      - follow: mcpGateway->repos
+      - follow: aiGateway->orgSystems
         note: A hidden instruction in a source file or document is read into context.
       - follow: harness->egressControl
         note: The instruction shapes the completion, which the loop treats as the plan.
@@ -691,9 +705,9 @@ scenarios:
     steps:
       - follow: vendorService->egressControl
         note: A cloud or scheduled session asks for org data; nobody's laptop is involved.
-      - follow: egressControl->mcpGateway
+      - follow: egressControl->aiGateway
         note: Our edge hands it to our gateway rather than letting the vendor's cloud reach in.
-      - follow: mcpGateway->orgData
+      - follow: aiGateway->orgSystems
         note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and we record it.
 
 deviations:

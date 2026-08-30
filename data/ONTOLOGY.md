@@ -70,7 +70,7 @@ one zone:
   Ownership, not architecture mode, is what activates the inline rule.
 
 **The zone-3 invariant:** any flow from a vendor or provider environment into customer
-systems must pass through a customer-owned inline component — the MCP gateway (see
+systems must pass through a customer-owned inline component — the AI gateway (see
 vocabulary) being the canonical one. An edge from a vendor block into customer data with no
 customer-owned component on it is an audit finding.
 
@@ -78,8 +78,7 @@ customer-owned component on it is an audit finding.
 
 - **Components** are blocks with items; items name things that exist. Control or policy
   statements are not items — the pinned chip is the statement. Exception: blocks whose role
-  IS a control surface (AI gateway, Service edge, MCP gateway, governance plane, egress
-  gate, OS permission layer, output validation stage, tool broker) — their items describe
+  IS a control surface (AI gateway, Service edge, egress control, governance plane, OS permission layer, output validation stage, tool broker) — their items describe
   function.
 - **Controls** are numbered capability chips: the number is per-diagram (position in the
   architecture's derived capability list); the catalogue-stable code (C-number, the
@@ -105,7 +104,7 @@ customer-owned component on it is an audit finding.
 Actors in column 0 (or on the user's path); Remote device on the user's path; governance
 plane rightmost; model provider top-right; Downstream services directly beneath Tool
 services on a vertical external edge; Memory & state adjacent to the harness; customer
-crossings (AI gateway out, MCP gateway in) between the harness column and what they govern.
+crossings (egress control and AI gateway) between the workload column and what they govern.
 These are conventions checked in review, not by the build — the build checks collisions.
 
 ## 6. Authoring checklist (every new or changed architecture)

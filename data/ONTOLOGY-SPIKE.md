@@ -20,7 +20,7 @@ inversion.
 | Entity | Rule |
 | --- | --- |
 | **Zone** | An ownership band with one of five standard `owner` values (below). Every block declares one. Drawn as a full-height background column, so a crossing is a horizontal move. |
-| **Flow** | A numbered, named path (`F1`, `F2` …) over real edges, carrying `moves` (what travels), `threats`, and `controls` (capability ids that must also be pinned). Selectable in the rail; the drawing traces it. |
+| **Flow** | A numbered, named path (`F1`, `F2` …) over real edges, carrying `moves` (what travels), `threats`, and `controls` (capability ids that must also be pinned). Selectable in the rail; the drawing traces it, and a **sequence view** renders beneath the canvas. A step may be a bare edge ref or an edge ref with its own note — a round trip reuses one edge in both directions and means something different each time. |
 
 ## The five standard zones
 
@@ -34,7 +34,7 @@ controls differ.
 | --- | --- | --- | --- |
 | 1 | `principal` | People and the surfaces they instruct from — staff, customers, remote devices, chat surfaces, application front ends | The person, on a device the organisation may or may not manage |
 | 2 | `workload` | Where the agent loop actually runs, and the state and local tools it owns | Us on the endpoint and cloud surfaces; **the vendor** on the SaaS surface |
-| 3 | `crossing` | The controls the organisation operates on the way out — egress control and firewall, AI gateway, MCP gateway, relay — and the control plane behind them: identity, secrets, policy, registry, telemetry | Always the organisation |
+| 3 | `crossing` | The controls the organisation operates on the way out — egress control and firewall, AI gateway, AI gateway, relay — and the control plane behind them: identity, secrets, policy, registry, telemetry | Always the organisation |
 | 4 | `enterprise` | The organisation's own systems and data — systems of record, internal APIs and MCP servers, tenant data, artifact stores. **What our MCPs and connectors reach in our own environment.** | The organisation |
 | 5 | `external` | Outside the company entirely — model providers, third-party SaaS, remote MCP servers, public hubs, the open web, and the unsolicited senders who arrive through them | Nobody in the drawing |
 
@@ -44,7 +44,7 @@ controls differ.
 | --- | --- | --- | --- | --- | --- |
 | **Endpoint** | Owner or developer, remote device, local terminal | The managed device and its sandbox — harness, local tools, memory, workspace | Relay, AI gateway, egress control, control plane | Org repos, internal APIs and MCP servers, org data | Model providers, messaging platforms, remote MCP, package registries, the web, senders |
 | **Cloud & hosted** | Requesters, initiators, schedules and events, the application front end | The agent tier the organisation runs — supervisor, subagents, memory, sandboxes | AI gateway, tool gateway, governance plane | Systems of record, tenant data, vector stores, model registry | Model providers, third-party APIs, A2A peers, the web |
-| **Third-party SaaS** | Employees, citizen builders, agent consumers | **The vendor's runtime** — where the loop runs, operated by someone else | Our egress control, our MCP gateway, our tenant governance | Org data the vendor's agents reach through our gateway | The vendor's own backend, its model providers, consumer tenants, the web |
+| **Third-party SaaS** | Employees, citizen builders, agent consumers | **The vendor's runtime** — where the loop runs, operated by someone else | Our egress control, our AI gateway, our tenant governance | Org data the vendor's agents reach through our gateway | The vendor's own backend, its model providers, consumer tenants, the web |
 
 The SaaS row is the one that earns the model: putting the vendor runtime in `workload` and
 our data in `enterprise` makes the crossing rule say exactly what we want it to say — a
@@ -74,12 +74,26 @@ jobs, and conflating them produces architectures nobody would build:
 | --- | --- | --- |
 | An **approved vendor's own service** under an enterprise agreement | Destination admission. The vendor's endpoints are allowlisted because third-party risk management cleared them; the session is not inspected, and on a pinned TLS session it cannot be. | Firewall / egress allowlist |
 | **Arbitrary destinations** — registries, the open web, third-party servers | Admission *and* inspection, because nothing vouches for what comes back | Egress proxy, SSE, CASB |
-| **Our own systems and data** | Brokered access: scoped short-lived grants, our keys, our audit | MCP gateway / API gateway |
+| **Our own systems and data** | Brokered access: scoped short-lived grants, our keys, our audit | AI gateway / API gateway |
 
 Drawing an inspection point on a sanctioned vendor path asserts a control nobody operates.
 What governs that path is the assessment behind the allowlist entry, the tenant binding in
 managed settings, and the agreement itself — pinned as vendor assurance and egress control on
 the edge, not drawn as a proxy in the middle of it.
+
+## The sequence view
+
+A static drawing answers "what is connected to what". It cannot answer "in what order, and in
+which direction" — and for this catalogue's most-misread path, an instruction typed on a phone
+that ends up executing on the user's own laptop by way of a vendor relay, the ordering *is* the
+architecture. So a selected flow also renders as lifelines and numbered messages beneath the
+canvas. The pair is the explanation: the drawing places the components and the boundaries, the
+sequence shows the traversal, including the same crossing being used four times in four
+directions.
+
+This is also the answer to arrow density. A drawing whose every path is legible at rest is a
+drawing with very few paths; the resting state shows the topology, and reading any particular
+story is a click.
 
 ## What stays from the main grammar
 
@@ -89,7 +103,7 @@ A spike architecture is still a normal architecture — it just carries two extr
 
 ## The one deliberate departure from the source research
 
-Both research streams draw five separate brokers (messaging relay, AI gateway, MCP gateway,
+Both research streams draw five separate brokers (messaging relay, AI gateway, AI gateway,
 API gateway, egress proxy). This catalogue draws **one bundled AI gateway**, because that is
 how the organisation actually operates: a LiteLLM-class tier fronting the model providers,
 the MCP servers and the skills/plugin brokerage together. The consolidation is recorded as a

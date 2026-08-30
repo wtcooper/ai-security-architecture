@@ -433,7 +433,8 @@ export function FlowDiagramRF({
   const activeFlow = flow ? archetype.flows?.find((f) => f.id === flow) : undefined;
   const flowEdges = useMemo(() => {
     const s = new Set<string>();
-    for (const ref of activeFlow?.path ?? []) {
+    for (const raw of activeFlow?.path ?? []) {
+      const ref = typeof raw === "string" ? raw : raw.follow;
       s.add(ref);
       const [a, b] = ref.split("->");
       if (a && b) s.add(`${b}->${a}`);
@@ -442,7 +443,12 @@ export function FlowDiagramRF({
   }, [activeFlow]);
   const inFlow = Boolean(activeFlow);
   const flowBlocks = useMemo(
-    () => new Set((activeFlow?.path ?? []).flatMap((ref) => ref.split("->"))),
+    () =>
+      new Set(
+        (activeFlow?.path ?? []).flatMap((raw) =>
+          (typeof raw === "string" ? raw : raw.follow).split("->"),
+        ),
+      ),
     [activeFlow],
   );
 
@@ -708,7 +714,8 @@ export function FlowDiagramRF({
 
     // Spike grammar: the numbered flow tags each edge carries, stacked under the midpoint.
     for (const f of archetype.flows ?? []) {
-      for (const ref of f.path) {
+      for (const raw of f.path) {
+        const ref = typeof raw === "string" ? raw : raw.follow;
         const geo = edgeGeo.get(ref) ?? edgeGeo.get(ref.split("->").reverse().join("->"));
         if (!geo) continue;
         const key = `${geo.from}->${geo.to}`;

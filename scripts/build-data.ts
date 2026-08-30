@@ -621,7 +621,8 @@ function checkArchetypes(
       flowIds.add(flow.id);
       if (!flow.moves?.trim()) fail(`${at}: needs a "moves" statement`);
       if (!flow.path?.length) fail(`${at}: has no path`);
-      for (const ref of flow.path ?? []) {
+      for (const raw of flow.path ?? []) {
+        const ref = typeof raw === "string" ? raw : raw?.follow;
         if (edgeKeys.has(ref)) continue;
         const [a, b] = (ref ?? "").split("->");
         if (a && b && bidir.has(`${b}->${a}`)) continue;

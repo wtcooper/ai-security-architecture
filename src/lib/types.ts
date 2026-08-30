@@ -283,14 +283,23 @@ export interface ArchZone {
  * they carry what moves, the threats that ride them, and the controls that must apply — so a
  * reviewer designs the flow rather than inferring it from the connectors left between blocks.
  */
+/**
+ * One step of a flow. A round trip uses the same edge in both directions with different
+ * meaning each time, so a step may carry its own note rather than inheriting the edge's.
+ */
+export interface ArchFlowStep {
+  follow: string;
+  note?: string;
+}
+
 export interface ArchFlow {
   /** "F1", "F2" … stable within the architecture. */
   id: string;
   title: string;
   /** What actually moves along this flow. */
   moves: string;
-  /** Ordered edge refs, "from->to", each of which must be a real edge. */
-  path: string[];
+  /** Ordered steps — a bare edge ref, or an edge ref with its own note. */
+  path: (string | ArchFlowStep)[];
   threats?: string[];
   /** Capability ids that must apply to this flow; each must also be pinned on the drawing. */
   controls?: string[];
