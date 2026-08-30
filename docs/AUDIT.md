@@ -794,6 +794,7 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
 | Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
 | First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
+| First-party coding & desktop agents | Remote relay | external | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
 | First-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
 | First-party coding & desktop agents | Tool services | service | `componentTools` |
@@ -826,10 +827,9 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | Supply-chain assurance | governance | (none) |
 | Third-party coding & desktop agents | Observability & response | governance | (none) |
 | Local model runtime | Local applications | service | (none) |
-| Local model runtime | Local HTTP API | service | `componentModelServing` |
+| Local model runtime | Inference API | service | `componentModelServing` |
 | Local model runtime | Inference runtime | service | `componentTheModel` |
 | Local model runtime | Storage | external | `componentModelStorage` |
-| Local model runtime | Egress control | service | (none) |
 | Local model runtime | Supply-chain assurance | governance | (none) |
 | Local model runtime | Observability & response | governance | (none) |
 | Local model runtime | Public model hub | external | `componentModelStorage` |

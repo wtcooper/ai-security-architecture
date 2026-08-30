@@ -84,7 +84,7 @@ export function buildViewerModel(archetype: Archetype) {
   // its own members, the vertical extent is shared so the bands read as columns and a crossing
   // is a horizontal move — except governance, which spans the full width beneath the rest
   // because it applies to every band including what is reachable outside us.
-  const ZONE_PAD = 22;
+  const ZONE_PAD = 16;
   const ZONE_HEAD = 30;
   const govZoneIds = new Set(
     (archetype.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
@@ -104,7 +104,7 @@ export function buildViewerModel(archetype: Archetype) {
     if (!rs.length) return [];
     const isGov = zone.owner === "governance";
     // Band width comes from the grid columns, matching the on-screen renderer exactly.
-    const cs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => b.col);
+    const cs = archetype.blocks.filter((b) => b.zone === zone.id && !b.parent).map((b) => b.col);
     const lo = cols[Math.min(...cs)];
     const hi = cols[Math.max(...cs)];
     const x0 = isGov ? fullLeft : (lo ? lo.x - ZONE_PAD : Math.min(...rs.map((r) => r.x)) - ZONE_PAD);

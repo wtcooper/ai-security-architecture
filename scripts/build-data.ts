@@ -1297,7 +1297,7 @@ function checkDiagramCollisions(
   // A pin anchored on an edge whose midpoint falls in the gutter between two bands puts a
   // control in no-man's-land: it belongs inside a band, or on a band's edge, or nowhere.
   // Reported rather than failed while the catalogue is rebuilt; flips to an error in Wave F.
-  const ZONE_PAD = 22;
+  const ZONE_PAD = 16;
   const bandSpans = (arch.zones ?? [])
     .filter((z) => z.owner !== "governance")
     .flatMap((z) => {

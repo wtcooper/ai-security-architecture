@@ -529,7 +529,7 @@ export function FlowDiagramRF({
     // Ownership bands as full-height background columns. The horizontal extent
     // comes from each zone's own members; the vertical extent is shared across every zone, so
     // the bands read as columns and a crossing is a horizontal move between two of them.
-    const ZONE_PAD = 22;
+    const ZONE_PAD = 16;
     const ZONE_HEAD = 30;
     // Governance is drawn as a full-width band beneath the columns: it applies to every other
     // band, including what may be reached externally, so it cannot be one of them.
@@ -554,7 +554,8 @@ export function FlowDiagramRF({
     // leave a visible gutter beside it; deriving from the column closes that.
     const cols = archetype.layout.columns ?? [];
     const spanOf = (zoneId: string) => {
-      const cs = archetype.blocks.filter((b) => b.zone === zoneId).map((b) => b.col);
+      const cs = archetype.blocks.filter((b) => b.zone === zoneId && !b.parent).map((b) => b.col);
+      if (!cs.length) return null;
       const lo = cols[Math.min(...cs)];
       const hi = cols[Math.max(...cs)];
       return lo && hi ? { x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD } : null;

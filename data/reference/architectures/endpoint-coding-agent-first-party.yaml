@@ -141,6 +141,30 @@ blocks:
       Present, watching, and the approval gate for what matters — the property the whole
       archetype's posture rests on, and the one that unattended modes quietly remove.
 
+  - id: relay
+    kind: external
+    title: Remote relay
+    cosaiComponent: componentAgentUserQuery
+    zone: zoneExternal
+    col: 6
+    row: 0
+    note: >
+      What a phone actually reaches, in the target state: a tunnel the harness dialled out to,
+      a purpose-built agent relay, or a chat platform bridging into the loop. It is drawn in
+      the external band because it is somebody else's service — including, for one popular
+      harness, a default community relay with no IP allowlisting that most users will never
+      change. The alternative is worse rather than better: with no relay the phone connects
+      straight to a listening port on the machine.
+    items:
+      - id: tunnel
+        label: Tunnel service
+        icon: plug
+        note: Tailscale, Cloudflare Tunnel or ngrok in front of a harness that ships no transport auth of its own.
+      - id: chatChannels
+        label: Chat channels
+        icon: chat
+        note: A community bridge putting messaging-platform identity in front of the loop.
+
   - id: harness
     kind: service
     title: Agent harness
@@ -290,7 +314,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 5
-    row: 0
+    row: 3
     note: >
       Where the vendor column used to be. This archetype's supply chain includes the agent
       itself: the harness, its extensions and its skills all arrive through community channels
@@ -442,10 +466,20 @@ edges:
       machine, authorised by holding the machine. The same shape as the personal agent's local
       session — proximity is the authorisation, so device posture carries it.
   - from: remoteDevice
-    to: harness
-    path: primary
+    to: relay
+    path: external
     bidir: true
-    label: serve port / relay / bridge
+    label: remote steering
+    note: >
+      The phone reaches the relay, not the machine. Nothing we operate is on this hop, and the
+      relay is a third party we did not contract with — for one popular harness, a community
+      instance running on somebody's goodwill.
+  - from: relay
+    to: harness
+    path: external
+    bidir: true
+    route: hv
+    label: dialled-out tunnel
     note: >
       Three shapes, one hop, and none of them cross anything we operate: a direct connection to
       the harness's listening port, a relay tunnel the harness dialled out to, or a chat bridge
@@ -494,6 +528,7 @@ edges:
     path: primary
     bidir: true
     label: signed installs
+    route: hv
     note: >
       Harness, extension and skill releases pulled from the mirror rather than straight from a
       community channel. The same crossing that brokers the model call is the one that decides
@@ -557,7 +592,7 @@ pins:
         developer pictured sharing, and with no vendor tenancy in between, whatever the
         provider's default retention happens to be is the retention policy.
     - risk: riskStaleAgentIdentityBinding
-      at: remoteDevice->harness
+      at: remoteDevice->relay
       note: >
         A remote channel is only as good as the account and device binding behind it; a stale
         login steering a machine full of credentials is an account-compromise blast radius —
@@ -589,7 +624,7 @@ pins:
 
   capabilities:
     - capability: capabilityIga
-      at: remoteDevice->harness
+      at: remoteDevice->relay
       note: >
         Bind the remote surface to a named user on a managed device. Nothing in this category
         does that on its own — a serve port takes a shared secret, a chat bridge takes whoever
@@ -666,23 +701,35 @@ flows:
       An instruction typed on a phone, straight into the session on the developer's own
       machine — and the result straight back.
     path:
-      - follow: developer->remoteDevice
-        note: The developer types the instruction on a phone, a web UI the harness serves, or a chat thread.
-      - follow: remoteDevice->harness
+      - follow: developer->harness
         note: >
-          Three shapes, one hop: a direct connection to the harness's listening port, a relay
-          tunnel the harness dialled out to, or a chat bridge forwarding platform messages.
-          Nothing we operate is on this path — the phone does not cross the corporate network
-          to reach the machine — so admission is a bearer secret at best.
+          First step, option two, and the common one: the developer is at the machine and
+          drives the session directly. The remote path below is the same instruction taking a
+          longer road.
+      - follow: developer->remoteDevice
+        note: First step, option one — the developer types the instruction on a phone, a web UI the harness serves, or a chat thread.
+      - follow: remoteDevice->relay
+        note: >
+          The phone reaches a third-party relay — a tunnel, a purpose-built agent relay, or a
+          chat platform. Nothing we operate is on this hop, and for one popular harness the
+          default is a community relay with no IP allowlisting.
+      - follow: relay->harness
+        note: >
+          The relay hands the instruction down a connection the harness dialled out. Admission
+          is a bearer secret at best; in the install with no relay at all, the phone connects
+          straight to a listening port on the machine and admission is whatever that port
+          checks, which is often nothing.
       - follow: harness->toolPlane
         note: >
           The work executes locally with the developer's files, credentials and browser
           sessions around it, on the authority of whoever got past that secret.
-      - follow: harness->remoteDevice
+      - follow: harness->relay
+        note: The result goes back up the same dialled-out connection.
+      - follow: relay->remoteDevice
         note: >
-          And the result back the same way. Four steps against the third-party drawing's
-          eight — because there is no vendor relay in the middle, and so no party that checked
-          anything before the session was raised.
+          And back to the phone. The same shape as the third-party round trip, with a party in
+          the middle that vouches for nothing — no owner account, no tenant, often no
+          allowlist. That is the whole difference between the two drawings.
     threats: [Serve port reachable with a guessable secret or none, Chat bridge admitting whoever the platform admits, No owner account behind any of it]
     controls: [capabilityAgentRuntimeEnforcement, capabilityIga, capabilityMcpToolSecurity]
     note: >

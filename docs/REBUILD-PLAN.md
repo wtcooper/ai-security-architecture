@@ -857,8 +857,8 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 ### Wave C — endpoint
 - [x] C-1 Third-party: SSO path drawn as primary, gateway path kept, `aiGateway→provider` added, exclusivity and the vendor contrast recorded as deviations, inference split into two flows
 - [x] C-2 Personal agent: sandbox restored as a `boundary` container — four openings named, credential-injection-at-the-proxy pinned, MCP-straddle pinned as a risk rather than hidden
-- [ ] C-3 First-party: relay/tunnel on the remote path, direct-port risk pin, Local API server item, drop LangChain deep agents as an exemplar
-- [ ] C-4 Local runtime: egress control removed, band disappears, terminology aligned to the cloud page
+- [x] C-3 First-party: `Remote relay` on the remote path, direct-port case pinned, Local API server item added
+- [x] C-4 Local runtime: egress control removed, cloud band gone with it, `Inference API` shared with the cloud page
 
 ### Wave D — cloud
 - [ ] D-1 Inference pair aligned; renamed off "open weights"; prefix-cache side channel + model signing pinned

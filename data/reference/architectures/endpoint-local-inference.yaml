@@ -75,12 +75,6 @@ zones:
       The machine and everything the runtime puts on it: the local API, the process that loads
       the weights, and the artifacts on disk. The whole architecture lives here, which is why
       the one band that matters is the boundary around it.
-  - id: zoneCloud
-    owner: cloud
-    note: >
-      Infrastructure we operate. Only one component sits here, and it is the only thing
-      standing between a multi-gigabyte artifact from a public hub and a process that will
-      execute it on load.
   - id: zoneExternal
     owner: external
     note: >
@@ -119,7 +113,7 @@ blocks:
 
   - id: api
     kind: service
-    title: Local HTTP API
+    title: Inference API
     zone: zoneEndpoint
     col: 1
     row: 1
@@ -184,24 +178,6 @@ blocks:
         label: Model files
         icon: db
         note: Readable by any process with the user's privileges, and swappable by the same.
-
-  - id: egress
-    kind: service
-    title: Egress control
-    zone: zoneCloud
-    col: 3
-    row: 2
-    note: >
-      The organisation's proxy and firewall tier — the only customer-operated component this
-      architecture has, and the only place the weight fetch can be admitted, scanned and
-      recorded. A public hub is an arbitrary destination, so the job here is admission *and*
-      inspection, not the destination admission a contracted vendor would get. Target state:
-      the common install fetches straight from the hub and nothing sees it.
-    items:
-      - id: outbound
-        label: Outbound connector
-        icon: plug
-        note: Where the fetch is admitted by destination and the artifact is scanned before it reaches a loader.
 
   - id: govSupplyChain
     kind: governance
@@ -278,23 +254,17 @@ edges:
       The runtime fetches artifacts to disk and loads them at start. For several formats the load
       is an execution event, which makes this the supply chain's last step.
   - from: runtime
-    to: egress
-    path: primary
-    bidir: true
-    label: weight fetch
-    note: >
-      The runtime asks for the artifact — which is why the scan has to sit in front of this
-      hop rather than after it. It is also the process that will open the file, and for several
-      formats opening it is the execution event.
-  - from: egress
     to: hub
     path: external
     bidir: true
-    label: admitted & scanned
+    label: weight fetch
     note: >
-      Transport is authenticated and the publisher may be verifiable. Neither says what the
-      artifact does when opened, which is why the crossing scans the format rather than
-      checking the source.
+      The runtime is its own package manager: it asks the hub for the artifact and pulls it to
+      disk. That is why scanning has to gate the fetch rather than follow it — this same
+      process is the one that will open the file, and for several formats opening it *is* the
+      execution event. Nothing of ours sits on this hop by default, which is the finding.
+      Transport is authenticated and the publisher may be verifiable; neither says anything
+      about what the artifact does when the loader opens it.
 
 pins:
   risks:
@@ -304,7 +274,7 @@ pins:
         Pickle-class formats execute code on load. The risk is a property of the artifact format,
         not of the publisher.
     - risk: riskModelSourceTampering
-      at: egress->hub
+      at: runtime->hub
       note: Publisher identity at publish time, nothing at load time — and a hub account is a takeover target.
     - risk: riskDenialOfMLService
       at: unexpectedCallers->api
@@ -335,7 +305,7 @@ pins:
 
   capabilities:
     - capability: capabilityModelScanning
-      at: egress->hub
+      at: runtime->hub
       note: >
         Format and content inspection in front of the fetch — a scan that runs after the runtime
         opens the file has documented an incident, not prevented one.
@@ -390,7 +360,7 @@ flows:
   - id: F3
     title: Weights arrive and are loaded
     moves: Multi-gigabyte artifacts from a public hub, onto disk, and into a process.
-    path: [runtime->egress, egress->hub, runtime->weights]
+    path: [runtime->hub, runtime->weights]
     threats: [Serialization format that executes on load, Native parser bug in a safe-by-construction format, Chat template that executes at inference time]
     controls: [capabilityModelScanning, capabilityAiBom, capabilityModelWeightProtection]
     note: >
@@ -411,7 +381,7 @@ scenarios:
         note: The response returns with no provider floor under it.
   - title: A poisoned checkpoint
     steps:
-      - follow: egress->hub
+      - follow: runtime->hub
         note: A well-reviewed model name, a compromised artifact — the download verifies transport, not behaviour.
       - follow: weights->runtime
         note: >
