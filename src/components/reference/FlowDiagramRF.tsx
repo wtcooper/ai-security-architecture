@@ -46,6 +46,8 @@ type BlockNodeData = {
   w: number;
   h: number;
   dim: boolean;
+  /** Capability id -> chip number, so an item can show what it implements. */
+  capNumber?: Map<string, number>;
   /** Shows the shared hover card — items use it so each icon can explain itself. */
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
 };
@@ -149,6 +151,27 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                 <FlowIcon name={item.icon} x={11} y={11} size={20} />
               </svg>
               <span>{item.label}</span>
+              {(item.capabilities?.length ?? 0) > 0 && (
+                <span style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                  {item.capabilities!.map((id) => (
+                    <span
+                      key={id}
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
+                        background: "var(--paper, #fff)",
+                        border: "1.2px solid var(--chip, #4a5fd0)",
+                        color: "var(--chip, #4a5fd0)",
+                        font: "700 8.5px/12px var(--font-mono, monospace)",
+                        textAlign: "center",
+                      }}
+                    >
+                      {data.capNumber?.get(id) ?? "?"}
+                    </span>
+                  ))}
+                </span>
+              )}
             </div>
           );
         })
@@ -159,11 +182,12 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
 
 /** Spike grammar: an ownership zone drawn as a labelled background band. */
 const ZONE_TINT: Record<string, { fill: string; line: string; ink: string }> = {
-  principal: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
-  workload: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
-  crossing: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
-  enterprise: { fill: "#eaf0fb", line: "#94aede", ink: "#3667c4" },
+  user: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
+  endpoint: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
+  cloud: { fill: "#eaf0fb", line: "#94aede", ink: "#3667c4" },
+  vendor: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
   external: { fill: "#f3eef9", line: "#a894ce", ink: "#6f4bb5" },
+  governance: { fill: "#eef1f5", line: "#9aa3b0", ink: "#4b5b70" },
 };
 
 function ZoneNode({
@@ -481,26 +505,40 @@ export function FlowDiagramRF({
       frame = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     }
 
+    const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
+
     const nodes: Node[] = [];
     // Spike grammar: ownership zones as full-height background columns. The horizontal extent
     // comes from each zone's own members; the vertical extent is shared across every zone, so
     // the bands read as columns and a crossing is a horizontal move between two of them.
     const ZONE_PAD = 22;
     const ZONE_HEAD = 30;
+    // Governance is drawn as a full-width band beneath the columns: it applies to every other
+    // band, including what may be reached externally, so it cannot be one of them.
+    const govZoneIds = new Set(
+      (archetype.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
+    );
+    const colRects = archetype.blocks
+      .filter((b) => !govZoneIds.has(b.zone ?? ""))
+      .map((b) => rects[b.id])
+      .filter(Boolean);
     const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
-    const bandTop = allRects.length
-      ? Math.min(...allRects.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD
+    const bandTop = colRects.length
+      ? Math.min(...colRects.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD
       : 0;
-    const bandBottom = allRects.length
-      ? Math.max(...allRects.map((r) => r.y + r.h)) + ZONE_PAD
+    const bandBottom = colRects.length
+      ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD
       : 0;
+    const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
+    const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
     for (const zone of archetype.zones ?? []) {
       const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
       if (!rs.length) continue;
-      const x0 = Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
-      const x1 = Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
-      const y0 = bandTop;
-      const y1 = bandBottom;
+      const isGov = zone.owner === "governance";
+      const x0 = isGov ? fullLeft : Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
+      const x1 = isGov ? fullRight : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
+      const y0 = isGov ? Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : bandTop;
+      const y1 = isGov ? Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD : bandBottom;
       nodes.push({
         id: `__zone_${zone.id}`,
         type: "zone",
@@ -533,7 +571,7 @@ export function FlowDiagramRF({
         type: "block",
         position: inFrame && frame ? { x: r.x - frame.x, y: r.y - frame.y } : { x: r.x, y: r.y },
         parentId: inFrame ? "__frame" : undefined,
-        data: { block, w: r.w, h: r.h, dim: false, onItemEnter: cardAt },
+        data: { block, w: r.w, h: r.h, dim: false, onItemEnter: cardAt, capNumber },
         draggable: true,
         style: { width: r.w, height: r.h },
       });
@@ -541,7 +579,6 @@ export function FlowDiagramRF({
 
     // Pins sit at the same spots the SVG renderer and the build checks use. Block-anchored
     // pins are children of their block, so they travel when the user drags it.
-    const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
 
     const chipGroups = new Map<string, { capability: string; note?: string }[]>();
     for (const pin of archetype.pins.capabilities) {

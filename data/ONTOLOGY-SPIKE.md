@@ -22,51 +22,66 @@ inversion.
 | **Zone** | An ownership band with one of five standard `owner` values (below). Every block declares one. Drawn as a full-height background column, so a crossing is a horizontal move. |
 | **Flow** | A numbered, named path (`F1`, `F2` …) over real edges, carrying `moves` (what travels), `threats`, and `controls` (capability ids that must also be pinned). Selectable in the rail; the drawing traces it, and a **sequence view** renders beneath the canvas. A step may be a bare edge ref or an edge ref with its own note — a round trip reuses one edge in both directions and means something different each time. |
 
-## The five standard zones
+## The standard zones
 
-**Both the `owner` values and the band titles are fixed catalogue-wide.** An earlier draft of
-this document let titles vary per architecture; two drawings promptly called the same band
-"Owner surfaces" and "Developer surfaces", and the workload band "Managed endpoint" and
-"Vendor application on the endpoint". A band that is named differently on each drawing cannot
-be compared across drawings, which is the whole point of having bands. Architecture-specific
-detail goes in the zone's `note`. The build fails a title that does not match its owner.
+**Bands measure one axis: who operates the environment.** They are surfaces — locations and
+trust domains — never functions. Two earlier drafts got this wrong: the first let titles vary
+per architecture (so the same band was "Owner surfaces" on one drawing and "Developer
+surfaces" on another), and the second standardised onto a *functional* name, "Agent workload",
+which cannot be a location because an agent workload can run on an endpoint, in our cloud, or
+in a vendor's. Naming rules only help if the dimension being named is coherent.
 
-They run left to right as an ownership gradient, and the reason there are five rather than
-four is that **our systems and outside systems are different places** — an agent reaching the
-organisation's own data is not the same event as an agent reaching the open internet, and the
-controls differ.
+The set below is purely locational, and three of the five are the catalogue's own surface
+taxonomy, so a reader meets the same vocabulary at both levels.
 
-| Order | `owner` | Fixed title | What belongs in it | Who operates it |
+| Order | `owner` | Fixed title | What belongs in it | Maps to |
 | --- | --- | --- | --- | --- |
-| 1 | `principal` | **Actors & surfaces** | People and the surfaces they instruct from — staff, customers, remote devices, chat surfaces, application front ends | The person, on a device the organisation may or may not manage |
-| 2 | `workload` | **Agent workload** | Where the agent loop actually runs, and the state and local tools it owns | Us on the endpoint and cloud surfaces; **the vendor** on the SaaS surface |
-| 3 | `crossing` | **Enterprise crossing** | The controls the organisation operates on the way out — egress control and firewall, AI gateway, AI gateway, relay — and the control plane behind them: identity, secrets, policy, registry, telemetry | Always the organisation |
-| 4 | `enterprise` | **Enterprise systems & data** | The organisation's own systems and data — systems of record, internal APIs and MCP servers, tenant data, artifact stores. **What our MCPs and connectors reach in our own environment.** | The organisation |
-| 5 | `external` | **External** | Outside the company entirely — model providers, third-party SaaS, remote MCP servers, public hubs, the open web, and the unsolicited senders who arrive through them | Nobody in the drawing |
+| 1 | `user` | **User surfaces** | The person's own devices and channels — phone, chat client, browser, local terminal | — |
+| 2 | `endpoint` | **Managed endpoint** | Devices the organisation manages and whatever runs on them | `surfaceEndpoint` |
+| 3 | `cloud` | **Enterprise cloud** | Infrastructure the organisation operates — crossings, agent tiers, our own systems and data | `surfaceCloud` |
+| 4 | `vendor` | **Vendor platform** | Environments a vendor operates under an agreement we hold | `surfaceSaas` |
+| 5 | `external` | **External** | Outside the company with no agreement — public hubs, the open web, unsolicited senders | — |
+| — | `governance` | **Governance** | The oversight column, drawn full-width *beneath* every band | — |
 
-### How the bands map onto each surface
+An architecture draws only the bands it uses: the personal agent has no vendor band, a cloud
+workflow has no endpoint band.
 
-| Surface | `principal` | `workload` | `crossing` | `enterprise` | `external` |
-| --- | --- | --- | --- | --- | --- |
-| **Endpoint** | Owner or developer, remote device, local terminal | The managed device and its sandbox — harness, local tools, memory, workspace | Relay, AI gateway, egress control, control plane | Org repos, internal APIs and MCP servers, org data | Model providers, messaging platforms, remote MCP, package registries, the web, senders |
-| **Cloud & hosted** | Requesters, initiators, schedules and events, the application front end | The agent tier the organisation runs — supervisor, subagents, memory, sandboxes | AI gateway, tool gateway, governance plane | Systems of record, tenant data, vector stores, model registry | Model providers, third-party APIs, A2A peers, the web |
-| **Third-party SaaS** | Employees, citizen builders, agent consumers | **The vendor's runtime** — where the loop runs, operated by someone else | Our egress control, our AI gateway, our tenant governance | Org data the vendor's agents reach through our gateway | The vendor's own backend, its model providers, consumer tenants, the web |
+### Crossing is a component property, not a band
 
-The SaaS row is the one that earns the model: putting the vendor runtime in `workload` and
-our data in `enterprise` makes the crossing rule say exactly what we want it to say — a
-vendor-hosted agent cannot touch our systems except through a component we run.
+An earlier draft made "Enterprise crossing" its own band, which put a functional concept in a
+row of locational ones. A gateway is a thing that lives somewhere — in our cloud, next to the
+systems it protects. So the vocabulary marks components `crossing: true` (AI gateway, egress
+control, service edge, messaging relay, application front end, a vendor's managed tool
+gateway), and the rule is about components meeting bands rather than about a band existing.
+
+This is also more precise. `harness -> orgData` now fails even though both could sit in
+adjacent bands, because orgData is not a crossing — the path has to run
+`harness -> aiGateway -> orgData`.
+
+### The governance band
+
+Governance is drawn as a band across the full width beneath the others, because it applies to
+all of them — including the external band, since whether an external destination is reachable
+at all is a governed decision enforced at our crossings. It holds exactly one component, the
+Governance plane, whose **items are the control technologies** (identity, secrets, policy,
+registry, telemetry, kill switch). Each item carries the chip numbers of the capabilities it
+delivers, so a reader can map a numbered control on the drawing to the technology that
+implements it without hovering.
+
+There is deliberately no second "Control plane" component. Management-class capabilities are
+items on this one column and never boxes of their own — that is the rule that stops a
+reference architecture becoming a tool inventory.
 
 ## Rules the build enforces
 
 1. **Zone completeness and naming** — if an architecture declares zones, every block declares
    one and it must exist; and every band carries the fixed title for its owner. Omit the title
    and the build fills it in; give it a different one and the build fails.
-2. **The crossing rule** — no edge may join a `workload` block directly to an `enterprise` or
-   `external` block. Every such path terminates in the `crossing` band first. This is the
-   ONTOLOGY.md §3 invariant generalised and promoted from prose to a build failure, and it is
-   the rule that does the real work: it refuses to let an author draw a sandbox that reaches
-   the internet, or a vendor runtime that reaches our data, without the component that makes
-   it governable.
+2. **The crossing rule** — any edge entering or leaving a band *we* operate (`endpoint`,
+   `cloud`) must terminate at a component the vocabulary marks `crossing: true`. Exempt: a
+   person using their own managed device, anything wholly outside us (a vendor calling its own
+   model provider), and the governance band, whose relationships are oversight rather than
+   data.
 3. **Flow integrity** — flow ids match `^F\d+$` and are unique; every path step follows a real
    edge (reverse legal on bidirectional edges); every `moves` statement is present; every
    capability a flow claims is pinned on the drawing.

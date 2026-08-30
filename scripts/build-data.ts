@@ -587,6 +587,20 @@ function checkArchetypes(
       }
     }
 
+    // Items may claim the capabilities they implement; the claim must match a real pin.
+    for (const b of arch.blocks) {
+      for (const it of b.items ?? []) {
+        for (const id of it.capabilities ?? []) {
+          if (!capabilityById.has(id))
+            fail(`${where}: item ${b.id}.${it.id} claims unknown capability ${id}`);
+          else if (!capabilities.includes(id))
+            fail(
+              `${where}: item ${b.id}.${it.id} claims capability ${id}, which is not pinned on this architecture`,
+            );
+        }
+      }
+    }
+
     // --- Zones and flows (spike grammar, data/ONTOLOGY-SPIKE.md) --------------
     const zoneIds = new Set((arch.zones ?? []).map((z) => z.id));
     const zoneOwner = new Map((arch.zones ?? []).map((z) => [z.id, z.owner]));
@@ -608,20 +622,29 @@ function checkArchetypes(
         if (!b.zone) fail(`${where}: block ${b.id} has no zone (this architecture declares zones)`);
         else if (!zoneIds.has(b.zone)) fail(`${where}: block ${b.id} has unknown zone ${b.zone}`);
       }
-      // The crossing rule: the workload — wherever the loop runs — may not touch the
-      // organisation's systems or anything external directly. Every such path terminates in
-      // the crossing band, which is the whole reason that band exists.
+      // The crossing rule. Bands say where a thing lives; whether a thing may terminate a
+      // band crossing is a property of the component. Any edge that enters or leaves a band
+      // WE operate must land on a component the vocabulary marks `crossing: true`.
+      // Exempt: the person using their own managed device, anything wholly outside us, and
+      // the governance band, whose relationships are oversight rather than data.
       const ownerOf = new Map(arch.blocks.map((b) => [b.id, zoneOwner.get(b.zone ?? "")]));
-      const guarded = new Set(["enterprise", "external"]);
+      const titleOf = new Map(arch.blocks.map((b) => [b.id, b.title]));
+      const OURS = new Set(["endpoint", "cloud"]);
       for (const e of arch.edges) {
         const from = ownerOf.get(e.from);
         const to = ownerOf.get(e.to);
-        const crosses =
-          (from === "workload" && guarded.has(to ?? "")) ||
-          (to === "workload" && guarded.has(from ?? ""));
-        if (crosses)
+        if (!from || !to || from === to) continue;
+        if (from === "governance" || to === "governance") continue;
+        if (!OURS.has(from) && !OURS.has(to)) continue;
+        const personOnTheirDevice =
+          (from === "user" && to === "endpoint") || (from === "endpoint" && to === "user");
+        if (personOnTheirDevice) continue;
+        const terminates =
+          CROSSING_TITLES.has(titleOf.get(e.from) ?? "") ||
+          CROSSING_TITLES.has(titleOf.get(e.to) ?? "");
+        if (!terminates)
           fail(
-            `${where}: edge ${e.from}->${e.to} joins the workload band to ${from === "workload" ? to : from} directly — that crossing must terminate in the crossing band`,
+            `${where}: edge ${e.from}->${e.to} crosses the ${from} band into the ${to} band without terminating at a crossing component — route it through a gateway, edge or relay (vocabulary: crossing: true)`,
           );
       }
     }
@@ -681,15 +704,25 @@ function checkArchetypes(
  * must carry the canonical icon, canonical block titles the canonical kind, and inline
  * capabilities need an embodying component or a deviation recording the absorption.
  */
-/** Canonical band titles, keyed by owner — read once from the vocabulary. */
-const ZONE_TITLES: Record<string, string> = (() => {
+/** Canonical band titles and the components that may terminate a band crossing. */
+const { ZONE_TITLES, CROSSING_TITLES } = (() => {
   try {
     const v = parseYaml(
       readFileSync(join(ROOT, "data", "reference", "vocabulary.yaml"), "utf8"),
-    ) as { zones?: Record<string, { title: string }> };
-    return Object.fromEntries(Object.entries(v.zones ?? {}).map(([k, z]) => [k, z.title]));
+    ) as {
+      zones?: Record<string, { title: string }>;
+      components?: { title: string; crossing?: boolean }[];
+    };
+    return {
+      ZONE_TITLES: Object.fromEntries(
+        Object.entries(v.zones ?? {}).map(([k, z]) => [k, z.title]),
+      ) as Record<string, string>,
+      CROSSING_TITLES: new Set(
+        (v.components ?? []).filter((c) => c.crossing).map((c) => c.title),
+      ),
+    };
   } catch {
-    return {};
+    return { ZONE_TITLES: {} as Record<string, string>, CROSSING_TITLES: new Set<string>() };
   }
 })();
 

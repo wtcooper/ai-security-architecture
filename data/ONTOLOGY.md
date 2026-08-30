@@ -25,6 +25,12 @@ Components are the things data flows between. Some controls ARE components — a
 gateway, a curation stage — and some controls are properties of components or flows. The
 enforcement classification below decides which, once, catalogue-wide.
 
+**A dimension states the axis it measures.** Naming rules only help if the concept being
+named is coherent: a set of bands that mixes "where it runs" with "what it does" produces
+consistent names for a confused idea. Zones measure who operates an environment, and nothing
+else; functional properties (is this a crossing?) belong to components. State the axis in the
+registry, not just the allowed values.
+
 **Naming is a hard standard, not a preference.** Every recurring component, item and zone band
 has one name, registered in `vocabulary.yaml`, and the build reports any drawing that invents
 another. This rule exists because it has failed twice in practice: the same crossing was drawn

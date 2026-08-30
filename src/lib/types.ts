@@ -254,27 +254,39 @@ export interface ArchBlockItem {
   note?: string;
   /** Risk-map anchor for this specific internal. */
   cosaiComponent?: string;
+  /**
+   * Capabilities this item implements, each of which must also be pinned on the architecture.
+   * Their chip numbers render beside the item, so a reader can map a numbered control to the
+   * technology that delivers it without hovering — most useful on the governance band, where
+   * the items ARE the control technologies.
+   */
+  capabilities?: string[];
 }
 
 /**
  * Spike grammar (data/ONTOLOGY-SPIKE.md): an ownership zone. Zones are drawn as labelled
  * background bands and carry the crossing rule — nothing in an `endpoint` zone may reach an
- * `external` zone without terminating in an `enterprise` zone first.
+ * band without terminating at a component the vocabulary marks as a crossing.
  */
 export interface ArchZone {
   id: string;
-  title: string;
+  /** Fixed per owner (data/reference/vocabulary.yaml); the build fills it in or fails. */
+  title?: string;
   /**
-   * The standard five-band ownership gradient, left to right — the same set on every surface,
-   * with only the band titles varying by architecture. See data/ONTOLOGY-SPIKE.md.
+   * Bands measure ONE axis: who operates the environment. They are surfaces — locations and
+   * trust domains — never functions, and their titles are fixed catalogue-wide. "Crossing" is
+   * deliberately not a band: a gateway is a thing that lives somewhere, so crossing-ness is a
+   * property of the component. See data/ONTOLOGY-SPIKE.md.
    *
-   * `principal`  people and the surfaces they instruct from
-   * `workload`   where the loop actually runs (our endpoint, our cloud tier, or a vendor's)
-   * `crossing`   the governed brokers and control plane the organisation operates
-   * `enterprise` the organisation's own systems and data — what its MCPs and APIs reach
-   * `external`   outside the company: providers, third-party services, the web, senders
+   * `user`       the person's own devices and channels
+   * `endpoint`   devices the organisation manages           (surfaceEndpoint)
+   * `cloud`      infrastructure the organisation operates   (surfaceCloud)
+   * `vendor`     vendor-operated environments under agreement (surfaceSaas)
+   * `external`   outside the company, no agreement: public hubs, the open web, senders
+   * `governance` the oversight band, drawn full-width beneath the others because it applies
+   *              to all of them, including what may be reached externally
    */
-  owner: "principal" | "workload" | "crossing" | "enterprise" | "external";
+  owner: "user" | "endpoint" | "cloud" | "vendor" | "external" | "governance";
   note?: string;
 }
 
