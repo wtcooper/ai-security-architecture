@@ -589,6 +589,11 @@ function checkArchetypes(
 
     // Items may claim the capabilities they implement; the claim must match a real pin.
     for (const b of arch.blocks) {
+      for (const id of b.capabilities ?? []) {
+        if (!capabilityById.has(id)) fail(`${where}: block ${b.id} claims unknown capability ${id}`);
+        else if (!capabilities.includes(id))
+          fail(`${where}: block ${b.id} claims capability ${id}, which is not pinned on this architecture`);
+      }
       for (const it of b.items ?? []) {
         for (const id of it.capabilities ?? []) {
           if (!capabilityById.has(id))

@@ -336,6 +336,14 @@ export interface ArchBlock {
   /** Risk-map anchor, so the block links back to the component it instantiates. */
   cosaiComponent?: string;
   items?: ArchBlockItem[];
+  /**
+   * Capabilities this block delivers, each of which must also be pinned somewhere on the
+   * architecture. Their chip numbers render on the block. Used by the governance band, whose
+   * services are call-outs naming where a numbered control is implemented — they are
+   * deliberately unconnected, because governance is a set of services and processes that
+   * apply across every band, not another hop in the data path.
+   */
+  capabilities?: string[];
 }
 
 /**

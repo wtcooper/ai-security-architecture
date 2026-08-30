@@ -62,15 +62,25 @@ adjacent bands, because orgData is not a crossing — the path has to run
 
 Governance is drawn as a band across the full width beneath the others, because it applies to
 all of them — including the external band, since whether an external destination is reachable
-at all is a governed decision enforced at our crossings. It holds exactly one component, the
-Governance plane, whose **items are the control technologies** (identity, secrets, policy,
-registry, telemetry, kill switch). Each item carries the chip numbers of the capabilities it
-delivers, so a reader can map a numbered control on the drawing to the technology that
-implements it without hovering.
+at all is a governed decision enforced at our crossings.
 
-There is deliberately no second "Control plane" component. Management-class capabilities are
-items on this one column and never boxes of their own — that is the rule that stops a
-reference architecture becoming a tool inventory.
+**Its services are standalone call-outs with no edges.** Identity services, secrets and key
+management, policy and authorization, supply-chain assurance, observability and response —
+each an icon carrying the **chip numbers of the controls it implements**, so a reader can map
+a numbered control on the drawing to the technology that delivers it without hovering. They
+are deliberately unconnected: governance is a set of services *and processes* that apply
+across every band, not another hop in the data path, and drawing arrows to them would force a
+box-and-arrow reading onto something that is neither. A sequence view still passes through
+these technologies where a real traversal does; the reference architecture does not need to
+draw them all.
+
+Two consequences worth stating. A band holding one component that holds the real content is
+nesting for its own sake — the services are blocks, not items of a block. And the *controls*
+still pin where they are enforced, which is the crossing, not the call-out: the call-out
+names the implementing technology and cites the number, it does not claim the enforcement
+point. There is no "Control plane" component; management capabilities never become boxes in
+the data path, which is the rule that stops a reference architecture becoming a tool
+inventory.
 
 ## Rules the build enforces
 

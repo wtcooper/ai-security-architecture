@@ -203,6 +203,12 @@ blocks:
         label: Shell commands
         icon: code
         note: Command execution inside the sandbox, never on the host.
+      - id: localMcp
+        label: MCP servers
+        icon: plug
+        note: >
+          The servers a user installs on their own machine — local child processes with the
+          user's privileges, and the reason the local surface is a tool service like any other.
       - id: skills
         label: Installed skills
         icon: gear
@@ -275,46 +281,69 @@ blocks:
         icon: doc
         note: Every crossing recorded as a side effect, not a favour asked of the agent.
 
-  - id: governance
+  - id: govIdentity
     kind: governance
-    title: Governance plane
+    title: Identity services
+    icon: person
+    zone: zoneGovernance
+    col: 1
+    row: 5
+    capabilities: [capabilityKillSwitch]
+    note: >
+      The IdP and the non-human identity plane: one workload identity per agent, bound to its
+      owner and device, and the revocation that ends every path at once.
+
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 2
+    row: 5
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
+    note: >
+      The vault and the just-in-time credential path — short-lived, scoped tokens issued from
+      outside whatever is asking for them.
+
+  - id: govPolicy
+    kind: governance
+    title: Policy & authorization
+    icon: scale
     zone: zoneGovernance
     col: 3
     row: 5
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityEgressControl, capabilityRateLimiting]
     note: >
-      One column, one name, spanning every band beneath the drawing. It holds the
-      management-class controls as items — never as boxes of their own, which is what keeps a
-      reference architecture from turning into a tool inventory.
-    items:
-      - id: idp
-        label: Agent identity
-        icon: person
-        note: One workload identity per agent, bound to its owner and device — revoking it is the kill switch.
-        capabilities: [capabilityKillSwitch]
-      - id: secrets
-        label: Secrets vault
-        icon: key
-        note: Short-lived tokens issued from outside the sandbox, at sandbox start.
-        capabilities: [capabilitySecretsManagement]
-      - id: policy
-        label: Policy engine
-        icon: scale
-        note: The per-call decisions the crossing enforces, authored where the agent cannot reach them.
-        capabilities: [capabilityAgentRuntimeEnforcement, capabilityEgressControl, capabilityRateLimiting]
-      - id: registry
-        label: Skill & image registry
-        icon: db
-        note: Internal, scanned, signed and pinned — the only supply the sandbox installs from.
-        capabilities: [capabilityMcpToolSecurity]
-      - id: telemetry
-        label: Telemetry sink
-        icon: eye
-        note: One correlated trace per message, written where the agent cannot amend it.
-        capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery]
+      The policy engine the crossings consult per call, and the egress and rate decisions it
+      carries — authored where the workload cannot reach them.
+
+  - id: govSupplyChain
+    kind: governance
+    title: Supply-chain assurance
+    icon: db
+    zone: zoneGovernance
+    col: 4
+    row: 5
+    capabilities: [capabilityMcpToolSecurity]
+    note: >
+      The registry, signing and scanning that decide which agents, tools, servers and images
+      are admitted at all, and the vendor assessments behind them.
+
+  - id: govObservability
+    kind: governance
+    title: Observability & response
+    icon: eye
+    zone: zoneGovernance
+    col: 5
+    row: 5
+    capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery]
+    note: >
+      Telemetry, the audit trail the workload cannot amend, discovery of what nobody
+      registered, and the containment path when something goes wrong.
 
   - id: internalTools
     kind: service
-    title: Internal MCP & APIs
+    title: Tool services
     cosaiComponent: componentTools
     zone: zoneCloud
     col: 4
@@ -325,11 +354,11 @@ blocks:
       of it is what decides which of them it may.
     items:
       - id: internalMcp
-        label: Internal MCP servers
+        label: MCP servers
         icon: plug
         note: Our own servers, listed in the catalogue the gateway enforces.
       - id: internalApis
-        label: Internal APIs
+        label: APIs & connectors
         icon: plug
         note: Service APIs reached on grants the gateway issues, scoped to the owner.
 
@@ -385,7 +414,7 @@ blocks:
 
   - id: remoteTools
     kind: service
-    title: Remote tool services
+    title: Tool services
     cosaiComponent: componentTools
     zone: zoneExternal
     col: 5
@@ -543,14 +572,6 @@ edges:
     note: >
       The install path: skills and images come from the internal registry, scanned, signed and
       pinned — and from nowhere else.
-  - from: governance
-    to: gateway
-    path: governance
-    label: identity · secrets · policy
-    note: >
-      The crossing enforces decisions authored here, on identities issued here — which is why
-      revoking the agent's identity stops every flow at once.
-
 pins:
   risks:
     - risk: riskPromptInjection
@@ -641,11 +662,15 @@ pins:
       at: harness->gateway
       note: Spend and iteration ceilings on the crossing, sized for a loop that wakes itself.
     - capability: capabilityAuditLogging
-      at: governance
-      note: One correlated trace per message — prompt, tool calls, effects — written where the agent cannot amend it.
+      at: gateway
+      note: >
+        One correlated trace per message — prompt, tool calls, effects — captured at the
+        crossing every call already passes, and written where the agent cannot amend it.
     - capability: capabilityKillSwitch
-      at: governance->gateway
-      note: Revoking the agent's identity denies every flow at the crossing within seconds, without a deploy.
+      at: gateway
+      note: >
+        Revoking the agent's identity denies every flow at the crossing within seconds, without
+        a deploy — which is why the crossing is where the stop is enforced.
     - capability: capabilityShadowAiDiscovery
       at: harness
       note: Find the installs nobody registered, derived from the device rather than self-reported.
@@ -683,7 +708,7 @@ flows:
     note: >
       One bundled crossing carries model, MCP and skills traffic in this organisation; the
       controls are per-flow regardless of how many tiers implement them.
-  - id: F10
+  - id: F9
     title: Enterprise systems
     moves: Calls into our own MCP servers and APIs, and the records they read and change.
     path: [harness->gateway, gateway->internalTools, internalTools->orgData]
@@ -722,14 +747,6 @@ flows:
     note: >
       Unattended runs belong to a read-only or draft action class enforced at the crossing, not
       to the same authority an attended turn carries.
-  - id: F9
-    title: Control plane and telemetry
-    moves: Identity, secrets and policy down to the crossing; traces and decisions back up.
-    path: [governance->gateway]
-    threats: [Stale or unrevocable agent identity, Audit that the agent can amend]
-    controls: [capabilityAuditLogging, capabilityKillSwitch, capabilityShadowAiDiscovery]
-    note: The one flow that is not about the agent's work, and the one that ends every other flow when it has to.
-
 scenarios:
   - title: A stranger messages the agent
     steps:

@@ -122,6 +122,42 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
           </svg>
           <span style={{ fontWeight: 600 }}>{block.title}</span>
         </div>
+      ) : (block.items?.length ?? 0) === 0 && block.icon ? (
+        <div
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 5,
+          }}
+        >
+          <svg width="26" height="26" viewBox="0 0 26 26">
+            <FlowIcon name={block.icon} x={13} y={13} size={24} />
+          </svg>
+          {(block.capabilities?.length ?? 0) > 0 && (
+            <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
+              {block.capabilities!.map((id) => (
+                <span
+                  key={id}
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    background: "var(--paper, #fff)",
+                    border: "1.3px solid var(--chip, #4a5fd0)",
+                    color: "var(--chip, #4a5fd0)",
+                    font: "700 9.5px/14px var(--font-mono, monospace)",
+                    textAlign: "center",
+                  }}
+                >
+                  {data.capNumber?.get(id) ?? "?"}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
       ) : (
         (block.items ?? []).map((item, i) => {
           const cell = cells[i];
