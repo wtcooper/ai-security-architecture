@@ -672,11 +672,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-12 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+13 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 3 — Coding and desktop agents, Local model runtime, Personal autonomous agent |
+| Endpoint | 4 — Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent |
 | Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
@@ -764,8 +764,10 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Governance plane | governance | (none) |
 | Coding and desktop agents | Repos, docs & screen | external | `componentDataSources` |
 | Coding and desktop agents | Agent harness | service | `componentReasoningCore` |
+| Coding and desktop agents | Remote device | service | `componentAgentUserQuery` |
 | Coding and desktop agents | Memory & state | service | `componentDataStorage` |
 | Coding and desktop agents | Tool services | service | `componentTools` |
+| Coding and desktop agents | MCP gateway | service | (none) |
 | Coding and desktop agents | Vendor service | provider | (none) |
 | Coding and desktop agents | Model provider | provider | `componentModelServing` |
 | Coding and desktop agents | Downstream services | external | `componentDataSources` |
@@ -773,6 +775,16 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | Inference runtime | service | `componentTheModel` |
 | Local model runtime | Storage | external | `componentModelStorage` |
 | Local model runtime | Public model hub | external | `componentModelStorage` |
+| Open-source coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
+| Open-source coding & desktop agents | Repos, docs & screen | external | `componentDataSources` |
+| Open-source coding & desktop agents | Agent harness | service | `componentReasoningCore` |
+| Open-source coding & desktop agents | Memory & state | service | `componentDataStorage` |
+| Open-source coding & desktop agents | Tool services | service | `componentTools` |
+| Open-source coding & desktop agents | AI gateway | service | (none) |
+| Open-source coding & desktop agents | Model provider | provider | `componentModelServing` |
+| Open-source coding & desktop agents | Private pkg registry | external | `componentDataSources` |
+| Open-source coding & desktop agents | Downstream services | external | `componentDataSources` |
+| Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Tool services | service | `componentTools` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
@@ -792,6 +804,7 @@ Highlights below are Google's original mapping, not ours.
 | UI/low-code managed agent runtime | Identity & entitlements | service | (none) |
 | UI/low-code managed agent runtime | Attached knowledge | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
+| UI/low-code managed agent runtime | MCP gateway | service | (none) |
 | UI/low-code managed agent runtime | Connected systems | service | `componentDataSources` |
 | UI/low-code managed agent runtime | Maker governance | governance | (none) |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
@@ -800,16 +813,17 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Managed memory | provider | `componentDataStorage` |
 | API/SDK managed agent runtime | Managed sandbox | provider | (none) |
 | API/SDK managed agent runtime | Managed tool gateway | provider | (none) |
+| API/SDK managed agent runtime | MCP gateway | service | (none) |
 | API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Customer governance | governance | (none) |
 
 ## 5. Controls-guidance coverage
 
-12 of 12 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+13 of 13 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | Coding and desktop agents, Local model runtime, Personal autonomous agent | — |
+| Endpoint | Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent | — |
 | Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
@@ -823,12 +837,13 @@ Highlights below are Google's original mapping, not ours.
 | Remote MCP server you publish | build | draft | 5 | Human-in-the-loop approval & escalation, Output encoding & safe rendering |
 | Self-hosted open-weights inference | build | draft | 4 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 5 | _none_ |
-| Coding and desktop agents | use | draft | 7 | Agent memory & context protection |
+| Coding and desktop agents | use | draft | 7 | Agent memory & context protection, Secrets management & ephemeral credentials, Runtime action authorization |
 | Local model runtime | use | draft | 4 | _none_ |
+| Open-source coding & desktop agents | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 4 | _none_ |
-| Enterprise AI chat with connectors | use | draft | 5 | _none_ |
+| Enterprise AI chat with connectors | use | draft | 5 | Encryption & key management for AI assets |
 | UI/low-code managed agent runtime | use | draft | 5 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 5 | _none_ |
+| API/SDK managed agent runtime | hybrid | draft | 5 | Secrets management & ephemeral credentials, Encryption & key management for AI assets, Network segmentation & egress control |
 
 ### 5b. Tool registry
 
