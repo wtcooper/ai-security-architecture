@@ -1,7 +1,7 @@
 id: archSelfHostedInference
 surface: surfaceCloud
 rank: 5
-title: Self-hosted open-weights inference
+title: Self-hosted model inference
 abbrev: Self-hosted inference
 
 summary:
@@ -102,11 +102,33 @@ blocks:
       numbered pins on this block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
 
+  - id: api
+    kind: service
+    title: Inference API
+    cosaiComponent: componentModelServing
+    zone: zoneCloud
+    col: 2
+    row: 1
+    note: >
+      The OpenAI-compatible endpoint the serving stack publishes — the same component the
+      local runtime draws, at a different scale. Authentication here is opt-in too: vLLM's
+      `--api-key` is a flag, not a default, and a serving tier reachable without one is the
+      same failure as an unauthenticated laptop, with a much larger blast radius.
+    items:
+      - id: endpoint
+        label: Completion endpoint
+        icon: plug
+        note: The published interface every internal caller shares.
+      - id: binding
+        label: Interface binding
+        icon: gear
+        note: Which network the tier is reachable from, and the whole of the trust boundary if auth is off.
+
   - id: runtime
     kind: service
     title: Inference runtime
     zone: zoneCloud
-    col: 2
+    col: 3
     row: 1
     cosaiComponent: componentModelServing
     note: >
@@ -139,7 +161,7 @@ blocks:
     kind: external
     title: Storage
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 2
     cosaiComponent: componentModelStorage
     note: >
@@ -156,7 +178,7 @@ blocks:
     kind: external
     title: Model sources
     zone: zoneExternal
-    col: 4
+    col: 5
     row: 2
     cosaiComponent: componentModelStorage
     note: >
@@ -168,24 +190,6 @@ blocks:
         label: Open-weights catalogue
         icon: db
         note: Declared behaviour and actual behaviour are separate facts.
-
-  - id: egress
-    kind: service
-    title: Egress control
-    zone: zoneCloud
-    col: 3
-    row: 1
-    note: >
-      The proxy tier the weights arrive through, and the only customer-operated component
-      between a public hub and a runtime that will open the file. A hub is an arbitrary
-      destination, so the job here is admission and inspection — the scan is a blocking gate in
-      front of the fetch rather than a check afterwards, because for several formats opening
-      the file is the execution event.
-    items:
-      - id: outbound
-        label: Outbound connector
-        icon: plug
-        note: Where the fetch is admitted by destination and the artifact is scanned before it reaches storage.
 
   - id: govSupplyChain
     kind: governance
@@ -247,6 +251,15 @@ edges:
       The tenant on the token is what quotas and cache-isolation decisions key off. A request
       that arrives without one gets whatever the default tenant can do.
   - from: gateway
+    to: api
+    path: primary
+    bidir: true
+    label: brokered inference
+    note: >
+      Every caller crosses the gateway, which is where the tenant identity, the per-tenant
+      quota and the spend attribution live — the things the endpoint drawing has nowhere to
+      put.
+  - from: api
     to: runtime
     path: primary
     bidir: true
@@ -262,28 +275,41 @@ edges:
     note: >
       Promoted artifacts load into the runtime, digest-verified against the promotion record.
       Without that verification the gate can be bypassed by writing to storage directly.
-  - from: sources
-    to: egress
-    route: vh
+  - from: runtime
+    to: sources
     path: external
     label: weights in
+    route: hv
     note: >
       Fetched from a public hub. Provenance
       establishes who made the artifact and nothing about what it does on load.
-  - from: egress
-    to: storage
-    path: governance
-    label: scan & promotion gate
-    note: >
-      Scanning and evaluation gate promotion — blocking, not advisory. A scan that runs after
-      deployment has documented an incident.
 pins:
   risks:
+    - risk: riskSensitiveDataDisclosure
+      at: api
+      note: >
+        The sharpest risk that exists here and not on the endpoint: prefix caching makes
+        time-to-first-token a side channel. A caller sends a crafted prefix and measures the
+        response time to learn whether it matched one cached from *another tenant's* request,
+        which is enough to reconstruct prompts and secrets. Efficiency and disclosure are the
+        same mechanism. Partition the cache by tenant, and note the risk compounds under
+        disaggregated serving, where the cache crosses the network onto SSD and object
+        storage.
+    - risk: riskSensitiveDataDisclosure
+      at: api
+      note: >
+        The sharpest risk that exists here and not on the endpoint: prefix caching makes
+        time-to-first-token a side channel. A caller sends a crafted prefix and measures the
+        response time to learn whether it matched one cached from *another tenant's* request,
+        which is enough to reconstruct prompts and secrets. Efficiency and disclosure are the
+        same feature. Partition the cache by tenant, and note the risk compounds under
+        disaggregated serving, where the cache crosses the network onto SSD and object
+        storage.
     - risk: riskModelSourceTampering
       at: sources
       note: Publisher identity is the only assurance the hub offers, and it says nothing about the artifact's behaviour.
     - risk: riskMaliciousLoaderDeserialization
-      at: sources->egress
+      at: runtime->sources
       note: >
         Several weight formats execute code on load. Format policy on this edge is the only
         place that fact can be addressed once for everything downstream.
@@ -326,8 +352,16 @@ pins:
       note: With no provider applying output policy, an unguarded return leg hands raw completions to every caller.
 
   capabilities:
+    - capability: capabilityModelWeightProtection
+      at: runtime->storage
+      note: >
+        Verify the artifact's signature at load, not at download. The mature answer is the
+        OpenSSF Model Signing spec with Sigstore bundles — a detached signature, so nothing has
+        to be repackaged — and at least one major hub now signs everything it publishes. This
+        is the gate between the store and the loader, and it is what our own fine-tuning
+        pipeline's output should be signed with so there is something here to verify against.
     - capability: capabilityAiBom
-      at: egress->storage
+      at: runtime->storage
       note: >
         The record of which artifact is actually serving — publisher, version, format and the
         scan that cleared it. Without it the question "what is running" has no answer.
@@ -345,10 +379,10 @@ pins:
         Per model version, because a new checkpoint from the same publisher is a new model
         nobody else has tested — and there is no provider doing it on our behalf.
     - capability: capabilityModelScanning
-      at: egress->storage
+      at: runtime->storage
       note: Format and content scanning as a blocking gate in the promotion pipeline, before any artifact reaches the runtime.
     - capability: capabilityModelEvals
-      at: egress->storage
+      at: runtime->storage
       note: Safety and adversarial evaluation per model version — a new checkpoint is a new model with new behaviour.
     - capability: capabilityAiGateway
       at: gateway
@@ -387,7 +421,7 @@ flows:
   - id: F1
     title: An internal call
     moves: Prompts from our own services in; completions back.
-    path: [consumers->gateway, gateway->runtime]
+    path: [consumers->gateway, gateway->api, api->runtime]
     threats: [No provider guardrail on either direction, One caller exhausting finite shared capacity, Raw output returned to a service that assumed a hosted API's floor]
     controls: [capabilityRateLimiting, capabilityModelGuardrails, capabilityAuditLogging]
     note: >
@@ -397,7 +431,7 @@ flows:
   - id: F2
     title: Weights arrive
     moves: Checkpoints from a public hub or our own pipeline, admitted and scanned before they land.
-    path: [sources->egress, egress->storage, storage->runtime]
+    path: [runtime->sources, runtime->storage]
     threats: [Serialization format that executes on load, A new checkpoint from a known publisher being a new model nobody tested, Weights swapped underneath a running tier]
     controls: [capabilityModelScanning, capabilityAiBom, capabilityModelWeightProtection]
     note: >
@@ -406,7 +440,7 @@ flows:
   - id: F3
     title: Co-tenancy
     moves: Several tenants' requests mixed in one forward pass on shared accelerators.
-    path: [gateway->runtime]
+    path: [gateway->api, api->runtime]
     threats: [Cross-tenant leakage through a shared prefix cache, Efficiency settings that are also isolation settings]
     controls: [capabilitySecretsManagement, capabilityAiSpm]
     note: >
@@ -417,9 +451,9 @@ flows:
 scenarios:
   - title: A new checkpoint is promoted
     steps:
-      - follow: sources->egress
+      - follow: runtime->sources
         note: The artifact arrives — fetched from the hub or produced by the training pipeline — with provenance recorded.
-      - follow: egress->storage
+      - follow: runtime->storage
         note: Scanning and per-version evaluation gate the promotion. Blocking, or it is not a gate.
       - follow: storage->runtime
         note: The promoted artifact loads into the runtime, digest-verified against the promotion record.
@@ -427,7 +461,7 @@ scenarios:
     steps:
       - follow: consumers->gateway
         note: The workload identity on the request decides its quota and its cache scope.
-      - follow: gateway->runtime
+      - follow: gateway->api
         note: >
           The admitted request is scheduled into a batch alongside other tenants' traffic;
           tenant-scoped cache keys are what keep the prefix lookup safe.
@@ -437,7 +471,7 @@ scenarios:
     steps:
       - follow: consumers->gateway
         note: Admission control decides who waits. There is no provider to absorb the spike.
-      - follow: gateway->runtime
+      - follow: gateway->api
         note: Within-quota traffic is scheduled; everything else is shed at the front door rather than at the accelerator.
 
 deviations:

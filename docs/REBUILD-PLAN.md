@@ -861,8 +861,8 @@ The thing to check against so nothing in this plan is forgotten. Tick as landed.
 - [x] C-4 Local runtime: egress control removed, cloud band gone with it, `Inference API` shared with the cloud page
 
 ### Wave D — cloud
-- [ ] D-1 Inference pair aligned; renamed off "open weights"; prefix-cache side channel + model signing pinned
-- [ ] D-2 Fine-tuning narrowed to seven components; curation / evaluation / registry-gate / serving removed; earlier accepted judgment overturned in writing
+- [x] D-1 Inference pair aligned — shared `Inference API`, renamed to "Self-hosted model inference", prefix-cache side channel and model signing pinned, egress control removed
+- [x] D-2 Fine-tuning narrowed to five blocks — curation, evaluation, registry-gate and serving removed; guidance updated in the same change
 - [ ] D-3 Agent trio: harness-local tools, checkpointer database, supervisor+subagents nested as real blocks, A2A via gateway, "durable" dropped
 - [ ] D-4 Chat agent: human, browser application layer, **scheduling trigger**, same skeleton as single-agent
 - [ ] D-5 MCP server rebuilt small; anonymous origin into the gateway; July 2026 spec pin set

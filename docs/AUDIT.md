@@ -677,20 +677,23 @@ Highlights below are Google's original mapping, not ours.
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 4 — First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
-| Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
+| Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
-### 4a. Risks no architecture pins — 5 of 36
+### 4a. Risks no architecture pins — 6 of 36
 
 - Model Reverse Engineering (`riskModelReverseEngineering`)
 - Inferred Sensitive Data (`riskInferredSensitiveData`)
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
 - Orchestrator/Route Hijack (`riskOrchestratorRouteHijacking`)
+- Evaluation/Benchmark Manipulation (`riskEvaluationBenchmarkManipulation`)
 
-### 4b. Capabilities no architecture pins — 10 of 56
+### 4b. Capabilities no architecture pins — 12 of 56
 
 - Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
+- Privacy-enhancing technologies (`capabilityPetTooling`)
+- Staged rollout, versioning & rollback (`capabilityStagedRollout`)
 - Groundedness & output verification (`capabilityGroundednessChecking`)
 - Model hardening & adversarial training (`capabilityModelHardening`)
 - System prompt & instruction hierarchy management (`capabilitySystemPromptManagement`)
@@ -701,9 +704,11 @@ Highlights below are Google's original mapping, not ours.
 - SaaS security posture management for AI features (`capabilityVendorAssurance`)
 - Threat modelling tooling for AI systems (`capabilityThreatModeling`)
 
-### 4c. CoSAI components no architecture anchors — 6 of 23
+### 4c. CoSAI components no architecture anchors — 8 of 23
 
+- Data Filtering and Processing (`componentDataFilteringAndProcessing`)
 - Model Frameworks and Code (`componentModelFrameworksAndCode`)
+- Model Evaluation (`componentModelEvaluation`)
 - Model Output Handling (`componentApplicationOutputHandling`)
 - Orchestration Output (`componentOrchestrationOutputHandling`)
 - Orchestration Input (`componentOrchestrationInputHandling`)
@@ -770,29 +775,25 @@ Highlights below are Google's original mapping, not ours.
 | Remote MCP server you publish | Policy & authorization | governance | (none) |
 | Remote MCP server you publish | Supply-chain assurance | governance | (none) |
 | Remote MCP server you publish | Observability & response | governance | (none) |
-| Self-hosted open-weights inference | Consuming applications | service | (none) |
-| Self-hosted open-weights inference | AI gateway | service | (none) |
-| Self-hosted open-weights inference | Inference runtime | service | `componentModelServing` |
-| Self-hosted open-weights inference | Storage | external | `componentModelStorage` |
-| Self-hosted open-weights inference | Model sources | external | `componentModelStorage` |
-| Self-hosted open-weights inference | Egress control | service | (none) |
-| Self-hosted open-weights inference | Supply-chain assurance | governance | (none) |
-| Self-hosted open-weights inference | Policy & authorization | governance | (none) |
-| Self-hosted open-weights inference | Secrets & key management | governance | (none) |
-| Self-hosted open-weights inference | Observability & response | governance | (none) |
-| Fine-tuning and model registry pipeline | Training content origins | external | `componentDataSources` |
-| Fine-tuning and model registry pipeline | Curation & filtering | service | `componentDataFilteringAndProcessing` |
-| Fine-tuning and model registry pipeline | Egress control | service | (none) |
-| Fine-tuning and model registry pipeline | Training corpus | service | `componentTrainingData` |
+| Self-hosted model inference | Consuming applications | service | (none) |
+| Self-hosted model inference | AI gateway | service | (none) |
+| Self-hosted model inference | Inference API | service | `componentModelServing` |
+| Self-hosted model inference | Inference runtime | service | `componentModelServing` |
+| Self-hosted model inference | Storage | external | `componentModelStorage` |
+| Self-hosted model inference | Model sources | external | `componentModelStorage` |
+| Self-hosted model inference | Supply-chain assurance | governance | (none) |
+| Self-hosted model inference | Policy & authorization | governance | (none) |
+| Self-hosted model inference | Secrets & key management | governance | (none) |
+| Self-hosted model inference | Observability & response | governance | (none) |
 | Fine-tuning and model registry pipeline | Base model & deps | external | `componentModelStorage` |
+| Fine-tuning and model registry pipeline | Training content origins | external | `componentDataSources` |
+| Fine-tuning and model registry pipeline | Training corpus | service | `componentTrainingData` |
 | Fine-tuning and model registry pipeline | Training job | service | `componentModelTrainingTuning` |
-| Fine-tuning and model registry pipeline | Evaluation & red teaming | service | `componentModelEvaluation` |
-| Fine-tuning and model registry pipeline | Model registry | service | `componentModelStorage` |
-| Fine-tuning and model registry pipeline | Serving & consumers | service | `componentModelServing` |
+| Fine-tuning and model registry pipeline | Storage | external | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Supply-chain assurance | governance | (none) |
 | Fine-tuning and model registry pipeline | Policy & authorization | governance | (none) |
-| Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
 | Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
+| Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
 | First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Remote relay | external | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
@@ -891,7 +892,7 @@ Highlights below are Google's original mapping, not ours.
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
-| Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline | — |
+| Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
 ### 5a. Documents
@@ -902,8 +903,8 @@ Highlights below are Google's original mapping, not ours.
 | Durable multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
 | Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
 | Remote MCP server you publish | build | draft | 5 | Secure service edge for AI services, Application security testing for AI systems, Kill switch, quarantine & decommissioning, Human-in-the-loop approval & escalation, Output encoding & safe rendering |
-| Self-hosted open-weights inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
-| Fine-tuning and model registry pipeline | build | draft | 5 | Model registry & documentation generation, Audit logging & non-repudiation |
+| Self-hosted model inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
+| Fine-tuning and model registry pipeline | build | draft | 4 | Audit logging & non-repudiation, Model registry & documentation generation |
 | First-party coding & desktop agents | use | draft | 4 | Identity & access management for AI applications, Data loss prevention for AI interactions, Agent & tool registry, Audit logging & non-repudiation |
 | Third-party coding & desktop agents | use | draft | 7 | Runtime action authorization, Third-party risk management platform for AI vendors, Agent memory & context protection, Secrets management & ephemeral credentials |
 | Local model runtime | use | draft | 4 | _none_ |
