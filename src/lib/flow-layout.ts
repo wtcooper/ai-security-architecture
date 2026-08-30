@@ -133,79 +133,101 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   }
 
   // --- Edges ---------------------------------------------------------------------
-  // Parallel edges between the same pair fan out a few pixels so both stay visible.
-  const pairCount = new Map<string, number>();
-  const pairSeen = new Map<string, number>();
-  for (const e of arch.edges) {
-    const key = [e.from, e.to].sort().join("~");
-    pairCount.set(key, (pairCount.get(key) ?? 0) + 1);
-  }
+  // Every arrow gets its own anchor point. Without this, edges attaching to the same side of
+  // a block all meet at its centre and their long runs share a corridor, so a reader sees a
+  // bundle and cannot tell which line goes where. Anchors are spread along the side and
+  // ordered by where the other end sits, which also removes most needless crossings.
+  type Side = "t" | "b" | "l" | "r";
+  const cx = (r: Rect) => r.x + r.w / 2;
+  const cy = (r: Rect) => r.y + r.h / 2;
 
-  const edges = arch.edges.map((e) => {
+  const plans = arch.edges.map((e) => {
     const a = blocks[e.from];
     const b = blocks[e.to];
-    const key = [e.from, e.to].sort().join("~");
-    const n = pairCount.get(key) ?? 1;
-    const i = pairSeen.get(key) ?? 0;
-    pairSeen.set(key, i + 1);
-    const off = n > 1 ? (i - (n - 1) / 2) * 16 : 0;
-
     const yOv = overlap(a.y, a.y + a.h, b.y, b.y + b.h);
-    if (yOv) {
-      // Facing sides, straight horizontal.
-      const yMid = (yOv[0] + yOv[1]) / 2 + off;
-      const [x1, x2] = a.x < b.x ? [a.x + a.w, b.x] : [a.x, b.x + b.w];
-      return {
-        from: e.from,
-        to: e.to,
-        d: `M ${x1} ${yMid} L ${x2} ${yMid}`,
-        midX: (x1 + x2) / 2,
-        midY: yMid,
-        horizontal: true,
-      };
-    }
     const xOv = overlap(a.x, a.x + a.w, b.x, b.x + b.w);
-    if (xOv) {
-      const xMid = (xOv[0] + xOv[1]) / 2 + off;
-      const [y1, y2] = a.y < b.y ? [a.y + a.h, b.y] : [a.y, b.y + b.h];
+    let kind: "h" | "v" | "vh" | "hv";
+    let aSide: Side;
+    let bSide: Side;
+    if (yOv) {
+      kind = "h";
+      aSide = a.x < b.x ? "r" : "l";
+      bSide = a.x < b.x ? "l" : "r";
+    } else if (xOv) {
+      kind = "v";
+      aSide = a.y < b.y ? "b" : "t";
+      bSide = a.y < b.y ? "t" : "b";
+    } else if (e.route === "vh") {
+      kind = "vh";
+      aSide = cy(a) < cy(b) ? "b" : "t";
+      bSide = cx(a) < cx(b) ? "l" : "r";
+    } else {
+      kind = "hv";
+      aSide = cx(a) < cx(b) ? "r" : "l";
+      bSide = cy(a) < cy(b) ? "t" : "b";
+    }
+    return { e, a, b, kind, aSide, bSide };
+  });
+
+  const sideLists = new Map<string, { ref: string; sort: number }[]>();
+  plans.forEach((p, i) => {
+    const add = (blockId: string, side: Side, other: Rect, end: "a" | "b") => {
+      const k = `${blockId}|${side}`;
+      const list = sideLists.get(k) ?? [];
+      list.push({ ref: `${i}|${end}`, sort: side === "t" || side === "b" ? cx(other) : cy(other) });
+      sideLists.set(k, list);
+    };
+    add(p.e.from, p.aSide, p.b, "a");
+    add(p.e.to, p.bSide, p.a, "b");
+  });
+  const slot = new Map<string, { idx: number; total: number }>();
+  for (const [k, list] of sideLists) {
+    list.sort((x, y) => x.sort - y.sort);
+    list.forEach((entry, idx) => slot.set(`${k}|${entry.ref}`, { idx, total: list.length }));
+  }
+  const anchorAt = (blockId: string, side: Side, r: Rect, i: number, end: "a" | "b") => {
+    const s = slot.get(`${blockId}|${side}|${i}|${end}`) ?? { idx: 0, total: 1 };
+    const f = (s.idx + 1) / (s.total + 1);
+    if (side === "t") return { x: r.x + r.w * f, y: r.y };
+    if (side === "b") return { x: r.x + r.w * f, y: r.y + r.h };
+    if (side === "l") return { x: r.x, y: r.y + r.h * f };
+    return { x: r.x + r.w, y: r.y + r.h * f };
+  };
+
+  const edges = plans.map((p, i) => {
+    const { e, a, b, kind, aSide, bSide } = p;
+    const A = anchorAt(e.from, aSide, a, i, "a");
+    const B = anchorAt(e.to, bSide, b, i, "b");
+    const base = { from: e.from, to: e.to };
+    if (kind === "h") {
+      // Straight where the anchors line up; a shallow Z where they do not.
+      const d =
+        Math.abs(A.y - B.y) < 0.5
+          ? `M ${A.x} ${A.y} L ${B.x} ${B.y}`
+          : `M ${A.x} ${A.y} L ${(A.x + B.x) / 2} ${A.y} L ${(A.x + B.x) / 2} ${B.y} L ${B.x} ${B.y}`;
+      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: true };
+    }
+    if (kind === "v") {
+      const d =
+        Math.abs(A.x - B.x) < 0.5
+          ? `M ${A.x} ${A.y} L ${B.x} ${B.y}`
+          : `M ${A.x} ${A.y} L ${A.x} ${(A.y + B.y) / 2} L ${B.x} ${(A.y + B.y) / 2} L ${B.x} ${B.y}`;
+      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: false };
+    }
+    if (kind === "vh") {
       return {
-        from: e.from,
-        to: e.to,
-        d: `M ${xMid} ${y1} L ${xMid} ${y2}`,
-        midX: xMid,
-        midY: (y1 + y2) / 2,
+        ...base,
+        d: `M ${A.x} ${A.y} L ${A.x} ${B.y} L ${B.x} ${B.y}`,
+        midX: A.x,
+        midY: (A.y + B.y) / 2,
         horizontal: false,
       };
     }
-    if (e.route === "vh") {
-      // One bend, leaving vertically: down (or up) the source's column, turn at the target's
-      // row, enter the target sideways. Entry sits a little above centre so a vh arrival and an
-      // hv departure on the same block do not draw over each other.
-      const ax = a.x + a.w / 2 + off;
-      const y1 = a.y + a.h / 2 < b.y + b.h / 2 ? a.y + a.h : a.y;
-      const by = b.y + b.h / 2 - 14 + off;
-      const bx = ax < b.x ? b.x : b.x + b.w;
-      return {
-        from: e.from,
-        to: e.to,
-        d: `M ${ax} ${y1} L ${ax} ${by} L ${bx} ${by}`,
-        midX: ax,
-        midY: (y1 + by) / 2,
-        horizontal: false,
-      };
-    }
-    // One bend, leaving sideways: across at the source's centre, turn at the target's column,
-    // enter the target vertically.
-    const ay = a.y + a.h / 2 + off;
-    const x1 = a.x + a.w / 2 < b.x + b.w / 2 ? a.x + a.w : a.x;
-    const bx = b.x + b.w / 2 + off;
-    const by = ay < b.y ? b.y : b.y + b.h;
     return {
-      from: e.from,
-      to: e.to,
-      d: `M ${x1} ${ay} L ${bx} ${ay} L ${bx} ${by}`,
-      midX: (x1 + bx) / 2,
-      midY: ay,
+      ...base,
+      d: `M ${A.x} ${A.y} L ${B.x} ${A.y} L ${B.x} ${B.y}`,
+      midX: (A.x + B.x) / 2,
+      midY: A.y,
       horizontal: true,
     };
   });

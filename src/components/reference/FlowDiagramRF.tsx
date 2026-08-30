@@ -480,6 +480,9 @@ export function FlowDiagramRF({
   const cfg = RF_CONFIG[archetype.id];
   const [card, setCard] = useState<HoverCard | null>(null);
   const [dragged, setDragged] = useState<ReadonlySet<string>>(new Set());
+  // Hovering one arrow pulls it out of the bundle — the interactive half of the answer to
+  // "which line goes where", alongside the fanned anchor points the layout computes.
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
 
   const walk = scenario !== null ? archetype.scenarios?.[scenario] : undefined;
   const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => s.follow) ?? []), [walk]);
@@ -814,6 +817,8 @@ export function FlowDiagramRF({
       if (!geo) continue;
       const style = PATH_STYLE[e.path];
       const dimmed = (inScenario && !walkEdges.has(key)) || (inFlow && !flowEdges.has(key));
+      const traced = hoveredEdge === key;
+      const otherTraced = hoveredEdge !== null && !traced;
       const live = moved.has(e.from) || moved.has(e.to);
       const [sh, th] = facing(rects[e.from], rects[e.to]);
       out.push({
@@ -837,10 +842,11 @@ export function FlowDiagramRF({
         },
         style: {
           stroke: style.stroke,
-          strokeWidth: 1.8,
+          strokeWidth: traced ? 3.4 : 1.8,
           strokeDasharray: style.dash,
-          opacity: dimmed ? 0.15 : 1,
+          opacity: dimmed ? 0.15 : otherTraced ? 0.2 : 1,
         },
+        zIndex: traced ? 20 : undefined,
         markerEnd: { type: "arrowclosed" as never, color: style.stroke, width: 14, height: 14 },
         markerStart: e.bidir
           ? { type: "arrowclosed" as never, color: style.stroke, width: 14, height: 14 }
@@ -848,7 +854,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, cfg, inScenario, walkEdges, inFlow, flowEdges, dragged, cardAt, onPinLeave]);
+  }, [archetype, cfg, inScenario, walkEdges, inFlow, flowEdges, hoveredEdge, dragged, cardAt, onPinLeave]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
@@ -873,13 +879,17 @@ export function FlowDiagramRF({
         }}
         onNodeMouseLeave={() => setCard(null)}
         onEdgeMouseEnter={(event, edge) => {
+          setHoveredEdge(edge.id);
           const d = edge.data as { label?: string; note?: string };
           const e = archetype.edges.find((x) => `${x.from}->${x.to}` === edge.id);
           const fromTitle = archetype.blocks.find((b) => b.id === e?.from)?.title ?? e?.from;
           const toTitle = archetype.blocks.find((b) => b.id === e?.to)?.title ?? e?.to;
           cardAt(event, d.label ?? `${fromTitle} → ${toTitle}`, d.note);
         }}
-        onEdgeMouseLeave={() => setCard(null)}
+        onEdgeMouseLeave={() => {
+          setHoveredEdge(null);
+          setCard(null);
+        }}
         onMoveStart={() => setCard(null)}
         fitView
         fitViewOptions={{ padding: 0.05 }}
