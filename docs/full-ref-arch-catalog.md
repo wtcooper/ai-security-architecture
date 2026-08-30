@@ -20,15 +20,18 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 2 | Open-source coding & desktop agents | `archOssCodingAgent` | `endpoint-oss-coding-agent.yaml` |
 | 3 | Personal autonomous agent | `archPersonalAgent` | `endpoint-personal-agent.yaml` |
 | 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
-| 5 | Personal agent — zone map (spike A) | `archPersonalAgentZones` | `endpoint-personal-agent-zones.yaml` |
-| 6 | Personal agent — one door (spike B) | `archPersonalAgentHub` | `endpoint-personal-agent-hub.yaml` |
+| 5 | Personal agent — zone map (spike) | `archPersonalAgentZones` | `endpoint-personal-agent-zones.yaml` |
+| 6 | Coding & desktop agents — zone map (spike) | `archCodingAgentZones` | `endpoint-coding-agent-zones.yaml` |
 
 - **Ranks 5 and 6 are a research preview**, not additions to the catalogue proper. They redraw
-  the personal autonomous agent in the spike grammar (`data/ONTOLOGY-SPIKE.md`): ownership
-  zones as geometry with a build-enforced crossing rule, and nine numbered first-class data
-  flows carrying what moves, the threats and the controls. Two variants are published for A/B
-  comparison — a fine-grained zone map and a coarse one-door hub. The intent is to keep one,
-  retire the other and its ontology document, or promote the grammar over the main one.
+  two existing archetypes in the spike grammar (`data/ONTOLOGY-SPIKE.md`): five standard
+  ownership bands as full-height columns with a build-enforced crossing rule, and numbered
+  first-class data flows carrying what moves, the threats and the controls. Both sit alongside
+  their main-grammar originals so the two readings can be compared directly. The zone set —
+  principal, workload, crossing, enterprise, external — is designed to hold on every surface,
+  with the SaaS mapping (vendor runtime in `workload`, our data in `enterprise`) the case that
+  earns it. The coding-agent variant is the demonstration: the crossing rule makes the
+  endpoint-to-vendor edge illegal and forces the secure edge onto the page.
 
 - **The vendored/OSS split (2026-08)** replaced a single coding-agent diagram that carried an
   either/or model path. The ontology bans conditional edges: the OSS harnesses differ in

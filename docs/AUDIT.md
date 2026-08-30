@@ -676,7 +676,7 @@ Highlights below are Google's original mapping, not ours.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 6 — Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal agent — one door (spike B), Personal agent — zone map (spike A), Personal autonomous agent |
+| Endpoint | 6 — Coding & desktop agents — zone map (spike), Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal agent — zone map (spike A), Personal autonomous agent |
 | Cloud & hosted | 6 — Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
@@ -762,6 +762,17 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Model registry | service | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Serving & consumers | external | `componentModelServing` |
 | Fine-tuning and model registry pipeline | Governance plane | governance | (none) |
+| Coding & desktop agents — zone map (spike) | Remote device | service | `componentAgentUserQuery` |
+| Coding & desktop agents — zone map (spike) | Agent harness | service | `componentReasoningCore` |
+| Coding & desktop agents — zone map (spike) | Memory & state | service | `componentDataStorage` |
+| Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
+| Coding & desktop agents — zone map (spike) | Secure edge | service | (none) |
+| Coding & desktop agents — zone map (spike) | MCP gateway | service | (none) |
+| Coding & desktop agents — zone map (spike) | Repos & documents | external | `componentDataSources` |
+| Coding & desktop agents — zone map (spike) | Enterprise data | external | `componentDataSources` |
+| Coding & desktop agents — zone map (spike) | Vendor service | provider | (none) |
+| Coding & desktop agents — zone map (spike) | Model provider | provider | `componentModelServing` |
+| Coding & desktop agents — zone map (spike) | Downstream services | external | `componentDataSources` |
 | Coding and desktop agents | Repos, docs & screen | external | `componentDataSources` |
 | Coding and desktop agents | Agent harness | service | `componentReasoningCore` |
 | Coding and desktop agents | Remote device | service | `componentAgentUserQuery` |
@@ -784,14 +795,6 @@ Highlights below are Google's original mapping, not ours.
 | Open-source coding & desktop agents | Model provider | provider | `componentModelServing` |
 | Open-source coding & desktop agents | Private pkg registry | external | `componentDataSources` |
 | Open-source coding & desktop agents | Downstream services | external | `componentDataSources` |
-| Personal agent — one door (spike B) | Remote device | service | `componentAgentUserQuery` |
-| Personal agent — one door (spike B) | AI gateway | service | (none) |
-| Personal agent — one door (spike B) | Agent runtime | service | `componentReasoningCore` |
-| Personal agent — one door (spike B) | Memory & state | service | `componentDataStorage` |
-| Personal agent — one door (spike B) | Control plane | governance | (none) |
-| Personal agent — one door (spike B) | Model provider | provider | `componentModelServing` |
-| Personal agent — one door (spike B) | Remote tool services | service | `componentTools` |
-| Personal agent — one door (spike B) | Downstream services | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Remote device | service | `componentAgentUserQuery` |
 | Personal agent — zone map (spike A) | Channel bridges | service | `componentAgentUserQuery` |
 | Personal agent — zone map (spike A) | Agent harness | service | `componentReasoningCore` |
@@ -801,6 +804,8 @@ Highlights below are Google's original mapping, not ours.
 | Personal agent — zone map (spike A) | Messaging relay | service | (none) |
 | Personal agent — zone map (spike A) | AI gateway | service | (none) |
 | Personal agent — zone map (spike A) | Control plane | governance | (none) |
+| Personal agent — zone map (spike A) | Internal MCP & APIs | service | `componentTools` |
+| Personal agent — zone map (spike A) | Enterprise data | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Messaging platform | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Model provider | provider | `componentModelServing` |
 | Personal agent — zone map (spike A) | Remote tool services | service | `componentTools` |
@@ -844,7 +849,7 @@ Highlights below are Google's original mapping, not ours.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent | Personal agent — one door (spike B), Personal agent — zone map (spike A) |
+| Endpoint | Coding and desktop agents, Local model runtime, Open-source coding & desktop agents, Personal autonomous agent | Coding & desktop agents — zone map (spike), Personal agent — zone map (spike A) |
 | Cloud & hosted | Single agent workflow, Durable multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted open-weights inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 

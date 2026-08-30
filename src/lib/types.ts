@@ -264,7 +264,17 @@ export interface ArchBlockItem {
 export interface ArchZone {
   id: string;
   title: string;
-  owner: "user" | "endpoint" | "enterprise" | "external";
+  /**
+   * The standard five-band ownership gradient, left to right — the same set on every surface,
+   * with only the band titles varying by architecture. See data/ONTOLOGY-SPIKE.md.
+   *
+   * `principal`  people and the surfaces they instruct from
+   * `workload`   where the loop actually runs (our endpoint, our cloud tier, or a vendor's)
+   * `crossing`   the governed brokers and control plane the organisation operates
+   * `enterprise` the organisation's own systems and data — what its MCPs and APIs reach
+   * `external`   outside the company: providers, third-party services, the web, senders
+   */
+  owner: "principal" | "workload" | "crossing" | "enterprise" | "external";
   note?: string;
 }
 

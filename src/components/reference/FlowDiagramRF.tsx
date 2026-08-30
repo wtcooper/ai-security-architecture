@@ -159,9 +159,10 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
 
 /** Spike grammar: an ownership zone drawn as a labelled background band. */
 const ZONE_TINT: Record<string, { fill: string; line: string; ink: string }> = {
-  user: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
-  endpoint: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
-  enterprise: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
+  principal: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
+  workload: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
+  crossing: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
+  enterprise: { fill: "#eaf0fb", line: "#94aede", ink: "#3667c4" },
   external: { fill: "#f3eef9", line: "#a894ce", ink: "#6f4bb5" },
 };
 
@@ -475,16 +476,25 @@ export function FlowDiagramRF({
     }
 
     const nodes: Node[] = [];
-    // Spike grammar: ownership zones as background bands, sized from their members.
+    // Spike grammar: ownership zones as full-height background columns. The horizontal extent
+    // comes from each zone's own members; the vertical extent is shared across every zone, so
+    // the bands read as columns and a crossing is a horizontal move between two of them.
     const ZONE_PAD = 22;
     const ZONE_HEAD = 30;
+    const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
+    const bandTop = allRects.length
+      ? Math.min(...allRects.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD
+      : 0;
+    const bandBottom = allRects.length
+      ? Math.max(...allRects.map((r) => r.y + r.h)) + ZONE_PAD
+      : 0;
     for (const zone of archetype.zones ?? []) {
       const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
       if (!rs.length) continue;
       const x0 = Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
-      const y0 = Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD;
       const x1 = Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
-      const y1 = Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD;
+      const y0 = bandTop;
+      const y1 = bandBottom;
       nodes.push({
         id: `__zone_${zone.id}`,
         type: "zone",

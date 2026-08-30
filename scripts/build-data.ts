@@ -596,17 +596,20 @@ function checkArchetypes(
         if (!b.zone) fail(`${where}: block ${b.id} has no zone (this architecture declares zones)`);
         else if (!zoneIds.has(b.zone)) fail(`${where}: block ${b.id} has unknown zone ${b.zone}`);
       }
-      // The crossing rule: an endpoint-zone block may not reach an external-zone block
-      // directly — an enterprise-zone broker has to terminate the crossing.
+      // The crossing rule: the workload — wherever the loop runs — may not touch the
+      // organisation's systems or anything external directly. Every such path terminates in
+      // the crossing band, which is the whole reason that band exists.
       const ownerOf = new Map(arch.blocks.map((b) => [b.id, zoneOwner.get(b.zone ?? "")]));
+      const guarded = new Set(["enterprise", "external"]);
       for (const e of arch.edges) {
         const from = ownerOf.get(e.from);
         const to = ownerOf.get(e.to);
         const crosses =
-          (from === "endpoint" && to === "external") || (from === "external" && to === "endpoint");
+          (from === "workload" && guarded.has(to ?? "")) ||
+          (to === "workload" && guarded.has(from ?? ""));
         if (crosses)
           fail(
-            `${where}: edge ${e.from}->${e.to} crosses endpoint to external directly — the crossing must terminate in an enterprise zone`,
+            `${where}: edge ${e.from}->${e.to} joins the workload band to ${from === "workload" ? to : from} directly — that crossing must terminate in the crossing band`,
           );
       }
     }
