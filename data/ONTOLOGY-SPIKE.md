@@ -24,19 +24,25 @@ inversion.
 
 ## The five standard zones
 
-The `owner` values are fixed catalogue-wide; only the band *titles* change per architecture.
+**Both the `owner` values and the band titles are fixed catalogue-wide.** An earlier draft of
+this document let titles vary per architecture; two drawings promptly called the same band
+"Owner surfaces" and "Developer surfaces", and the workload band "Managed endpoint" and
+"Vendor application on the endpoint". A band that is named differently on each drawing cannot
+be compared across drawings, which is the whole point of having bands. Architecture-specific
+detail goes in the zone's `note`. The build fails a title that does not match its owner.
+
 They run left to right as an ownership gradient, and the reason there are five rather than
 four is that **our systems and outside systems are different places** — an agent reaching the
 organisation's own data is not the same event as an agent reaching the open internet, and the
 controls differ.
 
-| Order | `owner` | What belongs in it | Who operates it |
-| --- | --- | --- | --- |
-| 1 | `principal` | People and the surfaces they instruct from — staff, customers, remote devices, chat surfaces, application front ends | The person, on a device the organisation may or may not manage |
-| 2 | `workload` | Where the agent loop actually runs, and the state and local tools it owns | Us on the endpoint and cloud surfaces; **the vendor** on the SaaS surface |
-| 3 | `crossing` | The controls the organisation operates on the way out — egress control and firewall, AI gateway, AI gateway, relay — and the control plane behind them: identity, secrets, policy, registry, telemetry | Always the organisation |
-| 4 | `enterprise` | The organisation's own systems and data — systems of record, internal APIs and MCP servers, tenant data, artifact stores. **What our MCPs and connectors reach in our own environment.** | The organisation |
-| 5 | `external` | Outside the company entirely — model providers, third-party SaaS, remote MCP servers, public hubs, the open web, and the unsolicited senders who arrive through them | Nobody in the drawing |
+| Order | `owner` | Fixed title | What belongs in it | Who operates it |
+| --- | --- | --- | --- | --- |
+| 1 | `principal` | **Actors & surfaces** | People and the surfaces they instruct from — staff, customers, remote devices, chat surfaces, application front ends | The person, on a device the organisation may or may not manage |
+| 2 | `workload` | **Agent workload** | Where the agent loop actually runs, and the state and local tools it owns | Us on the endpoint and cloud surfaces; **the vendor** on the SaaS surface |
+| 3 | `crossing` | **Enterprise crossing** | The controls the organisation operates on the way out — egress control and firewall, AI gateway, AI gateway, relay — and the control plane behind them: identity, secrets, policy, registry, telemetry | Always the organisation |
+| 4 | `enterprise` | **Enterprise systems & data** | The organisation's own systems and data — systems of record, internal APIs and MCP servers, tenant data, artifact stores. **What our MCPs and connectors reach in our own environment.** | The organisation |
+| 5 | `external` | **External** | Outside the company entirely — model providers, third-party SaaS, remote MCP servers, public hubs, the open web, and the unsolicited senders who arrive through them | Nobody in the drawing |
 
 ### How the bands map onto each surface
 
@@ -52,8 +58,9 @@ vendor-hosted agent cannot touch our systems except through a component we run.
 
 ## Rules the build enforces
 
-1. **Zone completeness** — if an architecture declares zones, every block declares one and it
-   must exist.
+1. **Zone completeness and naming** — if an architecture declares zones, every block declares
+   one and it must exist; and every band carries the fixed title for its owner. Omit the title
+   and the build fills it in; give it a different one and the build fails.
 2. **The crossing rule** — no edge may join a `workload` block directly to an `enterprise` or
    `external` block. Every such path terminates in the `crossing` band first. This is the
    ONTOLOGY.md §3 invariant generalised and promoted from prose to a build failure, and it is

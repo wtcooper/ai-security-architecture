@@ -592,6 +592,18 @@ function checkArchetypes(
     const zoneOwner = new Map((arch.zones ?? []).map((z) => [z.id, z.owner]));
     if (arch.zones?.length) {
       if (zoneIds.size !== arch.zones.length) fail(`${where}: duplicate zone id`);
+      // Band titles are a closed set keyed by owner: a band means the same thing on every
+      // drawing, or cross-architecture comparison is worthless. Architecture-specific detail
+      // belongs in the zone note.
+      for (const z of arch.zones) {
+        const canon = ZONE_TITLES[z.owner];
+        if (!canon) continue;
+        if (!z.title) z.title = canon;
+        else if (z.title !== canon)
+          fail(
+            `${where}: zone ${z.id} is titled "${z.title}" — the standard title for owner ${z.owner} is "${canon}" (put the architecture-specific detail in the zone note)`,
+          );
+      }
       for (const b of arch.blocks) {
         if (!b.zone) fail(`${where}: block ${b.id} has no zone (this architecture declares zones)`);
         else if (!zoneIds.has(b.zone)) fail(`${where}: block ${b.id} has unknown zone ${b.zone}`);
@@ -669,6 +681,18 @@ function checkArchetypes(
  * must carry the canonical icon, canonical block titles the canonical kind, and inline
  * capabilities need an embodying component or a deviation recording the absorption.
  */
+/** Canonical band titles, keyed by owner — read once from the vocabulary. */
+const ZONE_TITLES: Record<string, string> = (() => {
+  try {
+    const v = parseYaml(
+      readFileSync(join(ROOT, "data", "reference", "vocabulary.yaml"), "utf8"),
+    ) as { zones?: Record<string, { title: string }> };
+    return Object.fromEntries(Object.entries(v.zones ?? {}).map(([k, z]) => [k, z.title]));
+  } catch {
+    return {};
+  }
+})();
+
 function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   let vocab: {
     components?: { title: string; kind?: string; items?: { label: string; icon: string }[] }[];
@@ -690,6 +714,10 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   for (const arch of archs) {
     for (const block of arch.blocks) {
       const canon = byTitle.get(block.title);
+      if (!canon && block.kind !== "actor")
+        warnings.push(
+          `${arch.id}: block "${block.title}" is not in the vocabulary — reuse a canonical component or add it to data/reference/vocabulary.yaml`,
+        );
       if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor")
         warnings.push(`${arch.id}: block "${block.title}" is kind ${block.kind}, vocabulary says ${canon.kind}`);
       for (const item of block.items ?? []) {

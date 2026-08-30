@@ -25,6 +25,14 @@ Components are the things data flows between. Some controls ARE components — a
 gateway, a curation stage — and some controls are properties of components or flows. The
 enforcement classification below decides which, once, catalogue-wide.
 
+**Naming is a hard standard, not a preference.** Every recurring component, item and zone band
+has one name, registered in `vocabulary.yaml`, and the build reports any drawing that invents
+another. This rule exists because it has failed twice in practice: the same crossing was drawn
+as both "MCP gateway" and "AI gateway", and the same ownership band as both "Managed endpoint"
+and "Vendor application on the endpoint". A reader comparing two architectures cannot tell
+whether differently-named things are different things — so a new name is a deliberate act that
+adds a registry entry, never a local choice. Architecture-specific meaning belongs in notes.
+
 ## 2. The enforcement classification
 
 Every capability carries `enforcement` in vocabulary.yaml:
@@ -109,7 +117,9 @@ These are conventions checked in review, not by the build — the build checks c
 
 ## 6. Authoring checklist (every new or changed architecture)
 
-1. Block titles and recurring items from vocabulary.yaml; departures carry a deviation.
+1. Block titles, item labels and zone bands from vocabulary.yaml — the build warns on an
+   unregistered component name and fails on a non-standard zone title. A genuinely new
+   component is registered in the vocabulary in the same change, never named locally.
 2. Inline capabilities embodied or their absorption recorded; zone rules respected for the
    architecture's mode.
 3. Risks pinned where they materialize; standard pin patterns applied (untrusted-content

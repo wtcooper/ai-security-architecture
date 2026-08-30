@@ -766,10 +766,9 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop agents — zone map (spike) | Agent harness | service | `componentReasoningCore` |
 | Coding & desktop agents — zone map (spike) | Memory & state | service | `componentDataStorage` |
 | Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
-| Coding & desktop agents — zone map (spike) | Secure edge | service | (none) |
-| Coding & desktop agents — zone map (spike) | MCP gateway | service | (none) |
-| Coding & desktop agents — zone map (spike) | Repos & documents | external | `componentDataSources` |
-| Coding & desktop agents — zone map (spike) | Enterprise data | external | `componentDataSources` |
+| Coding & desktop agents — zone map (spike) | Egress control | service | (none) |
+| Coding & desktop agents — zone map (spike) | AI gateway | service | (none) |
+| Coding & desktop agents — zone map (spike) | Enterprise systems | external | `componentDataSources` |
 | Coding & desktop agents — zone map (spike) | Vendor service | provider | (none) |
 | Coding & desktop agents — zone map (spike) | Model provider | provider | `componentModelServing` |
 | Coding & desktop agents — zone map (spike) | Downstream services | external | `componentDataSources` |
@@ -778,7 +777,7 @@ Highlights below are Google's original mapping, not ours.
 | Coding and desktop agents | Remote device | service | `componentAgentUserQuery` |
 | Coding and desktop agents | Memory & state | service | `componentDataStorage` |
 | Coding and desktop agents | Tool services | service | `componentTools` |
-| Coding and desktop agents | MCP gateway | service | (none) |
+| Coding and desktop agents | AI gateway | service | (none) |
 | Coding and desktop agents | Vendor service | provider | (none) |
 | Coding and desktop agents | Model provider | provider | `componentModelServing` |
 | Coding and desktop agents | Downstream services | external | `componentDataSources` |
@@ -800,7 +799,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal agent — zone map (spike A) | Agent harness | service | `componentReasoningCore` |
 | Personal agent — zone map (spike A) | Memory & state | service | `componentDataStorage` |
 | Personal agent — zone map (spike A) | Tool services | service | `componentTools` |
-| Personal agent — zone map (spike A) | Owner workspace | service | `componentDataSources` |
+| Personal agent — zone map (spike A) | Owner workspace | external | `componentDataSources` |
 | Personal agent — zone map (spike A) | Messaging relay | service | (none) |
 | Personal agent — zone map (spike A) | AI gateway | service | (none) |
 | Personal agent — zone map (spike A) | Control plane | governance | (none) |
@@ -830,7 +829,7 @@ Highlights below are Google's original mapping, not ours.
 | UI/low-code managed agent runtime | Identity & entitlements | service | (none) |
 | UI/low-code managed agent runtime | Attached knowledge | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
-| UI/low-code managed agent runtime | MCP gateway | service | (none) |
+| UI/low-code managed agent runtime | AI gateway | service | (none) |
 | UI/low-code managed agent runtime | Connected systems | service | `componentDataSources` |
 | UI/low-code managed agent runtime | Maker governance | governance | (none) |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
@@ -839,7 +838,7 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Managed memory | provider | `componentDataStorage` |
 | API/SDK managed agent runtime | Managed sandbox | provider | (none) |
 | API/SDK managed agent runtime | Managed tool gateway | provider | (none) |
-| API/SDK managed agent runtime | MCP gateway | service | (none) |
+| API/SDK managed agent runtime | AI gateway | service | (none) |
 | API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Customer governance | governance | (none) |
 
