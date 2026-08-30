@@ -15,7 +15,7 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Component (block) | architecture `blocks:` | canonical title from vocabulary, or a recorded custom |
 | Subcomponent (item) | block `items:` | canonical label+icon from vocabulary where the concept recurs |
 | Flow (edge) | architecture `edges:` | `from->to`, one of three path classes |
-| Boundary (frame) | rf-config.ts | containment only — never a block |
+| Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
 | Capability (control) | data/overlay/capabilities.yaml | 56 catalogue-wide, stable ids; per-diagram chip numbers |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
@@ -28,12 +28,12 @@ enforcement classification below decides which, once, catalogue-wide.
 **A dimension states the axis it measures.** Naming rules only help if the concept being
 named is coherent: a set of bands that mixes "where it runs" with "what it does" produces
 consistent names for a confused idea. Zones measure who operates an environment, and nothing
-else; functional properties (is this a crossing?) belong to components. State the axis in the
-registry, not just the allowed values.
+else; functional properties belong to components, and containment belongs to `parent`. State
+the axis in the registry, not just the allowed values.
 
 **Naming is a hard standard, not a preference.** Every recurring component, item and zone band
 has one name, registered in `vocabulary.yaml`, and the build reports any drawing that invents
-another. This rule exists because it has failed twice in practice: the same crossing was drawn
+another. This rule exists because it has failed twice in practice: the same gateway was drawn
 as both "MCP gateway" and "AI gateway", and the same ownership band as both "Managed endpoint"
 and "Vendor application on the endpoint". A reader comparing two architectures cannot tell
 whether differently-named things are different things — so a new name is a deliberate act that
@@ -108,11 +108,11 @@ customer-owned component on it is an audit finding.
   trust or ownership boundary, or carrying untrusted content), `governance` (dotted policy
   and configuration relationships). Labels appear only where the flow's nature is not
   obvious from its endpoints.
-- **Boundaries** (sandboxes, shipped applications, tenants) are frames, never blocks.
-  Sandboxing has exactly three canonical forms, chosen by criteria: a **frame** when the
-  boundary wraps the whole system under discussion; a **Sandboxed tools item** when it is a
-  contained execution path inside an application; a **Managed sandbox block** when it is a
-  provider-operated product the customer buys.
+- **Boundaries** (sandboxes, shipped applications, tenants) are **containers** — a
+  `kind: boundary` block that other blocks name as their `parent` (see §4a). Sandboxing has
+  three canonical forms, chosen by criteria: a **boundary container** when it wraps a set of
+  components; a **Sandboxed tools item** when it is a contained execution path inside one
+  application; a **Managed sandbox block** when it is a provider-operated product you buy.
 - **CoSAI (and OWASP KC, and the F5 grammar) are crosswalks, not the source.** Our component
   registry is authoritative; `cosaiComponent` anchors are kept where a mapping exists
   because they buy the risk-map linkage, and their absence is meaningful (the grey blocks).
@@ -143,14 +143,26 @@ workflow has no endpoint band. **Columns must be assigned in band order** — th
 derives each band's rect from the `min..max col` of its members, so a column out of band order
 makes two bands overlap.
 
-### Crossing is a component property, not a band
+### Bands are locations, not a pipeline
 
-An earlier draft made "Enterprise crossing" its own band, which put a functional concept in a
-row of locational ones. A gateway is a thing that lives somewhere — in our cloud, next to the
-systems it protects. So the vocabulary marks components `crossing: true`, and the rule is
-about components meeting bands rather than about a band existing. This is also more precise:
-`harness -> orgData` fails even though both could sit in adjacent bands, because orgData is
-not a crossing — the path has to run `harness -> aiGateway -> orgData`.
+A band says who operates an environment. It does **not** imply an ordering that traffic must
+follow. A managed endpoint reaches our cloud, a vendor, or an uncontracted third party
+directly; a vendor reaches back into our cloud; two outside parties talk to each other without
+touching us at all. Draw the paths that exist.
+
+**The crossing rule was removed on 2026-08-30, and the reason is worth keeping.** It required
+every edge in or out of a band we operate to terminate at a component marked `crossing: true`.
+The intent was sound — traffic crossing our boundary should meet a control we run. But it
+encoded the pipeline assumption above, and because it was a hard build failure, an honest
+drawing with no crossing could only be made to build by *inventing a component*. It produced
+four fabricated blocks across four architectures, every one of them a control wearing a
+component's clothes.
+
+A rule that makes a drawing dishonest in order to satisfy itself is a broken rule. What
+replaced it is an observation the build reports and never blocks on: an edge leaving a band we
+operate with no inline control pinned at either end. When the rule was removed, that count
+across the whole catalogue was **zero** — the drawings were already right, and the rule had
+only ever been forcing boxes where pins sufficed.
 
 ### What the crossing band is *not*
 
@@ -190,9 +202,29 @@ the implementing technology and cites the number. There is no "Control plane" co
 management capabilities never become boxes in the data path, which is the rule that stops a
 reference architecture becoming a tool inventory.
 
-**Bands replace frames.** A containment frame inside a band reads as a second boundary of the
-same kind, so a zoned architecture states its sandbox on the harness and enforces it with the
-sandboxing capability instead. `rf-config.ts` stays for any future non-zoned drawing.
+### Containment nests, to any depth
+
+An earlier draft claimed a containment frame inside a band "reads as a second boundary of the
+same kind" and dropped frames entirely. **That was wrong, and it cost the catalogue its most
+important control recommendation** — the sandbox around a personal agent became a sentence in a
+note. A band answers *who operates this environment*; a container answers *what contains this
+process*. Different questions, and a drawing carries both.
+
+Containment is a block property: `parent: <blockId>`. It nests without limit — a sandbox
+holding a harness that itself holds a supervisor and its subagents is three levels through one
+mechanism. **Nested blocks stay ordinary blocks**, keeping their edges, pins, items and
+capability chips, which is the property that makes containment expressible without breaking the
+flows.
+
+Two container flavours:
+- **`kind: boundary`** — pure containment with no data path of its own. Dashed, a label tab, no
+  items. A sandbox, a shipped vendor application, a tenant.
+- **A normal block with children** — keeps its border and its own items. An agent harness
+  containing a supervisor and its subagents.
+
+One more kind exists for a different job: **`kind: origin`** occupies a grid cell and draws
+nothing, so an edge can arrive from a deliberately unnamed source — used where a component is
+reached from several surfaces and naming any one of them would be arbitrary.
 
 ## 4b. Flows and the sequence view
 
@@ -266,8 +298,9 @@ to any architecture can be checked against them without reading the whole docume
    controls are components; embedded controls are pins; management controls are call-outs in
    the security and governance band. *(Failed as: egress allowlist and audit tap drawn as
    gateway items while also pinned.)*
-4. **Crossing-ness is a component property.** Any edge entering or leaving a band we operate
-   terminates at a component marked `crossing: true`.
+4. **Bands are locations, not a pipeline.** A band says who operates an environment; it implies
+   no ordering traffic must follow. Draw the paths that exist. *(Failed as: the crossing rule,
+   removed 2026-08-30 — see §4a for why, and for what four invented components it cost.)*
 5. **Risks pin where they materialize; controls pin where they are enforced.** A governance
    call-out cites a control's number; it does not claim to be the enforcement point.
 6. **Either/or edges are banned.** A variant needing a conditional edge is its own
@@ -296,10 +329,12 @@ to any architecture can be checked against them without reading the whole docume
    one and it must exist; every band carries the fixed title for its owner. Omit the title and
    the build fills it in; give it a different one and the build fails. Columns are assigned in
    band order, or two bands draw on top of each other.
-12. **The crossing rule.** Any edge entering or leaving a band we operate (`endpoint`,
-   `cloud`) terminates at a component the vocabulary marks `crossing: true`. Exempt: a person
-   using their own managed device, anything wholly outside us, and the governance band, whose
-   relationships are oversight rather than data.
+12. **A component is a thing somebody runs, not the name of a control.** The test is
+   provenance, not wording: an AI gateway is a real tier (LiteLLM-class) and is a component;
+   "Egress control" is the name of a capability in our own catalogue and belongs as a pin. If
+   you cannot name the product class that sits there, it is not a component. *(Failed as: four
+   Egress control blocks invented across four architectures to satisfy the crossing rule this
+   rule replaced.)*
 13. **Flow integrity.** Flow ids match `^F\d+$` and are unique; every path step follows a real
    edge (reverse legal on bidirectional edges); every `moves` statement is present; every
    capability a flow claims is pinned on the drawing.

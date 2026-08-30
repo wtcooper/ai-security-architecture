@@ -751,7 +751,7 @@ of the grammar changes. The line appears to begin in empty space.
 Grammar and renderer first, because every architecture inherits them. Then the architectures in
 dependency order, leaving the ones told to "follow the patterns established by the others" last.
 
-### Wave A — ontology and build
+### Wave A — ontology and build ✅ **complete 2026-08-30**
 
 - **Remove the crossing rule** and `crossing: true`, replacing it with an optional non-blocking
   report. Must land first, or removing the invented components will fail the build.
@@ -832,13 +832,13 @@ dependency order, leaving the ones told to "follow the patterns established by t
 
 The thing to check against so nothing in this plan is forgotten. Tick as landed.
 
-### Wave A — ontology and build
-- [ ] A1 Remove the crossing rule and `crossing: true`; replace with a non-blocking report
-- [ ] A2 Provenance test for components (report-only), then error in Wave F
-- [ ] A3 Retire `Egress control` and `Service edge` with `deprecated:` redirects
-- [ ] A4 A2A into `toolServicesRemote` (cloud, vendor, external)
-- [ ] A5 Full controls-as-components audit across all 13 using the provenance test
-- [ ] A6 Revert the "frame inside a band" deviation in ONTOLOGY.md
+### Wave A — ontology and build ✅ **complete 2026-08-30**
+- [x] A1 Removed the crossing rule and `crossing: true`; replaced with a non-blocking observation, which reports **zero** across the catalogue and `crossing: true`; replace with a non-blocking report
+- [x] A2 Provenance test as `controlBlockTitles` (report-only; 6 in the rebuild backlog) for components (report-only), then error in Wave F
+- [x] A3 `Egress control`, `Service edge`, `Identity & secure edge` and `Governance plane` on the control-block denylist with `deprecated:` redirects
+- [x] A4 A2A into `toolServicesRemote` (cloud, vendor, external)
+- [x] A5 Audit run — 6 instances found across 4 architectures, cleared per architecture in Waves C–E across all 13 using the provenance test
+- [x] A6 Reverted; ONTOLOGY §4a now carries the nesting design and rule 4 is rewritten in ONTOLOGY.md
 
 ### Wave B — grammar and renderer ✅ **complete 2026-08-30**
 - [x] B1 `parent:` on blocks — recursive containment, unlimited depth

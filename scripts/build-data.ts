@@ -687,30 +687,37 @@ function checkArchetypes(
         }
       }
 
-      // The crossing rule. Bands say where a thing lives; whether a thing may terminate a
-      // band crossing is a property of the component. Any edge that enters or leaves a band
-      // WE operate must land on a component the vocabulary marks `crossing: true`.
-      // Exempt: the person using their own managed device, anything wholly outside us, and
-      // the governance band, whose relationships are oversight rather than data.
+      // The crossing rule used to live here and has been removed (2026-08-30). It required
+      // every edge in or out of a band we operate to terminate at a component marked
+      // `crossing: true`. The intent — that traffic crossing our boundary meets a control we
+      // run — is sound, but the rule encoded an assumption that is false: that traffic flows
+      // through a logical *sequence* of bands. It does not. A managed endpoint reaches our
+      // cloud, a vendor, or an uncontracted third party directly, and a vendor reaches back.
+      //
+      // Worse, it was a hard failure, so an honest drawing with no crossing could only be made
+      // to build by inventing one. That produced four fabricated components across four
+      // architectures. A rule that makes a drawing dishonest to satisfy itself is a broken rule.
+      //
+      // What survives is the observation, reported and never blocking: an edge leaving a band
+      // we operate without passing through a component that carries an inline capability pin.
       const ownerOf = new Map(arch.blocks.map((b) => [b.id, zoneOwner.get(b.zone ?? "")]));
-      const titleOf = new Map(arch.blocks.map((b) => [b.id, b.title]));
       const OURS = new Set(["endpoint", "cloud"]);
+      const inlinePinned = new Set(
+        (arch.pins?.capabilities ?? [])
+          .filter((p) => INLINE_CAPABILITIES.has(p.capability))
+          .flatMap((p) => p.at.split("->")),
+      );
       for (const e of arch.edges) {
         const from = ownerOf.get(e.from);
         const to = ownerOf.get(e.to);
         if (!from || !to || from === to) continue;
         if (from === "governance" || to === "governance") continue;
         if (!OURS.has(from) && !OURS.has(to)) continue;
-        const personOnTheirDevice =
-          (from === "user" && to === "endpoint") || (from === "endpoint" && to === "user");
-        if (personOnTheirDevice) continue;
-        const terminates =
-          CROSSING_TITLES.has(titleOf.get(e.from) ?? "") ||
-          CROSSING_TITLES.has(titleOf.get(e.to) ?? "");
-        if (!terminates)
-          fail(
-            `${where}: edge ${e.from}->${e.to} crosses the ${from} band into the ${to} band without terminating at a crossing component — route it through a gateway, edge or relay (vocabulary: crossing: true)`,
-          );
+        if (from === "user" || to === "user") continue;
+        if (inlinePinned.has(e.from) || inlinePinned.has(e.to)) continue;
+        uncontrolledCrossings.push(
+          `${where}: ${e.from}->${e.to} leaves the ${from} band for ${to} without an inline control pinned at either end`,
+        );
       }
     }
     const flowIds = new Set<string>();
@@ -776,8 +783,18 @@ function checkArchetypes(
  */
 /** Collected across all architectures and reported once (see checkDiagramCollisions). */
 const pinGutterWarnings: string[] = [];
+/** Band crossings with no inline control pinned at either end. Observation, never a failure. */
+const uncontrolledCrossings: string[] = [];
 
-const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS, ITEM_PACKS, DEPRECATED_TITLES, KNOWN_LABELS } =
+const {
+  ZONE_TITLES,
+  CONTROL_ITEM_LABELS,
+  CONTROL_BLOCK_TITLES,
+  INLINE_CAPABILITIES,
+  ITEM_PACKS,
+  DEPRECATED_TITLES,
+  KNOWN_LABELS,
+} =
   (() => {
     try {
       const v = parseYaml(
@@ -792,6 +809,8 @@ const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS, ITEM_PACKS, DEPRECATE
           items?: { label: string; icon: string }[];
         }[];
         controlItemLabels?: string[];
+        controlBlockTitles?: string[];
+        capabilityEnforcement?: { inline?: Record<string, string[]> };
         itemPacks?: Record<string, { items?: { label: string; icon: string }[] }>;
       };
       const packs = new Map(
@@ -806,10 +825,9 @@ const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS, ITEM_PACKS, DEPRECATE
         ZONE_TITLES: Object.fromEntries(
           Object.entries(v.zones ?? {}).map(([k, z]) => [k, z.title]),
         ) as Record<string, string>,
-        CROSSING_TITLES: new Set(
-          (v.components ?? []).filter((c) => c.crossing).map((c) => c.title),
-        ),
         CONTROL_ITEM_LABELS: new Set(v.controlItemLabels ?? []),
+        CONTROL_BLOCK_TITLES: new Set(v.controlBlockTitles ?? []),
+        INLINE_CAPABILITIES: new Set(Object.keys(v.capabilityEnforcement?.inline ?? {})),
         ITEM_PACKS: packs,
         DEPRECATED_TITLES: new Map(
           (v.components ?? [])
@@ -821,8 +839,9 @@ const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS, ITEM_PACKS, DEPRECATE
     } catch {
       return {
         ZONE_TITLES: {} as Record<string, string>,
-        CROSSING_TITLES: new Set<string>(),
         CONTROL_ITEM_LABELS: new Set<string>(),
+        CONTROL_BLOCK_TITLES: new Set<string>(),
+        INLINE_CAPABILITIES: new Set<string>(),
         ITEM_PACKS: new Map<string, { label: string; icon: string }[]>(),
         DEPRECATED_TITLES: new Map<string, string>(),
         KNOWN_LABELS: new Set<string>(),
@@ -941,6 +960,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
     return; // no vocabulary file, nothing to check
   }
   const warnings: string[] = [];
+  const controlBlocks: string[] = [];
   const byTitle = new Map((vocab.components ?? []).map((c) => [c.title, c]));
   const iconByLabel = new Map<string, string>();
   for (const c of vocab.components ?? [])
@@ -975,6 +995,15 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
       if (canon?.deprecated)
         warnings.push(
           `${arch.id}: block "${block.title}" is retired — use "${canon.deprecated}" instead (data/reference/vocabulary.yaml)`,
+        );
+      // A block title naming a control rather than a thing. The distinction that matters is
+      // provenance, not wording: "AI gateway" is a tier somebody runs (LiteLLM), so it stays;
+      // "Egress control" is the name of a capability in our own catalogue and was only ever
+      // drawn because a rule demanded a component. If you cannot name the product class, it is
+      // a pin. Report-only while the catalogue is rebuilt; an error in Wave F.
+      if (CONTROL_BLOCK_TITLES.has(block.title))
+        controlBlocks.push(
+          `${arch.id}: block "${block.title}" names a control, not a thing we run — a control belongs as a numbered pin where it is enforced and a call-out in the governance band. If a real tier sits here, name the tier.`,
         );
       if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor")
         warnings.push(`${arch.id}: block "${block.title}" is kind ${block.kind}, vocabulary says ${canon.kind}`);
@@ -1028,6 +1057,13 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   }
   const once = (m: Map<string, number>) => [...m.values()].filter((n) => n === 1).length;
   const zoned = archs.filter((a) => a.zones?.length).length;
+  if (controlBlocks.length) {
+    console.log(`controls drawn as components: ${controlBlocks.length} (rebuild backlog)`);
+    for (const w of controlBlocks) console.log(`  ~ ${w}`);
+  }
+  if (uncontrolledCrossings.length) {
+    console.log(`band crossings with no inline control pinned: ${uncontrolledCrossings.length} (observation)`);
+  }
   if (pinGutterWarnings.length) {
     console.log(`pin placement: ${pinGutterWarnings.length} pin(s) in a band gutter`);
     for (const w of pinGutterWarnings) console.log(`  ~ ${w}`);
