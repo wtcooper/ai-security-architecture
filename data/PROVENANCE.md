@@ -140,6 +140,13 @@ surface.
 
 ## Reference architectures
 
+Representation rules for this layer — the entity model, the canonical component vocabulary,
+the control enforcement classification (inline / embedded / management), and the three-zone
+build-vs-buy responsibility rule — live in `data/ONTOLOGY.md`, with
+`data/reference/vocabulary.yaml` as its build-checked machine half. The prose rules later in
+this section predate that document and are retained as background; where they differ, the
+ontology wins.
+
 `data/reference/architectures/` is original work, currently mid-rebuild. The first-generation
 catalogue — 28 archetypes drawn as trust-boundary zone diagrams over a shared node/zone/control
 vocabulary — is archived intact under `data/reference/archive/` and remains the research base;

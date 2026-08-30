@@ -8,8 +8,10 @@
  *   npm run data
  */
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
+import { parse as parseYaml } from "yaml";
 
 import type {
   Archetype,
@@ -609,7 +611,74 @@ function checkArchetypes(
       `${anchored.size} risk-map components anchored` +
       (emptySurfaces.length ? ` — no architecture yet for: ${emptySurfaces.join(", ")}` : ""),
   );
+  checkVocabulary(out);
   return out;
+}
+
+/**
+ * Vocabulary conformance (data/ONTOLOGY.md via data/reference/vocabulary.yaml), reported as
+ * warnings rather than failures while the catalogue is remediated: canonical item labels
+ * must carry the canonical icon, canonical block titles the canonical kind, and inline
+ * capabilities need an embodying component or a deviation recording the absorption.
+ */
+function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
+  let vocab: {
+    components?: { title: string; kind?: string; items?: { label: string; icon: string }[] }[];
+    capabilityEnforcement?: { inline?: Record<string, string[]> };
+  };
+  try {
+    vocab = parseYaml(
+      readFileSync(join(ROOT, "data", "reference", "vocabulary.yaml"), "utf8"),
+    ) as typeof vocab;
+  } catch {
+    return; // no vocabulary file, nothing to check
+  }
+  const warnings: string[] = [];
+  const byTitle = new Map((vocab.components ?? []).map((c) => [c.title, c]));
+  const iconByLabel = new Map<string, string>();
+  for (const c of vocab.components ?? [])
+    for (const it of c.items ?? []) if (!iconByLabel.has(it.label)) iconByLabel.set(it.label, it.icon);
+
+  for (const arch of archs) {
+    for (const block of arch.blocks) {
+      const canon = byTitle.get(block.title);
+      if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor")
+        warnings.push(`${arch.id}: block "${block.title}" is kind ${block.kind}, vocabulary says ${canon.kind}`);
+      for (const item of block.items ?? []) {
+        const icon = iconByLabel.get(item.label);
+        if (icon && item.icon !== icon)
+          warnings.push(`${arch.id}: item "${item.label}" uses icon ${item.icon}, vocabulary says ${icon}`);
+      }
+    }
+    const inline = vocab.capabilityEnforcement?.inline ?? {};
+    const names = new Set<string>();
+    for (const b of arch.blocks) {
+      names.add(b.title);
+      for (const i of b.items ?? []) names.add(i.label);
+    }
+    const deviationText = (arch.deviations ?? []).map((d) => `${d.subject} ${d.reason}`).join(" ");
+    // Zone 2 of the three-zone rule (ONTOLOGY.md §3): pins anchored on or toward a
+    // provider-kind block are customer configuration of a vendor surface — the inline
+    // embodiment rule applies only to customer-owned components.
+    const providerBlocks = new Set(arch.blocks.filter((b) => b.kind === "provider").map((b) => b.id));
+    for (const pin of arch.pins.capabilities) {
+      const embodiments = inline[pin.capability];
+      if (!embodiments) continue;
+      if (pin.at.split("->").some((ref) => providerBlocks.has(ref))) continue;
+      const embodied = embodiments.some((e) => names.has(e));
+      const absorbed = deviationText.length > 0 && /absor|drawn as|folded|control on the/i.test(deviationText);
+      if (!embodied && !absorbed)
+        warnings.push(
+          `${arch.id}: inline capability ${pin.capability} pinned at ${pin.at} with no embodying component (${embodiments.join(", ")}) and no recorded absorption`,
+        );
+    }
+  }
+  if (warnings.length) {
+    console.log(`vocabulary: ${warnings.length} conformance warning(s)`);
+    for (const w of warnings) console.log(`  ~ ${w}`);
+  } else {
+    console.log("vocabulary: conformant");
+  }
 }
 
 /**
