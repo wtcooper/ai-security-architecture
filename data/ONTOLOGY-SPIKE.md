@@ -1,9 +1,10 @@
 # Spike ontology — zones and numbered flows
 
 **Status: research preview.** This is a second grammar, running alongside the main one in
-`data/ONTOLOGY.md`, tried on the personal autonomous agent only. Two variants are published
-for comparison (`archPersonalAgentZones`, `archPersonalAgentHub`); the intent is to keep one
-and retire the other and this document with it, or to promote it over the main grammar.
+`data/ONTOLOGY.md`, tried on two archetypes so far (`archPersonalAgentZones`,
+`archCodingAgentZones`). Both sit beside their main-grammar originals so the readings can be
+compared. The intent is to retire it and this document, or to promote it over the main grammar
+and retrofit the rest of the catalogue.
 
 ## Why a second grammar
 
@@ -33,7 +34,7 @@ controls differ.
 | --- | --- | --- | --- |
 | 1 | `principal` | People and the surfaces they instruct from — staff, customers, remote devices, chat surfaces, application front ends | The person, on a device the organisation may or may not manage |
 | 2 | `workload` | Where the agent loop actually runs, and the state and local tools it owns | Us on the endpoint and cloud surfaces; **the vendor** on the SaaS surface |
-| 3 | `crossing` | The governed brokers and the control plane: AI gateway, MCP gateway, secure edge, relay, identity, secrets, policy, registry, telemetry | Always the organisation |
+| 3 | `crossing` | The controls the organisation operates on the way out — egress control and firewall, AI gateway, MCP gateway, relay — and the control plane behind them: identity, secrets, policy, registry, telemetry | Always the organisation |
 | 4 | `enterprise` | The organisation's own systems and data — systems of record, internal APIs and MCP servers, tenant data, artifact stores. **What our MCPs and connectors reach in our own environment.** | The organisation |
 | 5 | `external` | Outside the company entirely — model providers, third-party SaaS, remote MCP servers, public hubs, the open web, and the unsolicited senders who arrive through them | Nobody in the drawing |
 
@@ -41,9 +42,9 @@ controls differ.
 
 | Surface | `principal` | `workload` | `crossing` | `enterprise` | `external` |
 | --- | --- | --- | --- | --- | --- |
-| **Endpoint** | Owner or developer, remote device, local terminal | The managed device and its sandbox — harness, local tools, memory, workspace | Relay, AI gateway, secure edge, control plane | Org repos, internal APIs and MCP servers, org data | Model providers, messaging platforms, remote MCP, package registries, the web, senders |
+| **Endpoint** | Owner or developer, remote device, local terminal | The managed device and its sandbox — harness, local tools, memory, workspace | Relay, AI gateway, egress control, control plane | Org repos, internal APIs and MCP servers, org data | Model providers, messaging platforms, remote MCP, package registries, the web, senders |
 | **Cloud & hosted** | Requesters, initiators, schedules and events, the application front end | The agent tier the organisation runs — supervisor, subagents, memory, sandboxes | AI gateway, tool gateway, governance plane | Systems of record, tenant data, vector stores, model registry | Model providers, third-party APIs, A2A peers, the web |
-| **Third-party SaaS** | Employees, citizen builders, agent consumers | **The vendor's runtime** — where the loop runs, operated by someone else | Our secure edge, our MCP gateway, our tenant governance | Org data the vendor's agents reach through our gateway | The vendor's own backend, its model providers, consumer tenants, the web |
+| **Third-party SaaS** | Employees, citizen builders, agent consumers | **The vendor's runtime** — where the loop runs, operated by someone else | Our egress control, our MCP gateway, our tenant governance | Org data the vendor's agents reach through our gateway | The vendor's own backend, its model providers, consumer tenants, the web |
 
 The SaaS row is the one that earns the model: putting the vendor runtime in `workload` and
 our data in `enterprise` makes the crossing rule say exactly what we want it to say — a
