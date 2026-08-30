@@ -464,13 +464,16 @@ edges:
       machine, authorised by holding the machine. The same shape as the personal agent's local
       session — proximity is the authorisation, so device posture carries it.
   - from: remoteDevice
-    to: aiGateway
-    path: primary
+    to: vendorService
+    path: external
     bidir: true
     label: remote steering
     note: >
-      Steering from away leaves through our crossing before it reaches the vendor's relay, so a
-      session raised from a phone is one the organisation can see and refuse.
+      The phone talks to the vendor's relay directly, and this is the one path in the drawing
+      that never touches anything we operate — a personal device on a cell network has no
+      reason to traverse the corporate egress and no way to be made to. Admission here is the
+      vendor's account binding and whatever the managed settings allow, which is exactly why
+      that tier is the control rather than our firewall.
   - from: harness
     to: memory
     path: primary
@@ -572,10 +575,12 @@ pins:
         Code, documents and screenshots leave the company here — usually more than the
         developer pictured sharing, and only the edge can see how much.
     - risk: riskStaleAgentIdentityBinding
-      at: remoteDevice->aiGateway
+      at: remoteDevice->vendorService
       note: >
-        A remote channel is only as good as the account and device binding behind it; a stale
-        login steering a machine full of credentials is an account-compromise blast radius.
+        A remote channel is only as good as the account and device binding behind it, and this
+        one is bound by the vendor rather than by us. A stale login steering a machine full of
+        credentials is an account-compromise blast radius, and nothing we operate is on the
+        path to notice it.
     - risk: riskAgenticDelegationConfusedDeputy
       at: aiGateway->vendorService
       note: >
@@ -602,10 +607,12 @@ pins:
 
   capabilities:
     - capability: capabilityIga
-      at: remoteDevice->aiGateway
+      at: remoteDevice->vendorService
       note: >
-        Bind the session to a named user on a managed device before it reaches the vendor's
-        relay — the admission decision belongs to us, not to the account alone.
+        Federate the vendor account to our directory so this hop inherits our lifecycle and
+        revocation. We cannot put a control on the path itself — the phone never touches our
+        network — so the identity behind the account is the only lever, and an unfederated
+        vendor login is the finding.
     - capability: capabilityAgentRuntimeEnforcement
       at: harness->aiGateway
       note: Session admission and per-call policy evaluated at the edge, outside the application being governed.
@@ -669,13 +676,6 @@ pins:
 
 flows:
   - id: F1
-    title: Developer works at the machine
-    moves: The task, the diffs, and the approvals that gate what matters.
-    path: [developer->harness, harness->toolPlane]
-    threats: [Approval fatigue, Unreviewed writes to the working tree]
-    controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
-    note: The attended path, and the one the archetype's whole posture assumes is the normal case.
-  - id: F2
     title: Remote steering, and the relay back
     moves: >
       An instruction typed on a phone, out to the vendor's relay, back down to the session on
@@ -683,16 +683,17 @@ flows:
     path:
       - follow: developer->remoteDevice
         note: The developer types the instruction on a phone, in a browser, or in a chat thread.
-      - follow: remoteDevice->aiGateway
+      - follow: remoteDevice->vendorService
         note: >
-          It leaves for the vendor's relay through our firewall, which is where the device and
-          the user are checked and where an unapproved surface would be refused.
-      - follow: aiGateway->vendorService
-        note: Out to the vendor's cloud on the allowlisted path — the session the relay will route.
+          Straight to the vendor's relay. This hop never touches anything we operate — a
+          personal device on a cell network has no reason to cross the corporate egress and no
+          way to be made to — so admission here is the vendor's account binding, not our
+          firewall.
       - follow: vendorService->aiGateway
         note: >
-          The relay hands the work back down. Note the direction: the vendor is not reaching
-          into the endpoint — it is answering a connection the endpoint already opened.
+          The relay hands the work down the connection the endpoint already opened, and that
+          connection is ours: the laptop is on our network, so this leg does cross our
+          crossing. Note the direction — the vendor is answering, not reaching in.
       - follow: aiGateway->harness
         note: >
           The instruction arrives at the session running on the developer's own machine. No
@@ -703,19 +704,25 @@ flows:
         note: The result goes back up the same outbound connection.
       - follow: aiGateway->vendorService
         note: Through the vendor's relay again, which is holding the other end of the conversation.
-      - follow: aiGateway->remoteDevice
+      - follow: vendorService->remoteDevice
         note: >
-          And back to the phone. Nine steps, one crossing used four times in four directions —
-          which is why this reads as a sequence and not as an arrow.
-    threats: [Stale account or device binding, Chat channels admitting more than the owner, Approval answered on a low-assurance surface]
+          And back to the phone, the way it came. Eight steps across two boundaries — and the
+          asymmetry is the point: the half that leaves the endpoint is governed by us, the half
+          that starts at the phone is governed by the vendor's account and nothing else.
+    threats: [Stale or unfederated vendor account, Chat channels admitting more than the owner, Approval answered on a low-assurance surface]
     controls: [capabilityIga, capabilityAgentRuntimeEnforcement, capabilityAiTprm]
     note: >
       The round trip is the point: nothing listens on the endpoint, so the work reaches the
-      machine only because the machine is already holding a connection open to the vendor. The
-      instruction leaves the company, comes back, executes locally with the developer's own
-      credentials around it, and the answer retraces the path. Read this one as a sequence — a
-      single arrow on the drawing cannot show that the same crossing is used four times in
-      four different directions.
+      machine only because the machine is already holding a connection open to the vendor. Read
+      this one as a sequence — a static arrow cannot show that the phone's half of the journey
+      never crosses a control we own.
+  - id: F2
+    title: Developer works at the machine
+    moves: The task, the diffs, and the approvals that gate what matters.
+    path: [developer->harness, harness->toolPlane]
+    threats: [Approval fatigue, Unreviewed writes to the working tree]
+    controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
+    note: The attended path, and the one the archetype's whole posture assumes is the normal case.
   - id: F3
     title: Model inference
     moves: Code, documents and screenshots out for inference; the completion that drives the next action back.
