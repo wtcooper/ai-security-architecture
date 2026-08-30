@@ -766,10 +766,11 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop agents — zone map (spike) | Agent harness | service | `componentReasoningCore` |
 | Coding & desktop agents — zone map (spike) | Memory & state | service | `componentDataStorage` |
 | Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
-| Coding & desktop agents — zone map (spike) | Egress control | service | (none) |
 | Coding & desktop agents — zone map (spike) | AI gateway | service | (none) |
-| Coding & desktop agents — zone map (spike) | Enterprise systems | external | `componentDataSources` |
+| Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
+| Coding & desktop agents — zone map (spike) | Enterprise data | external | `componentDataSources` |
 | Coding & desktop agents — zone map (spike) | Vendor service | provider | (none) |
+| Coding & desktop agents — zone map (spike) | Tool services | service | `componentTools` |
 | Coding & desktop agents — zone map (spike) | Model provider | provider | `componentModelServing` |
 | Coding & desktop agents — zone map (spike) | Downstream services | external | `componentDataSources` |
 | Coding & desktop agents — zone map (spike) | Identity services | governance | (none) |

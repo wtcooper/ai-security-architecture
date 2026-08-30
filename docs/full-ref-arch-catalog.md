@@ -23,8 +23,11 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 5 | Personal agent — zone map (spike) | `archPersonalAgentZones` | `endpoint-personal-agent-zones.yaml` |
 | 6 | Coding & desktop agents — zone map (spike) | `archCodingAgentZones` | `endpoint-coding-agent-zones.yaml` |
 
-- **Ranks 5 and 6 are a research preview**, not additions to the catalogue proper. They redraw
-  two existing archetypes in the spike grammar (`data/ONTOLOGY-SPIKE.md`): five standard
+- **Ranks 5 and 6 are the gold standards**, and the grammar they proved is now the catalogue
+  standard (`data/ONTOLOGY.md` §4a and §4b). They are being folded back into their
+  main-grammar originals — rank 5 into `archPersonalAgent`, rank 6 into the third-party coding
+  agent — after which both `-zones` files and their ids disappear and every remaining
+  architecture migrates onto the same grammar. What they established: five standard
   ownership bands as full-height columns with a build-enforced crossing rule, and numbered
   first-class data flows carrying what moves, the threats and the controls. Both sit alongside
   their main-grammar originals so the two readings can be compared directly. The zone set —

@@ -22,6 +22,8 @@ controlItemLabels:
   - Credential injection
   - Policy enforcement
   - Rate & budget limits
+  - Rate limits & quotas
+  - Approved destinations
   - Content inspection
   - Sender allowlist
   - Signature check
@@ -55,7 +57,7 @@ icons:
   shield: validation, gating, and protection
   stop: halting and revocation
 
-# The five ownership bands (spike grammar, data/ONTOLOGY-SPIKE.md). The owner is a closed
+# The five ownership bands (data/ONTOLOGY.md §4a). The owner is a closed
 # set and the title is FIXED per owner — a band means the same thing on every drawing, or the
 # comparison a reader makes across architectures is worthless. Architecture-specific detail
 # belongs in the zone's note, never in its title. The build fails a mismatch and fills the
@@ -85,6 +87,144 @@ zones:
       the band drawn across the full width beneath every other, holding the security and
       governance services that implement controls in the bands above. Named for security
       explicitly because most of what lives here is security tooling, not policy documents.
+
+# Named item packs — the canonical contents of a block, reusable by name. A block writes
+# `pack: toolServicesRemote` instead of re-listing the items, so the same component drawn in
+# five architectures is provably identical in all five rather than similar in four and subtly
+# different in the fifth. The build resolves a pack into items before anything else runs.
+#
+# Reuse before you create: if the block you are drawing matches a pack, reference it. If it
+# matches except for one item, reference the pack and add the item — do not fork the pack.
+itemPacks:
+  aiGatewayTraffic:
+    when: >
+      the AI gateway, in every architecture. The three traffic classes a LiteLLM-class tier
+      brokers. The checks it runs — egress allowlist, audit tap, credential broker, rate
+      limits — are NOT items here; they are numbered pins on the crossing and call-outs in the
+      governance band. Writing them as items too states one control in two grammars, which is
+      what 28 of the catalogue's 31 conformance warnings were.
+    items:
+      - { label: Model proxy, icon: model }
+      - { label: MCP & tool broker, icon: plug }
+      - { label: Skills broker, icon: gear }
+  toolServicesLocal:
+    when: Tool services in the endpoint band — the action surface running as the user.
+    items:
+      - { label: File & edit tools, icon: folder }
+      - { label: Shell commands, icon: code }
+      - { label: MCP servers, icon: plug }
+  toolServicesRemote:
+    when: >
+      Tool services in the cloud, vendor and external bands. Deliberately identical in all
+      three — the band says where it is, this pack says what it offers.
+    items:
+      - { label: MCP servers, icon: plug }
+      - { label: APIs & connectors, icon: plug }
+  memoryLocal:
+    when: Memory & state beside a harness — what the loop reads back as instruction.
+    items:
+      - { label: Memory files, icon: folder }
+      - { label: Rules & instructions, icon: doc }
+  modelProvider:
+    when: Model provider, everywhere. Everything behind the published interface is theirs.
+    items:
+      - { label: Inference API, icon: model }
+  enterpriseData:
+    when: Enterprise data — the terminus of patternDataChain.
+    items:
+      - { label: Org data, icon: db }
+      - { label: File storage, icon: folder }
+  downstreamPublic:
+    when: Downstream services — what a tool surface reaches on the open internet.
+    items:
+      - { label: SaaS, icon: mail }
+      - { label: Web & APIs, icon: globe }
+
+# Named edge chains — the shapes that recur across architectures, with their registered path
+# class, direction, routing hint and label. ONTOLOGY.md rule 9 says a shared pattern is drawn
+# identically everywhere it appears; this section is that rule in machine-readable form, so
+# the build can check it instead of a reviewer remembering it.
+#
+# `requires` lists the block titles that must all be present for the pattern to apply. If an
+# architecture has them, it must draw the pattern — divergence is a defect, not a variation.
+patterns:
+  patternDataChain:
+    when: >
+      how an agent reaches the organisation's own data, at every band and in every
+      architecture that has one. Never harness -> Enterprise data directly: the gateway
+      brokers it and the cloud tool surface serves it.
+    requires: [Agent harness, AI gateway, Tool services, Enterprise data]
+    legs:
+      - { from: Agent harness, to: AI gateway, path: primary, bidir: true, label: model & tool calls }
+      - { from: AI gateway, to: Tool services, toBand: cloud, path: primary, bidir: true, route: vh, label: internal tool calls }
+      - { from: Tool services, fromBand: cloud, to: Enterprise data, path: primary, bidir: true, label: scoped reads & writes }
+  patternLocalSession:
+    when: a person working at the machine the agent runs on.
+    requires: [Agent harness]
+    legs:
+      - { from: actor, to: Agent harness, path: primary, bidir: true, label: local session }
+  patternLocalTools:
+    when: the harness driving its own tool surface on the endpoint.
+    requires: [Agent harness, Tool services]
+    legs:
+      - { from: Agent harness, to: Tool services, toBand: endpoint, path: primary, bidir: true, route: hv, label: local tool calls }
+  patternMemory:
+    when: cross-session state beside the loop. Unlabelled — the endpoints say it.
+    requires: [Agent harness, Memory & state]
+    legs:
+      - { from: Agent harness, to: Memory & state, path: primary, bidir: true }
+  patternSupplyBackhaul:
+    when: >
+      what the endpoint tool surface installs, pulled back through the crossing. One
+      direction only: things come in, nothing goes out this way.
+    requires: [Tool services, AI gateway]
+    legs:
+      - { from: Tool services, fromBand: endpoint, to: AI gateway, path: primary, route: hv }
+  patternExternalTools:
+    when: brokered reach to third-party tool surfaces and what sits behind them.
+    requires: [AI gateway, Tool services, Downstream services]
+    legs:
+      - { from: AI gateway, to: Tool services, toBand: external, path: external, bidir: true, route: vh }
+      - { from: Tool services, fromBand: external, to: Downstream services, path: external, bidir: true }
+  patternRemoteEntry:
+    when: the person steering from somewhere other than the machine.
+    requires: [Remote device]
+    legs:
+      - { from: actor, to: Remote device, path: primary, bidir: true }
+  patternModelPath:
+    when: >
+      inference. Two registered shapes: direct where we broker it ourselves, and via the
+      vendor where an agreement puts their service on the path. Not a divergence — the vendor
+      leg is present or absent, and the rest is identical.
+    requires: [AI gateway, Model provider]
+    legs:
+      - { from: AI gateway, to: Model provider, path: external, bidir: true }
+    viaVendor:
+      - { from: AI gateway, to: Vendor service, path: external, bidir: true, route: vh, label: to the approved vendor }
+      - { from: Vendor service, to: Model provider, path: external, bidir: true }
+  patternUnsolicitedInbound:
+    when: >
+      content arriving from someone who was never authorised to instruct the agent — the
+      defining ingress of an always-on agent on a messaging channel.
+    requires: [Unsolicited senders, Messaging platform, Messaging relay, Channel bridges, Agent harness]
+    legs:
+      - { from: Unsolicited senders, to: Messaging platform, path: external, label: unsolicited message }
+      - { from: Messaging platform, to: Messaging relay, path: external, bidir: true }
+      - { from: Messaging relay, to: Channel bridges, path: primary, bidir: true, label: outbound only }
+      - { from: Channel bridges, to: Agent harness, path: primary, bidir: true }
+  patternGovernanceBand:
+    when: >
+      the security and governance control plane, on every architecture. Five standalone
+      call-outs at row 5, in this order, each carrying the chip numbers of the controls it
+      implements and NO edges — governance applies across every band rather than being another
+      hop in the data path. A sixth, Data protection, is available where classification and
+      DLP carry real weight on the drawing.
+    blocks:
+      - { id: govIdentity, title: Identity services, icon: person, col: 1 }
+      - { id: govSecrets, title: Secrets & key management, icon: key, col: 2 }
+      - { id: govPolicy, title: Policy & authorization, icon: scale, col: 3 }
+      - { id: govSupplyChain, title: Supply-chain assurance, icon: db, col: 4 }
+      - { id: govObservability, title: Observability & response, icon: eye, col: 5 }
 
 components:
   # --- The agent core -----------------------------------------------------------------
@@ -154,28 +294,20 @@ components:
       externally-hosted agents admitted back into our systems. There is deliberately no
       separate "MCP gateway"; qualify only when ownership differs (Shared AI gateway,
       Managed tool gateway).
-    items:
-      - { label: Connector marketplace, icon: db }
-      - { label: Scoped grants & BYOK, icon: key }
-      - { label: MCP & tool broker, icon: plug }
-      - { label: Model proxy, icon: model }
-      - { label: Credential broker, icon: key }
-      - { label: Credential injection, icon: key }
-      - { label: Rate & budget limits, icon: clock }
-      - { label: Egress allowlist, icon: shield }
-      - { label: Policy enforcement, icon: shield }
-      - { label: Audit tap, icon: doc }
+      Its items name the TRAFFIC CLASSES it brokers, never the checks it runs: the checks are
+      numbered pins on the crossing plus call-outs in the governance band. This is the single
+      biggest source of control-as-item drift in the catalogue — see itemPacks.aiGatewayTraffic.
+    pack: aiGatewayTraffic
   - title: Egress control
     kind: service
     crossing: true
     when: the organisation's firewall and proxy tier — destination admission for approved
       vendors (the allowlist entry is where a TPRM decision is enforced), admission plus
-      inspection for arbitrary destinations.
+      inspection for arbitrary destinations. Its checks are pins, not items; it is drawn as a
+      separate block only where the organisation genuinely operates a proxy tier distinct from
+      the AI gateway.
     items:
-      - { label: Approved destinations, icon: scale }
-      - { label: Egress allowlist, icon: shield }
-      - { label: Content inspection, icon: eye }
-      - { label: Audit tap, icon: doc }
+      - { label: Outbound connector, icon: plug }
   - title: Messaging relay
     kind: service
     crossing: true
@@ -183,25 +315,21 @@ components:
       platform credentials never sit on the device and no inbound port is opened.
     items:
       - { label: Outbound connector, icon: plug }
-      - { label: Signature check, icon: shield }
+      - { label: Platform credentials, icon: key }
   - title: Enterprise systems
     kind: external
-    cosaiComponent: componentDataSources
-    when: the organisation's own systems and data inside the enterprise band — repositories,
-      internal servers, systems of record. Items extend but never rename.
-    items:
-      - { label: Org data, icon: db }
-      - { label: File storage, icon: folder }
-      - { label: Code & project docs, icon: doc }
-      - { label: Tool config dotfile, icon: gear }
+    deprecated: Enterprise data
+    when: >
+      RETIRED — use "Enterprise data". Two names for the systems of record behind our own
+      crossings; the catalogue settled on Enterprise data because that is what both gold
+      standards draw.
   - title: Internal MCP & APIs
     kind: service
-    cosaiComponent: componentTools
-    when: the organisation's own tool servers and service APIs, drawn in the enterprise band
-      as what the agent is actually meant to reach.
-    items:
-      - { label: Internal MCP servers, icon: plug }
-      - { label: Internal APIs, icon: plug }
+    deprecated: Tool services
+    when: >
+      RETIRED — use "Tool services" in the cloud band. Renaming a tool surface by its location
+      hides the symmetry a reader needs (ONTOLOGY.md rule 7): the band says where, the item
+      pack says what.
   - title: Channel bridges
     kind: service
     cosaiComponent: componentAgentUserQuery
@@ -209,7 +337,7 @@ components:
       own admission surface.
     items:
       - { label: Channel adapters, icon: chat }
-      - { label: Sender allowlist, icon: shield }
+      - { label: Pairing records, icon: doc }
   - title: Owner workspace
     kind: external
     cosaiComponent: componentDataSources
@@ -219,13 +347,10 @@ components:
       - { label: Shared folders, icon: folder }
   - title: Remote tool services
     kind: service
-    cosaiComponent: componentTools
-    when: the remote transports kept outside a boundary — MCP servers and connectors reached
-      only through a crossing.
-    items:
-      - { label: Remote MCP, icon: plug }
-      - { label: MCP servers, icon: plug }
-      - { label: APIs & connectors, icon: plug }
+    deprecated: Tool services
+    when: >
+      RETIRED — use "Tool services" in the external band. Same reasoning as Internal MCP &
+      APIs: location belongs to the band, not the title.
   - title: Messaging platform
     kind: external
     cosaiComponent: componentDataSources
@@ -239,8 +364,7 @@ components:
     when: the front door of a service the organisation publishes — WAF, quotas, routing —
       in front of internet-facing machine traffic.
     items:
-      - { label: WAF & DDoS, icon: shield }
-      - { label: Rate limits & quotas, icon: scale }
+      - { label: App & API endpoint, icon: globe }
       - { label: Header routing, icon: plug }
   - title: Remote device
     kind: service
@@ -257,8 +381,11 @@ components:
   # --- Identity ------------------------------------------------------------------------
   - title: Enterprise IdP
     kind: external
-    when: the identity provider the organisation already governs, federating into an
-      architecture's authorization.
+    deprecated: Identity services
+    when: >
+      RETIRED — the identity provider is a governance call-out (Identity services), not a
+      block in the data path. Draw it as a block only where tokens genuinely flow through it
+      on the drawing, in which case the component is Authorization server.
   - title: Authorization server
     kind: service
     when: token issuance for a service the organisation publishes.
@@ -333,23 +460,13 @@ components:
 
   - title: Governance plane
     kind: governance
+    deprecated: patternGovernanceBand
     when: >
-      the single oversight column, qualified by who governs (Tenant governance, Maker
-      governance, Customer governance). It holds the management-class capabilities — identity,
-      secrets, policy, registry, evaluation, audit, kill switch — as items, with their chips
-      pinned to it. There is deliberately no second "Control plane": one column, one name, and
-      management controls never become boxes of their own. That is the anti-sprawl rule.
-    items:
-      - { label: Identity provider, icon: person }
-      - { label: Agent identity, icon: person }
-      - { label: Secrets vault, icon: key }
-      - { label: Policy engine, icon: scale }
-      - { label: Skill & image registry, icon: db }
-      - { label: Telemetry sink, icon: eye }
-      - { label: Agent & tool registry, icon: gear }
-      - { label: Evaluation gates, icon: scale }
-      - { label: Audit sink, icon: eye }
-      - { label: Kill switch, icon: stop }
+      RETIRED — draw patternGovernanceBand instead: five standalone call-outs across the
+      bottom band, each naming the technology group that implements numbered controls
+      elsewhere on the drawing. A single column holding ten control items is the same
+      control stated twice (once as an item, once as the pin it cites), and a band holding
+      one block that holds the real content is nesting for its own sake.
 
   # --- Registered by the 2026-08 completeness pass -------------------------------------
   # Components already in use across the catalogue that had never been registered. Listed so
@@ -360,17 +477,29 @@ components:
   - { title: Application front end, kind: service, crossing: true, cosaiComponent: componentApplication, when: see above }
   - { title: Chat surface & uploads, kind: service, cosaiComponent: componentAgentUserQuery, when: a vendor chat client on the user's device, where the prompt and the attachment are still visible to something the organisation runs }
   - { title: Identity & secure edge, kind: service, crossing: true, when: a combined identity assertion and inline inspection tier; embodies both IGA and SSE on one drawing }
-  - { title: Identity & entitlements, kind: service, when: authentication plus the decision about whose credentials a published agent runs on }
+  - { title: Identity & entitlements, kind: service, deprecated: Identity services, when: RETIRED — a third name for identity. The entitlement decision pins as a control; the technology is the Identity services call-out. }
   - { title: Local HTTP API, kind: service, cosaiComponent: componentModelServing, when: the loopback API a local inference runtime publishes }
   - { title: Public model hub, kind: external, cosaiComponent: componentModelStorage, when: open-weights distribution, where publisher identity says nothing about load-time behaviour }
   - { title: Model sources, kind: external, cosaiComponent: componentModelStorage, when: where weights arrive from — a public hub or the organisation's own pipeline }
   - { title: "Repos, docs & screen", kind: external, cosaiComponent: componentDataSources, when: everything a coding or desktop agent reads — repository content, documents, screenshots }
   - { title: Owner workspace, kind: external, cosaiComponent: componentDataSources, when: see above }
-  - { title: Attached knowledge, kind: external, cosaiComponent: componentDataSources, when: folders and sites attached to a low-code agent as grounding }
+  - { title: Attached knowledge, kind: external, deprecated: Enterprise data, when: RETIRED — grounding folders and sites are Enterprise data; that they were attached by a maker rather than an admin belongs in the note. }
   - { title: Connected systems, kind: service, cosaiComponent: componentDataSources, when: whatever a platform's connectors reach }
   - { title: User-connected systems, kind: service, cosaiComponent: componentDataSources, when: sources each user authorises individually, whose union is the organisation's real data path }
-  - { title: Enterprise data, kind: external, cosaiComponent: componentDataSources, when: the systems of record behind internal connectors }
-  - { title: Tenant data, kind: service, cosaiComponent: componentDataStorage, when: per-tenant records a published service reaches }
+  - title: Enterprise data
+    kind: external
+    cosaiComponent: componentDataSources
+    when: >
+      the organisation's own systems and data behind our crossings — repositories, internal
+      servers, systems of record. The terminus of patternDataChain, and the one name for what
+      was also being called "Enterprise systems", "Tenant data" and "Attached knowledge".
+      Items extend this set but never rename it.
+    items:
+      - { label: Org data, icon: db }
+      - { label: File storage, icon: folder }
+      - { label: Code & project docs, icon: doc }
+      - { label: Tool config dotfile, icon: gear }
+  - { title: Tenant data, kind: service, deprecated: Enterprise data, when: RETIRED — per-tenant records are Enterprise data from the publisher's side; whose tenant it is belongs in the note. }
   - { title: MCP service, kind: service, cosaiComponent: componentApplication, when: the stateless application a team deploys to publish an MCP server }
   - { title: Tool definitions, kind: service, cosaiComponent: componentTools, when: names, descriptions and schemas — versioned content that executes as instruction in a caller's model }
   - { title: Curation & filtering, kind: service, cosaiComponent: componentDataFilteringAndProcessing, when: the last point a poisoned example can be removed rather than baked in }
@@ -388,9 +517,9 @@ components:
   - { title: Managed memory, kind: provider, cosaiComponent: componentDataStorage, when: a provider's separately billed memory service, whose scope is a configuration flag }
   - { title: Managed sandbox, kind: provider, when: provider-operated code execution and browsing }
   - { title: Managed tool gateway, kind: provider, crossing: true, when: a provider's brokered path to tools and MCP servers }
-  - { title: Maker governance, kind: governance, when: population management for a self-service builder platform }
-  - { title: Tenant governance, kind: governance, when: tenant configuration plus the discovery and inspection an organisation runs independently of a vendor }
-  - { title: Customer governance, kind: governance, when: the controls a customer owns on a platform a provider operates }
+  - { title: Maker governance, kind: governance, deprecated: patternGovernanceBand, when: RETIRED — a fourth name for the governance band. Who governs belongs in the block notes, not the band title. }
+  - { title: Tenant governance, kind: governance, deprecated: patternGovernanceBand, when: RETIRED — see Maker governance. }
+  - { title: Customer governance, kind: governance, deprecated: patternGovernanceBand, when: RETIRED — see Maker governance. }
 
 # Enforcement classification for every capability (ONTOLOGY.md §2). inline requires an
 # embodying component (or a recorded absorption); embedded pins on flows/blocks only;

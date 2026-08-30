@@ -211,7 +211,28 @@ function BuildPathEdge(props) {
   </${React.Fragment}>`;
 }
 
-const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode };
+/* An ownership band: who operates this environment. Drawn as a background column so a
+   crossing between two of them is a horizontal move; governance spans the full width beneath. */
+const ZONE_TINT = {
+  user: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
+  endpoint: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
+  cloud: { fill: "#eaf0fb", line: "#94aede", ink: "#3667c4" },
+  vendor: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
+  external: { fill: "#f3eef9", line: "#a894ce", ink: "#6f4bb5" },
+  governance: { fill: "#eef1f5", line: "#9aa3b0", ink: "#4b5b70" },
+};
+
+function ZoneNode({ data }) {
+  const tint = ZONE_TINT[data.owner] ?? ZONE_TINT.user;
+  return h`<div style=${{ width: data.w, height: data.h, background: tint.fill,
+      border: `1.5px solid ${tint.line}`, borderRadius: 14, position: "relative", pointerEvents: "none" }}>
+    <div style=${{ position: "absolute", top: 10, left: 0, right: 0, textAlign: "center",
+        font: "700 10px/1 ui-monospace, monospace", letterSpacing: ".1em",
+        textTransform: "uppercase", color: tint.ink }}>${data.title}</div>
+  </div>`;
+}
+
+const nodeTypes = { block: BlockNode, frame: FrameNode, chip: ChipNode, tag: TagNode, zone: ZoneNode };
 const edgeTypes = { buildPath: BuildPathEdge };
 
 /* Pick the facing handle pair from the two blocks' initial geometry. */
@@ -251,6 +272,13 @@ function Viewer() {
 
   const initialNodes = useMemo(() => {
     const nodes = [];
+    // Bands sit behind everything and never move: they are the geometry the blocks are read
+    // against, so dragging one would say something the drawing does not mean.
+    (MODEL.zones ?? []).forEach((z, i) => {
+      nodes.push({ id: "__zone" + i, type: "zone", position: { x: z.x, y: z.y },
+        data: { title: z.title, owner: z.owner, note: z.note, w: z.w, h: z.h },
+        style: { width: z.w, height: z.h }, draggable: false, selectable: false, zIndex: -3 });
+    });
     const memberOf = new Map();
     MODEL.frames.forEach((f, i) => {
       const id = "__frame" + i;

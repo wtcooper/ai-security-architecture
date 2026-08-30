@@ -477,6 +477,29 @@ function checkArchetypes(
       if (!d.reason?.trim()) fail(`${where}: deviation "${d.subject}" has no reason`);
     }
 
+    // --- Item packs ----------------------------------------------------------
+    // A block may name a canonical pack instead of re-listing its items, so the same
+    // component drawn in five architectures is provably identical rather than similar in four
+    // and subtly different in the fifth. An explicit item with the same label wins, which is
+    // how a drawing attaches its own note to a standard item without forking the pack.
+    for (const block of arch.blocks ?? []) {
+      const packName = (block as { pack?: string }).pack;
+      if (!packName) continue;
+      const pack = ITEM_PACKS.get(packName);
+      if (!pack)
+        fail(
+          `${where} block ${block.id}: unknown item pack "${packName}" — see itemPacks in data/reference/vocabulary.yaml`,
+        );
+      const explicit = block.items ?? [];
+      const overridden = new Set(explicit.map((i) => i.label));
+      block.items = [
+        ...pack!
+          .filter((p) => !overridden.has(p.label))
+          .map((p) => ({ id: packItemId(p.label), label: p.label, icon: p.icon })),
+        ...explicit,
+      ];
+    }
+
     // --- Blocks --------------------------------------------------------------
     const blockIds = new Set<string>();
     for (const block of arch.blocks ?? []) {
@@ -606,7 +629,7 @@ function checkArchetypes(
       }
     }
 
-    // --- Zones and flows (spike grammar, data/ONTOLOGY-SPIKE.md) --------------
+    // --- Zones and flows (data/ONTOLOGY.md §4a, §4b) --------------------------
     const zoneIds = new Set((arch.zones ?? []).map((z) => z.id));
     const zoneOwner = new Map((arch.zones ?? []).map((z) => [z.id, z.owner]));
     if (arch.zones?.length) {
@@ -709,37 +732,158 @@ function checkArchetypes(
  * must carry the canonical icon, canonical block titles the canonical kind, and inline
  * capabilities need an embodying component or a deviation recording the absorption.
  */
-/** Canonical band titles and the components that may terminate a band crossing. */
-const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS } = (() => {
-  try {
-    const v = parseYaml(
-      readFileSync(join(ROOT, "data", "reference", "vocabulary.yaml"), "utf8"),
-    ) as {
-      zones?: Record<string, { title: string }>;
-      components?: { title: string; crossing?: boolean }[];
-      controlItemLabels?: string[];
-    };
-    return {
-      ZONE_TITLES: Object.fromEntries(
-        Object.entries(v.zones ?? {}).map(([k, z]) => [k, z.title]),
-      ) as Record<string, string>,
-      CROSSING_TITLES: new Set(
-        (v.components ?? []).filter((c) => c.crossing).map((c) => c.title),
-      ),
-      CONTROL_ITEM_LABELS: new Set(v.controlItemLabels ?? []),
-    };
-  } catch {
-    return {
-      ZONE_TITLES: {} as Record<string, string>,
-      CROSSING_TITLES: new Set<string>(),
-      CONTROL_ITEM_LABELS: new Set<string>(),
-    };
+/**
+ * Canonical band titles, the components that may terminate a band crossing, the control
+ * labels that may never be items, the named item packs a block can reference by name, and the
+ * retirement redirects that point an author at the surviving name for a concept.
+ */
+const { ZONE_TITLES, CROSSING_TITLES, CONTROL_ITEM_LABELS, ITEM_PACKS, DEPRECATED_TITLES, KNOWN_LABELS } =
+  (() => {
+    try {
+      const v = parseYaml(
+        readFileSync(join(ROOT, "data", "reference", "vocabulary.yaml"), "utf8"),
+      ) as {
+        zones?: Record<string, { title: string }>;
+        components?: {
+          title: string;
+          crossing?: boolean;
+          deprecated?: string;
+          pack?: string;
+          items?: { label: string; icon: string }[];
+        }[];
+        controlItemLabels?: string[];
+        itemPacks?: Record<string, { items?: { label: string; icon: string }[] }>;
+      };
+      const packs = new Map(
+        Object.entries(v.itemPacks ?? {}).map(([k, p]) => [k, p.items ?? []]),
+      );
+      // Every label the vocabulary knows about, from both component item lists and packs —
+      // the basis of the "reuse before you create" check.
+      const labels = new Set<string>();
+      for (const c of v.components ?? []) for (const it of c.items ?? []) labels.add(it.label);
+      for (const items of packs.values()) for (const it of items) labels.add(it.label);
+      return {
+        ZONE_TITLES: Object.fromEntries(
+          Object.entries(v.zones ?? {}).map(([k, z]) => [k, z.title]),
+        ) as Record<string, string>,
+        CROSSING_TITLES: new Set(
+          (v.components ?? []).filter((c) => c.crossing).map((c) => c.title),
+        ),
+        CONTROL_ITEM_LABELS: new Set(v.controlItemLabels ?? []),
+        ITEM_PACKS: packs,
+        DEPRECATED_TITLES: new Map(
+          (v.components ?? [])
+            .filter((c) => c.deprecated)
+            .map((c) => [c.title, c.deprecated as string]),
+        ),
+        KNOWN_LABELS: labels,
+      };
+    } catch {
+      return {
+        ZONE_TITLES: {} as Record<string, string>,
+        CROSSING_TITLES: new Set<string>(),
+        CONTROL_ITEM_LABELS: new Set<string>(),
+        ITEM_PACKS: new Map<string, { label: string; icon: string }[]>(),
+        DEPRECATED_TITLES: new Map<string, string>(),
+        KNOWN_LABELS: new Set<string>(),
+      };
+    }
+  })();
+
+/** Turn `id` into a stable item id when a pack supplies the label. */
+const packItemId = (label: string) =>
+  label
+    .replace(/[^A-Za-z0-9 ]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join("");
+
+type PatternLeg = {
+  from: string;
+  to: string;
+  fromBand?: string;
+  toBand?: string;
+  path?: string;
+  bidir?: boolean;
+  route?: string;
+  label?: string;
+};
+type PatternSpec = { requires?: string[]; legs?: PatternLeg[]; viaVendor?: PatternLeg[] };
+
+/**
+ * Pattern conformance (ONTOLOGY.md rule 9, mechanised). A shared pattern is drawn identically
+ * everywhere it appears — so if an architecture has all the blocks a registered pattern
+ * requires, it must draw that pattern's legs with the registered path class, direction,
+ * routing and label. This is what catches the failure the rule was written for: one drawing
+ * reaching Enterprise data straight from the gateway while its sibling goes through Tool
+ * services.
+ */
+function checkPatterns(
+  arch: Omit<Archetype, "layout">,
+  patterns: Record<string, PatternSpec>,
+): string[] {
+  if (!arch.zones?.length) return []; // patterns are expressed in band terms
+  const out: string[] = [];
+  const ownerOfZone = new Map(arch.zones.map((z) => [z.id, z.owner]));
+  const bandOf = (b: (typeof arch.blocks)[number]) => ownerOfZone.get(b.zone ?? "") ?? "";
+  const edge = new Map(arch.edges.map((e) => [`${e.from}->${e.to}`, e]));
+
+  // Candidate block ids for one side of a leg: "actor" means any actor block; otherwise
+  // match on canonical title, narrowed by band where the leg names one.
+  const idsFor = (title: string, band?: string) =>
+    arch.blocks
+      .filter((b) => (title === "actor" ? b.kind === "actor" : b.title === title))
+      .filter((b) => !band || bandOf(b) === band)
+      .map((b) => b.id);
+
+  for (const [name, spec] of Object.entries(patterns)) {
+    const requires = spec.requires ?? [];
+    if (!requires.length || !spec.legs?.length) continue;
+    // The pattern applies only if every block it needs is on this drawing.
+    if (!requires.every((t) => idsFor(t).length > 0)) continue;
+
+    // patternModelPath has a registered vendor-interposed variant; satisfying either is
+    // conformance, so try the variant first and only report if neither shape is drawn.
+    const shapes = spec.viaVendor ? [spec.legs, spec.viaVendor] : [spec.legs];
+    const misses = shapes.map((legs) =>
+      legs.flatMap((leg) => {
+        const froms = idsFor(leg.from, leg.fromBand);
+        const tos = idsFor(leg.to, leg.toBand);
+        const found = froms
+          .flatMap((f) => tos.map((t) => edge.get(`${f}->${t}`) ?? edge.get(`${t}->${f}`)))
+          .find(Boolean);
+        if (!found)
+          return [
+            `${arch.id}: ${name} requires an edge ${leg.from}${leg.fromBand ? `[${leg.fromBand}]` : ""} -> ${leg.to}${leg.toBand ? `[${leg.toBand}]` : ""}, which is not drawn`,
+          ];
+        const drift: string[] = [];
+        if (leg.path && found.path !== leg.path) drift.push(`path ${found.path} (pattern says ${leg.path})`);
+        if (leg.bidir && !found.bidir) drift.push("not bidirectional (pattern is)");
+        if (leg.route && found.route !== leg.route) drift.push(`route ${found.route ?? "default"} (pattern says ${leg.route})`);
+        if (leg.label && found.label !== leg.label)
+          drift.push(`label "${found.label ?? ""}" (pattern says "${leg.label}")`);
+        return drift.length
+          ? [`${arch.id}: ${name} leg ${found.from}->${found.to} diverges — ${drift.join("; ")}`]
+          : [];
+      }),
+    );
+    if (misses.some((m) => m.length === 0)) continue; // one registered shape is fully drawn
+    out.push(...misses.reduce((a, b) => (a.length <= b.length ? a : b)));
   }
-})();
+  return out;
+}
 
 function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   let vocab: {
-    components?: { title: string; kind?: string; items?: { label: string; icon: string }[] }[];
+    components?: {
+      title: string;
+      kind?: string;
+      deprecated?: string;
+      items?: { label: string; icon: string }[];
+    }[];
+    itemPacks?: Record<string, { items?: { label: string; icon: string }[] }>;
+    patterns?: Record<string, PatternSpec>;
     capabilityEnforcement?: { inline?: Record<string, string[]> };
   };
   try {
@@ -754,6 +898,23 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   const iconByLabel = new Map<string, string>();
   for (const c of vocab.components ?? [])
     for (const it of c.items ?? []) if (!iconByLabel.has(it.label)) iconByLabel.set(it.label, it.icon);
+  for (const p of Object.values(vocab.itemPacks ?? {}))
+    for (const it of p.items ?? []) if (!iconByLabel.has(it.label)) iconByLabel.set(it.label, it.icon);
+
+  // The vocabulary must not contradict itself: a label it denies as a control cannot also
+  // appear in its own item packs. This file licensed the exact violation it reported for
+  // months, so the contradiction is a hard failure rather than a warning.
+  for (const c of vocab.components ?? [])
+    for (const it of c.items ?? [])
+      if (CONTROL_ITEM_LABELS.has(it.label))
+        fail(
+          `vocabulary: component "${c.title}" lists "${it.label}" as an item, but controlItemLabels denies it — ` +
+            "the denylist and the item packs cannot both be right",
+        );
+  for (const [name, p] of Object.entries(vocab.itemPacks ?? {}))
+    for (const it of p.items ?? [])
+      if (CONTROL_ITEM_LABELS.has(it.label))
+        fail(`vocabulary: itemPack "${name}" lists denied control label "${it.label}"`);
 
   for (const arch of archs) {
     for (const block of arch.blocks) {
@@ -762,6 +923,12 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
         warnings.push(
           `${arch.id}: block "${block.title}" is not in the vocabulary — reuse a canonical component or add it to data/reference/vocabulary.yaml`,
         );
+      // Retired names carry their replacement, so the message says what to do rather than
+      // only what is wrong — this is the "reuse before you create" rule, mechanised.
+      if (canon?.deprecated)
+        warnings.push(
+          `${arch.id}: block "${block.title}" is retired — use "${canon.deprecated}" instead (data/reference/vocabulary.yaml)`,
+        );
       if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor")
         warnings.push(`${arch.id}: block "${block.title}" is kind ${block.kind}, vocabulary says ${canon.kind}`);
       for (const item of block.items ?? []) {
@@ -769,11 +936,16 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
           warnings.push(
             `${arch.id}: item "${block.title}.${item.label}" names a control — controls belong as numbered pins where they are enforced, and as call-outs in the security and governance band, not as items inside the component they govern`,
           );
+        else if (!KNOWN_LABELS.has(item.label))
+          warnings.push(
+            `${arch.id}: item "${block.title}.${item.label}" is a new label — reuse an existing one if it means the same thing, or register it in data/reference/vocabulary.yaml in this change`,
+          );
         const icon = iconByLabel.get(item.label);
         if (icon && item.icon !== icon)
           warnings.push(`${arch.id}: item "${item.label}" uses icon ${item.icon}, vocabulary says ${icon}`);
       }
     }
+    warnings.push(...checkPatterns(arch, vocab.patterns ?? {}));
     const inline = vocab.capabilityEnforcement?.inline ?? {};
     const names = new Set<string>();
     for (const b of arch.blocks) {
@@ -797,6 +969,23 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
         );
     }
   }
+  // The census. Name sprawl is the thing the registry exists to reverse, so every build
+  // prints it: reuse before you create means these numbers only ever go down.
+  const titles = new Map<string, number>();
+  const labels = new Map<string, number>();
+  for (const arch of archs) {
+    for (const b of arch.blocks) {
+      titles.set(b.title, (titles.get(b.title) ?? 0) + 1);
+      for (const it of b.items ?? []) labels.set(it.label, (labels.get(it.label) ?? 0) + 1);
+    }
+  }
+  const once = (m: Map<string, number>) => [...m.values()].filter((n) => n === 1).length;
+  const zoned = archs.filter((a) => a.zones?.length).length;
+  console.log(
+    `vocabulary census: ${titles.size} distinct block titles (${once(titles)} used once), ` +
+      `${labels.size} distinct item labels (${once(labels)} used once), ` +
+      `${zoned}/${archs.length} architectures on the zone grammar`,
+  );
   if (warnings.length) {
     console.log(`vocabulary: ${warnings.length} conformance warning(s)`);
     for (const w of warnings) console.log(`  ~ ${w}`);

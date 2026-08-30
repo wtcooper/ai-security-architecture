@@ -264,7 +264,7 @@ export interface ArchBlockItem {
 }
 
 /**
- * Spike grammar (data/ONTOLOGY-SPIKE.md): an ownership zone. Zones are drawn as labelled
+ * An ownership zone (data/ONTOLOGY.md §4a). Zones are drawn as labelled
  * background bands and carry the crossing rule — nothing in an `endpoint` zone may reach an
  * band without terminating at a component the vocabulary marks as a crossing.
  */
@@ -276,7 +276,7 @@ export interface ArchZone {
    * Bands measure ONE axis: who operates the environment. They are surfaces — locations and
    * trust domains — never functions, and their titles are fixed catalogue-wide. "Crossing" is
    * deliberately not a band: a gateway is a thing that lives somewhere, so crossing-ness is a
-   * property of the component. See data/ONTOLOGY-SPIKE.md.
+   * property of the component. See data/ONTOLOGY.md §4a.
    *
    * `user`       the person's own devices and channels
    * `endpoint`   devices the organisation manages           (surfaceEndpoint)

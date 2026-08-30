@@ -117,6 +117,132 @@ customer-owned component on it is an audit finding.
   registry is authoritative; `cosaiComponent` anchors are kept where a mapping exists
   because they buy the risk-map linkage, and their absence is meaningful (the grey blocks).
 
+## 4a. Zones — the ownership bands
+
+**Bands measure one axis: who operates the environment.** They are surfaces — locations and
+trust domains — never functions. Two earlier drafts got this wrong: the first let titles vary
+per architecture (so the same band was "Owner surfaces" on one drawing and "Developer
+surfaces" on another), and the second standardised onto a *functional* name, "Agent workload",
+which cannot be a location because an agent workload can run on an endpoint, in our cloud, or
+in a vendor's. Naming rules only help if the dimension being named is coherent.
+
+The set below is purely locational, and three of the five are the catalogue's own surface
+taxonomy, so a reader meets the same vocabulary at both levels.
+
+| Order | `owner` | Fixed title | What belongs in it | Maps to |
+| --- | --- | --- | --- | --- |
+| 1 | `user` | **User surfaces** | The person's own devices and channels — phone, chat client, browser, local terminal | — |
+| 2 | `endpoint` | **Managed endpoint** | Devices the organisation manages and whatever runs on them | `surfaceEndpoint` |
+| 3 | `cloud` | **Enterprise cloud** | Infrastructure the organisation operates — crossings, agent tiers, our own systems and data | `surfaceCloud` |
+| 4 | `vendor` | **Vendor platform** | Environments a vendor operates under an agreement we hold | `surfaceSaas` |
+| 5 | `external` | **External** | Outside the company with no agreement — public hubs, the open web, unsolicited senders | — |
+| — | `governance` | **Security & governance control plane** | The oversight band, drawn full-width *beneath* every other | — |
+
+An architecture draws only the bands it uses: the personal agent has no vendor band, a cloud
+workflow has no endpoint band. **Columns must be assigned in band order** — the renderer
+derives each band's rect from the `min..max col` of its members, so a column out of band order
+makes two bands overlap.
+
+### Crossing is a component property, not a band
+
+An earlier draft made "Enterprise crossing" its own band, which put a functional concept in a
+row of locational ones. A gateway is a thing that lives somewhere — in our cloud, next to the
+systems it protects. So the vocabulary marks components `crossing: true`, and the rule is
+about components meeting bands rather than about a band existing. This is also more precise:
+`harness -> orgData` fails even though both could sit in adjacent bands, because orgData is
+not a crossing — the path has to run `harness -> aiGateway -> orgData`.
+
+### What the crossing band is *not*
+
+The rule says every path out of the workload crosses something we operate. It does **not** say
+every path is inspected or brokered — the crossing holds controls with three different jobs,
+and conflating them produces architectures nobody would build:
+
+| Destination | Job of the crossing | Typical component |
+| --- | --- | --- |
+| An **approved vendor's own service** under an enterprise agreement | Destination admission. The vendor's endpoints are allowlisted because third-party risk management cleared them; the session is not inspected, and on a pinned TLS session it cannot be. | Firewall / egress allowlist |
+| **Arbitrary destinations** — registries, the open web, third-party servers | Admission *and* inspection, because nothing vouches for what comes back | Egress proxy, SSE, CASB |
+| **Our own systems and data** | Brokered access: scoped short-lived grants, our keys, our audit | AI gateway / API gateway |
+
+Drawing an inspection point on a sanctioned vendor path asserts a control nobody operates.
+What governs that path is the assessment behind the allowlist entry, the tenant binding in
+managed settings, and the agreement itself — pinned as vendor assurance and egress control on
+the edge, not drawn as a proxy in the middle of it.
+
+### The governance band
+
+Governance is drawn across the full width beneath the others, because it applies to all of
+them — including the external band, since whether an external destination is reachable at all
+is a governed decision enforced at our crossings.
+
+**Its services are standalone call-outs with no edges.** Identity services, secrets and key
+management, policy and authorization, supply-chain assurance, observability and response —
+each an icon carrying the **chip numbers of the controls it implements**, so a reader can map
+a numbered control to the technology that delivers it without hovering. They are deliberately
+unconnected: governance is a set of services *and processes* that apply across every band, not
+another hop in the data path, and drawing arrows to them would force a box-and-arrow reading
+onto something that is neither.
+
+Two consequences worth stating. A band holding one component that holds the real content is
+nesting for its own sake — the services are blocks, not items of a block. And the *controls*
+still pin where they are enforced, which is the crossing, not the call-out: the call-out names
+the implementing technology and cites the number. There is no "Control plane" component;
+management capabilities never become boxes in the data path, which is the rule that stops a
+reference architecture becoming a tool inventory.
+
+**Bands replace frames.** A containment frame inside a band reads as a second boundary of the
+same kind, so a zoned architecture states its sandbox on the harness and enforces it with the
+sandboxing capability instead. `rf-config.ts` stays for any future non-zoned drawing.
+
+## 4b. Flows and the sequence view
+
+A **flow** is a numbered, named path (`F1`, `F2` …) over real edges, carrying `moves` (what
+travels), `threats`, and `controls` (capability ids that must also be pinned). Flows exist
+because the older grammar made components first-class and flows incidental: an edge was an
+unnamed connector with a note, so nobody designed the flows — they emerged as leftovers
+between blocks.
+
+A step may be a bare edge ref or an edge ref with its own note. A round trip reuses one edge
+in both directions and means something different each time, which is why the annotated form
+exists.
+
+A static drawing answers "what is connected to what". It cannot answer "in what order, and in
+which direction" — and for this catalogue's most-misread path, an instruction typed on a phone
+that ends up executing on the user's own laptop by way of a vendor relay, the ordering *is* the
+architecture. So a selected flow also renders as lifelines and numbered messages beneath the
+canvas. This is also the answer to arrow density: a drawing whose every path is legible at rest
+is a drawing with very few paths. The resting state shows the topology; reading any particular
+story is a click.
+
+**Flows and scenarios both stay.** Flows are the topology inventory — every path the
+architecture has. Scenarios are the adversarial walks — the two or three stories worth telling
+in prose. The overlap is deliberate.
+
+## 4c. Reuse before you create
+
+The catalogue's measured failure is name sprawl: at the point this rule was written, 66% of
+block titles and 75% of item labels were used exactly once, and there was nothing to stop a
+fourteenth name for the ninth version of the same idea. Every build now prints a census line so
+the number is visible; it should only ever go down.
+
+Before authoring a block or an item:
+
+1. **Search `vocabulary.yaml` first** — `components:`, `itemPacks:` and `patterns:`. If a
+   canonical name means what you mean, use it, even if you would have phrased it differently.
+2. **Prefer a registered pack to a hand-written item list.** `pack: toolServicesRemote` is a
+   promise that this block is identical to the same block on four other drawings; five
+   hand-copied items are a promise that they are similar.
+3. **Prefer a registered pattern to a hand-drawn chain.** If your drawing has the blocks a
+   pattern requires, draw the pattern — the build checks it.
+4. **A new name is a registry entry made in the same change**, with a one-line note saying why
+   an existing name did not fit. Never a local choice.
+5. **Retired names carry their replacement.** The build reports `deprecated:` entries with the
+   surviving name, so the message says what to do rather than only what is wrong.
+
+The bar for a new name is not "is this slightly different?" but "would a reader comparing two
+drawings be misled by using the existing one?" Location is never a reason for a new name — the
+band already says where a thing is (rule 7).
+
 ## 5. Layout conventions
 
 Actors in column 0 (or on the user's path); Remote device on the user's path; governance
@@ -166,12 +292,25 @@ to any architecture can be checked against them without reading the whole docume
 10. **Every claim is checkable.** An item or block that claims a capability must reference one
    actually pinned; a flow step must follow a real edge; guidance must cite pinned
    capabilities. If a claim cannot be checked by the build, say why in a deviation.
+11. **Zone completeness and naming.** If an architecture declares zones, every block declares
+   one and it must exist; every band carries the fixed title for its owner. Omit the title and
+   the build fills it in; give it a different one and the build fails. Columns are assigned in
+   band order, or two bands draw on top of each other.
+12. **The crossing rule.** Any edge entering or leaving a band we operate (`endpoint`,
+   `cloud`) terminates at a component the vocabulary marks `crossing: true`. Exempt: a person
+   using their own managed device, anything wholly outside us, and the governance band, whose
+   relationships are oversight rather than data.
+13. **Flow integrity.** Flow ids match `^F\d+$` and are unique; every path step follows a real
+   edge (reverse legal on bidirectional edges); every `moves` statement is present; every
+   capability a flow claims is pinned on the drawing.
 
 ### Families that must stay in step
 
 | Family | Members | May differ in |
 | --- | --- | --- |
-| Endpoint agents | personal autonomous agent, vendored coding agent, open-source coding agent | The vendor band and its relay; the messaging bridges and unbounded sender set; the heartbeat, scheduling and memory emphasis of an always-on daemon versus a human-triggered session. Nothing else. |
+| Endpoint agents | personal autonomous agent, first-party coding agent, third-party coding agent | The vendor band and its relay; the messaging bridges and unbounded sender set; the heartbeat, scheduling and memory emphasis of an always-on daemon versus a human-triggered session. Nothing else. |
+| Cloud agents | single agent workflow, chat agent with tools, durable multi-agent workflow | The trigger (human, schedule, or supervisor); the durability layer and subagent fan-out. The gateway, the tool chain, the enterprise data behind it and the governance band are the same drawing three times. |
+| SaaS agents | enterprise AI chat, low-code agent builder, managed agent runtime | What the vendor operates inside the vendor band, and who governs the tenant. The crossing into our systems and the three-zone treatment of vendor internals are identical. |
 
 Everything outside that column — the local session path, the tool-services chain, the gateway,
 the enterprise data behind it, the governance call-outs, the band set and the positions — is
@@ -179,6 +318,10 @@ the same drawing twice, and a difference is a defect in one of them until proven
 
 ## 7. Authoring checklist (every new or changed architecture)
 
+0. **Reuse before you create (§4c).** Search `vocabulary.yaml` — `components:`, `itemPacks:`,
+   `patterns:` — before writing a single block. Reference a pack rather than copying its items;
+   draw a registered pattern rather than re-deriving its chain. The census line in
+   `npm run data` should go down, never up.
 1. Block titles, item labels and zone bands from vocabulary.yaml — the build warns on an
    unregistered component name and fails on a non-standard zone title. A genuinely new
    component is registered in the vocabulary in the same change, never named locally.

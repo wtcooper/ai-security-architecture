@@ -85,6 +85,35 @@ export function buildViewerModel(archetype: Archetype) {
       }]
     : [];
 
+  // Ownership bands, mirroring FlowDiagramRF exactly: each band's horizontal extent comes from
+  // its own members, the vertical extent is shared so the bands read as columns and a crossing
+  // is a horizontal move — except governance, which spans the full width beneath the rest
+  // because it applies to every band including what is reachable outside us.
+  const ZONE_PAD = 22;
+  const ZONE_HEAD = 30;
+  const govZoneIds = new Set(
+    (archetype.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
+  );
+  const colRects = archetype.blocks
+    .filter((b) => !govZoneIds.has(b.zone ?? ""))
+    .map((b) => rects[b.id])
+    .filter(Boolean);
+  const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
+  const bandTop = colRects.length ? Math.min(...colRects.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : 0;
+  const bandBottom = colRects.length ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD : 0;
+  const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
+  const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
+  const zones = (archetype.zones ?? []).flatMap((zone) => {
+    const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
+    if (!rs.length) return [];
+    const isGov = zone.owner === "governance";
+    const x0 = isGov ? fullLeft : Math.min(...rs.map((r) => r.x)) - ZONE_PAD;
+    const x1 = isGov ? fullRight : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD;
+    const y0 = isGov ? Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : bandTop;
+    const y1 = isGov ? Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD : bandBottom;
+    return [{ title: zone.title, owner: zone.owner, note: zone.note, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }];
+  });
+
   const edgeGeoOf = (ref: string) => {
     const found =
       layout.edges.find((g) => `${g.from}->${g.to}` === ref) ??
@@ -161,6 +190,7 @@ export function buildViewerModel(archetype: Archetype) {
     blocks,
     edges,
     frames,
+    zones,
     blockPins,
     edgePins,
     scenarios: (archetype.scenarios ?? []).map((s) => ({
