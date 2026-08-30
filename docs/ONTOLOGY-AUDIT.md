@@ -58,12 +58,22 @@ census on every build. It should only ever go down.
 | --- | --- | --- |
 | 0 | Promote the grammar; `itemPacks:` and `patterns:` registries; deprecation redirects; vocabulary self-check; band-overlap check; zone support in the HTML exporter | **done** |
 | 1 | Endpoint family — third-party, first-party, personal agent, local inference | **done** |
-| 2 | Cloud — action agent, chat agent, agent workflow (one commit, they are a family), then self-hosted inference, remote MCP server, training pipeline | open |
+| 2 | Cloud — **chat agent done**; action agent and agent workflow still to do (they are a family: bring them onto the chat agent's shape and land them together), then self-hosted inference, remote MCP server, training pipeline | in progress |
 | 3 | SaaS — enterprise AI chat, low-code agent builder, managed agent runtime (one commit) | open |
 | 4 | Flip enforcement to errors; close this tracker | open |
 
 **After Wave 1:** 76 block titles (56 once), 166 item labels (125 once), 4/13 architectures
 zoned, 0 warnings on the migrated four.
+
+**Now:** 76 block titles (56 once), 165 item labels (126 once), 5/13 zoned, 0 warnings on the
+migrated five. The once-used counts stay high because the un-migrated architectures still hold
+their one-off names; they come down as each is migrated, not before.
+
+**The cloud shape, established by the chat agent** — the other five cloud architectures copy
+it rather than re-deriving it: user band holds the person; the cloud band holds the front end,
+the harness, its state, the gateway, our Tool services and Enterprise data; the external band
+holds the model provider, third-party Tool services and Downstream services. Columns run
+user 0, cloud 1-4, external 5. `patternDataChain` and `patternExternalTools` are both drawn.
 
 ### What each remaining architecture needs
 
