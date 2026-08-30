@@ -866,8 +866,13 @@ function checkPatterns(
   for (const [name, spec] of Object.entries(patterns)) {
     const requires = spec.requires ?? [];
     if (!requires.length || !spec.legs?.length) continue;
-    // The pattern applies only if every block it needs is on this drawing.
-    if (!requires.every((t) => idsFor(t).length > 0)) continue;
+    // The pattern applies only if every block it needs is on this drawing — resolved WITH the
+    // legs' band qualifiers, because "Tool services" exists in three bands and a pattern about
+    // the endpoint one says nothing about a drawing that has only the cloud one.
+    const resolvable = spec.legs.every(
+      (leg) => idsFor(leg.from, leg.fromBand).length > 0 && idsFor(leg.to, leg.toBand).length > 0,
+    );
+    if (!resolvable || !requires.every((t) => idsFor(t).length > 0)) continue;
 
     // patternModelPath has a registered vendor-interposed variant; satisfying either is
     // conformance, so try the variant first and only report if neither shape is drawn.

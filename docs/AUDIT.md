@@ -688,10 +688,9 @@ Highlights below are Google's original mapping, not ours.
 - Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
 - Orchestrator/Route Hijack (`riskOrchestratorRouteHijacking`)
 
-### 4b. Capabilities no architecture pins — 13 of 56
+### 4b. Capabilities no architecture pins — 12 of 56
 
 - Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
-- Retrieval & vector store security (`capabilityRagSecurity`)
 - Groundedness & output verification (`capabilityGroundednessChecking`)
 - Model hardening & adversarial training (`capabilityModelHardening`)
 - System prompt & instruction hierarchy management (`capabilitySystemPromptManagement`)
@@ -738,8 +737,14 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | AI gateway | service | (none) |
 | Chat agent with tools | Model provider | provider | `componentModelServing` |
 | Chat agent with tools | Tool services | service | `componentTools` |
+| Chat agent with tools | Enterprise data | external | `componentDataSources` |
+| Chat agent with tools | Tool services | service | `componentTools` |
 | Chat agent with tools | Downstream services | external | `componentDataSources` |
-| Chat agent with tools | Governance plane | governance | (none) |
+| Chat agent with tools | Identity services | governance | (none) |
+| Chat agent with tools | Secrets & key management | governance | (none) |
+| Chat agent with tools | Policy & authorization | governance | (none) |
+| Chat agent with tools | Supply-chain assurance | governance | (none) |
+| Chat agent with tools | Observability & response | governance | (none) |
 | Remote MCP server you publish | Enterprise IdP | external | (none) |
 | Remote MCP server you publish | Authorization server | service | (none) |
 | Remote MCP server you publish | Service edge | service | (none) |
@@ -859,7 +864,7 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- | --- | --- | --- |
 | Single agent workflow | build | draft | 5 | _none_ |
 | Durable multi-agent workflow | build | draft | 5 | Network segmentation & egress control, Agent execution sandboxing |
-| Chat agent with tools | build | draft | 5 | _none_ |
+| Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
 | Remote MCP server you publish | build | draft | 5 | Human-in-the-loop approval & escalation, Output encoding & safe rendering |
 | Self-hosted open-weights inference | build | draft | 4 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 5 | _none_ |
