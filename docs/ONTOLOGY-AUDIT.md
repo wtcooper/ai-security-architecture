@@ -43,30 +43,52 @@ findings that existed at adoption. Status is updated as waves land.
   customer component can sit on a SaaS-to-SaaS grant path. Wave C (inline/naming/icons):
   findings 8-13. `npm run data` reports vocabulary: conformant as of Wave C.
 
-## Open backlog — controls drawn as items (2026-08-30)
+## Migration tracker — the catalogue moves onto the zone grammar (2026-08-30)
 
-A rule added after the spike review: a control is a numbered pin and, where useful, a call-out
-in the security and governance band — never an item inside the component it governs. The two
-spike architectures were cleaned when the rule landed. The build warns on the rest, which are
-deferred by decision:
+The grammar decision recorded above is made: the zone/flow grammar is promoted out of research
+preview into `data/ONTOLOGY.md` §4a and §4b, `data/ONTOLOGY-SPIKE.md` is deleted, and every
+architecture migrates. The controls-drawn-as-items backlog is cleared per architecture as part
+of its migration rather than as a separate sweep, so the work is done once.
 
-| Architecture | Instances |
+**Baseline at Wave 0 (the number the exercise is about):** 78 distinct block titles of which
+51 used once; 174 distinct item labels of which 123 used once. `npm run data` prints this
+census on every build. It should only ever go down.
+
+| Wave | Scope | State |
+| --- | --- | --- |
+| 0 | Promote the grammar; `itemPacks:` and `patterns:` registries; deprecation redirects; vocabulary self-check; band-overlap check; zone support in the HTML exporter | **done** |
+| 1 | Endpoint family — third-party, first-party, personal agent, local inference | **done** |
+| 2 | Cloud — action agent, chat agent, agent workflow (one commit, they are a family), then self-hosted inference, remote MCP server, training pipeline | open |
+| 3 | SaaS — enterprise AI chat, low-code agent builder, managed agent runtime (one commit) | open |
+| 4 | Flip enforcement to errors; close this tracker | open |
+
+**After Wave 1:** 76 block titles (56 once), 166 item labels (125 once), 4/13 architectures
+zoned, 0 warnings on the migrated four.
+
+### What each remaining architecture needs
+
+Every one needs `zones:`, numbered `flows:`, and the five governance call-outs in place of its
+single "Governance plane"-style block. Beyond that:
+
+| Architecture | Specific work |
 | --- | --- |
-| archAgentWorkflow | 5 |
-| archChatAgent | 4 |
-| archActionAgent | 4 |
-| archSelfHostedInference | 3 |
-| archRemoteMcpServer | 3 |
-| archPersonalAgent | 3 |
-| archOssCodingAgent | 3 |
-| archManagedAgentRuntime | 2 |
-| archLowCodeAgentBuilder | 2 |
-| archCodingAgent | 2 |
+| archActionAgent, archChatAgent, archAgentWorkflow | Split the bundled Tool services per band; `pack: aiGatewayTraffic` on the gateway; separate Enterprise data out of Downstream services so `patternDataChain` can be drawn; reclassify `Schedules & events` (kind `actor`, but it is cloud infrastructure) |
+| archSelfHostedInference | `pack: aiGatewayTraffic`; reclassify `Consuming applications` and weight `Storage`, both mis-kinded |
+| archRemoteMcpServer | Publisher perspective, so the band mapping inverts; `Service edge` is the crossing; retire `Enterprise IdP` and `Tenant data` per their redirects |
+| archTrainingPipeline | The weakest fit — temporally ordered, no crossing component. Sparse bands (cloud, external, governance). `Evaluation & red teaming` stays a block: that is a recorded accepted judgment above, not drift. The `dataOrigins -> curation` edge needs a crossing decision |
+| archEnterpriseAiChat, archLowCodeAgentBuilder, archManagedAgentRuntime | The vendor band carries these; §3's three-zone rule becomes geometry. Retire `Tenant/Maker/Customer governance`, `Identity & entitlements`, `Attached knowledge` per their redirects |
 
-These are cleared when the grammar decision is made, so the work is done once rather than
-twice.
+### Constraints learned in Wave 1 — do not rediscover these
+
+- **Columns must be assigned left to right in band order.** A band's rect is derived from the
+  min..max column of its members, so a band holding column 0 and column 4 stretches across the
+  drawing and swallows its neighbours. The build now fails on this.
+- **Bands replace frames.** `RF_CONFIG` is empty by design.
+- **Check `npm run audit` §4 every wave.** Folding or dropping a block can orphan a risk that
+  is pinned nowhere else — that is how `riskCovertChannelsInModelOutputs` was nearly lost.
 
 ## Flip-to-error criterion
 
-Vocabulary warnings become build failures when this table reaches zero open findings and
-one full authoring cycle (one new architecture) has passed without a false positive.
+Vocabulary warnings become build failures when the migration tracker reaches Wave 4 — every
+architecture zoned and warning-free. Wave 1 supplied the authoring cycle that was the other
+half of the original criterion.
