@@ -655,6 +655,81 @@ attempted unauthenticated**.
 Retention or a HIPAA BAA**, and **vault credential values are excluded from customer-managed
 encryption** — they sit under Anthropic-managed keys.
 
+## Part 4b — Decisions (2026-08-30, second pass)
+
+| Ref | Decision |
+|---|---|
+| CHALLENGE-A | **Sandbox restored, with unlimited nesting.** See the nesting design below. |
+| CHALLENGE-B | **Confirmed.** The AI gateway is a real hosted tier (LiteLLM) and stays. The provenance test is the rule. |
+| CHALLENGE-C | **Superseded** — nesting will carry edges, so nothing is lost. |
+| CHALLENGE-D | **A2A goes on the cloud tool services too**, not just external — we may host an agent in our own cloud that the gateway reaches. It lands in `toolServicesRemote`, which covers cloud, vendor and external. |
+| CHALLENGE-E | **Chat agent stays separate**, with the human, the browser application layer, *and* a scheduling trigger. |
+| CHALLENGE-F | Keep the MCP page, small and pin-dense. |
+| CHALLENGE-G | **Solid line, anonymous origin** — see the unbound-origin design below. |
+| CHALLENGE-H | **Resolved, and I had it backwards.** In the low-code case our gateway is reached *for tools and data*, not for inference — the vendor calls its own model provider in the external band. So "every gateway reaches a provider" is not a rule; it is a common shape with real exceptions. |
+
+### The crossing rule is removed
+
+You asked what it was for. It came from the spike grammar: *any edge entering or leaving a band
+we operate must terminate at a component marked `crossing: true`.* The intent was to force every
+path in or out of our environments through a control point we run.
+
+The intent is sound; the rule was not. It encoded an assumption you have now stated plainly is
+false — that traffic flows through a **logical sequence of zones**. It does not. A managed
+endpoint reaches our cloud, a vendor, or an uncontracted third party *directly*, and a vendor
+reaches back into our cloud. Bands are locations, not a pipeline.
+
+Worse, it was a hard build failure, so when an honest drawing had no crossing the only way to
+make the build pass was to invent one. That produced four fabricated components across four
+architectures. **A rule that renders a drawing dishonest in order to satisfy a layout constraint
+is a broken rule.**
+
+Removed: the enforcement, and `crossing: true` from the vocabulary. Kept as an **optional
+report** — the build may note an edge leaving a band we operate without passing through a
+component carrying an inline capability pin. Informational, never blocking.
+
+### Nesting — proposed design
+
+Requirement: unlimited depth, and nested blocks must still carry edges, pins and items.
+
+**Add `parent: <blockId>` to a block. That is the whole primitive.**
+
+1. A block with children renders as a **container**: a header tab and a padded bounding box
+   around its children.
+2. **Children are ordinary blocks.** They keep edges, pins, items and capability chips. Nothing
+   about flows or arrows changes — this is the property that makes the approach work.
+3. **Depth is unlimited and needs no special case.** Sandbox → harness → supervisor and
+   subagents is three levels and uses one mechanism.
+
+Two container flavours, distinguished by `kind`:
+- **`kind: boundary`** — pure containment with no data path of its own. Dashed border, a label
+  tab, no items. This is the sandbox, the vendor application, the shipped-product boundary.
+- **A normal block with children** — keeps its solid border and its own items. This is the agent
+  harness containing a supervisor and its subagents.
+
+**Layout:** children are laid out on a grid local to their parent; the parent's rect is derived
+from that plus padding and header; the parent is then placed on its own parent's grid. Recursion
+falls out. Collision checking moves from global to per-container scope.
+
+**Renderer:** React Flow already supports `parentId` — the retired frame code used it — so edges
+between nested nodes work without new machinery.
+
+**This replaces `RF_CONFIG` entirely.** Containment becomes data in the architecture file rather
+than config in a TypeScript map, which is why it can nest and why the exporter gets it for free.
+
+Cost: the layout engine needs recursive sizing, and the collision checker needs scoping. That is
+real work, and it is Wave B.
+
+### Unbound edge origins — proposed design
+
+For the MCP page you want a solid line arriving at the gateway from **nothing** — no source
+icon — to say "something calls this, and we are deliberately not naming it because it could be
+any of several surfaces."
+
+**Add `kind: origin`.** A block that occupies a grid cell for layout purposes and renders as
+nothing. Edges, flows and pins reference it by id exactly like any other block, so no other part
+of the grammar changes. The line appears to begin in empty space.
+
 ## Part 5 — Sequencing
 
 Grammar and renderer first, because every architecture inherits them. Then the architectures in
@@ -662,19 +737,21 @@ dependency order, leaving the ones told to "follow the patterns established by t
 
 ### Wave A — ontology and build
 
-- **Relieve the crossing rule.** Allow a recorded deviation to satisfy it. This is the root cause
-  of the invented components and must land before anything is removed, or the build will block.
-- **Add the provenance test** for crossing components: a component terminating a band crossing
-  must be justified by a named exemplar. Report-only at first.
+- **Remove the crossing rule** and `crossing: true`, replacing it with an optional non-blocking
+  report. Must land first, or removing the invented components will fail the build.
+- **Add the provenance test**: a component must be justified by a named exemplar — a tier we
+  actually run. Report-only at first.
 - **Retire `Egress control` and `Service edge`** from the vocabulary with `deprecated:` redirects.
-- **Add A2A** to the `toolServicesRemote` pack only (CHALLENGE-D).
-- **Add the gateway→provider rule** with the two recorded exceptions (CHALLENGE-H).
-- **Restore frames** — revert the "frame inside a band" deviation (CHALLENGE-A).
+- **Add A2A** to `toolServicesRemote` (cloud, vendor and external).
+- **No gateway→provider rule.** Add the missing edge where it belongs case by case.
+- **Nesting**: `parent` on blocks, `kind: boundary`, `kind: origin`; retire `RF_CONFIG`; revert
+  the "frame inside a band" deviation.
 - **Full controls-as-components audit** (E18) across all 13, using the provenance test as the
   instrument rather than my judgement.
 
 ### Wave B — renderer and layout
 
+- **Recursive layout and per-container collision scoping** — the nesting engine.
 - **Derive the governance row** from the tallest content band instead of authoring it. Fixes the
   402px and 222px gaps in seven architectures at a stroke.
 - **Set a minimum band width** so an actor-only band does not leave a 76px gutter.
@@ -686,8 +763,9 @@ dependency order, leaving the ones told to "follow the patterns established by t
 
 1. **Third-party** (E1–E6): direct SSO path primary, gateway path secondary, `aiGateway→provider`
    added, mutual exclusivity recorded as a deviation, Cursor contrast in exemplars.
-2. **Sandbox** (E7–E9): frame on the personal agent and first-party, four openings named in the
-   frame note, credential-injection-at-the-proxy pinned, MCP-straddles-the-boundary pinned.
+2. **Sandbox** (E7–E9): a `boundary` container on the personal agent and first-party, four
+   openings named in its note, credential-injection-at-the-proxy pinned, and the MCP-servers-run-
+   on-the-host gap pinned rather than hidden by drawing a clean boundary.
 3. **First-party** (E10–E14): relay/tunnel component on the remote path, direct-port case pinned
    as the risk, Local API server item, LangChain deep agents dropped as an exemplar.
 4. **Local runtime** (E15–E19): egress control removed, band disappears, terminology aligned with
@@ -700,10 +778,12 @@ dependency order, leaving the ones told to "follow the patterns established by t
 6. **Fine-tuning** (C28–C30): narrowed to the seven honest components; curation, evaluation,
    registry-as-gate and serving removed; the earlier accepted judgment overturned in writing.
 7. **Agent trio** (C1–C13): harness-local tool services, checkpointer database, supervisor and
-   subagents nested, A2A via the gateway, chat agent aligned to the same skeleton with the
-   browser application layer as its genuine difference, "durable" dropped from the name.
+   subagents **nested inside the harness as real blocks with edges**, A2A via the gateway, chat
+   agent on the same skeleton plus human, browser application layer **and a scheduling trigger**,
+   "durable" dropped from the name.
 8. **MCP server** (C14–C22): rebuilt small — MCP service, authorization server, tool definitions,
-   tenant data, with the gateway as the leftmost entry. Dense pin set from the July 2026 spec.
+   tenant data, with the gateway as the leftmost entry reached by a solid line from an
+   **anonymous origin**. Dense pin set from the July 2026 spec.
 
 ### Wave E — third-party
 
@@ -712,9 +792,12 @@ dependency order, leaving the ones told to "follow the patterns established by t
    inbound-to-a-public-endpoint, CMEK trade-off pinned.
 10. **API/SDK runtime** (T14–T17): vendor hosts the harness; three return paths; vaults and their
     two sharp edges pinned; ZDR/HIPAA ineligibility recorded.
-11. **Low-code** (T11–T13) **last**, per your instruction: everything vendor-side except the
-    on-premises data gateway; maker-credential ambient authority as the headline risk; the
-    DLP publish gate as a governance call-out.
+11. **Low-code** (T11–T13) **last**: the agent is built and runs in the vendor's platform, which
+    calls **its own** model provider in the external band; once built it reaches back into our
+    cloud through **our AI gateway to our tool services and data** — so our gateway carries no
+    inference here. Maker-credential ambient authority is the headline risk; the DLP publish
+    gate is a governance call-out with real teeth. Pin that the vendor's MCP path needs a
+    publicly reachable endpoint of ours.
 
 ### Wave F — enforcement and verification
 
@@ -728,5 +811,5 @@ dependency order, leaving the ones told to "follow the patterns established by t
 | Build | `npm run data` conformant; `npx tsc --noEmit` clean; `npm run audit` diffed for orphaned risks |
 | Layout | Playwright screenshot of **each** of the 13; inter-band gaps uniform; no gap between the content bands and the governance band; no band-width whitespace without content |
 | Pins | Every pin inside a block or on a band edge; none floating between two bands |
-| Standards | Zero controls-as-components under the provenance test; no zone present without content |
+| Standards | Zero controls-as-components under the provenance test; no zone present without content; no component invented to satisfy a rule |
 | Fidelity | Each architecture's exemplars name the researched technology, and the flows match the topology the research established |
