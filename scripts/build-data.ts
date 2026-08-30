@@ -868,7 +868,12 @@ type PatternLeg = {
   route?: string;
   label?: string;
 };
-type PatternSpec = { requires?: string[]; legs?: PatternLeg[]; viaVendor?: PatternLeg[] };
+type PatternSpec = {
+  requires?: string[];
+  requiresItem?: string;
+  legs?: PatternLeg[];
+  viaVendor?: PatternLeg[];
+};
 
 /**
  * Pattern conformance (ONTOLOGY.md rule 9, mechanised). A shared pattern is drawn identically
@@ -906,6 +911,13 @@ function checkPatterns(
       (leg) => idsFor(leg.from, leg.fromBand).length > 0 && idsFor(leg.to, leg.toBand).length > 0,
     );
     if (!resolvable || !requires.every((t) => idsFor(t).length > 0)) continue;
+    // Some patterns are about a capacity rather than a shape, and a title alone cannot tell
+    // you whether the drawing has it. `requiresItem` names the item that proves it does.
+    if (
+      spec.requiresItem &&
+      !arch.blocks.some((b) => (b.items ?? []).some((i) => i.label === spec.requiresItem))
+    )
+      continue;
 
     // patternModelPath has a registered vendor-interposed variant; satisfying either is
     // conformance, so try the variant first and only report if neither shape is drawn.
