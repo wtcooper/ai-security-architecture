@@ -454,6 +454,8 @@ export interface ArchLayout {
    * its column instead of leaving a gutter beside it. Empty columns have zero width.
    */
   columns: { x: number; w: number }[];
+  /** Top of the ownership bands — encloses first-row risk-tag stacks, not just blocks. */
+  bandTop: number;
   edges: {
     from: string;
     to: string;

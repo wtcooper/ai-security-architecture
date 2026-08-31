@@ -78,8 +78,9 @@ zones:
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company: the public hubs the weights come from, and the callers nobody
-      intended who find a port that was assumed to be private.
+      Outside the company, and on this drawing that means one thing: the public hubs the weights
+      come from. Nothing out here calls in. A managed endpoint has no inbound path, which is why
+      the callers this architecture has to worry about are all on the machine already.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -88,18 +89,6 @@ zones:
       decide which artifacts are allowed and notice the runtimes nobody registered.
 
 blocks:
-  - id: unexpectedCallers
-    kind: actor
-    title: Unexpected callers
-    icon: globe
-    zone: zoneExternal
-    col: 4
-    row: 0
-    note: >
-      Anything on the machine that can open a socket — including a browser tab, where the runtime
-      allows cross-origin requests. Not the caller the API was designed for, and nothing tells
-      them apart.
-
   - id: localApps
     kind: service
     title: Local applications
@@ -108,8 +97,11 @@ blocks:
     col: 0
     row: 1
     note: >
-      The intended consumers: editors, agents and tools on the same machine, calling the local API
-      instead of a hosted one — and often built expecting a hosted API's safety floor.
+      Everything on the machine that can open a socket to the port. The consumers the runtime was
+      installed for — editors, agents and tools calling the local API instead of a hosted one,
+      usually built expecting a hosted API's safety floor — and the browser, which is local
+      software too, and which a visited web page can drive through a permissive cross-origin
+      policy. Nothing on the path tells the two apart.
 
   - id: api
     kind: service
@@ -230,14 +222,9 @@ edges:
     label: completion request
     note: >
       Local software calls the local API the way it would a hosted one — usually assuming a safety
-      floor that is not there.
-  - from: unexpectedCallers
-    to: api
-    path: primary
-    label: unauthenticated request
-    note: >
-      The same endpoint, reached by callers nobody intended: a browser tab through CORS, or the
-      network if the binding is routable. Locality is standing in for authorization.
+      floor that is not there. The same unauthenticated request, on the same port, whether it came
+      from the editor the runtime was installed for or from a web page driving the browser.
+      Locality is standing in for authorization.
   - from: api
     to: runtime
     path: primary
@@ -277,7 +264,7 @@ pins:
       at: runtime->hub
       note: Publisher identity at publish time, nothing at load time — and a hub account is a takeover target.
     - risk: riskDenialOfMLService
-      at: unexpectedCallers->api
+      at: localApps->api
       note: Any local process can saturate the runtime; a browser tab can do it from a web page.
     - risk: riskModelExfiltration
       at: weights
@@ -350,13 +337,17 @@ flows:
       and out is absent unless the device owner deploys it here.
   - id: F2
     title: The call nobody intended
-    moves: The same completion request, from a caller the deployment never meant to serve.
-    path: [unexpectedCallers->api]
-    threats: [Runtime bound to a routable interface, Permissive CORS letting a web page drive inference, Locality standing in for authorization]
+    moves: The same completion request, from local software the deployment never meant to serve.
+    path: [localApps->api]
+    threats: [Permissive CORS letting a visited web page drive inference, Locality standing in for authorization, Runtime bound to a routable interface]
     controls: [capabilityTransportSecurity, capabilityRateLimiting]
     note: >
-      Same endpoint, same lack of authentication, different caller — and nothing on the path
-      tells them apart. This is the flow the exposure scans keep finding.
+      Same endpoint, same lack of authentication, different caller — and nothing on the path tells
+      them apart. It is drawn as the same edge as F1 deliberately: the caller nobody intended is
+      not out on the network but on the machine, because a managed endpoint has no inbound path.
+      The browser is the one that matters, since a visited page reaches the port without the user
+      doing anything. A routable binding is the remaining way this becomes a network exposure, and
+      it is a misconfiguration rather than an architecture.
   - id: F3
     title: Weights arrive and are loaded
     moves: Multi-gigabyte artifacts from a public hub, onto disk, and into a process.
@@ -390,8 +381,10 @@ scenarios:
           the user's privileges.
   - title: A browser tab finds the port
     steps:
-      - follow: unexpectedCallers->api
-        note: A visited web page calls the local endpoint through a permissive cross-origin policy.
+      - follow: localApps->api
+        note: >
+          A visited web page calls the local endpoint through the browser, under a permissive
+          cross-origin policy. The caller is local software; nobody chose to serve it.
       - follow: api->runtime
         note: >
           Nothing distinguishes this caller from the intended ones. The page now drives local

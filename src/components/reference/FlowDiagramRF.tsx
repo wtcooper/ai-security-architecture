@@ -27,7 +27,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
@@ -529,8 +529,6 @@ export function FlowDiagramRF({
     // Ownership bands as full-height background columns. The horizontal extent
     // comes from each zone's own members; the vertical extent is shared across every zone, so
     // the bands read as columns and a crossing is a horizontal move between two of them.
-    const ZONE_PAD = 16;
-    const ZONE_HEAD = 30;
     // Governance is drawn as a full-width band beneath the columns: it applies to every other
     // band, including what may be reached externally, so it cannot be one of them.
     const govZoneIds = new Set(
@@ -541,9 +539,9 @@ export function FlowDiagramRF({
       .map((b) => rects[b.id])
       .filter(Boolean);
     const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
-    const bandTop = colRects.length
-      ? Math.min(...colRects.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD
-      : 0;
+    // bandTop comes from the layout, which knows how far the first row's risk-tag stacks rise
+    // above their blocks. Recomputing it from block rects alone drops those tags outside the band.
+    const bandTop = colRects.length ? layout.bandTop : 0;
     const bandBottom = colRects.length
       ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD
       : 0;

@@ -50,6 +50,9 @@ const MARGIN_TOP = 60;
 const MARGIN_BOTTOM = 32;
 
 export const TAB_H = 20;
+/** Band chrome, shared with both renderers so a band's rect can be derived here. */
+export const ZONE_PAD = 16;
+export const ZONE_HEAD = 30;
 /** Items pack two per row inside a standard block. */
 const ITEM_H = 50;
 const BLOCK_PAD_TOP = 16;
@@ -215,15 +218,28 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // to hide this. The margin is derived rather than fixed so no author has to leave a blank row
   // as packing material.
   const tagsOn = new Map<string, number>();
-  for (const pin of arch.pins?.risks ?? []) {
-    if (!pin.at.includes("->")) tagsOn.set(pin.at, (tagsOn.get(pin.at) ?? 0) + 1);
-  }
+  for (const pin of arch.pins?.risks ?? []) tagsOn.set(pin.at, (tagsOn.get(pin.at) ?? 0) + 1);
   const firstRow = Math.min(...roots.map((p) => p.block.row));
-  const deepestStack = Math.max(
-    0,
-    ...roots.filter((p) => p.block.row === firstRow).map((p) => tagsOn.get(p.block.id) ?? 0),
-  );
-  const marginTop = Math.max(MARGIN_TOP, TAG_GAP * deepestStack + TAG_H + 8);
+  const onFirstRow = new Map(roots.filter((p) => p.block.row === firstRow).map((p) => [p.block.id, p]));
+  // Headroom for the tallest stack, plus the band chrome that has to fit above it — a tag
+  // belongs inside the band its block sits in, so the band's top is pushed up to enclose the
+  // stack and the canvas has to have room for that. A block's stack rises from its top edge;
+  // an edge's rises from the midpoint, which on a horizontal run between two first-row blocks
+  // is half a block lower. Edge stacks were left out of this sum entirely until the local model
+  // runtime lost its top row and three risk tags floated up out of the band — the slack that
+  // had been hiding them was the row that got removed.
+  const stackHeight = (n: number) => (n ? TAG_GAP * n + TAB_H / 2 + ZONE_HEAD + 8 : 0);
+  const needed = [
+    ...[...onFirstRow.values()].map((p) => stackHeight(tagsOn.get(p.block.id) ?? 0)),
+    ...[...tagsOn.entries()]
+      .filter(([at]) => at.includes("->"))
+      .map(([at, n]) => {
+        const ends = at.split("->").map((id) => onFirstRow.get(id));
+        if (ends.some((p) => !p)) return 0;
+        return stackHeight(n) - Math.min(...ends.map((p) => p!.h)) / 2;
+      }),
+  ];
+  const marginTop = Math.max(MARGIN_TOP, ...needed);
 
   const blocks: Record<string, Rect> = {};
   const place = (items: Placed[], grid: GridResult, ox: number, oy: number) => {
@@ -241,6 +257,22 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // Column extents let the renderer derive band rects from the grid rather than from member
   // rects, so a band holding only a narrow actor no longer leaves a gutter beside it.
   const columns = top.colX.map((x, i) => ({ x: MARGIN_X + x, w: top.colW[i] }));
+
+  // Where the ownership bands start. Derived here rather than in each renderer because it is
+  // not simply "above the topmost block": a risk-tag stack rises out of its block and must stay
+  // inside the band that owns it, so the band's top is whichever of the two sits higher.
+  const rootTops = roots.map((p) => blocks[p.block.id].y);
+  const tagTops = [...tagsOn.entries()]
+    .map(([at, n]) => {
+      const r = blocks[at];
+      if (!r) return Infinity; // edge-anchored stacks need edge geometry, resolved below
+      return r.y - TAB_H / 2 - TAG_GAP * n;
+    })
+    .filter((y) => Number.isFinite(y));
+  const bandTop = Math.min(
+    Math.min(...rootTops) - ZONE_PAD - ZONE_HEAD,
+    ...tagTops.map((y) => y - ZONE_HEAD - 6),
+  );
 
   // --- Edges ---------------------------------------------------------------------
   // Every arrow gets its own anchor point. Without this, edges attaching to the same side of
@@ -342,7 +374,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     };
   });
 
-  return { width, height, blocks, edges, columns };
+  return { width, height, blocks, edges, columns, bandTop };
 }
 
 // --- Pin placement -----------------------------------------------------------------

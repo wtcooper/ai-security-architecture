@@ -9,7 +9,7 @@
  */
 import { bandFor } from "@/lib/bands";
 import { capabilityById, componentById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, itemCells, tagSpots } from "@/lib/flow-layout";
+import { chipSpots, itemCells, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 
 import { tagWidth } from "./flow-style";
@@ -84,8 +84,6 @@ export function buildViewerModel(archetype: Archetype) {
   // its own members, the vertical extent is shared so the bands read as columns and a crossing
   // is a horizontal move — except governance, which spans the full width beneath the rest
   // because it applies to every band including what is reachable outside us.
-  const ZONE_PAD = 16;
-  const ZONE_HEAD = 30;
   const govZoneIds = new Set(
     (archetype.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
   );
@@ -94,7 +92,9 @@ export function buildViewerModel(archetype: Archetype) {
     .map((b) => rects[b.id])
     .filter(Boolean);
   const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
-  const bandTop = colRects.length ? Math.min(...colRects.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : 0;
+  // Same source as the on-screen renderer: the layout knows how far the first row's risk-tag
+  // stacks rise, and a band has to enclose the tags its blocks carry.
+  const bandTop = colRects.length ? layout.bandTop : 0;
   const bandBottom = colRects.length ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD : 0;
   const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
   const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
