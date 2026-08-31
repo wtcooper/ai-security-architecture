@@ -239,10 +239,16 @@ data shape: ordered steps, each following a real edge, each with its own note (a
 reuses one edge in both directions and means something different each time, which is why the
 note lives on the step rather than the edge).
 
-The canvas numbers exactly one walk at a time. At rest that is the walkthrough. Selecting a
-scenario re-numbers the drawing to that story and swaps the sequence diagram below it. **A
-number on a drawing therefore means one thing: the step you are on.** The drawing and the
-sequence are the same walk seen twice, and the numbers match in both directions.
+They are presented as one list — "sequence data flows" — and behave identically. **The resting
+drawing carries no step numbers at all.** Selecting any walk numbers its steps onto the arrows
+it uses, dims what it does not touch, and opens its sequence diagram beneath the canvas. So a
+number appears only because a reader asked for that walk, which is what lets it mean one thing:
+the step you are on. The drawing and the sequence are the same walk seen twice, and the numbers
+match in both directions.
+
+Nothing in the interface marks the walkthrough as special. It is first in the list because it
+is the complete walk; that is the whole of its privilege. A drawing that needed a badge to say
+which walk was the important one would be admitting the list was not really one kind of thing.
 
 ### What this replaced, and why
 

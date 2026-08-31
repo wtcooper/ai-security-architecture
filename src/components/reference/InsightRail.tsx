@@ -2,7 +2,7 @@
 
 /**
  * The rail beside the diagram — F5's "Insights" panel translated onto this framework's spine:
- * scenario walks over the canvas, the numbered capabilities that must be deployed (their
+ * sequence data flows over the canvas, the numbered capabilities that must be deployed (their
  * design-requirements list), and the coded risks pinned to the drawing (their OWASP list).
  * Every row links into the taxonomy tab that owns the entity.
  */
@@ -10,21 +10,25 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import type { Archetype } from "@/lib/types";
+import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
 
 interface InsightRailProps {
   archetype: Archetype;
-  scenario: number | null;
-  onScenario: (index: number | null) => void;
+  /** Every walk on the drawing, walkthrough first. They behave identically. */
+  walks: Scenario[];
+  /** Index into `walks`, or null when nothing is selected and the drawing carries no numbers. */
+  walk: number | null;
+  onWalk: (index: number | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
 }
 
 export function InsightRail({
   archetype,
-  scenario,
-  onScenario,
+  walks,
+  walk,
+  onWalk,
   highlight,
   onHighlight,
 }: InsightRailProps) {
@@ -45,46 +49,28 @@ export function InsightRail({
   return (
     <div className="space-y-5">
       <section>
-        <p className="eyebrow">Sequence walks</p>
+        <p className="eyebrow">Sequence data flows</p>
         <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
-          The drawing numbers one walk at a time, and the sequence diagram under it always shows
-          the same one. The walkthrough is how the architecture is meant to work; the rest are
-          the ways it goes wrong.
+          Select one to number its steps onto the drawing and open its sequence diagram below.
+          The first is the complete walk through the architecture; the rest are variations on it.
         </p>
         <div className="mt-2 space-y-1.5">
-          {archetype.walkthrough && (
-            <button
-              type="button"
-              onClick={() => onScenario(null)}
-              aria-pressed={scenario === null}
-              className={`block w-full rounded-lg border px-3 py-2 text-left text-[12.5px] leading-snug transition-colors ${
-                scenario === null
-                  ? "border-ink bg-mist font-semibold text-ink"
-                  : "border-line bg-paper text-ink-2 hover:border-line-strong"
-              }`}
-            >
-              <span className="ident mr-1.5 rounded bg-ink px-1.5 py-[2px] text-[9.5px] font-bold uppercase tracking-wide text-paper">
-                Walkthrough
-              </span>
-              {archetype.walkthrough.title}
-              <span className="ml-1.5 opacity-60">{archetype.walkthrough.steps.length} steps</span>
-            </button>
-          )}
-          {(archetype.scenarios ?? []).map((s, i) => {
-              const active = scenario === i;
-              return (
-                <button
-                  key={s.title}
-                  onClick={() => onScenario(active ? null : i)}
-                  aria-pressed={active}
-                  className={`block w-full rounded-lg border px-3 py-2 text-left text-[12.5px] leading-snug transition-colors ${
-                    active
-                      ? "border-mitigated bg-mitigated-soft font-semibold text-ink"
-                      : "border-line bg-paper text-ink-2 hover:border-line-strong"
-                  }`}
-                >
-                {s.title}
-                <span className="ml-1.5 opacity-60">{s.steps.length} steps</span>
+          {walks.map((w, i) => {
+            const active = walk === i;
+            return (
+              <button
+                key={w.title}
+                type="button"
+                onClick={() => onWalk(active ? null : i)}
+                aria-pressed={active}
+                className={`block w-full rounded-lg border px-3 py-2 text-left text-[12.5px] leading-snug transition-colors ${
+                  active
+                    ? "border-mitigated bg-mitigated-soft font-semibold text-ink"
+                    : "border-line bg-paper text-ink-2 hover:border-line-strong"
+                }`}
+              >
+                {w.title}
+                <span className="ml-1.5 opacity-60">{w.steps.length} steps</span>
               </button>
             );
           })}

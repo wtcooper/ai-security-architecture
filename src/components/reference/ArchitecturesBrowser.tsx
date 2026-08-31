@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces } from "@/lib/data";
-import type { Archetype, Paragraph } from "@/lib/types";
+import type { Archetype, Paragraph, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
 import { FlowSequence } from "./FlowSequence";
@@ -45,14 +45,18 @@ export function ArchitecturesBrowser() {
   const [surface, setSurface] = useState<string | null>(
     linkedSurface && surfaces.some((s) => s.id === linkedSurface) ? linkedSurface : null,
   );
-  // null means the walkthrough — the idealised main use, which is what the canvas numbers at
-  // rest. A scenario index re-numbers it to that story and swaps the sequence below.
-  const [scenario, setScenario] = useState<number | null>(null);
-  const [sequenceOpen, setSequenceOpen] = useState(false);
+  // Index into the walk list, or null for the resting drawing. Every walk behaves identically:
+  // the first is the complete walk through the architecture and the rest are variations, but
+  // nothing about the selection treats them differently.
+  const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
-  const activeWalk = scenario !== null ? archetype.scenarios?.[scenario] : archetype.walkthrough;
+  const walks = useMemo(
+    () => [archetype.walkthrough, ...(archetype.scenarios ?? [])].filter(Boolean) as Scenario[],
+    [archetype],
+  );
+  const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
 
   // Deep links stay shareable. replaceState rather than router.push: pushing would drop the
   // GitHub Pages basePath, the same reason TourExplorer does it this way.
@@ -67,7 +71,7 @@ export function ArchitecturesBrowser() {
 
   const select = (id: string) => {
     setArchetypeId(id);
-    setScenario(null);
+    setWalkIndex(null);
     setHighlight(null);
   };
 
@@ -143,7 +147,7 @@ export function ArchitecturesBrowser() {
             <div className="flex items-start overflow-hidden rounded-xl border border-line bg-paper">
               <FlowDiagram
                 archetype={archetype}
-                scenario={scenario}
+                walk={activeWalk}
                 highlight={highlight}
                 onHighlight={setHighlight}
                 className="w-full"
@@ -151,41 +155,33 @@ export function ArchitecturesBrowser() {
             </div>
             <FlowLegend className="mt-3 px-1" />
             {activeWalk && (
-              <details
-                className="group mt-4 rounded-xl border border-line bg-paper"
-                open={sequenceOpen}
-                onToggle={(e) => setSequenceOpen((e.currentTarget as HTMLDetailsElement).open)}
-              >
+              <details className="mt-4 rounded-xl border border-line bg-paper" open>
                 <summary className="flex cursor-pointer list-none items-baseline gap-2 px-4 py-2.5 text-[12.5px] text-ink-2 hover:text-ink">
                   <span className="ident text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3">
-                    {scenario === null ? "Walkthrough" : "Scenario"}
+                    Sequence
                   </span>
                   <span className="font-semibold text-ink">{activeWalk.title}</span>
                   <span className="ml-auto shrink-0 text-[11px] text-ink-3">
-                    {activeWalk.steps.length} steps · {sequenceOpen ? "hide" : "show"} sequence
+                    {activeWalk.steps.length} steps
                   </span>
                 </summary>
-                <FlowSequence
-                  archetype={archetype}
-                  walk={activeWalk}
-                  eyebrow={scenario === null ? "Walkthrough" : "Scenario"}
-                  className="px-4 pb-4"
-                />
+                <FlowSequence archetype={archetype} walk={activeWalk} className="px-4 pb-4" />
               </details>
             )}
           </div>
           <div className="self-start rounded-xl border border-line bg-paper p-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <InsightRail
               archetype={archetype}
-              scenario={scenario}
-              onScenario={(i) => {
-                setScenario(i);
+              walks={walks}
+              walk={walkIndex}
+              onWalk={(i) => {
+                setWalkIndex(i);
                 setHighlight(null);
               }}
               highlight={highlight}
               onHighlight={(h) => {
                 setHighlight(h);
-                setScenario(null);
+                setWalkIndex(null);
               }}
             />
           </div>

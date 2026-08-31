@@ -390,13 +390,15 @@ export interface ScenarioStep {
 }
 
 /**
- * A numbered walk over the canvas: ordered steps, each following a real edge.
+ * A sequence data flow: ordered steps over the canvas, each following a real edge.
  *
- * There is exactly one shape here and two uses of it. The **walkthrough** is the architecture's
- * idealised main use — how the thing is meant to work — and it is what the drawing numbers at
- * rest. **Scenarios** are the adversarial variants, and selecting one re-numbers the canvas to
- * that story. A number on a drawing therefore means one thing and only one thing: the step you
- * are on.
+ * One shape, and every instance behaves identically. The **walkthrough** happens to be the
+ * complete walk through the architecture and is listed first; the **scenarios** are variations
+ * on it. Nothing in the interface treats them differently — selecting any of them numbers its
+ * steps onto the drawing, dims what it does not touch, and opens its sequence diagram below.
+ *
+ * The resting drawing carries no numbers at all. A number is only ever on a diagram because a
+ * reader asked for that walk, which is what makes it mean one thing: the step you are on.
  *
  * This replaced a second, parallel mechanism. `flows:` named every route, carried its own
  * threat list and control list, and stamped its own badges — and it turned out that scenarios
@@ -482,9 +484,9 @@ export interface Archetype {
   /** Spike grammar only: ownership zones drawn as background bands. */
   zones?: ArchZone[];
   pins: { risks: RiskPin[]; capabilities: CapabilityPin[] };
-  /** The idealised main use — what the canvas numbers when nothing is selected. */
+  /** The complete walk through the architecture; listed first among the sequence data flows. */
   walkthrough?: Scenario;
-  /** Adversarial variants over the same canvas; selecting one re-numbers the drawing. */
+  /** Variations on it — the ways it goes wrong. Identical in behaviour to the walkthrough. */
   scenarios?: Scenario[];
   /**
    * Derived by the build from the risk pins, in pin order, deduplicated. The rail and the

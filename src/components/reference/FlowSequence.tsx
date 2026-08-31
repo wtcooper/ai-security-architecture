@@ -7,26 +7,29 @@
  * This renders the walk's ordered steps as lifelines and numbered messages beneath the canvas,
  * so the drawing and the sequence read as one explanation of the same thing.
  *
- * It renders whichever walk the canvas is currently numbering: the walkthrough at rest, or a
- * scenario when one is selected. The numbers match, in both directions.
+ * It renders whichever walk the canvas is currently numbering. The numbers match, in both
+ * directions, and neither appears until a reader selects a walk.
  *
  * Laid out in HTML rather than SVG so step notes wrap and stay selectable.
  */
 import type { Archetype, Scenario } from "@/lib/types";
 
-const HEAD_H = 46;
+const HEAD_H = 52;
+/**
+ * Each lifeline needs room for its own name. A fixed canvas width divided by eight columns left
+ * "Unsolicited senders" wrapping onto the first message line, so the width is derived from the
+ * count instead and the container scrolls when it has to.
+ */
+const COL_MIN = 132;
 const ROW_H = 62;
 
 export function FlowSequence({
   archetype,
   walk,
-  eyebrow,
   className,
 }: {
   archetype: Archetype;
   walk: Scenario;
-  /** "Walkthrough" or "Scenario" — which of the two uses of a walk this is. */
-  eyebrow: string;
   className?: string;
 }) {
   // Lifelines in first-appearance order — the order the story visits them.
@@ -68,7 +71,7 @@ export function FlowSequence({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-line bg-paper">
-        <div className="relative min-w-[720px] px-3 pb-4">
+        <div className="relative px-3 pb-4" style={{ minWidth: Math.max(720, n * COL_MIN) }}>
           {/* Lifeline heads */}
           <div className="relative" style={{ height: HEAD_H }}>
             {lifelines.map((id, i) => (
@@ -77,7 +80,7 @@ export function FlowSequence({
                 className="absolute -translate-x-1/2 text-center"
                 style={{ left: `${colAt(i)}%`, top: 10, width: `${100 / n}%` }}
               >
-                <span className="ident rounded border border-line-strong bg-mist px-1.5 py-[3px] text-[10px] font-semibold text-ink-2">
+                <span className="ident inline-block rounded border border-line-strong bg-mist px-1.5 py-[3px] text-[10px] font-semibold leading-tight text-ink-2">
                   {titleOf(id)}
                 </span>
               </div>

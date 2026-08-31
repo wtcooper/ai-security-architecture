@@ -28,7 +28,7 @@ import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
-import type { ArchBlock, Archetype } from "@/lib/types";
+import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
@@ -452,12 +452,12 @@ function facing(a: { x: number; y: number; w: number; h: number }, b: { x: numbe
 
 export function FlowDiagramRF({
   archetype,
-  scenario = null,
+  walk = null,
   className,
 }: {
   archetype: Archetype;
-  /** Index into `scenarios`, or null for the walkthrough — the idealised main use. */
-  scenario?: number | null;
+  /** The selected sequence data flow, or null — the resting drawing carries no step numbers. */
+  walk?: Scenario | null;
   className?: string;
 }) {
   const [card, setCard] = useState<HoverCard | null>(null);
@@ -466,17 +466,16 @@ export function FlowDiagramRF({
   // "which line goes where", alongside the fanned anchor points the layout computes.
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
 
-  // The canvas always numbers a walk. At rest that is the walkthrough — how the architecture is
-  // meant to work — and selecting a scenario re-numbers it to that story. One mechanism, so a
-  // number on a drawing means one thing: the step you are on. Dimming is reserved for the
-  // scenario case, because dimming the walkthrough would dim the resting state of the drawing.
-  const walk = scenario !== null ? archetype.scenarios?.[scenario] : archetype.walkthrough;
+  // The drawing rests unnumbered: blocks, arrows, chips and tags, and nothing else. Selecting a
+  // sequence data flow numbers its steps onto the arrows it uses and dims the rest. Every walk
+  // behaves the same way, so a number on a drawing means one thing — the step you are on — and
+  // it is only ever there because somebody asked for it.
   const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => s.follow) ?? []), [walk]);
   const walkBlocks = useMemo(
     () => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []),
     [walk],
   );
-  const inScenario = scenario !== null && Boolean(walk);
+  const inScenario = Boolean(walk);
 
 
   const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {

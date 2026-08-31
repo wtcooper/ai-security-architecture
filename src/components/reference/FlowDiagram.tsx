@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, itemCells, TAG_H, tagSpots } from "@/lib/flow-layout";
-import type { ArchBlock, Archetype, Phase, Rect } from "@/lib/types";
+import type { ArchBlock, Archetype, Phase, Rect, Scenario } from "@/lib/types";
 import dynamic from "next/dynamic";
 
 import { downloadArchetypeHtml } from "./export-html";
@@ -59,8 +59,8 @@ const OVERLAY_STYLE: Record<Phase, { stroke: string; fill: string }> = {
 
 interface FlowDiagramProps {
   archetype: Archetype;
-  /** Index into archetype.scenarios, or null for the resting view. */
-  scenario?: number | null;
+  /** The selected sequence data flow, or null for the resting view. */
+  walk?: Scenario | null;
   highlight?: Highlight | null;
   onHighlight?: (h: Highlight | null) => void;
   overlay?: StepOverlay | null;
@@ -88,7 +88,7 @@ const TAB_H = 20;
 
 export function FlowDiagram({
   archetype,
-  scenario = null,
+  walk = null,
   highlight = null,
   onHighlight = () => {},
   overlay = null,
@@ -244,7 +244,7 @@ export function FlowDiagram({
     return edgeGeo.get(`${b}->${a}`);
   };
 
-  const activeScenario = scenario === null ? null : archetype.scenarios?.[scenario] ?? null;
+  const activeScenario = walk ?? null;
   const scenarioEdges = new Set(
     (activeScenario?.steps ?? []).map((s) => {
       const g = findEdge(s.follow);
@@ -273,7 +273,7 @@ export function FlowDiagram({
   }
 
   // Pins hide both during a scenario walk and while an incident step is replayed on top.
-  const inScenario = scenario !== null || overlay !== null;
+  const inScenario = walk !== null || overlay !== null;
   const centre = { x: layout.width / 2, y: layout.height / 2 };
 
   if (overlay === null) {
@@ -287,7 +287,7 @@ export function FlowDiagram({
         >
           Export HTML
         </button>
-        <FlowDiagramRFLazy archetype={archetype} scenario={scenario} className={className} />
+        <FlowDiagramRFLazy archetype={archetype} walk={walk} className={className} />
       </div>
     );
   }
