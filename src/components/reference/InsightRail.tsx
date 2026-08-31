@@ -53,8 +53,12 @@ export function InsightRail({
         <section>
           <p className="eyebrow">Data flows</p>
           <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
-            Numbered flows are the spine of this drawing: each one carries what moves, the
-            threats that ride it, and the controls that must apply. Select one to trace it.
+            Named routes, not ordered steps — they all run at once, and F2 does not follow F1.
+            Each carries what moves, the threats that ride it, and the controls that must apply.
+            The number is drawn on the arrows that belong to that route alone; shared arrows stay
+            unnumbered. <span className="text-ink-2">Select one to highlight its whole path and
+            open its sequence diagram below the drawing.</span> For an ordered walkthrough, use a
+            scenario walk.
           </p>
           <div className="mt-2 space-y-1.5">
             {archetype.flows!.map((f) => {

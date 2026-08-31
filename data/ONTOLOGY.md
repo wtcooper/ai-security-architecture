@@ -250,6 +250,39 @@ story is a click.
 architecture has. Scenarios are the adversarial walks — the two or three stories worth telling
 in prose. The overlap is deliberate.
 
+### What a flow is not, and the three rules that follow
+
+Reviewed 2026-08-31, after a reader arrived at the catalogue expecting `F1` to mean step one.
+It never did — flows are named routes that all run at once — but ordinal notation promises a
+sequence, and the promise was being broken in three measurable ways. The fix is not to
+renumber; it is to make the numbering mean something the drawing can keep.
+
+1. **A flow earns a number by owning an arrow.** Ten flows across the catalogue shared every
+   leg they walked with some other flow, so selecting one highlighted a subset of another. A
+   flow with no leg of its own is not a route — it is a *property* of somebody else's route,
+   and properties belong in a risk note. Co-tenancy on the self-hosted tier is the clean
+   example: it walks the inference path and adds a concern, so it is a pin on that path.
+   Build-enforced.
+
+2. **Every drawn edge belongs to a flow.** Four arrows belonged to none, one of them the
+   low-code builder's connector path where that archetype's prompt injection is pinned — so a
+   reader tracing flows never met it. An arrow worth drawing is worth a story; if there is no
+   story, reconsider the arrow. Build-enforced.
+
+3. **A flow that doubles back is a scenario.** If the path revisits an edge in the other
+   direction, it has a beginning and an end, and that is what the scenario walk renders — in
+   order, with a note per step. The two coding agents each carried a seven- and nine-leg round
+   trip as a flow; both are now walks, which is where they read correctly. A one-way run of any
+   length is still a flow.
+
+**Badges are drawn on a flow's own legs only.** A chokepoint like the AI gateway sits on the
+model path, the tools path and the egress path by design, so stamping every leg put three and
+four numbers on one arrow and made the numbering look broken. The number now lands where a
+flow becomes *itself*, and shared legs stay quiet — which on the personal agent draws the
+actual finding, that the owner's instruction and an unsolicited message converge into one pipe
+the agent cannot tell apart. Selecting a flow still highlights its whole path: tracing is the
+highlight's job, and on a shared leg the badge has no honest answer.
+
 ## 4c. Reuse before you create
 
 The catalogue's measured failure is name sprawl: at the point this rule was written, 66% of

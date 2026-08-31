@@ -27,7 +27,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeLegs, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
@@ -779,21 +779,17 @@ export function FlowDiagramRF({
     // The numbered flow badges each edge carries. Placement comes from flowBadgeSpots so the
     // build's collision check and this renderer cannot drift: below the midpoint on a
     // horizontal arrow, beside it on a vertical one.
-    const flowsByEdge = new Map<string, typeof archetype.flows>();
-    for (const f of archetype.flows ?? []) {
-      for (const raw of f.path) {
-        const ref = typeof raw === "string" ? raw : raw.follow;
-        const geo = edgeGeo.get(ref) ?? edgeGeo.get(ref.split("->").reverse().join("->"));
-        if (!geo) continue;
-        const key = `${geo.from}->${geo.to}`;
-        flowsByEdge.set(key, [...(flowsByEdge.get(key) ?? []), f]);
-      }
-    }
-    for (const [key, fs] of flowsByEdge) {
+    const resolve = (ref: string) => {
+      const geo = edgeGeo.get(ref) ?? edgeGeo.get(ref.split("->").reverse().join("->"));
+      return geo ? `${geo.from}->${geo.to}` : undefined;
+    };
+    const byId = new Map((archetype.flows ?? []).map((f) => [f.id, f]));
+    for (const [key, ids] of flowBadgeLegs(archetype.flows ?? [], resolve)) {
       const geo = edgeGeo.get(key)!;
-      const spots = flowBadgeSpots(fs!.length, geo);
+      const spots = flowBadgeSpots(ids.length, geo);
       const list = pinsByEdge.get(key) ?? [];
-      fs!.forEach((f, i) => {
+      ids.forEach((id, i) => {
+        const f = byId.get(id)!;
         list.push({
           kind: "flow",
           dx: spots[i].x - geo.midX,

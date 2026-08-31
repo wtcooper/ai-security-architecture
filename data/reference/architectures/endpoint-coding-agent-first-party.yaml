@@ -696,54 +696,29 @@ pins:
 
 flows:
   - id: F1
-    title: Remote steering, with nothing on the path
-    moves: >
-      An instruction typed on a phone, straight into the session on the developer's own
-      machine — and the result straight back.
-    path:
-      - follow: developer->harness
-        note: >
-          First step, option two, and the common one: the developer is at the machine and
-          drives the session directly. The remote path below is the same instruction taking a
-          longer road.
-      - follow: developer->remoteDevice
-        note: First step, option one — the developer types the instruction on a phone, a web UI the harness serves, or a chat thread.
-      - follow: remoteDevice->relay
-        note: >
-          The phone reaches a third-party relay — a tunnel, a purpose-built agent relay, or a
-          chat platform. Nothing we operate is on this hop, and for one popular harness the
-          default is a community relay with no IP allowlisting.
-      - follow: relay->harness
-        note: >
-          The relay hands the instruction down a connection the harness dialled out. Admission
-          is a bearer secret at best; in the install with no relay at all, the phone connects
-          straight to a listening port on the machine and admission is whatever that port
-          checks, which is often nothing.
-      - follow: harness->toolPlane
-        note: >
-          The work executes locally with the developer's files, credentials and browser
-          sessions around it, on the authority of whoever got past that secret.
-      - follow: harness->relay
-        note: The result goes back up the same dialled-out connection.
-      - follow: relay->remoteDevice
-        note: >
-          And back to the phone. The same shape as the third-party round trip, with a party in
-          the middle that vouches for nothing — no owner account, no tenant, often no
-          allowlist. That is the whole difference between the two drawings.
+    title: The developer drives the session
+    moves: The task, the diffs, and the approvals that gate what matters.
+    path: [developer->harness, harness->toolPlane]
+    threats: [Approval fatigue, Unreviewed writes to the working tree, Anything holding the machine can steer the loop]
+    controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
+    note: >
+      The attended path, and the one the archetype's whole posture assumes is the normal case.
+      Authorised by nothing but possession of the machine — which is fine while a human is
+      sitting there and is the entire problem once the session can be reached from elsewhere.
+  - id: F2
+    title: Steering it from somewhere else
+    moves: An instruction typed on a phone, into the session running on the developer's own machine.
+    path: [developer->remoteDevice, remoteDevice->relay, relay->harness]
     threats: [Serve port reachable with a guessable secret or none, Chat bridge admitting whoever the platform admits, No owner account behind any of it]
     controls: [capabilityAgentRuntimeEnforcement, capabilityIga, capabilityMcpToolSecurity]
     note: >
-      Compare this with the third-party remote flow deliberately: same story, two fewer
-      boundaries and one fewer party that verified anything. The control that is missing is not
-      one of ours — it is the vendor's account binding, and nothing in this category replaces
-      it. Turning the serve mode off on a managed machine is the honest mitigation.
-  - id: F2
-    title: Developer works at the machine
-    moves: The task, the diffs, and the approvals that gate what matters.
-    path: [developer->harness, harness->toolPlane]
-    threats: [Approval fatigue, Unreviewed writes to the working tree]
-    controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
-    note: The attended path, and the one the archetype's whole posture assumes is the normal case.
+      Compare this with the third-party drawing's equivalent deliberately: same road, two fewer
+      boundaries and one fewer party that verified anything. The relay is a tunnel, a
+      purpose-built agent relay or a chat platform — and for one popular harness the default is
+      a community relay with no IP allowlisting. The control that is missing is not one of ours;
+      it is the vendor account binding, and nothing in this category replaces it. Turning serve
+      mode off on a managed machine is the honest mitigation. The full round trip, result and
+      all, is the "Steering from a phone" walk below.
   - id: F3
     title: Model inference
     moves: Code, documents and screenshots out for inference; the completion that drives the next action back.
@@ -757,39 +732,38 @@ flows:
       the agent, its tools and any repository script can read. The gateway's broker is what
       replaces it, and it is drawn because this catalogue draws target states.
   - id: F4
-    title: Repository and document content
-    moves: Clones, file reads, issue text and documents — read into context as though instruction.
+    title: Enterprise systems and repository content
+    moves: Clones, file reads, issue text, documents and connector calls — and the records they change.
     path: [toolPlane->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
-    threats: [Indirect prompt injection, Tool config arriving with the clone]
-    controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity]
-    note: The content is ours and still untrusted — many hands wrote it, and none of them are authenticated.
+    threats: [Indirect prompt injection, Tool config arriving with the clone, Over-scoped internal grants, Bulk reads of org data, Writes with no approval]
+    controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity, capabilityHitlControls, capabilityAgentRegistry]
+    note: >
+      One flow rather than two, because reaching our systems from the tool plane and reaching
+      them from the loop are the same road after the first hop — and our gateway, not the
+      harness, is what decides what may be touched either way. Two things ride it: content that
+      is ours and still untrusted, since many hands wrote it and none of them are authenticated,
+      and the actions the deployment exists for.
   - id: F5
     title: Local execution and memory
     moves: Commands, edits and generated files; the notes and rules the next session reads back.
-    path: [harness->toolPlane, harness->memory]
+    path: [harness->memory]
     threats: [Command execution with the developer's authority, Memory poisoning, Credential harvesting]
     controls: [capabilityAgentSandboxing, capabilityCredentialIsolation, capabilityMemoryProtection]
-    note: The machine holds the developer's keys and sessions; the sandbox is what stands between them and the loop.
-  - id: F6
-    title: Enterprise systems
-    moves: Calls into our internal connectors, and the records they read and change.
-    path: [harness->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
-    threats: [Over-scoped internal grants, Bulk reads of org data, Writes with no approval]
-    controls: [capabilitySecretsManagement, capabilityHitlControls, capabilityAgentRegistry]
     note: >
-      The flow the deployment exists for — and the one where our gateway, not the vendor's
-      console, decides what the agent may touch.
-  - id: F7
+      The machine holds the developer's keys and sessions; the sandbox is what stands between
+      them and the loop. Numbered at the memory leg because that is the part only this flow
+      uses — the execution itself rides F1's arrow into the tool plane.
+  - id: F6
     title: Internet egress
     moves: Dependency fetches, web reads and third-party SaaS calls.
     path: [toolPlane->aiGateway, aiGateway->extTools, extTools->downstream]
     threats: [Web-borne injection, Exfiltration to an attacker endpoint, Malicious dependencies]
     controls: [capabilityEgressControl, capabilityAiDlp, capabilityAuditLogging]
     note: Everything fetched here re-enters the loop as context, which is why the allowlist is a security control.
-  - id: F8
+  - id: F7
     title: The agent installs itself
     moves: Harness releases, extensions and skills, pulled in and loaded into the running process.
-    path: [toolPlane->aiGateway, aiGateway->registry]
+    path: [aiGateway->registry]
     threats: [Compromised harness release on a community channel, Unpinned update loading as code, Publisher self-attestation standing in for review]
     controls: [capabilityMcpToolSecurity, capabilityAgentRegistry, capabilityShadowAiDiscovery]
     note: >
@@ -800,6 +774,30 @@ flows:
       tokens. The mirror is what turns an update from an event into a decision.
 
 scenarios:
+  - title: Steering from a phone
+    steps:
+      - follow: developer->remoteDevice
+        note: The developer types the instruction on a phone, a web UI the harness serves, or a chat thread.
+      - follow: remoteDevice->relay
+        note: >
+          The phone reaches a third-party relay. Nothing we operate is on this hop, and for one
+          popular harness the default is a community relay with no IP allowlisting.
+      - follow: relay->harness
+        note: >
+          The relay hands the instruction down a connection the harness dialled out. Admission
+          is a bearer secret at best; with no relay at all the phone connects straight to a
+          listening port and admission is whatever that port checks, which is often nothing.
+      - follow: harness->toolPlane
+        note: >
+          The work executes locally with the developer's files, credentials and browser sessions
+          around it, on the authority of whoever got past that secret.
+      - follow: harness->relay
+        note: The result goes back up the same dialled-out connection.
+      - follow: relay->remoteDevice
+        note: >
+          And back to the phone. The same shape as the third-party round trip, with a party in
+          the middle that vouches for nothing — no owner account, no tenant, often no allowlist.
+          That is the whole difference between the two drawings.
   - title: The developer asks for a change
     steps:
       - follow: developer->harness

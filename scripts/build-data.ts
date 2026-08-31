@@ -36,7 +36,7 @@ import type {
 } from "../src/lib/types";
 import { CAPABILITY_STATUSES, FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
+import { chipSpots, flowBadgeLegs, flowBadgeSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
 import {
   ACTOR_IDS,
   BANDS,
@@ -742,6 +742,49 @@ function checkArchetypes(
       }
     }
 
+    // Two rules the flow audit of 2026-08-31 was written to find, now enforced so they cannot
+    // rot back in. Both are about the same confusion: a number that promises a distinct route.
+    //
+    // A flow must own at least one leg. Ten flows across the catalogue shared every arrow they
+    // walked with some other flow, which meant selecting one highlighted a subset of another —
+    // and stamped a second badge onto an arrow that already had one. A flow with no leg of its
+    // own is not a route; it is a property of somebody else's route, and the grammar puts
+    // properties in risk notes.
+    //
+    // And every drawn edge must be carried by some flow. Four arrows belonged to none — one of
+    // them the low-code builder's connector path, where that archetype's prompt-injection risk
+    // is pinned, so a reader tracing flows never met it. An arrow worth drawing is worth a
+    // story; if there is no story, the arrow is the thing to reconsider.
+    const canonical = (ref: string) => {
+      if (edgeKeys.has(ref)) return ref;
+      const [a, b] = ref.split("->");
+      return bidir.has(`${b}->${a}`) ? `${b}->${a}` : undefined;
+    };
+    const legsOf = new Map(
+      (arch.flows ?? []).map((f) => [
+        f.id,
+        [...new Set(f.path.map((r) => canonical(typeof r === "string" ? r : r.follow)!))],
+      ]),
+    );
+    const legOwners = new Map<string, number>();
+    for (const legs of legsOf.values()) for (const k of legs) legOwners.set(k, (legOwners.get(k) ?? 0) + 1);
+    for (const [id, legs] of legsOf) {
+      if (!legs.some((k) => legOwners.get(k) === 1))
+        fail(
+          `${where} flow ${id}: shares every leg with another flow — a flow earns a number by ` +
+            "owning an arrow. Merge it, or record what it adds as a risk note instead",
+        );
+    }
+    if (arch.flows?.length) {
+      for (const key of edgeKeys) {
+        if (!legOwners.has(key))
+          fail(
+            `${where}: edge ${key} is carried by no flow — add it to one, or reconsider whether ` +
+              "the arrow belongs on the drawing",
+          );
+      }
+    }
+
     const resolved = { ...arch, risks, capabilities };
     const layout = layoutArchetype(resolved);
     checkDiagramCollisions(where, resolved, layout);
@@ -1355,20 +1398,14 @@ function checkDiagramCollisions(
   // F4 sitting across the Downstream services title bar. Their geometry is fixed by the
   // renderer — a 28x17 pill at the edge midpoint, stepping right for each additional flow on
   // the same edge — so the same collision test applies.
-  const flowsByEdge = new Map<string, number>();
-  for (const f of arch.flows ?? []) {
-    for (const raw of f.path) {
-      const ref = typeof raw === "string" ? raw : raw.follow;
-      const found =
-        layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
-        layout.edges.find((e) => `${e.to}->${e.from}` === ref);
-      if (!found) continue;
-      const key = `${found.from}->${found.to}`;
-      flowsByEdge.set(key, (flowsByEdge.get(key) ?? 0) + 1);
-    }
-  }
-  for (const [key, n] of flowsByEdge) {
-    checkSpots("flow badge", key, flowBadgeSpots(n, edgeGeoOf(key)!));
+  const resolveLeg = (ref: string) => {
+    const found =
+      layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
+      layout.edges.find((e) => `${e.to}->${e.from}` === ref);
+    return found ? `${found.from}->${found.to}` : undefined;
+  };
+  for (const [key, ids] of flowBadgeLegs(arch.flows ?? [], resolveLeg)) {
+    checkSpots("flow badge", key, flowBadgeSpots(ids.length, edgeGeoOf(key)!));
   }
 }
 

@@ -288,23 +288,15 @@ pins:
     - risk: riskSensitiveDataDisclosure
       at: api
       note: >
-        The sharpest risk that exists here and not on the endpoint: prefix caching makes
-        time-to-first-token a side channel. A caller sends a crafted prefix and measures the
-        response time to learn whether it matched one cached from *another tenant's* request,
-        which is enough to reconstruct prompts and secrets. Efficiency and disclosure are the
-        same mechanism. Partition the cache by tenant, and note the risk compounds under
-        disaggregated serving, where the cache crosses the network onto SSD and object
-        storage.
-    - risk: riskSensitiveDataDisclosure
-      at: api
-      note: >
-        The sharpest risk that exists here and not on the endpoint: prefix caching makes
-        time-to-first-token a side channel. A caller sends a crafted prefix and measures the
-        response time to learn whether it matched one cached from *another tenant's* request,
-        which is enough to reconstruct prompts and secrets. Efficiency and disclosure are the
-        same feature. Partition the cache by tenant, and note the risk compounds under
-        disaggregated serving, where the cache crosses the network onto SSD and object
-        storage.
+        The sharpest risk that exists here and not on the endpoint, and the reason co-tenancy is
+        recorded as a property of the inference path rather than drawn as a flow of its own: it
+        uses no arrow another flow does not already use. Continuous batching mixes several
+        tenants' requests into one forward pass, and prefix caching makes time-to-first-token a
+        side channel — a caller sends a crafted prefix and measures the response time to learn
+        whether it matched one cached from *another tenant's* request, which is enough to
+        reconstruct prompts and secrets. Efficiency and isolation are the same settings.
+        Partition the cache by tenant, and note the risk compounds under disaggregated serving,
+        where the cache crosses the network onto SSD and object storage.
     - risk: riskModelSourceTampering
       at: sources
       note: Publisher identity is the only assurance the hub offers, and it says nothing about the artifact's behaviour.
@@ -422,7 +414,7 @@ flows:
     title: An internal call
     moves: Prompts from our own services in; completions back.
     path: [consumers->gateway, gateway->api, api->runtime]
-    threats: [No provider guardrail on either direction, One caller exhausting finite shared capacity, Raw output returned to a service that assumed a hosted API's floor]
+    threats: [No provider guardrail on either direction, One caller exhausting finite shared capacity, Raw output returned to a service that assumed a hosted API's floor, Several tenants' requests mixed in one forward pass on shared accelerators]
     controls: [capabilityRateLimiting, capabilityModelGuardrails, capabilityAuditLogging]
     note: >
       The flow the deployment exists for, and the one where taking the model in-house shows its
@@ -437,16 +429,6 @@ flows:
     note: >
       The supply chain, and the reason the scan is a blocking gate in front of the fetch rather
       than a check after it: for several formats, opening the file is the execution event.
-  - id: F3
-    title: Co-tenancy
-    moves: Several tenants' requests mixed in one forward pass on shared accelerators.
-    path: [gateway->api, api->runtime]
-    threats: [Cross-tenant leakage through a shared prefix cache, Efficiency settings that are also isolation settings]
-    controls: [capabilitySecretsManagement, capabilityAiSpm]
-    note: >
-      Continuous batching and prefix caching are efficiency features and co-tenancy risks in
-      the same mechanism — which is why whether cache sharing is on is a posture question, not
-      a tuning one.
 
 scenarios:
   - title: A new checkpoint is promoted

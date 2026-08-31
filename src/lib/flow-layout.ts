@@ -410,6 +410,48 @@ export function chipSpots(
 }
 
 /**
+ * Which edges each flow gets badged on.
+ *
+ * Not every leg it walks — only the legs it does not share with another flow. A chokepoint like
+ * the AI gateway sits on the model path, the tools path and the egress path by design, so
+ * stamping every leg put three and four numbers on the one arrow into it and made the numbering
+ * look broken. Badging the divergences instead puts the number where a flow becomes *itself*,
+ * and leaves the shared spine quiet — which on the personal agent draws the actual point, that
+ * two entrances converge into one pipe the agent cannot tell apart.
+ *
+ * Selecting a flow still highlights its whole path. Tracing is the highlight's job; the badge's
+ * job is to say which flow this arrow belongs to, and on a shared leg there is no answer.
+ *
+ * A flow with no leg of its own falls back to its last leg so it still appears somewhere. That
+ * is a defect the build reports rather than a case worth designing for — see checkFlows.
+ */
+export function flowBadgeLegs(
+  flows: { id: string; path: (string | { follow: string })[] }[],
+  resolve: (ref: string) => string | undefined,
+): Map<string, string[]> {
+  const legs = new Map<string, string[]>();
+  for (const f of flows) {
+    const keys: string[] = [];
+    for (const raw of f.path) {
+      const key = resolve(typeof raw === "string" ? raw : raw.follow);
+      if (key && !keys.includes(key)) keys.push(key);
+    }
+    legs.set(f.id, keys);
+  }
+  const owners = new Map<string, number>();
+  for (const keys of legs.values()) for (const k of keys) owners.set(k, (owners.get(k) ?? 0) + 1);
+
+  const out = new Map<string, string[]>();
+  for (const f of flows) {
+    const keys = legs.get(f.id)!;
+    const own = keys.filter((k) => owners.get(k) === 1);
+    const chosen = own.length ? own : keys.slice(-1);
+    for (const k of chosen) out.set(k, [...(out.get(k) ?? []), f.id]);
+  }
+  return out;
+}
+
+/**
  * The numbered flow badges an edge carries. Both orientations stack the badges in a column,
  * because the space an edge midpoint sits in is a gutter: 44px wide between columns, and a
  * second badge laid alongside the first needs 58. Below the midpoint on a horizontal arrow,
