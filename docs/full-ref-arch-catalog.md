@@ -22,8 +22,8 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
 
 - **All four are on the zone grammar** (`data/ONTOLOGY.md` §4a and §4b): ownership bands as
-  full-height columns, numbered first-class data flows carrying what moves and the threats and
-  controls that ride them, and standalone governance call-outs across the bottom band. The two
+  full-height columns, one numbered walkthrough over the canvas paired with a sequence diagram
+  beneath it, and standalone governance call-outs across the bottom band. The two
   `-zones` research-preview files that proved the grammar have been folded into their originals
   and no longer exist.
 

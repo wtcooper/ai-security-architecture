@@ -78,7 +78,7 @@ export function ArchitecturesBrowser() {
       <PageHeader
         eyebrow={`${archetypesInOrder.length} application archetypes · authored`}
         title="Reference architectures"
-        lead="Target-state architectures in the reference-architecture grammar the industry actually reads: capability blocks connected by typed data paths, the capabilities to deploy numbered onto the drawing, the risks tagged where they surface, and scenario walks over the same canvas. Built to be copied, not audited against."
+        lead="Target-state architectures in the reference-architecture grammar the industry actually reads: capability blocks connected by typed data paths, the capabilities to deploy numbered onto the drawing, the risks tagged where they surface, and a numbered walkthrough paired with its sequence diagram. Built to be copied, not audited against."
       />
 
       <div className="mx-auto w-full max-w-[1500px] px-6 py-8">
