@@ -27,7 +27,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, flowBadgeLegs, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
@@ -453,13 +453,11 @@ function facing(a: { x: number; y: number; w: number; h: number }, b: { x: numbe
 export function FlowDiagramRF({
   archetype,
   scenario = null,
-  flow = null,
   className,
 }: {
   archetype: Archetype;
+  /** Index into `scenarios`, or null for the walkthrough — the idealised main use. */
   scenario?: number | null;
-  /** Spike grammar: the highlighted numbered flow, by id. */
-  flow?: string | null;
   className?: string;
 }) {
   const [card, setCard] = useState<HoverCard | null>(null);
@@ -468,36 +466,18 @@ export function FlowDiagramRF({
   // "which line goes where", alongside the fanned anchor points the layout computes.
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
 
-  const walk = scenario !== null ? archetype.scenarios?.[scenario] : undefined;
+  // The canvas always numbers a walk. At rest that is the walkthrough — how the architecture is
+  // meant to work — and selecting a scenario re-numbers it to that story. One mechanism, so a
+  // number on a drawing means one thing: the step you are on. Dimming is reserved for the
+  // scenario case, because dimming the walkthrough would dim the resting state of the drawing.
+  const walk = scenario !== null ? archetype.scenarios?.[scenario] : archetype.walkthrough;
   const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => s.follow) ?? []), [walk]);
   const walkBlocks = useMemo(
     () => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []),
     [walk],
   );
-  const inScenario = Boolean(walk);
+  const inScenario = scenario !== null && Boolean(walk);
 
-  // Spike grammar: the active numbered flow, and the edge set it runs over (either direction).
-  const activeFlow = flow ? archetype.flows?.find((f) => f.id === flow) : undefined;
-  const flowEdges = useMemo(() => {
-    const s = new Set<string>();
-    for (const raw of activeFlow?.path ?? []) {
-      const ref = typeof raw === "string" ? raw : raw.follow;
-      s.add(ref);
-      const [a, b] = ref.split("->");
-      if (a && b) s.add(`${b}->${a}`);
-    }
-    return s;
-  }, [activeFlow]);
-  const inFlow = Boolean(activeFlow);
-  const flowBlocks = useMemo(
-    () =>
-      new Set(
-        (activeFlow?.path ?? []).flatMap((raw) =>
-          (typeof raw === "string" ? raw : raw.follow).split("->"),
-        ),
-      ),
-    [activeFlow],
-  );
 
   const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
     const wrap = (event.target as HTMLElement).closest("[data-rfwrap]");
@@ -689,7 +669,7 @@ export function FlowDiagramRF({
       nodes.map((n) => {
         if (n.type === "block") {
           const dim =
-            (inScenario && !walkBlocks.has(n.id)) || (inFlow && !flowBlocks.has(n.id));
+            inScenario && !walkBlocks.has(n.id);
           return { ...n, data: { ...n.data, dim } };
         }
         if (n.type === "chip" || n.type === "tag") {
@@ -697,7 +677,7 @@ export function FlowDiagramRF({
         }
         return n;
       }),
-    [nodes, inScenario, walkBlocks, inFlow, flowBlocks],
+    [nodes, inScenario, walkBlocks],
   );
 
   const onNodesChange = useCallback(
@@ -776,27 +756,28 @@ export function FlowDiagramRF({
       pinsByEdge.set(at, list);
     }
 
-    // The numbered flow badges each edge carries. Placement comes from flowBadgeSpots so the
-    // build's collision check and this renderer cannot drift: below the midpoint on a
-    // horizontal arrow, beside it on a vertical one.
-    const resolve = (ref: string) => {
-      const geo = edgeGeo.get(ref) ?? edgeGeo.get(ref.split("->").reverse().join("->"));
-      return geo ? `${geo.from}->${geo.to}` : undefined;
-    };
-    const byId = new Map((archetype.flows ?? []).map((f) => [f.id, f]));
-    for (const [key, ids] of flowBadgeLegs(archetype.flows ?? [], resolve)) {
+    // Step numbers for the active walk. A walk may cross the same arrow twice — a round trip
+    // means something different each way — so numbers stack on that arrow, which is the one
+    // case where two badges on one edge is the correct drawing rather than a defect.
+    const stepsByEdge = new Map<string, { n: number; note?: string }[]>();
+    (walk?.steps ?? []).forEach((st, i) => {
+      const geo = edgeGeo.get(st.follow) ?? edgeGeo.get(st.follow.split("->").reverse().join("->"));
+      if (!geo) return;
+      const key = `${geo.from}->${geo.to}`;
+      stepsByEdge.set(key, [...(stepsByEdge.get(key) ?? []), { n: i + 1, note: st.note }]);
+    });
+    for (const [key, steps] of stepsByEdge) {
       const geo = edgeGeo.get(key)!;
-      const spots = flowBadgeSpots(ids.length, geo);
+      const spots = flowBadgeSpots(steps.length, geo);
       const list = pinsByEdge.get(key) ?? [];
-      ids.forEach((id, i) => {
-        const f = byId.get(id)!;
+      steps.forEach((step, i) => {
         list.push({
           kind: "flow",
           dx: spots[i].x - geo.midX,
           dy: spots[i].y - geo.midY,
-          code: f.id,
-          title: `${f.id} · ${f.title}`,
-          body: f.moves,
+          code: String(step.n),
+          title: `Step ${step.n} · ${walk?.title ?? ""}`,
+          body: step.note,
         });
       });
       pinsByEdge.set(key, list);
@@ -808,7 +789,7 @@ export function FlowDiagramRF({
       const geo = edgeGeo.get(key);
       if (!geo) continue;
       const style = PATH_STYLE[e.path];
-      const dimmed = (inScenario && !walkEdges.has(key)) || (inFlow && !flowEdges.has(key));
+      const dimmed = inScenario && !walkEdges.has(key);
       const traced = hoveredEdge === key;
       const otherTraced = hoveredEdge !== null && !traced;
       const live = moved.has(e.from) || moved.has(e.to);
@@ -846,7 +827,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, inScenario, walkEdges, inFlow, flowEdges, hoveredEdge, dragged, cardAt, onPinLeave]);
+  }, [archetype, walk, inScenario, walkEdges, hoveredEdge, dragged, cardAt, onPinLeave]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>

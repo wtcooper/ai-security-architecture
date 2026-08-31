@@ -694,84 +694,29 @@ pins:
       at: harness
       note: Find the installs that never enrolled, because this archetype spreads one developer at a time.
 
-flows:
-  - id: F1
-    title: The developer drives the session
-    moves: The task, the diffs, and the approvals that gate what matters.
-    path: [developer->harness, harness->toolPlane]
-    threats: [Approval fatigue, Unreviewed writes to the working tree, Anything holding the machine can steer the loop]
-    controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
-    note: >
-      The attended path, and the one the archetype's whole posture assumes is the normal case.
-      Authorised by nothing but possession of the machine — which is fine while a human is
-      sitting there and is the entire problem once the session can be reached from elsewhere.
-  - id: F2
-    title: Steering it from somewhere else
-    moves: An instruction typed on a phone, into the session running on the developer's own machine.
-    path: [developer->remoteDevice, remoteDevice->relay, relay->harness]
-    threats: [Serve port reachable with a guessable secret or none, Chat bridge admitting whoever the platform admits, No owner account behind any of it]
-    controls: [capabilityAgentRuntimeEnforcement, capabilityIga, capabilityMcpToolSecurity]
-    note: >
-      Compare this with the third-party drawing's equivalent deliberately: same road, two fewer
-      boundaries and one fewer party that verified anything. The relay is a tunnel, a
-      purpose-built agent relay or a chat platform — and for one popular harness the default is
-      a community relay with no IP allowlisting. The control that is missing is not one of ours;
-      it is the vendor account binding, and nothing in this category replaces it. Turning serve
-      mode off on a managed machine is the honest mitigation. The full round trip, result and
-      all, is the "Steering from a phone" walk below.
-  - id: F3
-    title: Model inference
-    moves: Code, documents and screenshots out for inference; the completion that drives the next action back.
-    path: [harness->aiGateway, aiGateway->provider]
-    threats: [Pasted long-lived key in a dotfile, Unapproved model or provider, No record but the provider's invoice]
-    controls: [capabilitySecretsManagement, capabilityEgressControl, capabilityAgentRuntimeEnforcement]
-    note: >
-      The same path as the third-party drawing with the vendor removed — and removing the
-      vendor removes the credential story with it. There is no session credential to expire
-      here: the common install holds a long-lived provider key in plaintext configuration that
-      the agent, its tools and any repository script can read. The gateway's broker is what
-      replaces it, and it is drawn because this catalogue draws target states.
-  - id: F4
-    title: Enterprise systems and repository content
-    moves: Clones, file reads, issue text, documents and connector calls — and the records they change.
-    path: [toolPlane->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
-    threats: [Indirect prompt injection, Tool config arriving with the clone, Over-scoped internal grants, Bulk reads of org data, Writes with no approval]
-    controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity, capabilityHitlControls, capabilityAgentRegistry]
-    note: >
-      One flow rather than two, because reaching our systems from the tool plane and reaching
-      them from the loop are the same road after the first hop — and our gateway, not the
-      harness, is what decides what may be touched either way. Two things ride it: content that
-      is ours and still untrusted, since many hands wrote it and none of them are authenticated,
-      and the actions the deployment exists for.
-  - id: F5
-    title: Local execution and memory
-    moves: Commands, edits and generated files; the notes and rules the next session reads back.
-    path: [harness->memory]
-    threats: [Command execution with the developer's authority, Memory poisoning, Credential harvesting]
-    controls: [capabilityAgentSandboxing, capabilityCredentialIsolation, capabilityMemoryProtection]
-    note: >
-      The machine holds the developer's keys and sessions; the sandbox is what stands between
-      them and the loop. Numbered at the memory leg because that is the part only this flow
-      uses — the execution itself rides F1's arrow into the tool plane.
-  - id: F6
-    title: Internet egress
-    moves: Dependency fetches, web reads and third-party SaaS calls.
-    path: [toolPlane->aiGateway, aiGateway->extTools, extTools->downstream]
-    threats: [Web-borne injection, Exfiltration to an attacker endpoint, Malicious dependencies]
-    controls: [capabilityEgressControl, capabilityAiDlp, capabilityAuditLogging]
-    note: Everything fetched here re-enters the loop as context, which is why the allowlist is a security control.
-  - id: F7
-    title: The agent installs itself
-    moves: Harness releases, extensions and skills, pulled in and loaded into the running process.
-    path: [aiGateway->registry]
-    threats: [Compromised harness release on a community channel, Unpinned update loading as code, Publisher self-attestation standing in for review]
-    controls: [capabilityMcpToolSecurity, capabilityAgentRegistry, capabilityShadowAiDiscovery]
-    note: >
-      The flow that has no counterpart in the third-party drawing, and the one this archetype
-      is defined by. The supply chain here delivers the agent itself, not merely its tools —
-      so a bad release is code execution as the developer on a machine holding their keys.
-      This has already happened once, to a widely-installed harness, using stolen publisher
-      tokens. The mirror is what turns an update from an event into a decision.
+walkthrough:
+  title: The developer asks for a change
+  moves: >-
+    A task stated at the machine, inference, and the edits and calls it produces.
+  steps:
+    - follow: developer->harness
+      note: The task is stated by a human who will stay for the session.
+    - follow: harness->aiGateway
+      note: >
+        The turn's model call crosses on a brokered credential — or, in the common install,
+        does not cross here at all and goes straight out on a pasted key.
+    - follow: aiGateway->provider
+      note: The completion returns and is treated as the plan.
+    - follow: harness->toolPlane
+      note: Edits and commands execute with whatever scope the permission model granted.
+    - follow: toolPlane->aiGateway
+      note: Anything reaching our systems is admitted on our grants, because nothing else admits it.
+    - follow: aiGateway->extTools
+      note: A dependency fetch or a web read, brokered and allowlisted rather than dialled direct.
+    - follow: extTools->downstream
+      note: >
+        And out to a package registry or a site. What comes back is loaded and read as context,
+        which is why the provenance of a tool matters as much as the content of a page.
 
 scenarios:
   - title: Steering from a phone
@@ -798,20 +743,6 @@ scenarios:
           And back to the phone. The same shape as the third-party round trip, with a party in
           the middle that vouches for nothing — no owner account, no tenant, often no allowlist.
           That is the whole difference between the two drawings.
-  - title: The developer asks for a change
-    steps:
-      - follow: developer->harness
-        note: The task is stated by a human who will stay for the session.
-      - follow: harness->aiGateway
-        note: >
-          The turn's model call crosses on a brokered credential — or, in the common install,
-          does not cross here at all and goes straight out on a pasted key.
-      - follow: aiGateway->provider
-        note: The completion returns and is treated as the plan.
-      - follow: harness->toolPlane
-        note: Edits and commands execute with whatever scope the permission model granted.
-      - follow: toolPlane->aiGateway
-        note: Anything reaching our systems is admitted on our grants, because nothing else admits it.
   - title: A poisoned document phones home
     steps:
       - follow: hostedTools->orgData

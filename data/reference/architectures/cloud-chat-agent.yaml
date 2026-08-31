@@ -543,84 +543,39 @@ pins:
       at: govObservability
       note: A stop that ends live sessions and revokes the agent's identity without a deploy.
 
-flows:
-  - id: F1
-    title: A turn nobody started
-    moves: A schedule or trigger the conversation set up, firing into the loop with the thread closed.
-    path: [events->agent]
-    threats: [No human in the thread to read the reply before the next action runs, A follow-up job outliving the conversation that created it]
-    controls: [capabilityNhiManagement, capabilityHitlControls]
-    note: >
-      Named first for the same reason its two siblings name it first: it is the flow that removes
-      the control the rest of the drawing leans on. A chat agent with a schedule is a single-agent
-      workflow wearing a chat interface, and the approval gate F2 depends on is simply absent.
-  - id: F2
-    title: The turn
-    moves: A question in, a reply back — and an action proposal when the next step is consequential.
-    path: [user->entry, entry->agent]
-    threats: [The conversation is input written by the party the action benefits, Approval text too vague to approve anything in particular]
-    controls: [capabilityIga, capabilityHitlControls]
-    note: >
-      The flow the archetype is defined by: the human reads every reply before the next action
-      runs. The identity bound at the front end is the authority everything downstream acts on.
-  - id: F3
-    title: Model inference
-    moves: The accumulated conversation out; the reply and the proposed tool calls back.
-    path: [agent->gateway, gateway->provider]
-    threats: [Whole-conversation context leaving on every call, Completion treated as a decision rather than a proposal]
-    controls: [capabilityModelEvals, capabilityRateLimiting, capabilityAiDlp]
-    note: >
-      Everything accumulated in the thread stands beside the system instruction here, which is
-      why one poisoned tool result earlier in the session steers every later call.
-  - id: F4
-    title: Enterprise systems
-    moves: Approved actions into our own systems of record, and the grounding they read back.
-    path: [agent->gateway, gateway->internalTools, internalTools->orgData]
-    threats: [Grant wider than the conversing user, Writes with no approval, Retrieved content re-entering as instruction]
-    controls: [capabilityToolPermissionScoping, capabilityHitlControls, capabilitySecretsManagement]
-    note: >
-      The canonical chain, drawn the same way here as on every other page: never straight from
-      the gateway to the data, because the scoping and the record happen at the tool surface.
-  - id: F5
-    title: Third-party actions and peers
-    moves: Calls out to servers and peer agents nobody we contracted with operates.
-    path: [agent->gateway, gateway->extTools, extTools->downstream]
-    threats: [Indirect prompt injection returning as context, Exfiltration to an attacker endpoint, A peer agent's output entering the thread as input]
-    controls: [capabilityEgressControl, capabilityPromptInjectionDefense, capabilityAuditLogging]
-    note: >
-      Everything that comes back here is untrusted content entering a conversation the user
-      will act on, which is why the allowlist is a security control and not a cost control.
-  - id: F6
-    title: The conversation persists
-    moves: Turns, retrievals and tool results written forward and read back as context.
-    path: [agent->memory]
-    threats: [One poisoned result steering every later action in the session, Memory scoped wider than the conversation]
-    controls: [capabilityMemoryProtection, capabilityRagSecurity]
-    note: >
-      The conversation is the persistence surface. Cross-conversation memory would let one
-      user's text steer another user's actions, which is why the scope is the session.
+walkthrough:
+  title: A turn that ends in an action
+  moves: >-
+    A question, a reply, and the approved action the conversation decided on.
+  steps:
+    - follow: user->entry
+      note: The user asks for something consequential, in their own words.
+    - follow: entry->agent
+      note: The turn enters the loop with the user's identity attached.
+    - follow: agent->gateway
+      note: The turn's model call crosses on a brokered credential, as every call does.
+    - follow: agent->memory
+      note: The conversation so far loads as context.
+    - follow: agent->gateway
+      note: The context leaves the loop on a brokered, user-scoped credential.
+    - follow: gateway->provider
+      note: The model proposes a reply and a tool call.
+    - follow: entry->user
+      note: The proposal renders in the thread — specific enough to be worth reading — and the user approves.
+    - follow: gateway->internalTools
+      note: The approved action leaves with the user's grant, not the service's.
+    - follow: internalTools->orgData
+      note: The action lands on the system of record, attributable to the session that approved it.
+    - follow: gateway->extTools
+      note: >
+        The approved action reaches outward too — a third-party server or a peer agent nobody we
+        contracted with operates, on a grant brokered rather than held by the agent.
+    - follow: extTools->downstream
+      note: >
+        And the effect lands. What returns from it re-enters the thread as context, which is how
+        one poisoned result steers every later turn in the session.
 
 scenarios:
-  - title: A turn that ends in an action
-    steps:
-      - follow: user->entry
-        note: The user asks for something consequential, in their own words.
-      - follow: entry->agent
-        note: The turn enters the loop with the user's identity attached.
-      - follow: agent->gateway
-        note: The turn's model call crosses on a brokered credential, as every call does.
-      - follow: agent->memory
-        note: The conversation so far loads as context.
-      - follow: agent->gateway
-        note: The context leaves the loop on a brokered, user-scoped credential.
-      - follow: gateway->provider
-        note: The model proposes a reply and a tool call.
-      - follow: entry->user
-        note: The proposal renders in the thread — specific enough to be worth reading — and the user approves.
-      - follow: gateway->internalTools
-        note: The approved action leaves with the user's grant, not the service's.
-      - follow: internalTools->orgData
-        note: The action lands on the system of record, attributable to the session that approved it.
   - title: A tool result steers the next turn
     steps:
       - follow: gateway->internalTools

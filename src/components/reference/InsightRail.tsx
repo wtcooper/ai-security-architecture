@@ -17,9 +17,6 @@ interface InsightRailProps {
   archetype: Archetype;
   scenario: number | null;
   onScenario: (index: number | null) => void;
-  /** Spike grammar: the highlighted numbered flow, by id. */
-  flow?: string | null;
-  onFlow?: (id: string | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
 }
@@ -28,8 +25,6 @@ export function InsightRail({
   archetype,
   scenario,
   onScenario,
-  flow = null,
-  onFlow,
   highlight,
   onHighlight,
 }: InsightRailProps) {
@@ -49,60 +44,33 @@ export function InsightRail({
 
   return (
     <div className="space-y-5">
-      {(archetype.flows?.length ?? 0) > 0 && (
-        <section>
-          <p className="eyebrow">Data flows</p>
-          <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
-            Named routes, not ordered steps — they all run at once, and F2 does not follow F1.
-            Each carries what moves, the threats that ride it, and the controls that must apply.
-            The number is drawn on the arrows that belong to that route alone; shared arrows stay
-            unnumbered. <span className="text-ink-2">Select one to highlight its whole path and
-            open its sequence diagram below the drawing.</span> For an ordered walkthrough, use a
-            scenario walk.
-          </p>
-          <div className="mt-2 space-y-1.5">
-            {archetype.flows!.map((f) => {
-              const active = flow === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => onFlow?.(active ? null : f.id)}
-                  className={`block w-full rounded-lg border px-2.5 py-2 text-left text-[12px] leading-snug transition ${
-                    active
-                      ? "border-ink bg-mist text-ink"
-                      : "border-line text-ink-2 hover:border-ink-3 hover:text-ink"
-                  }`}
-                >
-                  <span className="ident mr-1.5 rounded bg-ink px-1.5 py-[2px] text-[10px] font-bold text-paper">
-                    {f.id}
-                  </span>
-                  <span className="font-semibold">{f.title}</span>
-                  <span className="mt-1 block text-[11px] text-ink-3">{f.moves}</span>
-                  {active && (
-                    <>
-                      {(f.threats?.length ?? 0) > 0 && (
-                        <span className="mt-1.5 block text-[11px] text-ink-2">
-                          <span className="font-semibold">Threats: </span>
-                          {f.threats!.join(" · ")}
-                        </span>
-                      )}
-                      {f.note && (
-                        <span className="mt-1 block text-[11px] text-ink-2">{f.note}</span>
-                      )}
-                    </>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-      {(archetype.scenarios?.length ?? 0) > 0 && (
-        <section>
-          <p className="eyebrow">Scenario walks</p>
-          <div className="mt-2 space-y-1.5">
-            {archetype.scenarios!.map((s, i) => {
+      <section>
+        <p className="eyebrow">Sequence walks</p>
+        <p className="mt-1 text-[11.5px] leading-snug text-ink-3">
+          The drawing numbers one walk at a time, and the sequence diagram under it always shows
+          the same one. The walkthrough is how the architecture is meant to work; the rest are
+          the ways it goes wrong.
+        </p>
+        <div className="mt-2 space-y-1.5">
+          {archetype.walkthrough && (
+            <button
+              type="button"
+              onClick={() => onScenario(null)}
+              aria-pressed={scenario === null}
+              className={`block w-full rounded-lg border px-3 py-2 text-left text-[12.5px] leading-snug transition-colors ${
+                scenario === null
+                  ? "border-ink bg-mist font-semibold text-ink"
+                  : "border-line bg-paper text-ink-2 hover:border-line-strong"
+              }`}
+            >
+              <span className="ident mr-1.5 rounded bg-ink px-1.5 py-[2px] text-[9.5px] font-bold uppercase tracking-wide text-paper">
+                Walkthrough
+              </span>
+              {archetype.walkthrough.title}
+              <span className="ml-1.5 opacity-60">{archetype.walkthrough.steps.length} steps</span>
+            </button>
+          )}
+          {(archetype.scenarios ?? []).map((s, i) => {
               const active = scenario === i;
               return (
                 <button
@@ -115,23 +83,13 @@ export function InsightRail({
                       : "border-line bg-paper text-ink-2 hover:border-line-strong"
                   }`}
                 >
-                  {s.title}
-                  <span className="ml-1.5 opacity-60">{s.steps.length} steps</span>
-                </button>
-              );
-            })}
-          </div>
-          {scenario !== null && (
-            <ol className="mt-2.5 space-y-1.5 border-l-2 border-mitigated-soft pl-3">
-              {archetype.scenarios![scenario].steps.map((step, i) => (
-                <li key={i} className="text-[12px] leading-snug text-ink-2">
-                  <span className="font-semibold text-mitigated">{i + 1}.</span> {step.note}
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-      )}
+                {s.title}
+                <span className="ml-1.5 opacity-60">{s.steps.length} steps</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <RailSection
         title={`Capabilities to deploy · ${archetype.capabilities.length}`}

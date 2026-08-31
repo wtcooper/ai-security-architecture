@@ -304,29 +304,6 @@ export interface ArchZone {
  * they carry what moves, the threats that ride them, and the controls that must apply — so a
  * reviewer designs the flow rather than inferring it from the connectors left between blocks.
  */
-/**
- * One step of a flow. A round trip uses the same edge in both directions with different
- * meaning each time, so a step may carry its own note rather than inheriting the edge's.
- */
-export interface ArchFlowStep {
-  follow: string;
-  note?: string;
-}
-
-export interface ArchFlow {
-  /** "F1", "F2" … stable within the architecture. */
-  id: string;
-  title: string;
-  /** What actually moves along this flow. */
-  moves: string;
-  /** Ordered steps — a bare edge ref, or an edge ref with its own note. */
-  path: (string | ArchFlowStep)[];
-  threats?: string[];
-  /** Capability ids that must apply to this flow; each must also be pinned on the drawing. */
-  controls?: string[];
-  note?: string;
-}
-
 export interface ArchBlock {
   id: string;
   kind: BlockKind;
@@ -412,9 +389,25 @@ export interface ScenarioStep {
   note?: string;
 }
 
-/** A numbered use-case walk over the same canvas — one architecture, many scenario walks. */
+/**
+ * A numbered walk over the canvas: ordered steps, each following a real edge.
+ *
+ * There is exactly one shape here and two uses of it. The **walkthrough** is the architecture's
+ * idealised main use — how the thing is meant to work — and it is what the drawing numbers at
+ * rest. **Scenarios** are the adversarial variants, and selecting one re-numbers the canvas to
+ * that story. A number on a drawing therefore means one thing and only one thing: the step you
+ * are on.
+ *
+ * This replaced a second, parallel mechanism. `flows:` named every route, carried its own
+ * threat list and control list, and stamped its own badges — and it turned out that scenarios
+ * visited no edge flows did not, and that every one of the 171 flow controls was already drawn
+ * as a capability chip because the build required it. Two presentations of the same walk, one
+ * of which carried almost no data of its own.
+ */
 export interface Scenario {
   title: string;
+  /** One line on what the walk is for. Carried by the walkthrough; optional on a scenario. */
+  moves?: string;
   steps: ScenarioStep[];
 }
 
@@ -488,9 +481,10 @@ export interface Archetype {
   edges: ArchEdge[];
   /** Spike grammar only: ownership zones drawn as background bands. */
   zones?: ArchZone[];
-  /** Spike grammar only: numbered first-class data flows. */
-  flows?: ArchFlow[];
   pins: { risks: RiskPin[]; capabilities: CapabilityPin[] };
+  /** The idealised main use — what the canvas numbers when nothing is selected. */
+  walkthrough?: Scenario;
+  /** Adversarial variants over the same canvas; selecting one re-numbers the drawing. */
   scenarios?: Scenario[];
   /**
    * Derived by the build from the risk pins, in pin order, deduplicated. The rail and the

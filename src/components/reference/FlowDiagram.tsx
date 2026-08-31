@@ -61,8 +61,6 @@ interface FlowDiagramProps {
   archetype: Archetype;
   /** Index into archetype.scenarios, or null for the resting view. */
   scenario?: number | null;
-  /** Spike grammar: the highlighted numbered flow, by id. */
-  flow?: string | null;
   highlight?: Highlight | null;
   onHighlight?: (h: Highlight | null) => void;
   overlay?: StepOverlay | null;
@@ -91,7 +89,6 @@ const TAB_H = 20;
 export function FlowDiagram({
   archetype,
   scenario = null,
-  flow = null,
   highlight = null,
   onHighlight = () => {},
   overlay = null,
@@ -290,7 +287,7 @@ export function FlowDiagram({
         >
           Export HTML
         </button>
-        <FlowDiagramRFLazy archetype={archetype} scenario={scenario} flow={flow} className={className} />
+        <FlowDiagramRFLazy archetype={archetype} scenario={scenario} className={className} />
       </div>
     );
   }

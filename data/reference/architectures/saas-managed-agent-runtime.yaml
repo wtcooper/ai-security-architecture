@@ -393,54 +393,25 @@ pins:
       at: govObservability
       note: The population view across every agent somebody deployed with an API call.
 
-flows:
-  - id: F1
-    title: A request reaches the hosted agent
-    moves: A person's request, straight to a runtime somebody else operates.
-    path: [endUser->managedRuntime]
-    threats: [Context and results living on their side, No zero-retention or BAA eligibility for cloud sessions]
-    controls: [capabilityIga, capabilityAiTprm]
-    note: >
-      There is no tier of ours in front of this. Buying a managed runtime means the first hop is
-      already outside, which is what makes the return hop the one that matters.
-  - id: F2
-    title: The definition ships
-    moves: Model, prompt, tools and skills, declared and pushed to the provider.
-    path: [agentDef->managedRuntime]
-    threats: [An agent an API call away with nobody reviewing it, A definition claiming more capability than the task needs]
-    controls: [capabilityAgentRegistry, capabilityModelEvals]
-    note: >
-      On a runtime we do not operate, this artifact is very nearly the whole of what we control
-      about the agent. Reviewing it is a release gate, not a formality.
-  - id: F3
-    title: The agent reaches back into our systems
-    moves: Tool calls from their cloud into our repositories and records.
-    path: [managedRuntime->aiGateway, aiGateway->internalTools, internalTools->orgData]
-    threats: [Their infrastructure exercising our authority, Vault credentials scoped to a workspace rather than a session, A session with no matching credential connecting unauthenticated]
-    controls: [capabilitySecretsManagement, capabilityToolPermissionScoping, capabilityHitlControls]
-    note: >
-      The crossing the architecture exists to govern, and the one place our controls are ours.
-      Their gateway hands to ours rather than reaching past it — the difference between a grant
-      we scope and one we merely hope about.
-  - id: F4
-    title: Actions land outside
-    moves: Outbound calls, and the untrusted content that returns.
-    path: [aiGateway->downstream]
-    threats: [Content returning into a context we do not hold, Exfiltration through an action nobody reviewed]
-    controls: [capabilityEgressControl, capabilityAuditLogging]
-    note: Whatever comes back re-enters a loop running somewhere we cannot see.
+walkthrough:
+  title: A user's request becomes a tool call on our systems
+  moves: >-
+    A request to a runtime somebody else operates, reaching back into our data.
+  steps:
+    - follow: endUser->managedRuntime
+      note: The request goes straight to the provider; nothing of ours is on this hop.
+    - follow: managedRuntime->aiGateway
+      note: Their runtime reaches our gateway rather than reaching past it into the tool surface.
+    - follow: aiGateway->internalTools
+      note: Admitted to a named server on a short-lived, per-user grant.
+    - follow: internalTools->orgData
+      note: The read or write happens on our side, which is the only reason it is bounded.
+    - follow: aiGateway->downstream
+      note: >
+        Outbound effects, and the untrusted content that returns with them — which the hosted
+        loop will read as instruction on its next turn.
 
 scenarios:
-  - title: A user's request becomes a tool call on our systems
-    steps:
-      - follow: endUser->managedRuntime
-        note: The request goes straight to the provider; nothing of ours is on this hop.
-      - follow: managedRuntime->aiGateway
-        note: Their runtime reaches our gateway rather than reaching past it into the tool surface.
-      - follow: aiGateway->internalTools
-        note: Admitted to a named server on a short-lived, per-user grant.
-      - follow: internalTools->orgData
-        note: The read or write happens on our side, which is the only reason it is bounded.
   - title: A credential outlives its owner
     steps:
       - follow: agentDef->managedRuntime

@@ -697,89 +697,27 @@ pins:
       at: harness
       note: Find the installs that never enrolled, because this archetype spreads one developer at a time.
 
-flows:
-  - id: F1
-    title: The developer drives the session
-    moves: The task, the diffs, and the approvals that gate what matters.
-    path: [developer->harness, harness->toolPlane]
-    threats: [Approval fatigue, Unreviewed writes to the working tree, Anything holding the machine can steer the loop]
-    controls: [capabilityToolPermissionScoping, capabilityAgentSandboxing]
-    note: The attended path, and the one the archetype's whole posture assumes is the normal case.
-  - id: F2
-    title: Steering it from somewhere else
-    moves: An instruction typed on a phone, out to the vendor, and down into the session on the machine.
-    path: [developer->remoteDevice, remoteDevice->vendorService]
-    threats: [Stale or unfederated vendor account, Chat channels admitting more than the owner, Approval answered on a low-assurance surface]
-    controls: [capabilityIga, capabilityAgentRuntimeEnforcement, capabilityAiTprm]
-    note: >
-      Numbered at the two legs that are only this: the phone, and the phone reaching the vendor.
-      What happens after that is the vendor crossing F8 owns and the connection the machine was
-      already holding open. The asymmetry is the finding — the half that leaves the endpoint is
-      governed by us, the half that starts at the phone is governed by the vendor's account and
-      nothing else — and it is a round trip, so read it as the "Steering from a phone" walk
-      below rather than as a static arrow.
-  - id: F3
-    title: Model inference, the SSO path
-    moves: Code, documents and screenshots out through the vendor's session; the completion back.
-    path: [harness->vendorService, vendorService->provider]
-    threats: [Context leaving under the vendor's terms, Session credential outliving the employment, Model choice made by the vendor's default]
-    controls: [capabilityAiTprm, capabilityIga, capabilityAuditLogging]
-    note: >
-      A sanctioned path: the vendor is approved, its endpoints are allowlisted, and the session
-      credential expires with the SSO session rather than sitting in a dotfile. What we give up
-      is the record — the model call is theirs, and what we know about it is what they export.
-  - id: F4
-    title: Model inference, the gateway path
-    moves: The same context, brokered on credentials we hold, with the vendor out of the loop.
-    path: [harness->aiGateway, aiGateway->provider]
-    threats: [Unapproved model or provider, Context leaving with no record of ours, Long-lived key in configuration]
-    controls: [capabilitySecretsManagement, capabilityEgressControl, capabilityAgentRuntimeEnforcement]
-    note: >
-      Two model paths on one drawing is the reason this architecture exists separately from its
-      first-party sibling. Which one an install uses is a procurement decision with a security
-      consequence: the vendor path buys credential hygiene and costs visibility, and this one is
-      the reverse trade.
-  - id: F5
-    title: Enterprise systems and repository content
-    moves: Clones, file reads, issue text, documents and connector calls — and the records they change.
-    path: [toolPlane->aiGateway, aiGateway->hostedTools, hostedTools->orgData]
-    threats: [Indirect prompt injection, Tool config arriving with the clone, Over-scoped internal grants, Bulk reads of org data, Vendor infrastructure exercising our authority]
-    controls: [capabilityPromptInjectionDefense, capabilityMcpToolSecurity, capabilityHitlControls, capabilityAgentRegistry]
-    note: >
-      One flow rather than three, because reaching our systems from the tool plane, from the
-      loop, or from a cloud session running in the vendor's environment are the same road after
-      the first hop — and our gateway is what admits all three. The last of those is worth
-      stating plainly: nobody's laptop is involved, and it is the crossing that most often has
-      no component on it at all, which is why the AI gateway is drawn.
-  - id: F6
-    title: Local execution and memory
-    moves: Commands, edits and generated files; the notes and rules the next session reads back.
-    path: [harness->memory]
-    threats: [Command execution with the developer's authority, Memory poisoning, Credential harvesting]
-    controls: [capabilityAgentSandboxing, capabilityCredentialIsolation, capabilityMemoryProtection]
-    note: >
-      The machine holds the developer's keys and sessions; the sandbox is what stands between
-      them and the loop. Numbered at the memory leg because that is the part only this flow
-      uses — the execution itself rides F1's arrow into the tool plane.
-  - id: F7
-    title: Internet egress
-    moves: Dependency fetches, web reads and third-party SaaS calls.
-    path: [toolPlane->aiGateway, aiGateway->extTools, extTools->downstream]
-    threats: [Web-borne injection, Exfiltration to an attacker endpoint, Malicious dependencies]
-    controls: [capabilityEgressControl, capabilityAiDlp, capabilityAuditLogging]
-    note: Everything fetched here re-enters the loop as context, which is why the allowlist is a security control.
-  - id: F8
-    title: The vendor crossing
-    moves: Managed settings and allowlists down; session audit export back — and every remote session in between.
-    path: [aiGateway->vendorService]
-    threats: [Unmanaged install with no policy or audit, Settings left at default, Standing org credentials in a vendor cloud]
-    controls: [capabilityAuditLogging, capabilityShadowAiDiscovery, capabilityAiTprm]
-    note: >
-      One arrow carrying everything that passes between us and the vendor: policy down, audit
-      back, and the relayed sessions of F2. It gets the number because it is the only flow whose
-      whole content is this crossing — which is also the honest statement of our position, since
-      the plane on the far side is assured rather than drawn. What we own is fusing their export
-      with our edge's record, and finding the installs that never enrolled.
+walkthrough:
+  title: The developer asks for a change
+  moves: >-
+    A task stated at the machine, inference through the vendor, and the edits it produces.
+  steps:
+    - follow: developer->harness
+      note: The task is stated by a human who will stay for the session.
+    - follow: harness->aiGateway
+      note: Context leaves for an allowlisted destination — the vendor our assessment approved, and no other.
+    - follow: aiGateway->vendorService
+      note: The vendor's service takes the session and calls the model behind it.
+    - follow: harness->toolPlane
+      note: Edits and commands execute with whatever scope the permission model granted.
+    - follow: toolPlane->aiGateway
+      note: Anything reaching our systems is admitted by our marketplace, on our grants.
+    - follow: aiGateway->extTools
+      note: A dependency fetch or a web read, brokered and allowlisted rather than dialled direct.
+    - follow: extTools->downstream
+      note: >
+        And out to a package registry or a site. What comes back is loaded and read as context,
+        which is why the provenance of a tool matters as much as the content of a page.
 
 scenarios:
   - title: Steering from a phone
@@ -805,18 +743,6 @@ scenarios:
           And back to the phone, the way it came. Eight steps across two boundaries — and the
           asymmetry is the point: the half that leaves the endpoint is governed by us, the half
           that starts at the phone is governed by the vendor's account and nothing else.
-  - title: The developer asks for a change
-    steps:
-      - follow: developer->harness
-        note: The task is stated by a human who will stay for the session.
-      - follow: harness->aiGateway
-        note: Context leaves for an allowlisted destination — the vendor our assessment approved, and no other.
-      - follow: aiGateway->vendorService
-        note: The vendor's service takes the session and calls the model behind it.
-      - follow: harness->toolPlane
-        note: Edits and commands execute with whatever scope the permission model granted.
-      - follow: toolPlane->aiGateway
-        note: Anything reaching our systems is admitted by our marketplace, on our grants.
   - title: A poisoned document phones home
     steps:
       - follow: hostedTools->orgData

@@ -1,42 +1,56 @@
 "use client";
 
 /**
- * The sequence view of a numbered flow (spike grammar). The reference architecture answers
- * "what is connected to what"; a round trip — a phone instructing a session that runs on the
- * user's own laptop, by way of a vendor relay — is a story about ordering, and an arrow on a
- * static drawing cannot tell it. This renders the flow's ordered path as lifelines and
- * numbered messages beneath the canvas, so the pair reads as one explanation.
+ * The sequence view of a walk. The reference architecture answers "what is connected to what";
+ * a round trip — a phone instructing a session that runs on the user's own laptop, by way of a
+ * vendor relay — is a story about ordering, and an arrow on a static drawing cannot tell it.
+ * This renders the walk's ordered steps as lifelines and numbered messages beneath the canvas,
+ * so the drawing and the sequence read as one explanation of the same thing.
+ *
+ * It renders whichever walk the canvas is currently numbering: the walkthrough at rest, or a
+ * scenario when one is selected. The numbers match, in both directions.
  *
  * Laid out in HTML rather than SVG so step notes wrap and stay selectable.
  */
-import type { Archetype } from "@/lib/types";
-
-const refOf = (raw: string | { follow: string; note?: string }) =>
-  typeof raw === "string" ? raw : raw.follow;
-const noteOf = (raw: string | { follow: string; note?: string }) =>
-  typeof raw === "string" ? undefined : raw.note;
+import type { Archetype, Scenario } from "@/lib/types";
 
 const HEAD_H = 46;
 const ROW_H = 62;
 
 export function FlowSequence({
   archetype,
-  flowId,
+  walk,
+  eyebrow,
   className,
 }: {
   archetype: Archetype;
-  flowId: string;
+  walk: Scenario;
+  /** "Walkthrough" or "Scenario" — which of the two uses of a walk this is. */
+  eyebrow: string;
   className?: string;
 }) {
-  const flow = archetype.flows?.find((f) => f.id === flowId);
-  if (!flow) return null;
-
   // Lifelines in first-appearance order — the order the story visits them.
   const lifelines: string[] = [];
-  for (const raw of flow.path) {
-    for (const part of refOf(raw).split("->")) if (!lifelines.includes(part)) lifelines.push(part);
+  for (const st of walk.steps) {
+    for (const part of st.follow.split("->")) if (!lifelines.includes(part)) lifelines.push(part);
   }
-  const titleOf = (id: string) => archetype.blocks.find((b) => b.id === id)?.title ?? id;
+  // Block titles repeat across bands on purpose — "Tool services" is the same component
+  // wherever it runs, and the band says whose it is. Two identical lifeline heads would be
+  // unreadable, so a repeated title picks up its band.
+  const bandOf = (id: string) => {
+    const zoneId = archetype.blocks.find((b) => b.id === id)?.zone;
+    return archetype.zones?.find((z) => z.id === zoneId)?.title;
+  };
+  const rawTitle = (id: string) => archetype.blocks.find((b) => b.id === id)?.title ?? id;
+  const repeated = new Set(
+    lifelines
+      .map(rawTitle)
+      .filter((t, i, all) => all.indexOf(t) !== i),
+  );
+  const titleOf = (id: string) => {
+    const t = rawTitle(id);
+    return repeated.has(t) && bandOf(id) ? `${t} · ${bandOf(id)}` : t;
+  };
   const labelOf = (from: string, to: string) =>
     archetype.edges.find(
       (e) => (e.from === from && e.to === to) || (e.from === to && e.to === from),
@@ -47,13 +61,11 @@ export function FlowSequence({
 
   return (
     <figure className={className}>
-      <figcaption className="mb-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-1">
-        <span className="ident rounded bg-ink px-1.5 py-[2px] text-[10px] font-bold text-paper">
-          {flow.id}
-        </span>
-        <span className="text-[13px] font-semibold text-ink">{flow.title} — sequence</span>
-        <span className="text-[11.5px] text-ink-3">{flow.moves}</span>
-      </figcaption>
+      {walk.moves && (
+        <figcaption className="mb-2.5 px-1 text-[11.5px] leading-snug text-ink-3">
+          {walk.moves}
+        </figcaption>
+      )}
 
       <div className="overflow-x-auto rounded-xl border border-line bg-paper">
         <div className="relative min-w-[720px] px-3 pb-4">
@@ -73,7 +85,7 @@ export function FlowSequence({
           </div>
 
           {/* Lifelines + messages */}
-          <div className="relative" style={{ height: flow.path.length * ROW_H }}>
+          <div className="relative" style={{ height: walk.steps.length * ROW_H }}>
             {lifelines.map((id, i) => (
               <div
                 key={id}
@@ -83,8 +95,8 @@ export function FlowSequence({
               />
             ))}
 
-            {flow.path.map((raw, step) => {
-              const ref = refOf(raw);
+            {walk.steps.map((st, step) => {
+              const ref = st.follow;
               const [from, to] = ref.split("->");
               const a = colAt(lifelines.indexOf(from));
               const b = colAt(lifelines.indexOf(to));
@@ -144,11 +156,11 @@ export function FlowSequence({
 
       {/* The prose of the walk — what each step actually is. */}
       <ol className="mt-2.5 space-y-1.5 px-1">
-        {flow.path.map((raw, step) => {
-          const ref = refOf(raw);
+        {walk.steps.map((st, step) => {
+          const ref = st.follow;
           const [from, to] = ref.split("->");
           const note =
-            noteOf(raw) ??
+            st.note ??
             archetype.edges.find(
               (e) => (e.from === from && e.to === to) || (e.from === to && e.to === from),
             )?.note;

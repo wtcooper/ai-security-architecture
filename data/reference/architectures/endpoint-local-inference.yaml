@@ -325,42 +325,21 @@ pins:
         Evaluate what the weights actually do before serving them to other software — there is no
         provider evaluation to inherit.
 
-flows:
-  - id: F1
-    title: The call
-    moves: Prompts and documents from any local software; raw completions back.
-    path: [localApps->api, api->runtime]
-    threats: [Raw output returned with no classification, No per-caller quota on a shared local service, Permissive CORS letting a visited web page drive inference, Locality standing in for authorization]
-    controls: [capabilityModelGuardrails, capabilityRateLimiting, capabilityTransportSecurity]
-    note: >
-      The flow the runtime exists for, and the only inbound one there is — which is the finding
-      rather than a simplification. Everything a hosted API would have applied on the way in and
-      out is absent unless the device owner deploys it here, and nothing on this path
-      distinguishes the editor the runtime was installed for from a web page driving the browser.
-      There is no second route to draw: a managed endpoint has no inbound path, so the caller
-      nobody intended arrives on the same arrow as the caller who was expected.
-  - id: F2
-    title: Weights arrive and are loaded
-    moves: Multi-gigabyte artifacts from a public hub, onto disk, and into a process.
-    path: [runtime->hub, runtime->weights]
-    threats: [Serialization format that executes on load, Native parser bug in a safe-by-construction format, Chat template that executes at inference time]
-    controls: [capabilityModelScanning, capabilityAiBom, capabilityModelWeightProtection]
-    note: >
-      The archetype's defining flow. The scan sits in front of the fetch because the runtime is
-      the thing doing the fetching, and for several formats opening the file *is* the execution
-      event — so a control placed after the download has already been bypassed.
+walkthrough:
+  title: An application asks for a completion
+  moves: >-
+    A prompt from local software into weights on the same machine, and the completion back.
+  steps:
+    - follow: localApps->api
+      note: A local tool calls the OpenAI-compatible endpoint as if it were hosted.
+    - follow: api->runtime
+      note: >
+        The request crosses whatever classification the owner deployed — often none — and the
+        model serves the completion with whatever behaviour the weights carry.
+    - follow: api->localApps
+      note: The response returns with no provider floor under it.
 
 scenarios:
-  - title: An application asks for a completion
-    steps:
-      - follow: localApps->api
-        note: A local tool calls the OpenAI-compatible endpoint as if it were hosted.
-      - follow: api->runtime
-        note: >
-          The request crosses whatever classification the owner deployed — often none — and the
-          model serves the completion with whatever behaviour the weights carry.
-      - follow: api->localApps
-        note: The response returns with no provider floor under it.
   - title: A poisoned checkpoint
     steps:
       - follow: runtime->hub

@@ -600,89 +600,29 @@ pins:
       at: govObservability
       note: A stop that works mid-flight, because these processes run for days.
 
-flows:
-  - id: F1
-    title: A run nobody started
-    moves: Timers, webhooks and queue messages — including the signal that resumes a suspended workflow.
-    path: [events->harness]
-    threats: [A resumption waking work nobody is watching, Trigger content read as instruction]
-    controls: [capabilityAgentRuntimeEnforcement, capabilityAgentObservability]
-    note: >
-      Durability means a workflow can sleep for hours and wake up still holding its authority.
-      The resumption is a trigger like any other, and deserves the same admission.
-  - id: F2
-    title: The process is started
-    moves: A request in, a result back — days later, in some deployments.
-    path: [initiator->entry, entry->harness]
-    threats: [Authority granted once and carried for the workflow's whole life, Initiator absent for everything that follows]
-    controls: [capabilityIga, capabilityNhiManagement]
-    note: >
-      The approval given here is the only human decision until something escalates, which is
-      what makes the identity binding outlive the session that created it.
-  - id: F3
-    title: Delegation
-    moves: Work handed down to specialists; their results handed back up.
-    path: [orchestration->subagents]
-    threats: [One confused agent propagating through the graph, Model output becoming model input with nothing between, Agents sharing one identity and so one blast radius]
-    controls: [capabilityAgentObservability, capabilityNhiManagement, capabilityAgentRegistry]
-    note: >
-      The flow that makes this its own architecture. A specialist's output is the supervisor's
-      input, so an injection that lands anywhere in the graph reaches everywhere in it — and
-      the only thing that makes the propagation legible afterwards is per-agent identity.
-  - id: F4
-    title: Model inference, for every agent
-    moves: Each agent's context out; each agent's next step back.
-    path: [harness->gateway, gateway->provider]
-    threats: [Fan-out multiplying spend with no ceiling, A model change affecting every agent at once]
-    controls: [capabilityRateLimiting, capabilityModelEvals]
-    note: >
-      Supervisor and specialists use the same door, which is what stops the fan-out from
-      multiplying the reachable set along with the call volume.
-  - id: F5
-    title: Enterprise systems
-    moves: Admitted, scoped actions into our own systems of record.
-    path: [harness->gateway, gateway->internalTools, internalTools->orgData]
-    threats: [Standing grants held for the process's life, Writes accumulating unnoticed over a long run]
-    controls: [capabilityToolPermissionScoping, capabilitySecretsManagement, capabilityHitlControls]
-    note: >
-      The canonical chain. Credentials are fetched at step time rather than held, because here
-      "the process's life" can mean days.
-  - id: F6
-    title: Outside the company
-    moves: Effects landing on third-party services, and the content that returns.
-    path: [harness->gateway, gateway->extTools, extTools->downstream]
-    threats: [Exfiltration over a long unattended run, Untrusted content becoming several agents' input at once]
-    controls: [capabilityEgressControl, capabilityPromptInjectionDefense, capabilityAuditLogging]
-    note: Whatever returns here does not enter one context — it enters the graph.
-  - id: F7
-    title: The journal
-    moves: Every step's inputs and returns, persisted for replay and resumption.
-    path: [harness->state]
-    threats: [A returned credential becoming a stored credential, Shared memory letting one branch steer another]
-    controls: [capabilityCredentialIsolation, capabilityMemoryProtection]
-    note: >
-      The journal is a reliability feature and a secrets sink in the same breath: durability
-      means everything a step returned is still there, and the journal cannot un-learn it.
+walkthrough:
+  title: A user asks the agent to act
+  moves: >-
+    A long-running process: work delegated to specialists, journalled at every step.
+  steps:
+    - follow: initiator->entry
+      note: >
+        The request arrives authenticated with a scoped grant; the supervisor decomposes the
+        goal into work for specialists.
+    - follow: orchestration->subagents
+      note: Each specialist takes its task with a narrowed grant, not the supervisor's authority.
+    - follow: harness->gateway
+      note: Every call the agents make funnels through the one door.
+    - follow: gateway->provider
+      note: Inference on brokered credentials, limits applied.
+    - follow: gateway->internalTools
+      note: Tool calls carry the narrowed per-step grant.
+    - follow: internalTools->orgData
+      note: The write lands — behind an approval gate when it is consequential.
+    - follow: entry->initiator
+      note: The result returns, possibly days after the request.
 
 scenarios:
-  - title: A user asks the agent to act
-    steps:
-      - follow: initiator->entry
-        note: >
-          The request arrives authenticated with a scoped grant; the supervisor decomposes the
-          goal into work for specialists.
-      - follow: orchestration->subagents
-        note: Each specialist takes its task with a narrowed grant, not the supervisor's authority.
-      - follow: harness->gateway
-        note: Every call the agents make funnels through the one door.
-      - follow: gateway->provider
-        note: Inference on brokered credentials, limits applied.
-      - follow: gateway->internalTools
-        note: Tool calls carry the narrowed per-step grant.
-      - follow: internalTools->orgData
-        note: The write lands — behind an approval gate when it is consequential.
-      - follow: entry->initiator
-        note: The result returns, possibly days after the request.
   - title: A step replays after a crash
     steps:
       - follow: state->harness

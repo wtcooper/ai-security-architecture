@@ -421,57 +421,26 @@ pins:
       at: govSupplyChain
       note: Probe our own descriptions the way an adversarial caller would, since they run in somebody else's model.
 
-flows:
-  - id: F1
-    title: A tool call
-    moves: A request in; a result — and our tool descriptions — back into a caller's model.
-    path: [callers->gateway, gateway->service, service->authServer]
-    threats: [Callers that retry and parallelise at machine rates, A token minted for another audience, Our descriptions steering an agent we do not operate]
-    controls: [capabilityRateLimiting, capabilityIga, capabilityToolPermissionScoping]
-    note: >
-      Every request carries its own credentials and is authorized on its own, because the
-      revision removed sessions. The return direction matters more than the outbound one.
-  - id: F2
-    title: Reaching tenant data
-    moves: Reads and writes bounded by the delegation the token carries.
-    path: [service->orgData]
-    threats: [One caller reaching another caller's records, A handler trusting stated identity over the token's]
-    controls: [capabilityDataAccessGovernance]
-    note: >
-      The defining failure of a published server, and the protocol contributes nothing to
-      preventing it — there is no tenant concept to lean on.
-  - id: F3
-    title: Where delegation stops
-    moves: Our own service calling outward on its own credential.
-    path: [service->downstream]
-    threats: [The caller's delegation bounding nothing past this hop, One tenant's request spending another's upstream quota]
-    controls: [capabilitySecretsManagement, capabilityEgressControl]
-    note: >
-      The hop most easily missed when publishing a server. Forwarding the caller's token here
-      would be simpler and is explicitly forbidden, for exactly the reasons it is tempting.
-  - id: F4
-    title: What the descriptions say
-    moves: Names, descriptions and schemas, published into other people's model context.
-    path: [toolDefs->service]
-    threats: [A wording change altering somebody else's agent behaviour, Schema drift between what is declared and what is accepted]
-    controls: [capabilityMcpToolSecurity, capabilityAiRedTeaming]
-    note: >
-      Versioned content that executes as instruction elsewhere. The protocol gives it no
-      version field and no integrity mechanism, so pinning is ours to build. Only the leg that
-      publishes the descriptions is numbered here; they reach callers back along the same routed
-      path F1 arrives on, which is F1's arrow rather than a second one.
+walkthrough:
+  title: A caller invokes a tool
+  moves: >-
+    Somebody else's agent calling a tool we publish, and the tenant data it reaches.
+  steps:
+    - follow: callers->gateway
+      note: The request arrives with its method and tool name mirrored into headers.
+    - follow: gateway->service
+      note: Routed and metered per tool without the body being parsed — provided the headers are checked against it.
+    - follow: service->authServer
+      note: Audience, scope and subject validated for this request, because there is no session to have validated once.
+    - follow: service->orgData
+      note: The read happens inside the delegation the token carries, and not one record wider.
+    - follow: service->downstream
+      note: >
+        Where the delegation stops: our own service calling outward on its own credential, with
+        the caller's token no longer in play. Everything past this point is our authority, not
+        theirs.
 
 scenarios:
-  - title: A caller invokes a tool
-    steps:
-      - follow: callers->gateway
-        note: The request arrives with its method and tool name mirrored into headers.
-      - follow: gateway->service
-        note: Routed and metered per tool without the body being parsed — provided the headers are checked against it.
-      - follow: service->authServer
-        note: Audience, scope and subject validated for this request, because there is no session to have validated once.
-      - follow: service->orgData
-        note: The read happens inside the delegation the token carries, and not one record wider.
   - title: A description edit ships
     steps:
       - follow: toolDefs->service

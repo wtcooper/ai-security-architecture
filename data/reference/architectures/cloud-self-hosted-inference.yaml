@@ -409,26 +409,19 @@ pins:
       at: runtime
       note: Continuous posture over which versions serve where and at what configuration, catching drift before an incident does.
 
-flows:
-  - id: F1
-    title: An internal call
-    moves: Prompts from our own services in; completions back.
-    path: [consumers->gateway, gateway->api, api->runtime]
-    threats: [No provider guardrail on either direction, One caller exhausting finite shared capacity, Raw output returned to a service that assumed a hosted API's floor, Several tenants' requests mixed in one forward pass on shared accelerators]
-    controls: [capabilityRateLimiting, capabilityModelGuardrails, capabilityAuditLogging]
-    note: >
-      The flow the deployment exists for, and the one where taking the model in-house shows its
-      bill: every check a provider was applying on the way in and out is now a service we run
-      or do without.
-  - id: F2
-    title: Weights arrive
-    moves: Checkpoints from a public hub or our own pipeline, admitted and scanned before they land.
-    path: [runtime->sources, runtime->storage]
-    threats: [Serialization format that executes on load, A new checkpoint from a known publisher being a new model nobody tested, Weights swapped underneath a running tier]
-    controls: [capabilityModelScanning, capabilityAiBom, capabilityModelWeightProtection]
-    note: >
-      The supply chain, and the reason the scan is a blocking gate in front of the fetch rather
-      than a check after it: for several formats, opening the file is the execution event.
+walkthrough:
+  title: A tenant calls the endpoint
+  moves: >-
+    Prompts from our own services into weights we host, and completions back.
+  steps:
+    - follow: consumers->gateway
+      note: The workload identity on the request decides its quota and its cache scope.
+    - follow: gateway->api
+      note: >
+        The admitted request is scheduled into a batch alongside other tenants' traffic;
+        tenant-scoped cache keys are what keep the prefix lookup safe.
+    - follow: gateway->consumers
+      note: The completion returns through the guardrail's output leg, not around it.
 
 scenarios:
   - title: A new checkpoint is promoted
@@ -439,16 +432,6 @@ scenarios:
         note: Scanning and per-version evaluation gate the promotion. Blocking, or it is not a gate.
       - follow: storage->runtime
         note: The promoted artifact loads into the runtime, digest-verified against the promotion record.
-  - title: A tenant calls the endpoint
-    steps:
-      - follow: consumers->gateway
-        note: The workload identity on the request decides its quota and its cache scope.
-      - follow: gateway->api
-        note: >
-          The admitted request is scheduled into a batch alongside other tenants' traffic;
-          tenant-scoped cache keys are what keep the prefix lookup safe.
-      - follow: gateway->consumers
-        note: The completion returns through the guardrail's output leg, not around it.
   - title: A spike hits finite capacity
     steps:
       - follow: consumers->gateway

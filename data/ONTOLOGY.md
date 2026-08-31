@@ -226,62 +226,53 @@ One more kind exists for a different job: **`kind: origin`** occupies a grid cel
 nothing, so an edge can arrive from a deliberately unnamed source — used where a component is
 reached from several surfaces and naming any one of them would be arbitrary.
 
-## 4b. Flows and the sequence view
-
-A **flow** is a numbered, named path (`F1`, `F2` …) over real edges, carrying `moves` (what
-travels), `threats`, and `controls` (capability ids that must also be pinned). Flows exist
-because the older grammar made components first-class and flows incidental: an edge was an
-unnamed connector with a note, so nobody designed the flows — they emerged as leftovers
-between blocks.
-
-A step may be a bare edge ref or an edge ref with its own note. A round trip reuses one edge
-in both directions and means something different each time, which is why the annotated form
-exists.
+## 4b. Walks and the sequence view
 
 A static drawing answers "what is connected to what". It cannot answer "in what order, and in
 which direction" — and for this catalogue's most-misread path, an instruction typed on a phone
 that ends up executing on the user's own laptop by way of a vendor relay, the ordering *is* the
-architecture. So a selected flow also renders as lifelines and numbered messages beneath the
-canvas. This is also the answer to arrow density: a drawing whose every path is legible at rest
-is a drawing with very few paths. The resting state shows the topology; reading any particular
-story is a click.
+architecture.
 
-**Flows and scenarios both stay.** Flows are the topology inventory — every path the
-architecture has. Scenarios are the adversarial walks — the two or three stories worth telling
-in prose. The overlap is deliberate.
+So every architecture carries **one walkthrough** — the idealised main use, how the thing is
+meant to work — and two or three **scenarios**, the adversarial variants. They are the same
+data shape: ordered steps, each following a real edge, each with its own note (a round trip
+reuses one edge in both directions and means something different each time, which is why the
+note lives on the step rather than the edge).
 
-### What a flow is not, and the three rules that follow
+The canvas numbers exactly one walk at a time. At rest that is the walkthrough. Selecting a
+scenario re-numbers the drawing to that story and swaps the sequence diagram below it. **A
+number on a drawing therefore means one thing: the step you are on.** The drawing and the
+sequence are the same walk seen twice, and the numbers match in both directions.
 
-Reviewed 2026-08-31, after a reader arrived at the catalogue expecting `F1` to mean step one.
-It never did — flows are named routes that all run at once — but ordinal notation promises a
-sequence, and the promise was being broken in three measurable ways. The fix is not to
-renumber; it is to make the numbering mean something the drawing can keep.
+### What this replaced, and why
 
-1. **A flow earns a number by owning an arrow.** Ten flows across the catalogue shared every
-   leg they walked with some other flow, so selecting one highlighted a subset of another. A
-   flow with no leg of its own is not a route — it is a *property* of somebody else's route,
-   and properties belong in a risk note. Co-tenancy on the self-hosted tier is the clean
-   example: it walks the inference path and adds a concern, so it is a pin on that path.
-   Build-enforced.
+There was a second, parallel mechanism. `flows:` named every route the architecture had, each
+with its own id, threat list and control list, and each stamping its own badges onto the
+canvas. It was introduced for a real reason — the older grammar made components first-class
+and paths incidental, so edges were unnamed leftovers nobody had designed — and it did fix
+that. What it never should have had is its own reader-facing presentation, because scenario
+walks already had one.
 
-2. **Every drawn edge belongs to a flow.** Four arrows belonged to none, one of them the
-   low-code builder's connector path where that archetype's prompt injection is pinned — so a
-   reader tracing flows never met it. An arrow worth drawing is worth a story; if there is no
-   story, reconsider the arrow. Build-enforced.
+The measurements that settled it:
 
-3. **A flow that doubles back is a scenario.** If the path revisits an edge in the other
-   direction, it has a beginning and an end, and that is what the scenario walk renders — in
-   order, with a note per step. The two coding agents each carried a seven- and nine-leg round
-   trip as a flow; both are now walks, which is where they read correctly. A one-way run of any
-   length is still a flow.
+- **Every one of the 171 flow `controls` was already drawn as a capability chip**, because the
+  build required each to be pinned. The field could not carry anything new.
+- **Scenarios visited no edge that flows did not**, on all thirteen drawings. One was a strict
+  subset of the other.
+- A reader who had used the catalogue for weeks did not know the sequence view existed, and
+  read `F1` as "step one" — which is what ordinal notation means, and which flows could never
+  deliver, because they all run at once.
 
-**Badges are drawn on a flow's own legs only.** A chokepoint like the AI gateway sits on the
-model path, the tools path and the egress path by design, so stamping every leg put three and
-four numbers on one arrow and made the numbering look broken. The number now lands where a
-flow becomes *itself*, and shared legs stay quiet — which on the personal agent draws the
-actual finding, that the owner's instruction and an unsolicited message converge into one pipe
-the agent cannot tell apart. Selecting a flow still highlights its whole path: tracing is the
-highlight's job, and on a shared leg the badge has no honest answer.
+Flow `threats` prose moved into step notes and risk-pin notes. Everything else was deleted.
+
+### The rule that survived
+
+Flows carried one check worth keeping: every drawn edge had to belong to some named route. The
+replacement is narrower and truer — **an edge carrying a risk pin must be visited by some
+walk.** An ordinary arrow with a note, a chip and a tag is perfectly legible unvisited; an
+arrow with a risk tag is not, because the tag says *that* something can go wrong there and
+only a walk says how it plays out. The low-code builder's connector path was the case that
+proved it: prompt injection pinned on an arrow no story went near.
 
 ## 4c. Reuse before you create
 

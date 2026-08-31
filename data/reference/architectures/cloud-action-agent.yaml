@@ -539,81 +539,27 @@ pins:
       at: govObservability
       note: A halt that also revokes the agent's identity, and does not require a deploy.
 
-flows:
-  - id: F1
-    title: A run nobody started
-    moves: A timer, queue message, file drop or webhook, straight into the loop.
-    path: [events->planner]
-    threats: [A trigger nobody reviewed starting a run with real authority, File and webhook content read as instruction]
-    controls: [capabilityNhiManagement, capabilityAgentRuntimeEnforcement]
-    note: >
-      The defining flow. In many deployments this is the common path and the request surface is
-      the exception — which removes the human gate the chat agent leans on and pushes the whole
-      control set onto the catalogue and the governance band.
-  - id: F2
-    title: A run a person started
-    moves: A request in, the outcome back — with the requester's identity bound to it.
-    path: [requester->entry, entry->planner]
-    threats: [The request text is written by the party the action benefits, Identity of convenience rather than of the asker]
-    controls: [capabilityIga, capabilityHitlControls]
-    note: >
-      The exception path, drawn because when a human does start a run this is where the
-      authority it carries is decided.
-  - id: F3
-    title: Model inference
-    moves: The request and everything read so far out; the chosen action and its parameters back.
-    path: [planner->gateway, gateway->provider]
-    threats: [Completion treated as a decision rather than a proposal, Runaway loop metered only by the invoice]
-    controls: [capabilityModelEvals, capabilityRateLimiting]
-    note: >
-      What returns names an action. It is validated against the catalogue rather than trusted,
-      which is the difference between this architecture and a script with a model in it.
-  - id: F4
-    title: The action lands
-    moves: A validated, scoped action into our systems of record — and what it reads back.
-    path: [planner->gateway, gateway->internalTools, internalTools->orgData]
-    threats: [Irreversible effect with no compensating transaction, Grant wider than the case, Record content re-entering a later run as instruction]
-    controls: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAgentRegistry]
-    note: >
-      The canonical chain, and where this archetype's real question is settled: whether the
-      effect can be reversed. The approval threshold is keyed to irreversibility and value, not
-      to model confidence.
-  - id: F5
-    title: Outside the company
-    moves: Actions landing on third-party services, and the content that returns.
-    path: [planner->gateway, gateway->extTools, extTools->downstream]
-    threats: [Exfiltration with nobody reading the output, Untrusted content returning into the next model call, A peer agent's output entering the loop as input]
-    controls: [capabilityEgressControl, capabilityPromptInjectionDefense, capabilityAuditLogging]
-    note: >
-      The same shape as every other architecture's external leg, and more dangerous here for
-      one reason: no human reads what comes back before the next action runs on it.
-  - id: F6
-    title: The case persists
-    moves: Policy, customer history and working state, read back and written forward.
-    path: [planner->stateRetrieval]
-    threats: [Cross-case memory letting one requester's text influence another's outcome, Record content as the second injection path]
-    controls: [capabilityMemoryProtection, capabilityDataAccessGovernance]
-    note: >
-      Reads scoped to the account under discussion rather than to what the service can reach.
-      That distinction is the whole of the control.
+walkthrough:
+  title: A customer asks for a refund
+  moves: >-
+    A request in, the agent's chosen action out, and the record it changed.
+  steps:
+    - follow: requester->entry
+      note: The request arrives authenticated and bound to an account; the loop starts with that identity intact.
+    - follow: planner->stateRetrieval
+      note: Policy and the customer's history load as context, scoped to this account.
+    - follow: planner->gateway
+      note: The context leaves the loop through the gateway, on a brokered credential.
+    - follow: gateway->provider
+      note: The model proposes an action and parameters from the catalogue.
+    - follow: gateway->internalTools
+      note: The proposal is validated — well-formed, in policy, under the value threshold.
+    - follow: internalTools->orgData
+      note: The refund executes, with its compensating transaction on file.
+    - follow: entry->requester
+      note: The outcome returns within seconds; the audit holds the reasoning.
 
 scenarios:
-  - title: A customer asks for a refund
-    steps:
-      - follow: requester->entry
-        note: The request arrives authenticated and bound to an account; the loop starts with that identity intact.
-      - follow: planner->stateRetrieval
-        note: Policy and the customer's history load as context, scoped to this account.
-      - follow: planner->gateway
-        note: The context leaves the loop through the gateway, on a brokered credential.
-      - follow: gateway->provider
-        note: The model proposes an action and parameters from the catalogue.
-      - follow: gateway->internalTools
-        note: The proposal is validated — well-formed, in policy, under the value threshold.
-      - follow: internalTools->orgData
-        note: The refund executes, with its compensating transaction on file.
-      - follow: entry->requester
-        note: The outcome returns within seconds; the audit holds the reasoning.
   - title: The request text is the attack
     steps:
       - follow: requester->entry
