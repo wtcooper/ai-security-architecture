@@ -14,8 +14,9 @@ summary:
 
 description:
   - >
-    The trade is explicit: a data-disclosure risk goes away and a supply-chain, availability and
-    safety risk arrives. There is no provider applying content policy, no provider absorbing a
+    The trade is explicit: the provider-boundary disclosure risk goes away and a supply-chain,
+    availability and safety risk arrives — while logs, caches, storage and co-tenancy keep
+    their own disclosure paths in-house. There is no provider applying content policy, no provider absorbing a
     traffic spike, and no provider patching the serving stack. Every control a managed API
     supplies by default is now a component this organisation runs or does without — which is why
     the gateway and the governance plane are the blocks that separate this architecture from the
@@ -48,16 +49,26 @@ distinguishedBy:
     provider was doing are now blocks on this diagram.
 
 exemplars:
-  - name: Serving runtimes on Kubernetes
+  - name: vLLM
     note: >
-      Open-source inference servers with continuous batching and paged attention, scheduled onto
-      GPU node pools with an inference-aware gateway in front.
-    asOf: "2026-08"
-  - name: On-premises inference for data residency
+      The serving runtime this drawing's runtime block describes — continuous batching, paged
+      attention, prefix caching — whose security guide documents the opt-in API key, the
+      unauthenticated auxiliary endpoints and the trusted-network assumption the notes cite.
+    url: https://docs.vllm.ai
+    asOf: "2026-09"
+  - name: KServe
     note: >
-      The same stack in a datacentre because the data cannot leave. The most common non-cost
-      reason organisations take on this architecture.
-    asOf: "2026-08"
+      Model serving on Kubernetes with an inference-aware routing layer in front — the
+      cluster-scheduled shape of this architecture, storage-to-runtime load path included.
+    url: https://kserve.github.io/website/
+    asOf: "2026-09"
+  - name: SGLang
+    note: >
+      A second serving stack with the same co-tenancy mechanics (radix-tree prefix caching
+      across requests), illustrating that the cache-sharing disclosure path is a property of
+      the class, not one product.
+    url: https://docs.sglang.ai
+    asOf: "2026-09"
 
 zones:
   - id: zoneCloud
@@ -100,7 +111,11 @@ blocks:
       the guardrail checks enforced here are a service the organisation runs itself or does
       without. Its items are the traffic classes it brokers — the checks it runs are the
       numbered pins on this block and its edges, and the call-outs beneath.
-    pack: aiGatewayTraffic
+    items:
+      - id: gwModel
+        label: Model proxy
+        icon: model
+        note: The one traffic class this gateway carries — inference, brokered per tenant.
 
   - id: api
     kind: service
@@ -190,15 +205,34 @@ blocks:
         label: Open-weights catalogue
         icon: db
         note: Declared behaviour and actual behaviour are separate facts.
+      - id: selfTrained
+        label: Self-trained model
+        icon: model
+        note: >
+          The fine-tuning pipeline's registry output — the meeting point of this drawing and
+          the training pipeline, arriving signed so the load path has something to verify.
+
+  - id: govIdentity
+    kind: governance
+    title: Identity services
+    icon: person
+    zone: zoneGovernance
+    col: 1
+    row: 5
+    capabilities: [capabilityNhiManagement]
+    note: >
+      Workload identity per calling tenant — the thing every quota, cache-isolation and
+      attribution decision on this page keys off, issued by the platform rather than a shared
+      key in a config map.
 
   - id: govSupplyChain
     kind: governance
     title: Supply-chain assurance
     icon: db
     zone: zoneGovernance
-    col: 1
+    col: 4
     row: 5
-    capabilities: [capabilityModelScanning, capabilityAiBom]
+    capabilities: [capabilityModelScanning, capabilityAiBom, capabilityStagedRollout]
     note: >
       Format and content inspection as a blocking gate in the promotion pipeline, and the
       record of which artifact is actually serving. The control a managed provider would have
@@ -209,7 +243,7 @@ blocks:
     title: Policy & authorization
     icon: scale
     zone: zoneGovernance
-    col: 2
+    col: 3
     row: 5
     capabilities: [capabilityRateLimiting, capabilityModelGuardrails]
     note: >
@@ -221,21 +255,22 @@ blocks:
     title: Secrets & key management
     icon: key
     zone: zoneGovernance
-    col: 3
+    col: 2
     row: 5
     capabilities: [capabilitySecretsManagement, capabilityModelWeightProtection]
     note: >
-      Workload identity per calling tenant, and the weights themselves treated as an asset
-      worth protecting rather than a file on a disk.
+      The internal credentials this system runs on — storage pulls, registry reads,
+      control-plane tokens — and the weights themselves treated as an asset worth protecting
+      rather than a file on a disk.
 
   - id: govObservability
     kind: governance
     title: Observability & response
     icon: eye
     zone: zoneGovernance
-    col: 4
+    col: 5
     row: 5
-    capabilities: [capabilityAuditLogging, capabilityAiSpm, capabilityAiRedTeaming]
+    capabilities: [capabilityAuditLogging, capabilityAiSpm, capabilityAiRedTeaming, capabilityAiVulnMgmt]
     note: >
       Which versions serve where and at what configuration — including whether cross-tenant
       cache sharing is on — plus per-version red teaming, because a new checkpoint from the
@@ -266,50 +301,45 @@ edges:
     note: >
       Admitted requests scheduled into the batch; completions back through the guardrail checks.
       Output-side policy is the half most often omitted when self-hosting.
-  - from: runtime
+  - from: sources
     to: storage
-    path: primary
-    bidir: true
-    route: vh
-    label: fetch / load
-    note: >
-      Promoted artifacts load into the runtime, digest-verified against the promotion record.
-      Without that verification the gate can be bypassed by writing to storage directly.
-  - from: runtime
-    to: sources
     path: external
     label: weights in
-    route: hv
     note: >
-      Fetched from a public hub. Provenance
-      establishes who made the artifact and nothing about what it does on load.
+      Artifacts arrive in storage — fetched from the hub by the ingest tooling, or published
+      by the fine-tuning pipeline's registry. The serving runtime holds no source-fetch
+      credentials; provenance establishes who made the artifact and nothing about what it
+      does on load.
+  - from: storage
+    to: runtime
+    path: primary
+    route: hv
+    label: load
+    note: >
+      Only promoted artifacts load, digest-verified against the promotion record. Without
+      that verification the gate can be bypassed by writing to storage directly.
 pins:
   risks:
     - risk: riskSensitiveDataDisclosure
       at: api
       note: >
-        The sharpest risk that exists here and not on the endpoint, and the reason co-tenancy is
-        recorded as a property of the inference path rather than drawn as a flow of its own: it
-        uses no arrow another flow does not already use. Continuous batching mixes several
-        tenants' requests into one forward pass, and prefix caching makes time-to-first-token a
-        side channel — a caller sends a crafted prefix and measures the response time to learn
-        whether it matched one cached from *another tenant's* request, which is enough to
-        reconstruct prompts and secrets. Efficiency and isolation are the same settings.
-        Partition the cache by tenant, and note the risk compounds under disaggregated serving,
-        where the cache crosses the network onto SSD and object storage.
+        The endpoint's own exposure, distinct from the cache story pinned on the runtime:
+        authentication is opt-in on this class of server, and a completion endpoint reachable
+        without it hands every tenant's model to whatever can route to the binding.
     - risk: riskModelSourceTampering
       at: sources
       note: Publisher identity is the only assurance the hub offers, and it says nothing about the artifact's behaviour.
     - risk: riskMaliciousLoaderDeserialization
-      at: runtime->sources
+      at: storage->runtime
       note: >
-        Several weight formats execute code on load. Format policy on this edge is the only
-        place that fact can be addressed once for everything downstream.
+        Several weight formats execute code on load, and the loader is where the file is
+        opened. Format policy at promotion is what keeps this leg deserialization rather than
+        execution.
     - risk: riskModelExfiltration
       at: storage
       note: The stored artifact is expensive to reproduce and trivial to copy, which makes storage access control an asset-protection question.
     - risk: riskModelDeploymentTampering
-      at: runtime->storage
+      at: storage->runtime
       note: A load path that skips digest verification turns the promotion gate into a suggestion.
     - risk: riskInsecureIntegratedComponent
       at: runtime
@@ -320,22 +350,26 @@ pins:
         The gateway is third-party code holding every tenant's brokered credentials — a
         compromised release of the gateway itself is the whole credential portfolio, a supply
         chain incident class with recent precedent.
-    - risk: riskCrossTenantCredentialPropagation
-      at: runtime
-      note: Batching puts several tenants' requests in one forward pass; isolation is a property of several configuration choices at once.
     - risk: riskAcceleratorAndSystemSideChannels
       at: runtime
       note: Shared accelerators are a physical substrate common to every tenant, below every namespace boundary.
     - risk: riskSensitiveDataDisclosure
       at: runtime
       note: >
-        Cross-tenant prefix sharing puts one tenant's context where another's request can reach
-        it, and it looks like a cache hit rather than an incident — a hit is measurable from
-        outside as latency, and published attacks reconstruct other tenants' prompts from that
-        timing alone.
-    - risk: riskPromptResponseCachePoisoning
-      at: runtime
-      note: A poisoned cache entry serves every later request that matches it.
+        The sharpest risk that exists here and not on the endpoint. Continuous batching mixes
+        several tenants' requests into one forward pass, and prefix caching makes
+        time-to-first-token a side channel — a crafted prefix plus response timing is enough
+        to reconstruct prompts and secrets cached from another tenant's request. Efficiency
+        and isolation are the same settings; partition the cache by tenant, and note the risk
+        compounds under disaggregated serving, where the cache crosses the network onto SSD
+        and object storage.
+    - risk: riskModelReverseEngineering
+      at: api
+      note: >
+        Sustained query access is all extraction needs, and every internal caller — or
+        whatever compromises one — has it. A proprietary fine-tune distilled out through its
+        own completion endpoint is theft that looks like traffic; rate ceilings and anomaly
+        review on the crossing are the answer.
     - risk: riskDenialOfMLService
       at: consumers->gateway
       note: Capacity is finite and there is no provider to absorb a spike. Admission control here is an availability control, not a billing feature.
@@ -345,37 +379,51 @@ pins:
 
   capabilities:
     - capability: capabilityModelWeightProtection
-      at: runtime->storage
+      at: storage->runtime
       note: >
         Verify the artifact's signature at load, not at download. The mature answer is the
         OpenSSF Model Signing spec with Sigstore bundles — a detached signature, so nothing has
         to be repackaged — and at least one major hub now signs everything it publishes. This
-        is the gate between the store and the loader, and it is what our own fine-tuning
-        pipeline's output should be signed with so there is something here to verify against.
+        is the gate between the store and the loader, and it is what the fine-tuning
+        pipeline's promotion signature is verified against.
     - capability: capabilityAiBom
-      at: runtime->storage
+      at: govSupplyChain
       note: >
         The record of which artifact is actually serving — publisher, version, format and the
         scan that cleared it. Without it the question "what is running" has no answer.
     - capability: capabilitySecretsManagement
       at: gateway
       note: >
-        Workload identity per calling tenant, which is what per-tenant quotas and
-        cache-isolation decisions key off.
+        The internal credentials the crossing brokers — storage pulls, registry reads,
+        control-plane tokens — issued short-lived per call rather than living in the serving
+        tier's environment.
     - capability: capabilityAuditLogging
-      at: gateway
-      note: Every request and completion recorded at the one crossing every caller shares.
+      at: govObservability
+      note: >
+        Every request and completion recorded from the tap at the crossing every caller
+        shares, kept privacy-consciously: the log of an inference service is itself a corpus
+        of everything the organisation asked.
     - capability: capabilityAiRedTeaming
-      at: runtime
+      at: govObservability
       note: >
         Per model version, because a new checkpoint from the same publisher is a new model
         nobody else has tested — and there is no provider doing it on our behalf.
     - capability: capabilityModelScanning
-      at: runtime->storage
-      note: Format and content scanning as a blocking gate in the promotion pipeline, before any artifact reaches the runtime.
+      at: sources->storage
+      note: >
+        Format and content scanning as a blocking gate on ingest, before any artifact can be
+        promoted — absorbed by the promotion gate over Storage, per the recorded deviation.
     - capability: capabilityModelEvals
-      at: runtime->storage
-      note: Safety and adversarial evaluation per model version — a new checkpoint is a new model with new behaviour.
+      at: sources->storage
+      note: >
+        Safety and adversarial evaluation per model version gates promotion — inline on the
+        artifact path per the recorded deviation, the ontology's canonical evaluation
+        exception.
+    - capability: capabilityStagedRollout
+      at: storage->runtime
+      note: >
+        A new version serves a slice before it serves everyone, and the previous promoted
+        artifact stays loadable — rollback is a registry operation, not a re-download.
     - capability: capabilityAiGateway
       at: gateway
       note: >
@@ -400,13 +448,13 @@ pins:
       at: runtime
       note: Hardware-backed isolation for the highest-sensitivity tenants where shared accelerators are not acceptable.
     - capability: capabilityAiVulnMgmt
-      at: runtime
+      at: govObservability
       note: Track and patch the serving stack's CVE stream on your own schedule, because nobody upstream will.
     - capability: capabilityModelWeightProtection
       at: storage
       note: Encryption, access control and integrity digests on weights at rest, matched by verification at load.
     - capability: capabilityAiSpm
-      at: runtime
+      at: govObservability
       note: Continuous posture over which versions serve where and at what configuration, catching drift before an incident does.
 
 walkthrough:
@@ -417,21 +465,31 @@ walkthrough:
     - follow: consumers->gateway
       note: The workload identity on the request decides its quota and its cache scope.
     - follow: gateway->api
+      note: Admitted within quota, with the input-side guardrail applied at the crossing.
+    - follow: api->runtime
       note: >
-        The admitted request is scheduled into a batch alongside other tenants' traffic;
-        tenant-scoped cache keys are what keep the prefix lookup safe.
+        Scheduled into a batch alongside other tenants' traffic; tenant-scoped cache keys are
+        what keep the prefix lookup safe.
+    - follow: runtime->api
+      note: The completion leaves the batch — raw model output, nothing yet between it and the caller.
+    - follow: api->gateway
+      note: Back through the crossing, where the output-side guardrail runs — the half most often omitted.
     - follow: gateway->consumers
-      note: The completion returns through the guardrail's output leg, not around it.
+      note: The completion returns to the tenant that asked, attributed and metered.
 
 scenarios:
   - title: A new checkpoint is promoted
     steps:
-      - follow: runtime->sources
-        note: The artifact arrives — fetched from the hub or produced by the training pipeline — with provenance recorded.
-      - follow: runtime->storage
-        note: Scanning and per-version evaluation gate the promotion. Blocking, or it is not a gate.
+      - follow: sources->storage
+        note: >
+          The artifact arrives — fetched from the hub, or published signed by the training
+          pipeline's registry — with provenance recorded. Scanning and per-version evaluation
+          gate the promotion here. Blocking, or it is not a gate.
       - follow: storage->runtime
-        note: The promoted artifact loads into the runtime, digest-verified against the promotion record.
+        note: >
+          The promoted artifact loads, digest-verified against the promotion record, and
+          serves a staged slice first — with the previous version still loadable if the slice
+          misbehaves.
   - title: A spike hits finite capacity
     steps:
       - follow: consumers->gateway
@@ -449,7 +507,20 @@ deviations:
     reason: >
       Registry semantics — versioning, provenance, promotion state — live in the storage block
       and the governance plane's gate over it; drawing a separate registry service duplicated
-      the storage block it fronted.
+      the storage block it fronted. The training pipeline draws the registry in full; this
+      drawing consumes it.
+  - subject: Admission scanning and per-version evaluation are absorbed by the promotion gate
+    reason: >
+      capabilityModelScanning is embodied by the private package registry and evaluation is a
+      block on the training drawing; here both duties run inside the promotion gate over
+      Storage, pinned on the ingest edge — one gate, two checks, on the only path an artifact
+      can take to the runtime. Evaluation inline on an artifact path is the ontology's own
+      canonical exception.
+  - subject: The AI gateway carries inference only
+    reason: >
+      No MCP, tool or skills traffic exists on this drawing, so the gateway lists its one real
+      traffic class rather than the registered aiGatewayTraffic pack — the same honesty rule
+      the SaaS drawings and the MCP publisher apply in the other direction.
 
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain, LLM06 unbounded consumption"
