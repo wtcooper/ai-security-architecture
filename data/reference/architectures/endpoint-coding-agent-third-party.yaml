@@ -112,13 +112,13 @@ zones:
     owner: endpoint
     note: >
       The managed device, running the vendor's application: the harness, its tool surface and
-      its memory. Ours to manage, theirs to build — with no route of its own to our systems or
-      the outside.
+      its memory. Ours to manage, theirs to build — its outbound routes are the SSO session to
+      the approved vendor and the brokered crossing, nothing else.
   - id: zoneCloud
     owner: cloud
     note: >
-      Infrastructure we operate — the egress control every outbound path crosses, the AI
-      gateway that admits agents into our systems, and those systems themselves.
+      Infrastructure we operate — the AI gateway that brokers model, tool and egress traffic
+      and admits agents into our systems, and those systems themselves.
   - id: zoneVendor
     owner: vendor
     note: >
@@ -237,6 +237,18 @@ blocks:
         label: Sandboxed tools
         icon: shield
         note: Where builds, tests and driven desktops run when isolation is on.
+      - id: skills
+        label: Installed skills
+        icon: gear
+        note: >
+          Packaged instructions and helpers pulled through the crossing's skills broker —
+          content that executes as instruction, versioned and pinned like code.
+      - id: computerUse
+        label: Computer use
+        icon: eye
+        note: >
+          The sharpest tool the application can switch on: the agent drives the GUI and
+          inherits every application already signed in.
 
   - id: aiGateway
     kind: service
@@ -513,8 +525,10 @@ edges:
     route: hv
     label: brokered calls
     note: >
-      The local tool surface reaches nothing on its own — connectors, remote servers and web
-      fetches all cross here first.
+      The local tool surface reaches nothing on its own. Connectors and remote servers are
+      brokered here, and the crossing's bundled egress-proxy function carries the tool plane's
+      package and web fetches to their allowlisted destinations — one tier, several duties,
+      per the recorded deviation.
   - from: aiGateway
     to: vendorService
     path: external
@@ -530,16 +544,6 @@ edges:
     path: external
     bidir: true
     note: The vendor's service calls the model provider; everything behind that interface is theirs.
-  - from: aiGateway
-    to: provider
-    path: external
-    bidir: true
-    route: hv
-    label: our keys
-    note: >
-      The alternative path, and a real one: inference on credentials we hold, brokered at our
-      own tier, with the vendor out of the loop entirely. Every gateway in the catalogue that
-      carries inference reaches a provider — this one was simply missing.
   - from: aiGateway
     to: hostedTools
     path: primary
@@ -583,20 +587,24 @@ pins:
       at: memory
       note: >
         Memory files and rules are prose a later session treats as instruction — including
-        rules committed by whoever last touched the repo.
+        rules committed by whoever last touched the repo, and the settings hooks the worm
+        incidents wrote their persistence into.
     - risk: riskToolRegistryTampering
       at: toolPlane
       note: >
         Configuration admits the whole tool plane and can arrive with the clone. Injecting into
         it and swapping it after approval are the disclosed paths.
     - risk: riskInsecureModelOutput
-      at: harness->aiGateway
-      note: The completion is unauthenticated content, and it drives file writes, commands and clicks.
-    - risk: riskExcessiveDataHandlingDuringInference
-      at: aiGateway->vendorService
+      at: harness
       note: >
-        Code, documents and screenshots leave the company here — usually more than the
-        developer pictured sharing, and only the edge can see how much.
+        The completion is unauthenticated content, and this is where it becomes the plan —
+        file writes, commands and clicks all start as text the model returned.
+    - risk: riskExcessiveDataHandlingDuringInference
+      at: harness->vendorService
+      note: >
+        Code, documents and screenshots leave the company on the SSO session — the path most
+        users are actually on — usually more than the developer pictured sharing, and with
+        nothing of ours on the hop to see how much.
     - risk: riskStaleAgentIdentityBinding
       at: remoteDevice->vendorService
       note: >
@@ -622,6 +630,22 @@ pins:
     - risk: riskRogueActions
       at: hostedTools->orgData
       note: Writes into systems of record from a loop whose plan nobody reviewed.
+    - risk: riskInsecureIntegratedComponent
+      at: aiGateway
+      note: >
+        The gateway is third-party code holding the brokered credentials and the allowlist —
+        a compromised release of the tier the controls hang on is the joined incident's
+        centrepiece, not a hypothetical.
+    - risk: riskMCPTransportHijacking
+      at: aiGateway->extTools
+      note: >
+        A remote server's transport, redirected or replayed between approval and use, delivers
+        somebody else's tools under an approved name.
+    - risk: riskZombieShadowMCPServers
+      at: toolPlane
+      note: >
+        A server admitted once and forgotten keeps its process, its privileges and its place
+        in context long after the project that justified it.
     - risk: riskShadowAndUnknownAgents
       at: harness
       note: >
@@ -630,29 +654,30 @@ pins:
 
   capabilities:
     - capability: capabilityIga
-      at: remoteDevice->vendorService
+      at: vendorService
       note: >
-        Federate the vendor account to our directory so this hop inherits our lifecycle and
-        revocation. We cannot put a control on the path itself — the phone never touches our
-        network — so the identity behind the account is the only lever, and an unfederated
-        vendor login is the finding.
+        Federated login enforced in the vendor's account layer — Zone-2 configuration, because
+        the phone never touches our network and the account binding is the only lever. An
+        unfederated vendor login is the finding.
     - capability: capabilityAgentRuntimeEnforcement
       at: harness->aiGateway
       note: Session admission and per-call policy evaluated at the edge, outside the application being governed.
     - capability: capabilityAiTprm
-      at: aiGateway->vendorService
+      at: vendorService
       note: >
-        The assessment behind the allowlist entry. On this path the vendor's own controls,
-        retention terms and tenancy are the substance of the review — because once the
-        destination is approved and named, the session itself is not something we inspect.
+        The assessment behind the allowlist entry, pinned on the vendor itself: their
+        controls, retention terms and tenancy are the substance of the review, because once
+        the destination is approved and named, the session is not something we inspect.
     - capability: capabilityAiDlp
       at: toolPlane->aiGateway
       note: >
         Inspection belongs on the arbitrary-destination path, where the agent fetches from
         registries and the open web — not on the pinned vendor session.
     - capability: capabilityEgressControl
-      at: extTools->downstream
-      note: Default-deny outbound with an allowlist — the vendor's endpoints and the approved registries, nothing else.
+      at: aiGateway->extTools
+      note: >
+        Default-deny outbound enforced at the crossing we operate — the vendor's endpoints and
+        the approved registries in the allowlist, nothing else.
     - capability: capabilityToolPermissionScoping
       at: harness->toolPlane
       note: >
@@ -696,27 +721,53 @@ pins:
     - capability: capabilityShadowAiDiscovery
       at: harness
       note: Find the installs that never enrolled, because this archetype spreads one developer at a time.
+    - capability: capabilityKillSwitch
+      at: govObservability
+      note: >
+        Unattended modes need a stop: sessions switchable off from the vendor control plane,
+        and the gateway able to revoke the grants a scheduled run rides on — without waiting
+        for the owner to notice.
+    - capability: capabilityEdr
+      at: harness
+      note: >
+        The device tooling that sees what no crossing can: which harnesses are installed,
+        what their processes execute, and the containment that isolates a machine whose agent
+        has been steered.
 
 walkthrough:
   title: The developer asks for a change
   moves: >-
-    A task stated at the machine, inference through the vendor, and the edits it produces.
+    A task stated at the machine, inference through the vendor, and the approved edits it
+    produces.
   steps:
     - follow: developer->harness
       note: The task is stated by a human who will stay for the session.
-    - follow: harness->aiGateway
-      note: Context leaves for an allowlisted destination — the vendor our assessment approved, and no other.
-    - follow: aiGateway->vendorService
-      note: The vendor's service takes the session and calls the model behind it.
+    - follow: harness->vendorService
+      note: >
+        Context leaves on the SSO session — the vendor-recommended path, and the one most of
+        our users are on. What governs it is the tenant binding and the assessment behind the
+        allowlist entry.
+    - follow: vendorService->provider
+      note: The vendor's service calls the model provider behind it; everything past that interface is theirs.
+    - follow: vendorService->harness
+      note: The completion returns down the same session — unauthenticated content, now the plan.
+    - follow: harness->developer
+      note: >
+        Consequential actions surface for approval before they run — the gate the whole
+        archetype leans on, rare enough that each prompt is read.
+    - follow: developer->harness
+      note: Approved — this action, these arguments, not a blanket yes.
     - follow: harness->toolPlane
       note: Edits and commands execute with whatever scope the permission model granted.
     - follow: toolPlane->aiGateway
-      note: Anything reaching our systems is admitted by our marketplace, on our grants.
+      note: >
+        Anything leaving the machine crosses our tier — a dependency fetch bound for an
+        allowlisted registry, a call to our own servers, all on the same bundled crossing.
     - follow: aiGateway->extTools
-      note: A dependency fetch or a web read, brokered and allowlisted rather than dialled direct.
+      note: A third-party server or connector, admitted by the catalogue on a scoped credential.
     - follow: extTools->downstream
       note: >
-        And out to a package registry or a site. What comes back is loaded and read as context,
+        And out to what those services act on. What comes back is loaded and read as context,
         which is why the provenance of a tool matters as much as the content of a page.
 
 scenarios:
@@ -726,23 +777,22 @@ scenarios:
         note: The developer types the instruction on a phone or in a chat thread, away from the machine.
       - follow: remoteDevice->vendorService
         note: Out to the vendor, authenticated by the vendor's account and nothing of ours.
-      - follow: vendorService->aiGateway
-        note: Back across our edge — the first control on the journey, four steps in.
-      - follow: aiGateway->harness
+      - follow: vendorService->harness
         note: >
-          And down the connection the machine was already holding open. Nothing listens on the
-          endpoint; the work arrives only because the harness dialled out first.
+          Down the outbound SSO session the harness was already holding open. Nothing of ours
+          is on this path — the relay requires the vendor's own API, which is exactly the
+          trade the deviation records — and nothing listens on the endpoint; the work arrives
+          only because the harness dialled out first.
       - follow: harness->toolPlane
         note: The work happens locally, with the developer's files, credentials and sessions around it.
-      - follow: harness->aiGateway
-        note: The result goes back up the same outbound connection.
-      - follow: aiGateway->vendorService
-        note: Through the vendor's relay again, which is holding the other end of the conversation.
+      - follow: harness->vendorService
+        note: The result goes back up the same outbound session.
       - follow: vendorService->remoteDevice
         note: >
-          And back to the phone, the way it came. Eight steps across two boundaries — and the
-          asymmetry is the point: the half that leaves the endpoint is governed by us, the half
-          that starts at the phone is governed by the vendor's account and nothing else.
+          And back to the phone, the way it came. Six steps across two boundaries — and the
+          honest point is that no control of ours sits on any of them: admission is the
+          vendor's account binding and the managed-settings tier, which is why those are the
+          controls this page pins.
   - title: A poisoned document phones home
     steps:
       - follow: hostedTools->orgData
@@ -763,18 +813,25 @@ scenarios:
         note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and we record it.
 
 deviations:
-  - subject: Two model paths are drawn, and an organisation does not get both at once
+  - subject: One model path is drawn; the customer-key variant is recorded, not drawn
     reason: >
-      Both are real and both are in use here, so this is not a banned either/or edge — it is
-      two populations. The SSO path, where the application authenticates to the vendor and
-      calls it directly, is the vendor-recommended one and the one most of our users are on.
-      The gateway path, inference on our own keys with the vendor out of the loop, is the
-      documented alternative.
-      They are not freely composable, and the trade-off belongs on the page: the vendor's
-      remote-control relay requires the vendor's own API, so pointing the client at a gateway
-      disables remote steering entirely, along with server-side web search and the long prompt
-      cache. Route through your gateway and gain credential control, egress policy and audit;
-      lose the vendor relay that remote steering rides on.
+      The SSO path — the application authenticating to the vendor and calling it directly —
+      is the vendor-recommended baseline and the one most of our users are on, so it is the
+      one drawn. The documented alternative, inference on our own keys through the gateway
+      with the vendor out of the loop, is a separately reviewed variant rather than a second
+      edge, because the two are not composable: the vendor's remote-control relay requires
+      the vendor's own API, so pointing the client at a gateway disables remote steering,
+      server-side web search and the long prompt cache. Route through your gateway and gain
+      credential control, egress policy, audit and spend ceilings; lose the relay. That trade
+      — not a missing rate-limit pin — is also why the sibling drawing pins rateLimiting and
+      this one leans on the vendor's seat metering.
+  - subject: The crossing bundles an egress-proxy function
+    reason: >
+      A LiteLLM-class tier is not a general web proxy, but this catalogue draws the endpoint's
+      arbitrary-destination traffic — package and web fetches — over the same crossing that
+      brokers model and tool calls, because the duties are enforced together even where they
+      are implemented as separate proxies. An organisation running a distinct egress/SSE tier
+      splits the block and changes nothing else; the personal agent records the same bundling.
   - subject: The vendor's own path is admitted, not inspected
     reason: >
       A pinned TLS session to an approved vendor cannot be inspected without breaking the
