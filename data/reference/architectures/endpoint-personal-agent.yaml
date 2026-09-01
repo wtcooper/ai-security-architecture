@@ -40,10 +40,11 @@ description:
     per-command consent. Products now ship exactly this wrap for the popular harnesses; the
     drawing is that pattern, vendor-neutral.
   - >
-    What the drawing still does not contain is a governance plane. No agent identity distinct
-    from the user, no policy engine consulted per tool call, no audit sink beyond the gateway's
-    tap, no kill switch beyond killing the process. The sandbox bounds the blast radius; it does
-    not govern the agent.
+    The governance band this drawing carries is entirely the organisation's addition — the
+    assembled-by-user common state has none of it: no agent identity distinct from the user,
+    no policy engine consulted per tool call, no audit sink beyond the gateway's tap, no kill
+    switch beyond killing the process. The sandbox bounds the blast radius; the governance
+    services drawn beneath are what it takes to actually govern the agent.
 
 distinguishedBy:
   - >
@@ -100,11 +101,17 @@ zones:
       Infrastructure we operate — the messaging relay, the bundled AI gateway, and the internal
       servers and data the agent is meant to reach. The crossings live here alongside what they
       protect.
+  - id: zoneVendor
+    owner: vendor
+    note: >
+      The contracted messaging tenant — the one vendor relationship this architecture has. A
+      consumer channel with no agreement is a different posture, recorded as a deviation
+      rather than drawn.
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company: model providers, the messaging platform, third-party tool servers —
-      and the unsolicited senders who arrive through them.
+      Outside the company: model providers, third-party tool servers, the open web — and the
+      unsolicited senders who arrive through the messaging platform.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -153,12 +160,14 @@ blocks:
       recommendation for this archetype, and the control that bounds every other failure on
       this page. Its own kernel, filesystem and network, and no approval prompts inside,
       because the boundary replaces them.
-      Four openings are deliberate and each is a control decision. The workspace is mounted
+      Three openings are deliberate and each is a control decision. The workspace is mounted
       directly at the same path and propagates both ways, so a read-only clone is the safer
       default. Skills persist across sandboxes and are therefore a contamination channel
       between them. Egress leaves through a host-side proxy whose allowlist ships with broad
-      wildcards worth pruning. And local MCP servers run on the host with host privileges,
-      outside this boundary entirely — the gap every implementation shares.
+      wildcards worth pruning. The target state runs local MCP servers inside this boundary
+      with the rest of the tool surface; the common state runs them on the host with host
+      privileges — the gap every implementation shares, carried as the risk pinned on the
+      tool plane.
       What earns the boundary its keep: the model credential is injected into request headers
       by that host-side proxy, so the key never enters the sandbox and an agent that can
       exfiltrate cannot steal it.
@@ -255,8 +264,9 @@ blocks:
         label: MCP servers
         icon: plug
         note: >
-          The servers a user installs on their own machine — local child processes with the
-          user's privileges, and the reason the local surface is a tool service like any other.
+          Local child processes, run inside the boundary in the target state so they hold the
+          sandbox's authority rather than the user's. The common state runs them on the host —
+          the containment gap the risk pin records.
       - id: skills
         label: Installed skills
         icon: gear
@@ -323,6 +333,23 @@ blocks:
           The signed, pinned path by which skills and images reach the sandbox — the third
           traffic class this one tier carries.
 
+  - id: registry
+    kind: external
+    title: Private pkg registry
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 3
+    row: 3
+    note: >
+      The organisation-maintained mirror the sandbox pulls skills and images from — reviewed,
+      signed and pinned before anything is installable. The registry moves the review
+      earlier; it does not remove the risk.
+    items:
+      - id: approvedPackages
+        label: Approved packages
+        icon: db
+        note: Skills, plugins and sandbox base images — the only sources the gateway will serve.
+
   - id: govIdentity
     kind: governance
     title: Identity services
@@ -330,10 +357,11 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 6
-    capabilities: [capabilityKillSwitch]
+    capabilities: [capabilityKillSwitch, capabilityIga]
     note: >
       The IdP and the non-human identity plane: one workload identity per agent, bound to its
-      owner and device, and the revocation that ends every path at once.
+      owner and device, the pairing admission the bridges enforce, and the revocation that
+      ends every path at once.
 
   - id: govSecrets
     kind: governance
@@ -378,10 +406,11 @@ blocks:
     zone: zoneGovernance
     col: 5
     row: 6
-    capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery]
+    capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery, capabilityBehavioralDriftDetection]
     note: >
       Telemetry, the audit trail the workload cannot amend, discovery of what nobody
-      registered, and the containment path when something goes wrong.
+      registered, the baseline that notices drift, and the containment path when something
+      goes wrong.
 
   - id: internalTools
     kind: service
@@ -428,12 +457,13 @@ blocks:
     kind: external
     title: Messaging platform
     cosaiComponent: componentDataSources
-    zone: zoneExternal
+    zone: zoneVendor
     col: 5
     row: 0
     note: >
-      The vendor's messaging cloud. It authenticates senders to its own satisfaction, which is
-      the only sender assurance this architecture inherits.
+      The messaging vendor's cloud, holding the corporate tenant under an agreement we signed.
+      It authenticates senders to its own satisfaction, which is the only sender assurance
+      this architecture inherits.
     items:
       - id: tenant
         label: Platform tenant
@@ -445,8 +475,8 @@ blocks:
     title: Model provider
     cosaiComponent: componentModelServing
     zone: zoneExternal
-    col: 5
-    row: 2
+    col: 6
+    row: 1
     note: The inference API, reached only through the gateway on a brokered credential.
     items:
       - id: inference
@@ -459,7 +489,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 3
     note: >
       The MCP servers and connectors the gateway's catalogue admits — outside the boundary,
@@ -479,7 +509,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 4
     note: >
       Where actions land and where fetched content comes back from — untrusted on the way in,
@@ -534,14 +564,24 @@ edges:
       owner's instruction and a stranger's arrive by the same path and are told apart, if at
       all, by whatever the platform asserts about the sender.
   - from: remoteDevice
+    to: relay
+    path: primary
+    bidir: true
+    label: remote control UI
+    note: >
+      The dashboard reached from away, over the authenticated tunnel the relay terminates —
+      never a port opened on the device. What makes this honest is the relay: without it a
+      remote dashboard means a routable bind, which is the exposure the scans keep finding.
+  - from: owner
     to: bridges
     path: primary
     bidir: true
-    label: control UI
+    route: vh
+    label: local dashboard
     note: >
-      The one direct surface: the gateway's own dashboard, reached from the owner's browser on
-      their own device. No platform stands in the middle of this one, and it is a documented
-      token-exfiltration surface in its own right.
+      The gateway's own dashboard on loopback, reached from the owner's browser — and a
+      documented token-exfiltration surface in its own right, because every page in that
+      browser can attempt the same loopback calls the dashboard makes.
   - from: bridges
     to: relay
     path: primary
@@ -599,13 +639,14 @@ edges:
     to: provider
     path: external
     bidir: true
+    route: hv
     note: Inference on a brokered credential, against an allowlisted model, logged at the crossing.
   - from: gateway
     to: remoteTools
     path: external
     bidir: true
     label: brokered tool calls
-    route: vh
+    route: hv
     note: Admission is the catalogue; every call carries an owner-scoped, short-lived credential.
   - from: remoteTools
     to: downstream
@@ -616,7 +657,7 @@ edges:
     to: internalTools
     path: primary
     bidir: true
-    route: vh
+    route: hv
     label: internal tool calls
     note: >
       The path the organisation actually wants the agent to use: our own MCP servers and APIs,
@@ -632,21 +673,29 @@ edges:
   - from: toolPlane
     to: gateway
     path: primary
-    bidir: true
     route: hv
     label: signed installs
     note: >
-      The install path: skills and images come from the internal registry, scanned, signed and
-      pinned — and from nowhere else.
+      The install path, one direction only: skills and images come in from the mirror, and
+      nothing leaves this way.
+  - from: gateway
+    to: registry
+    path: primary
+    bidir: true
+    label: signed pulls
+    note: >
+      The crossing serves installs from the mirror and nowhere else — which build of a skill
+      or image is permitted to run is a decision made here, against the registry's pins.
 pins:
   risks:
     - risk: riskInsecureIntegratedComponent
       at: toolPlane
       note: >
-        The boundary is not as clean as it looks. Local MCP servers, plugins and skills run on
-        the host with host privileges, outside the isolation — true of Docker Sandboxes,
-        OpenClaw and Hermes alike. So the tool surface straddles the boundary rather than
-        sitting inside it, and third-party code in that half has the user's full authority.
+        The target draws MCP servers inside the boundary; every current implementation runs
+        them on the host with host privileges — true of Docker Sandboxes, OpenClaw and Hermes
+        alike. Until an implementation closes that gap, third-party code in this surface has
+        the user's full authority, and the containment the drawing shows is the requirement,
+        not the shipped state.
     - risk: riskPromptInjection
       at: senders->platform
       note: The message body is model input, from a set the platform bounds and the organisation does not.
@@ -658,11 +707,24 @@ pins:
     - risk: riskPromptInjection
       at: remoteTools->downstream
       note: Fetched content re-enters the loop indistinguishable from the owner's own words.
-    - risk: riskMCPTransportHijacking
-      at: bridges->relay
+    - risk: riskPromptInjection
+      at: internalTools->orgData
       note: >
-        The relay is the one path in. A bridge bound to a routable interface instead of
-        loopback is the exposure the scans of this archetype keep finding.
+        Org documents and records are unrelated instruction entering context — many hands
+        wrote them, none of them authenticated as the owner.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: gateway->remoteTools
+      note: >
+        The agent acts on the owner's accounts with whatever the token exchange granted —
+        delegation that does not narrow to the task is the owner's whole reach on a loop
+        nobody is watching.
+    - risk: riskInsecureIntegratedComponent
+      at: bridges
+      note: >
+        The listening surface itself: a bridge bound to a routable interface instead of
+        loopback is the exposure the scans keep finding, and the loopback dashboard is a
+        documented token-exfiltration surface even when the bind is right — the owner's own
+        browser defeats "localhost is not reachable" from inside.
     - risk: riskStaleAgentIdentityBinding
       at: relay->bridges
       note: >
@@ -702,18 +764,27 @@ pins:
 
   capabilities:
     - capability: capabilityPromptInjectionDefense
-      at: senders->platform
-      note: Classify inbound content before it reaches the loop; every message is untrusted, including the owner's.
-    - capability: capabilityAgentRuntimeEnforcement
-      at: relay->bridges
+      at: relay
+      note: >
+        Classify inbound content at the first tier we operate — every message is untrusted,
+        the owner's included; the platform before this hop is somebody else's cloud.
+    - capability: capabilityIga
+      at: bridges
       note: >
         One admission decision for every channel — directory-bound pairing, re-checked, and
-        enforced identically per bridge rather than reimplemented per platform. It belongs on
-        this hop because this is where every inbound message actually lands, the owner's
-        included.
+        enforced identically per bridge rather than reimplemented per platform. Identity is
+        the whole of the admission on this surface.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: gateway->remoteTools
+      note: >
+        Proposed actions evaluated per call at the crossing before they leave — this action,
+        this scope, now — rather than a session-time grant the loop argues with itself about.
     - capability: capabilityTransportSecurity
-      at: bridges->relay
-      note: Loopback binding plus an outbound-only relay, so the endpoint never listens.
+      at: bridges
+      note: >
+        Loopback binding, authenticated dashboard transport with origin checks, and an
+        outbound-only relay — so the endpoint never listens, and the browser next door is
+        treated as hostile.
     - capability: capabilityMemoryProtection
       at: harness->memory
       note: Treat memory as untrusted input on read; scan what is written; scope what is kept.
@@ -728,8 +799,11 @@ pins:
       at: harness->toolPlane
       note: Per-tool grants on the local surface instead of the daemon's full authority.
     - capability: capabilityCredentialIsolation
-      at: toolPlane->workspace
-      note: Share named folders read-only with a private clone; the home directory and its keys stay out.
+      at: gateway->remoteTools
+      note: >
+        On-behalf-of exchange at the crossing: each remote call carries a token narrowed to
+        the task, never the owner's standing grants — the bounded delegation that answers the
+        confused deputy pinned beside it.
     - capability: capabilitySecretsManagement
       at: harness->gateway
       note: >
@@ -743,11 +817,23 @@ pins:
       at: gateway->provider
       note: The inspection a hosted product would have applied, run by the organisation on both legs.
     - capability: capabilityMcpToolSecurity
-      at: gateway->remoteTools
-      note: Catalogue admission, description pinning and drift alerting before a server is reachable.
+      at: gateway->registry
+      note: >
+        Provenance, signing and version pinning on the supply path — an update is a decision,
+        and drift between what was reviewed and what installs is an alert.
     - capability: capabilityHitlControls
-      at: remoteTools->downstream
-      note: An approval gate on consequential actions, because no human saw the plan.
+      at: gateway->remoteTools
+      note: >
+        The approval gate fires at the crossing, before the call leaves anything we operate —
+        because no human saw the plan, and past this hop nobody can pause it.
+    - capability: capabilityHitlControls
+      at: internalTools->orgData
+      note: >
+        Approval on consequential writes to systems of record, mirroring the coding-agent
+        siblings — rare enough that each prompt is read.
+    - capability: capabilityToolPermissionScoping
+      at: internalTools->orgData
+      note: Reads and writes bounded to the owner's scope on the record, never a standing service account.
     - capability: capabilityRateLimiting
       at: harness->gateway
       note: Spend and iteration ceilings on the crossing, sized for a loop that wakes itself.
@@ -764,6 +850,17 @@ pins:
     - capability: capabilityShadowAiDiscovery
       at: harness
       note: Find the installs nobody registered, derived from the device rather than self-reported.
+    - capability: capabilityEdr
+      at: harness
+      note: >
+        A long-lived daemon with shell access is exactly the workload endpoint telemetry
+        exists for — incident 06's payload was a commodity stealer, and the device tooling is
+        what would have seen it.
+    - capability: capabilityBehavioralDriftDetection
+      at: govObservability
+      note: >
+        A baseline over the gateway's record is the only place a covert channel or a runaway
+        pattern could be seen — somebody has to be reading the trace the pins keep citing.
 
 walkthrough:
   title: The owner asks the agent to do something
@@ -791,6 +888,14 @@ walkthrough:
       note: >
         The action leaves on the same brokered crossing, which is where scope, spend and the
         record are decided rather than at the tool.
+    - follow: gateway->internalTools
+      note: >
+        The flow the deployment exists for: our own servers and APIs, admitted by the
+        catalogue on grants the crossing issues.
+    - follow: internalTools->orgData
+      note: >
+        Reads and writes on our systems of record, under the owner's scope and behind the
+        approval gate — logged on our side of the boundary.
     - follow: gateway->remoteTools
       note: A tool call on the owner's own accounts, on a grant we scoped rather than one they pasted.
     - follow: remoteTools->downstream
@@ -822,6 +927,8 @@ scenarios:
     steps:
       - follow: senders->platform
         note: The message arrives from a set the platform bounds and the organisation does not.
+      - follow: platform->relay
+        note: Our relay collects it from the tenant, exactly as it collects the owner's.
       - follow: relay->bridges
         note: The relay hands it to the endpoint over the connection the endpoint opened.
       - follow: bridges->harness
@@ -846,21 +953,43 @@ scenarios:
           turn carries.
       - follow: gateway->remoteTools
         note: A one-time injection has become a recurring one, bounded now by the action class.
+  - title: A page in the owner's browser reaches the dashboard
+    steps:
+      - follow: owner->bridges
+        note: >
+          A malicious page in the owner's own browser makes the same loopback calls the
+          dashboard makes — localhost is not a boundary against software already on the right
+          side of it.
+      - follow: bridges->harness
+        note: >
+          An admitted call enters the loop, or walks off with the dashboard token — the
+          documented exfiltration surface, defeated only by authenticated transport and
+          origin checks on the bind.
+      - follow: harness->gateway
+        note: >
+          Whatever the pivot achieved leaves through the crossing — which is where the record,
+          and the revocation, live.
   - title: A skill is installed
     steps:
       - follow: harness->toolPlane
         note: The install runs as a shell command inside the sandbox.
       - follow: toolPlane->gateway
-        note: The pull reaches the internal registry — scanned, signed, pinned — and nowhere else.
+        note: The pull request reaches the crossing — the only tier allowed to serve installs.
+      - follow: gateway->registry
+        note: Served from the mirror — scanned, signed, pinned — and from nowhere else.
 
 deviations:
-  - subject: One bundled AI gateway rather than the research's separate brokers
+  - subject: The messaging tenant is contracted; consumer channels are a variant
     reason: >
-      The source research draws messaging relay, AI gateway, MCP gateway, API gateway and
-      egress proxy as five tiers. This organisation runs a LiteLLM-class tier that bundles
-      model proxying, MCP brokerage and the skills plugin path, so the drawing shows one
-      crossing with those functions as items. The flows are identical either way; an
-      organisation with separate tiers splits the block and changes nothing else.
+      The drawn posture is an enterprise tenant under an agreement, which is why the platform
+      sits in the vendor band. A consumer channel with no agreement — the common state for
+      personal installs — moves the platform to the external band and removes the tenant
+      controls with it; that posture is recorded here rather than drawn as a second topology.
+  - subject: The kill switch is cited from Identity services and pinned at the gateway
+    reason: >
+      Revocation-as-stop: killing the agent's identity denies every flow at the crossing
+      within seconds, so the enforcement point is the gateway while the implementing service
+      is the identity plane. Deliberate, not drift.
   - subject: The local session is drawn as its own path
     reason: >
       A terminal on the machine and a phone across town are not the same admission problem:
