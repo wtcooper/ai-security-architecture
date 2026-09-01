@@ -155,3 +155,21 @@ rather than an exception list.
 | Distinct item labels | 111 — 78 used once | **84 — 47 used once** |
 | Controls drawn as components | 6 | **0, and a build failure** |
 | Crossings with no inline control | not measured | **0** |
+
+## The review remediation (2026-09-01)
+
+The two-pass architecture review (`docs/refarch-review/`) surfaced rule-level items alongside
+the per-drawing fixes. Recorded here as they land:
+
+**The sandbox-frame deviation triple is resolved.** Three drawings carried a deviation whose
+stated reason — "a frame inside a band reads as a second boundary of the same kind" — is the
+exact claim §4a repudiates. The personal agent's copy was also false about its own file, which
+draws the Sandbox frame; it is deleted. The two coding agents keep the item form, but for the
+ontology's own reason: their sandbox is a contained execution path inside one application
+(harness and shell run as the user; only tool execution is contained, conditionally), which is
+the §4 criterion for the **Sandboxed tools item**, not the frame. The deviations now say that.
+
+**Unknown top-level keys in an architecture file now fail the build.** Three files carried the
+retired `flows:` mechanism as silently ignored data for a month after its deletion; the
+load-bearing prose was migrated into walks and the rest deleted. Retired grammar is deleted,
+not ignored.
