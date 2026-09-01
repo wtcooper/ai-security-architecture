@@ -27,18 +27,23 @@ description:
     admission decisions of this architecture, and by default nobody makes them.
   - >
     The supply chain is the axis specific to this archetype. Weights are large binaries fetched
-    from public hubs, and several serialization formats execute code on load — the format matters
-    more than the source, because a safe-by-construction tensor format from an unknown publisher
-    beats a pickle-based one from a known publisher. Safe-by-construction has limits of its own:
-    the formats that cannot execute on load are still opened by fast-moving native parsers whose
-    memory bugs are a code-execution class of their own, and one popular format embeds chat
-    templates that execute at inference time, past every static scan. The scan has to sit in
-    front of the fetch, because the runtime is usually the thing doing the fetching.
+    from public hubs, and several serialization formats execute code on load — on that
+    load-time-execution axis alone, a safe-by-construction tensor format from an unknown
+    publisher beats a pickle-based one from a known publisher. It is one gate among several,
+    not a ranking: format policy, publisher provenance, scanner results and behavioural
+    evaluation are independent checks, and passing one buys nothing at the others.
+    Safe-by-construction has limits of its own: the formats that cannot execute on load are
+    still opened by fast-moving native parsers whose memory bugs are a code-execution class of
+    their own, and one popular format embeds chat templates that execute at inference time,
+    past every static scan. The target sequencing is fetch-to-quarantine: the artifact is
+    acquired without being loaded, verified and scanned at rest, then promoted to approved
+    local storage the runtime loads from — never fetched and opened in one step.
   - >
-    There is no governance column, and that absence is the finding: no model inventory, no weight
-    scanning pipeline, no policy on binding or sources exists anywhere in the default deployment.
-    This runtime is installed by one person in an afternoon and appears in no inventory — every
-    control named on this page presumes someone first learns it exists.
+    The common install has no governance at all: no model inventory, no weight scanning
+    pipeline, no policy on binding or sources. The target state adds exactly what this page's
+    governance band draws — artifact assurance, inventory, evaluation and response — and every
+    control named here presumes someone first learns the runtime exists, because it is
+    installed by one person in an afternoon and appears in no inventory.
 
 distinguishedBy:
   - >
@@ -52,21 +57,25 @@ distinguishedBy:
     risks are supply chain and local exposure rather than agency.
 
 exemplars:
-  - name: Local inference servers
+  - name: Ollama
     note: >
-      Desktop applications and daemons that download open-weights models and expose an
-      OpenAI-compatible HTTP API on a loopback port for other local software to call.
-    asOf: "2026-08"
-  - name: OS and vendor-provided local runtimes
+      The flagship daemon of the class: pulls open weights by name, serves an
+      OpenAI-compatible API on a local port with no authentication by default, and is the
+      runtime the exposure scans keep finding on routable interfaces.
+    url: https://docs.ollama.com
+    asOf: "2026-09"
+  - name: llama.cpp server
     note: >
-      Platform-level local inference offered as a system service, with a managed model catalogue.
-      Narrower supply chain, same local-service exposure.
-    asOf: "2026-08"
-  - name: Public model hubs
+      The engine underneath much of the category, served directly: a native HTTP server over
+      GGUF artifacts, whose fast-moving parser is its own memory-safety bug class.
+    url: https://github.com/ggml-org/llama.cpp
+    asOf: "2026-09"
+  - name: LM Studio
     note: >
-      Where the weights come from. Publisher identity is verifiable to varying degrees; what the
-      artifact does on load is a property of its format, not its publisher.
-    asOf: "2026-08"
+      The desktop-application shape: a GUI over the same engines with a local server mode a
+      click away — the install that most reliably appears in no inventory.
+    url: https://lmstudio.ai
+    asOf: "2026-09"
 
 zones:
   - id: zoneEndpoint
@@ -78,9 +87,9 @@ zones:
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company, and on this drawing that means one thing: the public hubs the weights
-      come from. Nothing out here calls in. A managed endpoint has no inbound path, which is why
-      the callers this architecture has to worry about are all on the machine already.
+      Outside the company: the public hubs the weights come from — and, when the bind is
+      routable, whoever finds the port. The intended callers are all on the machine already;
+      the drawn origin is the unintended class the exposure scans keep documenting.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -111,10 +120,12 @@ blocks:
     row: 1
     cosaiComponent: componentModelServing
     note: >
-      An OpenAI-compatible endpoint on a local port, unauthenticated by design in the flagship
-      runtimes — the vendors point at VPNs and reverse proxies rather than shipping auth. Which
-      interface it binds and who may call it are this architecture's admission decisions, and
-      exposure scans keep finding the runtimes that made neither.
+      In the target state this is an authenticated policy wrapper: the raw runtime endpoint —
+      unauthenticated by design in the flagship runtimes, whose vendors point at VPNs and
+      reverse proxies rather than shipping auth — sits private behind it, and caller identity,
+      per-caller ceilings and origin policy are enforced here. Which interface it binds and
+      who may call it are this architecture's admission decisions, and exposure scans keep
+      finding the installs that made neither.
     items:
       - id: endpoint
         label: Completion endpoint
@@ -137,11 +148,11 @@ blocks:
     zone: zoneEndpoint
     col: 2
     row: 1
-    cosaiComponent: componentTheModel
+    cosaiComponent: componentModelServing
     note: >
-      Loads weights, batches requests, serves completions. Also the process that fetches the
-      weights, which is why the supply-chain control has to sit in front of the fetch. Whatever
-      safety behaviour exists is whatever the weights carry.
+      Loads weights, batches requests, serves completions — from approved local storage only,
+      never straight from a fetch. Whatever safety behaviour exists is whatever the weights
+      carry.
     items:
       - id: loader
         label: Weight loader
@@ -163,13 +174,18 @@ blocks:
     row: 2
     cosaiComponent: componentModelStorage
     note: >
-      Multi-gigabyte artifacts whose format determines whether loading them is deserialization or
-      execution — a more useful question than who published them.
+      Quarantine and approved storage in one tier: artifacts land here on fetch, are scanned
+      and verified at rest, and only promoted files are loadable. Format determines whether
+      loading is deserialization or execution — a more useful question than who published
+      them. Public base weights are not secret; the confidentiality case is the
+      organisation's own fine-tunes and adapters stored beside them.
     items:
       - id: files
         label: Model files
         icon: db
-        note: Readable by any process with the user's privileges, and swappable by the same.
+        note: >
+          Readable by any process with the user's privileges, and swappable by the same —
+          including any org-tuned adapters, which are the part worth stealing.
 
   - id: govSupplyChain
     kind: governance
@@ -196,6 +212,16 @@ blocks:
       Every control named on this page presumes someone first learns the runtime exists. It is
       installed by one person in an afternoon and appears in no inventory, so discovery is not
       a supporting control here — it is the precondition for all the others.
+
+  - id: callers
+    kind: origin
+    title: Callers
+    zone: zoneExternal
+    col: 4
+    row: 0
+    note: >
+      Deliberately unnamed: whoever finds the port when the bind is routable. Not a supported
+      caller — the drawn reminder that loopback is an assumption, not a policy.
 
   - id: hub
     kind: external
@@ -232,36 +258,42 @@ edges:
     note: >
       Prompts in, raw completions back. Input and output classification is a control deployed on
       this path — in the common install it is a straight pipe.
-  - from: runtime
-    to: weights
+  - from: weights
+    to: runtime
     path: primary
-    bidir: true
-    label: fetch / load
+    label: load
     note: >
-      The runtime fetches artifacts to disk and loads them at start. For several formats the load
-      is an execution event, which makes this the supply chain's last step.
-  - from: runtime
-    to: hub
+      Only promoted, integrity-checked artifacts load, and never in the same step as a fetch.
+      For several formats the load is an execution event, which makes this the supply chain's
+      last gate.
+  - from: hub
+    to: weights
     path: external
-    bidir: true
     label: weight fetch
     note: >
-      The runtime is its own package manager: it asks the hub for the artifact and pulls it to
-      disk. That is why scanning has to gate the fetch rather than follow it — this same
-      process is the one that will open the file, and for several formats opening it *is* the
-      execution event. Nothing of ours sits on this hop by default, which is the finding.
-      Transport is authenticated and the publisher may be verifiable; neither says anything
-      about what the artifact does when the loader opens it.
+      The artifact is pulled to quarantine without being opened — by the management tooling in
+      the target state, by the runtime's own downloader in the common install, where fetch and
+      load collapse into one step and the whole promotion story disappears. Transport is
+      authenticated and the publisher may be verifiable; neither says anything about what the
+      artifact does when the loader opens it.
+  - from: callers
+    to: api
+    path: external
+    label: found port
+    route: hv
+    note: >
+      The path that should not exist: a routable bind, and the endpoint is reachable from the
+      network with whatever authentication it shipped — usually none.
 
 pins:
   risks:
     - risk: riskMaliciousLoaderDeserialization
-      at: runtime->weights
+      at: weights->runtime
       note: >
         Pickle-class formats execute code on load. The risk is a property of the artifact format,
         not of the publisher.
     - risk: riskModelSourceTampering
-      at: runtime->hub
+      at: hub->weights
       note: Publisher identity at publish time, nothing at load time — and a hub account is a takeover target.
     - risk: riskDenialOfMLService
       at: localApps->api
@@ -269,11 +301,6 @@ pins:
     - risk: riskModelExfiltration
       at: weights
       note: The artifacts sit on disk with the user's file permissions — readable by anything running as the user.
-    - risk: riskShadowAndUnknownAgents
-      at: runtime
-      note: >
-        Installed by one person in an afternoon, in no inventory. Responding to a bad model
-        release presumes someone knows this runtime exists.
     - risk: riskInsecureIntegratedComponent
       at: runtime
       note: >
@@ -284,6 +311,12 @@ pins:
       note: >
         Where this block is absent — the common case — raw model output goes straight to callers
         built expecting a hosted API's floor.
+    - risk: riskDenialOfMLService
+      at: callers->api
+      note: >
+        When the bind is routable, anyone who finds the port consumes the machine — free
+        inference, and on some runtimes the management surface too. The headline exposure
+        class the scans keep documenting.
     - risk: riskModelEvasion
       at: runtime
       note: >
@@ -292,27 +325,41 @@ pins:
 
   capabilities:
     - capability: capabilityModelScanning
-      at: runtime->hub
+      at: hub->weights
       note: >
-        Format and content inspection in front of the fetch — a scan that runs after the runtime
-        opens the file has documented an incident, not prevented one.
-    - capability: capabilityTransportSecurity
-      at: localApps->api
-      note: Authenticate local callers rather than treating locality as authorization; a browser tab is local too.
+        Format and content inspection at quarantine, before promotion — a scan that runs after
+        the runtime opens the file has documented an incident, not prevented one.
+    - capability: capabilityIga
+      at: api
+      note: >
+        Caller identity at the wrapper rather than locality as authorization — a browser tab
+        is local too. Absorbed by the API wrapper per the recorded deviation.
     - capability: capabilityModelGuardrails
       at: api->runtime
       note: Deploy the input and output classification a hosted API would have applied — nothing supplies it here by default.
     - capability: capabilityRateLimiting
       at: api
       note: Bound what any single caller can consume, because the callers share one unmetered port.
-    - capability: capabilityAiGovernancePlatform
+    - capability: capabilityTransportSecurity
       at: api
       note: >
-        A device-enforced policy on whether local inference may run at all, from which sources,
-        and bound to loopback only.
+        The bind, the origin policy and the auth flag treated as security settings with a
+        reviewed baseline — loopback only, CORS closed, authenticated transport on — enforced
+        by device management rather than hoped from defaults.
     - capability: capabilityModelWeightProtection
       at: weights
       note: Restrictive file permissions and integrity checks on the artifacts, so a swap is detectable.
+    - capability: capabilityAiGovernancePlatform
+      at: govObservability
+      note: >
+        The system of record for whether local inference may run at all, from which sources,
+        on which machines — the policy the device-level settings enforce.
+    - capability: capabilityEdr
+      at: runtime
+      note: >
+        Endpoint telemetry over the serving process: vulnerable-version discovery, port and
+        process visibility, and the containment that isolates a machine serving something it
+        should not.
     - capability: capabilityAiBom
       at: runtime
       note: Which models, at which versions, from which sources, on which machines — the precondition for every response.
@@ -320,10 +367,11 @@ pins:
       at: runtime
       note: Find the runtimes nobody registered, derived from the machine rather than self-reported.
     - capability: capabilityModelEvals
-      at: runtime
+      at: govObservability
       note: >
-        Evaluate what the weights actually do before serving them to other software — there is no
-        provider evaluation to inherit.
+        Evaluate what the weights actually do before promoting them for other software to call
+        — a gate on change, run from the governance band; there is no provider evaluation to
+        inherit.
 
 walkthrough:
   title: An application asks for a completion
@@ -342,13 +390,27 @@ walkthrough:
 scenarios:
   - title: A poisoned checkpoint
     steps:
-      - follow: runtime->hub
-        note: A well-reviewed model name, a compromised artifact — the download verifies transport, not behaviour.
+      - follow: hub->weights
+        note: >
+          A well-reviewed model name, a compromised artifact — the download verifies transport,
+          not behaviour. It lands in quarantine unopened, which is the step the common install
+          skips.
       - follow: weights->runtime
         note: >
-          The runtime opens the file. In a pickle-class format the load is the execution event;
-          in a safe format, a malformed header exercises the parser instead — either way, with
-          the user's privileges.
+          Only after scan and promotion does the runtime open the file. In a pickle-class
+          format the load is the execution event; in a safe format, a malformed header
+          exercises the parser instead — either way, with the user's privileges.
+  - title: The port is on the internet
+    steps:
+      - follow: callers->api
+        note: >
+          An exposure scan finds the bind that was never meant to be routable — tens of
+          thousands of them, in the published counts.
+      - follow: api->runtime
+        note: >
+          Free inference for whoever arrived, and on some runtimes the management surface too:
+          models pulled, deleted or swapped by a stranger, on a machine that appears in no
+          inventory.
   - title: A browser tab finds the port
     steps:
       - follow: localApps->api
@@ -361,6 +423,19 @@ scenarios:
           inference — for free, and invisibly to the user.
 
 deviations:
+  - subject: Quarantine, scanning and rate limiting are absorbed rather than drawn
+    reason: >
+      The scanning embodiment (the private package registry) and a separate quarantine tier
+      are not drawn: the storage block carries quarantine and promotion state, the management
+      tooling runs the scan, and the API wrapper absorbs caller identity and per-caller
+      ceilings. Recorded here because each is an inline duty a simple endpoint drawing folds
+      into the nearest real tier.
+  - subject: The runtime's own distribution channel is not drawn
+    reason: >
+      The serving binary updates itself over its vendor's channel — attack surface the
+      insecure-component risk note names, but a single outbound updater hop that a standing
+      edge would overstate. An organisation that mirrors the runtime binary through its
+      package registry closes it there.
   - subject: Guardrails are a control on the request path, not a block
     reason: >
       Input and output classification is something the device owner deploys, not a component of
