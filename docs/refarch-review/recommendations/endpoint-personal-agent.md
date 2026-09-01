@@ -1,5 +1,11 @@
 # Review: Personal autonomous agent
 
+> **Status (2026-09-01): APPLIED** on branch `refarch-review-updates`. Every finding was
+> executed per its Second-review verdict — Agree rows as written, Modify rows as amended,
+> Disagree rows via the stated alternative — with guidance updated in the same commits.
+> Exception: PA-10 applied via its alternative (bundled-gateway deviation dropped, gateway kept whole).
+
+
 Files reviewed: `data/reference/architectures/endpoint-personal-agent.yaml` and its paired guidance.
 
 ## Overall assessment

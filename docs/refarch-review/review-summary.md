@@ -26,6 +26,12 @@
 
 # Second review (2026-09-01)
 
+> **Status: APPLIED (2026-09-01)** — all findings below were executed on branch
+> `refarch-review-updates`, one commit per work package, per the verdicts in each
+> recommendations file (which now carry per-file status headers). Deferred: the
+> agentic-browser reactivation proposal. Post-remediation audit: 2 risks and 3 capabilities
+> unpinned, all judged correctly absent.
+
 An independent second pass over all thirteen architectures plus a cross-catalogue sweep. Every first-review finding now carries a **Second review** verdict column in its recommendations file; additional findings are appended per file; cross-catalogue findings are in `recommendations/cross-catalogue.md` (new).
 
 **Adjudication of the first review: 125 Agree, 35 Modify, 4 Disagree** across 164 findings. The first review holds up well; most Modifys sharpen the fix (usually: resolve at vocabulary/family level rather than in one file, or use a recorded deviation rather than redrawing). The four Disagrees:

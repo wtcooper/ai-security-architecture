@@ -173,3 +173,23 @@ the §4 criterion for the **Sandboxed tools item**, not the frame. The deviation
 retired `flows:` mechanism as silently ignored data for a month after its deletion; the
 load-bearing prose was migrated into walks and the rest deleted. Retired grammar is deleted,
 not ignored.
+
+**A gateway's items must match the traffic it actually brokers.** Three drawings displayed the
+`aiGatewayTraffic` pack's Model proxy on gateways with no model anywhere behind them; a fourth
+(self-hosted inference) displayed MCP and skills brokers on an inference-only gateway. Each now
+lists its real traffic classes with a recorded deviation, the pack's `when:` says so, and the
+`patternModelPath` comment no longer claims the low-code builder is the unique case.
+
+**The band-order exception list is now truthful.** Four drawings break left-to-right band
+order — the training pipeline (external first, ingest), and all three SaaS drawings (vendor
+before our cloud, because the user or maker reaches the vendor first). All four now record it
+in `deviations:`; the review guide previously claimed only two did.
+
+**Vocabulary registrations either serve a drawing or carry a pointer.** The review revived four
+orphans the drawings had wrongly dropped (Curation & filtering, Evaluation & red teaming,
+Model registry, the sources' Self-trained model item) and deprecated seven that duplicated
+surviving names or violated the three-zone rule (Chat surface & uploads, Connected systems,
+User-connected systems, Serving & consumers, Managed memory/sandbox/tool gateway). The
+`capabilityModelScanning` embodiment was re-pointed from the never-registered "Artifact
+scanning" to the Private pkg registry, and `capabilityStagedRollout` now applies on the SaaS
+surface for customer-owned agent definitions.

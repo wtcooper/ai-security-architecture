@@ -1,5 +1,11 @@
 # Review: Chat agent with tools
 
+> **Status (2026-09-01): APPLIED** on branch `refarch-review-updates`. Every finding was
+> executed per its Second-review verdict — Agree rows as written, Modify rows as amended,
+> Disagree rows via the stated alternative — with guidance updated in the same commits.
+> Exception: CA-02 applied via its alternative (scheduled edge kept, pinned and walked per CA-A1).
+
+
 Files reviewed: `data/reference/architectures/cloud-chat-agent.yaml` and its paired guidance.
 
 ## Overall assessment

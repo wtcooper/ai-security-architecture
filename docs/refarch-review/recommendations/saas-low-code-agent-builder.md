@@ -1,5 +1,11 @@
 # Review: UI/low-code managed agent runtime
 
+> **Status (2026-09-01): APPLIED** on branch `refarch-review-updates`. Every finding was
+> executed per its Second-review verdict — Agree rows as written, Modify rows as amended,
+> Disagree rows via the stated alternative — with guidance updated in the same commits.
+> Exception: LC-02 applied via its alternative (provider block kept, variants noted).
+
+
 Files reviewed: `data/reference/architectures/saas-low-code-agent-builder.yaml` and its paired guidance.
 
 ## Overall assessment

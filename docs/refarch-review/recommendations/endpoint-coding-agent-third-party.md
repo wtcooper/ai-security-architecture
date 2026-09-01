@@ -1,5 +1,11 @@
 # Review: Third-party coding & desktop agents
 
+> **Status (2026-09-01): APPLIED** on branch `refarch-review-updates`. Every finding was
+> executed per its Second-review verdict — Agree rows as written, Modify rows as amended,
+> Disagree rows via the stated alternative — with guidance updated in the same commits.
+> Exception: TP-09 resolved by keeping the grouped, dated exemplar style per its Judgement verdict.
+
+
 Files reviewed: `data/reference/architectures/endpoint-coding-agent-third-party.yaml` and its paired guidance.
 
 ## Overall assessment

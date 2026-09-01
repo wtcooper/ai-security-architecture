@@ -1,5 +1,14 @@
 # Review: Cross-catalogue (second review)
 
+> **Status (2026-09-01): APPLIED** on branch `refarch-review-updates`. Every finding was
+> executed per its Second-review verdict — Agree rows as written, Modify rows as amended,
+> Disagree rows via the stated alternative — with guidance updated in the same commits.
+> Exceptions: the agentic-browser reactivation (§5.3) is deferred as a follow-up proposal;
+> riskPromptResponseCachePoisoning is now unpinned by design (its mis-uses were retyped and no
+> drawing carries a real shared response cache); and capabilityGroundednessChecking was pinned
+> on the chat agent per CA-11, overriding this report's "correctly absent" call.
+
+
 Added in the second-pass review. Scope: §6.5 of the review guide plus the two known-open §5 items — unpinned risks and capabilities, deviations read together, name reuse, pin-distribution smells, catalogue shape. All thirteen active drawings read in full, against `data/ONTOLOGY.md`, `data/reference/vocabulary.yaml`, `docs/AUDIT.md`, the taxonomy files in `data/cosai/` and `data/overlay/`, and `docs/full-ref-arch-catalog.md`.
 
 ## 1. The 7 unpinned risks and 12 unpinned capabilities

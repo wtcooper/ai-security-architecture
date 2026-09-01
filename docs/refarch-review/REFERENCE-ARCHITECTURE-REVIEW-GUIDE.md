@@ -37,7 +37,7 @@ most productive thing to look for.
 
 ## 2. The principles
 
-These are stated in full in [`data/ONTOLOGY.md`](../data/ONTOLOGY.md). The short version:
+These are stated in full in [`data/ONTOLOGY.md`](../../data/ONTOLOGY.md). The short version:
 
 1. **A component is a tier somebody runs.** Not a control, not a checkpoint, not a policy. "AI
    gateway" is a component because it is real software on real infrastructure. "Egress control"
@@ -54,9 +54,11 @@ These are stated in full in [`data/ONTOLOGY.md`](../data/ONTOLOGY.md). The short
    drawing does not need is simply absent.
 
 4. **Reuse before you create.** Every block title and item label must already be registered in
-   [`data/reference/vocabulary.yaml`](../data/reference/vocabulary.yaml), or be registered in
-   the same change with a reason. Every build prints a census of distinct names; it is meant
-   only to go down. Currently 56 block titles and 84 item labels across thirteen drawings.
+   [`data/reference/vocabulary.yaml`](../../data/reference/vocabulary.yaml), or be registered in
+   the same change with a reason. Every build prints a census of distinct names; the registry
+   is meant only to shrink. Currently 59 block titles and 98 item labels are in use across
+   thirteen drawings (the 2026-09 remediation revived several registered names the drawings
+   had wrongly dropped).
 
 5. **The three-zone responsibility rule.** What a vendor runs inside their own boundary is never
    drawn — it is assured by assessment (`capabilityAiTprm`) and recorded as one block. Drawing a
@@ -103,11 +105,11 @@ Rendering, for reference but not for review:
 
 | Concern | File |
 | --- | --- |
-| Validation and the generated dataset | [`scripts/build-data.ts`](../scripts/build-data.ts) |
-| Geometry — grid to pixels, band rects, pin placement | [`src/lib/flow-layout.ts`](../src/lib/flow-layout.ts) |
-| On-screen diagram | [`src/components/reference/FlowDiagramRF.tsx`](../src/components/reference/FlowDiagramRF.tsx) |
-| Sequence diagram | [`src/components/reference/FlowSequence.tsx`](../src/components/reference/FlowSequence.tsx) |
-| Standalone HTML export | [`src/components/reference/export-html.ts`](../src/components/reference/export-html.ts) |
+| Validation and the generated dataset | [`scripts/build-data.ts`](../../scripts/build-data.ts) |
+| Geometry — grid to pixels, band rects, pin placement | [`src/lib/flow-layout.ts`](../../src/lib/flow-layout.ts) |
+| On-screen diagram | [`src/components/reference/FlowDiagramRF.tsx`](../../src/components/reference/FlowDiagramRF.tsx) |
+| Sequence diagram | [`src/components/reference/FlowSequence.tsx`](../../src/components/reference/FlowSequence.tsx) |
+| Standalone HTML export | [`src/components/reference/export-html.ts`](../../src/components/reference/export-html.ts) |
 
 Run `npm run data` to validate, `npm run audit` to regenerate `docs/AUDIT.md`.
 
@@ -131,10 +133,10 @@ An architecture file has these sections, in this order.
 
 ### `zones`
 The ownership bands, each with an `owner` from the six, and a `note` saying what the band means
-*on this drawing*. Band order is left-to-right by convention, and two drawings deliberately
+*on this drawing*. Band order is left-to-right by convention, and four drawings deliberately
 break it — the training pipeline (external on the left, because it is an ingest architecture)
-and the low-code builder (vendor before our cloud, because a maker reaches the platform first).
-Both have deviations recording it.
+and all three SaaS drawings (vendor before our cloud, because the user or maker reaches the
+vendor first). All four have deviations recording it.
 
 ### `blocks`
 The components. Each carries `kind`, `title`, `zone`, grid `col`/`row`, an optional `parent` for
@@ -206,9 +208,11 @@ capability chip, risk tag or step badge lands on a block or runs off the canvas.
 mode, carry attribution, and cite only capabilities pinned on the drawing. Ranks are unique
 within a surface. Deviations have reasons. The SAIF and CoSAI cross-checks pass.
 
-Two known-open items, both intentional and both reported by `npm run audit`: **7 risks and 12
-capabilities are not pinned on any architecture**. Judging whether each of those is a genuine
-gap or correctly absent is a reasonable thing to include in your review.
+Two known-open items, both intentional and both reported by `npm run audit`: **2 risks and 3
+capabilities are not pinned on any architecture** (down from 7 and 12 after the 2026-09
+remediation; the residue was judged correctly absent, with the reasoning in
+`refarch-review/recommendations/cross-catalogue.md`). Judging whether each remains correctly
+absent is a reasonable thing to include in your review.
 
 ---
 

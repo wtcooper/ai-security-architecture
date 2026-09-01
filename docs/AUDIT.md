@@ -680,31 +680,21 @@ Highlights below are Google's original mapping, not ours.
 | Cloud & hosted | 6 — Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
-### 4a. Risks no architecture pins — 5 of 36
+### 4a. Risks no architecture pins — 2 of 36
 
-- Model Reverse Engineering (`riskModelReverseEngineering`)
-- Inferred Sensitive Data (`riskInferredSensitiveData`)
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
-- Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
-- Evaluation/Benchmark Manipulation (`riskEvaluationBenchmarkManipulation`)
+- Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 
-### 4b. Capabilities no architecture pins — 9 of 56
+### 4b. Capabilities no architecture pins — 3 of 56
 
 - Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
-- Privacy-enhancing technologies (`capabilityPetTooling`)
-- Staged rollout, versioning & rollback (`capabilityStagedRollout`)
-- Model hardening & adversarial training (`capabilityModelHardening`)
 - Content provenance & watermarking (`capabilityContentProvenance`)
-- Agent behavioural & goal-drift detection (`capabilityBehavioralDriftDetection`)
-- Endpoint detection & response (`capabilityEdr`)
-- SaaS security posture management for AI features (`capabilityVendorAssurance`)
 - Threat modelling tooling for AI systems (`capabilityThreatModeling`)
 
-### 4c. CoSAI components no architecture anchors — 9 of 23
+### 4c. CoSAI components no architecture anchors — 8 of 23
 
-- Data Filtering and Processing (`componentDataFilteringAndProcessing`)
 - Model Frameworks and Code (`componentModelFrameworksAndCode`)
-- Model Evaluation (`componentModelEvaluation`)
+- The Model (`componentTheModel`)
 - Model Output Handling (`componentApplicationOutputHandling`)
 - Model Input Handling (`componentApplicationInputHandling`)
 - Orchestration Output (`componentOrchestrationOutputHandling`)
@@ -774,6 +764,7 @@ Highlights below are Google's original mapping, not ours.
 | Remote MCP server you publish | Enterprise data | external | `componentDataSources` |
 | Remote MCP server you publish | Downstream services | external | `componentDataSources` |
 | Remote MCP server you publish | Identity services | governance | (none) |
+| Remote MCP server you publish | Secrets & key management | governance | (none) |
 | Remote MCP server you publish | Policy & authorization | governance | (none) |
 | Remote MCP server you publish | Supply-chain assurance | governance | (none) |
 | Remote MCP server you publish | Observability & response | governance | (none) |
@@ -783,15 +774,20 @@ Highlights below are Google's original mapping, not ours.
 | Self-hosted model inference | Inference runtime | service | `componentModelServing` |
 | Self-hosted model inference | Storage | external | `componentModelStorage` |
 | Self-hosted model inference | Model sources | external | `componentModelStorage` |
+| Self-hosted model inference | Identity services | governance | (none) |
 | Self-hosted model inference | Supply-chain assurance | governance | (none) |
 | Self-hosted model inference | Policy & authorization | governance | (none) |
 | Self-hosted model inference | Secrets & key management | governance | (none) |
 | Self-hosted model inference | Observability & response | governance | (none) |
 | Fine-tuning and model registry pipeline | Base model & deps | external | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Training content origins | external | `componentDataSources` |
+| Fine-tuning and model registry pipeline | Private pkg registry | external | `componentDataSources` |
+| Fine-tuning and model registry pipeline | Curation & filtering | service | `componentDataFilteringAndProcessing` |
 | Fine-tuning and model registry pipeline | Training corpus | service | `componentTrainingData` |
 | Fine-tuning and model registry pipeline | Training job | service | `componentModelTrainingTuning` |
 | Fine-tuning and model registry pipeline | Storage | external | `componentModelStorage` |
+| Fine-tuning and model registry pipeline | Evaluation & red teaming | service | `componentModelEvaluation` |
+| Fine-tuning and model registry pipeline | Model registry | service | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Supply-chain assurance | governance | (none) |
 | Fine-tuning and model registry pipeline | Policy & authorization | governance | (none) |
 | Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
@@ -831,10 +827,11 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | Observability & response | governance | (none) |
 | Local model runtime | Local applications | service | (none) |
 | Local model runtime | Inference API | service | `componentModelServing` |
-| Local model runtime | Inference runtime | service | `componentTheModel` |
+| Local model runtime | Inference runtime | service | `componentModelServing` |
 | Local model runtime | Storage | external | `componentModelStorage` |
 | Local model runtime | Supply-chain assurance | governance | (none) |
 | Local model runtime | Observability & response | governance | (none) |
+| Local model runtime | Callers | origin | (none) |
 | Local model runtime | Public model hub | external | `componentModelStorage` |
 | Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Sandbox | boundary | (none) |
@@ -845,6 +842,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Owner workspace | external | `componentDataSources` |
 | Personal autonomous agent | Messaging relay | service | (none) |
 | Personal autonomous agent | AI gateway | service | (none) |
+| Personal autonomous agent | Private pkg registry | external | `componentDataSources` |
 | Personal autonomous agent | Identity services | governance | (none) |
 | Personal autonomous agent | Secrets & key management | governance | (none) |
 | Personal autonomous agent | Policy & authorization | governance | (none) |
@@ -865,6 +863,7 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | Consumer product | external | `componentApplication` |
 | Enterprise AI chat with connectors | Tool services | service | `componentTools` |
 | Enterprise AI chat with connectors | Identity services | governance | (none) |
+| Enterprise AI chat with connectors | Secrets & key management | governance | (none) |
 | Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
 | Enterprise AI chat with connectors | Supply-chain assurance | governance | (none) |
 | Enterprise AI chat with connectors | Observability & response | governance | (none) |
@@ -876,18 +875,22 @@ Highlights below are Google's original mapping, not ours.
 | UI/low-code managed agent runtime | Model provider | provider | `componentModelServing` |
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
 | UI/low-code managed agent runtime | Identity services | governance | (none) |
+| UI/low-code managed agent runtime | Secrets & key management | governance | (none) |
 | UI/low-code managed agent runtime | Policy & authorization | governance | (none) |
 | UI/low-code managed agent runtime | Supply-chain assurance | governance | (none) |
 | UI/low-code managed agent runtime | Observability & response | governance | (none) |
+| API/SDK managed agent runtime | Application front end | service | `componentApplication` |
 | API/SDK managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
 | API/SDK managed agent runtime | AI gateway | service | (none) |
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
 | API/SDK managed agent runtime | Enterprise data | external | `componentDataSources` |
+| API/SDK managed agent runtime | Tool services | service | `componentTools` |
 | API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Identity services | governance | (none) |
 | API/SDK managed agent runtime | Secrets & key management | governance | (none) |
 | API/SDK managed agent runtime | Policy & authorization | governance | (none) |
+| API/SDK managed agent runtime | Supply-chain assurance | governance | (none) |
 | API/SDK managed agent runtime | Observability & response | governance | (none) |
 
 ## 5. Controls-guidance coverage
@@ -907,16 +910,16 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | build | draft | 7 | Agent credential isolation & delegation control |
 | Multi-agent workflow | build | draft | 8 | Data access governance for retrieval |
 | Chat agent with tools | build | draft | 7 | _none_ |
-| Remote MCP server you publish | build | draft | 5 | Application security testing for AI systems, Kill switch, quarantine & decommissioning |
-| Self-hosted model inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
-| Fine-tuning and model registry pipeline | build | draft | 4 | Audit logging & non-repudiation, Model registry & documentation generation |
-| First-party coding & desktop agents | use | draft | 4 | Identity & access management for AI applications, Data loss prevention for AI interactions, Agent & tool registry, Audit logging & non-repudiation |
-| Third-party coding & desktop agents | use | draft | 7 | Runtime action authorization, Third-party risk management platform for AI vendors, Agent memory & context protection, Secrets management & ephemeral credentials |
-| Local model runtime | use | draft | 4 | _none_ |
-| Personal autonomous agent | use | draft | 4 | Inter-component & inter-agent transport security, Agent credential isolation & delegation control, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Shadow AI discovery |
-| Enterprise AI chat with connectors | use | draft | 5 | Third-party risk management platform for AI vendors, Encryption & key management for AI assets, Secrets management & ephemeral credentials, Tool permission scoping & least agency, Agent & tool registry |
-| UI/low-code managed agent runtime | use | draft | 5 | Encryption & key management for AI assets |
-| API/SDK managed agent runtime | hybrid | draft | 5 | Secrets management & ephemeral credentials, Encryption & key management for AI assets, Human-in-the-loop approval & escalation, Network segmentation & egress control |
+| Remote MCP server you publish | build | draft | 6 | _none_ |
+| Self-hosted model inference | build | draft | 6 | _none_ |
+| Fine-tuning and model registry pipeline | build | draft | 7 | _none_ |
+| First-party coding & desktop agents | hybrid | draft | 6 | _none_ |
+| Third-party coding & desktop agents | use | draft | 9 | Kill switch, quarantine & decommissioning |
+| Local model runtime | use | draft | 4 | Identity & access management for AI applications |
+| Personal autonomous agent | use | draft | 7 | Agent behavioural & goal-drift detection |
+| Enterprise AI chat with connectors | use | draft | 7 | _none_ |
+| UI/low-code managed agent runtime | use | draft | 7 | _none_ |
+| API/SDK managed agent runtime | hybrid | draft | 7 | _none_ |
 
 ### 5b. Tool registry
 

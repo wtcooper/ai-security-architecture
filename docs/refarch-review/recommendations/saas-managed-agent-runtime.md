@@ -1,5 +1,10 @@
 # Review: API/SDK managed agent runtime
 
+> **Status (2026-09-01): APPLIED** on branch `refarch-review-updates`. Every finding was
+> executed per its Second-review verdict — Agree rows as written, Modify rows as amended,
+> Disagree rows via the stated alternative — with guidance updated in the same commits.
+
+
 Files reviewed: `data/reference/architectures/saas-managed-agent-runtime.yaml` and its paired guidance.
 
 ## Overall assessment
