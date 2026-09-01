@@ -765,98 +765,6 @@ pins:
       at: harness
       note: Find the installs nobody registered, derived from the device rather than self-reported.
 
-flows:
-  - id: F1
-    title: Owner instructs the agent
-    moves: Natural-language instructions, files and approvals in; replies and questions back.
-    path:
-      - follow: owner->remoteDevice
-        note: >
-          First step, option one: the owner types into a chat client or the control UI, away
-          from the machine.
-      - follow: owner->harness
-        note: >
-          First step, option two: the owner is at the device and talks to the loop directly.
-          Same instruction, and authorised by nothing but holding the machine.
-      - follow: remoteDevice->bridges
-        note: >
-          The control UI talks to the adapter directly, skipping the messaging platform
-          entirely — the one entrance on this drawing that is ours end to end.
-      - follow: remoteDevice->platform
-        note: The chat client reaches the messaging platform, exactly as anybody else's would.
-      - follow: platform->relay
-        note: Our relay collects from the platform; it is outbound-only and opens no inbound port.
-      - follow: relay->bridges
-        note: Down to the per-platform adapter, where the pairing record is the whole admission decision.
-      - follow: bridges->harness
-        note: And into the loop, indistinguishable at this point from the unsolicited path in F2.
-    threats: [Unauthorised sender steers the agent, Approval fatigue on a low-assurance surface]
-    controls: [capabilityAgentRuntimeEnforcement, capabilityPromptInjectionDefense]
-    note: >
-      Read this beside F2 and the finding is that they are the same road. The owner's
-      instruction reaches the agent by the identical hops an unsolicited message does, because
-      the owner has no privileged channel — over chat they are authenticated by the messaging
-      platform and nothing else, and locally by holding the machine. Consequential approvals
-      deserve a surface with better assurance than either.
-  - id: F2
-    title: Unsolicited inbound
-    moves: Messages from anyone the platform admits, carrying content the loop will read as instruction.
-    path: [senders->platform, platform->relay, relay->bridges, bridges->harness]
-    threats: [Indirect prompt injection, Channel hijack, Group-chat exposure]
-    controls: [capabilityPromptInjectionDefense, capabilityAgentRuntimeEnforcement, capabilityTransportSecurity]
-    note: The defining flow of the archetype — an unbounded sender set reaching an unattended loop.
-  - id: F3
-    title: Model inference
-    moves: The assembled prompt — system instruction, memory, conversation, tool results — and the completion.
-    path: [harness->gateway, gateway->provider]
-    threats: [Sensitive context leaving the tenant, Unapproved models, Injection reaching the model, Cost abuse]
-    controls: [capabilitySecretsManagement, capabilityModelGuardrails, capabilityRateLimiting, capabilityEgressControl]
-    note: The gateway is the only provider endpoint the harness knows; direct provider domains are refused.
-  - id: F4
-    title: Remote tools and actions
-    moves: Tool discovery, calls and results — and the actions that land on the owner's accounts.
-    path: [harness->gateway, gateway->remoteTools, remoteTools->downstream]
-    threats: [Tool poisoning, Confused deputy, Over-scoped grants, Exfiltration through arguments]
-    controls: [capabilityMcpToolSecurity, capabilityHitlControls, capabilityEgressControl]
-    note: >
-      One bundled crossing carries model, MCP and skills traffic in this organisation; the
-      controls are per-flow regardless of how many tiers implement them.
-  - id: F5
-    title: Enterprise systems
-    moves: Calls into our own MCP servers and APIs, and the records they read and change.
-    path: [harness->gateway, gateway->internalTools, internalTools->orgData]
-    threats: [Over-scoped internal grants, Bulk reads of org data, Writes with no approval]
-    controls: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAuditLogging]
-    note: >
-      The flow the deployment exists for. Everything the organisation wants the agent to do
-      lives here, which is why this crossing gets the tightest scoping rather than the loosest.
-  - id: F6
-    title: Local execution
-    moves: Shell commands, file reads and writes inside the sandbox; results back into context.
-    path: [harness->toolPlane, toolPlane->workspace]
-    threats: [Sandbox escape, Destructive file operations, Implicit execution of edited host files]
-    controls: [capabilityAgentSandboxing, capabilityToolPermissionScoping, capabilityCredentialIsolation]
-    note: The workspace mount is the third opening — read-only with a private clone, or it is a host write path.
-  - id: F7
-    title: Skill and image supply
-    moves: Skill packages, plugins and sandbox base images.
-    path: [toolPlane->gateway]
-    threats: [Malicious public skills, Unpinned auto-update, Self-authored skills encoding injected behaviour]
-    controls: [capabilityMcpToolSecurity]
-    note: Internal registry only, scanned and signed; self-authored skills quarantine until reviewed.
-  - id: F8
-    title: Memory persistence
-    moves: Long-term memory files, transcripts and the user model the next turn reads as instruction.
-    path: [harness->memory]
-    threats: [Memory poisoning, Sensitive accumulation in plaintext, Config tampering, Unattended execution of injected instructions]
-    controls: [capabilityMemoryProtection]
-    note: >
-      The persistence primitive — and the reason one successful injection outlives its message.
-      It is also what an unattended wake-up reads on the way in: the heartbeat has no arrow of
-      its own on this drawing because it fires inside the harness rather than calling it from
-      outside, so what it actually carries into the loop is whatever is written here. Unattended
-      runs belong to a read-only or draft action class enforced at the crossing, not to the same
-      authority an attended turn carries — see the heartbeat scenario.
 walkthrough:
   title: The owner asks the agent to do something
   moves: >-
@@ -889,6 +797,27 @@ walkthrough:
       note: And the effect lands. Read the stranger's walk next; it converges on this same pipe.
 
 scenarios:
+  - title: The owner steers the agent from their phone
+    steps:
+      - follow: owner->remoteDevice
+        note: >
+          The owner types into a chat client, away from the machine. Everything after this
+          rides platform identity — there is no privileged owner channel.
+      - follow: remoteDevice->platform
+        note: The chat client reaches the messaging platform, exactly as anybody else's would.
+      - follow: platform->relay
+        note: Our relay collects from the platform; it is outbound-only and opens no inbound port.
+      - follow: relay->bridges
+        note: >
+          Down to the per-platform adapter, where the pairing record is the whole admission
+          decision.
+      - follow: bridges->harness
+        note: >
+          Into the loop — indistinguishable at this point from a stranger's message, because
+          the owner's instruction arrived by the identical hops. Read the stranger's walk
+          beside this one: they are the same road, told apart only by what the platform
+          asserts about the sender. Consequential approvals deserve a surface with better
+          assurance than either.
   - title: A stranger messages the agent
     steps:
       - follow: senders->platform
@@ -906,9 +835,15 @@ scenarios:
   - title: The heartbeat fires with nobody watching
     steps:
       - follow: memory->harness
-        note: The tick re-reads memory, including anything written there last week.
+        note: >
+          The heartbeat has no arrow of its own because it fires inside the harness rather
+          than calling it from outside — so what it actually carries into the loop is
+          whatever is written here, including anything an earlier turn persisted last week.
       - follow: harness->gateway
-        note: The unattended turn crosses like any other — and should be refused write scope here.
+        note: >
+          The unattended turn crosses like any other, but it belongs to a read-only or draft
+          action class enforced here at the crossing — not to the same authority an attended
+          turn carries.
       - follow: gateway->remoteTools
         note: A one-time injection has become a recurring one, bounded now by the action class.
   - title: A skill is installed

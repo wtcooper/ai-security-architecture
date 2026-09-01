@@ -67,6 +67,16 @@ async function loadIncidents(): Promise<Incident[]> {
   return Promise.all(files.map((f) => loadYaml<Incident>(join(dir, f))));
 }
 
+/**
+ * The keys an architecture file may author. Anything else fails the load — retired grammar
+ * (the 2026-08 `flows:` mechanism in particular) must not survive as silently ignored data.
+ */
+const ARCHETYPE_KEYS = new Set([
+  "id", "surface", "rank", "title", "abbrev", "summary", "description", "distinguishedBy",
+  "exemplars", "blocks", "edges", "zones", "pins", "walkthrough", "scenarios", "deviations",
+  "sources",
+]);
+
 /** One file per architecture, so each stays reviewable on its own. */
 async function loadArchetypes(): Promise<{ file: string; arch: AuthoredArchetype }[]> {
   const dir = join(ROOT, "data", "reference", "architectures");
@@ -74,7 +84,11 @@ async function loadArchetypes(): Promise<{ file: string; arch: AuthoredArchetype
   return Promise.all(
     files.map(async (f) => {
       try {
-        return { file: f, arch: await loadYaml<AuthoredArchetype>(join(dir, f)) };
+        const arch = await loadYaml<AuthoredArchetype>(join(dir, f));
+        const unknown = Object.keys(arch).filter((k) => !ARCHETYPE_KEYS.has(k));
+        if (unknown.length)
+          throw new Error(`unknown top-level key(s) ${unknown.join(", ")} — retired grammar is deleted, not ignored`);
+        return { file: f, arch };
       } catch (e) {
         throw new Error(`architectures/${f}: ${(e as Error).message}`);
       }
