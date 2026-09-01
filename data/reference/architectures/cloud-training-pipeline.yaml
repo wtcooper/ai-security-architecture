@@ -41,30 +41,37 @@ description:
 
 distinguishedBy:
   - >
-    Against the batch pipeline: same build-system trust properties, different artifact. That
-    produces data; this produces a model. The data can be corrected in place; the model cannot.
+    Against an ordinary data or software build pipeline: same trust properties, different
+    artifact. A dataset or binary can be corrected in place and diffed; a model cannot — which
+    is why the evaluation gate and the promotion decision carry the weight code review carries
+    elsewhere.
   - >
     Against self-hosted inference: that consumes artifacts, this produces them. They meet at the
-    registry, and the promotion gate between them is where both archetypes' supply-chain
-    controls concentrate.
+    model registry this drawing now shows, and the promotion gate in front of it is where both
+    archetypes' supply-chain controls concentrate.
 
 exemplars:
-  - name: Managed fine-tuning services
+  - name: Axolotl
     note: >
-      Provider-hosted tuning against a customer dataset, producing a private checkpoint served
-      from the same platform. Availability varies sharply by provider and by year.
-    asOf: "2026-08"
-  - name: Self-operated tuning on accelerator fleets
+      Self-operated adapter and full fine-tuning on the organisation's own accelerators — the
+      training-job tier of this drawing, run against a corpus and base checkpoint the
+      organisation curates itself.
+    url: https://github.com/axolotl-ai-cloud/axolotl
+    asOf: "2026-09"
+  - name: MLflow Model Registry
     note: >
-      Adapter or full fine-tuning on the organisation's own hardware, with a registry and
-      promotion pipeline built alongside.
-    asOf: "2026-08"
-  - name: Adapter and preference tuning
+      Versioned artifacts with lineage, stage transitions, approvals and rollback — the
+      registry-and-promotion tier, operated beside whatever produced the checkpoint.
+    url: https://mlflow.org/docs/latest/model-registry.html
+    asOf: "2026-09"
+  - name: Hugging Face PEFT
     note: >
       Lightweight tuning producing an adapter rather than a full checkpoint. Smaller artifact,
-      same supply-chain questions, and an additional one about who may load an adapter at serve
-      time.
-    asOf: "2026-08"
+      same supply-chain questions, and an additional one — who may load an adapter at serve
+      time — that this page pins at the registry. Provider-hosted managed tuning is a
+      different custody model and is deliberately not an exemplar here.
+    url: https://huggingface.co/docs/peft
+    asOf: "2026-09"
 
 zones:
   - id: zoneExternal
@@ -76,9 +83,9 @@ zones:
   - id: zoneCloud
     owner: cloud
     note: >
-      The run itself: the assembled dataset, the GPU pool that consumes it, and the artifact
-      store the new weights land in. Nothing else — a fine-tuning run needs remarkably little
-      to be honest about.
+      The build system end to end: the mirror that admits upstream artifacts, the curation
+      stage, the assembled dataset, the GPU pool, the candidate store, and the evaluation and
+      registry tiers that stand between a new checkpoint and anything that serves it.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -128,13 +135,62 @@ blocks:
         label: Internal records
         icon: db
         note: Our own data, and the reason the dataset store is the most sensitive thing on this page.
+      - id: labels
+        label: Human labels & preferences
+        icon: person
+        note: >
+          Labels and preference judgements steer behaviour directly, and the workforce that
+          writes them typically gets no scrutiny relative to that influence.
+
+  - id: pkgRegistry
+    kind: external
+    title: Private pkg registry
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 1
+    row: 0
+    note: >
+      The organisation-maintained mirror where base checkpoints and training frameworks are
+      admitted before any job may pull them — format policy and scanning run here, by a tier
+      the job cannot bypass, which is what makes the intake control independent of the thing
+      it protects.
+    items:
+      - id: approvedPackages
+        label: Approved packages
+        icon: db
+        note: The base weights and dependencies a run may use — admitted, scanned, and pinned by digest.
+
+  - id: curation
+    kind: service
+    title: Curation & filtering
+    cosaiComponent: componentDataFilteringAndProcessing
+    zone: zoneCloud
+    col: 1
+    row: 1
+    note: >
+      The processing tier between raw origins and the versioned corpus — the last point at
+      which a poisoned or improperly sourced example is a deletion rather than a retraining
+      decision.
+    items:
+      - id: qualityFilters
+        label: Quality & safety filters
+        icon: search
+        note: What a pipeline calls "curation" — filtering jobs somebody runs and tunes.
+      - id: sensitiveRemoval
+        label: Sensitive-content removal
+        icon: shield
+        note: Restricted-access content removed before it can be memorised into a wider-served artifact.
+      - id: provenanceCapture
+        label: Provenance capture
+        icon: doc
+        note: Per-example source and licence, recorded at ingest because it cannot be reconstructed later.
 
   - id: corpus
     kind: service
     title: Training corpus
     cosaiComponent: componentTrainingData
     zone: zoneCloud
-    col: 1
+    col: 2
     row: 1
     note: >
       The assembled, versioned dataset the run actually reads — an object-storage bucket or a
@@ -152,7 +208,7 @@ blocks:
     cosaiComponent: componentModelTrainingTuning
     zone: zoneCloud
     col: 2
-    row: 1
+    row: 0
     note: >
       The GPU pool and the framework running on it. The technique decides the shape more than
       anything else does: a quantized low-rank run fits on a single node, while a full
@@ -179,21 +235,72 @@ blocks:
     cosaiComponent: componentModelStorage
     zone: zoneCloud
     col: 3
-    row: 1
+    row: 0
     note: >
-      Where the output lands. For a low-rank run that is an adapter directory of megabytes
-      rather than a model; for a full fine-tune it is a complete checkpoint. Either way this is
-      the artifact the serving tier will later load, which is why it is signed here and
-      verified there.
+      Where the candidate lands, unsigned. For a low-rank run that is an adapter directory of
+      megabytes rather than a model; for a full fine-tune it is a complete checkpoint. Nothing
+      serves from here: a candidate becomes loadable only by passing the gate and being signed
+      at promotion. Encryption over these bytes is our keys, managed from the governance band.
     items:
       - id: modelFiles
         label: Model files
         icon: db
-        note: The new weights, or the adapter that layers over the base.
+        note: The new weights, or the adapter that layers over the base — candidates until promoted.
+
+  - id: evaluation
+    kind: service
+    title: Evaluation & red teaming
+    cosaiComponent: componentModelEvaluation
+    zone: zoneCloud
+    col: 4
+    row: 0
+    note: >
+      The blocking gate in front of promotion — candidates flow through it, which is why it is
+      a block here and a governance item on the agent drawings. With an artifact that cannot
+      be read, how the result behaves is one of only two things anyone can examine; the
+      benchmarks themselves are custody-controlled, because a gate whose answer key the
+      candidate's authors can edit gates nothing.
+    items:
+      - id: capabilityEvals
+        label: Capability & safety evals
+        icon: scale
+        note: Task performance and the safety regressions benign fine-tuning measurably causes.
+      - id: backdoorProbing
+        label: Backdoor probing
+        icon: eye
+        note: Trigger-phrase hunting — the only chance to catch a poisoning accuracy metrics cannot see.
+      - id: memorisationTesting
+        label: Memorisation testing
+        icon: search
+        note: Whether restricted corpus content can be extracted back out of the artifact.
+
+  - id: registry
+    kind: service
+    title: Model registry
+    cosaiComponent: componentModelStorage
+    zone: zoneCloud
+    col: 5
+    row: 0
+    note: >
+      Version, lineage, stage, approval, signature and rollback — the promotion semantics the
+      title promises, operated as its own tier. The artifact bytes stay in the store behind
+      it; what lives here is the decision record that makes one of them loadable. This is
+      where this drawing meets self-hosted inference.
+    items:
+      - id: candidates
+        label: Candidate checkpoints
+        icon: model
+        note: Every artifact the pipeline produced, promoted or not.
+      - id: lineage
+        label: Lineage metadata
+        icon: doc
+        note: Which data, which base, which run — the record that scopes a discovered poisoning.
       - id: signedReleases
         label: Signed releases
         icon: shield
-        note: Signed at the moment they land, so the tier that loads them has something to check.
+        note: >
+          Signed at promotion, by an identity the training job never holds, so the serving
+          tier's load-time verification proves the gate was passed.
 
   - id: govSupplyChain
     kind: governance
@@ -244,20 +351,32 @@ blocks:
 
 edges:
   - from: dataOrigins
-    to: corpus
+    to: curation
     path: external
     label: content in
     note: >
-      Material from outside, assembled into the versioned set the run will read. This is the
-      last point at which a poisoned example can be removed rather than learned.
-  - from: upstreamArtifacts
-    to: trainJob
-    path: external
-    label: base weights in
+      Raw material from outside, entering the one stage where a bad example is still a
+      deletion. Everything after this hop is versioned and, eventually, learned.
+  - from: curation
+    to: corpus
+    path: primary
+    label: filtered set
     note: >
-      The starting checkpoint and its frameworks, loaded by the job. For several formats
-      opening the file is itself the execution event, which is why the format check belongs
-      before this hop and not after it.
+      What survives filtering, with provenance stamped per example, assembled into the named,
+      versioned set the run will read.
+  - from: upstreamArtifacts
+    to: pkgRegistry
+    path: external
+    label: base weights & deps in
+    note: >
+      The starting checkpoint and its frameworks arrive at the mirror, where format policy and
+      scanning gate admission. For several formats opening the file is itself the execution
+      event, which is why this check runs at a tier the job cannot skip.
+  - from: pkgRegistry
+    to: trainJob
+    path: primary
+    label: approved artifacts
+    note: The job pulls only what the mirror admitted, pinned by digest.
   - from: corpus
     to: trainJob
     path: primary
@@ -267,18 +386,32 @@ edges:
   - from: trainJob
     to: storage
     path: primary
-    label: new weights out
+    label: candidate out
     note: >
-      The output artifact — a full checkpoint, or an adapter of a few megabytes. Signed as it
-      lands, because the tier that loads it later has no other way to know what it is.
+      The output artifact — a full checkpoint, or an adapter of a few megabytes — lands
+      unsigned. The job holds no signing identity; what it writes is a candidate, not a
+      release.
+  - from: storage
+    to: evaluation
+    path: primary
+    label: candidate under test
+    note: The gate loads the candidate the way a serving tier would, and probes what cannot be read.
+  - from: evaluation
+    to: registry
+    path: primary
+    label: promotion
+    note: >
+      A passing candidate is promoted: a separated human decision, a signature from an
+      identity the job never held, and a registry entry tying artifact to data, base and run.
 
 pins:
   risks:
     - risk: riskDataPoisoning
-      at: dataOrigins->corpus
+      at: dataOrigins->curation
       note: >
-        A poisoned example entering a set nobody can later re-inspect. The injection point of
-        the whole architecture, and the reason provenance is pinned rather than assumed.
+        A poisoned example entering the pipeline. The injection point of the whole
+        architecture, and the reason curation and provenance stand between origins and the
+        corpus rather than being assumed.
     - risk: riskUnauthorizedTrainingData
       at: corpus
       note: Content that was never licensed, consented to, or cleared for this use, learned irreversibly.
@@ -288,10 +421,11 @@ pins:
         The most sensitive artifact in the drawing, mounted by every worker in the job. Its
         access control matters more than anything else on this page.
     - risk: riskModelSourceTampering
-      at: upstreamArtifacts->trainJob
+      at: upstreamArtifacts->pkgRegistry
       note: >
         A base checkpoint whose format executes on load, or a framework dependency that does.
-        Publisher identity says nothing about what the artifact does when opened.
+        Publisher identity says nothing about what the artifact does when opened — which is
+        what admission at the mirror exists to decide.
     - risk: riskInsecureIntegratedComponent
       at: trainJob
       note: >
@@ -302,35 +436,82 @@ pins:
       note: >
         The output is the expensive thing and it is small — an adapter is megabytes. Egress from
         the artifact store deserves the attention a model-sized file would not attract.
+    - risk: riskEvaluationBenchmarkManipulation
+      at: evaluation
+      note: >
+        A gate whose benchmarks the candidate's authors can read or edit gates nothing — and a
+        targeted poisoning is invisible to any evaluation that does not know what to look for.
+        Benchmark custody is the control the gate itself depends on.
+    - risk: riskInferredSensitiveData
+      at: evaluation
+      note: >
+        Memorised examples can be extracted from the artifact afterwards, so restricted corpus
+        content becomes part of something served far more widely than the dataset ever was.
+        Memorisation testing here is where that surfaces before promotion does.
+    - risk: riskAdapterPEFTInjection
+      at: registry
+      note: >
+        An adapter layers over a clean, verified base at serve time — a trojaned one rides the
+        base's reputation. Who may register an adapter, and which base it is approved against,
+        is decided here.
 
   capabilities:
     - capability: capabilityDataSanitization
-      at: dataOrigins->corpus
+      at: curation
       note: >
-        Quality, safety and sensitive-content filtering at ingest — the last point at which a
-        bad example is removable rather than learned. It is a control on this hop rather than a
-        stage of its own, because what a pipeline calls "curation" is filtering plus provenance
-        and nothing a reader needs drawn as a box.
+        Quality, safety and sensitive-content filtering at the drawn stage — the last point at
+        which a bad example is removable rather than learned.
     - capability: capabilityDataProvenance
-      at: dataOrigins->corpus
+      at: curation
       note: Where every example came from, recorded at ingest, because it cannot be reconstructed after training.
+    - capability: capabilityPetTooling
+      at: curation
+      note: >
+        Where sensitive records are in scope, de-identification and privacy-preserving
+        transforms run here — applicability is a data-classification decision, not a default.
     - capability: capabilityDataAccessGovernance
       at: corpus
       note: Who may read the set, enforced at the store rather than trusted to the job.
     - capability: capabilityModelScanning
-      at: upstreamArtifacts->trainJob
-      note: Format and content inspection gating the load, not following it.
+      at: pkgRegistry
+      note: >
+        Format and content inspection gating admission to the mirror — before any loader in
+        the job opens the file, and independent of the job it protects.
     - capability: capabilityHitlControls
       at: corpus->trainJob
       note: A person authorises a run against a named dataset version; runs do not start themselves.
-    - capability: capabilityModelWeightProtection
-      at: trainJob->storage
+    - capability: capabilityModelHardening
+      at: trainJob
       note: >
-        Sign the artifact as it lands, with the OpenSSF Model Signing spec and a Sigstore
-        bundle, so the serving tier's load-time verification has something to verify.
-    - capability: capabilityEncryptionKeyManagement
+        Adversarial training and safety-preserving recipes where the tune's use is
+        safety-critical — the one stage where robustness can be built in rather than bolted
+        on, with the evaluation gate measuring whether it held.
+    - capability: capabilityHitlControls
+      at: evaluation->registry
+      note: >
+        Promotion is a separated human decision — a different person, and a different
+        credential, from anything the run itself held.
+    - capability: capabilityModelWeightProtection
+      at: evaluation->registry
+      note: >
+        Sign at promotion, with the OpenSSF Model Signing spec and a Sigstore bundle, using an
+        identity the training job never possesses — so a signature proves the gate was passed,
+        not merely that a job finished.
+    - capability: capabilityModelEvals
+      at: evaluation
+      note: >
+        The behavioural half of what substitutes for code review: capability, safety,
+        backdoor and memorisation checks, blocking promotion rather than advising it.
+    - capability: capabilityDataAccessGovernance
       at: storage
-      note: Our keys over the output, and over the checkpoints the run wrote on the way.
+      note: >
+        Reads from the candidate store are scoped and logged like corpus reads — the answering
+        control for exfiltration of an artifact small enough to walk out unnoticed.
+    - capability: capabilityEncryptionKeyManagement
+      at: govSecrets
+      note: >
+        Our keys over the candidate store and the checkpoints the run wrote on the way —
+        managed here, enforced as storage encryption from this service.
     - capability: capabilityAiBom
       at: govSupplyChain
       note: The record tying this artifact to this data, this base and this run.
@@ -342,35 +523,83 @@ pins:
       note: What the artifact is and what it was trained on, travelling with it rather than living in a wiki.
 
 walkthrough:
-  title: A tuning run produces an adapter
+  title: A tuning run produces a promoted adapter
   moves: >-
-    A versioned dataset and a base checkpoint through GPU compute, into a signed artifact.
+    Curated data and an admitted base checkpoint through GPU compute, evaluation and
+    promotion, into a signed registry entry.
   steps:
-    - follow: dataOrigins->corpus
-      note: Content is assembled into a named, versioned set.
-    - follow: upstreamArtifacts->trainJob
-      note: The base checkpoint is scanned, then loaded by the job.
+    - follow: dataOrigins->curation
+      note: Raw content enters the filtering stage — the last point a bad example is a deletion.
+    - follow: curation->corpus
+      note: What survives is assembled into a named, versioned set with provenance per example.
+    - follow: upstreamArtifacts->pkgRegistry
+      note: The base checkpoint and frameworks are scanned and admitted at the mirror.
+    - follow: pkgRegistry->trainJob
+      note: The job pulls only what was admitted, pinned by digest.
     - follow: corpus->trainJob
       note: Every worker reads the same set, on a grant that is checked at the store.
     - follow: trainJob->storage
-      note: The output lands and is signed in the same step, so it is never unsigned at rest.
+      note: The candidate lands, unsigned — the job holds no signing identity.
+    - follow: storage->evaluation
+      note: The gate loads the candidate and probes what cannot be read.
+    - follow: evaluation->registry
+      note: >
+        A human promotes; the artifact is signed by an identity the job never held, and the
+        registry entry ties it to its data, base and run.
 
 scenarios:
   - title: A poisoning is discovered months later
     steps:
-      - follow: dataOrigins->corpus
+      - follow: dataOrigins->curation
         note: The provenance record maps the poisoned examples back to the batch they arrived in.
       - follow: corpus->trainJob
         note: And forward to every run that read that dataset version — which is why versioning is not bookkeeping.
+      - follow: evaluation->registry
+        note: The lineage metadata identifies every artifact those runs promoted, and they are withdrawn.
+  - title: The base checkpoint is the attack
+    steps:
+      - follow: upstreamArtifacts->pkgRegistry
+        note: >
+          A tampered checkpoint arrives — a format that executes on load, or weights carrying
+          a trained-in backdoor. Format policy and scanning refuse the first class here.
+      - follow: pkgRegistry->trainJob
+        note: A behavioural backdoor survives scanning — the mirror admits bytes, not behaviour.
       - follow: trainJob->storage
-        note: The artifacts those runs produced are identified by lineage and withdrawn.
+        note: The candidate carries the backdoor forward; tuning does not remove it.
+      - follow: storage->evaluation
+        note: >
+          Backdoor probing is the last control with a chance — and only if the probes do not
+          come from a benchmark set the attacker could study.
+  - title: A compromised job tries to promote its own output
+    steps:
+      - follow: trainJob->storage
+        note: The job writes a candidate it would like the world to serve. It cannot sign it.
+      - follow: storage->evaluation
+        note: The only road to promotion runs through a gate the job has no credentials for.
+      - follow: evaluation->registry
+        note: >
+          Signature and registry entry happen here, on a human approval — a candidate that
+          skipped the gate has no signature, and the serving tier's load-time verification
+          refuses it.
 
 deviations:
-  - subject: Upstream artifact scanning is absorbed by the training job's intake
+  - subject: The external band is drawn on the left
     reason: >
-      Base checkpoints and dependencies are scanned where the job ingests them rather than at
-      a drawn scanning stage — the scanning chip on that edge marks the duty, and drawing a
-      stage would duplicate the promotion gate's scanner for a second artifact class.
+      Band order is left-to-right by convention; this drawing reverses it because it is an
+      ingest architecture — the outside world is its source, not its destination, and the
+      read order should follow the data.
+  - subject: Evaluation is drawn inline
+    reason: >
+      Everywhere else in the catalogue evaluation is a governance item, because it gates
+      change rather than data. Here candidates flow through the gate, so it is a block — the
+      ontology's own canonical example of a locus that legitimately differs by architecture.
+  - subject: Mixed-custody origins are drawn as one external block
+    reason: >
+      Internal records reach the corpus beside scraped and purchased sets, and a self-trained
+      base checkpoint can arrive beside an open one. Both are drawn entering from the external
+      band because the ingest treatment — curation, provenance, admission — is identical
+      regardless of custody; splitting the origins by owner would double the ingest chain to
+      say nothing new. The custody difference is carried in the item notes.
 
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning, LLM04 supply chain"
