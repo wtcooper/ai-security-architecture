@@ -31,7 +31,7 @@ description:
     already enforces them. Client registration is pre-arranged or metadata-document based —
     the self-service dynamic registration of the early protocol is deprecated.
   - >
-    The deployment shape is deliberately conventional: a service edge in front terminating
+    The deployment shape is deliberately conventional: a gateway tier in front terminating
     hostile machine traffic, one stateless application behind it, data and upstream systems
     behind that. The protocol is stateless by design — there are no sessions to bind, only
     server-minted state handles whose possession proves nothing — so the service scales
@@ -61,22 +61,24 @@ distinguishedBy:
     about the caller's nature.
 
 exemplars:
-  - name: Product MCP servers
+  - name: GitHub MCP server
     note: >
-      SaaS vendors publishing remote tool servers for their own products so customer agents can
-      act without a bespoke integration.
-    asOf: "2026-08"
-  - name: Internal MCP servers
+      A product vendor publishing a remote tool server for its own product, so customer agents
+      can act without a bespoke integration — the archetype's most-consumed instance.
+    url: https://github.com/github/github-mcp-server
+    asOf: "2026-09"
+  - name: Atlassian Remote MCP Server
     note: >
-      The same pattern inside one organisation, exposing internal systems to internal agents.
-      Same architecture, and the temptation to skip the authorization work is much stronger.
-    asOf: "2026-08"
-  - name: Gateway-fronted fleets
+      The same publisher shape over an OAuth resource server with tenant scoping across
+      products — the multi-tenant discipline this page pins, shipped commercially.
+    url: https://www.atlassian.com/platform/remote-mcp-server
+    asOf: "2026-09"
+  - name: Cloudflare remote MCP hosting
     note: >
-      Organisations publishing many servers behind one API-management or MCP gateway tier, with
-      identity, metering and audit centralised at the edge. The protocol's routing headers were
-      designed for exactly this mediation.
-    asOf: "2026-08"
+      Gateway-fronted fleets: many servers behind one edge tier with identity, metering and
+      audit centralised — the mediation the protocol's routing headers were designed for.
+    url: https://developers.cloudflare.com/agents/model-context-protocol/
+    asOf: "2026-09"
 
 zones:
   - id: zoneCloud
@@ -237,7 +239,7 @@ blocks:
     title: Identity services
     icon: person
     zone: zoneGovernance
-    col: 1
+    col: 0
     row: 3
     capabilities: [capabilityIga, capabilityNhiManagement]
     note: >
@@ -246,6 +248,18 @@ blocks:
       named anti-pattern, and claimed scopes in a token are never sufficient without our own
       authorization logic behind them.
 
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 1
+    row: 3
+    capabilities: [capabilitySecretsManagement]
+    note: >
+      The upstream credentials this service calls outward on — issued, scoped and rotated by a
+      secrets manager, one per upstream, never the caller's token forwarded.
+
   - id: govPolicy
     kind: governance
     title: Policy & authorization
@@ -253,11 +267,12 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 3
-    capabilities: [capabilityRateLimiting, capabilityToolPermissionScoping, capabilityTransportSecurity]
+    capabilities: [capabilityRateLimiting, capabilityToolPermissionScoping, capabilityTransportSecurity, capabilityEgressControl]
     note: >
       Per-tenant limits sized for callers that retry, loop and parallelise — limits tuned for
       human clients are not limits here — plus origin validation against DNS rebinding and the
-      egress controls that keep our own discovery fetches off internal addresses.
+      egress policy that keeps our own outbound calls and discovery fetches off internal
+      addresses.
 
   - id: govSupplyChain
     kind: governance
@@ -286,6 +301,16 @@ blocks:
 
 edges:
   - from: callers
+    to: authServer
+    path: primary
+    bidir: true
+    route: vh
+    label: token issuance
+    note: >
+      Before any tool call: the client exchanges a corporate SSO assertion for a short-lived
+      grant, and that grant for an access token audience-bound to this server. No consent
+      screen is visited here under the enterprise-managed profile.
+  - from: callers
     to: gateway
     path: primary
     bidir: true
@@ -305,9 +330,10 @@ edges:
     bidir: true
     label: token validation
     note: >
-      The resource server introspects; the authorization server does not call in to announce a
-      check. Audience, scope and subject are verified per request, because there is no session
-      left to verify them once.
+      Audience, scope and subject are verified per request, because there is no session left
+      to verify them once. Drawn as introspection — the deliberate choice here; the common
+      alternative is local JWT validation against the issuer's published keys, which removes
+      this network hop but not the per-request check.
   - from: toolDefs
     to: service
     path: primary
@@ -350,11 +376,17 @@ pins:
         The protocol has no notion of a tenant. Every isolation guarantee here is application
         code we wrote, and the failure is one caller reaching another's records.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: service->authServer
+      at: authServer
       note: >
-        A static client identifier in front of a third-party authorization server, with no
-        per-user record of which clients a user already approved, is the classic confused
-        deputy. Consent must be per client and recorded before the flow proceeds.
+        A static client identifier with no per-user record of which clients a user already
+        approved is the classic confused deputy at the registration surface. Consent must be
+        per client and recorded before the flow proceeds.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: service->downstream
+      note: >
+        Token passthrough — forwarding the caller's token upstream — is the confused deputy
+        the protocol documents by name: one compromised agent becomes a multi-service problem
+        wearing our audit identity.
     - risk: riskSensitiveDataDisclosure
       at: service->downstream
       note: >
@@ -365,6 +397,13 @@ pins:
       note: >
         The spec has no quotas and no back-pressure. A looping agent will hammer a tool until
         the backend behind it falls over, and nothing in the protocol slows it down.
+    - risk: riskMCPTransportHijacking
+      at: service
+      note: >
+        With protocol sessions gone, cross-call state is server-minted handles carried as
+        arguments — a handle that is guessable, unexpiring or unbound to its principal is the
+        session-hijacking risk reborn in application code, where it is the most likely thing
+        to get wrong.
     - risk: riskZombieShadowMCPServers
       at: service
       note: A published server that outlives the team that wrote it, still holding live grants into org data.
@@ -386,10 +425,13 @@ pins:
         build entirely — the protocol provides no quota mechanism at all.
     - capability: capabilityTransportSecurity
       at: callers->gateway
+      note: HTTPS throughout, and `Origin` validated against DNS rebinding on the inbound leg.
+    - capability: capabilityEgressControl
+      at: authServer
       note: >
-        HTTPS throughout, `Origin` validated against DNS rebinding, and our own outbound
-        discovery fetches blocked from private and metadata addresses — a surface the move to
-        client metadata documents newly created.
+        Client metadata documents make this component an outbound HTTP client: its discovery
+        fetches are blocked from private and metadata addresses — the SSRF surface the move
+        away from dynamic registration newly created, answered where the fetch happens.
     - capability: capabilityToolPermissionScoping
       at: gateway->service
       note: >
@@ -430,8 +472,13 @@ walkthrough:
   moves: >-
     Somebody else's agent calling a tool we publish, and the tenant data it reaches.
   steps:
+    - follow: callers->authServer
+      note: >
+        First, identity: a corporate SSO assertion is exchanged for an access token
+        audience-bound to this server — revocation stays central, and no consent screen is
+        involved.
     - follow: callers->gateway
-      note: The request arrives with its method and tool name mirrored into headers.
+      note: The request arrives bearing that token, with its method and tool name mirrored into headers.
     - follow: gateway->service
       note: Routed and metered per tool without the body being parsed — provided the headers are checked against it.
     - follow: service->authServer
@@ -449,11 +496,37 @@ scenarios:
     steps:
       - follow: toolDefs->service
         note: A wording change is deployed like any other content change.
-      - follow: gateway->service
+      - follow: service->gateway
+        note: The next tools/list response carries it outward, past the hash pin that should notice.
+      - follow: gateway->callers
         note: >
-          And lands in every consuming agent's context on their next call. Nothing in the
+          And it lands in every consuming agent's context as instruction. Nothing in the
           protocol versions this, which is why the pin is a hash we hold rather than a field we
           read.
+  - title: One tenant's agent asks for another tenant's record
+    steps:
+      - follow: callers->gateway
+        note: A syntactically perfect request — the object id just belongs to somebody else.
+      - follow: gateway->service
+        note: Routed and metered like any call; nothing at this tier knows what the id means.
+      - follow: service->authServer
+        note: The token is valid — audience, scope and subject all check out. The protocol is satisfied.
+      - follow: service->orgData
+        note: >
+          The tenant check in our own application code is the only thing left standing, because
+          the protocol has no notion of a tenant at all. This architecture's defining failure
+          happens on this hop or nowhere.
+  - title: A handler forwards the caller's token
+    steps:
+      - follow: callers->gateway
+        note: An ordinary call to a tool whose handler reaches an upstream system.
+      - follow: gateway->service
+        note: The handler has the caller's token in hand, and the upstream wants a credential.
+      - follow: service->downstream
+        note: >
+          Forwarding it is the confused deputy the spec forbids outright: audit, rate limits
+          and the trust boundary all break in one move. The handler calls as itself, on a
+          credential the secrets manager issued to this service, or the design is wrong.
 
 deviations:
   - subject: The AI gateway carries MCP traffic only
@@ -477,6 +550,30 @@ deviations:
       it would put a block we neither run nor can control in the middle of our own
       architecture. The federation is stated on the authorization server and pinned as
       identity governance instead.
+  - subject: The callers origin sits in our cloud band as a layout necessity
+    reason: >
+      Whoever calls a published server — internal agents, chat products, other services — the
+      drawing deliberately claims no ownership over them: the origin is unnamed and its band
+      placement is geometry, not custody. Moving it to the external band would split that band
+      across the drawing; the origin kind exists precisely so an edge can arrive from an
+      unclaimed source.
+  - subject: Outbound secrets and egress are absorbed by the service and its platform
+    reason: >
+      capabilitySecretsManagement and capabilityEgressControl are embodied by the AI gateway,
+      which sits on the inbound side only. On the outbound hop the service itself holds the
+      brokered upstream credential and the platform's network policy enforces the destination
+      list — recorded here rather than drawing an egress tier that nobody runs.
+  - subject: Definition pinning is enforced on the data path
+    reason: >
+      capabilityMcpToolSecurity is a management capability, and the supply-chain call-out
+      cites it — but the hash pin is checked where definitions load and serve, so the chip
+      sits on the toolDefs edge. The locus departure is deliberate: built at the gateway or it
+      does not exist.
+  - subject: The authorization server's metadata fetch path is not drawn
+    reason: >
+      Fetching a client metadata document is a single outbound HTTP request to a URL the
+      client chose; drawing a standing edge for it would overstate it. The surface is carried
+      on the clientReg item and answered by the egress pin on the block.
   - subject: Sessions are gone because the protocol removed them
     reason: >
       The current protocol revision deleted sessions and the initialize handshake; cross-call
