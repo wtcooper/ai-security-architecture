@@ -18,7 +18,8 @@ description:
     request, no staged rollout, no security sign-off unless the platform enforces one. The result
     is a population problem rather than an instance problem: individual agents are simple; the
     risk is four hundred of them, each with connector grants, each authored by someone who has
-    left, and no way to list which reach customer data.
+    left — and, until somebody actually queries the platform's inventory, no list of which
+    reach customer data. The unmanaged default has no list; the target state queries one.
   - >
     Credential inheritance is the specific technical trap. A low-code agent typically runs on
     connections authorised by its author, so a published agent lends its author's access to every
@@ -46,16 +47,27 @@ distinguishedBy:
     and you cannot add a deployment gate they did not build.
 
 exemplars:
-  - name: Suite-embedded agent builders
+  - name: Microsoft Copilot Studio
     note: >
-      Low-code agent authoring bundled with a productivity or CRM suite, available to any licensed
-      user by default unless an administrator turns it off.
-    asOf: "2026-08"
-  - name: Standalone agent-building platforms
+      Low-code agent authoring bundled with the productivity suite, available to licensed
+      users by default — verify per tenant which credential mode connectors default to and
+      what the publish gate actually blocks.
+    url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/
+    asOf: "2026-09"
+  - name: Salesforce Agentforce
     note: >
-      Vendor platforms whose product is the builder itself, with connector marketplaces and
-      publication to internal or external audiences.
-    asOf: "2026-08"
+      The CRM-embedded builder: agents assembled over platform connectors with the Einstein
+      trust layer as the vendor-side guardrail surface — the zone-2 configuration this page
+      pins.
+    url: https://www.salesforce.com/agentforce/
+    asOf: "2026-09"
+  - name: Zapier Agents
+    note: >
+      The standalone end of the class: a connector marketplace measured in thousands, maker
+      credentials as the natural default, and publication to anyone with the link — the
+      population problem in its purest form.
+    url: https://zapier.com/agents
+    asOf: "2026-09"
 
 zones:
   - id: zoneUser
@@ -152,10 +164,6 @@ blocks:
         label: MCP & tool broker
         icon: plug
         note: Which of our servers a published agent may reach, and on whose grants.
-      - id: gwSkills
-        label: Skills broker
-        icon: gear
-        note: Reusable instructions and connectors published for agents to draw on.
 
   - id: internalTools
     kind: service
@@ -178,10 +186,11 @@ blocks:
     col: 3
     row: 2
     note: >
-      The on-premises data gateway, and the only customer-operated component in the entire
-      architecture. A service on our own host making outbound-only connections, so nothing is
-      opened inbound. It relays data; it does not run agents, and it has hard payload limits
-      that make it a query path rather than a bulk one.
+      The on-premises data gateway — the only on-premises crossing in the architecture, on a
+      host we run beside the gateway and tool services we also run. Outbound-only connections,
+      so nothing is opened inbound. It relays data; it does not run agents, and it has hard
+      payload limits that make it a query path rather than a bulk one. The credentials it
+      caches sit on this host, which is why the secrets pin lands here.
     items:
       - id: outbound
         label: Outbound connector
@@ -210,7 +219,11 @@ blocks:
     pack: modelProvider
     note: >
       The vendor's model, called by the vendor. We neither broker it nor hold the key, which is
-      why our own gateway carries no inference on this page.
+      why our own gateway carries no inference on this page. Two variants worth noting in
+      assessment: some platforms run the model entirely inside their own boundary (then this
+      block collapses into the platform and is assured, not drawn), and some let the customer
+      bring a model key — zone-2 configuration that changes whose terms the grounding content
+      leaves under.
 
   - id: extTools
     kind: service
@@ -238,12 +251,25 @@ blocks:
       mode each connector uses, and that field is the single most useful thing an administrator
       can query here.
 
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 2
+    row: 5
+    capabilities: [capabilitySecretsManagement, capabilityEncryptionKeyManagement]
+    note: >
+      The tunnel host's cached connection credentials — issued, rotated and revoked from here
+      — and customer-managed keys over the platform's stored data, managed-tier only and slow
+      enough to enable that it is a planned change.
+
   - id: govPolicy
     kind: governance
     title: Policy & authorization
     icon: scale
     zone: zoneGovernance
-    col: 2
+    col: 3
     row: 5
     capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityDataAccessGovernance]
     note: >
@@ -256,9 +282,9 @@ blocks:
     title: Supply-chain assurance
     icon: db
     zone: zoneGovernance
-    col: 3
+    col: 4
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityAiTprm, capabilityDspm]
+    capabilities: [capabilityAgentRegistry, capabilityAiTprm, capabilityDspm, capabilityStagedRollout]
     note: >
       The inventory and the publication gate. On a platform where anyone can build, an agent
       nobody registered is an agent nobody can revoke — and that is the normal case rather than
@@ -269,9 +295,9 @@ blocks:
     title: Observability & response
     icon: eye
     zone: zoneGovernance
-    col: 4
+    col: 5
     row: 5
-    capabilities: [capabilityAuditLogging, capabilityAiGovernancePlatform, capabilityPromptInjectionDefense]
+    capabilities: [capabilityAuditLogging, capabilityAiGovernancePlatform, capabilityBehavioralDriftDetection]
     note: >
       Run history, and the population view: which agents exist, who built them, which have
       outlived their author. The unit of observation here is the population, not a deployment.
@@ -351,17 +377,19 @@ edges:
 pins:
   risks:
     - risk: riskAgenticDelegationConfusedDeputy
-      at: aiGateway
+      at: platform
       note: >
-        The defining risk of the archetype. A maker attaches a connector on their own
-        credentials and publishes to a team; every consumer then transitively holds the maker's
-        access to that backend. Nobody granted it and nobody sees it in an access review.
+        The defining risk of the archetype, and it materializes in the platform's connection
+        store: a maker attaches a connector on their own credentials and publishes to a team;
+        every consumer then transitively holds the maker's access to that backend. Nobody
+        granted it, nobody sees it in an access review — and most of it plays out on paths
+        our gateway never touches.
     - risk: riskShadowAndUnknownAgents
-      at: builder
+      at: platform
       note: >
-        An agent is a form away, built by someone who does not think of themselves as shipping
-        software. Without a registry the population is unbounded, and agents outlive the people
-        who built them.
+        An agent is a form away, and the unregistered population accumulates in the platform —
+        not in any one builder. Without the inventory queried, the population is unbounded,
+        and agents outlive the people who built them.
     - risk: riskRogueActions
       at: internalTools->orgData
       note: Writes into systems of record from an agent nobody reviewed.
@@ -395,16 +423,33 @@ pins:
     - capability: capabilityNhiManagement
       at: aiGateway
       note: Each connector grant is an identity with a lifecycle, not a setting somebody ticked once.
+    - capability: capabilitySecretsManagement
+      at: dataGateway
+      note: >
+        The cached connection credentials on the tunnel host — issued scoped and short-lived,
+        rotated, and revocable without redeploying the host. Absorbed here per the recorded
+        deviation, because this is where the secret actually sits.
+    - capability: capabilityDataAccessGovernance
+      at: dataGateway->orgData
+      note: >
+        The on-prem query path is scoped like the cloud one: which sources, which rows, whose
+        entitlement — decided before the relay, not assumed from the payload ceiling.
     - capability: capabilityAgentRegistry
       at: platform
       note: >
         The platform's own inventory, queried rather than assumed — including which connectors
         use maker credentials, which is the field that finds the ambient-authority agents.
-    - capability: capabilityHitlControls
+    - capability: capabilityStagedRollout
       at: platform
       note: >
-        The publication gate, which on this platform actually blocks: a data-policy violation
-        greys out publish, and exemptions no longer exist.
+        Publication as delivery: versioned agents, a limited audience first, and unpublish as
+        rollback. The data-policy gate that greys out the publish button is admission; this is
+        the release machinery around it.
+    - capability: capabilityHitlControls
+      at: consumer->platform
+      note: >
+        Runtime confirmation of consequential actions in the consumer's own session, where
+        the platform supports it — the human gate belongs at run time, not at publish time.
     - capability: capabilityToolPermissionScoping
       at: aiGateway->internalTools
       note: Which of our servers a published agent may reach, decided at our tier rather than by the maker.
@@ -417,8 +462,11 @@ pins:
       at: orgData
       note: Knowing what is behind a connector before it is attachable turns discovery into a decision.
     - capability: capabilityPromptInjectionDefense
-      at: platform->extTools
-      note: Treat grounding and connector output as untrusted on the way back into the agent.
+      at: platform
+      note: >
+        The platform's own grounding and connector-output classification, configured as zone 2
+        — theirs to implement, ours to switch on and verify, because nothing of ours sits on
+        the connector paths.
     - capability: capabilityAiTprm
       at: platform
       note: >
@@ -435,25 +483,32 @@ pins:
     - capability: capabilityAiGovernancePlatform
       at: govObservability
       note: The population view — every agent somebody built, and which of them still have an owner.
+    - capability: capabilityBehavioralDriftDetection
+      at: govObservability
+      note: >
+        A baseline over run history per agent, because a population of four hundred drifts
+        quietly: the agent whose tool mix changed is the one to quarantine before an incident
+        names it.
 
 walkthrough:
   title: An agent is built, published, and used
   moves: >-
-    A colleague assembles an agent from prompts and connectors; another colleague runs it.
+    A colleague assembles an agent from prompts and connectors; another colleague runs it,
+    and the answer comes back.
   steps:
     - follow: builder->platform
       note: >
         Built and published inside the vendor's surface by someone who is not an engineer. No
         pipeline is involved, so the platform's own publish gate is the only review there is —
         and governance here is population management rather than change review.
-    - follow: platform->provider
-      note: >
-        The vendor calls its own model, on its own key. We are not on this path — which is why
-        our gateway carries tools and data only.
     - follow: consumer->platform
       note: >
         A colleague runs what was published — on their own credentials if the maker chose
         end-user auth, and on the maker's if they did not.
+    - follow: platform->provider
+      note: >
+        Now the model is called — the vendor's own, on its own key, for the running turn. We
+        are not on this path, which is why our gateway carries tools and data only.
     - follow: platform->aiGateway
       note: The one hop we own. A published agent reaching our data crosses here or not at all.
     - follow: aiGateway->internalTools
@@ -466,6 +521,8 @@ walkthrough:
         through a connector we operate.
     - follow: dataGateway->orgData
       note: A query path rather than a bulk one — the connector caps what any single call carries.
+    - follow: platform->consumer
+      note: The reply returns to the colleague who ran it, grounded on everything the walk touched.
 
 scenarios:
   - title: A maker attaches a connector on their own credentials
@@ -491,12 +548,28 @@ scenarios:
     steps:
       - follow: builder->platform
         note: An agent outlives the person who built it, still holding their connector grants.
+      - follow: platform->extTools
+        note: >
+          The maker's third-party grants keep flowing — these never touch our network, so only
+          the platform's connection-ownership transfer or revocation can cut them. That
+          inventory operation is the primary response.
       - follow: platform->aiGateway
         note: >
-          Our gateway is where that grant can be cut, since the agent itself is not ours to
-          delete.
+          Our gateway cuts the slice it issued — the grants into our own systems — which is
+          real, and is not most of what the departed maker left behind.
 
 deviations:
+  - subject: The vendor band is drawn before our cloud band
+    reason: >
+      Band order is left-to-right by convention; here the vendor sits first because a maker
+      reaches the platform first and the platform reaches back into us second. The same
+      break, for the same reason, as both SaaS siblings.
+  - subject: The tunnel absorbs secrets and access scoping
+    reason: >
+      capabilitySecretsManagement is embodied by the AI gateway, but the on-prem relay never
+      crosses it: the cached connection credentials sit on the tunnel host, so the pin lands
+      there and the issuance story lives in the governance call-out — the same absorption the
+      enterprise chat drawing records for its tunnel.
   - subject: The AI gateway does not reach a model provider
     reason: >
       Everywhere else in the catalogue the gateway is the model path, and the registered
