@@ -13,12 +13,14 @@ summary:
 
 description:
   - >
-    The defining property is that the human reads every reply before the next action. That one
-    fact reorganises the control set: in-thread approval is the primary gate — an action is
-    proposed in the conversation, in words the user can read, before it executes — where the
-    single agent workflow, acting with nobody present, has to lean on compensating transactions
-    instead. The gate is only as good as the proposal text: an approval rendered as "OK to
-    proceed?" approves nothing in particular.
+    The defining property is that consequential actions must be proposed and approved in the
+    thread before they execute. That is a target-state requirement, not a fact about
+    tool-calling chat: real loops run many read-only tools mid-turn before anything renders,
+    so the control set splits actions into two classes — automatic read-only tools, and
+    mutating actions that wait for the human. In-thread approval is the primary gate for the
+    second class, where the single agent workflow, acting with nobody present, has to lean on
+    compensating transactions instead. The gate is only as good as the proposal text: an
+    approval rendered as "OK to proceed?" approves nothing in particular.
   - >
     Authority is on-behalf-of. The tools act as the conversing user, on a grant scoped to the
     session, not as a workload identity with standing powers — the reachable set is what this
@@ -32,42 +34,45 @@ description:
     the session, which is why memory is scoped to the conversation and why returned content is
     classified on the way back in.
   - >
-    Every model and tool call leaves through the AI gateway on brokered credentials, the same
-    crossing every agent architecture in this catalogue draws. The chat surface changes who is
-    watching, not how the calls leave.
+    Every network model and tool call leaves through the AI gateway on brokered credentials,
+    the same crossing every agent architecture in this catalogue draws — the in-process tool
+    set is the drawn exception. The chat surface changes who is watching, not how the calls
+    leave.
 
 distinguishedBy:
   - >
-    Against the embedded retrieval assistant: the same conversational surface with tools behind
-    it. The assistant's bright line — one mutating tool changes the entire control set — lands
-    here first: the retrieval-time controls stay, and the action controls arrive with the human
-    still present to gate them.
+    Against the durable multi-agent workflow: the horizon is one conversation, not a days-long
+    process. No supervisor, no journal, no replay — the thread is the state, and the human in
+    it is the gate that durability machinery replaces there.
   - >
     Against the single agent workflow: the same loop with the human kept in the turns.
     In-thread approval replaces the compensating transaction as the primary control; remove the
     human from the turns and you are in that architecture, and should be reading its page.
   - >
-    Against the realtime voice agent: the same conversational, acting shape over text — which
-    means there is time to deliberate. Filtering, in-thread approval and reconsideration are
-    exactly the controls the audio medium removes.
+    Against the enterprise AI chat with connectors: the same conversational surface, bought
+    rather than built. There the vendor operates the loop and the controls are tenant
+    configuration and assurance; here the whole workload is ours, which is what makes every
+    pin on this page enforceable.
 
 exemplars:
-  - name: Domain support copilots
+  - name: Intercom Fin
     note: >
-      Customer-facing chat agents that look up accounts, draft remedies and execute them —
-      refunds, changes, escalations — with the customer or an agent confirming each
-      consequential step in the thread.
-    asOf: "2026-08"
-  - name: Internal operations copilots
+      A customer-facing support copilot resolving requests in the thread — lookups, drafts and
+      executed remedies with the consequential steps confirmed in conversation.
+    url: https://www.intercom.com/fin
+    asOf: "2026-09"
+  - name: Decagon
     note: >
-      Chat surfaces over internal systems — tickets, deployments, HR and finance requests —
-      where employees converse and approve, and the tools act on the systems of record.
-    asOf: "2026-08"
-  - name: Chat-framework deployments
+      Enterprise support agents over ticketing and account systems, acting on systems of
+      record with human confirmation woven into the thread.
+    url: https://decagon.ai
+    asOf: "2026-09"
+  - name: Vercel AI SDK chatbot
     note: >
-      The agent-SDK and chat-UI starter shape: a hosted loop, a tool list, and a streaming chat
-      front end. Structurally this architecture from the first commit, whatever it grows into.
-    asOf: "2026-08"
+      The chat-framework starter shape — a hosted loop, a tool list and a streaming chat front
+      end. Structurally this architecture from the first commit, whatever it grows into.
+    url: https://ai-sdk.dev
+    asOf: "2026-09"
 
 zones:
   - id: zoneUser
@@ -140,6 +145,12 @@ blocks:
         label: Identity binding
         icon: shield
         note: Who is conversing, bound to the session before the loop runs — the identity the tools act as.
+      - id: uploads
+        label: File upload
+        icon: doc
+        note: >
+          Documents dropped into the thread — content authored anywhere, entering the same
+          context window as the user's words.
 
   - id: localTools
     kind: service
@@ -218,11 +229,11 @@ blocks:
     col: 3
     row: 1
     note: >
-      The one crossing every model and tool call leaves through. The agent tier holds no
-      standing credentials; the gateway brokers them per call, meters spend and writes the
-      audit trail as a tap on the crossing. Its items are the traffic classes it brokers — the
-      checks it runs are the numbered pins on this block and its edges, and the call-outs
-      beneath.
+      The one crossing every network-brokered model and tool call leaves through — the
+      in-process tool set is the drawn exception. The agent tier holds no standing
+      credentials; the gateway brokers them per call, meters spend and writes the audit trail
+      as a tap on the crossing. Its items are the traffic classes it brokers — the checks it
+      runs are the numbered pins on this block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
 
   - id: provider
@@ -370,7 +381,7 @@ edges:
     label: conversation
     note: >
       Turn in, reply back — and the in-thread approval prompt when an action is consequential.
-      The human reads every reply before the next action runs.
+      Read-only tools run mid-turn without ceremony; mutating actions wait for the human.
   - from: events
     to: agent
     path: primary
@@ -398,8 +409,8 @@ edges:
     bidir: true
     label: model & tool calls
     note: >
-      Every call out of the loop crosses here on a brokered credential scoped to the conversing
-      user. The agent holds no standing keys of its own.
+      Every network call out of the loop crosses here on a brokered credential scoped to the
+      conversing user. The agent holds no standing keys of its own.
   - from: gateway
     to: provider
     path: external
@@ -454,11 +465,17 @@ pins:
       note: >
         Records, pages and API responses return into the thread — content somebody else
         authored, standing beside the user's words on the next call.
-    - risk: riskPromptResponseCachePoisoning
+    - risk: riskPromptInjection
       at: memory
       note: >
         Conversation memory carries a poisoned turn forward: one bad retrieval steers every
-        later action in the session.
+        later action in the session — memory poisoning by its OWASP name, pinned as prompt
+        injection per the recorded deviation.
+    - risk: riskRetrievalVectorStorePoisoning
+      at: memory
+      note: >
+        The vector index grounds the thread; content planted in the indexed sources returns
+        as trusted context with the asking user's permissions.
     - risk: riskInsecureModelOutput
       at: gateway->provider
       note: The completion proposes the tool calls, and it is unauthenticated content.
@@ -467,6 +484,30 @@ pins:
       note: >
         An action the human approved without reading is not an overseen action. Approval
         fatigue is this architecture's version of no gate at all.
+    - risk: riskRogueActions
+      at: events->agent
+      note: >
+        A scheduled run is a consequential action with the approval gate structurally absent —
+        the control this whole page leans on does not exist on this path.
+    - risk: riskRunawayAgentToolLoops
+      at: agent
+      note: >
+        An agentic turn runs many tool calls before anything renders, and the scheduled path
+        runs with nobody watching — rate limits at the entry never see a mid-turn loop.
+    - risk: riskToolRegistryTampering
+      at: gateway->internalTools
+      note: The admission list is the tool supply chain; whoever writes it programs the agent.
+    - risk: riskPromptInjection
+      at: internalTools->orgData
+      note: >
+        Grounding content read back from records and files was written by many hands — the
+        scenario beside this drawing walks exactly this path.
+    - risk: riskInsecureIntegratedComponent
+      at: localTools
+      note: >
+        Handlers compiled into the loop's process hold whatever the process holds and cross no
+        chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
+        control.
     - risk: riskAgenticDelegationConfusedDeputy
       at: agent
       note: >
@@ -483,12 +524,13 @@ pins:
 
   capabilities:
     - capability: capabilityAgentRegistry
-      at: gateway->internalTools
+      at: govSupplyChain
       note: >
         Tools exist in a conversation only because the registry admitted them — admission, not
-        discovery. The gateway is where that decision is enforced per call.
+        discovery. Admission is a change-time decision made here; the gateway enforces the
+        resulting list per call.
     - capability: capabilityModelEvals
-      at: gateway->provider
+      at: govSupplyChain
       note: >
         Behavioural checks in front of every model, prompt or tool change, because the thing
         being changed is what decides the next action the human is asked to approve.
@@ -518,13 +560,28 @@ pins:
         Grounding retrieved with the asking user's permissions, not the service's — otherwise
         the index becomes a way to read what the conversation's owner cannot.
     - capability: capabilityPromptInjectionDefense
-      at: extTools->downstream
-      note: Returned content is classified before it re-enters the thread as context.
-    - capability: capabilityEgressControl
-      at: extTools->downstream
+      at: gateway->extTools
       note: >
-        Named destinations only — the same allowlist that bounds actions is the last boundary
-        for a steered session trying to send context somewhere it should not go.
+        Returned external content is classified at the crossing before it re-enters the thread
+        as context.
+    - capability: capabilityPromptInjectionDefense
+      at: gateway
+      note: >
+        The user's turns, uploaded documents and returned record content are classified on the
+        crossing before the model reads them — classification here, permission containment at
+        the tool scoping pin.
+    - capability: capabilityEgressControl
+      at: gateway->extTools
+      note: >
+        Named destinations only, enforced at the crossing we operate — the same allowlist that
+        bounds actions is the last boundary for a steered session trying to send context
+        somewhere it should not go.
+    - capability: capabilityGroundednessChecking
+      at: entry->user
+      note: >
+        The reply drives a human approval, so its claims are checked against the sources it
+        cites — distinct from authorization: this verifies what the human is told, not what
+        the agent may do.
     - capability: capabilityOutputEncoding
       at: entry->user
       note: >
@@ -552,18 +609,30 @@ walkthrough:
       note: The user asks for something consequential, in their own words.
     - follow: entry->agent
       note: The turn enters the loop with the user's identity attached.
-    - follow: agent->gateway
-      note: The turn's model call crosses on a brokered credential, as every call does.
     - follow: agent->memory
       note: The conversation so far loads as context.
     - follow: agent->gateway
       note: The context leaves the loop on a brokered, user-scoped credential.
     - follow: gateway->provider
       note: The model proposes a reply and a tool call.
+    - follow: gateway->agent
+      note: The completion returns to the loop — unauthenticated content, now a pending proposal.
+    - follow: agent->entry
+      note: The proposal travels to the surface to be rendered, nothing yet executed.
     - follow: entry->user
-      note: The proposal renders in the thread — specific enough to be worth reading — and the user approves.
+      note: >
+        It renders in the thread — specific enough to be worth reading: the action, the
+        target, the amount, the expiry.
+    - follow: user->entry
+      note: >
+        The user approves. The approval is bound to that exact action and its arguments — an
+        "OK" with nothing attached approves nothing in particular.
+    - follow: entry->agent
+      note: The confirmation is validated against the pending proposal before anything executes.
+    - follow: agent->gateway
+      note: Only now does the approved action leave the loop.
     - follow: gateway->internalTools
-      note: The approved action leaves with the user's grant, not the service's.
+      note: It crosses with the user's narrowed grant, not the service's.
     - follow: internalTools->orgData
       note: The action lands on the system of record, attributable to the session that approved it.
     - follow: gateway->extTools
@@ -584,10 +653,31 @@ scenarios:
         note: The fetch reaches a record somebody else authored.
       - follow: orgData->internalTools
         note: An embedded instruction returns with the content.
+      - follow: internalTools->gateway
+        note: The poisoned content crosses back through the gateway like any tool result.
+      - follow: gateway->agent
+        note: And re-enters the loop as context.
       - follow: agent->memory
         note: It persists into conversation state like any other result.
       - follow: gateway->provider
         note: Every later call this session reads it beside the system instruction — the approval gate is now the control.
+  - title: A scheduled run fires with the thread closed
+    steps:
+      - follow: events->agent
+        note: >
+          The job a conversation configured wakes with nobody reading the reply — the approval
+          gate this whole page leans on is structurally absent.
+      - follow: agent->gateway
+        note: The run crosses on the same brokered credential an attended turn would.
+      - follow: gateway->provider
+        note: The model proposes actions no one will read before they run.
+      - follow: gateway->internalTools
+        note: What executes is bounded by the catalogue and the scoped grant alone.
+      - follow: internalTools->orgData
+        note: >
+          The write lands unattended. The single agent workflow's controls — catalogue,
+          threshold, compensating transaction — are what must hold here, and its page is the
+          one to read.
   - title: The session outlives the topic
     steps:
       - follow: user->entry
@@ -600,6 +690,25 @@ scenarios:
         note: The reply can surface any of it — session-scoped memory and DLP on accumulation are what bound the answer.
 
 deviations:
+  - subject: In-process tool handlers are drawn with no edges
+    reason: >
+      The localTools block warns rather than models: tools compiled into the application run
+      in its process, so their calls traverse no drawable path of ours, and drawing edges
+      would assert a governed hop that does not exist. The bound is code review at admission,
+      which is why the risk is pinned on the block itself.
+  - subject: The gateway's Skills broker item has no drawn supply path
+    reason: >
+      The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
+      it whole because the tier brokers skills traffic in deployments that use skills. The
+      supply chain behind the item — a private package registry and its signing pipeline — is
+      deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
+      pull path.
+  - subject: Memory poisoning is pinned as prompt injection
+    reason: >
+      OWASP's agentic taxonomy names memory poisoning as a distinct threat; CoSAI's risk set
+      has no equivalent, so the conversation-state risk is pinned as prompt injection — the
+      nearest true statement, recorded rather than papered over, matching the multi-agent
+      sibling.
   - subject: The application front end absorbs the service edge
     reason: >
       Rate limiting and abuse controls for the public chat surface are drawn as the chip on

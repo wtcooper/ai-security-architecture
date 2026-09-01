@@ -16,8 +16,8 @@ description:
     The spine is a trigger path: requests, schedules and events start the process, and it runs
     through supervisor agent, subagents, AI gateway, tool services and downstream systems —
     there is no user interface, because nobody is conversing with it. The architecture's security posture lives almost entirely
-    in one decision — that agents do not hold credentials or reach tools directly. Every tool
-    call, model call and connector call leaves through the gateway, which brokers short-lived
+    in one decision — that agents do not hold credentials or reach tools directly. Every
+    network tool call, model call and connector call leaves through the gateway, which brokers short-lived
     credentials, enforces policy per call, applies rate and budget limits, and writes the audit
     trail as a tap rather than a favour asked of the agent.
   - >
@@ -36,7 +36,9 @@ description:
     more tools.
   - >
     The governance plane is drawn as its own column because it is what the personal-agent
-    archetype lacks: workload identities for every agent, a registry deciding what may run and
+    archetype lacks: a logical principal for every agent — short-lived tokens minted and
+    constrained at the gateway, revocable per specialist even though the specialists share one
+    process — a registry deciding what may run and
     which tools are admitted, evaluation gates in front of change, an append-only audit sink, and
     a stop that works while a process is mid-flight.
 
@@ -46,26 +48,31 @@ distinguishedBy:
     Hosting buys an identity per agent, a policy boundary on every tool call, an audit trail and
     an administrator — none of which the endpoint pattern supplies.
   - >
-    Against a RAG assistant: that architecture retrieves and answers. This one acts — its outputs
-    are writes to business systems, which is why the gateway, the approval gate and replay safety
-    carry the weight here.
+    Against the single agent workflow: each subagent here is that architecture nested one level
+    down. What this page adds is everything the nesting brings — a supervisor whose routing is
+    itself steerable, durable state that outlives any single request, replay that can re-execute
+    side effects, and delegation chains that must narrow at every hop.
 
 exemplars:
-  - name: Durable execution engines running agent steps
+  - name: Temporal
     note: >
-      Workflow platforms that journal step results and replay to recover, with agent invocations
-      as steps alongside conventional ones.
-    asOf: "2026-08"
-  - name: Supervisor and subagent orchestration
+      Durable execution journaling every step and replaying to recover, with agent invocations
+      as activities alongside conventional ones — the engine half of this drawing, run
+      in-process with the harness.
+    url: https://docs.temporal.io
+    asOf: "2026-09"
+  - name: LangGraph
     note: >
-      A coordinating agent decomposing work across specialists, each with its own context and
-      tool set, over a process too long to hold in one conversation.
-    asOf: "2026-08"
-  - name: Managed agent runtimes
+      Supervisor/subagent orchestration as a stateful graph with checkpointing at every step —
+      the specialists are objects in one process, exactly as this drawing nests them.
+    url: https://www.langchain.com/langgraph
+    asOf: "2026-09"
+  - name: Microsoft Agent Framework
     note: >
-      Cloud agent services package this same shape — runtime, gateway, registry, observability —
-      as discrete products behind one control plane.
-    asOf: "2026-08"
+      The unified successor to AutoGen and Semantic Kernel: graph-based multi-agent workflows
+      with durable state, packaged for exactly this supervisor-and-specialists shape.
+    url: https://learn.microsoft.com/en-us/agent-framework/
+    asOf: "2026-09"
 
 zones:
   - id: zoneUser
@@ -225,7 +232,7 @@ blocks:
     kind: service
     title: Memory & state
     zone: zoneCloud
-    col: 1
+    col: 2
     row: 2
     cosaiComponent: componentDataStorage
     note: >
@@ -252,10 +259,11 @@ blocks:
     col: 3
     row: 1
     note: >
-      The one door. Agents hold no credentials and reach nothing directly; every model and tool
-      call is brokered, policy-checked, rate-limited and logged here. Its items are the traffic
-      classes it brokers — the checks it runs are the numbered pins on this block and its
-      edges, and the call-outs beneath.
+      The one door for everything that leaves over the network. Agents hold no credentials and
+      reach nothing directly; every network model and tool call is brokered, policy-checked,
+      rate-limited and logged here — the in-process tool set is the drawn exception. Its items
+      are the traffic classes it brokers — the checks it runs are the numbered pins on this
+      block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
 
   - id: provider
@@ -263,7 +271,7 @@ blocks:
     title: Model provider
     zone: zoneExternal
     col: 5
-    row: 0
+    row: 1
     cosaiComponent: componentModelServing
     note: >
       The published inference interface, called many times across the process. Everything behind
@@ -279,7 +287,7 @@ blocks:
     title: Tool services
     zone: zoneCloud
     col: 4
-    row: 2
+    row: 3
     cosaiComponent: componentTools
     pack: toolServicesRemote
     items:
@@ -298,7 +306,7 @@ blocks:
     title: Enterprise data
     zone: zoneCloud
     col: 4
-    row: 3
+    row: 4
     cosaiComponent: componentDataSources
     note: >
       The systems of record the agents write to — where a wrong action becomes a real one, and
@@ -446,7 +454,7 @@ edges:
     path: primary
     bidir: true
     label: model & tool calls
-    note: Every call the supervisor makes crosses here on a brokered, step-scoped credential.
+    note: Every network call the agents make crosses here on a brokered, step-scoped credential.
   - from: gateway
     to: provider
     path: external
@@ -456,7 +464,7 @@ edges:
     to: internalTools
     path: primary
     bidir: true
-    route: hv
+    route: vh
     label: internal tool calls
     note: Admitted against the registry and narrowed to a scoped grant before anything executes.
   - from: internalTools
@@ -471,7 +479,7 @@ edges:
     to: extTools
     path: external
     bidir: true
-    route: hv
+    route: vh
     label: brokered external calls
     note: Third-party servers and peer agents, reached only through the crossing that admitted them.
   - from: extTools
@@ -489,19 +497,51 @@ pins:
       note: >
         Records, documents and API responses read over the process's lifetime are chances to
         steer an agent whose output another agent will trust.
+    - risk: riskPromptInjection
+      at: gateway->extTools
+      note: >
+        Content returning from third-party servers and peer agents enters a graph in which one
+        confused agent propagates to all the others — classified at the crossing or trusted by
+        every specialist at once.
+    - risk: riskPromptInjection
+      at: initiator->entry
+      note: >
+        The initiator's request text is model input like any other — it reaches the same
+        context window as the system instruction, and the workflow acts on it for days.
     - risk: riskInsecureModelOutput
       at: orchestration->subagents
       note: Inter-agent messages are model output landing in another agent's context as instruction.
+    - risk: riskInsecureModelOutput
+      at: gateway->provider
+      note: >
+        The completion decides the next delegation and the next tool call, and it is
+        unauthenticated content — the provider return is where it enters the graph.
     - risk: riskAgenticDelegationConfusedDeputy
       at: orchestration->subagents
       note: A subagent that inherits its parent's full authority is privilege distribution, not delegation.
-    - risk: riskSensitiveDataDisclosure
-      at: state
-      note: The journal records everything a step returns. A returned secret is a persisted one.
+    - risk: riskAgentDelegationChainOpacity
+      at: orchestration->subagents
+      note: >
+        Three hops in, nobody can say which agent decided what on whose behalf — the chain the
+        shared subagents block exists to carry, legible only if delegation is traced as it
+        happens.
+    - risk: riskOrchestratorRouteHijacking
+      at: orchestration->subagents
+      note: >
+        Steer the supervisor's routing — through injected content or a tampered route
+        definition — and every specialist downstream works from the attacker's plan without
+        any individual agent misbehaving.
+    - risk: riskInsecureIntegratedComponent
+      at: localTools
+      note: >
+        Handlers compiled into the harness's process hold whatever the process holds and cross
+        no chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
+        control.
     - risk: riskSensitiveDataDisclosure
       at: state
       note: >
-        Specialists journal too — every subagent's steps persist to the same store, so the
+        The journal records everything a step returns — a returned secret is a persisted one,
+        and every writer is in scope: the specialists journal to the same store, so the
         secrets-sink risk multiplies with the agent count.
     - risk: riskRogueActions
       at: internalTools->orgData
@@ -509,15 +549,17 @@ pins:
         Consequential writes with no human present — and replay can execute a non-idempotent one
         twice.
     - risk: riskRunawayAgentToolLoops
-      at: gateway
-      note: An unbounded loop between agents burns budget for as long as nobody notices.
+      at: harness
+      note: >
+        The loop materializes here — agents re-planning against each other can run for as long
+        as nobody notices; the gateway's ceilings are the brake, not the site.
     - risk: riskPromptInjection
       at: state
       note: >
         Shared memory is cross-step instruction: an injection journaled on day one re-enters
         every agent's context for the rest of the process — memory poisoning by its OWASP name.
     - risk: riskEconomicDenialOfWallet
-      at: gateway->provider
+      at: gateway
       note: Inference called many times across days of process is a spend surface worth a brake.
     - risk: riskToolRegistryTampering
       at: gateway->internalTools
@@ -529,35 +571,34 @@ pins:
       note: >
         Shared memory is what lets one branch of the graph steer another. Scoping it per run,
         and treating what a step wrote as untrusted when a later step reads it, is the control.
-    - capability: capabilityCredentialIsolation
-      at: state
-      note: >
-        Everything a step returns is persisted in the journal, so a returned credential is a
-        stored one. Keeping secrets out of step returns is the control; the journal cannot
-        un-learn them.
     - capability: capabilityModelEvals
-      at: gateway->provider
+      at: govSupplyChain
       note: >
         Behavioural checks in front of every model, prompt or agent change — the last point at
         which a change can be caught before it runs unattended for days.
     - capability: capabilityAgentObservability
-      at: orchestration->subagents
+      at: govObservability
       note: >
         The delegation graph has to be legible after the fact: which agent decided what, on
-        whose behalf, and what it passed to the next one.
+        whose behalf, and what it passed to the next one — assembled here from the traces the
+        gateway and the engine record.
     - capability: capabilityIga
       at: initiator->entry
       note: The user's identity and a delegated grant scoped to this request, not a standing power.
     - capability: capabilityNhiManagement
       at: orchestration
-      note: A workload identity for the supervisor, distinct from any user, so the chain starts attributable.
+      note: >
+        A logical principal for the supervisor, distinct from any user — its short-lived tokens
+        minted and constrained at the gateway, so the chain starts attributable.
     - capability: capabilityNhiManagement
       at: subagents
       note: >
-        A workload identity per specialist — not the supervisor's shared one — so every step in
-        the chain is attributable and separately revocable.
+        A logical principal per specialist — not the supervisor's shared one — so every step in
+        the chain is attributable and separately revocable at the gateway. The specialists
+        share one process; a compromise of the harness is a compromise of every principal it
+        speaks for, which is what the sandbox and the narrowed grants bound.
     - capability: capabilitySecretsManagement
-      at: gateway
+      at: harness->gateway
       note: Credentials brokered at step time, short-lived and scoped; agents hold none.
     - capability: capabilityAgentRuntimeEnforcement
       at: gateway
@@ -565,40 +606,70 @@ pins:
     - capability: capabilityToolPermissionScoping
       at: gateway->internalTools
       note: Each delegation hop carries a narrower grant than its parent.
+    - capability: capabilityCredentialIsolation
+      at: orchestration->subagents
+      note: >
+        Authority narrows where it is handed down: a specialist receives tokens scoped to its
+        task, never the supervisor's credentials — delegation that does not narrow is
+        privilege distribution.
     - capability: capabilityRateLimiting
-      at: gateway->provider
-      note: Rate and budget ceilings that end loops the agents cannot end themselves.
+      at: gateway
+      note: Rate and budget ceilings on the crossing that end loops the agents cannot end themselves.
     - capability: capabilityPromptInjectionDefense
-      at: internalTools->orgData
-      note: Returned content is classified before it re-enters any agent's context.
+      at: gateway
+      note: >
+        Returned record content is classified at the crossing before it re-enters any agent's
+        context.
+    - capability: capabilityPromptInjectionDefense
+      at: gateway->extTools
+      note: >
+        The external return gets the same classification at the crossing — third-party content
+        is the widest author set on the drawing.
     - capability: capabilityAiDlp
       at: state
-      note: Redaction on what steps may journal, because the journal outlives the process.
-    - capability: capabilityAiDlp
-      at: state
-      note: The same redaction on the specialists' journaling path — every writer to the journal is in scope.
+      note: >
+        Redaction on what steps may journal, because the journal outlives the process — and
+        every writer is in scope, the specialists included.
     - capability: capabilityHitlControls
       at: internalTools->orgData
-      note: An approval gate on consequential writes, sized to the blast radius.
-    - capability: capabilityEgressControl
-      at: extTools->downstream
       note: >
-        Named destinations only — over a process that runs for days, unbounded egress gives a
-        steered agent all the time it needs to find the exit.
+        An approval gate on consequential writes, sized to the blast radius. The engine
+        suspends the step and resumes only on an approval bound to the exact action and
+        workflow state — see the escalation scenario.
+    - capability: capabilityEgressControl
+      at: gateway->extTools
+      note: >
+        Named destinations only, enforced at the crossing we operate — over a process that
+        runs for days, unbounded egress gives a steered agent all the time it needs to find
+        the exit.
+    - capability: capabilityDataAccessGovernance
+      at: internalTools->orgData
+      note: >
+        Reads scoped to the workflow's grant rather than the service's reach — the same
+        entitlement filter the siblings enforce on this edge.
     - capability: capabilityAgentSandboxing
       at: internalTools
       note: >
         Generated code and browsing run in an isolated runtime with its own filesystem and
         network — never on the orchestration tier.
     - capability: capabilityAgentRegistry
-      at: gateway->internalTools
-      note: Admission for agents and tools — nothing runs or is offered by default.
+      at: govSupplyChain
+      note: >
+        Admission for agents and tools — nothing runs or is offered by default, and in a
+        multi-agent graph the registry is also the inventory: an agent nobody registered is an
+        agent nobody can revoke. The gateway enforces the resulting list per call.
     - capability: capabilityAuditLogging
       at: govObservability
       note: An append-only trail that can reconstruct who delegated what to whom.
     - capability: capabilityKillSwitch
       at: govObservability
       note: A stop that works mid-flight, because these processes run for days.
+    - capability: capabilityAiDetectionResponse
+      at: govObservability
+      note: >
+        Somebody correlating the trail while the process is still running — coordinated
+        fan-out, anomalous delegation and autonomous persistence are visible in the traces
+        only if something is actually reading them.
 
 walkthrough:
   title: A user asks the agent to act
@@ -607,18 +678,36 @@ walkthrough:
   steps:
     - follow: initiator->entry
       note: >
-        The request arrives authenticated with a scoped grant; the supervisor decomposes the
-        goal into work for specialists.
+        The request arrives authenticated, and a delegated grant scoped to this workflow is
+        bound to it — a binding that must outlive the session, because the work does.
+    - follow: entry->harness
+      note: The request reaches the supervisor carrying whose authority the workflow will run on.
+    - follow: harness->state
+      note: >
+        The run is journaled from its first step — everything a step returns will persist
+        here, which is the durability the drawing exists to show.
     - follow: orchestration->subagents
-      note: Each specialist takes its task with a narrowed grant, not the supervisor's authority.
+      note: >
+        The supervisor decomposes the goal; each specialist takes its task with a narrowed
+        grant, not the supervisor's authority.
     - follow: harness->gateway
-      note: Every call the agents make funnels through the one door.
+      note: Every network call the agents make funnels through the one door.
     - follow: gateway->provider
       note: Inference on brokered credentials, limits applied.
     - follow: gateway->internalTools
       note: Tool calls carry the narrowed per-step grant.
     - follow: internalTools->orgData
-      note: The write lands — behind an approval gate when it is consequential.
+      note: >
+        The write lands — behind the approval gate when it is consequential; the escalation
+        scenario walks that suspension.
+    - follow: gateway->extTools
+      note: >
+        Work reaches third parties through the same crossing; what returns is classified
+        before any agent reads it, because one confused agent propagates.
+    - follow: harness->state
+      note: >
+        The step checkpoints. Days may pass before an event wakes the run — the journal is
+        what it wakes into.
     - follow: entry->initiator
       note: The result returns, possibly days after the request.
 
@@ -635,6 +724,24 @@ scenarios:
         note: Idempotency fencing decides whether the side effect may run again.
       - follow: internalTools->orgData
         note: Without fencing, the payment executes twice. The journal replays; the world does not.
+  - title: A consequential write escalates for approval
+    steps:
+      - follow: gateway->internalTools
+        note: >
+          A step proposes a write above the threshold; the engine suspends the workflow
+          rather than executing.
+      - follow: entry->initiator
+        note: >
+          The proposal surfaces to a human — bound to the exact action, arguments and
+          workflow state, with an expiry.
+      - follow: initiator->entry
+        note: >
+          The approval returns and is validated against the suspended step — a blanket
+          "resume" approves nothing in particular.
+      - follow: gateway->internalTools
+        note: Only then does the action leave, under the same per-call policy as before.
+      - follow: internalTools->orgData
+        note: The write lands, attributable to both the workflow and the approver.
   - title: An event fires days into the process
     steps:
       - follow: events->harness
@@ -649,6 +756,19 @@ scenarios:
         note: The action proceeds under the same per-call policy as an attended run.
 
 deviations:
+  - subject: In-process tool handlers are drawn with no edges
+    reason: >
+      The localTools block warns rather than models: tools compiled into the application run
+      in its process, so their calls traverse no drawable path of ours, and drawing edges
+      would assert a governed hop that does not exist. The bound is code review at admission,
+      which is why the risk is pinned on the block itself.
+  - subject: The gateway's Skills broker item has no drawn supply path
+    reason: >
+      The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
+      it whole because the tier brokers skills traffic in deployments that use skills. The
+      supply chain behind the item — a private package registry and its signing pipeline — is
+      deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
+      pull path.
   - subject: Subagents are drawn as one block
     reason: >
       There are several, with different contexts and tools. They share one block because the

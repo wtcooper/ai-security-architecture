@@ -35,9 +35,10 @@ description:
   - >
     The agent needs an identity of its own. Actions taken as a shared service account are neither
     attributable nor separately revocable, which turns every incident into a full-service outage
-    when the response is to disable the credential. And its calls leave through an AI gateway —
-    brokered credentials, budget limits and the audit tap — the same crossing the durable
-    multi-agent workflow draws, at single-agent scale.
+    when the response is to disable the credential. And its network calls leave through an AI
+    gateway — brokered credentials, budget limits and the audit tap — the same crossing the
+    durable multi-agent workflow draws, at single-agent scale. The in-process tool set is the
+    drawn exception, and the reason it is drawn.
 
 distinguishedBy:
   - >
@@ -54,16 +55,25 @@ distinguishedBy:
     is this diagram one level down.
 
 exemplars:
-  - name: Autonomous customer service resolution
+  - name: Sierra Agent OS
     note: >
-      Agents that read a customer's request, consult policy and records, and issue the remedy
-      without a human, escalating only above a value or confidence threshold.
-    asOf: "2026-08"
-  - name: Operations and fulfilment agents
+      Goal-oriented service agents that resolve billing disputes, execute returns and update
+      subscriptions without a human, escalating above a threshold — the autonomous
+      customer-resolution shape this drawing describes, packaged as a platform.
+    url: https://sierra.ai
+    asOf: "2026-09"
+  - name: OpenAI Agents SDK
     note: >
-      Agents acting on orders, inventory or entitlements, where the action catalogue maps to
-      existing business transactions that already have reversal semantics.
-    asOf: "2026-08"
+      A build-your-own harness for exactly this loop: typed tools, guardrail hooks and
+      handoffs, with the action surface and its bounds supplied by the builder.
+    url: https://platform.openai.com/docs/guides/agents
+    asOf: "2026-09"
+  - name: Claude Agent SDK
+    note: >
+      The agent loop with parallel tool execution and hooks, run against a tool catalogue the
+      deployment defines — the single-agent workflow from the first commit.
+    url: https://docs.claude.com/en/api/agent-sdk/overview
+    asOf: "2026-09"
 
 zones:
   - id: zoneUser
@@ -213,11 +223,11 @@ blocks:
     col: 3
     row: 1
     note: >
-      The one crossing every model and tool call leaves through. The agent tier holds no
-      standing credentials; the gateway brokers them per call, meters spend and writes the
-      audit trail as a tap on the crossing. Its items are the traffic classes it brokers — the
-      checks it runs are the numbered pins on this block and its edges, and the call-outs
-      beneath.
+      The one crossing every network-brokered model and tool call leaves through — the
+      in-process tool set is the drawn exception. The agent tier holds no standing
+      credentials; the gateway brokers them per call, meters spend and writes the audit trail
+      as a tap on the crossing. Its items are the traffic classes it brokers — the checks it
+      runs are the numbered pins on this block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
 
   - id: internalTools
@@ -342,10 +352,11 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilitySystemPromptManagement]
     note: >
-      Which actions exist at all — admission, not discovery — and the behavioural checks in
-      front of every model, prompt or catalogue change.
+      Which actions exist at all — admission, not discovery — the behavioural checks in
+      front of every model, prompt or catalogue change, and the versioned ownership of the
+      system instruction itself.
 
   - id: govObservability
     kind: governance
@@ -393,8 +404,8 @@ edges:
     bidir: true
     label: model & tool calls
     note: >
-      Every call out of the loop crosses here on a brokered credential. The agent tier holds no
-      standing keys of its own.
+      Every network call out of the loop crosses here on a brokered credential. The agent tier
+      holds no standing keys of its own.
   - from: gateway
     to: provider
     path: external
@@ -465,9 +476,28 @@ pins:
     - risk: riskRunawayAgentToolLoops
       at: planner
       note: A loop that retries and re-plans in seconds can spend and act faster than anyone notices.
-    - risk: riskPromptResponseCachePoisoning
+    - risk: riskPromptInjection
       at: stateRetrieval
-      note: Case memory keyed loosely enough to collide across cases lets one requester's text steer another's outcome.
+      note: >
+        Case memory keyed loosely enough to collide across cases lets one requester's text
+        steer another's outcome — memory poisoning by its OWASP name, pinned as prompt
+        injection per the recorded deviation.
+    - risk: riskRetrievalVectorStorePoisoning
+      at: stateRetrieval
+      note: >
+        The search index grounds every case decision; content planted there by whoever can
+        write to the indexed sources returns as trusted context.
+    - risk: riskInsecureIntegratedComponent
+      at: localTools
+      note: >
+        Handlers compiled into the loop's process hold whatever the process holds and cross no
+        chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
+        control.
+    - risk: riskPromptInjection
+      at: extTools->downstream
+      note: >
+        Content returning from actions outside the company was authored by somebody else and
+        re-enters the next model call as context.
     - risk: riskToolRegistryTampering
       at: internalTools
       note: The catalogue is the policy surface; whoever can edit it programs the agent.
@@ -482,15 +512,22 @@ pins:
         Who is asking, established before the loop runs — the identity every downstream action
         is taken on behalf of, and the thing that bounds the reachable set.
     - capability: capabilityAgentRegistry
-      at: gateway->internalTools
+      at: govSupplyChain
       note: >
         Actions exist because the catalogue admitted them, not because a model named them.
-        Admission, not discovery — the primary control in an architecture with no human gate.
+        Admission is a change-time decision made here; the gateway enforces the resulting
+        catalogue per call.
     - capability: capabilityModelEvals
-      at: gateway->provider
+      at: govSupplyChain
       note: >
         Behavioural checks in front of every model, prompt or catalogue change, because with
         nobody watching a run there is no later opportunity to notice the change was wrong.
+    - capability: capabilitySystemPromptManagement
+      at: govSupplyChain
+      note: >
+        The system instruction is versioned, reviewed and owned like the catalogue it governs —
+        in an unattended workflow, a prompt change is a behaviour change nobody will be present
+        to notice.
     - capability: capabilityToolPermissionScoping
       at: gateway->internalTools
       note: >
@@ -500,7 +537,9 @@ pins:
       at: internalTools->orgData
       note: >
         An approval gate keyed to irreversibility and value, rare enough to be read; below it,
-        reversal rather than review.
+        reversal rather than review. The approver is an operator work queue outside this
+        drawing, never the requester — the beneficiary approving their own remedy is no gate
+        at all.
     - capability: capabilityAgentRuntimeEnforcement
       at: gateway->internalTools
       note: >
@@ -525,11 +564,23 @@ pins:
       at: gateway
       note: Quotas and cost ceilings on the crossing, before token spend and action volume are committed.
     - capability: capabilityEgressControl
-      at: extTools->downstream
+      at: gateway->extTools
       note: >
-        Named destinations only. The catalogue bounds what can be done; the egress allowlist
-        bounds where it can land — the last boundary between a content-borne injection and an
-        attacker's collection endpoint.
+        Named destinations only, enforced at the crossing we operate. The catalogue bounds what
+        can be done; the egress allowlist bounds where it can land — the last boundary between
+        a content-borne injection and an attacker's collection endpoint.
+    - capability: capabilityPromptInjectionDefense
+      at: gateway
+      note: >
+        Returned record and external content is classified at the crossing before it re-enters
+        the loop's context — the harder injection path gets the same treatment the request
+        text does.
+    - capability: capabilityCredentialIsolation
+      at: gateway->internalTools
+      note: >
+        Effective authority is the intersection of the requester's grant, the agent's identity,
+        the action policy and the target record — never the union, which is what a confused
+        deputy runs on.
     - capability: capabilityAuditLogging
       at: govObservability
       note: >
@@ -546,6 +597,8 @@ walkthrough:
   steps:
     - follow: requester->entry
       note: The request arrives authenticated and bound to an account; the loop starts with that identity intact.
+    - follow: entry->planner
+      note: The request enters the loop with the requester's identity attached.
     - follow: planner->stateRetrieval
       note: Policy and the customer's history load as context, scoped to this account.
     - follow: planner->gateway
@@ -574,6 +627,23 @@ scenarios:
         note: The catalogue does not care what steered the model — parameters and policy bounds hold.
       - follow: internalTools->orgData
         note: Below the threshold the action is compensable; above it the approval gate fires.
+  - title: A timer fires with nobody in the room
+    steps:
+      - follow: events->planner
+        note: >
+          The common trigger in many deployments: a queue message or schedule starts the run,
+          and there is no requester to return an outcome to.
+      - follow: planner->gateway
+        note: The unattended run crosses on the same brokered credential an attended one would.
+      - follow: gateway->provider
+        note: The model proposes an action with nobody watching the proposal.
+      - follow: gateway->extTools
+        note: The action reaches outward, admitted by the same catalogue and egress allowlist.
+      - follow: extTools->downstream
+        note: >
+          The effect lands outside the company, and what returns re-enters the next call as
+          somebody else's content. With no human anywhere on this path, the catalogue, the
+          threshold and the compensating transaction are the whole of the control set.
   - title: The injection was written months ago
     steps:
       - follow: planner->stateRetrieval
@@ -590,6 +660,32 @@ scenarios:
         note: The model reads it beside the system instruction with nothing marking it apart.
       - follow: gateway->internalTools
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
+
+deviations:
+  - subject: In-process tool handlers are drawn with no edges
+    reason: >
+      The localTools block warns rather than models: tools compiled into the application run
+      in its process, so their calls traverse no drawable path of ours, and drawing edges
+      would assert a governed hop that does not exist. The bound is code review at admission,
+      which is why the risk is pinned on the block itself.
+  - subject: The gateway's Skills broker item has no drawn supply path
+    reason: >
+      The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
+      it whole because the tier brokers skills traffic in deployments that use skills. The
+      supply chain behind the item — a private package registry and its signing pipeline — is
+      deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
+      pull path.
+  - subject: The application front end absorbs inbound classification
+    reason: >
+      capabilityPromptInjectionDefense is embodied by the AI gateway, but request text is
+      classified where it arrives — the entry tier absorbs the duty in this simple deployment
+      shape, mirroring the chat sibling's recorded absorption of the service edge.
+  - subject: Memory poisoning is pinned as prompt injection
+    reason: >
+      OWASP's agentic taxonomy names memory poisoning as a distinct threat; CoSAI's risk set
+      has no equivalent, so the cross-case memory risk is pinned as prompt injection — the
+      nearest true statement, recorded rather than papered over, matching the multi-agent
+      sibling.
 
 sources:
   - title: "OWASP Top 10 for Agentic Applications 2026 — ASI01 goal hijack, ASI02 tool misuse"

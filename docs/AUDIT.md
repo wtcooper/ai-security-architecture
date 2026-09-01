@@ -680,27 +680,22 @@ Highlights below are Google's original mapping, not ours.
 | Cloud & hosted | 6 — Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
-### 4a. Risks no architecture pins — 7 of 36
+### 4a. Risks no architecture pins — 5 of 36
 
 - Model Reverse Engineering (`riskModelReverseEngineering`)
 - Inferred Sensitive Data (`riskInferredSensitiveData`)
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Adapter/PEFT Injection (`riskAdapterPEFTInjection`)
-- Orchestrator/Route Hijack (`riskOrchestratorRouteHijacking`)
 - Evaluation/Benchmark Manipulation (`riskEvaluationBenchmarkManipulation`)
-- Agent Delegation Chain Opacity (`riskAgentDelegationChainOpacity`)
 
-### 4b. Capabilities no architecture pins — 12 of 56
+### 4b. Capabilities no architecture pins — 9 of 56
 
 - Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
 - Privacy-enhancing technologies (`capabilityPetTooling`)
 - Staged rollout, versioning & rollback (`capabilityStagedRollout`)
-- Groundedness & output verification (`capabilityGroundednessChecking`)
 - Model hardening & adversarial training (`capabilityModelHardening`)
-- System prompt & instruction hierarchy management (`capabilitySystemPromptManagement`)
 - Content provenance & watermarking (`capabilityContentProvenance`)
 - Agent behavioural & goal-drift detection (`capabilityBehavioralDriftDetection`)
-- AI-aware detection & response (`capabilityAiDetectionResponse`)
 - Endpoint detection & response (`capabilityEdr`)
 - SaaS security posture management for AI features (`capabilityVendorAssurance`)
 - Threat modelling tooling for AI systems (`capabilityThreatModeling`)
@@ -909,9 +904,9 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 5 | Identity & access management for AI applications, Agent & tool registry, Model & agent evaluation harnesses |
-| Multi-agent workflow | build | draft | 5 | Agent memory & context protection, Agent credential isolation & delegation control, Model & agent evaluation harnesses, Agent observability & tracing, Network segmentation & egress control, Agent execution sandboxing |
-| Chat agent with tools | build | draft | 5 | Agent & tool registry, Model & agent evaluation harnesses, Retrieval & vector store security |
+| Single agent workflow | build | draft | 7 | Agent credential isolation & delegation control |
+| Multi-agent workflow | build | draft | 8 | Data access governance for retrieval |
+| Chat agent with tools | build | draft | 7 | _none_ |
 | Remote MCP server you publish | build | draft | 5 | Application security testing for AI systems, Kill switch, quarantine & decommissioning |
 | Self-hosted model inference | build | draft | 4 | AI bill of materials & artifact signing, Secrets management & ephemeral credentials, Audit logging & non-repudiation, AI red teaming |
 | Fine-tuning and model registry pipeline | build | draft | 4 | Audit logging & non-repudiation, Model registry & documentation generation |
