@@ -31,9 +31,10 @@ description:
     The authoring surface is also an injection surface: instructions, knowledge sources and
     connector descriptions are assembled by someone who is not thinking about untrusted input, and
     a shared agent's knowledge source is frequently a folder anyone can write to. Because no
-    sandbox or runtime enforcement can be inserted into a vendor's execution, every control drawn
-    here is a population control — inventory, publication gating, connector policy, and audit that
-    can retire what nobody uses.
+    sandbox or runtime enforcement can be inserted into a vendor's execution, every control on
+    the vendor side is a population control — inventory, publication gating, connector policy,
+    and audit that can retire what nobody uses; the runtime controls that survive are the ones
+    on the crossing we run.
 
 distinguishedBy:
   - >
@@ -218,7 +219,9 @@ blocks:
     row: 0
     pack: modelProvider
     note: >
-      The vendor's model, called by the vendor. We neither broker it nor hold the key, which is
+      The vendor's model, called by the vendor — for the platforms whose model is their own it
+      sits under the same agreement, and this band is external only for the
+      bring-your-own-provider variant. We neither broker it nor hold the key, which is
       why our own gateway carries no inference on this page. Two variants worth noting in
       assessment: some platforms run the model entirely inside their own boundary (then this
       block collapses into the platform and is assured, not drawn), and some let the customer
@@ -258,7 +261,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 5
-    capabilities: [capabilitySecretsManagement, capabilityEncryptionKeyManagement]
+    capabilities: [capabilitySecretsManagement, capabilityEncryptionKeyManagement, capabilityCredentialIsolation]
     note: >
       The tunnel host's cached connection credentials — issued, rotated and revoked from here
       — and customer-managed keys over the platform's stored data, managed-tier only and slow
@@ -284,7 +287,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityAiTprm, capabilityDspm, capabilityStagedRollout]
+    capabilities: [capabilityAgentRegistry, capabilityAiTprm, capabilityDspm, capabilityStagedRollout, capabilityVendorAssurance]
     note: >
       The inventory and the publication gate. On a platform where anyone can build, an agent
       nobody registered is an agent nobody can revoke — and that is the normal case rather than
@@ -297,7 +300,7 @@ blocks:
     zone: zoneGovernance
     col: 5
     row: 5
-    capabilities: [capabilityAuditLogging, capabilityAiGovernancePlatform, capabilityBehavioralDriftDetection]
+    capabilities: [capabilityAuditLogging, capabilityAiGovernancePlatform, capabilityBehavioralDriftDetection, capabilityKillSwitch]
     note: >
       Run history, and the population view: which agents exist, who built them, which have
       outlived their author. The unit of observation here is the population, not a deployment.
@@ -412,6 +415,22 @@ pins:
       at: platform->provider
       note: Grounding content leaves for a model we do not broker and hold no key for.
 
+    - risk: riskSensitiveDataDisclosure
+      at: consumer->platform
+      note: >
+        Publish to a public channel with authentication off and the audience is the internet:
+        the agent's grounding and connectors answer anyone with the URL — found by the thousands
+        by recon tooling.
+    - risk: riskPromptInjection
+      at: internalTools->orgData
+      note: >
+        A document in a grounding folder anyone can write to comes back as a tool result and
+        enters their runtime as instruction — the path the shared-drive scenario walks.
+    - risk: riskSensitiveDataDisclosure
+      at: builder->platform
+      note: >
+        Bulk knowledge upload — folders pushed into the platform as grounding by someone not
+        thinking of it as data movement.
   capabilities:
     - capability: capabilityIga
       at: consumer->platform
@@ -420,8 +439,11 @@ pins:
         principal. Default to end-user credentials; maker-provided is the ambient-authority
         case and should be a deliberate, reviewed exception.
     - capability: capabilityNhiManagement
-      at: aiGateway
-      note: Each connector grant is an identity with a lifecycle, not a setting somebody ticked once.
+      at: platform
+      note: >
+        A directory principal minted per published agent, so conditional access, revocation
+        and ownership transfer attach to one agent — the grants live in the platform's
+        connection store, and our gateway sees only the slice it issued.
     - capability: capabilitySecretsManagement
       at: dataGateway
       note: >
@@ -489,6 +511,32 @@ pins:
         quietly: the agent whose tool mix changed is the one to quarantine before an incident
         names it.
 
+    - capability: capabilityPromptInjectionDefense
+      at: aiGateway
+      note: >
+        Grounding read through our gateway is classified before it goes back to their runtime —
+        the one return leg we can inspect.
+    - capability: capabilityAiDlp
+      at: builder->platform
+      note: >
+        Classification before knowledge is attached: a maker uploads whole folders as grounding,
+        and this is the only point where what leaves can still be read.
+    - capability: capabilityCredentialIsolation
+      at: platform
+      note: >
+        Invoker-credential execution as the tenant setting: the agent acts on the consumer's
+        grant, never the maker's, wherever the platform supports delegated authorization rather
+        than blanket connector consent.
+    - capability: capabilityKillSwitch
+      at: govObservability
+      note: >
+        Disable the app in the tenant and revoke every connector grant — the SaaS form of the
+        stop, and the response the departed-author and shadow-account scenarios actually invoke.
+    - capability: capabilityVendorAssurance
+      at: platform
+      note: >
+        The tenant's configuration drifts as the vendor ships: connector defaults, publication
+        channels and authentication toggles are re-assessed on a clock, not once.
 walkthrough:
   title: An agent is built, published, and used
   moves: >-
@@ -579,6 +627,19 @@ scenarios:
           Our gateway cuts the slice it issued — the grants into our own systems — which is
           real, and is not most of what the departed maker left behind.
 
+  - title: Published to anyone with the link
+    steps:
+      - follow: consumer->platform
+        note: >
+          A maker publishes to a public channel and leaves authentication off; the "consumer"
+          is now anyone who finds the URL, and recon tooling finds them by the thousands.
+      - follow: platform->aiGateway
+        note: The stranger's question reaches our crossing on the agent's own grants.
+      - follow: aiGateway->internalTools
+        note: Admitted like any run of this agent — the catalogue does not know who is asking.
+      - follow: internalTools->orgData
+        note: The grounding answers a stranger. Inventory and publication gating are what would have caught it.
+
 deviations:
   - subject: The vendor band is drawn before our cloud band
     reason: >
@@ -589,8 +650,10 @@ deviations:
     reason: >
       capabilitySecretsManagement is embodied by the AI gateway, but the on-prem relay never
       crosses it: the cached connection credentials sit on the tunnel host, so the pin lands
-      there and the issuance story lives in the governance call-out — the same absorption the
-      enterprise chat drawing records for its tunnel.
+      there and the issuance story lives in the governance call-out. The tunnel fronts
+      whatever we point it at: the source directly for an on-premises data gateway here, our
+      gateway for MCP-class backends on the enterprise chat drawing — the same component,
+      two chains.
   - subject: The AI gateway does not reach a model provider
     reason: >
       Everywhere else in the catalogue the gateway is the model path, and the registered

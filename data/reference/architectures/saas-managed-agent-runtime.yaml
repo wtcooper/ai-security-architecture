@@ -72,13 +72,6 @@ exemplars:
       configuration surface this page pins, shipped as platform policy.
     url: https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview
     asOf: "2026-09"
-  - name: Hosted background coding agents
-    note: >
-      Vendor-run remote agents taking a task and a repository grant, working unattended and
-      reporting back as pull requests — the one exemplar class that is genuinely vendor-direct,
-      with no customer front end; the recorded deviation covers it.
-    url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations
-    asOf: "2026-09"
 
 zones:
   - id: zoneUser
@@ -177,6 +170,14 @@ blocks:
         note: >
           Provider-operated code execution and browsing, one container per session — with its
           own path to the open web that never touches anything we run.
+      - id: hostedTools
+        label: MCP & connectors
+        icon: plug
+        note: >
+          Their tool gateway: hosted MCP servers and connectors the provider calls from its own
+          side, the tool list fetched by them. That path never touches our network — only the
+          tools we choose to front cross our gateway — so the risk sits on this item and the
+          control is the default-deny policy their gateway lets us set.
 
   - id: agentDef
     kind: service
@@ -308,7 +309,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityStagedRollout, capabilityAiTprm]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityStagedRollout, capabilityAiTprm, capabilityVendorAssurance]
     note: >
       Definition admission, the behavioural checks in front of every change, staged rollout of
       the definitions themselves, and the platform assessment behind adopting the runtime at
@@ -321,7 +322,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    capabilities: [capabilityAgentObservability, capabilityAuditLogging]
+    capabilities: [capabilityAgentObservability, capabilityAuditLogging, capabilityKillSwitch]
     note: >
       Their session event log fused with our gateway's record. A trail that exists only in
       their console is one we cannot query during an incident.
@@ -368,9 +369,9 @@ edges:
     label: back into our systems
     note: >
       The crossing this architecture exists to govern. Their runtime reaches our gateway rather
-      than reaching past it, so the grants are ours to scope and ours to revoke — over a
-      connector, an outbound-only tunnel, or a worker of ours that polls them, depending on how
-      much of the execution we chose to take back.
+      than reaching past it, so the grants are ours to scope and ours to revoke. The direct
+      invoke form is drawn; the tunnel form — an outbound-only connector we run inside our
+      network — is the enterprise chat drawing's Tunnel connector, by reference.
   - from: aiGateway
     to: internalTools
     path: primary
@@ -446,6 +447,21 @@ pins:
         dominant untrusted ingress of this archetype, on a path with no customer control
         anywhere.
 
+    - risk: riskToolSourceProvenance
+      at: managedRuntime
+      note: >
+        Tool descriptions fetched vendor-side enter the loop as instruction, from servers named
+        in the definition and vetted by nobody on the path.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: entry->managedRuntime
+      note: >
+        The delegation boundary: a service credential substituted for the user's context here
+        means every downstream grant is the service's, not the person's.
+    - risk: riskPromptInjection
+      at: internalTools->orgData
+      note: >
+        A record somebody else authored comes back as a tool result and enters their runtime as
+        instruction — classified at our gateway on the way, which is the only reason it can be.
   capabilities:
     - capability: capabilityIga
       at: entry
@@ -488,7 +504,9 @@ pins:
         with the vendor's per-tool approval defaults as the second, configured layer.
     - capability: capabilityEgressControl
       at: aiGateway->extTools
-      note: Named destinations for actions leaving our side of the boundary.
+      note: >
+        Named destinations for the actions we chose to front — the subset of tools that cross
+        our gateway. Hosted tools the provider calls from its own side never meet this list.
     - capability: capabilityPromptInjectionDefense
       at: aiGateway
       note: >
@@ -525,6 +543,26 @@ pins:
       at: govObservability
       note: The population view across every agent somebody deployed with an API call.
 
+    - capability: capabilityToolPermissionScoping
+      at: managedRuntime
+      note: >
+        Default-deny policy at their tool gateway — the floor a builder cannot lower, set in the
+        tenant rather than enforced by us.
+    - capability: capabilityRateLimiting
+      at: entry
+      note: >
+        Per-session and per-user ceilings before the vendor meters the loop — a hosted browser
+        steered into an open-ended run bills by the minute.
+    - capability: capabilityKillSwitch
+      at: govObservability
+      note: >
+        Disable the app in the tenant and revoke every connector grant — the SaaS form of the
+        stop, and the response the departed-author and shadow-account scenarios actually invoke.
+    - capability: capabilityVendorAssurance
+      at: managedRuntime
+      note: >
+        The platform's defaults drift as it ships — memory scope, guardrail coverage,
+        tool-gateway policy — and are re-assessed on a clock, not once.
 walkthrough:
   title: A user's request becomes a tool call on our systems
   moves: >-
@@ -623,6 +661,14 @@ deviations:
       with its one real traffic class rather than the registered aiGatewayTraffic pack,
       following the low-code builder's precedent: the honest signal that a gateway is not on
       the model path is its own contents.
+
+  - subject: Hosted tools are an item on the runtime, not an edge to the external band
+    reason: >
+      Hosted MCP servers and connectors are called from the provider's side and never touch
+      our network — the low-code sibling draws that as a platform-to-tools edge. Here the
+      runtime's external reach is drawn once already (the hosted browser), and a second
+      vendor-side arrow would cross the front end. The item carries the provenance risk and
+      the zone-2 policy control; nothing of ours sits on the path either way.
 
 sources:
   - title: "CoSAI Shared Responsibility Framework V1.0 — AI and agent PaaS operating model"
