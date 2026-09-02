@@ -19,6 +19,33 @@ export const metadata = {
     "AI security from risk map to reference architecture: the full CoSAI taxonomy, the technology capabilities that implement its controls, and target-state architectures for every class of AI application.",
 };
 
+const LADDER = [
+  {
+    href: "/map",
+    label: "Risk map",
+    blurb: "Every risk told in three moves across the components it touches.",
+    count: `${risks.length} risks · ${risks.length * 3} steps`,
+  },
+  {
+    href: "/risks",
+    label: "Taxonomy",
+    blurb: "The components, risks, controls and personas behind the picture, with the framework crosswalks.",
+    count: `${components.length} components · ${controls.length} controls · ${visibleFrameworks.length} frameworks`,
+  },
+  {
+    href: "/capabilities",
+    label: "Capabilities",
+    blurb: "The vendor-neutral tooling classes that implement each control, across endpoint, cloud and third-party SaaS.",
+    count: `${capabilities.length} capabilities`,
+  },
+  {
+    href: "/reference",
+    label: "Architectures",
+    blurb: "The target-state drawing for each class of AI application, built to be copied.",
+    count: `${archetypes.length} archetypes · ${incidents.length} incidents replayed`,
+  },
+];
+
 const SECTIONS = [
   {
     href: "/map",
@@ -143,34 +170,47 @@ export default function LandingPage() {
         >
           Start the tour
         </Link>
-        <Link
-          href="/reference"
-          className="rounded-lg border border-line-strong bg-paper px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-ink"
-        >
-          Browse the architectures
+        <Link href="/reference" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
+          Browse the architectures →
         </Link>
-        <Link
-          href="/capabilities"
-          className="rounded-lg border border-line-strong bg-paper px-5 py-2.5 text-[14px] font-semibold text-ink transition-colors hover:border-ink"
-        >
-          Map your tooling
+        <Link href="/capabilities" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
+          Map your tooling →
         </Link>
       </div>
 
+      {/* The ladder, drawn: four rungs a reader descends, each a link with what waits on it. */}
       <div className="mt-10 rounded-xl border border-line bg-paper p-6">
         <p className="eyebrow">The ladder</p>
-        <p className="mt-2 max-w-3xl text-[14.5px] leading-relaxed text-ink-2">
-          <span className="font-semibold text-ink">Risk map</span> — every risk told in three
-          moves across the components it touches.{" "}
-          <span className="font-semibold text-ink">Taxonomy</span> — the components, risks,
-          controls and personas behind the picture, with the framework crosswalks.{" "}
-          <span className="font-semibold text-ink">Capabilities</span> — the vendor-neutral
-          tooling classes that implement each control, split across endpoint, cloud and
-          third-party SaaS.{" "}
-          <span className="font-semibold text-ink">Architectures</span> — the target-state
-          drawing for each class of AI application, built to be copied.
-        </p>
-        <PhaseLegend className="mt-4" />
+        <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {LADDER.map((rung, i) => (
+            <li key={rung.href} className="relative">
+              <Link
+                href={rung.href}
+                className="group flex h-full flex-col rounded-lg border border-line bg-mist/50 p-4 transition-colors hover:border-ink"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="ident flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">
+                    {i + 1}
+                  </span>
+                  <span className="display text-[15px] font-semibold text-ink group-hover:text-introduced">
+                    {rung.label}
+                  </span>
+                </span>
+                <span className="mt-2 flex-1 text-[13px] leading-snug text-ink-2">{rung.blurb}</span>
+                <span className="ident mt-3 text-ink-3">{rung.count}</span>
+              </Link>
+              {i < LADDER.length - 1 && (
+                <span
+                  aria-hidden
+                  className="absolute -right-2.5 top-1/2 hidden -translate-y-1/2 text-line-strong lg:block"
+                >
+                  ›
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        <PhaseLegend className="mt-5" />
       </div>
 
       <h2 className="display mt-16 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">
@@ -238,44 +278,23 @@ export default function LandingPage() {
         </div>
         <div className="rounded-xl border border-line bg-paper p-5 sm:col-span-2">
           <p className="display text-[15px] font-semibold text-ink">
-            The capability taxonomy{" "}
-            <span className="ident ml-1.5 align-middle">authored here</span>
+            Authored here <span className="ident ml-1.5 align-middle">two layers</span>
           </p>
           <p className="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">
-            The one layer neither framework provides. Each of the {capabilities.length} classes
-            had to be named by at least two independent source families — MITRE ATLAS and the
-            OWASP Top 10s, the NIST, CISA, Five Eyes, NCSC, CSA and ISO guidance, and the
-            analyst and cloud-provider market catalogues — and had to have real tooling behind
-            it, so activities and policies are excluded. Every entry carries its sources, and
-            the mappings onto CoSAI are judgements made here.
+            The {capabilities.length} capabilities — tooling classes named by at least two
+            independent source families and backed by real products, mapped onto CoSAI by
+            judgement — and the {archetypes.length} reference architectures across{" "}
+            {surfaces.length} surfaces, each block anchored to the CoSAI component it
+            instantiates. Both are under review; every entry carries its sources.
           </p>
-          <Link
-            href="/capabilities"
-            className="mt-3 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
-          >
-            Browse the capability matrix →
-          </Link>
-        </div>
-        <div className="rounded-xl border border-line bg-paper p-5 sm:col-span-2">
-          <p className="display text-[15px] font-semibold text-ink">
-            The reference architectures{" "}
-            <span className="ident ml-1.5 align-middle">authored here</span>
-          </p>
-          <p className="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">
-            No published catalogue maps classes of AI application to architectures, so this one
-            was built: {archetypes.length} archetypes across {surfaces.length} surfaces, drawn
-            in the reference-architecture grammar practitioners already read — capability
-            blocks on typed data paths, with each block anchored to the CoSAI component it
-            instantiates, the capabilities to deploy numbered onto the drawing, and the risks
-            tagged where they surface. Target states, built to be copied rather than audited
-            against.
-          </p>
-          <Link
-            href="/reference"
-            className="mt-3 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
-          >
-            Browse the architectures →
-          </Link>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
+            <Link href="/capabilities" className="text-[13.5px] font-semibold text-introduced hover:underline">
+              Browse the capability matrix →
+            </Link>
+            <Link href="/reference" className="text-[13.5px] font-semibold text-introduced hover:underline">
+              Browse the architectures →
+            </Link>
+          </div>
         </div>
       </div>
 

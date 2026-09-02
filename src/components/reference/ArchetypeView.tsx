@@ -8,7 +8,7 @@
  * capability or risk tab clears the highlight, so the drawing always matches the panel.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { guidanceByArchetype } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
@@ -46,6 +46,19 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     if (next !== "capabilities" && next !== "risks") onHighlight(null);
   };
 
+  // On a phone the drawing is unreadable at page width, so it folds behind a toggle and the
+  // tabs lead; a reader who wants the drawing gets it full-bleed and pinch-zoomable.
+  const [narrow, setNarrow] = useState(false);
+  const [showDrawing, setShowDrawing] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const drawingVisible = !narrow || showDrawing;
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
@@ -56,16 +69,33 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
 
   return (
     <div className="mt-3">
-      <div className="overflow-hidden rounded-xl border border-line bg-paper">
-        <FlowDiagram
-          archetype={archetype}
-          walk={activeWalk}
-          highlight={highlight}
-          onHighlight={onHighlight}
-          className="w-full"
-        />
-      </div>
-      <FlowLegend className="mt-3 px-1" />
+      {narrow && (
+        <button
+          type="button"
+          onClick={() => setShowDrawing((v) => !v)}
+          aria-expanded={showDrawing}
+          className="mb-3 w-full rounded-lg border border-line bg-paper px-4 py-2.5 text-left text-[13px] font-semibold text-ink"
+        >
+          {showDrawing ? "Hide the drawing" : "Show the drawing"}
+          <span className="ml-2 font-normal text-ink-3">
+            {archetype.blocks.length} blocks · pinch to zoom
+          </span>
+        </button>
+      )}
+      {drawingVisible && (
+        <>
+          <div className="-mx-6 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
+            <FlowDiagram
+              archetype={archetype}
+              walk={activeWalk}
+              highlight={highlight}
+              onHighlight={onHighlight}
+              className="w-full"
+            />
+          </div>
+          <FlowLegend className="mt-3 px-1" />
+        </>
+      )}
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (

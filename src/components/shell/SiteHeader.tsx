@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SearchPalette } from "./SearchPalette";
 
 /**
  * The nav is the site's ladder: the risk map, the taxonomy behind it, the capabilities that
@@ -37,6 +38,7 @@ export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [dropdown, setDropdown] = useState<string | null>(null);
+  const [search, setSearch] = useState(false);
   const [prevPath, setPrevPath] = useState(pathname);
   const navRef = useRef<HTMLElement>(null);
 
@@ -47,6 +49,18 @@ export function SiteHeader() {
     if (open) setOpen(false);
     if (dropdown) setDropdown(null);
   }
+
+  // ⌘K / Ctrl+K anywhere opens search.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearch((s) => !s);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (!open && !dropdown) return;
@@ -127,13 +141,27 @@ export function SiteHeader() {
             )}
           </nav>
 
+          <button
+            type="button"
+            onClick={() => setSearch(true)}
+            aria-label="Search (⌘K)"
+            title="Search (⌘K)"
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink max-lg:ml-auto"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
+              <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M10.5 10.5 L14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            <span className="hidden sm:inline">Search</span>
+            <span className="ident hidden rounded border border-line px-1 text-[10px] sm:inline">⌘K</span>
+          </button>
           <a
             href={REPO_URL}
             target="_blank"
             rel="noreferrer"
             aria-label="Source on GitHub"
             title="Source on GitHub"
-            className="shrink-0 rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink max-lg:ml-auto"
+            className="shrink-0 rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink"
           >
             <GitHubMark />
           </a>
@@ -166,6 +194,8 @@ export function SiteHeader() {
           </nav>
         )}
       </header>
+
+      <SearchPalette open={search} onClose={() => setSearch(false)} />
 
       {/* Outside the header on purpose: `backdrop-blur` makes it a containing block, so a
           `fixed` child would size against the 56px bar instead of the viewport. */}
