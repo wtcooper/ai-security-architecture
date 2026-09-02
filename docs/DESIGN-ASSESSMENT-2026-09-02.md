@@ -127,3 +127,32 @@ section; the last section sequences them.
    layout for the drawing pages.
 3. Larger: family comparison view; drawing export and print; incident timeline; OpenGraph
    images.
+
+## Implementation status (same day)
+
+Done, on `main`:
+- Header is the ladder; every page header shows its rung. Incidents sit beside it.
+- Footer with dataset build date, CoSAI commit, counts and the single under-review note;
+  the per-architecture pill is gone.
+- ⌘K / Ctrl+K search over risks (with codes), controls, capabilities (with abbreviations),
+  components, personas, architectures and incidents.
+- Risks and Controls are master-detail pages: sticky grouped list, arrow keys, URL-backed
+  selection; risks list the incidents that name them.
+- Reference page opens on the traced walkthrough, the picker sits in the header, the page
+  title names the architecture; on phones the drawing folds behind a toggle and the tabs
+  scroll sideways.
+- Incidents open on the architecture view, accept `?incident=` links, and their risk chips
+  open the risk.
+- Capabilities hides the coverage legend until an assessment exists; the button says what it
+  does.
+- Home page draws the ladder as four linked rungs; secondary buttons are links; provenance is
+  three cards, not four.
+
+Corrected on inspection: back-links from risks, controls, capabilities and components to the
+architectures already existed, and capability chips already carried full-name titles; the
+assessment overstated both.
+
+Still open, in the order I would take them: family comparison view; PNG/SVG export of the
+drawing and a print stylesheet; OpenGraph images per architecture; a browsable risk list on
+the Risk map walkthrough in place of the select; "not mapped" reasons on the Frameworks rows;
+the incident timeline (needs per-step dates in the data); phone layout for the map pages.
