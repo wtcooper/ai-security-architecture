@@ -215,6 +215,13 @@ blocks:
         label: Rules & instructions
         icon: doc
         note: The AGENTS.md-class files — the repo-committed ones authored by whoever last committed.
+      - id: hooks
+        label: Hooks & settings
+        icon: gear
+        note: >
+          Session-start hooks, permission rules and editor tasks that run as code when the
+          project opens — the persistence a self-propagating package worm writes into an
+          agent's configuration, not prose the loop reads but commands it executes.
 
   - id: toolPlane
     kind: service
@@ -447,7 +454,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity]
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiBom, capabilitySystemPromptManagement]
     note: >
       Which agents, connectors and servers are admitted, and pinned to which versions. This
       call-out carries more weight here than in any other drawing: the supply chain delivers
@@ -460,7 +467,7 @@ blocks:
     zone: zoneGovernance
     col: 6
     row: 5
-    capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery]
+    capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery, capabilityKillSwitch]
     note: >
       Our gateway tap is the only session record there is — no vendor export exists to fuse
       with it — plus the discovery that finds the installs which never enrolled.
@@ -523,8 +530,9 @@ edges:
     route: hv
     label: model & tool calls
     note: >
-      The one general-purpose crossing: the vendor session, every model call inside it, and
-      every remote tool call leave the endpoint here.
+      The one general-purpose crossing: every model call and every remote tool call leave the
+      endpoint here — in the target state. In the common install the model call goes straight
+      out on a pasted key and never sees this tier.
   - from: toolPlane
     to: aiGateway
     path: primary
@@ -548,7 +556,7 @@ edges:
     to: registry
     path: primary
     bidir: true
-    label: signed installs
+    label: pinned installs
     route: hv
     note: >
       Harness, extension and skill releases pulled from the mirror rather than straight from a
@@ -595,7 +603,8 @@ pins:
       at: memory
       note: >
         Memory files and rules are prose a later session treats as instruction — including
-        rules committed by whoever last touched the repo.
+        rules committed by whoever last touched the repo, and the settings hooks the worm
+        incidents wrote their persistence into.
     - risk: riskToolRegistryTampering
       at: toolPlane
       note: >
@@ -618,7 +627,7 @@ pins:
         A remote channel is only as good as the account and device binding behind it; a stale
         login steering a machine full of credentials is an account-compromise blast radius —
         and here admission is a bearer secret at best, never an owner-bound account.
-    - risk: riskToolRegistryTampering
+    - risk: riskInsecureIntegratedComponent
       at: aiGateway->registry
       note: >
         The mirror decides which build of the agent runs. A tampered or unpinned release is
@@ -637,7 +646,7 @@ pins:
     - risk: riskRogueActions
       at: hostedTools->orgData
       note: Writes into systems of record from a loop whose plan nobody reviewed.
-    - risk: riskMCPTransportHijacking
+    - risk: riskInsecureIntegratedComponent
       at: harness
       note: >
         The serve mode is an agent-control transport listening on the machine: bound wider
@@ -650,6 +659,28 @@ pins:
         A binary a developer can fetch without asking anyone. Unmanaged, it has no policy, no
         audit and no inventory entry — and that is the common case.
 
+    - risk: riskInsecureIntegratedComponent
+      at: aiGateway
+      note: >
+        The gateway is a third-party tier with its own CVE stream — the LiteLLM backdoor shipped
+        in a release — and here there is no vendor console to notice a gateway that has gone
+        quiet.
+    - risk: riskMCPTransportHijacking
+      at: aiGateway->extTools
+      note: >
+        A remote MCP transport intercepted or impersonated between the crossing and the server
+        it admits — the tool result arrives from whoever holds the connection.
+    - risk: riskRunawayAgentToolLoops
+      at: harness
+      note: >
+        A scheduled or hosted session has no human to notice it looping; seat metering is the
+        only meter, and the stop is the credential.
+    - risk: riskInsecureIntegratedComponent
+      at: memory
+      note: >
+        Hooks and settings are executed, not read: a session-start hook or folder-open task
+        written into the agent's configuration is code execution as the developer on every
+        launch — the persistence the CHAINDROP worm chose.
   capabilities:
     - capability: capabilityIga
       at: relay
@@ -732,6 +763,28 @@ pins:
         which ports they listen on, what their processes execute — and the containment that
         isolates a machine whose agent has been steered.
 
+    - capability: capabilityAgentRuntimeEnforcement
+      at: relay->harness
+      note: >
+        Admission of a remote instruction: the relay's identity headers and the harness's shared
+        secret decide whether a steering message is executed — absorbed by the harness and the
+        contracted relay, recorded as a deviation.
+    - capability: capabilityKillSwitch
+      at: govObservability
+      note: >
+        Revoke the brokered credential and block the port from device management — the only
+        stop, because no vendor console exists.
+    - capability: capabilityAiBom
+      at: registry
+      note: >
+        Digest and signature verification at admission to the mirror, and an inventory of which
+        harness, extension and skill builds are permitted to run.
+    - capability: capabilitySystemPromptManagement
+      at: memory
+      note: >
+        Instruction files, hooks and settings are configuration and are managed as code:
+        reviewed on change, diffed on clone, never executed from a package a dependency dropped
+        in.
 walkthrough:
   title: The developer asks for a change
   moves: >-
@@ -878,6 +931,15 @@ deviations:
       is contained — conditionally, when isolation is on. A boundary frame would claim a
       containment the drawing's own notes deny. The personal agent, whose whole loop lives
       inside the container, draws the frame; here the item form is the honest one.
+
+  - subject: Identity governance and remote admission are absorbed by the relay and the harness
+    reason: >
+      Two inline pins sit on components that are not their registered embodiment. Identity
+      governance on the relay is delivered by contracting a zero-trust tunnel tied to our
+      directory — an uncontracted community relay leaves the pin unmet, which is then the
+      finding. Runtime enforcement on the relay-to-harness hop is the harness's own shared
+      secret and loopback bind plus the relay's identity headers; nothing else on this path
+      can hold it.
 
 sources:
   - title: "opencode — server mode, web UI and remote access"

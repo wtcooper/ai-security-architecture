@@ -42,11 +42,13 @@ description:
     already signed in, through an interface built on the assumption that a human is driving.
   - >
     The application boundary is the vendor's: tool capabilities and connectors are built into the
-    CLI or GUI and configured there, and the only governance this archetype has is the published
-    surface of the vendor's control plane — managed settings, a tool-server allowlist, audit
-    export. In a managed deployment they are the difference between a governed tool and a shadow
-    one; in the default install none of them are on, and the same binary runs with no policy, no
-    audit and no inventory entry.
+    CLI or GUI and configured there, and the only governance the vendor supplies is the
+    published surface of its control plane — managed settings, a tool-server allowlist, audit
+    export; everything else is ours, at the gateway and in the governance band. In a managed
+    deployment the vendor tier is the difference between a governed tool and a shadow one; in
+    the default install none of it is on, and the same binary runs with no policy, no audit and
+    no inventory entry. The CI-hosted form of the same engine — a GitHub Action running with
+    the runner's credentials — is a cloud agent, and belongs to the cloud agent drawings.
   - >
     The first-party harnesses that run the same loop without a vendor are their own
     architecture in this catalogue — same engine, different custody: pasted keys, community
@@ -154,8 +156,10 @@ blocks:
         label: Chat channels
         icon: chat
         note: >
-          The @-mention surfaces — and the widest admission decision here, because whoever the
-          channel admits can raise a session.
+          Two mechanisms wearing one icon. An @-mention in a hosted channel raises a session on
+          the vendor's cloud — the widest admission decision here, because whoever the channel
+          admits can raise one. A bot-token channel plugin the local harness polls steers the
+          local loop instead, on a token held on the device and no vendor account binding.
 
   - id: developer
     kind: actor
@@ -177,7 +181,8 @@ blocks:
     row: 1
     note: >
       The loop behind the terminal, editor or chat window, running as the user. Remote steering
-      reaches it over an outbound relay; it opens no port of its own.
+      reaches it over an outbound relay; it opens no inbound port for steering — the loopback
+      IDE bridge it does listen on is token-bound.
     items:
       - id: loop
         label: Agent loop
@@ -207,6 +212,13 @@ blocks:
         label: Rules & instructions
         icon: doc
         note: The AGENTS.md-class files — the repo-committed ones authored by whoever last committed.
+      - id: hooks
+        label: Hooks & settings
+        icon: gear
+        note: >
+          Session-start hooks, permission rules and editor tasks that run as code when the
+          project opens — the persistence a self-propagating package worm writes into an
+          agent's configuration, not prose the loop reads but commands it executes.
 
   - id: toolPlane
     kind: service
@@ -260,10 +272,17 @@ blocks:
       The crossing into our own systems, and the one general-purpose exit from the endpoint:
       how both the local application and the vendor's hosted sessions reach org data, and the
       only place that reach is scoped and recorded. Its items are the traffic classes it
-      brokers; the checks it runs — the allowlist that admits the vendor by name, the audit
-      tap, the credential broker — are the numbered pins on this block and its edges, and the
-      call-outs beneath.
-    pack: aiGatewayTraffic
+      brokers — tools and skills, never inference in the drawn baseline, where the model path
+      runs inside the vendor session; the checks it runs — the allowlist that admits the vendor
+      by name, the audit tap, the credential broker — are the numbered pins on this block and
+      its edges, and the call-outs beneath.
+    items:
+      - id: toolBroker
+        label: MCP & tool broker
+        icon: plug
+      - id: skillsBroker
+        label: Skills broker
+        icon: gear
 
   - id: hostedTools
     kind: service
@@ -367,7 +386,11 @@ blocks:
     zone: zoneExternal
     col: 5
     row: 1
-    note: The inference API behind the vendor's service. The completion drives writes, commands and clicks.
+    note: >
+      The inference API behind the vendor's service. For a vendor that is also the model
+      provider this leg collapses into their own backend; otherwise it is a disclosed
+      subprocessor under the same agreement, not a party with no agreement. The completion
+      drives writes, commands and clicks.
     items:
       - id: inference
         label: Inference API
@@ -441,7 +464,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiTprm]
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiTprm, capabilitySystemPromptManagement]
     note: >
       Which agents, connectors and servers are admitted, pinned to which versions — and the
       vendor assessment that put the approved destinations in the allowlist.
@@ -485,7 +508,9 @@ edges:
       that never touches anything we operate — a personal device on a cell network has no
       reason to traverse the corporate egress and no way to be made to. Admission here is the
       vendor's account binding and whatever the managed settings allow, which is exactly why
-      that tier is the control rather than our firewall.
+      that tier is the control rather than our firewall — and why a bot-token channel plugin,
+      which bypasses the account binding entirely, is the first-party drawing's problem wearing
+      this drawing's icon.
   - from: harness
     to: memory
     path: primary
@@ -517,8 +542,9 @@ edges:
     route: hv
     label: model & tool calls
     note: >
-      The one general-purpose crossing: the vendor session, every model call inside it, and
-      every remote tool call leave the endpoint here.
+      The one general-purpose crossing for remote tool and connector calls. The model call is
+      not on it in the drawn baseline: inference rides the vendor session, and only the
+      customer-key variant the deviation records brings it through here.
   - from: toolPlane
     to: aiGateway
     path: primary
@@ -536,8 +562,10 @@ edges:
     route: vh
     label: to the approved vendor
     note: >
-      Out to the vendor's backend on a session-scoped credential. The destination is in the
-      allowlist because an assessment cleared it, and the agreement governs the data once it
+      The reach-back path: the vendor's cloud and scheduled sessions are admitted to our tool
+      surface here, on grants the gateway issues rather than anything the vendor holds. The
+      destination is in the allowlist because an assessment cleared it, and the agreement
+      governs the data once it
       arrives.
   - from: vendorService
     to: provider
@@ -651,6 +679,17 @@ pins:
         A binary a developer can fetch without asking anyone. Unmanaged, it has no policy, no
         audit and no inventory entry — and that is the common case.
 
+    - risk: riskInsecureIntegratedComponent
+      at: memory
+      note: >
+        Hooks and settings are executed, not read: a session-start hook or folder-open task
+        written into the agent's configuration is code execution as the developer on every
+        launch — the persistence the CHAINDROP worm chose.
+    - risk: riskRunawayAgentToolLoops
+      at: harness
+      note: >
+        A scheduled or hosted session has no human to notice it looping; seat metering is the
+        only meter, and the stop is the credential.
   capabilities:
     - capability: capabilityIga
       at: vendorService
@@ -733,6 +772,18 @@ pins:
         what their processes execute, and the containment that isolates a machine whose agent
         has been steered.
 
+    - capability: capabilitySystemPromptManagement
+      at: memory
+      note: >
+        Instruction files, hooks and settings are configuration and are managed as code:
+        reviewed on change, diffed on clone, never executed from a package a dependency dropped
+        in.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: vendorService
+      note: >
+        Managed settings make permission rules, hook policy and the sandbox profile
+        non-overridable on the device — the per-action decision is enforced inside the harness
+        by the tier the vendor delivers.
 walkthrough:
   title: The developer asks for a change
   moves: >-
@@ -762,10 +813,12 @@ walkthrough:
       note: Edits and commands execute with whatever scope the permission model granted.
     - follow: toolPlane->aiGateway
       note: >
-        Anything leaving the machine crosses our tier — a dependency fetch bound for an
-        allowlisted registry, a call to our own servers, all on the same bundled crossing.
+        Anything leaving the machine crosses our tier — a remote tool call, a call to our own
+        servers, all on the same bundled crossing.
     - follow: aiGateway->extTools
-      note: A third-party server or connector, admitted by the catalogue on a scoped credential.
+      note: >
+        A third-party MCP server or connector — an issue tracker, a search API — admitted by
+        the catalogue on a scoped credential.
     - follow: extTools->downstream
       note: >
         And out to what those services act on. What comes back is loaded and read as context,
@@ -775,7 +828,7 @@ scenarios:
   - title: Steering from a phone
     steps:
       - follow: developer->remoteDevice
-        note: The developer types the instruction on a phone or in a chat thread, away from the machine.
+        note: The developer types the instruction on a phone or web app, away from the machine.
       - follow: remoteDevice->vendorService
         note: Out to the vendor, authenticated by the vendor's account and nothing of ours.
       - follow: vendorService->harness
@@ -872,6 +925,14 @@ deviations:
       is contained — conditionally, when isolation is on. A boundary frame would claim a
       containment the drawing's own notes deny. The personal agent, whose whole loop lives
       inside the container, draws the frame; here the item form is the honest one.
+
+  - subject: Stale agent identity binding is read as a stale account binding
+    reason: >
+      The catalogue defines the risk as credentials persisting across an artifact swap. On the
+      remote-steering path the mechanism that matters is the same shape one layer up — a
+      login or pairing that outlives the person or device it was issued to and keeps driving
+      a machine full of credentials. The tag is kept because it is the nearest coded risk; the
+      personal agent reads it the same way on its relay-to-bridges edge.
 
 sources:
   - title: "Claude Code — security model and permission system"
