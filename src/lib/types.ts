@@ -601,7 +601,16 @@ export interface IncidentStep {
   title: string;
   phase: Phase;
   narrative: string;
+  /** CoSAI components and boundary actors this step touches — what the risk map lights. */
   components: string[];
+  /**
+   * The step on the incident's reference architecture: edges as "from->to" (the reverse of a
+   * bidirectional edge is legal) and, for what happens inside a component, block ids. The
+   * Incidents tab replays the step by lighting exactly these, so a drawing change is a
+   * build failure here rather than a silently wrong replay. The CoSAI `components` list
+   * serves the risk map only; the replay never guesses from component anchors.
+   */
+  path: string[];
   risks?: string[];
   cves?: string[];
   sources?: IncidentSource[];

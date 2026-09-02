@@ -278,12 +278,45 @@ async function main() {
     for (const id of inc.risks) if (!riskIds.has(id)) fail(`${where}: unknown risk ${id}`);
     for (const id of inc.controls) if (!controlIds.has(id)) fail(`${where}: unknown control ${id}`);
     if (!inc.sources?.length) fail(`${where}: needs at least one source`);
+    // The replay on the reference architecture is authored, not inferred: every step names
+    // the edges it rides and the blocks it lands in, on the incident's own archetype. Edges
+    // must exist (the reverse of a bidirectional one is fine), blocks must exist, and the
+    // edges of a step must hang together — a step is one movement, not three corners.
+    const arch = archetypes.find((a) => a.id === inc.archetype);
+    const archBlocks = new Set(arch?.blocks.map((b) => b.id) ?? []);
+    const archEdges = new Set(arch?.edges.map((e) => `${e.from}->${e.to}`) ?? []);
+    const archBidir = new Set(arch?.edges.filter((e) => e.bidir).map((e) => `${e.from}->${e.to}`) ?? []);
+    const parentOf = new Map(arch?.blocks.map((b) => [b.id, b.parent]) ?? []);
+    const lineage = (id: string) => {
+      const out = [id];
+      for (let p = parentOf.get(id); p; p = parentOf.get(p)) out.push(p);
+      return out;
+    };
     for (const step of inc.steps) {
       const at = `${where} step ${step.n}`;
       if (!PHASES.includes(step.phase)) fail(`${at}: bad phase ${step.phase}`);
       if (!step.components.length) fail(`${at}: no components`);
       for (const id of step.components) {
         if (!mapTargets.has(id)) fail(`${at}: unknown component or actor ${id}`);
+      }
+      if (!step.path?.length) fail(`${at}: needs a path on ${inc.archetype} — edges and blocks the step touches`);
+      const reached = new Set<string>();
+      for (const ref of step.path ?? []) {
+        if (!ref.includes("->")) {
+          if (!archBlocks.has(ref)) fail(`${at}: path names unknown block ${ref} on ${inc.archetype}`);
+          for (const id of lineage(ref)) reached.add(id);
+          continue;
+        }
+        const [a, b] = ref.split("->");
+        if (!archEdges.has(ref) && !archBidir.has(`${b}->${a}`)) {
+          fail(`${at}: path edge "${ref}" is not an edge of ${inc.archetype} (reverse needs bidir: true)`);
+          continue;
+        }
+        const ends = [...lineage(a), ...lineage(b)];
+        if (reached.size && !ends.some((id) => reached.has(id))) {
+          fail(`${at}: path edge "${ref}" touches nothing earlier in the step — one movement per step`);
+        }
+        for (const id of ends) reached.add(id);
       }
       for (const id of step.risks ?? []) {
         if (!riskIds.has(id)) fail(`${at}: unknown risk ${id}`);

@@ -5,17 +5,38 @@ import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { RiskMap } from "@/components/map/RiskMap";
 import { PHASE_META } from "@/components/PhaseRail";
-import { FlowDiagram } from "@/components/reference/FlowDiagram";
+import { FlowDiagram, type StepOverlay } from "@/components/reference/FlowDiagram";
 import { FlowLegend } from "@/components/reference/FlowLegend";
 import {
   archetypeById,
-  blocksForComponents,
   componentTitle,
   controlTitle,
   incidents,
   riskTitle,
 } from "@/lib/data";
-import type { Incident, IncidentSource, Phase } from "@/lib/types";
+import type { Archetype, Incident, IncidentSource, IncidentStep, Phase } from "@/lib/types";
+
+/**
+ * The step replayed on its reference architecture: the blocks it lands in and the edges it
+ * rides, straight from the step's authored `path`. An edge walked against a bidirectional
+ * arrow is keyed the way the layout drew it, so the diagram finds it.
+ */
+function stepOverlay(archetype: Archetype, step: IncidentStep): StepOverlay {
+  const drawn = new Set(archetype.edges.map((e) => `${e.from}->${e.to}`));
+  const marks: Record<string, number> = {};
+  const edges: string[] = [];
+  for (const ref of step.path) {
+    if (!ref.includes("->")) {
+      marks[ref] = step.n;
+      continue;
+    }
+    const [a, b] = ref.split("->");
+    marks[a] = step.n;
+    marks[b] = step.n;
+    edges.push(drawn.has(ref) ? ref : `${b}->${a}`);
+  }
+  return { phase: step.phase, marks, edges };
+}
 
 export function IncidentExplorer() {
   const [incidentId, setIncidentId] = useState(incidents[0].id);
@@ -224,12 +245,7 @@ export function IncidentExplorer() {
           ) : (
             <FlowDiagram
               archetype={archetype}
-              overlay={{
-                phase: step.phase,
-                marks: Object.fromEntries(
-                  blocksForComponents(incident.archetype, step.components).map((b) => [b, step.n]),
-                ),
-              }}
+              overlay={stepOverlay(archetype, step)}
               className="h-full w-full max-h-[calc(100vh-15rem)]"
             />
           )}

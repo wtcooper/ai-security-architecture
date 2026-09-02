@@ -49,6 +49,8 @@ export interface StepOverlay {
   phase: Phase;
   /** Block id -> step number. */
   marks: Record<string, number>;
+  /** The edges the step rides, keyed as drawn ("from->to"); lit in the phase colour. */
+  edges: string[];
 }
 
 const OVERLAY_STYLE: Record<Phase, { stroke: string; fill: string }> = {
@@ -245,12 +247,14 @@ export function FlowDiagram({
   };
 
   const activeScenario = walk ?? null;
-  const scenarioEdges = new Set(
-    (activeScenario?.steps ?? []).map((s) => {
+  // An incident step lights the edges it rides the same way a walk lights its steps.
+  const scenarioEdges = new Set([
+    ...(activeScenario?.steps ?? []).map((s) => {
       const g = findEdge(s.follow);
       return g ? `${g.from}->${g.to}` : "";
     }),
-  );
+    ...(overlay?.edges ?? []),
+  ]);
 
   // Scenario steps grouped per drawn edge, so two steps on one flow sit side by side.
   const stepsAt = new Map<string, { n: number; note?: string }[]>();
@@ -336,13 +340,16 @@ export function FlowDiagram({
           const key = `${g.from}->${g.to}`;
           const style = PATH_STYLE[edge.path];
           const dimmed = inScenario && !scenarioEdges.has(key);
+          // On an incident replay the ridden edges take the step's phase colour, so the
+          // path reads as the story's, not the drawing's.
+          const lit = overlay && scenarioEdges.has(key) ? OVERLAY_STYLE[overlay.phase].stroke : style.stroke;
           return (
             <g key={key} opacity={dimmed ? 0.15 : 1}>
               <path
                 d={g.d}
                 fill="none"
-                stroke={style.stroke}
-                strokeWidth={inScenario && scenarioEdges.has(key) ? 2.4 : 1.8}
+                stroke={lit}
+                strokeWidth={inScenario && scenarioEdges.has(key) ? 2.6 : 1.8}
                 strokeDasharray={style.dash}
                 markerEnd={`url(#flow-arrow-${edge.path})`}
                 markerStart={edge.bidir ? `url(#flow-arrow-${edge.path})` : undefined}
@@ -544,6 +551,9 @@ function BlockShape({
   const style = BLOCK_STYLE[block.kind];
   const tabW = Math.min(block.title.length * 6.6 + 18, rect.w - 10);
   const cells = itemCells(block, rect);
+  // A governance call-out is a control, not a component: no box, just the tab and its icon
+  // — the same treatment the main view gives it. An incident step can still mark it.
+  const boxless = block.kind === "governance";
 
   return (
     <g>
@@ -553,8 +563,8 @@ function BlockShape({
         width={rect.w}
         height={rect.h}
         rx={3}
-        fill={active ? markStyle.fill : "var(--paper)"}
-        stroke={active ? markStyle.stroke : style.stroke}
+        fill={active ? markStyle.fill : boxless ? "transparent" : "var(--paper)"}
+        stroke={active ? markStyle.stroke : boxless ? "transparent" : style.stroke}
         strokeWidth={active ? 2.2 : 1.4}
         strokeDasharray={style.dash}
         onPointerEnter={() =>
@@ -590,6 +600,9 @@ function BlockShape({
           {block.title}
         </text>
       </g>
+      {boxless && block.icon && (
+        <FlowIcon name={block.icon} x={rect.x + rect.w / 2} y={rect.y + rect.h / 2} size={24} />
+      )}
       {(block.items ?? []).map((item, i) => {
         const cell = cells[i];
         if (!cell) return null;

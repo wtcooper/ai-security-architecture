@@ -214,3 +214,9 @@ surface for customer-owned agent definitions.
   external band is one column; the coding agents lost a column each, the cloud trio one, the
   personal agent one column and a row, the training pipeline one column, self-hosted
   inference one row. Risk tags on vertical runs moved off the tab of the block they enter.
+- **Incident replays are authored on the architecture (2026-09-02).** Every incident step
+  now carries a `path:` — the edges it rides and the blocks it lands in, on the incident's
+  own reference architecture — and the Incidents tab lights exactly that, edges in the
+  step's phase colour. The build checks each entry against the drawing and that a step's
+  edges hang together. The previous replay inferred blocks from CoSAI component anchors,
+  which the review rework had quietly made wrong; the guessing helper is gone.
