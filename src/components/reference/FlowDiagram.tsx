@@ -291,7 +291,7 @@ export function FlowDiagram({
         >
           Export HTML
         </button>
-        <FlowDiagramRFLazy archetype={archetype} walk={walk} className={className} />
+        <FlowDiagramRFLazy archetype={archetype} walk={walk} highlight={highlight} className={className} />
       </div>
     );
   }

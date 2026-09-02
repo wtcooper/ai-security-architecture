@@ -13,6 +13,10 @@ import { FlowSequence } from "./FlowSequence";
 import { FlowLegend } from "./FlowLegend";
 import { GuidancePanel } from "./GuidancePanel";
 import { InsightRail } from "./InsightRail";
+import { FocusDesign } from "./designs/FocusDesign";
+import { StoryDesign } from "./designs/StoryDesign";
+import { StudioDesign } from "./designs/StudioDesign";
+import { DESIGNS, type DesignId } from "./designs/types";
 
 const SURFACE_TAGLINE: Record<string, string> = {
   surfaceEndpoint: "on the person's own device",
@@ -35,6 +39,7 @@ export function ArchitecturesBrowser() {
   const params = useSearchParams();
   const linkedArchetype = params.get("archetype");
   const linkedSurface = params.get("surface");
+  const linkedDesign = params.get("design");
 
   const initial =
     (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) ||
@@ -50,6 +55,11 @@ export function ArchitecturesBrowser() {
   // nothing about the selection treats them differently.
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
+  // Which page design lays the content out. The candidates live side by side so they can be
+  // compared on the live data; "current" is the layout this page has grown into.
+  const [design, setDesign] = useState<DesignId>(
+    DESIGNS.some((d) => d.id === linkedDesign) ? (linkedDesign as DesignId) : "current",
+  );
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
   const walks = useMemo(
@@ -62,8 +72,12 @@ export function ArchitecturesBrowser() {
   // GitHub Pages basePath, the same reason TourExplorer does it this way.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.history.replaceState(null, "", `?archetype=${archetypeId}`);
-  }, [archetypeId]);
+    window.history.replaceState(
+      null,
+      "",
+      `?archetype=${archetypeId}${design === "current" ? "" : `&design=${design}`}`,
+    );
+  }, [archetypeId, design]);
 
   const shown = archetypesInOrder.filter((a) => !surface || a.surface === surface);
 
@@ -74,6 +88,15 @@ export function ArchitecturesBrowser() {
     setWalkIndex(null);
     setHighlight(null);
   };
+  const onWalk = (i: number | null) => {
+    setWalkIndex(i);
+    setHighlight(null);
+  };
+  const onHighlight = (h: Highlight | null) => {
+    setHighlight(h);
+    setWalkIndex(null);
+  };
+  const designProps = { archetype, walks, walkIndex, onWalk, highlight, onHighlight };
 
   const summary = typeof archetype.summary[0] === "string" ? archetype.summary[0] : "";
 
@@ -107,6 +130,24 @@ export function ArchitecturesBrowser() {
                 </FilterPill>
               ))}
             </div>
+            <label className="flex items-center gap-2 text-[11.5px] text-ink-3 sm:ml-auto">
+              Page design
+              <select
+                value={design}
+                onChange={(e) => {
+                  setDesign(e.target.value as DesignId);
+                  setWalkIndex(null);
+                  setHighlight(null);
+                }}
+                className="rounded-md border border-line bg-paper px-2 py-1 text-[12px] text-ink"
+              >
+                {DESIGNS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
 
@@ -142,6 +183,12 @@ export function ArchitecturesBrowser() {
           </div>
         </div>
 
+        {design === "focus" && <FocusDesign {...designProps} />}
+        {design === "studio" && <StudioDesign {...designProps} />}
+        {design === "story" && <StoryDesign {...designProps} />}
+
+        {design === "current" && (
+        <>
         <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
           <div>
             <div className="flex items-start overflow-hidden rounded-xl border border-line bg-paper">
@@ -195,6 +242,8 @@ export function ArchitecturesBrowser() {
           <div className="mt-8">
             <GuidancePanel archetype={archetype} />
           </div>
+        )}
+        </>
         )}
       </div>
     </>

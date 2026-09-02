@@ -29,6 +29,7 @@ import "@xyflow/react/dist/style.css";
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
+import type { Highlight } from "./FlowDiagram";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
@@ -286,7 +287,7 @@ function ZoneNode({
   );
 }
 
-function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean }>>) {
+function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean }>>) {
   return (
     <div
       style={{
@@ -298,7 +299,7 @@ function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean }>>) {
         color: "var(--chip, #4a5fd0)",
         font: "700 10px/15px var(--font-mono, monospace)",
         textAlign: "center",
-        opacity: data.dim ? 0 : 1,
+        opacity: data.dim ? 0 : data.faint ? 0.2 : 1,
       }}
     >
       {data.n}
@@ -307,7 +308,7 @@ function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean }>>) {
 }
 
 /** A coded risk tag at a build-validated spot; travels with its block. */
-function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolean }>>) {
+function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolean; faint?: boolean }>>) {
   return (
     <div
       style={{
@@ -319,7 +320,7 @@ function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolea
         color: "var(--ink-2, #555)",
         font: `600 9.5px/${TAG_H - 2}px var(--font-mono, monospace)`,
         textAlign: "center",
-        opacity: data.dim ? 0 : 1,
+        opacity: data.dim ? 0 : data.faint ? 0.2 : 1,
       }}
     >
       {data.code}
@@ -329,6 +330,8 @@ function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolea
 
 interface EdgePin {
   kind: "chip" | "tag" | "flow";
+  /** The capability or risk id behind a chip or tag, so a list selection can find it. */
+  ref?: string;
   dx: number;
   dy: number;
   n?: number;
@@ -345,6 +348,7 @@ interface BuildPathData {
   midY: number;
   pins: EdgePin[];
   pinsDim: boolean;
+  highlight?: Highlight | null;
   onPinEnter: (event: React.MouseEvent, title: string, body?: string) => void;
   onPinLeave: () => void;
 }
@@ -357,6 +361,15 @@ interface BuildPathData {
  */
 function BuildPathEdge(props: EdgeProps) {
   const data = props.data as unknown as BuildPathData;
+  const pinOpacity = (pin: EdgePin) => {
+    if (pin.kind === "flow") return 1;
+    if (data.pinsDim) return 0;
+    const h = data.highlight;
+    if (!h) return 1;
+    const match =
+      pin.kind === "chip" ? h.kind === "capability" && h.id === pin.ref : h.kind === "risk" && h.id === pin.ref;
+    return match ? 1 : 0.2;
+  };
   let path = data?.d ?? "";
   let midX = data?.midX ?? 0;
   let midY = data?.midY ?? 0;
@@ -415,7 +428,7 @@ function BuildPathEdge(props: EdgeProps) {
                       color: "var(--chip, #4a5fd0)",
                       font: "700 10px/15px var(--font-mono, monospace)",
                       textAlign: "center",
-                      opacity: data.pinsDim ? 0 : 1,
+                      opacity: pinOpacity(pin),
                       pointerEvents: "all",
                       zIndex: 10,
                     }
@@ -430,7 +443,7 @@ function BuildPathEdge(props: EdgeProps) {
                       color: "var(--ink-2, #555)",
                       font: `600 9.5px/${TAG_H - 2}px var(--font-mono, monospace)`,
                       textAlign: "center",
-                      opacity: data.pinsDim ? 0 : 1,
+                      opacity: pinOpacity(pin),
                       pointerEvents: "all",
                       zIndex: 10,
                     }
@@ -460,11 +473,14 @@ function facing(a: { x: number; y: number; w: number; h: number }, b: { x: numbe
 export function FlowDiagramRF({
   archetype,
   walk = null,
+  highlight = null,
   className,
 }: {
   archetype: Archetype;
   /** The selected sequence data flow, or null — the resting drawing carries no step numbers. */
   walk?: Scenario | null;
+  /** A capability or risk picked from a list: its chips or tags stay, the rest go faint. */
+  highlight?: Highlight | null;
   className?: string;
 }) {
   const [card, setCard] = useState<HoverCard | null>(null);
@@ -690,11 +706,14 @@ export function FlowDiagramRF({
           return { ...n, data: { ...n.data, dim } };
         }
         if (n.type === "chip" || n.type === "tag") {
-          return { ...n, data: { ...n.data, dim: inScenario } };
+          const wants = n.type === "chip" ? "capability" : "risk";
+          const faint =
+            highlight !== null && !(highlight.kind === wants && n.id.endsWith(`:${highlight.id}`));
+          return { ...n, data: { ...n.data, dim: inScenario, faint } };
         }
         return n;
       }),
-    [nodes, inScenario, walkBlocks],
+    [nodes, inScenario, walkBlocks, highlight],
   );
 
   const onNodesChange = useCallback(
@@ -735,6 +754,7 @@ export function FlowDiagramRF({
         const cap = capabilityById.get(pin.capability);
         list.push({
           kind: "chip",
+          ref: pin.capability,
           dx: spot.x - geo.midX,
           dy: spot.y - geo.midY,
           n,
@@ -762,6 +782,7 @@ export function FlowDiagramRF({
         const risk = riskById.get(pin.risk);
         list.push({
           kind: "tag",
+          ref: pin.risk,
           dx: r.x - geo.midX,
           dy: r.y - geo.midY,
           code: codes[i],
@@ -827,6 +848,7 @@ export function FlowDiagramRF({
           note: e.note,
           pins: pinsByEdge.get(key) ?? [],
           pinsDim: inScenario,
+          highlight,
           onPinEnter: cardAt,
           onPinLeave,
         },
@@ -844,7 +866,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, walk, inScenario, walkEdges, hoveredEdge, dragged, cardAt, onPinLeave]);
+  }, [archetype, walk, inScenario, walkEdges, hoveredEdge, dragged, cardAt, onPinLeave, highlight]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
