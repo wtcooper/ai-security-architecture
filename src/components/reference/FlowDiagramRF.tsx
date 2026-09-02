@@ -397,7 +397,9 @@ function BuildPathEdge(props: EdgeProps) {
                       font: "700 9.5px/17px var(--font-mono, monospace)",
                       letterSpacing: "0.04em",
                       textAlign: "center",
-                      opacity: data.pinsDim ? 0 : 1,
+                      // Step badges exist only while a walk is selected — the same state that
+                      // dims every other pin — so they must never share the pins' fade.
+                      opacity: 1,
                       pointerEvents: "all",
                       zIndex: 11,
                     }
