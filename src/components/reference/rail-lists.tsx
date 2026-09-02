@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * The three lists every page design composes differently: the sequence data flows, the
- * numbered capabilities, and the coded risks. Kept apart from any one layout so the designs
- * can put them in a rail, a tab, or a narrative column without re-implementing them.
+ * The three lists the architecture view composes into its tabs: the sequence data flows,
+ * the numbered capabilities, and the coded risks. Kept apart from the layout so a list can
+ * sit in a tab, a rail or a column without being re-implemented.
  */
 import Link from "next/link";
 
