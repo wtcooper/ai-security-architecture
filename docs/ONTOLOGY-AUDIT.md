@@ -246,3 +246,13 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **The AI gateway is not the network egress (2026-09-02).** An AI gateway brokers five
+  things — model inference, MCP, APIs, the skills catalogue and, as products catch up, A2A —
+  and sees nothing else. Its pack items now read Model proxy · MCP & API gateway · Skills
+  catalogue. What the gateway bounds is its registry of destinations, pinned as tool
+  permission scoping on its external edges; what a local tool may reach at all is the
+  sandbox's network policy, pinned as network segmentation & egress control on the sandboxed
+  tool surface (cloud Tool services, the endpoint tool plane, the personal agent's sandbox).
+  The coding agents' "bundles an egress-proxy function" deviation is retired; the vocabulary
+  re-points egress control's embodiment from the AI gateway to the tool surface, the sandbox
+  and the browser.

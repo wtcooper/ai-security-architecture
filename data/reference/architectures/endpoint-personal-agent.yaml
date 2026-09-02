@@ -29,9 +29,9 @@ description:
     The target state wraps the harness whole. A microVM-class sandbox contains the daemon, its
     memory and a deliberately local tool surface — files, shell and skills, with their own
     kernel, filesystem, packages and network — and remote reach is pushed outside the boundary.
-    The AI gateway is the general-purpose exit: deny-by-default egress for all outbound
-    traffic, credentials injected at the crossing so the sandbox itself holds no secrets, and
-    the audit tap. Remote MCP servers and external APIs sit behind the gateway as their own
+    The AI gateway brokers what leaves for a model, an MCP server or an API — credentials
+    injected at the crossing so the sandbox itself holds no secrets, and the audit tap — while
+    the sandbox's own network policy makes the gateway and the mirror the only routes out. Remote MCP servers and external APIs sit behind the gateway as their own
     tool surface, and only they touch downstream services. Two other openings exist: a
     read-only pull from a private, organisation-maintained package registry, and the owner's
     workspace folders, shared into the sandbox explicitly and nothing else. The boundary is
@@ -334,19 +334,19 @@ blocks:
     row: 2
     note: >
       The single bundled crossing this organisation operates: model proxying, MCP and tool
-      brokerage, and skills admission in one tier. Every call out of the endpoint that is not
-      the relay or a pull from the mirror leaves through here.
+      brokerage, and skills admission in one tier. Model, MCP and API calls leave through here;
+      everything else a tool emits is bounded by the sandbox's network policy, not by this tier.
     items:
       - id: llmProxy
         label: Model proxy
         icon: model
         note: The only provider endpoint the harness knows — allowlisted models, routed by data class.
       - id: mcpBroker
-        label: MCP & tool broker
+        label: MCP & API gateway
         icon: plug
         note: The approved server catalogue, tool-level scoping and token exchange to the owner's scope.
       - id: skillsBroker
-        label: Skills broker
+        label: Skills catalogue
         icon: gear
         note: >
           Admission for skills: which skills and images are permitted at all, and the pins the
@@ -815,9 +815,6 @@ pins:
         Credentials brokered per call at the crossing and injected into request headers by the
         host-side proxy, so nothing is at rest inside the boundary and the loop never holds a
         key it could leak.
-    - capability: capabilityEgressControl
-      at: gateway
-      note: Deny-by-default egress at the one crossing — models, tools and destinations each named.
     - capability: capabilityModelGuardrails
       at: gateway->provider
       note: The inspection a hosted product would have applied, run by the organisation on both legs.
@@ -878,11 +875,18 @@ pins:
         Every daemon that reaches the crossing is inventoried there — the one archetype whose
         incident says owners were found by scanning, not by inventory.
     - capability: capabilityEgressControl
-      at: toolPlane->registry
+      at: toolPlane
       note: >
-        The sandbox's egress policy is what makes the mirror the only place it may fetch from —
-        a deny-by-default allowlist with one entry. The AI gateway is not on this path; it never
-        was for a package manager.
+        The microVM's network policy: the only routes out of the boundary are the AI gateway,
+        the package mirror and the relay the bridges dial. Shell commands, fetches and browser
+        traffic are bounded here — not at the gateway, which brokers model, MCP and API calls
+        and sees nothing else.
+    - capability: capabilityToolPermissionScoping
+      at: gateway
+      note: >
+        The gateway's own allowlist: which remote MCP servers, APIs and peer agents are
+        registered, and which tools the daemon may call on them. Configuration of a broker, not
+        a network control.
 walkthrough:
   title: The owner asks the agent to do something
   moves: >-

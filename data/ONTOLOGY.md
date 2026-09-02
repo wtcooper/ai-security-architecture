@@ -95,9 +95,10 @@ customer-owned component on it is an audit finding.
   security and governance band naming the technology that delivers it. Writing it a third time
   as an item inside the component it governs states the same control in two grammars and is
   what makes a drawing feel arbitrary. This applies to control-surface components too: an AI
-  gateway's items name **the traffic classes it brokers** (model proxy, MCP and tool broker,
-  skills broker), not the checks it runs (egress allowlist, audit tap, credential broker). The
-  build warns on the known control labels listed in `vocabulary.yaml`.
+  gateway's items name **the traffic classes it brokers** (model proxy, MCP & API gateway,
+  skills catalogue), not the checks it runs (destination registry, audit tap, credential
+  broker) — and never the network egress of local tools, which is the sandbox's own policy.
+  The build warns on the known control labels listed in `vocabulary.yaml`.
 - **Controls** are numbered capability chips: the number is per-diagram (position in the
   architecture's derived capability list); the catalogue-stable code (C-number, the
   capability's position in capabilities.yaml) appears in the legend and hover so a reader

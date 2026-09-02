@@ -1155,6 +1155,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
   }
   if (uncontrolledCrossings.length) {
     console.log(`band crossings with no inline control pinned: ${uncontrolledCrossings.length} (observation)`);
+    for (const c of uncontrolledCrossings) console.log(`  ~ ${c}`);
   }
   console.log(
     `vocabulary census: ${titles.size} distinct block titles (${once(titles)} used once), ` +
