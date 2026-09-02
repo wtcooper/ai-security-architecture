@@ -71,7 +71,7 @@ export function CapabilityList({
   columns?: 1 | 2;
 }) {
   return (
-    <div className={columns === 2 ? "grid gap-x-6 gap-y-1 sm:grid-cols-2" : "space-y-1"}>
+    <div className={columns === 2 ? "space-y-1 sm:columns-2 sm:gap-x-6" : "space-y-1"}>
       {archetype.capabilities.map((id, i) => {
         const capability = capabilityById.get(id);
         const active = highlight?.kind === "capability" && highlight.id === id;
@@ -124,7 +124,7 @@ export function RiskList({
   columns?: 1 | 2;
 }) {
   return (
-    <div className={columns === 2 ? "grid gap-x-6 gap-y-1 sm:grid-cols-2" : "space-y-1"}>
+    <div className={columns === 2 ? "space-y-1 sm:columns-2 sm:gap-x-6" : "space-y-1"}>
       {archetype.risks.map((id) => {
         const risk = riskById.get(id);
         const active = highlight?.kind === "risk" && highlight.id === id;

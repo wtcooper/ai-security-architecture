@@ -53,6 +53,8 @@ type BlockNodeData = {
    * row instead of hanging off a border the call-out no longer draws.
    */
   pinnedCaps?: string[];
+  /** The selected capability or risk, so a call-out's chip numbers fade like the pins do. */
+  highlight?: Highlight | null;
   /** Shows the shared hover card — items use it so each icon can explain itself. */
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
 };
@@ -168,6 +170,10 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                 <span
                   key={id}
                   style={{
+                    opacity:
+                      data.highlight && !(data.highlight.kind === "capability" && data.highlight.id === id)
+                        ? 0.2
+                        : 1,
                     width: 16,
                     height: 16,
                     borderRadius: 8,
@@ -703,7 +709,7 @@ export function FlowDiagramRF({
         if (n.type === "block") {
           const dim =
             inScenario && !walkBlocks.has(n.id);
-          return { ...n, data: { ...n.data, dim } };
+          return { ...n, data: { ...n.data, dim, highlight } };
         }
         if (n.type === "chip" || n.type === "tag") {
           const wants = n.type === "chip" ? "capability" : "risk";
