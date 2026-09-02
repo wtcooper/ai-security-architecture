@@ -355,16 +355,38 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     return { e, a, b, kind, aSide, bSide };
   });
 
+  // Lane order along a side. Arrows to the left of a block take the left lanes and arrows
+  // to the right take the right lanes, as before — but within a group the order is what
+  // keeps two bent arrows from crossing: an arrow that has further to travel in the
+  // perpendicular direction takes the outer lane, so its long leg never cuts across the
+  // shorter arrow's turn. Sorting purely by the other block's centre put the low-code
+  // builder's data-gateway arrow under its external-tools arrow and crossed them.
+  const laneKey = (side: Side, self: Rect, other: Rect): number => {
+    const dx = cx(other) - cx(self);
+    const dy = cy(other) - cy(self);
+    if (side === "t" || side === "b") {
+      const level = Math.abs(dx) < 24;
+      const group = level ? 1 : dx < 0 ? 0 : 2;
+      const outerFirst = side === "t" ? dx > 0 : dx < 0;
+      const within = level ? dx : outerFirst ? dy : -dy;
+      return group * 1e6 + within;
+    }
+    const level = Math.abs(dy) < 24;
+    const group = level ? 1 : dy < 0 ? 0 : 2;
+    const outerFirst = side === "r" ? dy > 0 : dy < 0;
+    const within = level ? dy : outerFirst ? -dx : dx;
+    return group * 1e6 + within;
+  };
   const sideLists = new Map<string, { ref: string; sort: number }[]>();
   plans.forEach((p, i) => {
-    const add = (blockId: string, side: Side, other: Rect, end: "a" | "b") => {
+    const add = (blockId: string, side: Side, self: Rect, other: Rect, end: "a" | "b") => {
       const k = `${blockId}|${side}`;
       const list = sideLists.get(k) ?? [];
-      list.push({ ref: `${i}|${end}`, sort: side === "t" || side === "b" ? cx(other) : cy(other) });
+      list.push({ ref: `${i}|${end}`, sort: laneKey(side, self, other) });
       sideLists.set(k, list);
     };
-    add(p.e.from, p.aSide, p.b, "a");
-    add(p.e.to, p.bSide, p.a, "b");
+    add(p.e.from, p.aSide, p.a, p.b, "a");
+    add(p.e.to, p.bSide, p.b, p.a, "b");
   });
   const slot = new Map<string, { idx: number; total: number }>();
   for (const [k, list] of sideLists) {

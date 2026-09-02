@@ -220,3 +220,10 @@ surface for customer-owned agent definitions.
   step's phase colour. The build checks each entry against the drawing and that a step's
   edges hang together. The previous replay inferred blocks from CoSAI component anchors,
   which the review rework had quietly made wrong; the guessing helper is gone.
+- **Arrows never share a line (2026-09-02).** The build now fails two arrows whose segments
+  run collinear within 6px, or whose bend or endpoint lands on another arrow's line — the
+  third-party coding agent's remote-device and harness arrows into the vendor block had been
+  drawn on top of each other, so neither could be followed. Lane order along a block's side
+  gives the arrow with further to travel the outer lane, which removed six of the seven
+  crossings in the catalogue; the one left (managed runtime, user surface to front end across
+  the vendor band's downward legs) is a clean perpendicular crossing of unrelated arrows.

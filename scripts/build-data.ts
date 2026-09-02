@@ -1455,6 +1455,52 @@ function checkDiagramCollisions(
       checkSpots("step badge", key, flowBadgeSpots(n, edgeGeoOf(key)!));
     }
   }
+
+  // Two arrows must never share a line. A run drawn on top of another's, or a bend that
+  // lands on another arrow, cannot be followed — the reader sees one line with three ends.
+  // The third-party coding agent's remote-device and harness arrows into the vendor block
+  // were drawn exactly so, and a data change (route hints) fixed it; this keeps it fixed.
+  type Seg = { x0: number; y0: number; x1: number; y1: number; edge: string };
+  const segs: Seg[] = [];
+  const ends: { x: number; y: number; edge: string; what: string }[] = [];
+  for (const e of layout.edges) {
+    const pts = [...e.d.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: +m[1], y: +m[2] }));
+    const key = `${e.from}->${e.to}`;
+    for (let i = 1; i < pts.length; i++) {
+      segs.push({ x0: pts[i - 1].x, y0: pts[i - 1].y, x1: pts[i].x, y1: pts[i].y, edge: key });
+    }
+    pts.forEach((p, i) =>
+      ends.push({ ...p, edge: key, what: i === 0 ? "start" : i === pts.length - 1 ? "end" : "bend" }),
+    );
+  }
+  const H = (s: Seg) => Math.abs(s.y0 - s.y1) < 0.5;
+  const V = (s: Seg) => Math.abs(s.x0 - s.x1) < 0.5;
+  const lo = (a: number, b: number) => Math.min(a, b);
+  const hi = (a: number, b: number) => Math.max(a, b);
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const a = segs[i];
+      const b = segs[j];
+      if (a.edge === b.edge) continue;
+      if (H(a) && H(b) && Math.abs(a.y0 - b.y0) < 6) {
+        const shared = lo(hi(a.x0, a.x1), hi(b.x0, b.x1)) - hi(lo(a.x0, a.x1), lo(b.x0, b.x1));
+        if (shared > 12) fail(`${where}: flows ${a.edge} and ${b.edge} run on the same line for ${Math.round(shared)}px — route one of them differently`);
+      }
+      if (V(a) && V(b) && Math.abs(a.x0 - b.x0) < 6) {
+        const shared = lo(hi(a.y0, a.y1), hi(b.y0, b.y1)) - hi(lo(a.y0, a.y1), lo(b.y0, b.y1));
+        if (shared > 12) fail(`${where}: flows ${a.edge} and ${b.edge} run on the same line for ${Math.round(shared)}px — route one of them differently`);
+      }
+    }
+  }
+  for (const p of ends) {
+    for (const s of segs) {
+      if (s.edge === p.edge) continue;
+      const on = H(s)
+        ? Math.abs(p.y - s.y0) < 4 && p.x > lo(s.x0, s.x1) + 4 && p.x < hi(s.x0, s.x1) - 4
+        : Math.abs(p.x - s.x0) < 4 && p.y > lo(s.y0, s.y1) + 4 && p.y < hi(s.y0, s.y1) - 4;
+      if (on) fail(`${where}: the ${p.what} of flow ${p.edge} lands on flow ${s.edge} — the two read as one line`);
+    }
+  }
 }
 
 const archEdgeOf = (arch: Omit<Archetype, "layout">, geo: { from: string; to: string }) =>
