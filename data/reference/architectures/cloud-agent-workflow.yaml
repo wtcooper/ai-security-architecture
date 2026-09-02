@@ -57,8 +57,9 @@ exemplars:
   - name: Temporal
     note: >
       Durable execution journaling every step and replaying to recover, with agent invocations
-      as activities alongside conventional ones — the engine half of this drawing, run
-      in-process with the harness.
+      as activities alongside conventional ones. Only the SDK worker runs in-process with the
+      harness; the service holding the event history — the step journal — is a separate tier,
+      self-hosted or Temporal Cloud.
     url: https://docs.temporal.io
     asOf: "2026-09"
   - name: LangGraph
@@ -242,7 +243,10 @@ blocks:
       - id: journal
         label: Step journal
         icon: doc
-        note: Everything a step returns is persisted here. A returned credential is a stored one.
+        note: >
+          Everything a step returns is persisted here. A returned credential is a stored one —
+          and when the engine is a hosted service, the journal lives with the vendor, payloads
+          included, unless a payload codec encrypts them under our keys.
       - id: index
         label: Vector index
         icon: search
@@ -370,7 +374,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 4
-    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation, capabilityEncryptionKeyManagement]
     note: >
       Short-lived credentials fetched at step time rather than held for the process's life —
       which matters more here than anywhere, because the process's life may be days.
@@ -382,7 +386,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 4
-    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting]
+    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting, capabilityHitlControls]
     note: >
       A per-call decision about this agent, this tool, this argument — never a standing grant,
       and the brake on a loop that would otherwise be metered only by the invoice.
@@ -394,7 +398,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 4
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityMcpToolSecurity]
     note: >
       Which agents and tools exist at all. In a multi-agent graph the registry is also the
       inventory: an agent nobody registered is an agent nobody can revoke.
@@ -564,6 +568,11 @@ pins:
       at: gateway->internalTools
       note: The admission list is the tool supply chain; whoever writes it programs the agents.
 
+    - risk: riskRetrievalVectorStorePoisoning
+      at: harness->state
+      note: >
+        The vector index is written by steps and read by every later one; a poisoned entry is
+        retrieved into the context of an agent that never saw it arrive.
   capabilities:
     - capability: capabilityMemoryProtection
       at: state
@@ -598,9 +607,11 @@ pins:
         speaks for, which is what the sandbox and the narrowed grants bound.
     - capability: capabilitySecretsManagement
       at: harness->gateway
-      note: Credentials brokered at step time, short-lived and scoped; agents hold none.
+      note: >
+        Credentials brokered at step time, short-lived and scoped; agents hold none for
+        network calls — the in-process tool set is the drawn exception.
     - capability: capabilityAgentRuntimeEnforcement
-      at: gateway
+      at: gateway->internalTools
       note: A policy decision on every tool call — agent, tool, arguments — outside the loop.
     - capability: capabilityToolPermissionScoping
       at: gateway->internalTools
@@ -617,8 +628,8 @@ pins:
     - capability: capabilityPromptInjectionDefense
       at: gateway
       note: >
-        Returned record content is classified at the crossing before it re-enters any agent's
-        context.
+        Returned record content — and the initiator's own request text on its way in — is
+        classified at the crossing before it reaches any agent's context.
     - capability: capabilityPromptInjectionDefense
       at: gateway->extTools
       note: >
@@ -670,6 +681,21 @@ pins:
         fan-out, anomalous delegation and autonomous persistence are visible in the traces
         only if something is actually reading them.
 
+    - capability: capabilityEncryptionKeyManagement
+      at: state
+      note: >
+        Payloads in the journal encrypted under keys we hold, so a hosted engine stores
+        ciphertext and a returned credential is not a vendor-readable one.
+    - capability: capabilityRagSecurity
+      at: state
+      note: >
+        Per-run index scoping and ingest trust on what enters the corpus — the answer to a
+        poisoned index, distinct from scoping what a step may read.
+    - capability: capabilityMcpToolSecurity
+      at: govSupplyChain
+      note: >
+        Admission is change-time; the rug-pull is a tool whose definition changes after
+        admission. Content-hash pinning of admitted tool descriptions is what catches it.
 walkthrough:
   title: A user asks the agent to act
   moves: >-
@@ -687,18 +713,22 @@ walkthrough:
         here, which is the durability the drawing exists to show.
     - follow: state->harness
       note: The journal acknowledges; the run now has a durable identity.
-    - follow: orchestration->subagents
-      note: >
-        The supervisor decomposes the goal; each specialist takes its task with a narrowed
-        grant, not the supervisor's authority.
-    - follow: subagents->orchestration
-      note: Each specialist reports its slice back to the supervisor.
     - follow: harness->gateway
-      note: Every network call the agents make funnels through the one door.
+      note: >
+        The supervisor's first call is for a plan — nothing is delegated before the goal is
+        decomposed — and every network call any agent makes funnels through this one door.
     - follow: gateway->provider
       note: Inference on brokered credentials, limits applied.
     - follow: provider->gateway
-      note: The completion comes back across the crossing.
+      note: The decomposition comes back across the crossing.
+    - follow: gateway->harness
+      note: Into the supervisor as a plan — unauthenticated content, now the work breakdown.
+    - follow: orchestration->subagents
+      note: >
+        The supervisor delegates; each specialist takes its task with a narrowed grant, not
+        the supervisor's authority.
+    - follow: harness->gateway
+      note: A specialist's model and tool calls leave through the same door, on its own grant.
     - follow: gateway->internalTools
       note: Tool calls carry the narrowed per-step grant.
     - follow: internalTools->orgData
@@ -714,9 +744,12 @@ walkthrough:
     - follow: extTools->gateway
       note: What returns is classified before any agent reads it, because one confused agent propagates.
     - follow: gateway->harness
+      note: Results land with the specialist that asked.
+    - follow: subagents->orchestration
       note: >
-        Results land with the supervisor and the step checkpoints to the journal. Days may
-        pass before an event wakes the run — the journal is what it wakes into.
+        Each specialist reports its slice back to the supervisor, which checkpoints the step
+        to the journal. Days may pass before an event wakes the run — the journal is what it
+        wakes into.
     - follow: harness->entry
       note: The result heads back to the surface.
     - follow: entry->initiator
@@ -729,8 +762,6 @@ scenarios:
         note: The engine rebuilds state from the journal — including anything a step persisted.
       - follow: orchestration->subagents
         note: Replayed steps land on their specialists again.
-      - follow: subagents->orchestration
-        note: Their results come back to the supervisor as if for the first time.
       - follow: harness->gateway
         note: Replayed steps re-request credentials; nothing survives from the first run.
       - follow: gateway->internalTools
@@ -770,12 +801,20 @@ scenarios:
         note: >
           A timer or webhook resumes work with nobody watching — the waiting step wakes days
           after the request that started the process.
+      - follow: harness->gateway
+        note: >
+          The supervisor re-plans from the journal, on credentials fetched now — the ones from
+          day one would be stale authority.
+      - follow: gateway->provider
+        note: Inference on the fresh grant.
+      - follow: provider->gateway
+        note: The plan for the waking step comes back.
+      - follow: gateway->harness
+        note: Into the supervisor.
       - follow: orchestration->subagents
         note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
-      - follow: subagents->orchestration
-        note: The waking specialist reports back.
       - follow: harness->gateway
-        note: Credentials are fetched now — the ones from day one would be stale authority.
+        note: The specialist's call leaves through the same door.
       - follow: gateway->internalTools
         note: The action proceeds under the same per-call policy as an attended run.
 

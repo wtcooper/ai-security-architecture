@@ -204,7 +204,7 @@ blocks:
       context.
     items:
       - id: retrieval
-        label: Search index
+        label: Vector index
         icon: search
         cosaiComponent: componentRAGContent
         note: Reads scoped to the account under discussion, not to what the service can reach.
@@ -330,7 +330,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 4
-    capabilities: [capabilitySecretsManagement]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
     note: Short-lived credentials minted per call, so a loop running with nobody watching holds no standing keys.
 
   - id: govPolicy
@@ -340,7 +340,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 4
-    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting]
+    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting, capabilityHitlControls]
     note: >
       The bounds the tool surface enforces per invocation, authored and changed outside the
       loop — because the loop is the thing that may be misbehaving.
@@ -352,7 +352,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 4
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilitySystemPromptManagement]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilitySystemPromptManagement, capabilityMcpToolSecurity]
     note: >
       Which actions exist at all — admission, not discovery — the behavioural checks in
       front of every model, prompt or catalogue change, and the versioned ownership of the
@@ -365,10 +365,22 @@ blocks:
     zone: zoneGovernance
     col: 5
     row: 4
-    capabilities: [capabilityAuditLogging, capabilityKillSwitch, capabilityHitlControls]
+    capabilities: [capabilityAuditLogging, capabilityKillSwitch]
     note: >
       The decision audit and the stop, plus the approval threshold — keyed to irreversibility
       and value rather than model confidence, and rare enough that somebody actually reads it.
+
+  - id: operator
+    kind: actor
+    title: Operator
+    icon: person
+    zone: zoneUser
+    col: 0
+    row: 2
+    note: >
+      The approver for actions above the threshold — an operator work queue, never the
+      requester, because the beneficiary approving their own remedy is no gate at all. Present
+      only when a proposal escalates; the loop runs without them the rest of the time.
 
 edges:
   - from: events
@@ -378,6 +390,16 @@ edges:
     note: >
       A timer, queue message, file drop or webhook starts a run with nobody in the room. In
       many deployments this is the common path and the request surface is the exception.
+  - from: operator
+    to: entry
+    path: primary
+    bidir: true
+    route: hv
+    label: escalation / approval
+    note: >
+      A proposal above the threshold surfaces here, bound to the exact action, arguments and
+      case, with an expiry; the approval returns the same way and is validated against the
+      pending proposal before anything executes.
   - from: requester
     to: entry
     path: primary
@@ -493,12 +515,12 @@ pins:
         chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
         control.
     - risk: riskPromptInjection
-      at: extTools->downstream
+      at: gateway->extTools
       note: >
         Content returning from actions outside the company was authored by somebody else and
         re-enters the next model call as context.
     - risk: riskToolRegistryTampering
-      at: internalTools
+      at: gateway->internalTools
       note: The catalogue is the policy surface; whoever can edit it programs the agent.
     - risk: riskEconomicDenialOfWallet
       at: gateway
@@ -536,9 +558,9 @@ pins:
       at: internalTools->orgData
       note: >
         An approval gate keyed to irreversibility and value, rare enough to be read; below it,
-        reversal rather than review. The approver is an operator work queue outside this
-        drawing, never the requester — the beneficiary approving their own remedy is no gate
-        at all.
+        reversal rather than review. The approver is the operator on the drawing, reached over
+        the front end — never the requester, because the beneficiary approving their own remedy
+        is no gate at all. The escalation scenario walks the round trip.
     - capability: capabilityAgentRuntimeEnforcement
       at: gateway->internalTools
       note: >
@@ -589,6 +611,21 @@ pins:
       at: govObservability
       note: A halt that also revokes the agent's identity, and does not require a deploy.
 
+    - capability: capabilityRagSecurity
+      at: stateRetrieval
+      note: >
+        Ingest trust on what enters the case index and per-tenant isolation inside it — the
+        answer to a poisoned index, distinct from scoping what a read may return.
+    - capability: capabilityPromptInjectionDefense
+      at: gateway->extTools
+      note: >
+        Third-party and peer-agent returns are classified at the crossing before they re-enter
+        the loop — the widest author set on the drawing.
+    - capability: capabilityMcpToolSecurity
+      at: govSupplyChain
+      note: >
+        Admission is change-time; the rug-pull is a tool whose definition changes after
+        admission. Content-hash pinning of admitted tool descriptions is what catches it.
 walkthrough:
   title: A customer asks for a refund
   moves: >-
@@ -685,6 +722,31 @@ scenarios:
         note: The proposal it produces is the attacker's, in the model's voice.
       - follow: gateway->internalTools
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
+
+  - title: A refund above the threshold escalates
+    steps:
+      - follow: planner->gateway
+        note: The loop proposes a refund well above the compensable threshold.
+      - follow: gateway->internalTools
+        note: The per-call policy trips the threshold; the catalogue refuses to execute and returns a suspension.
+      - follow: internalTools->gateway
+        note: The suspension comes back as the call's result.
+      - follow: gateway->planner
+        note: The loop parks the proposal rather than retrying it.
+      - follow: planner->entry
+        note: The proposal heads to the surface — the action, the amount, the case, an expiry.
+      - follow: entry->operator
+        note: An operator, never the requester, reads it in a work queue.
+      - follow: operator->entry
+        note: Approved — this action, these arguments; a blanket "yes" approves nothing in particular.
+      - follow: entry->planner
+        note: The approval is validated against the parked proposal.
+      - follow: planner->gateway
+        note: Only then does the action leave again.
+      - follow: gateway->internalTools
+        note: Admitted now, carrying the approval it lacked before.
+      - follow: internalTools->orgData
+        note: The refund executes, attributable to both the loop and the approver.
 
 deviations:
   - subject: In-process tool handlers are drawn with no edges

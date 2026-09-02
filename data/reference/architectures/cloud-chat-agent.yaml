@@ -334,7 +334,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 4
-    capabilities: [capabilitySecretsManagement]
+    capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
     note: Short-lived, user-scoped credentials minted per call, so the agent tier holds no standing keys.
 
   - id: govPolicy
@@ -344,7 +344,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 4
-    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting]
+    capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting, capabilityHitlControls]
     note: >
       What the conversation may reach and what it may spend, decided outside the loop that
       would otherwise be arguing for itself.
@@ -356,7 +356,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 4
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityMcpToolSecurity]
     note: >
       Which tools may be offered to a conversation at all — admission, not discovery — and the
       behavioural checks in front of every model, prompt or tool change.
@@ -457,9 +457,10 @@ pins:
       at: user->entry
       note: >
         The conversation is model input authored by the party the actions benefit, and it
-        reaches the same context window as the system instruction.
+        reaches the same context window as the system instruction — and uploaded documents,
+        authored by anyone, arrive on the same edge.
     - risk: riskPromptInjection
-      at: extTools->downstream
+      at: gateway->extTools
       note: >
         Records, pages and API responses return into the thread — content somebody else
         authored, standing beside the user's words on the next call.
@@ -552,8 +553,13 @@ pins:
     - capability: capabilityMemoryProtection
       at: memory
       note: Conversation-scoped memory with hard boundaries — no cross-session reads, ever.
-    - capability: capabilityRagSecurity
+    - capability: capabilityDataAccessGovernance
       at: internalTools->orgData
+      note: >
+        Retrieval scoped to the user's own grant, not the service's reach — what a read may
+        return is decided at the store, per session.
+    - capability: capabilityRagSecurity
+      at: memory
       note: >
         Grounding retrieved with the asking user's permissions, not the service's — otherwise
         the index becomes a way to read what the conversation's owner cannot.
@@ -598,6 +604,27 @@ pins:
       at: govObservability
       note: A stop that ends live sessions and revokes the agent's identity without a deploy.
 
+    - capability: capabilityAgentRuntimeEnforcement
+      at: gateway->internalTools
+      note: >
+        Mutating actions are refused unless the call carries an approval bound to this action,
+        its arguments and this session; read-only actions pass on the user's grant. This is the
+        decision the in-thread approval exists to feed.
+    - capability: capabilityRateLimiting
+      at: gateway
+      note: >
+        Per-turn tool-call and token ceilings on the crossing — the brake a mid-turn loop
+        actually meets, which the session ceiling at the entry never sees.
+    - capability: capabilityCredentialIsolation
+      at: gateway->internalTools
+      note: >
+        User grant, agent workload identity and session scope intersect on every call; the
+        gateway exchanges the user's token for a narrowed one and never forwards it.
+    - capability: capabilityMcpToolSecurity
+      at: govSupplyChain
+      note: >
+        Admission is change-time; the rug-pull is a tool whose definition changes after
+        admission. Content-hash pinning of admitted tool descriptions is what catches it.
 walkthrough:
   title: A turn that ends in an action
   moves: >-
@@ -641,14 +668,12 @@ walkthrough:
       note: The record confirms the change.
     - follow: internalTools->gateway
       note: The result crosses back through the same door.
-    - follow: gateway->extTools
-      note: >
-        The approved action reaches outward too — a third-party server or a peer agent nobody we
-        contracted with operates, on a grant brokered rather than held by the agent.
-    - follow: extTools->downstream
-      note: >
-        And the effect lands. What returns from it re-enters the thread as context, which is how
-        one poisoned result steers every later turn in the session.
+    - follow: gateway->agent
+      note: The outcome lands in the loop.
+    - follow: agent->entry
+      note: And heads for the surface.
+    - follow: entry->user
+      note: It renders in the thread, attributable to the approval that allowed it.
 
 scenarios:
   - title: A tool result steers the next turn
@@ -714,6 +739,21 @@ scenarios:
         note: And toward the surface.
       - follow: entry->user
         note: The reply can surface any of it — session-scoped memory and DLP on accumulation are what bound the answer.
+
+  - title: An approved action lands outside the company
+    steps:
+      - follow: agent->gateway
+        note: An approved action targets a third-party service or a peer agent nobody we contracted with operates.
+      - follow: gateway->extTools
+        note: It leaves on a grant brokered rather than held by the agent, against the egress allowlist.
+      - follow: extTools->downstream
+        note: And the effect lands.
+      - follow: downstream->extTools
+        note: What returns was authored by somebody else.
+      - follow: extTools->gateway
+        note: It is classified at the crossing before it re-enters the thread —
+      - follow: gateway->agent
+        note: which is how one poisoned result would otherwise steer every later turn in the session.
 
 deviations:
   - subject: In-process tool handlers are drawn with no edges
