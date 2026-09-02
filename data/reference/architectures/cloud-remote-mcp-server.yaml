@@ -123,6 +123,9 @@ blocks:
       parsing bodies. That only holds if it enforces the matching rule: a server that processes
       the body must reject any request whose headers disagree with it, because a gateway
       routing on the header while the server executes the body is a policy-bypass primitive.
+      One operating concern survives the stateless revision: a subscription is a long-lived
+      POST stream, so this tier's idle timeouts and response buffering are configuration, not
+      defaults.
     items:
       - id: gwTools
         label: MCP & tool broker
@@ -136,16 +139,23 @@ blocks:
     col: 2
     row: 0
     note: >
-      Token issuance for the server we publish, and the component the consuming organisation's
-      identity provider federates into. Under the enterprise-managed profile the client never
-      visits an authorization page here at all: it exchanges a corporate SSO assertion at its
-      own IdP for a short-lived grant, and that grant for an access token — which is what
-      removes the per-server consent screen and puts revocation back in one place.
+      Token issuance for the server we publish. The normative flow is the authorization code
+      grant with PKCE and the `resource` parameter naming this server, through a consent
+      screen for any public client — what the two exemplars run. For callers whose identity
+      provider we federate, the enterprise-managed profile replaces the consent screen: the
+      client exchanges a corporate SSO assertion for a short-lived grant, and that grant for
+      the access token, which puts revocation back in one place. Same server, both flows.
     items:
       - id: tokenIssuance
         label: Token issuance
         icon: key
         note: Audience-bound to this server by name, so a token minted for another is refused.
+      - id: consent
+        label: Consent records
+        icon: doc
+        note: >
+          What each client was granted, by whom — the record a per-client review reads, and
+          the thing the enterprise profile replaces with the consuming organisation's policy.
       - id: clientReg
         label: Client registration
         icon: gear
@@ -181,7 +191,18 @@ blocks:
       - id: handlers
         label: Tool handlers
         icon: code
-        note: Ordinary application code behind the protocol, and ordinary attack surface.
+        note: >
+          Ordinary application code behind the protocol, and ordinary attack surface. A
+          consequential handler returns `input_required` and executes only on the retry that
+          carries the caller's confirmation — tool annotations are hints the client must treat
+          as untrusted, so this is the confirmation lever the server actually holds.
+      - id: resourceMeta
+        label: Resource metadata
+        icon: doc
+        note: >
+          The Protected Resource Metadata document every client reads first, naming which
+          authorization server this resource trusts. Unauthenticated and public by design, and
+          a security artifact: a tampered one points every caller at somebody else's server.
 
   - id: toolDefs
     kind: service
@@ -294,7 +315,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 3
-    capabilities: [capabilityAuditLogging, capabilityKillSwitch]
+    capabilities: [capabilityAuditLogging, capabilityKillSwitch, capabilityAiVulnMgmt]
     note: >
       Per-call audit attributable to a tenant and a delegation, and revocation that reaches
       tokens already minted rather than only future ones.
@@ -302,17 +323,18 @@ blocks:
 edges:
   - from: callers
     to: authServer
-    path: primary
+    path: external
     bidir: true
     route: vh
     label: token issuance
     note: >
-      Before any tool call: the client exchanges a corporate SSO assertion for a short-lived
-      grant, and that grant for an access token audience-bound to this server. No consent
-      screen is visited here under the enterprise-managed profile.
+      Before any tool call: the PKCE authorization-code flow with `resource` naming this
+      server, through a consent screen — or, for a caller whose IdP we federate, a corporate
+      SSO assertion exchanged for a short-lived grant and that grant for the access token,
+      with no consent screen at all. Either way the token is audience-bound to this server.
   - from: callers
     to: gateway
-    path: primary
+    path: external
     bidir: true
     label: tool calls
     note: >
@@ -338,7 +360,10 @@ edges:
     to: service
     path: primary
     label: published schemas
-    note: Versioned content loaded by the service and served to callers as instruction.
+    note: >
+      Versioned content loaded by the service and served to callers as instruction. The list
+      a caller sees is filtered by its scopes, so the hash consumers pin is computed per
+      scope-set — or the description-edit scenario false-alarms on every scope change.
   - from: service
     to: orgData
     path: primary
@@ -408,13 +433,27 @@ pins:
       at: service
       note: A published server that outlives the team that wrote it, still holding live grants into org data.
 
+    - risk: riskInsecureIntegratedComponent
+      at: gateway->service
+      note: >
+        The service is built on the official SDK, and the SDK's CVE stream is ours to ship — the
+        2026 request-handling flaws reached every server built on it, up to 200,000 instances by
+        the disclosed count.
+    - risk: riskInsecureIntegratedComponent
+      at: gateway
+      note: >
+        A LiteLLM-class tier with its own CVE stream and its own release channel — the
+        backdoored gateway release is this component, fronting everything we publish.
   capabilities:
     - capability: capabilityIga
       at: service->authServer
       note: >
-        Tokens audience-bound to this server by name, and refused if minted for anything else.
-        Under the enterprise-managed profile the consuming organisation's own policy decides
-        issuance, which is what makes revocation immediate and central.
+        Tokens audience-bound to this server by name, and refused if minted for anything else;
+        the `resource` audience is asserted at issuance and checked on every request. The
+        Protected Resource Metadata that names our authorization server is integrity-protected
+        like code, because a client trusts whatever it says. Under the enterprise-managed
+        profile the consuming organisation's own policy decides issuance, which is what makes
+        revocation immediate and central.
     - capability: capabilityNhiManagement
       at: callers->gateway
       note: The caller is a machine identity; treat it as one, with its own lifecycle rather than a shared key.
@@ -436,7 +475,9 @@ pins:
       at: gateway->service
       note: >
         Minimal scopes with step-up rather than an omnibus grant, and the whole set needed for
-        an operation emitted in one challenge instead of drip-fed.
+        an operation emitted in one challenge instead of drip-fed. The tool list is filtered
+        by the presenting token's scopes on every request — a tool the caller cannot invoke
+        is never shown to its model.
     - capability: capabilityMcpToolSecurity
       at: toolDefs->service
       note: >
@@ -467,18 +508,30 @@ pins:
       at: govSupplyChain
       note: Probe our own descriptions the way an adversarial caller would, since they run in somebody else's model.
 
+    - capability: capabilityAiVulnMgmt
+      at: govObservability
+      note: >
+        The SDK, the gateway and the handlers behind them tracked as a patch stream with an
+        owner and a clock; a published server ages like any other application.
 walkthrough:
   title: A caller invokes a tool
   moves: >-
     Somebody else's agent calling a tool we publish, and the tenant data it reaches.
   steps:
+    - follow: callers->gateway
+      note: >
+        An unauthenticated first call. The answer is a 401 carrying Protected Resource
+        Metadata — the public document naming which authorization server this resource
+        trusts, and a security artifact for exactly that reason.
+    - follow: gateway->callers
+      note: The 401 and the metadata go back; the client now knows where to authenticate.
     - follow: callers->authServer
       note: >
-        First, identity: a corporate SSO assertion is exchanged for an access token
-        audience-bound to this server — revocation stays central, and no consent screen is
-        involved.
+        The PKCE authorization-code flow with `resource` naming this server, through a
+        consent screen for a public client — or, for a caller whose IdP we federate, an SSO
+        assertion exchanged for a grant with no consent screen, and revocation kept central.
     - follow: authServer->callers
-      note: The token comes back to the caller, short-lived and scoped to this server.
+      note: The token comes back to the caller, short-lived and audience-bound to this server.
     - follow: callers->gateway
       note: The request arrives bearing that token, with its method and tool name mirrored into headers.
     - follow: gateway->service
@@ -535,6 +588,18 @@ scenarios:
           Forwarding it is the confused deputy the spec forbids outright: audit, rate limits
           and the trust boundary all break in one move. The handler calls as itself, on a
           credential the secrets manager issued to this service, or the design is wrong.
+
+  - title: The header lies about the body
+    steps:
+      - follow: callers->gateway
+        note: >
+          `Mcp-Name: read_ticket` in the headers; `delete_ticket` in the body. The gateway
+          routes and meters on the header, because that is what the header is for.
+      - follow: gateway->service
+        note: >
+          Routed and metered as a read. The service parses the body — and must refuse the
+          mismatch outright, or the meter, the per-tool policy and the audit line all
+          describe a call that never happened.
 
 deviations:
   - subject: The AI gateway carries MCP traffic only

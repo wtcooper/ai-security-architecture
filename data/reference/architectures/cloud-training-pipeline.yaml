@@ -223,7 +223,10 @@ blocks:
       - id: tuningRun
         label: Tuning run
         icon: gear
-        note: Full fine-tune, or the low-rank techniques that collapse the same job onto far less hardware.
+        note: >
+          Full fine-tune, or the low-rank techniques that collapse the same job onto far less
+          hardware. RL and agentic recipes execute model-generated actions inside the job, so
+          the sandbox is part of the build environment, not an afterthought.
       - id: reproRecord
         label: Reproducibility record
         icon: doc
@@ -344,10 +347,23 @@ blocks:
     zone: zoneGovernance
     col: 5
     row: 3
-    capabilities: [capabilityAuditLogging, capabilityModelDocumentation]
+    capabilities: [capabilityAuditLogging, capabilityModelDocumentation, capabilityKillSwitch]
     note: >
       The lineage record and the documentation that travel with an artifact — the only reason a
       question asked long after the run has an answer.
+
+  - id: govIdentity
+    kind: governance
+    title: Identity services
+    icon: person
+    zone: zoneGovernance
+    col: 1
+    row: 3
+    capabilities: [capabilityNhiManagement]
+    note: >
+      A workload identity per run, minted for the dataset version it was approved against and
+      structurally unable to sign — the identity is what makes the promotion gate independent
+      of the thing it gates.
 
 edges:
   - from: dataOrigins
@@ -396,6 +412,14 @@ edges:
     path: primary
     label: candidate under test
     note: The gate loads the candidate the way a serving tier would, and probes what cannot be read.
+  - from: storage
+    to: registry
+    path: primary
+    route: vh
+    label: artifact digest
+    note: >
+      The registry records the digest of the bytes the store holds; the signed release points
+      at exactly that artifact and nothing else.
   - from: evaluation
     to: registry
     path: primary
@@ -455,6 +479,17 @@ pins:
         base's reputation. Who may register an adapter, and which base it is approved against,
         is decided here.
 
+    - risk: riskInsecureIntegratedComponent
+      at: pkgRegistry
+      note: >
+        The mirror is third-party software with its own CVE stream, sitting between the job and
+        the internet — the artifact server whose remote-repository proxying became the escape in
+        the joined incident.
+    - risk: riskMaliciousLoaderDeserialization
+      at: pkgRegistry->trainJob
+      note: >
+        Format policy at the mirror is what makes this leg a deserialization: a digest-pinned
+        pickle is still pickle, and the loader opens it as the job.
   capabilities:
     - capability: capabilityDataSanitization
       at: curation
@@ -479,7 +514,10 @@ pins:
         the job opens the file, and independent of the job it protects.
     - capability: capabilityHitlControls
       at: corpus->trainJob
-      note: A person authorises a run against a named dataset version; runs do not start themselves.
+      note: >
+        An approved run specification names the dataset version a job may read — a person
+        per run is not the target state on a pipeline-launched platform; the approval is on
+        the spec, and the identity enforces it.
     - capability: capabilityModelHardening
       at: trainJob
       note: >
@@ -522,6 +560,33 @@ pins:
       at: govObservability
       note: What the artifact is and what it was trained on, travelling with it rather than living in a wiki.
 
+    - capability: capabilityDataAccessGovernance
+      at: pkgRegistry
+      note: >
+        Read-only to jobs. Writes come from admission only, so a compromised run cannot use the
+        mirror as a message board or a staging area.
+    - capability: capabilityEgressControl
+      at: trainJob
+      note: >
+        Deny-by-default egress from the job: the mirror, the corpus store and the artifact store
+        are the whole allowlist. Absorbed by the compute platform's network policy per the
+        recorded deviation.
+    - capability: capabilityNhiManagement
+      at: corpus->trainJob
+      note: >
+        The run's own workload identity, scoped to the approved dataset version and denied the
+        promotion identity — the separation the whole drawing rests on.
+    - capability: capabilityKillSwitch
+      at: registry
+      note: >
+        A release withdrawn here fails load-time verification everywhere it serves — the lineage
+        query names the artifacts, and the registry's stage transition is the stop.
+    - capability: capabilityAgentSandboxing
+      at: trainJob
+      note: >
+        Rollouts in an RL or agentic recipe execute what the model generates; that execution is
+        contained inside the job's environment — absorbed by the compute platform per the
+        recorded deviation.
 walkthrough:
   title: A tuning run produces a promoted adapter
   moves: >-
@@ -607,6 +672,13 @@ deviations:
       band because the ingest treatment — curation, provenance, admission — is identical
       regardless of custody; splitting the origins by owner would double the ingest chain to
       say nothing new. The custody difference is carried in the item notes.
+
+  - subject: Job egress and rollout containment are absorbed by the compute platform
+    reason: >
+      Deny-by-default egress from the training job and containment of the actions an RL or
+      agentic recipe executes are both delivered by the platform the job runs on — its network
+      policy and its execution environment — rather than by any block the drawing could name.
+      The pins sit on the job because that is what they bound.
 
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning, LLM04 supply chain"

@@ -197,20 +197,14 @@ blocks:
     row: 1
     cosaiComponent: componentModelStorage
     note: >
-      Where the weights come from: a public hub, where publisher identity says nothing about
-      what the artifact does on load — or the organisation's own fine-tuning pipeline, which is
-      its own architecture in this catalogue.
+      Where hub weights come from: a public catalogue, where publisher identity says nothing
+      about what the artifact does on load. The organisation's own fine-tuned models do not
+      enter here — they arrive from the model registry, inside our custody.
     items:
       - id: hub
         label: Open-weights catalogue
         icon: db
         note: Declared behaviour and actual behaviour are separate facts.
-      - id: selfTrained
-        label: Self-trained model
-        icon: model
-        note: >
-          The fine-tuning pipeline's registry output — the meeting point of this drawing and
-          the training pipeline, arriving signed so the load path has something to verify.
 
   - id: govIdentity
     kind: governance
@@ -276,6 +270,24 @@ blocks:
       cache sharing is on — plus per-version red teaming, because a new checkpoint from the
       same publisher is a new model nobody else has tested.
 
+  - id: registry
+    kind: service
+    title: Model registry
+    cosaiComponent: componentModelStorage
+    zone: zoneCloud
+    col: 4
+    row: 0
+    note: >
+      The fine-tuning pipeline's output, and the block the two drawings share literally: a
+      promoted release arrives here signed by an identity the training job never held, with
+      lineage back to its data, base and run. What it publishes needs no second gate — its
+      signature and lineage are verified, not re-evaluated.
+    items:
+      - id: releases
+        label: Signed releases
+        icon: shield
+        note: Signature and lineage are the admission evidence; withdrawal here is refusal at load everywhere.
+
 edges:
   - from: consumers
     to: gateway
@@ -301,6 +313,13 @@ edges:
     note: >
       Admitted requests scheduled into the batch; completions back through the guardrail checks.
       Output-side policy is the half most often omitted when self-hosting.
+  - from: registry
+    to: storage
+    path: primary
+    label: promoted release
+    note: >
+      A signed release lands in the store with its promotion record; the load path verifies
+      the signature against it. This is where this drawing meets the training pipeline.
   - from: sources
     to: storage
     path: external
@@ -376,15 +395,32 @@ pins:
       at: gateway
       note: With no provider applying output policy, an unguarded return leg hands raw completions to every caller.
 
+    - risk: riskAdapterPEFTInjection
+      at: api
+      note: >
+        Dynamic adapter-loading endpoints load LoRA weights at runtime by path — a second load
+        path that skips storage, the digest and the promotion gate, and one the serving stack
+        ships behind a flag.
+    - risk: riskModelDeploymentTampering
+      at: api
+      note: >
+        Weight-update, pause and abort endpoints outside the versioned API are not covered by
+        the API key on the common serving stacks; reachable from a tenant, they swap the model
+        under every other tenant.
+    - risk: riskMaliciousLoaderDeserialization
+      at: runtime
+      note: >
+        The compile and torch caches are loaded without integrity verification, in formats that
+        can execute; a writable cache directory is a write-to-execute path the serving stack's
+        own guide says never to share.
   capabilities:
     - capability: capabilityModelWeightProtection
       at: storage->runtime
       note: >
-        Verify the artifact's signature at load, not at download. The mature answer is the
-        OpenSSF Model Signing spec with Sigstore bundles — a detached signature, so nothing has
-        to be repackaged — and at least one major hub now signs everything it publishes. This
-        is the gate between the store and the loader, and it is what the fine-tuning
-        pipeline's promotion signature is verified against.
+        Verify at load, not at download. For a promoted release that is the OpenSSF Model
+        Signing signature with its Sigstore bundle — a detached signature, so nothing has to be
+        repackaged; for a hub artifact, which mostly carries none, it is the promotion record's
+        digest. This is the gate between the store and the loader.
     - capability: capabilityAiBom
       at: govSupplyChain
       note: >
@@ -456,6 +492,18 @@ pins:
       at: govObservability
       note: Continuous posture over which versions serve where and at what configuration, catching drift before an incident does.
 
+    - capability: capabilityMlSecureDefaults
+      at: api
+      note: >
+        Runtime weight and adapter updating disabled, and the control endpoints outside the
+        versioned API unreachable from any tenant — the serving stack's own security guide says
+        as much.
+    - capability: capabilityEgressControl
+      at: runtime
+      note: >
+        The distributed serving plane talks between nodes with no authentication by design;
+        network isolation of that plane is the control, absorbed by platform network policy per
+        the recorded deviation.
 walkthrough:
   title: A tenant calls the endpoint
   moves: >-
@@ -481,9 +529,12 @@ scenarios:
     steps:
       - follow: sources->storage
         note: >
-          The artifact arrives — fetched from the hub, or published signed by the training
-          pipeline's registry — with provenance recorded. Scanning and per-version evaluation
-          gate the promotion here. Blocking, or it is not a gate.
+          A hub artifact arrives with provenance recorded. Scanning and per-version evaluation
+          gate its promotion here — blocking, or it is not a gate.
+      - follow: registry->storage
+        note: >
+          A release from our own pipeline arrives already gated: its signature and lineage are
+          verified, and nothing is evaluated twice.
       - follow: storage->runtime
         note: >
           The promoted artifact loads, digest-verified against the promotion record, and
@@ -495,6 +546,18 @@ scenarios:
         note: Admission control decides who waits. There is no provider to absorb the spike.
       - follow: gateway->api
         note: Within-quota traffic is scheduled; everything else is shed at the front door rather than at the accelerator.
+
+  - title: A tenant probes another's prefix
+    steps:
+      - follow: consumers->gateway
+        note: A crafted prompt sharing a suspected prefix with another tenant's traffic, well within quota.
+      - follow: gateway->api
+        note: Admitted like any call; nothing at the crossing knows what the prefix is for.
+      - follow: api->runtime
+        note: >
+          Time to first token says whether the prefix was already cached by someone else.
+          Tenant-scoped cache keys make the answer always no — the drawing's sharpest risk,
+          closed by one configuration flag or open by default.
 
 deviations:
   - subject: No separate GPU or cache blocks are drawn
@@ -520,6 +583,13 @@ deviations:
       No MCP, tool or skills traffic exists on this drawing, so the gateway lists its one real
       traffic class rather than the registered aiGatewayTraffic pack — the same honesty rule
       the SaaS drawings and the MCP publisher apply in the other direction.
+
+  - subject: Network isolation of the serving plane is absorbed by platform policy
+    reason: >
+      The nodes of a distributed serving plane talk to each other unauthenticated by design.
+      The control is an isolated network for that plane, delivered by the cluster's network
+      policy rather than by any block on the drawing; the pin sits on the runtime because
+      that is what it protects.
 
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM04 supply chain, LLM06 unbounded consumption"
