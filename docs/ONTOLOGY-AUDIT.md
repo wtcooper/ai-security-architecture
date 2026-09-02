@@ -227,3 +227,8 @@ surface for customer-owned agent definitions.
   gives the arrow with further to travel the outer lane, which removed six of the seven
   crossings in the catalogue; the one left (managed runtime, user surface to front end across
   the vendor band's downward legs) is a clean perpendicular crossing of unrelated arrows.
+- **One renderer (2026-09-02).** The SVG engine that survived for incident-step overlays is
+  gone; the React Flow renderer draws the Reference and Incidents tabs alike, with an
+  incident step's blocks and arrows in the step's phase colour and everything else faded.
+  Blocks are no longer draggable — a moved block broke the routed arrows and the pins seated
+  on them. Pan and zoom remain.

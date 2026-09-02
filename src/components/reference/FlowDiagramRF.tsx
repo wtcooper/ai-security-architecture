@@ -1,13 +1,14 @@
 "use client";
 
 /**
- * React Flow renderer for the flow-style architectures — the second leg of the renderer
- * bake-off, promoted to a full view where containment matters. Geometry is enforced the same
- * way as the SVG engine: initial node positions are the build-time rects and edges render the
- * build-computed path strings verbatim — but nodes are user-movable, and once an endpoint has
- * been dragged its edges switch to live routing. Capability chips and risk tags sit at the
- * same chipSpots/tagSpots the SVG uses and travel with the block they annotate. Hover cards
- * replace persistent edge labels, which also keeps text off the drawing.
+ * The React Flow renderer for the flow-style architectures — the only renderer, on the
+ * Reference tab and the Incidents tab alike. Geometry is the build's: node positions are the
+ * build-time rects and edges render the build-computed path strings verbatim. Nothing is
+ * draggable — a moved block broke the routed arrows and the pins seated on them, and the
+ * drawing is an argument, not a whiteboard. Pan and zoom remain. Capability chips and risk
+ * tags sit at the chipSpots/tagSpots the build checked. Hover cards replace persistent edge
+ * labels, which also keeps text off the drawing. An incident step overlays the same drawing:
+ * its blocks and arrows take the step's phase colour and everything else fades.
  */
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -29,8 +30,8 @@ import "@xyflow/react/dist/style.css";
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
-import type { Highlight } from "./FlowDiagram";
-import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
+import type { Highlight, StepOverlay } from "./FlowDiagram";
+import { blockTab, BLOCK_STYLE, OVERLAY_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
 
@@ -55,6 +56,9 @@ type BlockNodeData = {
   pinnedCaps?: string[];
   /** The selected capability or risk, so a call-out's chip numbers fade like the pins do. */
   highlight?: Highlight | null;
+  /** The incident step number touching this block, and the phase colouring it. */
+  mark?: number;
+  markStyle?: { stroke: string; fill: string };
   /** Shows the shared hover card — items use it so each icon can explain itself. */
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
 };
@@ -87,21 +91,45 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   // A governance call-out is a control, not a component, so it gets no component box: the
   // title tab, the icon and the chip numbers stand on the band by themselves.
   const boxless = block.kind === "actor" || block.kind === "governance";
+  const marked = data.mark !== undefined && data.markStyle !== undefined;
   return (
     <div
       style={{
         width: w,
         height: h,
-        background: boxless ? "transparent" : "var(--paper, #fff)",
-        border: boxless ? "none" : `1.5px ${style?.dash ? "dashed" : "solid"} ${style?.stroke}`,
+        background: marked ? data.markStyle!.fill : boxless ? "transparent" : "var(--paper, #fff)",
+        border: marked
+          ? `2px solid ${data.markStyle!.stroke}`
+          : boxless
+            ? "none"
+            : `1.5px ${style?.dash ? "dashed" : "solid"} ${style?.stroke}`,
         borderRadius: 8,
         position: "relative",
         fontFamily: "inherit",
         opacity: dim ? 0.25 : 1,
         transition: "opacity 150ms",
-        cursor: "grab",
+        cursor: "default",
       }}
     >
+      {marked && (
+        <span
+          style={{
+            position: "absolute",
+            top: -9,
+            right: -9,
+            width: 18,
+            height: 18,
+            borderRadius: 9,
+            background: "var(--ink, #1c1e21)",
+            color: "#fff",
+            font: "700 10px/18px var(--font-mono, monospace)",
+            textAlign: "center",
+            zIndex: 5,
+          }}
+        >
+          {data.mark}
+        </span>
+      )}
       {(["t", "b", "l", "r"] as const).map((side) => {
         const pos =
           side === "t" ? Position.Top : side === "b" ? Position.Bottom : side === "l" ? Position.Left : Position.Right;
@@ -349,7 +377,6 @@ interface EdgePin {
 
 interface BuildPathData {
   d: string;
-  live: boolean;
   midX: number;
   midY: number;
   pins: EdgePin[];
@@ -360,10 +387,8 @@ interface BuildPathData {
 }
 
 /**
- * Renders the build-computed path verbatim until either endpoint has been dragged, then falls
- * back to live orthogonal routing so edges follow the user's layout. The edge's capability
- * chips and risk tags render here too, offset from the current midpoint — so they travel with
- * the arrow when a block is dragged.
+ * Renders the build-computed path verbatim. The edge's capability chips, risk tags and step
+ * badges render here too, offset from the build midpoint.
  */
 function BuildPathEdge(props: EdgeProps) {
   const data = props.data as unknown as BuildPathData;
@@ -376,23 +401,9 @@ function BuildPathEdge(props: EdgeProps) {
       pin.kind === "chip" ? h.kind === "capability" && h.id === pin.ref : h.kind === "risk" && h.id === pin.ref;
     return match ? 1 : 0.2;
   };
-  let path = data?.d ?? "";
-  let midX = data?.midX ?? 0;
-  let midY = data?.midY ?? 0;
-  if (data?.live) {
-    const [sx, sy, tx, ty] = [props.sourceX, props.sourceY, props.targetX, props.targetY];
-    if (Math.abs(tx - sx) > Math.abs(ty - sy)) {
-      const ex = (sx + tx) / 2;
-      path = `M ${sx} ${sy} L ${ex} ${sy} L ${ex} ${ty} L ${tx} ${ty}`;
-      midX = ex;
-      midY = (sy + ty) / 2;
-    } else {
-      const ey = (sy + ty) / 2;
-      path = `M ${sx} ${sy} L ${sx} ${ey} L ${tx} ${ey} L ${tx} ${ty}`;
-      midX = (sx + tx) / 2;
-      midY = ey;
-    }
-  }
+  const path = data?.d ?? "";
+  const midX = data?.midX ?? 0;
+  const midY = data?.midY ?? 0;
   return (
     <>
       <BaseEdge path={path} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />
@@ -480,6 +491,7 @@ export function FlowDiagramRF({
   archetype,
   walk = null,
   highlight = null,
+  overlay = null,
   className,
 }: {
   archetype: Archetype;
@@ -487,10 +499,11 @@ export function FlowDiagramRF({
   walk?: Scenario | null;
   /** A capability or risk picked from a list: its chips or tags stay, the rest go faint. */
   highlight?: Highlight | null;
+  /** An incident step replayed on the drawing; hides pins and walks while it is set. */
+  overlay?: StepOverlay | null;
   className?: string;
 }) {
   const [card, setCard] = useState<HoverCard | null>(null);
-  const [dragged, setDragged] = useState<ReadonlySet<string>>(new Set());
   // Hovering one arrow pulls it out of the bundle — the interactive half of the answer to
   // "which line goes where", alongside the fanned anchor points the layout computes.
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
@@ -504,7 +517,9 @@ export function FlowDiagramRF({
     () => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []),
     [walk],
   );
-  const inScenario = Boolean(walk);
+  const walkActive = Boolean(walk);
+  // Pins hide both during a walk and while an incident step is replayed on top.
+  const inScenario = walkActive || Boolean(overlay);
 
 
   const cardAt = useCallback((event: React.MouseEvent, title: string, body?: string) => {
@@ -610,7 +625,7 @@ export function FlowDiagramRF({
               ? archetype.pins.capabilities.filter((p) => p.at === id).map((p) => p.capability)
               : undefined,
         },
-        draggable: true,
+        draggable: false,
         selectable: false,
         // A container sits behind what it contains, deeper nesting drawing progressively above.
         zIndex: kidsOf.has(id) ? -2 + depth : depth,
@@ -620,8 +635,8 @@ export function FlowDiagramRF({
     };
     for (const block of archetype.blocks) if (!block.parent) emit(block.id, 0);
 
-    // Pins sit at the same spots the SVG renderer and the build checks use. Block-anchored
-    // pins are children of their block, so they travel when the user drags it.
+    // Pins sit at the spots the build checks use. Block-anchored pins are children of their
+    // block, so they sit in the block's own coordinate space.
 
     const chipGroups = new Map<string, { capability: string; note?: string }[]>();
     for (const pin of archetype.pins.capabilities) {
@@ -698,18 +713,27 @@ export function FlowDiagramRF({
   if (lastId !== archetype.id) {
     setLastId(archetype.id);
     setNodes(initialNodes);
-    setDragged(new Set());
     setCard(null);
   }
 
-  // Scenario fade is derived at render time, so dragged positions survive scenario changes.
+  // Scenario and overlay fades are derived at render time, never stored.
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
         if (n.type === "block") {
+          const mark = overlay?.marks[n.id];
           const dim =
-            inScenario && !walkBlocks.has(n.id);
-          return { ...n, data: { ...n.data, dim, highlight } };
+            (walkActive && !walkBlocks.has(n.id)) || (overlay !== null && mark === undefined);
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              dim,
+              highlight,
+              mark,
+              markStyle: mark !== undefined && overlay ? OVERLAY_STYLE[overlay.phase] : undefined,
+            },
+          };
         }
         if (n.type === "chip" || n.type === "tag") {
           const wants = n.type === "chip" ? "capability" : "risk";
@@ -719,7 +743,7 @@ export function FlowDiagramRF({
         }
         return n;
       }),
-    [nodes, inScenario, walkBlocks, highlight],
+    [nodes, walkActive, walkBlocks, highlight, overlay],
   );
 
   const onNodesChange = useCallback(
@@ -729,17 +753,10 @@ export function FlowDiagramRF({
 
   const edges = useMemo(() => {
     const { layout } = archetype;
-    const descendants = (id: string): string[] => {
-      const kids = archetype.blocks.filter((b) => b.parent === id).map((b) => b.id);
-      return kids.flatMap((k) => [k, ...descendants(k)]);
-    };
     const rects = layout.blocks;
     const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
-    // Dragging a container carries everything nested inside it, however deep.
-    const moved = new Set([...dragged, ...[...dragged].flatMap(descendants)]);
 
-    // Edge-anchored pins, as offsets from the build midpoint — the edge component re-bases
-    // them on the live midpoint once an endpoint moves, so they travel with the arrow.
+    // Edge-anchored pins, as offsets from the build midpoint.
     const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
     const pinsByEdge = new Map<string, EdgePin[]>();
     const chipGroups = new Map<string, { capability: string; note?: string }[]>();
@@ -833,10 +850,12 @@ export function FlowDiagramRF({
       const geo = edgeGeo.get(key);
       if (!geo) continue;
       const style = PATH_STYLE[e.path];
-      const dimmed = inScenario && !walkEdges.has(key);
+      const onStep = overlay !== null && overlay.edges.includes(key);
+      const dimmed = (walkActive && !walkEdges.has(key)) || (overlay !== null && !onStep);
       const traced = hoveredEdge === key;
       const otherTraced = hoveredEdge !== null && !traced;
-      const live = moved.has(e.from) || moved.has(e.to);
+      // On an incident replay the ridden arrows take the step's phase colour.
+      const stroke = onStep && overlay ? OVERLAY_STYLE[overlay.phase].stroke : style.stroke;
       const [sh, th] = facing(rects[e.from], rects[e.to]);
       out.push({
         id: key,
@@ -847,7 +866,6 @@ export function FlowDiagramRF({
         type: "buildPath",
         data: {
           d: geo.d,
-          live,
           midX: geo.midX,
           midY: geo.midY,
           label: e.label,
@@ -859,20 +877,20 @@ export function FlowDiagramRF({
           onPinLeave,
         },
         style: {
-          stroke: style.stroke,
-          strokeWidth: traced ? 3.4 : 1.8,
+          stroke,
+          strokeWidth: traced ? 3.4 : onStep ? 2.6 : 1.8,
           strokeDasharray: style.dash,
           opacity: dimmed ? 0.15 : otherTraced ? 0.2 : 1,
         },
-        zIndex: traced ? 20 : undefined,
-        markerEnd: { type: "arrowclosed" as never, color: style.stroke, width: 14, height: 14 },
+        zIndex: traced || onStep ? 20 : undefined,
+        markerEnd: { type: "arrowclosed" as never, color: stroke, width: 14, height: 14 },
         markerStart: e.bidir
-          ? { type: "arrowclosed" as never, color: style.stroke, width: 14, height: 14 }
+          ? { type: "arrowclosed" as never, color: stroke, width: 14, height: 14 }
           : undefined,
       });
     }
     return out;
-  }, [archetype, walk, inScenario, walkEdges, hoveredEdge, dragged, cardAt, onPinLeave, highlight]);
+  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
@@ -882,10 +900,7 @@ export function FlowDiagramRF({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
-        onNodeDragStart={(_, n) => {
-          setDragged((prev) => new Set(prev).add(n.id));
-          setCard(null);
-        }}
+        nodesDraggable={false}
         onNodeMouseEnter={(event, node) => {
           if (node.type === "block") {
             const block = (node.data as BlockNodeData).block;

@@ -5,7 +5,7 @@
  */
 import { bandFor, type BandId } from "@/lib/bands";
 import { componentById } from "@/lib/data";
-import type { ArchBlock, BlockKind, PathClass } from "@/lib/types";
+import type { ArchBlock, BlockKind, PathClass, Phase } from "@/lib/types";
 
 /** Stroke and dash per connector class. One green for everything inside the system. */
 export const PATH_STYLE: Record<PathClass, { stroke: string; dash?: string; label: string }> = {
@@ -88,3 +88,10 @@ export const TAG = {
 };
 
 export const tagWidth = (code: string) => code.length * 6.6 + 12;
+
+/** An incident step's phase, as the fill and stroke of the blocks and arrows it touches. */
+export const OVERLAY_STYLE: Record<Phase, { stroke: string; fill: string }> = {
+  introduced: { stroke: "var(--introduced)", fill: "var(--introduced-soft)" },
+  exposed: { stroke: "var(--exposed)", fill: "var(--exposed-soft)" },
+  mitigated: { stroke: "var(--mitigated)", fill: "var(--mitigated-soft)" },
+};
