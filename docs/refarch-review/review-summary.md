@@ -52,3 +52,9 @@ An independent second pass over all thirteen architectures plus a cross-catalogu
 **Cross-catalogue verdicts on the two known-open items:** of the 7 unpinned risks, 4 are genuine gaps (delegation-chain opacity, benchmark manipulation — which reveals the training pipeline's missing evaluation gate — adapter/PEFT injection, route hijacking) and 3 correctly absent; of the 12 unpinned capabilities, 6 are gaps (staged rollout, vendor assurance/SSPM, drift detection, AI detection & response, model hardening, EDR), 2 lean-gaps, 4 correctly absent.
 
 **Highest-leverage fixes:** restore the evaluation gate to the training pipeline (closes a risk gap, an orphaned vocabulary pair, and a title/drawing mismatch at once); resolve the sandbox-frame deviation triple against ONTOLOGY §4a's own ruling; purge the dead `flows:` sections and stale deviations; fix the `aiGatewayTraffic` pack lie once at vocabulary level; pin and walk the personal agent's enterprise-data chain.
+
+## Third review (2026-09-02)
+
+An independent pass after the layout and walk rework, one reviewer per family, surfacing
+only what the first two passes had not fixed. Dispositions per finding, with the declined
+ones and their reasons, are in [third-review-2026-09-02.md](third-review-2026-09-02.md).
