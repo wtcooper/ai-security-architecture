@@ -330,7 +330,7 @@ blocks:
     title: Tool services
     zone: zoneExternal
     col: 4
-    row: 1
+    row: 2
     cosaiComponent: componentTools
     pack: toolServicesRemote
     items:
@@ -348,7 +348,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
-    row: 2
+    row: 3
     pack: downstreamPublic
     note: >
       Where effects land outside the company, and where the untrusted content that returns
@@ -398,7 +398,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 4
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityMcpToolSecurity]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityMcpToolSecurity, capabilityAiBom]
     note: >
       Which agents and tools exist at all. In a multi-agent graph the registry is also the
       inventory: an agent nobody registered is an agent nobody can revoke.
@@ -414,6 +414,23 @@ blocks:
     note: >
       The trail is recorded by the gateway, not volunteered by the agents — and the stop has to
       reach a workflow that is suspended mid-flight, not just one that is currently running.
+
+  - id: registry
+    kind: external
+    title: Private pkg registry
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 3
+    row: 0
+    note: >
+      The organisation-maintained mirror that serves whatever the sandbox installs: a
+      dependency the agent's generated code needs, a tool package a step pulls in. Read-only
+      to agents, because a writable cache is a message board between sandboxes and an escape
+      route — the OpenAI–Hugging Face incident began there.
+    items:
+      - id: hub
+        label: Approved packages
+        icon: db
 
 edges:
   - from: initiator
@@ -460,10 +477,19 @@ edges:
     label: model & tool calls
     note: Every network call the agents make crosses here on a brokered, step-scoped credential.
   - from: gateway
+    to: registry
+    path: primary
+    bidir: true
+    label: pinned installs
+    note: >
+      What a sandboxed step installs is pulled from the mirror through the crossing, pinned by
+      digest — never straight from a public registry. The same crossing that brokers the tool
+      call decides which build may run inside the sandbox.
+  - from: gateway
     to: provider
     path: external
     bidir: true
-    route: vh
+    route: hv
     note: Inference on the brokered credential, for every agent in the graph.
   - from: gateway
     to: internalTools
@@ -481,6 +507,7 @@ edges:
       reads back as context are stored.
   - from: gateway
     to: extTools
+    route: hv
     path: external
     bidir: true
     label: brokered external calls
@@ -573,6 +600,12 @@ pins:
       note: >
         The vector index is written by steps and read by every later one; a poisoned entry is
         retrieved into the context of an agent that never saw it arrive.
+    - risk: riskToolSourceProvenance
+      at: gateway->registry
+      note: >
+        What the sandbox installs is code the agent chose, on a name it read in a task or a tool
+        result; the mirror decides which build answers to that name, and whoever can write to
+        the mirror programs every sandbox that pulls from it.
   capabilities:
     - capability: capabilityMemoryProtection
       at: state
@@ -696,6 +729,17 @@ pins:
       note: >
         Admission is change-time; the rug-pull is a tool whose definition changes after
         admission. Content-hash pinning of admitted tool descriptions is what catches it.
+    - capability: capabilityAiBom
+      at: registry
+      note: >
+        Digest and signature verification at admission to the mirror, and an inventory of which
+        packages a sandbox may pull — the registered embodiment of artifact scanning.
+    - capability: capabilityDataAccessGovernance
+      at: registry
+      note: >
+        Read-only to agents. A cache a sandbox can write to is a shared medium between agent
+        instances that were meant to be isolated, and a proxying mirror is a road to the
+        internet the sandbox was not supposed to have.
 walkthrough:
   title: A user asks the agent to act
   moves: >-
@@ -817,6 +861,19 @@ scenarios:
         note: The specialist's call leaves through the same door.
       - follow: gateway->internalTools
         note: The action proceeds under the same per-call policy as an attended run.
+
+  - title: A dependency arrives with the task
+    steps:
+      - follow: harness->gateway
+        note: A sandboxed step needs a package its generated code imports, on a name the model chose.
+      - follow: gateway->registry
+        note: The pull goes to the mirror through the crossing, never to a public registry.
+      - follow: registry->gateway
+        note: The admitted build comes back, pinned by digest — the hop a poisoned package actually arrives on.
+      - follow: gateway->harness
+        note: >
+          It runs inside the sandbox with the step's grant. The mirror stays read-only to the
+          agent: a cache it could write to would be a message board between sandboxes.
 
 deviations:
   - subject: In-process tool handlers are drawn with no edges

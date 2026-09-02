@@ -232,3 +232,10 @@ surface for customer-owned agent definitions.
   incident step's blocks and arrows in the step's phase colour and everything else faded.
   Blocks are no longer draggable — a moved block broke the routed arrows and the pins seated
   on them. Pan and zoom remain.
+- **The package mirror is standard wherever an agent executes code (2026-09-02).** The
+  cloud agent trio and the third-party coding agent now draw `Private pkg registry` behind
+  the gateway, as the first-party coding agent, the personal agent and the training pipeline
+  already did. Any sandboxed step that installs something pulls from it; it is read-only to
+  agents, because a writable cache is a message board between sandboxes and an escape route
+  — the OpenAI–Hugging Face incident began there, and its replay now lands on the block.
+  SaaS drawings do not draw one: the vendor runs the sandbox and its supply chain is assessed.

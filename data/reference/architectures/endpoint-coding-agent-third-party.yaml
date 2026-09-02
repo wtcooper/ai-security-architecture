@@ -338,7 +338,7 @@ blocks:
     kind: provider
     title: Vendor service
     zone: zoneVendor
-    col: 4
+    col: 5
     row: 0
     note: >
       The vendor's backend and the published surfaces of its control plane — outside the
@@ -363,7 +363,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 2
     note: >
       Third-party servers and connectors — the same component again, out where nobody we
@@ -384,7 +384,7 @@ blocks:
     title: Model provider
     cosaiComponent: componentModelServing
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 1
     note: >
       The inference API behind the vendor's service. For a vendor that is also the model
@@ -402,7 +402,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 3
     note: >
       What the tool plane reaches on the open internet — dependency registries, the web, and
@@ -464,7 +464,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiTprm, capabilitySystemPromptManagement]
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiTprm, capabilitySystemPromptManagement, capabilityAiBom]
     note: >
       Which agents, connectors and servers are admitted, pinned to which versions — and the
       vendor assessment that put the approved destinations in the allowlist.
@@ -481,6 +481,23 @@ blocks:
       Our session record fused with the vendor's export, and the discovery that finds the
       installs which never enrolled.
 
+
+  - id: registry
+    kind: external
+    title: Private pkg registry
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 4
+    row: 3
+    note: >
+      The organisation-maintained mirror that serves what the sandboxed tools install:
+      project dependencies, extensions and skills. The harness itself comes from the vendor;
+      everything it pulls at the developer's request comes through here, pinned, and never
+      straight from a community channel.
+    items:
+      - id: hub
+        label: Approved packages
+        icon: db
 
 edges:
   - from: developer
@@ -573,6 +590,16 @@ edges:
     bidir: true
     route: vh
     note: The vendor's service calls the model provider; everything behind that interface is theirs.
+  - from: aiGateway
+    to: registry
+    path: primary
+    bidir: true
+    label: pinned installs
+    route: hv
+    note: >
+      Dependencies, extensions and skills pulled from the mirror through the crossing, pinned
+      by digest — never straight from a community channel. The same crossing that brokers the
+      tool calls decides which build may run on the machine.
   - from: aiGateway
     to: hostedTools
     path: primary
@@ -690,6 +717,11 @@ pins:
       note: >
         A scheduled or hosted session has no human to notice it looping; seat metering is the
         only meter, and the stop is the credential.
+    - risk: riskToolSourceProvenance
+      at: aiGateway->registry
+      note: >
+        What the sandbox installs is code the agent chose, on a name it read in a task, a
+        manifest or a tool result; the mirror decides which build answers to that name.
   capabilities:
     - capability: capabilityIga
       at: vendorService
@@ -784,6 +816,12 @@ pins:
         Managed settings make permission rules, hook policy and the sandbox profile
         non-overridable on the device — the per-action decision is enforced inside the harness
         by the tier the vendor delivers.
+    - capability: capabilityAiBom
+      at: registry
+      note: >
+        Digest and signature verification at admission to the mirror, and an inventory of which
+        packages, extensions and skills may run — the registered embodiment of artifact
+        scanning.
 walkthrough:
   title: The developer asks for a change
   moves: >-
@@ -887,6 +925,21 @@ scenarios:
           reach past into the data directly.
       - follow: hostedTools->orgData
         note: The scoped, BYOK-backed grant reaches exactly the admitted connector, and we record it.
+
+  - title: A dependency arrives with the task
+    steps:
+      - follow: harness->toolPlane
+        note: A step needs a package the generated code imports, on a name the model chose.
+      - follow: toolPlane->aiGateway
+        note: The pull leaves the machine through the crossing.
+      - follow: aiGateway->registry
+        note: Served from the mirror — scanned, pinned — and from nowhere else.
+      - follow: registry->aiGateway
+        note: The admitted build comes back, digest-checked — the hop a poisoned package actually arrives on.
+      - follow: aiGateway->toolPlane
+        note: Delivered into the sandbox.
+      - follow: toolPlane->harness
+        note: And it runs with the developer's files, credentials and sessions around it.
 
 deviations:
   - subject: One model path is drawn; the customer-key variant is recorded, not drawn
