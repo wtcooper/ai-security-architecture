@@ -61,8 +61,17 @@ exemplars:
     note: >
       The flagship daemon of the class: pulls open weights by name, serves an
       OpenAI-compatible API on a local port with no authentication by default, and is the
-      runtime the exposure scans keep finding on routable interfaces.
+      runtime the exposure scans keep finding on routable interfaces. Its cloud models and web
+      search forward the prompt to the vendor through the same local API — "never leaves the
+      machine" is a model-name suffix away from false.
     url: https://docs.ollama.com
+    asOf: "2026-09"
+  - name: vLLM
+    note: >
+      The serving stack of the cloud sibling, run on a workstation: loads hub repositories
+      directly, and with remote code trusted executes the repository's own loader — the
+      custom-code axis, distinct from the pickle one.
+    url: https://docs.vllm.ai/en/latest/usage/security.html
     asOf: "2026-09"
   - name: llama.cpp server
     note: >
@@ -140,7 +149,10 @@ blocks:
       - id: cors
         label: Cross-origin policy
         icon: globe
-        note: A permissive CORS policy lets any web page the user visits drive local inference.
+        note: >
+          Origin policy decides who may read a reply; a simple cross-origin POST is acted on
+          regardless, and a DNS-rebinding page reads as well. The control is Host and Origin
+          validation plus caller authentication, not CORS alone.
 
   - id: runtime
     kind: service
@@ -309,8 +321,8 @@ pins:
     - risk: riskInsecureModelOutput
       at: api->runtime
       note: >
-        Where this block is absent — the common case — raw model output goes straight to callers
-        built expecting a hosted API's floor.
+        Where no classifier sits on this path — the common case — raw model output goes straight
+        to callers built expecting a hosted API's floor.
     - risk: riskDenialOfMLService
       at: callers->api
       note: >
@@ -323,6 +335,22 @@ pins:
         With no provider-side safety layer, whatever refusal behaviour the weights carry is the
         whole of the defence, and it is removable by fine-tune.
 
+    - risk: riskExcessiveDataHandlingDuringInference
+      at: runtime
+      note: >
+        A model-name suffix or a search flag routes the prompt to the vendor's cloud through the
+        same local API, and nothing on the drawing governs the runtime process's own egress.
+    - risk: riskModelDeploymentTampering
+      at: weights->runtime
+      note: >
+        What the runtime serves is whatever sits in its model directory; a swap there — by a
+        stranger on an exposed port or by any local process — is served on the next request with
+        nothing to notice.
+    - risk: riskMaliciousLoaderDeserialization
+      at: runtime
+      note: >
+        The chat template embedded in the weights runs on every request — past the load gate and
+        every static scan.
   capabilities:
     - capability: capabilityModelScanning
       at: hub->weights
@@ -344,8 +372,8 @@ pins:
       at: api
       note: >
         The bind, the origin policy and the auth flag treated as security settings with a
-        reviewed baseline — loopback only, CORS closed, authenticated transport on — enforced
-        by device management rather than hoped from defaults.
+        reviewed baseline — loopback only, Host and Origin validated, authenticated transport
+        on — enforced by device management rather than hoped from defaults.
     - capability: capabilityModelWeightProtection
       at: weights
       note: Restrictive file permissions and integrity checks on the artifacts, so a swap is detectable.
@@ -361,7 +389,7 @@ pins:
         process visibility, and the containment that isolates a machine serving something it
         should not.
     - capability: capabilityAiBom
-      at: runtime
+      at: govSupplyChain
       note: Which models, at which versions, from which sources, on which machines — the precondition for every response.
     - capability: capabilityShadowAiDiscovery
       at: runtime
@@ -413,12 +441,18 @@ scenarios:
           Free inference for whoever arrived, and on some runtimes the management surface too:
           models pulled, deleted or swapped by a stranger, on a machine that appears in no
           inventory.
+      - follow: weights->runtime
+        note: >
+          The stranger's pull lands weights straight on disk and the runtime loads them — the
+          common-install collapse the deviation admits; a path-traversal flaw in that pull
+          turned it into remote code execution once already.
   - title: A browser tab finds the port
     steps:
       - follow: localApps->api
         note: >
-          A visited web page calls the local endpoint through the browser, under a permissive
-          cross-origin policy. The caller is local software; nobody chose to serve it.
+          A visited web page fires a simple-request POST at the local endpoint through the
+          browser; the server acts on it whether or not the origin is allowed, and a rebinding
+          page reads the answer too. The caller is local software; nobody chose to serve it.
       - follow: api->runtime
         note: >
           Nothing distinguishes this caller from the intended ones. The page now drives local
@@ -436,8 +470,10 @@ deviations:
     reason: >
       The serving binary updates itself over its vendor's channel — attack surface the
       insecure-component risk note names, but a single outbound updater hop that a standing
-      edge would overstate. An organisation that mirrors the runtime binary through its
-      package registry closes it there.
+      edge would overstate. The same process's cloud-model offload and web-search calls ride
+      the same undrawn egress. An organisation that mirrors the runtime binary through its
+      package registry closes the first at the mirror; the device firewall closes the rest
+      in the target state.
   - subject: Guardrails are a control on the request path, not a block
     reason: >
       Input and output classification is something the device owner deploys, not a component of

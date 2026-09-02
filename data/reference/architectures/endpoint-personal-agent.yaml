@@ -144,10 +144,6 @@ blocks:
         label: Messaging apps
         icon: chat
         note: The owner's chat clients — the same platforms an unbounded sender set can reach.
-      - id: controlUi
-        label: Control UI
-        icon: globe
-        note: The gateway's dashboard, and a documented token-exfiltration surface.
 
   - id: sandbox
     kind: boundary
@@ -175,10 +171,11 @@ blocks:
   - id: bridges
     kind: service
     title: Channel bridges
+    parent: sandbox
     cosaiComponent: componentAgentUserQuery
     zone: zoneEndpoint
     col: 1
-    row: 1
+    row: 0
     note: >
       One adapter per platform, each implementing its own sender check. The count of channels
       is the count of independent admission surfaces.
@@ -201,7 +198,7 @@ blocks:
     parent: sandbox
     zone: zoneEndpoint
     col: 0
-    row: 0
+    row: 1
     note: >
       The long-lived loop that plans, calls tools and reads results back as context, with the
       heartbeat that starts it when nobody is watching.
@@ -218,6 +215,13 @@ blocks:
         label: Context assembly
         icon: doc
         note: Merges the message, the memory and the tool results into one prompt.
+      - id: apiServer
+        label: Local API server
+        icon: plug
+        note: >
+          The daemon's control WebSocket and dashboard on loopback — the surface the exposure
+          scans keep finding on routable interfaces, and a documented token-exfiltration
+          surface even when the bind is right.
 
   - id: memory
     kind: service
@@ -226,7 +230,7 @@ blocks:
     parent: sandbox
     zone: zoneEndpoint
     col: 0
-    row: 1
+    row: 2
     note: >
       Cross-session files the agent writes and reads back as instruction — the persistence
       primitive, and the reason an injection outlives the message that carried it.
@@ -235,6 +239,12 @@ blocks:
         label: Memory files
         icon: folder
         note: Prose the next turn treats as instruction.
+      - id: rules
+        label: Rules & instructions
+        icon: doc
+        note: >
+          The bootstrap files the agent reads as its own standing instruction — and, on the
+          harnesses that write their own skills, edits.
       - id: index
         label: Search index
         icon: search
@@ -247,7 +257,7 @@ blocks:
     parent: sandbox
     zone: zoneEndpoint
     col: 1
-    row: 1
+    row: 2
     note: >
       The local surface inside the sandbox — files, shell and skills. Remote transports are not
       here: they live behind the enterprise crossing by construction.
@@ -270,7 +280,16 @@ blocks:
       - id: skills
         label: Installed skills
         icon: gear
-        note: Prose plus executable code loaded into the daemon's own process.
+        note: >
+          Prose that instructs the loop to run installers, plus code loaded into the daemon's
+          own process — the "prerequisites" step is where a stealer ran.
+      - id: computerUse
+        label: Computer use
+        icon: eye
+        note: >
+          Drives the host browser over the debugging protocol and inherits every signed-in
+          session in it — outside the boundary by construction. Disabled in the target state,
+          or pointed at a browser that lives inside the sandbox.
 
   - id: workspace
     kind: external
@@ -563,26 +582,6 @@ edges:
       does not reach the laptop directly and has no privileged route to it — which is why the
       owner's instruction and a stranger's arrive by the same path and are told apart, if at
       all, by whatever the platform asserts about the sender.
-  - from: remoteDevice
-    to: relay
-    path: primary
-    bidir: true
-    route: hv
-    label: remote control UI
-    note: >
-      The dashboard reached from away, over the authenticated tunnel the relay terminates —
-      never a port opened on the device. What makes this honest is the relay: without it a
-      remote dashboard means a routable bind, which is the exposure the scans keep finding.
-  - from: owner
-    to: bridges
-    path: primary
-    bidir: true
-    route: vh
-    label: local dashboard
-    note: >
-      The gateway's own dashboard on loopback, reached from the owner's browser — and a
-      documented token-exfiltration surface in its own right, because every page in that
-      browser can attempt the same loopback calls the dashboard makes.
   - from: bridges
     to: relay
     path: primary
@@ -694,7 +693,8 @@ pins:
       at: toolPlane
       note: >
         The target draws MCP servers inside the boundary; every current implementation runs
-        them on the host with host privileges — true of Docker Sandboxes, OpenClaw and Hermes
+        them on the host with host privileges, and browser control drives the host browser
+        outright — true of Docker Sandboxes, OpenClaw and Hermes
         alike. Until an implementation closes that gap, third-party code in this surface has
         the user's full authority, and the containment the drawing shows is the requirement,
         not the shipped state.
@@ -721,12 +721,12 @@ pins:
         delegation that does not narrow to the task is the owner's whole reach on a loop
         nobody is watching.
     - risk: riskInsecureIntegratedComponent
-      at: bridges
+      at: harness
       note: >
-        The listening surface itself: a bridge bound to a routable interface instead of
-        loopback is the exposure the scans keep finding, and the loopback dashboard is a
-        documented token-exfiltration surface even when the bind is right — the owner's own
-        browser defeats "localhost is not reachable" from inside.
+        The listening surface itself: the daemon's control WebSocket bound to a routable
+        interface instead of loopback is the exposure the scans keep finding, and the loopback
+        dashboard is a documented token-exfiltration surface even when the bind is right — the
+        owner's own browser defeats "localhost is not reachable" from inside.
     - risk: riskStaleAgentIdentityBinding
       at: relay->bridges
       note: >
@@ -745,7 +745,7 @@ pins:
         Everything the loop has assembled — memory, workspace content, tool results — crosses
         here. The gateway's inspection is the only place it can be seen.
     - risk: riskInsecureModelOutput
-      at: gateway->provider
+      at: harness
       note: The completion is unauthenticated content, and it chooses the next tool call.
     - risk: riskCovertChannelsInModelOutputs
       at: gateway->provider
@@ -764,6 +764,12 @@ pins:
       at: gateway->remoteTools
       note: The catalogue decides what the agent can be made to do; whoever edits it programs the agent.
 
+    - risk: riskSensitiveDataDisclosure
+      at: bridges->relay
+      note: >
+        The reply is addressed by the loop, not the owner: whatever the turn read — memory,
+        workspace content, tool results — leaves here to whichever chat the message named, and
+        never touches the gateway.
   capabilities:
     - capability: capabilityPromptInjectionDefense
       at: relay
@@ -777,12 +783,14 @@ pins:
         enforced identically per bridge rather than reimplemented per platform. Identity is
         the whole of the admission on this surface.
     - capability: capabilityAgentRuntimeEnforcement
-      at: gateway->remoteTools
+      at: gateway
       note: >
         Proposed actions evaluated per call at the crossing before they leave — this action,
         this scope, now — rather than a session-time grant the loop argues with itself about.
+        Unattended turns are tagged at ingress and bound to a read-only or draft class on
+        every outbound leg, internal and remote alike.
     - capability: capabilityTransportSecurity
-      at: bridges
+      at: harness
       note: >
         Loopback binding, authenticated dashboard transport with origin checks, and an
         outbound-only relay — so the endpoint never listens, and the browser next door is
@@ -864,6 +872,16 @@ pins:
         A baseline over the gateway's record is the only place a covert channel or a runaway
         pattern could be seen — somebody has to be reading the trace the pins keep citing.
 
+    - capability: capabilityAiDlp
+      at: relay
+      note: >
+        Outbound classification on the reply leg — the only inspection the messaging path gets,
+        because the gateway never sees it.
+    - capability: capabilityAgentRegistry
+      at: gateway
+      note: >
+        Every daemon that reaches the crossing is inventoried there — the one archetype whose
+        incident says owners were found by scanning, not by inventory.
 walkthrough:
   title: The owner asks the agent to do something
   moves: >-
@@ -953,6 +971,10 @@ scenarios:
         note: Anything remote is admitted by catalogue and carries an owner-scoped credential.
       - follow: remoteTools->downstream
         note: Actions land on real accounts — the approval gate is the last control standing.
+      - follow: harness->bridges
+        note: The reply carries whatever the turn read.
+      - follow: bridges->relay
+        note: Out to a chat the stranger chose — the second egress, and the one the gateway never inspects.
   - title: The heartbeat fires with nobody watching
     steps:
       - follow: memory->harness
@@ -969,15 +991,12 @@ scenarios:
         note: A one-time injection has become a recurring one, bounded now by the action class.
   - title: A page in the owner's browser reaches the dashboard
     steps:
-      - follow: owner->bridges
+      - follow: owner->harness
         note: >
           A malicious page in the owner's own browser makes the same loopback calls the
           dashboard makes — localhost is not a boundary against software already on the right
-          side of it.
-      - follow: bridges->harness
-        note: >
-          An admitted call enters the loop, or walks off with the dashboard token — the
-          documented exfiltration surface, defeated only by authenticated transport and
+          side of it. An admitted call enters the loop, or walks off with the dashboard token:
+          the documented exfiltration surface, defeated only by authenticated transport and
           origin checks on the bind.
       - follow: harness->gateway
         note: >
@@ -991,6 +1010,13 @@ scenarios:
         note: The pull request reaches the crossing — the only tier allowed to serve installs.
       - follow: gateway->registry
         note: Served from the mirror — scanned, signed, pinned — and from nowhere else.
+      - follow: registry->gateway
+        note: The signed skill comes back through the crossing.
+      - follow: harness->toolPlane
+        note: >
+          Its prerequisites run as shell — inside the boundary, where a stealer finds no
+          keychain and no key. Signing and pinning admit exactly this step; containment is
+          what bounds it.
 
 deviations:
   - subject: The messaging tenant is contracted; consumer channels are a variant
@@ -1010,6 +1036,27 @@ deviations:
       the phone's message is checked by a bridge against a pairing record, while the local
       session is authorised by nothing but being on the device. Drawing one edge for both hid
       that difference, so the direct path is drawn and the device posture is what governs it.
+
+  - subject: Pairing admission and inbound injection defense are absorbed by the bridges and the relay
+    reason: >
+      Two inline pins sit on components that are not their registered embodiment. Identity
+      governance on the channel bridges is the directory-bound pairing check inside each
+      adapter; injection defense on the relay is a content classifier on the collected
+      messages. Nothing else on the messaging path can hold either, and both are named so
+      the assessment can ask for them by product.
+  - subject: The remote dashboard is reached over a tunnel that is not drawn
+    reason: >
+      The daemon's dashboard is served on the same loopback port as its control socket. Away
+      from the machine it is reached over an identity-bound tunnel service — the coding
+      agents' Remote relay — never over the messaging relay, which carries chat and nothing
+      else. The tunnel is not drawn here because the messaging path is this drawing's remote
+      surface; the local API server item and its pins carry the exposure either way.
+  - subject: Stale agent identity binding is read as a stale pairing
+    reason: >
+      The catalogue defines the risk as credentials persisting across an artifact swap. On the
+      relay-to-bridges hop the mechanism is the same shape one layer up — a pairing record
+      that outlives the device or person it was issued to. The third-party coding agent reads
+      the tag the same way on its remote-steering edge.
 
 sources:
   - title: "OpenClaw documentation — gateway architecture and channel model"
