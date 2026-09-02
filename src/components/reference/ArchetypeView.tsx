@@ -1,26 +1,38 @@
 "use client";
 
 /**
- * Design A — Focus. The drawing takes the full width and everything else is one tab strip
- * beneath it: overview, sequence flows, capabilities, risks, guidance. One panel is visible
- * at a time and nothing is expanded by default, so the page never shows two lists and a
- * sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
+ * One architecture on the page: the drawing at full width and everything else in one tab
+ * strip beneath it — overview, sequence flows, capabilities, risks, guidance. One panel is
+ * visible at a time and nothing is expanded by default, so the page never shows two lists
+ * and a sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
  * capability or risk tab clears the highlight, so the drawing always matches the panel.
+ * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
 import { useState } from "react";
 
 import { guidanceByArchetype } from "@/lib/data";
-import { ArchetypeDetail } from "../ArchetypeDetail";
-import { FlowDiagram } from "../FlowDiagram";
-import { FlowLegend } from "../FlowLegend";
-import { FlowSequence } from "../FlowSequence";
-import { GuidancePanel } from "../GuidancePanel";
-import { CapabilityList, RiskList, WalkList } from "../rail-lists";
-import type { DesignProps } from "./types";
+import type { Archetype, Scenario } from "@/lib/types";
+import { ArchetypeDetail } from "./ArchetypeDetail";
+import { FlowDiagram, type Highlight } from "./FlowDiagram";
+import { FlowLegend } from "./FlowLegend";
+import { FlowSequence } from "./FlowSequence";
+import { GuidancePanel } from "./GuidancePanel";
+import { CapabilityList, RiskList, WalkList } from "./rail-lists";
 
 type Tab = "overview" | "flows" | "capabilities" | "risks" | "guidance";
 
-export function FocusDesign({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: DesignProps) {
+interface ArchetypeViewProps {
+  archetype: Archetype;
+  /** Every walk on the drawing, walkthrough first. They behave identically. */
+  walks: Scenario[];
+  /** Index into `walks`, or null when the drawing carries no step numbers. */
+  walkIndex: number | null;
+  onWalk: (index: number | null) => void;
+  highlight: Highlight | null;
+  onHighlight: (h: Highlight | null) => void;
+}
+
+export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
   const [tab, setTab] = useState<Tab>("overview");
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const guidance = guidanceByArchetype.get(archetype.id);

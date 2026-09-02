@@ -7,16 +7,8 @@ import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces } from "@/lib/data";
 import type { Archetype, Paragraph, Scenario } from "@/lib/types";
-import { ArchetypeDetail } from "./ArchetypeDetail";
-import { FlowDiagram, type Highlight } from "./FlowDiagram";
-import { FlowSequence } from "./FlowSequence";
-import { FlowLegend } from "./FlowLegend";
-import { GuidancePanel } from "./GuidancePanel";
-import { InsightRail } from "./InsightRail";
-import { FocusDesign } from "./designs/FocusDesign";
-import { StoryDesign } from "./designs/StoryDesign";
-import { StudioDesign } from "./designs/StudioDesign";
-import { DESIGNS, type DesignId } from "./designs/types";
+import { ArchetypeView } from "./ArchetypeView";
+import type { Highlight } from "./FlowDiagram";
 
 const SURFACE_TAGLINE: Record<string, string> = {
   surfaceEndpoint: "on the person's own device",
@@ -39,7 +31,6 @@ export function ArchitecturesBrowser() {
   const params = useSearchParams();
   const linkedArchetype = params.get("archetype");
   const linkedSurface = params.get("surface");
-  const linkedDesign = params.get("design");
 
   const initial =
     (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) ||
@@ -55,29 +46,19 @@ export function ArchitecturesBrowser() {
   // nothing about the selection treats them differently.
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
-  // Which page design lays the content out. The candidates live side by side so they can be
-  // compared on the live data; "current" is the layout this page has grown into.
-  const [design, setDesign] = useState<DesignId>(
-    DESIGNS.some((d) => d.id === linkedDesign) ? (linkedDesign as DesignId) : "current",
-  );
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
   const walks = useMemo(
     () => [archetype.walkthrough, ...(archetype.scenarios ?? [])].filter(Boolean) as Scenario[],
     [archetype],
   );
-  const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
 
   // Deep links stay shareable. replaceState rather than router.push: pushing would drop the
   // GitHub Pages basePath, the same reason TourExplorer does it this way.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.history.replaceState(
-      null,
-      "",
-      `?archetype=${archetypeId}${design === "current" ? "" : `&design=${design}`}`,
-    );
-  }, [archetypeId, design]);
+    window.history.replaceState(null, "", `?archetype=${archetypeId}`);
+  }, [archetypeId]);
 
   const shown = archetypesInOrder.filter((a) => !surface || a.surface === surface);
 
@@ -96,7 +77,6 @@ export function ArchitecturesBrowser() {
     setHighlight(h);
     setWalkIndex(null);
   };
-  const designProps = { archetype, walks, walkIndex, onWalk, highlight, onHighlight };
 
   const summary = typeof archetype.summary[0] === "string" ? archetype.summary[0] : "";
 
@@ -130,24 +110,6 @@ export function ArchitecturesBrowser() {
                 </FilterPill>
               ))}
             </div>
-            <label className="flex items-center gap-2 text-[11.5px] text-ink-3 sm:ml-auto">
-              Page design
-              <select
-                value={design}
-                onChange={(e) => {
-                  setDesign(e.target.value as DesignId);
-                  setWalkIndex(null);
-                  setHighlight(null);
-                }}
-                className="rounded-md border border-line bg-paper px-2 py-1 text-[12px] text-ink"
-              >
-                {DESIGNS.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
         </div>
 
@@ -183,68 +145,14 @@ export function ArchitecturesBrowser() {
           </div>
         </div>
 
-        {design === "focus" && <FocusDesign {...designProps} />}
-        {design === "studio" && <StudioDesign {...designProps} />}
-        {design === "story" && <StoryDesign {...designProps} />}
-
-        {design === "current" && (
-        <>
-        <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,1fr)_290px]">
-          <div>
-            <div className="flex items-start overflow-hidden rounded-xl border border-line bg-paper">
-              <FlowDiagram
-                archetype={archetype}
-                walk={activeWalk}
-                highlight={highlight}
-                onHighlight={setHighlight}
-                className="w-full"
-              />
-            </div>
-            <FlowLegend className="mt-3 px-1" />
-            {activeWalk && (
-              <details className="mt-4 rounded-xl border border-line bg-paper" open>
-                <summary className="flex cursor-pointer list-none items-baseline gap-2 px-4 py-2.5 text-[12.5px] text-ink-2 hover:text-ink">
-                  <span className="ident text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3">
-                    Sequence
-                  </span>
-                  <span className="font-semibold text-ink">{activeWalk.title}</span>
-                  <span className="ml-auto shrink-0 text-[11px] text-ink-3">
-                    {activeWalk.steps.length} steps
-                  </span>
-                </summary>
-                <FlowSequence archetype={archetype} walk={activeWalk} className="px-4 pb-4" />
-              </details>
-            )}
-          </div>
-          <div className="self-start rounded-xl border border-line bg-paper p-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
-            <InsightRail
-              archetype={archetype}
-              walks={walks}
-              walk={walkIndex}
-              onWalk={(i) => {
-                setWalkIndex(i);
-                setHighlight(null);
-              }}
-              highlight={highlight}
-              onHighlight={(h) => {
-                setHighlight(h);
-                setWalkIndex(null);
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <ArchetypeDetail archetype={archetype} />
-        </div>
-
-        {guidanceByArchetype.has(archetype.id) && (
-          <div className="mt-8">
-            <GuidancePanel archetype={archetype} />
-          </div>
-        )}
-        </>
-        )}
+        <ArchetypeView
+          archetype={archetype}
+          walks={walks}
+          walkIndex={walkIndex}
+          onWalk={onWalk}
+          highlight={highlight}
+          onHighlight={onHighlight}
+        />
       </div>
     </>
   );
