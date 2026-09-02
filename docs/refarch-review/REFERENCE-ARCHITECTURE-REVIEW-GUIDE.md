@@ -56,7 +56,7 @@ These are stated in full in [`data/ONTOLOGY.md`](../../data/ONTOLOGY.md). The sh
 4. **Reuse before you create.** Every block title and item label must already be registered in
    [`data/reference/vocabulary.yaml`](../../data/reference/vocabulary.yaml), or be registered in
    the same change with a reason. Every build prints a census of distinct names; the registry
-   is meant only to shrink. Currently 59 block titles and 98 item labels are in use across
+   is meant only to shrink. Currently 60 block titles and 101 item labels are in use across
    thirteen drawings (the 2026-09 remediation revived several registered names the drawings
    had wrongly dropped).
 

@@ -359,7 +359,7 @@ function IncidentFooter({ incident }: { incident: Incident }) {
                 <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{r.note}</p>
                 {r.sources?.map((s) => (
                   <a
-                    key={s.url}
+                    key={s.url + s.title}
                     href={s.url}
                     target="_blank"
                     rel="noreferrer"
@@ -384,7 +384,7 @@ function Sources({ sources, label }: { sources?: IncidentSource[]; label: string
       <p className="eyebrow">{label}</p>
       <ul className="mt-2 space-y-1.5">
         {sources.map((s) => (
-          <li key={s.url}>
+          <li key={s.url + s.title}>
             <a
               href={s.url}
               target="_blank"

@@ -779,6 +779,7 @@ Highlights below are Google's original mapping, not ours.
 | Self-hosted model inference | Policy & authorization | governance | (none) |
 | Self-hosted model inference | Secrets & key management | governance | (none) |
 | Self-hosted model inference | Observability & response | governance | (none) |
+| Self-hosted model inference | Model registry | service | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Base model & deps | external | `componentModelStorage` |
 | Fine-tuning and model registry pipeline | Training content origins | external | `componentDataSources` |
 | Fine-tuning and model registry pipeline | Private pkg registry | external | `componentDataSources` |
@@ -792,6 +793,7 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Policy & authorization | governance | (none) |
 | Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
 | Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
+| Fine-tuning and model registry pipeline | Identity services | governance | (none) |
 | First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Remote relay | external | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
@@ -907,16 +909,16 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 7 | Agent credential isolation & delegation control |
-| Multi-agent workflow | build | draft | 8 | Data access governance for retrieval |
+| Single agent workflow | build | draft | 7 | _none_ |
+| Multi-agent workflow | build | draft | 8 | _none_ |
 | Chat agent with tools | build | draft | 7 | _none_ |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 7 | _none_ |
 | First-party coding & desktop agents | hybrid | draft | 6 | _none_ |
 | Third-party coding & desktop agents | use | draft | 9 | Kill switch, quarantine & decommissioning |
-| Local model runtime | use | draft | 4 | Identity & access management for AI applications |
-| Personal autonomous agent | use | draft | 7 | Agent behavioural & goal-drift detection |
+| Local model runtime | use | draft | 4 | _none_ |
+| Personal autonomous agent | use | draft | 7 | _none_ |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
 | API/SDK managed agent runtime | hybrid | draft | 7 | _none_ |
