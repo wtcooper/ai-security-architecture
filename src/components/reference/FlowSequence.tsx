@@ -142,11 +142,14 @@ export function FlowSequence({
             );
           })}
 
-          {/* Messages: a solid arrow for a call, a dashed one for the leg back along a drawn edge */}
+          {/* Messages: a solid arrow for a call, a dashed one for the return leg of a round trip */}
           {walk.steps.map((st, step) => {
             const [from, to] = st.follow.split("->");
             const edge = edgeOf(from, to);
-            const reply = Boolean(edge && edge.from === to && edge.to === from);
+            // A reply is the leg back of a round trip inside this walk — the same pair already
+            // went the other way — not merely a step against the authored arrow direction,
+            // which on a bidirectional edge says nothing.
+            const reply = walk.steps.slice(0, step).some((prev) => prev.follow === `${to}->${from}`);
             const color = PATH_COLOR[edge?.path ?? "primary"] ?? PATH_COLOR.primary;
             const x1 = xOf(lifelines.indexOf(from));
             const x2 = xOf(lifelines.indexOf(to));
@@ -195,7 +198,7 @@ export function FlowSequence({
         </svg>
       </div>
       <p className="mt-1.5 px-1 text-[10.5px] text-ink-3">
-        Numbers sit on the lifeline a message leaves from; a dashed arrow is the leg back along a drawn path.
+        Numbers sit on the lifeline a message leaves from; a dashed arrow is the return leg of a round trip.
       </p>
 
       {/* The prose of the walk — what each step actually is. */}
