@@ -252,8 +252,30 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   };
   place(roots, top, MARGIN_X, marginTop);
 
+  // The governance plane draws as a band beneath the ownership bands, with its rect derived
+  // from its blocks (ZONE_PAD + ZONE_HEAD of chrome above them). Row packing alone leaves that
+  // chrome eating the row gap, so the plane's band overlapped the bands above it by a few
+  // pixels. Shift the governance row down until the two bands clear each other by the same
+  // gutter adjacent vertical bands already have (COL_GAP minus their two pads).
+  const govZones = new Set(
+    (arch.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
+  );
+  const govRoots = roots.filter((p) => govZones.has(p.block.zone ?? ""));
+  let govShift = 0;
+  if (govRoots.length && govRoots.length < roots.length) {
+    const contentBottom = Math.max(
+      ...roots
+        .filter((p) => !govZones.has(p.block.zone ?? ""))
+        .map((p) => blocks[p.block.id].y + blocks[p.block.id].h),
+    );
+    const govTop = Math.min(...govRoots.map((p) => blocks[p.block.id].y));
+    const BAND_GAP = COL_GAP - ZONE_PAD * 2;
+    govShift = Math.max(0, contentBottom + ZONE_PAD + BAND_GAP + ZONE_PAD + ZONE_HEAD - govTop);
+    for (const p of govRoots) blocks[p.block.id].y += govShift;
+  }
+
   const width = MARGIN_X * 2 + top.width;
-  const height = marginTop + top.height + MARGIN_BOTTOM;
+  const height = marginTop + top.height + govShift + MARGIN_BOTTOM;
   // Column extents let the renderer derive band rects from the grid rather than from member
   // rects, so a band holding only a narrow actor no longer leaves a gutter beside it.
   const columns = top.colX.map((x, i) => ({ x: MARGIN_X + x, w: top.colW[i] }));
