@@ -274,10 +274,11 @@ blocks:
     note: >
       The organisation-operated crossing that replaces the missing vendor column, and the only
       component in this drawing that can hold a control at all: the vault for the key the
-      developer would otherwise paste, deny-by-default egress, the admission decision for the
-      remote surface, and the mirror that decides which build of the agent runs. Its items are
-      the traffic classes it brokers; the checks are the numbered pins on this block and its
-      edges, and the call-outs beneath.
+      developer would otherwise paste, deny-by-default egress for tool and connector traffic,
+      and the admission decision for the remote surface. Which build of the agent runs is the
+      mirror's decision, reached by the tool plane directly. Its items are the traffic classes
+      it brokers; the checks are the numbered pins on this block and its edges, and the
+      call-outs beneath.
     pack: aiGatewayTraffic
 
   - id: hostedTools
@@ -285,7 +286,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 3
     note: >
       Our own tool servers and service APIs — the same component as the endpoint's local
@@ -306,7 +307,7 @@ blocks:
     title: Enterprise data
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 4
     note: >
       The repositories, documents and systems of record behind our own tool servers. Ours, and
@@ -335,7 +336,7 @@ blocks:
     title: Private pkg registry
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 3
     note: >
       Where the vendor column used to be. This archetype's supply chain includes the agent
@@ -552,18 +553,19 @@ edges:
       Inference on a credential the gateway brokers, rather than the long-lived key the
       developer would otherwise paste into a dotfile. With no vendor between them, this is the
       whole model path — and in the common install it does not cross the gateway at all.
-  - from: aiGateway
+  - from: toolPlane
     to: registry
     path: primary
     bidir: true
+    route: vh
     label: pinned installs
-    route: hv
     note: >
-      Harness, extension and skill releases pulled from the mirror rather than straight from a
-      community channel. The same crossing that brokers the model call is the one that decides
-      which build of the agent is allowed to run.
+      Harness, extension and skill releases pulled straight from the mirror, pinned by digest — never from a community channel.
+      The endpoint's egress allowlist is what makes the mirror the only place the sandbox can
+      fetch from; the AI gateway brokers model and tool calls and is not on this path.
   - from: aiGateway
     to: hostedTools
+    route: hv
     path: primary
     bidir: true
     label: internal tool calls
@@ -628,7 +630,7 @@ pins:
         login steering a machine full of credentials is an account-compromise blast radius —
         and here admission is a bearer secret at best, never an owner-bound account.
     - risk: riskInsecureIntegratedComponent
-      at: aiGateway->registry
+      at: toolPlane->registry
       note: >
         The mirror decides which build of the agent runs. A tampered or unpinned release is
         code execution as the developer, on a machine that also holds their keys — the
@@ -694,7 +696,7 @@ pins:
       at: harness->aiGateway
       note: Session admission and per-call policy evaluated at the edge, outside the application being governed.
     - capability: capabilityMcpToolSecurity
-      at: aiGateway->registry
+      at: toolPlane->registry
       note: >
         Pin harness, extension and skill versions against the mirror; an update is a decision,
         because the update channel is this category's proven attack path.
@@ -785,6 +787,12 @@ pins:
         Instruction files, hooks and settings are configuration and are managed as code:
         reviewed on change, diffed on clone, never executed from a package a dependency dropped
         in.
+    - capability: capabilityEgressControl
+      at: toolPlane->registry
+      note: >
+        The endpoint's egress allowlist is what makes the mirror the only place it may fetch
+        from — a deny-by-default allowlist with one entry. The AI gateway is not on this path;
+        it never was for a package manager.
 walkthrough:
   title: The developer asks for a change
   moves: >-
@@ -884,16 +892,13 @@ scenarios:
         note: >
           A new release of the harness or one of its extensions is requested — the package
           manager runs as the developer, on the supply chain's proven path.
-      - follow: toolPlane->aiGateway
-        note: The fetch crosses our tier, bound for the mirror.
-      - follow: aiGateway->registry
+      - follow: toolPlane->registry
         note: >
-          The mirror is where a version is pinned and a review has happened. Straight to a
-          community channel, this step is publisher self-attestation and nothing else.
-      - follow: registry->aiGateway
-        note: The approved build comes back — the hop a compromised release actually arrives on.
-      - follow: aiGateway->toolPlane
-        note: Delivered through the crossing, digest-checked against the pin.
+          Straight to the mirror, the one destination the egress allowlist permits. The mirror
+          is where a version is pinned and a review has happened; straight to a community
+          channel, this step is publisher self-attestation and nothing else.
+      - follow: registry->toolPlane
+        note: The approved build comes back, digest-checked against the pin — the hop a compromised release actually arrives on.
       - follow: toolPlane->harness
         note: >
           The update loads into the running process with everything the agent has. A
@@ -921,9 +926,10 @@ deviations:
   - subject: The private package registry is drawn in the enterprise band, not as a tool source
     reason: >
       In this archetype the registry delivers the agent itself, not merely what the agent
-      calls. Drawing it beside the gateway rather than out among the downstream services says
-      the thing that matters: which build of the harness is permitted to run is a decision the
-      organisation makes at its own crossing.
+      calls. Drawing it in the enterprise band rather than out among the downstream services
+      says the thing that matters: which build of the harness is permitted to run is a
+      decision the organisation makes at its own mirror, which the tool plane reaches directly
+      under the endpoint's egress allowlist.
   - subject: The sandbox is a Sandboxed tools item, not a frame
     reason: >
       Of the ontology's three canonical sandbox forms, this one is a contained execution path

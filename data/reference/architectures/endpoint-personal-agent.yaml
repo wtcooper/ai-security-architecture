@@ -334,8 +334,8 @@ blocks:
     row: 2
     note: >
       The single bundled crossing this organisation operates: model proxying, MCP and tool
-      brokerage, and the skills plugin path in one tier. Every call out of the endpoint that is
-      not the relay leaves through here.
+      brokerage, and skills admission in one tier. Every call out of the endpoint that is not
+      the relay or a pull from the mirror leaves through here.
     items:
       - id: llmProxy
         label: Model proxy
@@ -349,8 +349,9 @@ blocks:
         label: Skills broker
         icon: gear
         note: >
-          The signed, pinned path by which skills and images reach the sandbox — the third
-          traffic class this one tier carries.
+          Admission for skills: which skills and images are permitted at all, and the pins the
+          mirror serves against. The bytes do not pass through here — the sandbox pulls them
+          from the mirror directly.
 
   - id: registry
     kind: external
@@ -671,22 +672,16 @@ edges:
       Our systems of record, reached under the owner's scope rather than a standing service
       account — and logged on our side of the boundary.
   - from: toolPlane
-    to: gateway
-    path: primary
-    route: hv
-    label: signed installs
-    note: >
-      The install path, one direction only: skills and images come in from the mirror, and
-      nothing leaves this way.
-  - from: gateway
     to: registry
     path: primary
     bidir: true
     route: hv
-    label: signed pulls
+    label: pinned installs
     note: >
-      The crossing serves installs from the mirror and nowhere else — which build of a skill
-      or image is permitted to run is a decision made here, against the registry's pins.
+      Skills, images and packages pulled straight from the mirror, pinned by digest — never
+      from a community hub. The sandbox's egress policy is what makes the mirror the only
+      place it can fetch from; the AI gateway brokers model and tool calls and is not on this
+      path.
 pins:
   risks:
     - risk: riskInsecureIntegratedComponent
@@ -755,7 +750,7 @@ pins:
         also the completion that decides the next tool call, so the channel and the actuator
         are the same hop. The gateway's record is the only place the pattern could be seen.
     - risk: riskToolSourceProvenance
-      at: toolPlane->gateway
+      at: toolPlane->registry
       note: Skills are prose plus executable code; the registry moves the review earlier, it does not remove it.
     - risk: riskRogueActions
       at: remoteTools->downstream
@@ -827,7 +822,7 @@ pins:
       at: gateway->provider
       note: The inspection a hosted product would have applied, run by the organisation on both legs.
     - capability: capabilityMcpToolSecurity
-      at: gateway->registry
+      at: toolPlane->registry
       note: >
         Provenance, signing and version pinning on the supply path — an update is a decision,
         and drift between what was reviewed and what installs is an alert.
@@ -882,6 +877,12 @@ pins:
       note: >
         Every daemon that reaches the crossing is inventoried there — the one archetype whose
         incident says owners were found by scanning, not by inventory.
+    - capability: capabilityEgressControl
+      at: toolPlane->registry
+      note: >
+        The sandbox's egress policy is what makes the mirror the only place it may fetch from —
+        a deny-by-default allowlist with one entry. The AI gateway is not on this path; it never
+        was for a package manager.
 walkthrough:
   title: The owner asks the agent to do something
   moves: >-
@@ -1006,13 +1007,11 @@ scenarios:
     steps:
       - follow: harness->toolPlane
         note: The install runs as a shell command inside the sandbox.
-      - follow: toolPlane->gateway
-        note: The pull request reaches the crossing — the only tier allowed to serve installs.
-      - follow: gateway->registry
-        note: Served from the mirror — scanned, signed, pinned — and from nowhere else.
-      - follow: registry->gateway
-        note: The signed skill comes back through the crossing.
-      - follow: harness->toolPlane
+      - follow: toolPlane->registry
+        note: Served from the mirror — scanned, signed, pinned — and from nowhere else; the egress policy allows no other source.
+      - follow: registry->toolPlane
+        note: The signed skill comes back into the sandbox.
+      - follow: toolPlane->harness
         note: >
           Its prerequisites run as shell — inside the boundary, where a stealer finds no
           keychain and no key. Signing and pinning admit exactly this step; containment is

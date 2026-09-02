@@ -240,7 +240,7 @@ blocks:
     kind: provider
     title: Model provider
     zone: zoneExternal
-    col: 4
+    col: 5
     row: 0
     cosaiComponent: componentModelServing
     note: The published inference interface. What runs behind it is the provider's and is not drawn.
@@ -257,7 +257,23 @@ blocks:
     col: 3
     row: 2
     cosaiComponent: componentTools
-    pack: toolServicesRemote
+    items:
+      - id: mcpServers
+        label: MCP servers
+        icon: plug
+      - id: apis
+        label: APIs & connectors
+        icon: plug
+      - id: a2a
+        label: A2A peer agents
+        icon: agent
+      - id: sandboxedTools
+        label: Sandboxed tools
+        icon: shield
+        note: >
+          Code execution in an isolated runtime, admitted by the registry like any other tool
+          — the loop writes code; only the sandbox should run it, and what it installs comes
+          from the mirror and nowhere else.
     note: >
       Our own tool servers and service APIs — the same component as the external surface, at a
       different band. Every call carries the conversing user's grant rather than the service's
@@ -289,7 +305,7 @@ blocks:
     kind: service
     title: Tool services
     zone: zoneExternal
-    col: 4
+    col: 5
     row: 2
     cosaiComponent: componentTools
     pack: toolServicesRemote
@@ -307,7 +323,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 4
+    col: 5
     row: 3
     pack: downstreamPublic
     note: >
@@ -378,8 +394,8 @@ blocks:
     title: Private pkg registry
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 3
-    row: 0
+    col: 4
+    row: 2
     note: >
       The organisation-maintained mirror that serves whatever the sandbox installs: a
       dependency the agent's generated code needs, a tool package a step pulls in. Read-only
@@ -428,15 +444,16 @@ edges:
     note: >
       Every network call out of the loop crosses here on a brokered credential scoped to the
       conversing user. The agent holds no standing keys of its own.
-  - from: gateway
+  - from: internalTools
     to: registry
     path: primary
     bidir: true
     label: pinned installs
     note: >
-      What a sandboxed step installs is pulled from the mirror through the crossing, pinned by
-      digest — never straight from a public registry. The same crossing that brokers the tool
-      call decides which build may run inside the sandbox.
+      What a sandboxed step installs is pulled straight from the mirror, pinned by digest —
+      never from a public registry. The sandbox's network policy is what makes the mirror the
+      only place it can fetch from; the AI gateway brokers model and tool calls and is not on
+      this path.
   - from: gateway
     to: provider
     path: external
@@ -549,7 +566,7 @@ pins:
       note: Per-token inference behind a public chat surface makes unbounded conversation a spend problem.
 
     - risk: riskToolSourceProvenance
-      at: gateway->registry
+      at: internalTools->registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task or a tool
         result; the mirror decides which build answers to that name, and whoever can write to
@@ -669,6 +686,12 @@ pins:
         Read-only to agents. A cache a sandbox can write to is a shared medium between agent
         instances that were meant to be isolated, and a proxying mirror is a road to the
         internet the sandbox was not supposed to have.
+    - capability: capabilityEgressControl
+      at: internalTools->registry
+      note: >
+        The sandbox's network policy is what makes the mirror the only place it may fetch from —
+        a deny-by-default allowlist with one entry. The AI gateway is not on this path; it never
+        was for a package manager.
 walkthrough:
   title: A turn that ends in an action
   moves: >-
@@ -802,15 +825,19 @@ scenarios:
   - title: A dependency arrives with the task
     steps:
       - follow: agent->gateway
-        note: A sandboxed step needs a package its generated code imports, on a name the model chose.
-      - follow: gateway->registry
-        note: The pull goes to the mirror through the crossing, never to a public registry.
-      - follow: registry->gateway
+        note: A step needs a package its generated code imports, on a name the model chose.
+      - follow: gateway->internalTools
+        note: The code runs in the sandboxed tools, admitted like any other tool call.
+      - follow: internalTools->registry
+        note: The sandbox pulls from the mirror directly — the one destination its network policy allows.
+      - follow: registry->internalTools
         note: The admitted build comes back, pinned by digest — the hop a poisoned package actually arrives on.
+      - follow: internalTools->gateway
+        note: The step's result crosses back like any tool result.
       - follow: gateway->agent
         note: >
-          It runs inside the sandbox with the step's grant. The mirror stays read-only to the
-          agent: a cache it could write to would be a message board between sandboxes.
+          And the loop continues. The mirror stays read-only to the sandbox: a cache it could
+          write to would be a message board between sandboxes.
 
 deviations:
   - subject: In-process tool handlers are drawn with no edges

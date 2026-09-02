@@ -289,7 +289,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 3
     note: >
       Our own tool servers and service APIs — the same component as the endpoint's local
@@ -310,7 +310,7 @@ blocks:
     title: Enterprise data
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 4
     note: >
       The repositories, documents and systems of record behind our own tool servers. Ours, and
@@ -487,7 +487,7 @@ blocks:
     title: Private pkg registry
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 3
     note: >
       The organisation-maintained mirror that serves what the sandboxed tools install:
@@ -590,18 +590,19 @@ edges:
     bidir: true
     route: vh
     note: The vendor's service calls the model provider; everything behind that interface is theirs.
-  - from: aiGateway
+  - from: toolPlane
     to: registry
     path: primary
     bidir: true
+    route: vh
     label: pinned installs
-    route: hv
     note: >
-      Dependencies, extensions and skills pulled from the mirror through the crossing, pinned
-      by digest — never straight from a community channel. The same crossing that brokers the
-      tool calls decides which build may run on the machine.
+      Dependencies, extensions and skills pulled straight from the mirror, pinned by digest — never from a community channel.
+      The endpoint's egress allowlist is what makes the mirror the only place the sandbox can
+      fetch from; the AI gateway brokers model and tool calls and is not on this path.
   - from: aiGateway
     to: hostedTools
+    route: hv
     path: primary
     bidir: true
     label: internal tool calls
@@ -718,7 +719,7 @@ pins:
         A scheduled or hosted session has no human to notice it looping; seat metering is the
         only meter, and the stop is the credential.
     - risk: riskToolSourceProvenance
-      at: aiGateway->registry
+      at: toolPlane->registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task, a
         manifest or a tool result; the mirror decides which build answers to that name.
@@ -822,6 +823,12 @@ pins:
         Digest and signature verification at admission to the mirror, and an inventory of which
         packages, extensions and skills may run — the registered embodiment of artifact
         scanning.
+    - capability: capabilityEgressControl
+      at: toolPlane->registry
+      note: >
+        The endpoint's egress allowlist is what makes the mirror the only place it may fetch
+        from — a deny-by-default allowlist with one entry. The AI gateway is not on this path;
+        it never was for a package manager.
 walkthrough:
   title: The developer asks for a change
   moves: >-
@@ -930,14 +937,10 @@ scenarios:
     steps:
       - follow: harness->toolPlane
         note: A step needs a package the generated code imports, on a name the model chose.
-      - follow: toolPlane->aiGateway
-        note: The pull leaves the machine through the crossing.
-      - follow: aiGateway->registry
-        note: Served from the mirror — scanned, pinned — and from nowhere else.
-      - follow: registry->aiGateway
+      - follow: toolPlane->registry
+        note: The sandbox pulls from the mirror directly — the one destination the egress allowlist permits.
+      - follow: registry->toolPlane
         note: The admitted build comes back, digest-checked — the hop a poisoned package actually arrives on.
-      - follow: aiGateway->toolPlane
-        note: Delivered into the sandbox.
       - follow: toolPlane->harness
         note: And it runs with the developer's files, credentials and sessions around it.
 
@@ -957,10 +960,11 @@ deviations:
   - subject: The crossing bundles an egress-proxy function
     reason: >
       A LiteLLM-class tier is not a general web proxy, but this catalogue draws the endpoint's
-      arbitrary-destination traffic — package and web fetches — over the same crossing that
-      brokers model and tool calls, because the duties are enforced together even where they
-      are implemented as separate proxies. An organisation running a distinct egress/SSE tier
-      splits the block and changes nothing else; the personal agent records the same bundling.
+      remote tool and connector traffic over the same crossing that brokers model calls,
+      because the duties are enforced together even where they are implemented as separate
+      proxies. Package installs are not bundled: the sandbox pulls from the mirror directly,
+      under the endpoint's egress allowlist, and the crossing never sees them. An organisation
+      running a distinct egress/SSE tier splits the block and changes nothing else.
   - subject: The vendor's own path is admitted, not inspected
     reason: >
       A pinned TLS session to an approved vendor cannot be inspected without breaking the
