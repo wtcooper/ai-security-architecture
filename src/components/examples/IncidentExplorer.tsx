@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Chip } from "@/components/Chips";
 import { RiskMap } from "@/components/map/RiskMap";
 import { PHASE_META } from "@/components/PhaseRail";
@@ -39,11 +40,15 @@ function stepOverlay(archetype: Archetype, step: IncidentStep): StepOverlay {
 }
 
 export function IncidentExplorer() {
-  const [incidentId, setIncidentId] = useState(incidents[0].id);
+  const params = useSearchParams();
+  const linked = params.get("incident");
+  const [incidentId, setIncidentId] = useState(
+    linked && incidents.some((i) => i.id === linked) ? linked : incidents[0].id,
+  );
   const [stepIndex, setStepIndex] = useState(0);
   // Two schematics of the same flow: the CoSAI component map, or the incident's reference
   // architecture. The toggle survives step changes but resets nothing — same story, other lens.
-  const [view, setView] = useState<"map" | "architecture">("map");
+  const [view, setView] = useState<"map" | "architecture">("architecture");
 
   const incident = incidents.find((i) => i.id === incidentId)!;
   const step = incident.steps[stepIndex];
@@ -152,7 +157,7 @@ export function IncidentExplorer() {
               <p className="eyebrow mt-5">CoSAI risks</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {step.risks.map((id) => (
-                  <Link key={id} href={`/map?risk=${id}&phase=${step.phase}`}>
+                  <Link key={id} href={`/risks?risk=${id}`} title="Open the risk">
                     <Chip tone="exposed">{riskTitle(id)}</Chip>
                   </Link>
                 ))}

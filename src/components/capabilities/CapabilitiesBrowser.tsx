@@ -108,11 +108,12 @@ export function CapabilitiesBrowser() {
             onClick={() => setDrawerOpen(true)}
             className="rounded-lg border border-line bg-paper px-3.5 py-2 text-[13px] font-semibold text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
           >
-            Edit taxonomy
-            {hasEdits && <span className="ml-1.5 font-normal text-introduced">· edited</span>}
+            Assess your posture
+            {hasEdits && <span className="ml-1.5 font-normal text-introduced">· in progress</span>}
           </button>
         </div>
 
+        {hasEdits && (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-paper px-4 py-2.5">
           <span className="eyebrow">Coverage</span>
           {CAPABILITY_STATUSES.map((s) => {
@@ -138,11 +139,12 @@ export function CapabilitiesBrowser() {
               onClick={() => setDrawerOpen(true)}
               className="font-semibold text-introduced hover:underline"
             >
-              Edit taxonomy
+              Assess your posture
             </button>{" "}
-            to record your own posture.
+            to record your own.
           </span>
         </div>
+        )}
 
         <div className="overflow-x-auto rounded-xl border border-line bg-paper">
           <div className="grid min-w-[860px] grid-cols-[180px_repeat(3,minmax(0,1fr))]">

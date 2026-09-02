@@ -44,7 +44,7 @@ export function ArchitecturesBrowser() {
   // Index into the walk list, or null for the resting drawing. Every walk behaves identically:
   // the first is the complete walk through the architecture and the rest are variations, but
   // nothing about the selection treats them differently.
-  const [walkIndex, setWalkIndex] = useState<number | null>(null);
+  const [walkIndex, setWalkIndex] = useState<number | null>(0);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
@@ -58,7 +58,8 @@ export function ArchitecturesBrowser() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.history.replaceState(null, "", `?archetype=${archetypeId}`);
-  }, [archetypeId]);
+    document.title = `${archetype.title} · Reference architectures`;
+  }, [archetypeId, archetype.title]);
 
   const shown = archetypesInOrder.filter((a) => !surface || a.surface === surface);
 
@@ -66,7 +67,7 @@ export function ArchitecturesBrowser() {
 
   const select = (id: string) => {
     setArchetypeId(id);
-    setWalkIndex(null);
+    setWalkIndex(0);
     setHighlight(null);
   };
   const onWalk = (i: number | null) => {
@@ -86,12 +87,9 @@ export function ArchitecturesBrowser() {
         eyebrow={`${archetypesInOrder.length} application archetypes · authored`}
         title="Reference architectures"
         lead="Target-state architectures in the reference-architecture grammar the industry actually reads: capability blocks connected by typed data paths, the capabilities to deploy numbered onto the drawing, the risks tagged where they surface, and a numbered walkthrough paired with its sequence diagram. Built to be copied, not audited against."
-      />
-
-      <div className="mx-auto w-full max-w-[1500px] px-6 py-8">
-        {/* --- Picker: surface filter pills + a searchable dropdown -------------------- */}
-        <div className="rounded-xl border border-line bg-paper px-5 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      >
+        {/* --- Picker: a searchable dropdown + surface filter pills -------------------- */}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
             <ArchPicker options={shown} current={archetype} onSelect={select} />
             <div className="flex flex-wrap gap-1.5">
               <FilterPill active={!surface} onClick={() => setSurface(null)}>
@@ -110,11 +108,12 @@ export function ArchitecturesBrowser() {
                 </FilterPill>
               ))}
             </div>
-          </div>
         </div>
+      </PageHeader>
 
+      <div className="mx-auto w-full max-w-[1500px] px-6 py-8">
         {/* --- Selected architecture: summary with the diagram ------------------------- */}
-        <div className="mt-7 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div className="max-w-3xl">
             <p className="eyebrow">
               {surfaces.find((s) => s.id === archetype.surface)?.title} ·{" "}
@@ -124,13 +123,6 @@ export function ArchitecturesBrowser() {
               <h2 className="display text-[20px] font-bold leading-tight text-ink">
                 {archetype.title}
               </h2>
-              <span
-                title="Every reference architecture in this catalogue is under active review — treat the drawing, pins and mappings as draft rather than finalised."
-                className="ident cursor-help rounded-full border px-2 py-[3px] text-[10.5px] font-semibold"
-                style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}
-              >
-                Under review
-              </span>
             </div>
             <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">{summary}</p>
             <p className="mt-2 flex flex-wrap gap-x-3 text-[11.5px] text-ink-3">

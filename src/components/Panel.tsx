@@ -1,103 +1,56 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+/** Page chrome shared by every section: the ladder and the page header. */
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 /**
- * Disclosure row. Reference content stays folded away by default so these pages scan as a
- * list of names, not a wall of prose.
+ * The site's ladder, drawn on every page header so a reader always knows which rung they are
+ * on and what sits below it. Incidents replay on the map and the drawings, so they sit beside
+ * the ladder rather than on it.
  */
-export function Panel({
-  id,
-  title,
-  meta,
-  accent = "var(--ink-3)",
-  openAll,
-  deepLinkId,
-  children,
-}: {
-  id: string;
-  title: string;
-  meta?: React.ReactNode;
-  accent?: string;
-  /** Nudge from an "expand all" toggle; changes force the panel open or closed. */
-  openAll?: { value: boolean; nonce: number };
-  /** When the page's ?id= matches, open and scroll into view on load. */
-  deepLinkId?: string | null;
-  children: React.ReactNode;
-}) {
-  const [self, setSelf] = useState(false);
-  const [lastNonce, setLastNonce] = useState(openAll?.nonce);
-  const ref = useRef<HTMLDivElement>(null);
+const LADDER = [
+  { label: "Risk map", href: "/map", matches: ["/map"] },
+  {
+    label: "Taxonomy",
+    href: "/risks",
+    matches: ["/components", "/risks", "/controls", "/personas", "/frameworks"],
+  },
+  { label: "Capabilities", href: "/capabilities", matches: ["/capabilities"] },
+  { label: "Architectures", href: "/reference", matches: ["/reference"] },
+];
 
-  // "Expand all" arrives as a value plus a nonce. Adjust during render rather than in an
-  // effect, so the panel never paints in the stale state first.
-  if (openAll && openAll.nonce !== lastNonce) {
-    setLastNonce(openAll.nonce);
-    setSelf(openAll.value);
-  }
-
-  // A deep-linked panel is open by definition — derived, not stored.
-  const linked = deepLinkId === id;
-  const open = self || linked;
-
-  useEffect(() => {
-    if (linked) ref.current?.scrollIntoView({ block: "center" });
-  }, [linked]);
-
+export function Ladder({ className = "" }: { className?: string }) {
+  const pathname = usePathname();
+  const onIncidents = pathname.startsWith("/examples");
   return (
-    <div ref={ref} id={id} className="border-b border-line last:border-b-0 scroll-mt-20">
-      <button
-        onClick={() => setSelf(!open)}
-        aria-expanded={open}
-        className="group flex w-full items-center gap-4 py-4 text-left"
-      >
-        <span
-          className="h-6 w-[3px] shrink-0 rounded-full transition-opacity"
-          style={{ background: accent, opacity: open ? 1 : 0.35 }}
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1">
-          <span className="display block text-[16px] font-semibold text-ink group-hover:text-introduced transition-colors">
-            {title}
+    <nav aria-label="Where this page sits" className={`flex flex-wrap items-center gap-1 ${className}`}>
+      {LADDER.map((rung, i) => {
+        const current = rung.matches.some((m) => pathname.startsWith(m));
+        return (
+          <span key={rung.label} className="flex items-center gap-1">
+            {i > 0 && <span className="text-[10px] text-line-strong" aria-hidden>›</span>}
+            <Link
+              href={rung.href}
+              aria-current={current ? "page" : undefined}
+              className={`rounded-full border px-2 py-[2px] text-[10.5px] font-semibold uppercase tracking-[0.06em] transition-colors ${
+                current
+                  ? "border-ink bg-ink text-white"
+                  : "border-line text-ink-3 hover:border-line-strong hover:text-ink"
+              }`}
+            >
+              <span className="mr-1 opacity-60">{i + 1}</span>
+              {rung.label}
+            </Link>
           </span>
-          {meta && <span className="mt-0.5 block text-[13px] text-ink-3">{meta}</span>}
+        );
+      })}
+      {onIncidents && (
+        <span className="ml-1 rounded-full border border-ink bg-ink px-2 py-[2px] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white">
+          Incidents · replayed on 1 and 4
         </span>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          aria-hidden
-          className="shrink-0 text-ink-3 transition-transform"
-          style={{ transform: open ? "rotate(180deg)" : "none" }}
-        >
-          <path
-            d="M4 6.5 L8 10.5 L12 6.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
-      {open && <div className="pb-7 pl-7 pr-1">{children}</div>}
-    </div>
-  );
-}
-
-export function ExpandAll({ onToggle }: { onToggle: (open: boolean) => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <button
-      onClick={() => {
-        const next = !open;
-        setOpen(next);
-        onToggle(next);
-      }}
-      className="text-[13px] font-semibold text-introduced hover:underline"
-    >
-      {open ? "Collapse all" : "Expand all"}
-    </button>
+      )}
+    </nav>
   );
 }
 
@@ -115,6 +68,7 @@ export function PageHeader({
   return (
     <header className="border-b border-line bg-paper">
       <div className="mx-auto max-w-5xl px-6 py-9">
+        <Ladder className="mb-4" />
         <p className="eyebrow">{eyebrow}</p>
         <h1 className="display mt-2 text-[34px] font-bold leading-tight text-ink">{title}</h1>
         <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-ink-2">{lead}</p>

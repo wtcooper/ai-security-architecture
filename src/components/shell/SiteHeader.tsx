@@ -5,28 +5,28 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * The nav, grouped so nine sections read as three: everything CoSAI — the walkthrough and
- * the taxonomy behind it — under one Risk Map dropdown, with the two destination sections
- * standing alone. Everything sits right, next to the repository link.
+ * The nav is the site's ladder: the risk map, the taxonomy behind it, the capabilities that
+ * implement its controls, and the architectures that place them — plus the incidents that
+ * replay on the map and the drawings. Everything sits right, next to the repository link.
  */
 type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
 const NAV: NavItem[] = [
+  { href: "/map", label: "Risk map" },
   {
-    label: "Risk Map",
+    label: "Taxonomy",
     children: [
-      { href: "/map", label: "Risk Map Walkthrough" },
       { href: "/components", label: "Components" },
       { href: "/risks", label: "Risks" },
       { href: "/controls", label: "Controls" },
-      { href: "/capabilities", label: "Capabilities" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },
     ],
   },
-  { href: "/reference", label: "Reference Architectures" },
+  { href: "/capabilities", label: "Capabilities" },
+  { href: "/reference", label: "Architectures" },
   { href: "/examples", label: "Incidents" },
 ];
 

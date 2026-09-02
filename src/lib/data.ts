@@ -74,6 +74,10 @@ export function incidentStepsFor(targetId: string) {
   );
 }
 
+/** Every incident whose case study names this risk. */
+export const incidentsForRisk = (riskId: string) =>
+  incidents.filter((inc) => inc.risks.includes(riskId));
+
 /**
  * What a component is called throughout the UI. See src/lib/naming.ts — CoSAI's titles are
  * built for a table and collide on a diagram, so a small number are renamed, consistently

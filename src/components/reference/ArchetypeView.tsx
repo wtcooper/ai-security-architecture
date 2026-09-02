@@ -33,13 +33,16 @@ interface ArchetypeViewProps {
 }
 
 export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
-  const [tab, setTab] = useState<Tab>("overview");
+  // Opens on the flows tab with the walkthrough traced: a reader's first sight of a drawing is
+  // the numbered complete walk and its sequence, not an empty canvas waiting for a click.
+  const [tab, setTab] = useState<Tab>("flows");
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const guidance = guidanceByArchetype.get(archetype.id);
 
   const go = (next: Tab) => {
     setTab(next);
     if (next !== "flows") onWalk(null);
+    else if (walkIndex === null) onWalk(0);
     if (next !== "capabilities" && next !== "risks") onHighlight(null);
   };
 
@@ -64,14 +67,14 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
       </div>
       <FlowLegend className="mt-3 px-1" />
 
-      <div className="mt-5 flex flex-wrap gap-1 border-b border-line" role="tablist">
+      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => go(t.id)}
-            className={`-mb-px rounded-t-md border-b-2 px-3.5 py-2 text-[13px] transition-colors ${
+            className={`-mb-px shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-3.5 py-2 text-[13px] transition-colors ${
               tab === t.id
                 ? "border-ink font-semibold text-ink"
                 : "border-transparent text-ink-3 hover:text-ink"
