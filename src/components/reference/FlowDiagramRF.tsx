@@ -27,7 +27,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
 import { blockTab, BLOCK_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
@@ -47,6 +47,11 @@ type BlockNodeData = {
   dim: boolean;
   /** Capability id -> chip number, so an item can show what it implements. */
   capNumber?: Map<string, number>;
+  /**
+   * Capabilities pinned directly on a governance call-out. They join the call-out's own chip
+   * row instead of hanging off a border the call-out no longer draws.
+   */
+  pinnedCaps?: string[];
   /** Shows the shared hover card — items use it so each icon can explain itself. */
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
 };
@@ -76,16 +81,16 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   }
   const style = block.kind === "actor" ? null : BLOCK_STYLE[block.kind];
   const cells = itemCells(block, { x: 0, y: 0, w, h });
+  // A governance call-out is a control, not a component, so it gets no component box: the
+  // title tab, the icon and the chip numbers stand on the band by themselves.
+  const boxless = block.kind === "actor" || block.kind === "governance";
   return (
     <div
       style={{
         width: w,
         height: h,
-        background: block.kind === "actor" ? "transparent" : "var(--paper, #fff)",
-        border:
-          block.kind === "actor"
-            ? "none"
-            : `${block.kind === "governance" ? 1 : 1.5}px ${style?.dash ? "dashed" : "solid"} ${style?.stroke}`,
+        background: boxless ? "transparent" : "var(--paper, #fff)",
+        border: boxless ? "none" : `1.5px ${style?.dash ? "dashed" : "solid"} ${style?.stroke}`,
         borderRadius: 8,
         position: "relative",
         fontFamily: "inherit",
@@ -156,9 +161,9 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
           <svg width="26" height="26" viewBox="0 0 26 26">
             <FlowIcon name={block.icon} x={13} y={13} size={24} />
           </svg>
-          {(block.capabilities?.length ?? 0) > 0 && (
+          {(block.capabilities?.length ?? 0) + (data.pinnedCaps?.length ?? 0) > 0 && (
             <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
-              {block.capabilities!.map((id) => (
+              {[...new Set([...(block.capabilities ?? []), ...(data.pinnedCaps ?? [])])].map((id) => (
                 <span
                   key={id}
                   style={{
@@ -517,15 +522,12 @@ export function FlowDiagramRF({
       .filter((b) => !govZoneIds.has(b.zone ?? ""))
       .map((b) => rects[b.id])
       .filter(Boolean);
-    const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
     // bandTop comes from the layout, which knows how far the first row's risk-tag stacks rise
     // above their blocks. Recomputing it from block rects alone drops those tags outside the band.
     const bandTop = colRects.length ? layout.bandTop : 0;
     const bandBottom = colRects.length
       ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD
       : 0;
-    const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
-    const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
     // A band spans the GRID COLUMNS its members occupy, not the members' own rects. A band
     // holding only a narrow actor figure used to draw 108px wide against a 176px column and
     // leave a visible gutter beside it; deriving from the column closes that.
@@ -540,12 +542,14 @@ export function FlowDiagramRF({
     for (const zone of archetype.zones ?? []) {
       const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
       if (!rs.length) continue;
-      const isGov = zone.owner === "governance";
+      // The governance band's rect is the layout's: as wide as the ownership bands together,
+      // one band gutter beneath them — never derived from its own call-outs.
+      const gov = zone.owner === "governance" ? layout.govBand : undefined;
       const span = spanOf(zone.id);
-      const x0 = isGov ? fullLeft : (span?.x0 ?? Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
-      const x1 = isGov ? fullRight : (span?.x1 ?? Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
-      const y0 = isGov ? Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : bandTop;
-      const y1 = isGov ? Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD : bandBottom;
+      const x0 = gov ? gov.x : (span?.x0 ?? Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
+      const x1 = gov ? gov.x + gov.w : (span?.x1 ?? Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
+      const y0 = gov ? gov.y : bandTop;
+      const y1 = gov ? gov.y + gov.h : bandBottom;
       nodes.push({
         id: `__zone_${zone.id}`,
         type: "zone",
@@ -570,7 +574,18 @@ export function FlowDiagramRF({
         type: "block",
         position: parentRect ? { x: r.x - parentRect.x, y: r.y - parentRect.y } : { x: r.x, y: r.y },
         parentId: block.parent,
-        data: { block, w: r.w, h: r.h, dim: false, onItemEnter: cardAt, capNumber },
+        data: {
+          block,
+          w: r.w,
+          h: r.h,
+          dim: false,
+          onItemEnter: cardAt,
+          capNumber,
+          pinnedCaps:
+            block.kind === "governance"
+              ? archetype.pins.capabilities.filter((p) => p.at === id).map((p) => p.capability)
+              : undefined,
+        },
         draggable: true,
         selectable: false,
         // A container sits behind what it contains, deeper nesting drawing progressively above.
@@ -591,6 +606,7 @@ export function FlowDiagramRF({
     }
     for (const [at, pins] of chipGroups) {
       if (at.includes("->")) continue; // edge-anchored chips render inside the edge itself
+      if (byId.get(at)?.kind === "governance") continue; // drawn in the call-out's own chip row
       const blockRect = rects[at];
       if (!blockRect) continue;
       const spots = chipSpots(pins.length, blockRect, undefined);

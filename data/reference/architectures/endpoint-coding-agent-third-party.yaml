@@ -255,7 +255,7 @@ blocks:
     title: AI gateway
     zone: zoneCloud
     col: 3
-    row: 1
+    row: 2
     note: >
       The crossing into our own systems, and the one general-purpose exit from the endpoint:
       how both the local application and the vendor's hosted sessions reach org data, and the
@@ -270,7 +270,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 3
     note: >
       Our own tool servers and service APIs — the same component as the endpoint's local
@@ -291,7 +291,7 @@ blocks:
     title: Enterprise data
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 4
     note: >
       The repositories, documents and systems of record behind our own tool servers. Ours, and
@@ -319,7 +319,7 @@ blocks:
     kind: provider
     title: Vendor service
     zone: zoneVendor
-    col: 5
+    col: 4
     row: 0
     note: >
       The vendor's backend and the published surfaces of its control plane — outside the
@@ -344,7 +344,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneExternal
-    col: 6
+    col: 5
     row: 2
     note: >
       Third-party servers and connectors — the same component again, out where nobody we
@@ -365,7 +365,7 @@ blocks:
     title: Model provider
     cosaiComponent: componentModelServing
     zone: zoneExternal
-    col: 6
+    col: 5
     row: 1
     note: The inference API behind the vendor's service. The completion drives writes, commands and clicks.
     items:
@@ -379,7 +379,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 6
+    col: 5
     row: 3
     note: >
       What the tool plane reaches on the open internet — dependency registries, the web, and
@@ -514,6 +514,7 @@ edges:
     to: aiGateway
     path: primary
     bidir: true
+    route: hv
     label: model & tool calls
     note: >
       The one general-purpose crossing: the vendor session, every model call inside it, and
@@ -522,7 +523,6 @@ edges:
     to: aiGateway
     path: primary
     bidir: true
-    route: hv
     label: brokered calls
     note: >
       The local tool surface reaches nothing on its own. Connectors and remote servers are
@@ -543,12 +543,12 @@ edges:
     to: provider
     path: external
     bidir: true
+    route: vh
     note: The vendor's service calls the model provider; everything behind that interface is theirs.
   - from: aiGateway
     to: hostedTools
     path: primary
     bidir: true
-    route: vh
     label: internal tool calls
     note: >
       The path the deployment exists for: our own servers and APIs, admitted by the catalogue
@@ -566,7 +566,6 @@ edges:
     path: external
     bidir: true
     label: brokered external calls
-    route: vh
     note: Admission is the catalogue; every call carries a scoped, short-lived credential.
   - from: extTools
     to: downstream
@@ -749,8 +748,10 @@ walkthrough:
         allowlist entry.
     - follow: vendorService->provider
       note: The vendor's service calls the model provider behind it; everything past that interface is theirs.
+    - follow: provider->vendorService
+      note: The completion comes back to the vendor's service.
     - follow: vendorService->harness
-      note: The completion returns down the same session — unauthenticated content, now the plan.
+      note: And down the same session into the loop — unauthenticated content, now the plan.
     - follow: harness->developer
       note: >
         Consequential actions surface for approval before they run — the gate the whole
@@ -785,6 +786,8 @@ scenarios:
           only because the harness dialled out first.
       - follow: harness->toolPlane
         note: The work happens locally, with the developer's files, credentials and sessions around it.
+      - follow: toolPlane->harness
+        note: The result comes back to the loop.
       - follow: harness->vendorService
         note: The result goes back up the same outbound session.
       - follow: vendorService->remoteDevice
@@ -795,12 +798,32 @@ scenarios:
           controls this page pins.
   - title: A poisoned document phones home
     steps:
-      - follow: hostedTools->orgData
-        note: A hidden instruction in a source file or document is read into context.
       - follow: harness->aiGateway
-        note: The instruction shapes the completion, which the loop treats as the plan.
+        note: The loop asks for a document — a ticket, a wiki page, a shared file — through our crossing.
+      - follow: aiGateway->hostedTools
+        note: Brokered to the connector that can read it.
+      - follow: hostedTools->orgData
+        note: A hidden instruction in the document is read along with the document.
+      - follow: orgData->hostedTools
+        note: The content comes back as a tool result.
+      - follow: hostedTools->aiGateway
+        note: Across the crossing, where inspection is possible and rarely configured.
+      - follow: aiGateway->harness
+        note: And into context, where the loop cannot tell the instruction from the task.
+      - follow: harness->vendorService
+        note: The poisoned context goes up to the vendor for inference, on the SSO session.
+      - follow: vendorService->provider
+        note: Nothing on this hop knows the context is hostile.
+      - follow: provider->vendorService
+        note: The completion carries the attacker's instruction as the plan.
+      - follow: vendorService->harness
+        note: The loop treats it as the next step.
+      - follow: harness->toolPlane
+        note: A shell command or edit tool bundles a token, a file or a key into a request.
       - follow: toolPlane->aiGateway
         note: The exfiltration attempt has to cross the egress allowlist — the last control standing.
+      - follow: aiGateway->extTools
+        note: To an allowlisted destination the attacker controls, or a domain nobody reviewed.
   - title: A hosted session reaches back
     steps:
       - follow: vendorService->aiGateway

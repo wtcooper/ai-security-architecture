@@ -442,7 +442,7 @@ function checkCapabilities(
  *     one-way edge walked backwards is a wrong diagram, not a wrong scenario.
  */
 const BLOCK_KINDS = new Set(["actor", "service", "provider", "external", "governance", "boundary", "origin"]);
-const PATH_CLASSES = new Set(["primary", "external", "governance"]);
+const PATH_CLASSES = new Set(["primary", "external"]);
 const ICONS = new Set<string>(ICON_NAMES);
 
 function checkArchetypes(
@@ -628,14 +628,35 @@ function checkArchetypes(
     if (!arch.walkthrough) fail(`${where}: needs a walkthrough — the idealised main use`);
     if (arch.walkthrough && !arch.walkthrough.moves?.trim())
       fail(`${where} walkthrough: needs a "moves" line saying what the architecture is for`);
+    // A walk is one connected sequence. Every step after the first has to touch a block the
+    // walk has already reached — as the next hop, or as a second input converging on a block
+    // already on the path. A block nested in a container counts as reached when the container
+    // is. Without this, a scenario could name three edges in three corners of the drawing and
+    // call it a data flow; the third-party coding agent's "poisoned document" walk did.
+    const parentOf = new Map(arch.blocks.map((b) => [b.id, b.parent]));
+    const lineage = (id: string) => {
+      const out = [id];
+      for (let p = parentOf.get(id); p; p = parentOf.get(p)) out.push(p);
+      return out;
+    };
     for (const { at, walk } of walks) {
       if (!walk.steps?.length) fail(`${at}: has no steps`);
-      for (const step of walk.steps ?? []) {
-        if (edgeKeys.has(step.follow)) continue;
+      const reached = new Set<string>();
+      (walk.steps ?? []).forEach((step, i) => {
         const [a, b] = (step.follow ?? "").split("->");
-        if (a && b && bidir.has(`${b}->${a}`)) continue;
-        fail(`${at}: step "${step.follow}" follows no edge (reverse needs bidir: true)`);
-      }
+        if (!edgeKeys.has(step.follow) && !(a && b && bidir.has(`${b}->${a}`))) {
+          fail(`${at}: step "${step.follow}" follows no edge (reverse needs bidir: true)`);
+        }
+        if (!a || !b) return;
+        const ends = [...lineage(a), ...lineage(b)];
+        if (i > 0 && !ends.some((id) => reached.has(id))) {
+          fail(
+            `${at}: step ${i + 1} "${step.follow}" touches nothing the walk has reached — ` +
+              "a sequence data flow has to be one connected path",
+          );
+        }
+        for (const id of ends) reached.add(id);
+      });
     }
 
     // Items may claim the capabilities they implement; the claim must match a real pin.

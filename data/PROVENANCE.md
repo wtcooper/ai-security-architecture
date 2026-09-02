@@ -220,8 +220,9 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   all this one control in surface-specific dress. Sandboxing is drawn as containment (a
   labelled frame in the React Flow view, a Sandboxed tools item where it lives inside an
   application), never as a standalone facility block.
-- **Typed paths** follow F5's legend, simplified to three classes: one data path for flows
-  inside the system, external content and actions, and dotted governance relationships.
+- **Typed paths** follow F5's legend, simplified to two classes: one data path for flows
+  inside the system, and external content and actions. F5's dotted governance relationship
+  was dropped: the control plane is call-outs, not hops.
 - **Numbered capability chips** are F5's design-requirements treatment carried by this
   framework's capability taxonomy: each chip marks where a capability must be deployed, and the
   rail links it to the Capabilities tab. A pinned capability must apply on the architecture's

@@ -53,8 +53,8 @@ Every capability carries `enforcement` in vocabulary.yaml:
   tenant checks, memory scoping, output bounding, permission gates). Pin only — on the edge
   or block where enforcement happens. Never drawn as a block.
 - **management** — off the data path (audit, registry and admission, evaluation of change,
-  kill switch, policy authoring, assurance). Governance-plane item plus chip pinned to the
-  plane or its dotted edges.
+  kill switch, policy authoring, assurance). Governance-plane call-out plus chip pinned to
+  that call-out.
 
 The same capability may legitimately sit at a different locus in one architecture when the
 data path differs — the canonical example is evaluation: a block in the training pipeline
@@ -104,10 +104,11 @@ customer-owned component on it is an audit finding.
   can relate controls across architectures the way `R##` codes already relate risks.
 - **Risks** are coded tags pinned to the block or flow where the risk materializes;
   architecture-level lists are derived from pins, never authored.
-- **Flows** use three path classes: `primary` (owned data path), `external` (crossing a
-  trust or ownership boundary, or carrying untrusted content), `governance` (dotted policy
-  and configuration relationships). Labels appear only where the flow's nature is not
-  obvious from its endpoints.
+- **Flows** use two path classes: `primary` (owned data path) and `external` (crossing a
+  trust or ownership boundary, or carrying untrusted content). There is no governance path:
+  the control plane is call-outs, never hops, and the dotted "governance relationship" was
+  retired (2026-09-02) as a legend entry nothing drew. Labels appear only where the flow's
+  nature is not obvious from its endpoints.
 - **Boundaries** (sandboxes, shipped applications, tenants) are **containers** — a
   `kind: boundary` block that other blocks name as their `parent` (see §4a). Sandboxing has
   three canonical forms, chosen by criteria: a **boundary container** when it wraps a set of
@@ -141,7 +142,11 @@ taxonomy, so a reader meets the same vocabulary at both levels.
 An architecture draws only the bands it uses: the personal agent has no vendor band, a cloud
 workflow has no endpoint band. **Columns must be assigned in band order** — the renderer
 derives each band's rect from the `min..max col` of its members, so a column out of band order
-makes two bands overlap.
+makes two bands overlap. The governance band is the exception: its call-outs are not on the
+grid. The layout engine draws the band exactly as wide as the ownership bands together, one
+band gutter beneath them, and spaces the call-outs across it in authored (`row`, `col`) order —
+their `col` orders them and nothing more. A governance call-out is drawn without a component
+box (title, icon, chip numbers only), because it is a control, not a component.
 
 ### Bands are locations, not a pipeline
 

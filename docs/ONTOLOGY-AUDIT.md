@@ -193,3 +193,24 @@ User-connected systems, Serving & consumers, Managed memory/sandbox/tool gateway
 `capabilityModelScanning` embodiment was re-pointed from the never-registered "Artifact
 scanning" to the Private pkg registry, and `capabilityStagedRollout` now applies on the SaaS
 surface for customer-owned agent definitions.
+
+## The layout and walk pass (2026-09-02)
+
+- **Governance band geometry moved into the engine.** The band is now derived from the
+  content, not from its members: exactly as wide as the ownership bands together, one band
+  gutter (12px) beneath them, call-outs spaced across it in authored order and wrapped when
+  the drawing is narrower than five call-outs. It had been overlapping the bands above on
+  every drawing, overhanging the narrow ones and falling short of the wide ones.
+- **Governance call-outs are boxless.** A control is not a component, so the call-out is a
+  title tab, an icon and its chip numbers. Capabilities pinned directly on a call-out join its
+  chip row rather than hanging from a border it no longer draws.
+- **The governance path class is gone.** No live architecture drew one; the legend entry and
+  the dotted style were noise. `PathClass` is `primary | external`.
+- **Walks are connected by construction.** The build now fails a walkthrough or scenario
+  whose step touches nothing the walk has already reached (containment counts). Every walk
+  was rewritten as one contiguous sequence with its return legs, so the sequence diagram
+  reads as a sequence and the numbered drawing has no orphaned arrows.
+- **Grids condensed.** Tool surfaces sit directly beneath the gateway they hang off; the
+  external band is one column; the coding agents lost a column each, the cloud trio one, the
+  personal agent one column and a row, the training pipeline one column, self-hosted
+  inference one row. Risk tags on vertical runs moved off the tab of the block they enter.

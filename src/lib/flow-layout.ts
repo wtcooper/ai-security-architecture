@@ -43,7 +43,8 @@ export const ICON_NAMES = [
 // architecture in one glance, with short arrows between things that talk to each other.
 const COL_W = 176;
 const COL_GAP = 44;
-const ROW_GAP = 54;
+/** Tall enough for a vertical run carrying three stacked risk tags to clear the tab below it. */
+const ROW_GAP = 62;
 const MARGIN_X = 18;
 /** Room above the first row for tabs and risk-tag stacks; grown further when a stack is deep. */
 const MARGIN_TOP = 60;
@@ -53,6 +54,8 @@ export const TAB_H = 20;
 /** Band chrome, shared with both renderers so a band's rect can be derived here. */
 export const ZONE_PAD = 16;
 export const ZONE_HEAD = 30;
+/** Clear space between two bands: the column gap less the pad each band adds inside it. */
+const BAND_GAP = COL_GAP - ZONE_PAD * 2;
 /** Items pack two per row inside a standard block. */
 const ITEM_H = 50;
 const BLOCK_PAD_TOP = 16;
@@ -210,7 +213,17 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     };
   };
 
-  const roots = arch.blocks.filter((b) => !b.parent).map(measure);
+  // Governance call-outs are not on the grid. They are laid out by the engine beneath it (see
+  // the governance plane below), so they never add columns or rows to the drawing they govern.
+  const govZones = new Set(
+    (arch.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
+  );
+  const isGov = (b: ArchBlock) => govZones.has(b.zone ?? "");
+  const roots = arch.blocks.filter((b) => !b.parent && !isGov(b)).map(measure);
+  const govRoots = arch.blocks
+    .filter((b) => !b.parent && isGov(b))
+    .sort((a, b) => a.row - b.row || a.col - b.col)
+    .map(measure);
   const top = gridLayout(roots);
 
   // Risk tags stack upward from a block's top edge, so the first drawn row needs headroom for
@@ -252,30 +265,39 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   };
   place(roots, top, MARGIN_X, marginTop);
 
-  // The governance plane draws as a band beneath the ownership bands, with its rect derived
-  // from its blocks (ZONE_PAD + ZONE_HEAD of chrome above them). Row packing alone leaves that
-  // chrome eating the row gap, so the plane's band overlapped the bands above it by a few
-  // pixels. Shift the governance row down until the two bands clear each other by the same
-  // gutter adjacent vertical bands already have (COL_GAP minus their two pads).
-  const govZones = new Set(
-    (arch.zones ?? []).filter((z) => z.owner === "governance").map((z) => z.id),
-  );
-  const govRoots = roots.filter((p) => govZones.has(p.block.zone ?? ""));
-  let govShift = 0;
-  if (govRoots.length && govRoots.length < roots.length) {
-    const contentBottom = Math.max(
-      ...roots
-        .filter((p) => !govZones.has(p.block.zone ?? ""))
-        .map((p) => blocks[p.block.id].y + blocks[p.block.id].h),
-    );
-    const govTop = Math.min(...govRoots.map((p) => blocks[p.block.id].y));
-    const BAND_GAP = COL_GAP - ZONE_PAD * 2;
-    govShift = Math.max(0, contentBottom + ZONE_PAD + BAND_GAP + ZONE_PAD + ZONE_HEAD - govTop);
-    for (const p of govRoots) blocks[p.block.id].y += govShift;
+  // --- Governance plane ---------------------------------------------------------------
+  // The control plane is a band beneath the ownership bands: exactly as wide as they are
+  // together, and separated from them by the same gutter adjacent vertical bands have. Its
+  // call-outs are spaced across that width by the engine, in authored order (row, then col),
+  // wrapping to a second line when the drawing is narrower than the call-outs side by side.
+  // Deriving the band from the content rather than from its own members is what stops it
+  // overhanging a narrow drawing, falling short of a wide one, or sitting on the bands above.
+  const contentBottom = roots.length
+    ? Math.max(...roots.map((p) => blocks[p.block.id].y + blocks[p.block.id].h))
+    : marginTop;
+  let govBand: Rect | undefined;
+  let bottom = contentBottom;
+  if (govRoots.length) {
+    const bandY = contentBottom + ZONE_PAD + BAND_GAP;
+    const perRow = Math.max(1, Math.floor((top.width + COL_GAP) / (COL_W + COL_GAP)));
+    let y = bandY + ZONE_HEAD + ZONE_PAD;
+    for (let i = 0; i < govRoots.length; i += perRow) {
+      const line = govRoots.slice(i, i + perRow);
+      const lineW = line.length * COL_W + (line.length - 1) * COL_GAP;
+      const lineH = Math.max(...line.map((p) => p.h));
+      let x = MARGIN_X + (top.width - lineW) / 2;
+      for (const p of line) {
+        blocks[p.block.id] = { x, y, w: COL_W, h: lineH };
+        x += COL_W + COL_GAP;
+      }
+      y += lineH + ROW_GAP;
+    }
+    bottom = y - ROW_GAP + ZONE_PAD;
+    govBand = { x: MARGIN_X - ZONE_PAD, y: bandY, w: top.width + ZONE_PAD * 2, h: bottom - bandY };
   }
 
   const width = MARGIN_X * 2 + top.width;
-  const height = marginTop + top.height + govShift + MARGIN_BOTTOM;
+  const height = bottom + MARGIN_BOTTOM;
   // Column extents let the renderer derive band rects from the grid rather than from member
   // rects, so a band holding only a narrow actor no longer leaves a gutter beside it.
   const columns = top.colX.map((x, i) => ({ x: MARGIN_X + x, w: top.colW[i] }));
@@ -396,7 +418,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     };
   });
 
-  return { width, height, blocks, edges, columns, bandTop };
+  return { width, height, blocks, edges, columns, bandTop, govBand };
 }
 
 // --- Pin placement -----------------------------------------------------------------
@@ -523,7 +545,10 @@ export function tagSpots(
       leader: `M ${ax} ${bottom - TAG_GAP + TAG_H + 2} L ${ax} ${edge.midY - 5}`,
     };
   }
-  const right = edge.midX - 16;
+  // Well clear of the arrow, because the stack sits in the row gap right above the lower
+  // block's title tab: at 16px it overlapped the tab of every block a tagged vertical run
+  // entered. 60px leaves the tag over the block's shoulder, off the tab, with a longer leader.
+  const right = edge.midX - 60;
   const top = edge.midY - (n * TAG_GAP - (TAG_GAP - TAG_H)) / 2;
   return {
     rects: widths.map((w, i) => ({ x: right - w, y: top + i * TAG_GAP, w, h: TAG_H })),

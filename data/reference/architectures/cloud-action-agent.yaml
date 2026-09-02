@@ -234,7 +234,7 @@ blocks:
     kind: service
     title: Tool services
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 2
     cosaiComponent: componentTools
     pack: toolServicesRemote
@@ -248,7 +248,7 @@ blocks:
     kind: provider
     title: Model provider
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 0
     cosaiComponent: componentModelServing
     note: The published inference interface. What runs behind it is the provider's and is not drawn.
@@ -262,7 +262,7 @@ blocks:
     kind: external
     title: Enterprise data
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 3
     cosaiComponent: componentDataSources
     note: >
@@ -284,7 +284,7 @@ blocks:
     kind: service
     title: Tool services
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 1
     cosaiComponent: componentTools
     pack: toolServicesRemote
@@ -302,7 +302,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 2
     pack: downstreamPublic
     note: >
@@ -418,7 +418,6 @@ edges:
     to: internalTools
     path: primary
     bidir: true
-    route: vh
     label: internal tool calls
     note: >
       The proposed action, admitted against the catalogue and narrowed to a scoped grant before
@@ -600,17 +599,29 @@ walkthrough:
     - follow: entry->planner
       note: The request enters the loop with the requester's identity attached.
     - follow: planner->stateRetrieval
-      note: Policy and the customer's history load as context, scoped to this account.
+      note: Policy and the customer's history are requested, scoped to this account.
+    - follow: stateRetrieval->planner
+      note: They come back into the context window.
     - follow: planner->gateway
       note: The context leaves the loop through the gateway, on a brokered credential.
     - follow: gateway->provider
       note: The model proposes an action and parameters from the catalogue.
+    - follow: provider->gateway
+      note: The proposal comes back across the crossing — unauthenticated content, now the plan.
     - follow: gateway->internalTools
       note: The proposal is validated — well-formed, in policy, under the value threshold.
     - follow: internalTools->orgData
       note: The refund executes, with its compensating transaction on file.
+    - follow: orgData->internalTools
+      note: The record confirms the change.
+    - follow: internalTools->gateway
+      note: The result crosses back, logged against the call that caused it.
+    - follow: gateway->planner
+      note: The loop closes its plan with the outcome.
+    - follow: planner->entry
+      note: The outcome heads back to the surface.
     - follow: entry->requester
-      note: The outcome returns within seconds; the audit holds the reasoning.
+      note: Within seconds; the audit holds the reasoning.
 
 scenarios:
   - title: The request text is the attack
@@ -619,10 +630,14 @@ scenarios:
         note: >
           The text instructs the agent to ignore policy and refund in full; whatever survives
           classification enters the same context window as the system instruction.
+      - follow: entry->planner
+        note: The text enters the loop as the task.
       - follow: planner->gateway
         note: Whatever survived classification rides out with the context.
       - follow: gateway->provider
         note: A steered model proposes the most generous action available.
+      - follow: provider->gateway
+        note: The steered proposal comes back as the plan.
       - follow: gateway->internalTools
         note: The catalogue does not care what steered the model — parameters and policy bounds hold.
       - follow: internalTools->orgData
@@ -637,6 +652,8 @@ scenarios:
         note: The unattended run crosses on the same brokered credential an attended one would.
       - follow: gateway->provider
         note: The model proposes an action with nobody watching the proposal.
+      - follow: provider->gateway
+        note: The proposal comes back with nobody to read it.
       - follow: gateway->extTools
         note: The action reaches outward, admitted by the same catalogue and egress allowlist.
       - follow: extTools->downstream
@@ -646,18 +663,26 @@ scenarios:
           threshold and the compensating transaction are the whole of the control set.
   - title: The injection was written months ago
     steps:
-      - follow: planner->stateRetrieval
-        note: The loop reads the case history like any other.
       - follow: planner->gateway
-        note: The loop crosses first — nothing on the agent tier reaches a tool surface directly.
+        note: >
+          The loop needs a customer record — and crosses first, because nothing on the agent
+          tier reaches a tool surface directly.
       - follow: gateway->internalTools
         note: The lookup is admitted against the catalogue and narrowed to this case.
       - follow: internalTools->orgData
-        note: A note written into a record long ago, in someone else's case, comes back as context.
+        note: The record is read like any other.
+      - follow: orgData->internalTools
+        note: A note written into it long ago, in someone else's case, comes back with the content.
+      - follow: internalTools->gateway
+        note: It crosses back as an ordinary tool result.
+      - follow: gateway->planner
+        note: And lands in context beside the system instruction.
       - follow: planner->gateway
         note: The assembled context — injected note included — leaves for the model.
       - follow: gateway->provider
-        note: The model reads it beside the system instruction with nothing marking it apart.
+        note: The model reads it with nothing marking it apart.
+      - follow: provider->gateway
+        note: The proposal it produces is the attacker's, in the model's voice.
       - follow: gateway->internalTools
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
 

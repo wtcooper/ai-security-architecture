@@ -270,7 +270,7 @@ blocks:
     kind: provider
     title: Model provider
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 0
     cosaiComponent: componentModelServing
     note: >
@@ -286,7 +286,7 @@ blocks:
     kind: service
     title: Tool services
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 2
     cosaiComponent: componentTools
     pack: toolServicesRemote
@@ -305,7 +305,7 @@ blocks:
     kind: external
     title: Enterprise data
     zone: zoneCloud
-    col: 4
+    col: 3
     row: 3
     cosaiComponent: componentDataSources
     note: >
@@ -325,7 +325,7 @@ blocks:
     kind: service
     title: Tool services
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 1
     cosaiComponent: componentTools
     pack: toolServicesRemote
@@ -343,7 +343,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 2
     pack: downstreamPublic
     note: >
@@ -465,7 +465,6 @@ edges:
     to: internalTools
     path: primary
     bidir: true
-    route: vh
     label: internal tool calls
     note: Admitted against the registry and narrowed to a scoped grant before anything executes.
   - from: internalTools
@@ -520,13 +519,13 @@ pins:
       at: orchestration->subagents
       note: A subagent that inherits its parent's full authority is privilege distribution, not delegation.
     - risk: riskAgentDelegationChainOpacity
-      at: orchestration->subagents
+      at: orchestration
       note: >
         Three hops in, nobody can say which agent decided what on whose behalf — the chain the
         shared subagents block exists to carry, legible only if delegation is traced as it
         happens.
     - risk: riskOrchestratorRouteHijacking
-      at: orchestration->subagents
+      at: orchestration
       note: >
         Steer the supervisor's routing — through injected content or a tampered route
         definition — and every specialist downstream works from the attacker's plan without
@@ -686,28 +685,40 @@ walkthrough:
       note: >
         The run is journaled from its first step — everything a step returns will persist
         here, which is the durability the drawing exists to show.
+    - follow: state->harness
+      note: The journal acknowledges; the run now has a durable identity.
     - follow: orchestration->subagents
       note: >
         The supervisor decomposes the goal; each specialist takes its task with a narrowed
         grant, not the supervisor's authority.
+    - follow: subagents->orchestration
+      note: Each specialist reports its slice back to the supervisor.
     - follow: harness->gateway
       note: Every network call the agents make funnels through the one door.
     - follow: gateway->provider
       note: Inference on brokered credentials, limits applied.
+    - follow: provider->gateway
+      note: The completion comes back across the crossing.
     - follow: gateway->internalTools
       note: Tool calls carry the narrowed per-step grant.
     - follow: internalTools->orgData
       note: >
         The write lands — behind the approval gate when it is consequential; the escalation
         scenario walks that suspension.
+    - follow: orgData->internalTools
+      note: The record confirms the write.
+    - follow: internalTools->gateway
+      note: The result crosses back through the same door.
     - follow: gateway->extTools
+      note: Work reaches third parties through the same crossing.
+    - follow: extTools->gateway
+      note: What returns is classified before any agent reads it, because one confused agent propagates.
+    - follow: gateway->harness
       note: >
-        Work reaches third parties through the same crossing; what returns is classified
-        before any agent reads it, because one confused agent propagates.
-    - follow: harness->state
-      note: >
-        The step checkpoints. Days may pass before an event wakes the run — the journal is
-        what it wakes into.
+        Results land with the supervisor and the step checkpoints to the journal. Days may
+        pass before an event wakes the run — the journal is what it wakes into.
+    - follow: harness->entry
+      note: The result heads back to the surface.
     - follow: entry->initiator
       note: The result returns, possibly days after the request.
 
@@ -718,6 +729,8 @@ scenarios:
         note: The engine rebuilds state from the journal — including anything a step persisted.
       - follow: orchestration->subagents
         note: Replayed steps land on their specialists again.
+      - follow: subagents->orchestration
+        note: Their results come back to the supervisor as if for the first time.
       - follow: harness->gateway
         note: Replayed steps re-request credentials; nothing survives from the first run.
       - follow: gateway->internalTools
@@ -726,20 +739,29 @@ scenarios:
         note: Without fencing, the payment executes twice. The journal replays; the world does not.
   - title: A consequential write escalates for approval
     steps:
+      - follow: harness->gateway
+        note: A step proposes a write above the threshold.
       - follow: gateway->internalTools
-        note: >
-          A step proposes a write above the threshold; the engine suspends the workflow
-          rather than executing.
+        note: The per-call policy trips the threshold; the engine suspends the workflow rather than executing.
+      - follow: internalTools->gateway
+        note: The suspension comes back as the step's result.
+      - follow: gateway->harness
+        note: The supervisor parks the step in the journal.
+      - follow: harness->entry
+        note: The proposal surfaces toward a human.
       - follow: entry->initiator
         note: >
-          The proposal surfaces to a human — bound to the exact action, arguments and
-          workflow state, with an expiry.
+          Bound to the exact action, arguments and workflow state, with an expiry.
       - follow: initiator->entry
         note: >
           The approval returns and is validated against the suspended step — a blanket
           "resume" approves nothing in particular.
+      - follow: entry->harness
+        note: The suspended step resumes.
+      - follow: harness->gateway
+        note: Only then does the action leave.
       - follow: gateway->internalTools
-        note: Only then does the action leave, under the same per-call policy as before.
+        note: Under the same per-call policy as before.
       - follow: internalTools->orgData
         note: The write lands, attributable to both the workflow and the approver.
   - title: An event fires days into the process
@@ -750,6 +772,8 @@ scenarios:
           after the request that started the process.
       - follow: orchestration->subagents
         note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
+      - follow: subagents->orchestration
+        note: The waking specialist reports back.
       - follow: harness->gateway
         note: Credentials are fetched now — the ones from day one would be stale authority.
       - follow: gateway->internalTools

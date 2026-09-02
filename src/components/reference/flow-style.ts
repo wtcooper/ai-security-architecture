@@ -11,15 +11,15 @@ import type { ArchBlock, BlockKind, PathClass } from "@/lib/types";
 export const PATH_STYLE: Record<PathClass, { stroke: string; dash?: string; label: string }> = {
   primary: { stroke: "var(--mitigated)", label: "Data path" },
   external: { stroke: "var(--band-data-rail)", label: "External content & actions" },
-  governance: { stroke: "var(--ink-3)", dash: "3 4", label: "Governance relationship" },
 };
 
 /**
  * Block chrome per kind. The border says what kind of party runs the block — solid for
- * services, dashed grey for a provider you cannot see into, amber for the outside, dotted
- * slate for the management plane. Tab colours here are only the fallback when a block has no
- * CoSAI anchor: a quiet dark grey, reserved for the security and governance machinery CoSAI
- * does not model (gateways, identity edges, sandboxes, the governance plane itself).
+ * services, dashed grey for a provider you cannot see into, amber for the outside. A governance
+ * call-out draws no box at all: it is a control, not a component, so it is a title, an icon and
+ * the chip numbers of what it implements. Tab colours here are only the fallback when a block
+ * has no CoSAI anchor: a quiet dark grey, reserved for the security and governance machinery
+ * CoSAI does not model (gateways, identity edges, sandboxes, the governance plane itself).
  */
 export const BLOCK_STYLE: Record<
   Exclude<BlockKind, "actor">,
@@ -28,7 +28,7 @@ export const BLOCK_STYLE: Record<
   service: { stroke: "var(--ink)", tab: "var(--ink-2)" },
   provider: { stroke: "var(--ink-3)", tab: "var(--ink-2)", dash: "6 4" },
   external: { stroke: "var(--band-data-rail)", tab: "var(--ink-2)", dash: "8 4" },
-  governance: { stroke: "var(--ink-2)", tab: "var(--ink-2)", dash: "2 4" },
+  governance: { stroke: "transparent", tab: "var(--ink-2)" },
   // Containment, not a party: a dashed frame around whatever runs inside it.
   boundary: { stroke: "var(--ink-3)", tab: "var(--ink)", dash: "7 5" },
   // Deliberately unnamed source. Drawn as nothing; only its anchor point matters.

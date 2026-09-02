@@ -9,7 +9,7 @@
  */
 import { bandFor } from "@/lib/bands";
 import { capabilityById, componentById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, itemCells, tagSpots, ZONE_HEAD, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, itemCells, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 
 import { tagWidth } from "./flow-style";
@@ -45,7 +45,14 @@ export function buildViewerModel(archetype: Archetype) {
       note: b.note,
       // A governance call-out has no items and no edges — the chip numbers of the controls it
       // implements are its entire content, so without these it exports as an empty box.
-      caps: (b.capabilities ?? []).map((id) => ({
+      caps: [
+        ...new Set([
+          ...(b.capabilities ?? []),
+          ...(b.kind === "governance"
+            ? archetype.pins.capabilities.filter((p) => p.at === b.id).map((p) => p.capability)
+            : []),
+        ]),
+      ].map((id) => ({
         n: capNumber.get(id) ?? 0,
         title: capabilityById.get(id)?.title ?? id,
       })),
@@ -91,26 +98,24 @@ export function buildViewerModel(archetype: Archetype) {
     .filter((b) => !govZoneIds.has(b.zone ?? ""))
     .map((b) => rects[b.id])
     .filter(Boolean);
-  const allRects = archetype.blocks.map((b) => rects[b.id]).filter(Boolean);
   // Same source as the on-screen renderer: the layout knows how far the first row's risk-tag
   // stacks rise, and a band has to enclose the tags its blocks carry.
   const bandTop = colRects.length ? layout.bandTop : 0;
   const bandBottom = colRects.length ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD : 0;
-  const fullLeft = allRects.length ? Math.min(...allRects.map((r) => r.x)) - ZONE_PAD : 0;
-  const fullRight = allRects.length ? Math.max(...allRects.map((r) => r.x + r.w)) + ZONE_PAD : 0;
   const cols = layout.columns ?? [];
   const zones = (archetype.zones ?? []).flatMap((zone) => {
     const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
     if (!rs.length) return [];
-    const isGov = zone.owner === "governance";
-    // Band width comes from the grid columns, matching the on-screen renderer exactly.
+    // The governance band's rect is the layout's — as wide as the ownership bands together,
+    // one band gutter beneath them. Ownership band widths come from the grid columns.
+    const gov = zone.owner === "governance" ? layout.govBand : undefined;
     const cs = archetype.blocks.filter((b) => b.zone === zone.id && !b.parent).map((b) => b.col);
     const lo = cols[Math.min(...cs)];
     const hi = cols[Math.max(...cs)];
-    const x0 = isGov ? fullLeft : (lo ? lo.x - ZONE_PAD : Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
-    const x1 = isGov ? fullRight : (hi ? hi.x + hi.w + ZONE_PAD : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
-    const y0 = isGov ? Math.min(...rs.map((r) => r.y)) - ZONE_PAD - ZONE_HEAD : bandTop;
-    const y1 = isGov ? Math.max(...rs.map((r) => r.y + r.h)) + ZONE_PAD : bandBottom;
+    const x0 = gov ? gov.x : (lo ? lo.x - ZONE_PAD : Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
+    const x1 = gov ? gov.x + gov.w : (hi ? hi.x + hi.w + ZONE_PAD : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
+    const y0 = gov ? gov.y : bandTop;
+    const y1 = gov ? gov.y + gov.h : bandBottom;
     return [{ title: zone.title, owner: zone.owner, note: zone.note, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }];
   });
 
@@ -132,7 +137,9 @@ export function buildViewerModel(archetype: Archetype) {
     if (!chipGroups.has(pin.at)) chipGroups.set(pin.at, []);
     chipGroups.get(pin.at)!.push(pin);
   }
+  const kindOf = new Map(archetype.blocks.map((b) => [b.id, b.kind]));
   for (const [at, pins] of chipGroups) {
+    if (kindOf.get(at) === "governance") continue; // drawn in the call-out's own chip row
     const blockRect = rects[at];
     const geo = blockRect ? undefined : edgeGeoOf(at);
     const spots = chipSpots(pins.length, blockRect, geo);

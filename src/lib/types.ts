@@ -342,10 +342,11 @@ export interface ArchBlock {
 
 /**
  * The connector classes. `primary` is any data flow inside the system — one green keeps the
- * drawings simple; `external` crosses into content or services nobody in the diagram operates;
- * `governance` is a management-plane relationship, drawn dotted.
+ * drawings simple; `external` crosses into content or services nobody in the diagram operates.
+ * There is no governance connector: the control plane is call-outs, not hops, and the dotted
+ * "governance relationship" line was retired as noise nothing drew.
  */
-export type PathClass = "primary" | "external" | "governance";
+export type PathClass = "primary" | "external";
 
 export interface ArchEdge {
   from: string;
@@ -451,6 +452,11 @@ export interface ArchLayout {
   columns: { x: number; w: number }[];
   /** Top of the ownership bands — encloses first-row risk-tag stacks, not just blocks. */
   bandTop: number;
+  /**
+   * The governance plane's band: as wide as the ownership bands together, one band gutter
+   * beneath them. Absent when the architecture draws no governance zone.
+   */
+  govBand?: Rect;
   edges: {
     from: string;
     to: string;
