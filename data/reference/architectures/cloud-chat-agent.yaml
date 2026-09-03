@@ -102,7 +102,7 @@ blocks:
     icon: person
     zone: zoneUser
     col: 0
-    row: 0
+    row: 1
     note: >
       Present for every turn, and the approval gate for the actions that matter. Also the
       author of untrusted input — the conversation is model input written by the party the
@@ -217,7 +217,7 @@ blocks:
     title: Memory & state
     zone: zoneCloud
     col: 2
-    row: 3
+    row: 2
     cosaiComponent: componentDataStorage
     note: >
       The conversation's accumulated context and the retrieval index behind it. Scoped to the
@@ -240,7 +240,7 @@ blocks:
     title: AI gateway
     zone: zoneCloud
     col: 3
-    row: 1
+    row: 2
     note: >
       The one crossing every network-brokered model and tool call leaves through — the
       in-process tool set is the drawn exception. The agent tier holds no standing
@@ -254,7 +254,7 @@ blocks:
     title: Model provider
     zone: zoneExternal
     col: 4
-    row: 0
+    row: 1
     cosaiComponent: componentModelServing
     note: The published inference interface. What runs behind it is the provider's and is not drawn.
     items:
@@ -268,7 +268,7 @@ blocks:
     title: Tool services
     zone: zoneCloud
     col: 3
-    row: 2
+    row: 3
     cosaiComponent: componentTools
     pack: toolServicesRemote
     note: >
@@ -282,7 +282,7 @@ blocks:
     title: Enterprise data
     zone: zoneCloud
     col: 3
-    row: 3
+    row: 4
     cosaiComponent: componentDataSources
     note: >
       The systems of record a conversation actually changes, and the grounding content it reads
@@ -303,7 +303,7 @@ blocks:
     title: Tool services
     zone: zoneExternal
     col: 4
-    row: 1
+    row: 3
     cosaiComponent: componentTools
     pack: toolServicesRemote
     items:
@@ -321,11 +321,31 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
-    row: 2
+    row: 4
     pack: downstreamPublic
     note: >
       What the external tool surface reaches — where an approved action becomes a real one
       outside the company, and where the content that returns was authored by somebody else.
+
+  - id: sources
+    kind: external
+    title: Public package sources
+    zone: zoneExternal
+    col: 4
+    row: 0
+    note: >
+      Where the mirror gets what it serves: the public package registries and the skill and
+      extension hubs it proxies and admits from. Nothing here is ours, which is why admission
+      happens at the mirror and not at the tool that asked.
+    items:
+      - id: registries
+        label: Package registries
+        icon: db
+        note: PyPI, npm and their kind — mirrored, never reached by a tool directly in the target state.
+      - id: hubs
+        label: Skill & extension hubs
+        icon: gear
+        note: Community catalogues of skills, extensions and images, admitted through the same door.
 
   - id: govIdentity
     kind: governance
@@ -333,7 +353,7 @@ blocks:
     icon: person
     zone: zoneGovernance
     col: 0
-    row: 4
+    row: 5
     capabilities: [capabilityIga, capabilityNhiManagement]
     note: >
       The user's identity and the agent's workload identity, issued and kept distinct. In this
@@ -346,7 +366,7 @@ blocks:
     icon: key
     zone: zoneGovernance
     col: 1
-    row: 4
+    row: 5
     capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
     note: Short-lived, user-scoped credentials minted per call, so the agent tier holds no standing keys.
 
@@ -356,7 +376,7 @@ blocks:
     icon: scale
     zone: zoneGovernance
     col: 2
-    row: 4
+    row: 5
     capabilities: [capabilityToolPermissionScoping, capabilityEgressControl, capabilityRateLimiting, capabilityHitlControls]
     note: >
       What the conversation may reach and what it may spend, decided outside the loop that
@@ -368,7 +388,7 @@ blocks:
     icon: db
     zone: zoneGovernance
     col: 4
-    row: 4
+    row: 5
     capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityMcpToolSecurity, capabilityAiBom]
     note: >
       Which tools may be offered to a conversation at all — admission, not discovery — and the
@@ -380,7 +400,7 @@ blocks:
     icon: eye
     zone: zoneGovernance
     col: 5
-    row: 4
+    row: 5
     capabilities: [capabilityAuditLogging, capabilityKillSwitch]
     note: >
       Append-only and off the agent's write path, because the thread is not the audit trail —
@@ -391,8 +411,8 @@ blocks:
     title: Private pkg registry
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 1
-    row: 2
+    col: 3
+    row: 0
     note: >
       The organisation's package registry: public packages mirrored and admitted, and the
       organisation's own builds published by its CI pipelines. It serves whatever the sandbox
@@ -416,6 +436,7 @@ edges:
       Read-only tools run mid-turn without ceremony; mutating actions wait for the human.
   - from: events
     to: agent
+    route: vh
     path: primary
     label: scheduled run
     note: >
@@ -450,7 +471,6 @@ edges:
     to: registry
     path: primary
     bidir: true
-    route: vh
     label: pinned installs
     note: >
       What the harness's sandbox installs — a package manager running as a shell command —
@@ -460,9 +480,9 @@ edges:
   - from: gateway
     to: provider
     label: inference / completion
+    route: vh
     path: external
     bidir: true
-    route: vh
     note: >
       Inference on the brokered credential. The completion proposes the reply and the tool
       calls — content the human will read, and unauthenticated input all the same.
@@ -499,6 +519,14 @@ edges:
       Actions land on real systems outside the company; whatever comes back — records, pages,
       API responses — is untrusted content entering the conversation.
 
+  - from: sources
+    to: registry
+    path: external
+    label: mirrored & admitted
+    note: >
+      The mirror's own supply chain: public packages proxied in, scanned, pinned and admitted
+      before anything inside can pull them. Build pipelines publish the organisation's own
+      artifacts beside them.
 pins:
   risks:
     - risk: riskPromptInjection
@@ -696,6 +724,13 @@ pins:
         The gateway's own allowlist: which external MCP servers, APIs and peer agents are
         registered, and which tools each key may call on them. Configuration of a broker, not a
         network control.
+    - capability: capabilityModelScanning
+      at: sources->registry
+      note: >
+        Admission scanning at the mirror: digest and signature verification, malware and
+        typosquat checks on everything proxied in from a public source, before anything inside can
+        pull it. The registered embodiment of artifact scanning, on the one edge where it applies.
+
 walkthrough:
   title: A turn that ends in an action
   moves: >-

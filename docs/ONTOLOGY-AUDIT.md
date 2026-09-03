@@ -252,6 +252,18 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **Public package sources feed the mirror; they are not a downstream (2026-09-03).** The two
+  coding agents listed "Package registries" as an item of Downstream services, which said the
+  agent acts on PyPI. It does not: it pulls from the mirror, and the mirror pulls from PyPI.
+  A registered external block, Public package sources (package registries, skill and
+  extension hubs), now feeds Private pkg registry with an inbound "mirrored & admitted" edge
+  on all six drawings with a mirror, carrying admission scanning as the inline control — the
+  same shape the training pipeline already drew for Base model & deps. A tool reaching a
+  public index directly is the direct-egress edge's failure, and its note says so. The six
+  grids were re-laid with a search over the engine's own geometry (no arrow through a block,
+  no crossings, no collinear runs) with one skeleton per family: the cloud trio keeps the
+  mirror at the top of the cloud band beside its sources; the coding agents and the personal
+  agent keep it at the bottom, fed along the last row.
 - **One harness anatomy, and MCP kept as three things (2026-09-03).** The cloud trio nested its
   built-in tools inside the harness; the endpoints drew the same tools beside it with a
   "local tool calls" edge; memory hung off the harness everywhere, though on an endpoint the

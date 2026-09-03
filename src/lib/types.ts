@@ -467,6 +467,8 @@ export interface ArchLayout {
     midY: number;
     /** True when the segment at the midpoint runs horizontally. */
     horizontal: boolean;
+    /** Length of the segment the midpoint sits on — the room pins have along the arrow. */
+    extent: number;
   }[];
 }
 

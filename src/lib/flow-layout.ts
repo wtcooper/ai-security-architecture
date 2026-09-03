@@ -441,14 +441,14 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
         Math.abs(A.y - B.y) < 0.5
           ? `M ${A.x} ${A.y} L ${B.x} ${B.y}`
           : `M ${A.x} ${A.y} L ${(A.x + B.x) / 2} ${A.y} L ${(A.x + B.x) / 2} ${B.y} L ${B.x} ${B.y}`;
-      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: true };
+      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: true, extent: Math.abs(B.x - A.x) };
     }
     if (kind === "v") {
       const d =
         Math.abs(A.x - B.x) < 0.5
           ? `M ${A.x} ${A.y} L ${B.x} ${B.y}`
           : `M ${A.x} ${A.y} L ${A.x} ${(A.y + B.y) / 2} L ${B.x} ${(A.y + B.y) / 2} L ${B.x} ${B.y}`;
-      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: false };
+      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: false, extent: Math.abs(B.y - A.y) };
     }
     if (kind === "vh") {
       return {
@@ -457,6 +457,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
         midX: A.x,
         midY: (A.y + B.y) / 2,
         horizontal: false,
+        extent: Math.abs(B.y - A.y),
       };
     }
     return {
@@ -465,6 +466,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       midX: (A.x + B.x) / 2,
       midY: A.y,
       horizontal: true,
+      extent: Math.abs(B.x - A.x),
     };
   });
 
@@ -480,6 +482,8 @@ export interface PinEdgeGeo {
   midX: number;
   midY: number;
   horizontal: boolean;
+  /** Free length along the arrow at the midpoint; when known, badge stacks are shaped to fit it. */
+  extent?: number;
 }
 
 export const TAG_H = 17;
@@ -556,12 +560,17 @@ export function flowBadgeLegs(
 export const FLOW_BADGE_W = 28;
 export const FLOW_BADGE_H = 17;
 export function flowBadgeSpots(n: number, edge: PinEdgeGeo): Rect[] {
+  // Beside a vertical arrow the badges stack in a column while the arrow has room for it. A
+  // short vertical arrow between two stacked blocks has only the row gap to spend, so there
+  // the stack turns into rows of three, which still stop short of the next column's blocks.
+  const perRow = !edge.horizontal && edge.extent !== undefined && n * 21 - 4 > edge.extent - 12 ? 3 : 1;
+  const rows = Math.ceil(n / perRow);
   return Array.from({ length: n }, (_, i) =>
     edge.horizontal
       ? { x: edge.midX - 14, y: edge.midY + 16 + i * 21, w: FLOW_BADGE_W, h: FLOW_BADGE_H }
       : {
-          x: edge.midX + 12,
-          y: edge.midY - (n * 21 - 4) / 2 + i * 21,
+          x: edge.midX + 12 + (i % perRow) * 30,
+          y: edge.midY - (rows * 21 - 4) / 2 + Math.floor(i / perRow) * 21,
           w: FLOW_BADGE_W,
           h: FLOW_BADGE_H,
         },

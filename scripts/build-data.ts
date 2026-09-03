@@ -1355,7 +1355,7 @@ function checkDiagramCollisions(
     const found =
       layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
       layout.edges.find((e) => `${e.to}->${e.from}` === ref);
-    return found ? { midX: found.midX, midY: found.midY, horizontal: found.horizontal } : undefined;
+    return found ? { midX: found.midX, midY: found.midY, horizontal: found.horizontal, extent: found.extent } : undefined;
   };
 
   const checkSpots = (kind: string, at: string, rects: Rect[], ownBlock?: string) => {
