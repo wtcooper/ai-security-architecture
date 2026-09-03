@@ -246,9 +246,9 @@ surface for customer-owned agent definitions.
   container beside the container's own arrows, so the harness's memory arrow and its local
   tools' registry arrow no longer share a corridor. The pins on the install edge are
   tool-source provenance and egress control (the sandbox's allowlist, one entry);
-  the mirror carries AI BOM at admission and read-only-to-agents access governance, because
-  a writable cache is a message board between sandboxes and an escape route — the OpenAI–
-  Hugging Face incident began there, and its replay lands on the block. `patternSupplyBackhaul`
+  the registry carries AI BOM at admission and access governance that keeps pulling and
+  publishing as separate grants (agents pull, build pipelines publish); the OpenAI–Hugging
+  Face replay lands on the block. `patternSupplyBackhaul`
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.

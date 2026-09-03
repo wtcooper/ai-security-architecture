@@ -661,6 +661,11 @@ function checkArchetypes(
     if (!arch.walkthrough) fail(`${where}: needs a walkthrough — the idealised main use`);
     if (arch.walkthrough && !arch.walkthrough.moves?.trim())
       fail(`${where} walkthrough: needs a "moves" line saying what the architecture is for`);
+    // The sequence diagram labels every arrow with the edge's label, so an edge without one
+    // draws an unlabelled arrow there.
+    for (const e of arch.edges) {
+      if (!e.label?.trim()) fail(`${where}: edge ${e.from}->${e.to} needs a label — every sequence arrow shows one`);
+    }
     // A walk is one connected sequence. Every step after the first has to touch a block the
     // walk has already reached — as the next hop, or as a second input converging on a block
     // already on the path. A block nested in a container counts as reached when the container
