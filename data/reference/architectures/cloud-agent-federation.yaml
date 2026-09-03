@@ -1,0 +1,988 @@
+id: archAgentFederation
+surface: surfaceCloud
+rank: 7
+title: Agent-to-agent federation across platforms
+abbrev: A2A federation
+
+summary:
+  - >
+    Our agent working with agents other organisations run — a vendor platform's agent, a
+    partner's — over the Agent2Agent protocol, in both directions. The whole architecture is
+    an identity problem: which agent is speaking, on whose behalf, with what it may do, and how
+    far that authority is allowed to travel.
+
+description:
+  - >
+    A2A is thin on purpose. It defines how agents discover each other (a signed Agent Card),
+    how they exchange work (tasks, messages, artifacts, over gRPC, HTTP+JSON or JSON-RPC) and
+    which authentication schemes a peer accepts — and it stops there. Credentials are obtained
+    out of band; the identity that authenticates is the calling agent, not the user it works
+    for; whether a card is signed is a MAY; per-skill authorization is delegated to whatever
+    sits in front of the agent. Everything an enterprise needs for identity is therefore
+    plumbing it brings itself, and this drawing is that plumbing, made explicit: workload
+    identities for agents, identity assertions for users, an authorization server that mints
+    and exchanges, and a gateway that admits cards and enforces scopes per skill.
+  - >
+    Two identities travel on every task and must never be confused. The agent's identity says
+    which workload is calling — our harness registered as a client in the peer's platform, the
+    peer's agent registered in ours — authenticated with a private key or mutual TLS, never a
+    shared secret. The user's identity says on whose behalf, and it travels as an identity
+    assertion the peer's platform can verify because it federates with our identity provider,
+    exchanged for a token whose audience is that peer and whose scope is the skill being
+    invoked. Where no federation exists, the user's identity does not travel at all: the task
+    stops in `TASK_STATE_AUTH_REQUIRED` and the person authenticates to the peer themselves.
+  - >
+    Authority must not propagate. A token our gateway obtains for a peer is bound to that peer
+    and to one skill; when the peer delegates onward to a third agent, it does so on its own
+    identity and whatever grant its user gave it, not on ours — the delegation-chain opacity
+    that OWASP names is exactly this token travelling one hop too far. Inbound, the same rule:
+    a peer's token is accepted only if its audience is our agent, validated on every request,
+    and never forwarded to our tool servers or systems of record, which are reached on a
+    token exchanged for the purpose.
+  - >
+    Everything a peer returns is untrusted content read by our model. Artifacts, status
+    messages and the card itself land in our agent's context as instruction, so the gateway
+    classifies inbound artifacts the way it classifies any tool result, and the card a peer
+    publishes is admitted once — signature verified, hash pinned, skills reviewed — into a
+    registry our agents may reach, not discovered live from the open web.
+  - >
+    How much of this is in production is an honest question. A2A reached 1.0 in March 2026
+    under the Agentic AI Foundation, the specification has three formal bindings, and the
+    major agent platforms publish cards; but most enterprise agent networks today are internal,
+    and cross-organisation federation is early. This drawing is the target state to build
+    toward and the checklist to hold a vendor's A2A story against, not a claim about what is
+    common.
+
+distinguishedBy:
+  - >
+    Against the multi-agent workflow: there the specialists are ours, in one harness, on one
+    identity, and the delegation chain is internal. Here every hop crosses an organisation, and
+    what was a function call becomes an authenticated request with a scope.
+  - >
+    Against the remote MCP server we publish: the same authorization machinery — an
+    authorization server, audience-bound tokens, identity assertions — pointed at a peer that
+    is an agent rather than a tool. The difference is that a peer acts, delegates onward and
+    returns content composed by a model, so the artifact path and the delegation chain need
+    controls a tool result never did.
+  - >
+    Against the enterprise AI chat with connectors: there the vendor's agent reaches into our
+    systems through our gateway as a tool caller. Here two agents negotiate work as peers, in
+    both directions, and each side is somebody's published agent.
+
+exemplars:
+  - name: Agent2Agent protocol v1.0
+    note: >
+      The specification this drawing follows — signed Agent Cards (JWS over a canonical form),
+      the A2A-Version header, three bindings, OAuth 2.0 and OpenID Connect and mutual TLS as
+      the declared security schemes, and the auth-required task state.
+    url: https://a2a-protocol.org/latest/specification/
+    asOf: "2026-09"
+  - name: Enterprise agent platforms with A2A endpoints
+    note: >
+      The major agent platforms publish Agent Cards and accept tasks over A2A; each brings its
+      own authorization server and tenant model, which is why the token endpoint is an item on
+      the peer and why federation is decided per platform.
+    url: https://a2a-protocol.org/latest/topics/enterprise-ready/
+    asOf: "2026-09"
+  - name: Identity assertion authorization grant
+    note: >
+      The IETF draft that gives a user's identity a way to travel between an identity provider
+      and another organisation's authorization server without a browser — the same mechanism
+      enterprise-managed authorization uses for MCP, applied here to a peer agent's token
+      endpoint.
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-identity-assertion-authz-grant-04.html
+    asOf: "2026-09"
+
+zones:
+  - id: zoneUser
+    owner: user
+    note: The person whose task crosses to another organisation's agent — present at the start, and asked again only when a peer needs their own consent.
+  - id: zoneCloud
+    owner: cloud
+    note: >
+      Everything we operate: the surface that binds the user's identity, our identity provider
+      and authorization server, the harness that speaks A2A in both directions, the crossing
+      every task leaves and arrives through, and our own tool servers and systems of record.
+  - id: zoneVendor
+    owner: vendor
+    note: >
+      An agent platform we hold an agreement with. Its agent, its Agent Card, its token
+      endpoint and its tenant model are theirs; what we hold is the assessment behind the
+      agreement and the federation that lets our users' identity be honoured there.
+  - id: zoneExternal
+    owner: external
+    note: >
+      Outside any agreement: the model provider our harness infers on, and a partner
+      organisation's agent that ours works with on nothing more than a signed card and a
+      registration.
+  - id: zoneGovernance
+    owner: governance
+    note: >
+      Drawn across every band because it governs every band: the identities of our agents,
+      the registry of peers we admit, the per-skill policy the gateway enforces, and the audit
+      that has to join two organisations' records on one task.
+
+blocks:
+  - id: user
+    kind: actor
+    title: End user
+    icon: person
+    zone: zoneUser
+    col: 0
+    row: 1
+    note: >
+      The person on whose behalf the task runs. Their identity is the thing that must travel
+      to the peer correctly — or not travel, and be asked for again.
+
+  - id: idp
+    kind: service
+    title: Identity provider
+    zone: zoneCloud
+    col: 1
+    row: 0
+    note: >
+      Our identity provider, drawn because tokens flow through it: the user signs in here, the
+      front end holds the resulting ID token, and the authorization server turns that login into
+      identity assertions a federated peer platform will honour. Federation is a relationship
+      configured here, per platform — the peer's token endpoint trusts our issuer and keys, or
+      it does not, and that decides which of the two user-identity walks applies.
+    items:
+      - id: sso
+        label: SSO login
+        icon: person
+        note: The corporate sign-in; its ID token is the subject token for every exchange that follows.
+      - id: exchange
+        label: Token exchange
+        icon: key
+        note: >
+          RFC 8693 in our own house: the user's login exchanged for an assertion whose audience
+          is a specific peer platform's authorization server, carrying the user's `sub` and the
+          skill scope requested — never a broad token.
+      - id: policy
+        label: App registry & policy
+        icon: scale
+        note: >
+          Which peer platforms our users' identity may be asserted to, and for whom. Removing a
+          group ends every new assertion to that peer at once.
+
+  - id: entry
+    kind: service
+    title: Application front end
+    cosaiComponent: componentApplication
+    zone: zoneCloud
+    col: 1
+    row: 1
+    note: >
+      Where the user's identity is bound before anything is delegated. Drawn because the user
+      is the core input here — a task that will travel between organisations starts with a
+      person asking for it — and because the auth-required round trip returns here.
+    items:
+      - id: api
+        label: App & API endpoint
+        icon: globe
+        note: The published surface the user's request arrives on.
+      - id: authn
+        label: Identity binding
+        icon: shield
+        note: >
+          Who is asking, bound at the start; the identity every downstream assertion is about,
+          and the thing a peer will be told.
+
+  - id: authServer
+    kind: service
+    title: Authorization server
+    zone: zoneCloud
+    col: 2
+    row: 0
+    note: >
+      Ours, and the hinge of the drawing in both directions. Outbound it exchanges the user's
+      login for an identity assertion aimed at a peer platform, and holds our harness's own
+      client credentials for each peer — a private key per registration, never a shared
+      secret. Inbound it is the token endpoint our published Agent Card names: a peer agent
+      authenticates here with its registered identity and receives a token whose audience is
+      our agent and whose scopes are the skills that peer was admitted for, and the gateway
+      asks it to validate every request and to mint the downstream tokens our tools are
+      reached with.
+    items:
+      - id: tokenIssuance
+        label: Token issuance
+        icon: key
+        note: Audience-bound to one agent, scoped to named skills, short-lived.
+      - id: grantProfiles
+        label: Grant profiles
+        icon: scale
+        note: >
+          `client_credentials` with `private_key_jwt` or mutual TLS for agent identities;
+          the JWT-bearer grant for a federated peer's user assertions; token exchange for
+          on-behalf-of tokens outbound and downstream. Nothing interactive unless a person is
+          genuinely present.
+      - id: clientReg
+        label: Client registration
+        icon: gear
+        note: >
+          Each peer agent we admit is a registered client with its own key; each peer platform
+          we call has registered ours. Registration is where an agent gets an identity, and
+          deregistration is where it loses one.
+
+  - id: harness
+    kind: service
+    title: Agent harness
+    cosaiComponent: componentReasoningCore
+    zone: zoneCloud
+    col: 2
+    row: 1
+    note: >
+      Our agent, speaking A2A both ways: a client that delegates a slice of the user's task to a
+      peer, and a server whose signed Agent Card other organisations' agents discover and call.
+      It holds no credentials for peers itself — the gateway obtains them — and it treats what
+      peers return as content, not instruction.
+    items:
+      - id: loop
+        label: Agent loop
+        icon: agent
+        note: Decides which part of the task a peer should do, and reads what comes back as one more input.
+      - id: context
+        label: Context assembly
+        icon: doc
+        note: Merges the request, memory and every artifact a peer returned into one prompt.
+      - id: a2aClient
+        label: A2A client
+        icon: agent
+        note: >
+          Sends tasks and reads artifacts, streams or polls, sends `A2A-Version`, and hands the
+          peer's `TASK_STATE_AUTH_REQUIRED` back to the person rather than guessing.
+      - id: card
+        label: Agent card
+        icon: doc
+        note: >
+          Our published card: skills, the security schemes we accept (OAuth 2.0 against our
+          authorization server, mutual TLS inside a trust boundary), our push-notification
+          expectations — signed, with the key discoverable, because a card that can be tampered
+          with redirects every caller.
+
+  - id: localTools
+    kind: service
+    title: Native tools
+    cosaiComponent: componentTools
+    parent: harness
+    zone: zoneCloud
+    col: 0
+    row: 0
+    note: >
+      The harness's built-in tools, nested because the loop calling them is not a hop. Here
+      they matter for one reason: memory, where a peer's artifact would persist if it were
+      written unclassified.
+    items:
+      - id: inProcess
+        label: Tool handlers
+        icon: code
+        note: Functions in the application, including the state and retrieval reads the loop treats as context.
+
+  - id: memory
+    kind: service
+    title: Memory & state
+    cosaiComponent: componentDataStorage
+    zone: zoneCloud
+    col: 1
+    row: 2
+    note: >
+      Task state across the days a federated task may take, and the artifacts peers returned.
+      Anything written here from a peer is prose the next turn treats as instruction.
+    items:
+      - id: taskState
+        label: Case state
+        icon: folder
+        note: Which peer holds which slice, and the task ids to reconcile against.
+      - id: vector
+        label: Vector index
+        icon: search
+        note: Retrieval over past artifacts — the poisoning surface if artifacts are stored unclassified.
+
+  - id: gateway
+    kind: service
+    title: AI gateway
+    zone: zoneCloud
+    col: 3
+    row: 1
+    pack: aiGatewayTraffic
+    note: >
+      The crossing every task leaves and arrives through, and where A2A's gaps are closed:
+      it holds the registry of admitted peer cards (signature verified, hash pinned), obtains
+      the peer-bound token for each outbound task from our authorization server, sends
+      `A2A-Version` and the trace context, classifies every inbound artifact before the
+      harness reads it, and on the inbound side validates a peer's token against our agent's
+      audience and enforces scopes per skill — the authorization the protocol says SHOULD
+      exist and leaves to us.
+    items:
+      - id: a2a
+        label: A2A gateway
+        icon: agent
+        note: >
+          The traffic class this drawing is about: tasks, messages, artifacts and push
+          notifications between agents, brokered like any other call — routed per skill,
+          metered per peer, logged per task.
+
+  - id: internalTools
+    kind: service
+    title: Tool services
+    cosaiComponent: componentTools
+    zone: zoneCloud
+    col: 2
+    row: 3
+    pack: toolServicesRemote
+    note: >
+      Our own servers and connectors, reached when an inbound task from a peer needs our
+      systems — on a token exchanged for the purpose, never on the peer's token.
+
+  - id: orgData
+    kind: external
+    title: Enterprise data
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 1
+    row: 3
+    note: >
+      The records a peer's task ultimately touches, inside the scope the exchanged token names
+      and the tenant it belongs to.
+    items:
+      - id: data
+        label: Org data
+        icon: db
+        note: Reached only within the delegation the exchanged token carries.
+
+  - id: peerVendor
+    kind: provider
+    title: Peer agent
+    zone: zoneVendor
+    col: 4
+    row: 2
+    note: >
+      A vendor platform's agent under an agreement we hold. Its card names its skills and the
+      security schemes it accepts; its token endpoint is where our harness's registered identity
+      and our users' assertions are turned into tokens; its tenant model is what decides
+      whether our user's identity means anything there. The agreement buys assessment and a
+      federation relationship — not visibility into how it runs.
+    items:
+      - id: card
+        label: Agent card
+        icon: doc
+        note: >
+          Signed with JWS over the canonical card, verified against a published key, pinned by
+          hash in our registry. Skills, `securitySchemes`, `security`, `supportedInterfaces`,
+          `capabilities` including whether the card has an authenticated extended form.
+      - id: task
+        label: Task endpoint
+        icon: plug
+        note: Where tasks are sent and artifacts stream back, on the binding the card lists.
+      - id: token
+        label: Token endpoint
+        icon: key
+        note: >
+          The platform's own authorization server, named by the card: our agent's client
+          credentials and, where federated, our users' identity assertions are redeemed here.
+      - id: push
+        label: Push notifications
+        icon: mail
+        note: >
+          The webhook the peer calls when a long task changes state — authenticated with the
+          credentials we configured on the task, and validated by us before anything is read.
+
+  - id: provider
+    kind: provider
+    title: Model provider
+    zone: zoneExternal
+    col: 5
+    row: 0
+    pack: modelProvider
+    note: Where our harness's own inference goes, through the gateway on a brokered credential.
+
+  - id: partner
+    kind: provider
+    title: Peer agent
+    zone: zoneExternal
+    col: 5
+    row: 2
+    note: >
+      A partner organisation's agent, outside any platform agreement: everything we know about
+      it is its signed card and the registration we gave it. Its users' identities do not
+      travel to us and ours do not travel to it; tasks run on agent identities and skill scopes
+      alone, and anything needing a person's authority stops in `TASK_STATE_AUTH_REQUIRED`.
+    items:
+      - id: card
+        label: Agent card
+        icon: doc
+        note: Verified and pinned before a single task is sent, and re-verified when it changes.
+      - id: task
+        label: Task endpoint
+        icon: plug
+        note: Tasks and artifacts, on the agent identity our registration with them established.
+      - id: token
+        label: Token endpoint
+        icon: key
+        note: Where our harness's client credentials for this partner are redeemed — no user assertions, because nothing federates.
+      - id: push
+        label: Push notifications
+        icon: mail
+        note: The webhook path, authenticated per task and validated before use.
+
+  - id: govIdentity
+    kind: governance
+    title: Identity services
+    icon: person
+    zone: zoneGovernance
+    col: 0
+    row: 4
+  - id: govSecrets
+    kind: governance
+    title: Secrets & key management
+    icon: key
+    zone: zoneGovernance
+    col: 1
+    row: 4
+  - id: govPolicy
+    kind: governance
+    title: Policy & authorization
+    icon: scale
+    zone: zoneGovernance
+    col: 2
+    row: 4
+  - id: govSupplyChain
+    kind: governance
+    title: Supply-chain assurance
+    icon: db
+    zone: zoneGovernance
+    col: 3
+    row: 4
+  - id: govObservability
+    kind: governance
+    title: Observability & response
+    icon: eye
+    zone: zoneGovernance
+    col: 4
+    row: 4
+
+edges:
+  - from: user
+    to: entry
+    path: primary
+    bidir: true
+    label: request / outcome
+    note: The person asks; days later, possibly, the outcome returns — and once in between, a peer may ask for their consent.
+  - from: entry
+    to: idp
+    path: primary
+    bidir: true
+    label: sign-in / ID token
+    note: Single sign-on at our identity provider; the ID token the front end holds is what every later assertion about this user is derived from.
+  - from: entry
+    to: harness
+    path: primary
+    bidir: true
+    label: turn / result
+    note: The task enters the loop with the user's identity attached; results and auth-required prompts return the same way.
+  - from: idp
+    to: authServer
+    path: primary
+    bidir: true
+    label: federation / assertions
+    note: >
+      The identity provider and the authorization server are one trust domain: the login the
+      IdP issued is what the authorization server exchanges into peer-bound identity
+      assertions, under the IdP's registry of which peers may be told about which users.
+  - from: localTools
+    to: memory
+    route: vh
+    path: primary
+    bidir: true
+    label: read & write / context
+    note: Task state and stored artifacts, read back as context on every turn — classified before they were written.
+  - from: harness
+    to: gateway
+    path: primary
+    bidir: true
+    label: "inference, MCP & skills"
+    note: >
+      Every call the harness makes leaves here — inference, and every A2A task to a peer, sent
+      without a credential of its own because the gateway attaches the peer-bound token it
+      obtained for this task. Inbound tasks from peers arrive the same way, already validated.
+  - from: gateway
+    to: authServer
+    route: vh
+    path: primary
+    bidir: true
+    label: validate & exchange / tokens
+    note: >
+      Outbound: the user's assertion for the peer platform and our harness's client
+      credentials, exchanged here per task. Inbound: a peer's token validated per request —
+      audience is our agent, scope covers the skill — and a downstream token minted for our
+      tool servers so the peer's token stops at the crossing.
+  - from: gateway
+    to: internalTools
+    route: vh
+    path: primary
+    bidir: true
+    label: internal tool calls
+    note: An inbound task that needs our systems reaches them on a token exchanged for the purpose, scoped to the skill.
+  - from: internalTools
+    to: orgData
+    path: primary
+    bidir: true
+    label: scoped reads & writes
+    note: Inside the tenant and the scope the exchanged token names; a peer's task never widens what a user could do.
+  - from: gateway
+    to: provider
+    route: hv
+    path: external
+    bidir: true
+    label: inference / completion
+    note: Our harness's own inference, on a brokered credential, against an allowlisted provider.
+  - from: gateway
+    to: peerVendor
+    route: hv
+    path: external
+    bidir: true
+    label: card, tokens & tasks / artifacts
+    note: >
+      Discovery of the signed card (verified, pinned), redemption of our agent's credentials and
+      the user's assertion at the platform's token endpoint, and then the task itself —
+      `A2A-Version`, trace context, a token bound to this peer and this skill. Artifacts and
+      status updates return and are classified before the harness reads them. The same edge
+      carries the reverse: the vendor's agent calling ours.
+  - from: gateway
+    to: partner
+    route: hv
+    path: external
+    bidir: true
+    label: card, tokens & tasks / artifacts
+    note: >
+      The same shape with no federation: our agent's client credentials redeemed at the
+      partner's token endpoint, tasks on that identity and a skill scope, artifacts back
+      through classification. Nothing about our user travels, and their user never reaches
+      our systems on anything but an auth-required round trip of their own.
+
+pins:
+  risks:
+    - risk: riskAgentDelegationChainOpacity
+      at: gateway->peerVendor
+      note: >
+        A peer that delegates onward does so on its own identity and grant, never ours: the
+        token we sent is bound to that peer and that skill, so it cannot travel a hop further.
+        What we lose is sight — which agents actually touched the task — unless trace context
+        and task ids are carried and the peer's audit is part of the agreement.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: gateway->authServer
+      note: >
+        The failure the protocol leaves to us: a peer's inbound token forwarded to our tool
+        servers, or a user's assertion redeemed for a broader scope than the skill. Both are
+        prevented at the exchange — audience and scope narrowed per hop — and nowhere else.
+    - risk: riskPromptInjection
+      at: gateway->partner
+      note: >
+        Artifacts, status messages and the card's own descriptions are content composed by a
+        model we do not operate, and they land in our agent's context as instruction. The
+        classification at the crossing is the only control between a partner's output and our
+        agent's next action.
+    - risk: riskStaleAgentIdentityBinding
+      at: authServer
+      note: >
+        A peer agent deregistered at the platform, or a partner whose card key rotated, still
+        holds tokens until they expire and still matches a pinned card until it is re-verified.
+        Short lifetimes, introspection and re-verification on card change are what make the
+        binding current.
+    - risk: riskShadowAndUnknownAgents
+      at: gateway
+      note: >
+        Live discovery from the open web is how an agent ends up talking to a card nobody
+        reviewed. Admission into the gateway's registry — signature, hash, skills, security
+        schemes — is what separates a peer from a stranger.
+    - risk: riskCrossTenantCredentialPropagation
+      at: gateway->internalTools
+      note: >
+        An inbound task carries a peer's tenant and, if federated, one of our users. The
+        downstream token must name both, and our tool servers must check both; the protocol's
+        `tenant` parameter is opaque and enforces nothing.
+    - risk: riskSensitiveDataDisclosure
+      at: gateway->peerVendor
+      note: >
+        Whatever our harness puts in a task message leaves our organisation. Data-loss
+        inspection on the outbound task is the same control as on any tool call, applied to a
+        payload a model composed.
+    - risk: riskEconomicDenialOfWallet
+      at: gateway->partner
+      note: >
+        A partner's agent that retries, streams forever or fans out is somebody else's loop
+        spending our budget; A2A has no quotas of its own, so ours are per peer and per task.
+    - risk: riskRogueActions
+      at: harness
+      note: >
+        Our agent acting on a peer's artifact as if it were the user's instruction — the
+        confused agent, one organisation removed. Consequential actions still stop for the
+        person, however many agents recommended them.
+  capabilities:
+    - capability: capabilityNhiManagement
+      at: authServer
+      note: >
+        One identity per agent per relationship: our harness registered in each peer platform
+        with its own key, each peer agent registered with us the same way. No shared secrets,
+        no borrowed human sessions, a lifecycle with an owner and a decommission date.
+    - capability: capabilityIga
+      at: idp->authServer
+      note: >
+        Which peers may be told about which users, decided in the identity provider's registry
+        and evaluated at every exchange. A federation is a relationship a person owns, reviewed
+        like any access grant.
+    - capability: capabilityCredentialIsolation
+      at: gateway->authServer
+      note: >
+        Every hop gets its own token: user assertion → peer-bound token outbound; peer token →
+        downstream token inbound. The exchange is the delegation record, and nothing crosses a
+        boundary on the credential it arrived with.
+    - capability: capabilityAgentRegistry
+      at: govSupplyChain
+      note: >
+        The registry of admitted peer cards — signature verified against a published key, hash
+        pinned, skills and security schemes reviewed — and the registry of our own published
+        cards. An agent not in it is not a peer.
+    - capability: capabilityTransportSecurity
+      at: gateway->peerVendor
+      note: >
+        TLS with certificate validation on every binding; mutual TLS or sender-constrained tokens
+        for the agent-to-agent path, so a bearer token lifted from a log cannot be replayed by
+        whoever holds it.
+    - capability: capabilityPromptInjectionDefense
+      at: gateway->partner
+      note: >
+        Inbound artifacts and status messages classified before the harness reads them, with
+        the peer's identity attached so a steering artifact is attributable to the agent that
+        sent it.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: gateway
+      note: >
+        Per-skill authorization on both directions — which peer may invoke which of our skills,
+        which of a peer's skills our agent may invoke for which users — enforced at the crossing
+        because the protocol only says it SHOULD be.
+    - capability: capabilityAiDlp
+      at: gateway->peerVendor
+      note: Inspect the outbound task payload and the returned artifacts as the boundary crossings they are.
+    - capability: capabilityRateLimiting
+      at: gateway->partner
+      note: Per peer, per task and per skill, sized for agents that stream, retry and fan out.
+    - capability: capabilityHitlControls
+      at: entry->harness
+      note: >
+        The auth-required and input-required task states surface to the person here: a peer
+        that needs their consent gets it from them, in their own session, never from our agent
+        on their behalf.
+    - capability: capabilityAiTprm
+      at: peerVendor
+      note: >
+        The assessment behind the agreement: how the platform handles our users' assertions,
+        its tenant isolation, its card signing, its audit export — the questions A2A does not
+        answer and the contract must.
+    - capability: capabilityAgentObservability
+      at: govObservability
+      note: >
+        W3C trace context on every task, task ids reconciled across organisations, and the
+        agent identity on each hop — the only way a delegation chain that spans two audits can
+        be read as one.
+    - capability: capabilityAuditLogging
+      at: govObservability
+      note: Every task in and out with peer, user, skill, scope and outcome, retained where an incident can join it to the peer's record.
+    - capability: capabilityKillSwitch
+      at: govObservability
+      note: >
+        Revoke a peer at the registry and the authorization server in one action, and let
+        introspection make it real for tokens already issued.
+    - capability: capabilitySecretsManagement
+      at: authServer
+      note: The private keys our agent authenticates with at each peer platform, issued and rotated by the secrets service, never in the harness.
+    - capability: capabilityMemoryProtection
+      at: localTools->memory
+      note: Artifacts stored only after classification, scoped to the task that received them.
+    - capability: capabilityMcpToolSecurity
+      at: gateway->peerVendor
+      note: >
+        The peer's card treated as a dependency: signature verified against a published key at
+        admission and on every task, hash pinned, a change a decision rather than a surprise.
+
+walkthrough:
+  title: A user's task crosses to a peer platform
+  moves: >-
+    A request in, one slice delegated to another organisation's agent on the user's own
+    identity, and the artifact back — classified, attributable, bounded.
+  steps:
+    - follow: user->entry
+      note: >
+        The person asks for something a peer platform's agent can do part of — a booking, a record
+        in their system, an analysis only they can run.
+    - follow: entry->idp
+      note: >
+        Single sign-on. The front end holds the user's ID token; that token, not a password or a
+        session cookie, is what every assertion about this user will be derived from.
+    - follow: idp->entry
+      note: >
+        The ID token returns; the user's identity is bound before anything is delegated.
+    - follow: entry->harness
+      note: >
+        The task enters the loop with the user's identity attached.
+    - follow: localTools->memory
+      note: >
+        The loop reads task state — an earlier slice, a peer's previous artifact — through its handlers.
+    - follow: memory->localTools
+      note: >
+        It loads as context, classified when it was written.
+    - follow: harness->gateway
+      note: >
+        The loop decides a slice belongs to the vendor platform's agent and sends the task through
+        the crossing — no credential attached, because the harness holds none for peers.
+    - follow: gateway->peerVendor
+      note: >
+        Discovery, once: the gateway reads the peer's Agent Card, verifies its JWS signature against
+        the published key, pins its hash, and checks the skill and the security schemes against the
+        registry entry an owner admitted. A card that changed since admission stops here.
+    - follow: peerVendor->gateway
+      note: >
+        The card confirms the skill, names the token endpoint and the accepted schemes, and lists
+        the bindings; the gateway picks one and sets `A2A-Version`.
+    - follow: gateway->authServer
+      note: >
+        Two credentials for one task: our harness's client identity for this platform (a private key,
+        registered there), and the user's identity assertion — the ID token exchanged for a JWT whose
+        audience is the platform's authorization server, whose `sub` is the user, and whose scope is
+        this one skill. The identity provider's registry says this platform may be told about this
+        user; otherwise the exchange fails here and the task will stop for the person's own consent.
+    - follow: authServer->gateway
+      note: >
+        The assertion and the client assertion return — short-lived, narrow, aimed at one peer.
+    - follow: gateway->peerVendor
+      note: >
+        At the platform's token endpoint: client authentication with our private key, and the user
+        assertion under the JWT-bearer grant. The platform's authorization server validates our
+        issuer and keys, maps the user to its tenant, and issues a token bound to its agent and to
+        the skill. Then the task: `message/send` with that token, trace context, and a payload the
+        gateway inspected for what it carries out of the organisation.
+    - follow: peerVendor->gateway
+      note: >
+        The peer's agent works — on our user's identity in its tenant, and on its own identity for
+        anything it delegates onward, since our token can go no further — and artifacts and status
+        updates return. Each is classified before the harness sees it: model-composed content from
+        another organisation is instruction until proven otherwise.
+    - follow: gateway->harness
+      note: >
+        The artifact lands in context, attributed to the peer that produced it and logged against the
+        task, the user, the skill and both agent identities.
+    - follow: localTools->memory
+      note: >
+        Stored — after classification — scoped to this task.
+    - follow: harness->entry
+      note: >
+        The composed outcome heads back to the surface.
+    - follow: entry->user
+      note: >
+        The person sees the result, and the audit shows every organisation that touched it.
+
+scenarios:
+  - title: A peer agent calls our published agent
+    steps:
+      - follow: partner->gateway
+        note: >
+          A partner's agent discovers our signed Agent Card — skills, the security schemes we accept,
+          our token endpoint — and asks for a token. The card says OAuth 2.0 against our authorization
+          server, so it authenticates with the identity we registered for it and a key, not a secret.
+      - follow: gateway->authServer
+        note: >
+          `client_credentials` with `private_key_jwt`: the partner's agent identity, `resource` naming our
+          agent, scopes limited to the skills that registration admitted. No user, no consent — the
+          registration was the approval, and its scopes are the whole bound.
+      - follow: authServer->gateway
+        note: >
+          A token audience-bound to our agent, short-lived. The gateway validates it on every request
+          that follows and enforces the skill scope per call — the per-skill authorization the
+          protocol says SHOULD exist.
+      - follow: gateway->harness
+        note: >
+          The task reaches our agent as a request from a named peer, with no human behind it: the
+          policy for autonomous callers applies, and nothing in the payload is an instruction.
+      - follow: harness->gateway
+        note: >
+          Our agent needs a record from our own systems to do the work.
+      - follow: gateway->authServer
+        note: >
+          Not on the partner's token. The gateway exchanges it for a downstream token whose audience
+          is our tool server and whose scope is what this skill reads — the partner's tenant named,
+          the delegation logged.
+      - follow: authServer->gateway
+        note: >
+          The downstream token returns.
+      - follow: gateway->internalTools
+        note: >
+          The read, on that token — our tool server sees a peer's task, not a bearer it cannot place.
+      - follow: internalTools->orgData
+        note: >
+          Inside the scope and the partner's tenant, and not one record wider.
+      - follow: orgData->internalTools
+        note: >
+          The record comes back.
+      - follow: internalTools->gateway
+        note: >
+          Through the crossing, logged against the task.
+      - follow: gateway->harness
+        note: >
+          Into the loop; the artifact is composed.
+      - follow: harness->gateway
+        note: >
+          The artifact leaves — inspected for what it carries out, because it is our data going to
+          another organisation.
+      - follow: gateway->partner
+        note: >
+          Returned to the partner's agent, attributable to our agent identity and this task id in
+          both organisations' logs.
+
+  - title: The peer needs the person's own consent
+    steps:
+      - follow: harness->gateway
+        note: >
+          A task for a partner whose platform does not federate with our identity provider: our user's
+          identity cannot travel, so the task goes on our agent's identity alone.
+      - follow: gateway->partner
+        note: >
+          The partner's agent reaches a step that needs the person's own authority — their account on the
+          partner's side — and returns `TASK_STATE_AUTH_REQUIRED` with what it needs, instead of
+          proceeding on our agent's authority, which would be the confused deputy.
+      - follow: partner->gateway
+        note: >
+          The status update returns and is classified like any artifact; a status message is content too.
+      - follow: gateway->harness
+        note: >
+          The loop does not guess and does not escalate its own token: it hands the requirement to the
+          person.
+      - follow: harness->entry
+        note: >
+          The prompt surfaces — which partner, which step, what it will be allowed to do.
+      - follow: entry->user
+        note: >
+          The person authenticates to the partner themselves, in their own session with that
+          organisation; our agent never holds that credential.
+      - follow: user->entry
+        note: >
+          Done; the task may resume.
+      - follow: entry->harness
+        note: >
+          The confirmation reaches the loop.
+      - follow: harness->gateway
+        note: >
+          The task is resumed with the same task id.
+      - follow: gateway->partner
+        note: >
+          The partner's agent continues, now on the person's own grant in its system and our agent's
+          identity for the task — two identities, neither borrowed.
+
+  - title: A card changes after admission
+    steps:
+      - follow: gateway->peerVendor
+        note: >
+          A routine task begins with the card check every task begins with: the gateway fetches the
+          peer's Agent Card and verifies its JWS signature.
+      - follow: peerVendor->gateway
+        note: >
+          The signature verifies — but the hash differs from the pinned one: a skill's description
+          changed, or the token endpoint moved. A changed card is a changed agent.
+      - follow: gateway->harness
+        note: >
+          The task does not go. The change is queued for the owner who admitted the card — a moved
+          token endpoint is exactly how a redirected card steals every credential sent to it — and the
+          harness is told the peer is unavailable rather than handed a substitute.
+
+  - title: A peer's artifact tries to steer our agent
+    steps:
+      - follow: gateway->partner
+        note: >
+          An ordinary task to a partner's agent.
+      - follow: partner->gateway
+        note: >
+          The artifact that returns carries an instruction — read this URL, include these records in
+          your next message, call this other agent — written by a model we do not operate, or by
+          whoever steered it.
+      - follow: gateway->harness
+        note: >
+          Classification at the crossing marks it; what reaches the loop is content with a provenance
+          label, not a plan. What survives classification still stands beside the system instruction,
+          which is why consequential actions stop for the person regardless.
+      - follow: localTools->memory
+        note: >
+          Nothing is stored unclassified: an artifact written to memory as-is would re-execute on every
+          later task that retrieves it.
+      - follow: harness->gateway
+        note: >
+          The loop's next call — inference, or a task to another peer — leaves through the same
+          crossing, where an attempt to forward the poisoned instruction onward is one more inspected
+          payload.
+
+  - title: A revoked peer keeps calling
+    steps:
+      - follow: partner->gateway
+        note: >
+          An agent whose registration was revoked an hour ago — the partnership ended, or its key was
+          reported compromised — calls with a token issued before the revocation.
+      - follow: gateway->authServer
+        note: >
+          Introspection, not local validation: the authorization server knows the client was revoked.
+      - follow: authServer->gateway
+        note: >
+          Revoked; the token is refused and the registry entry is already gone, so the card is no longer
+          a peer's.
+      - follow: gateway->partner
+        note: >
+          A 401 with our resource metadata, so an honest client would start over — and this one cannot
+          register.
+
+deviations:
+  - subject: The authorization server is reached through the gateway's crossing
+    reason: >
+      The MCP publisher draws its authorization server as a crossing of its own, reached by
+      callers directly. Here the peers' token acquisition is carried on the peer edges and the
+      exchange on the gateway edge: with two peers, a provider and a federation to draw, a
+      direct edge from each peer to the authorization server cannot be routed without crossing
+      the inference path, and the enterprise deployments this drawing describes front the
+      token endpoint with the same edge tier in any case. The item notes on the peers' token
+      endpoints and our authorization server carry the flow.
+  - subject: The identity provider is drawn because tokens flow through it
+    reason: >
+      The catalogue keeps identity providers as a governance call-out except where tokens
+      genuinely flow through them. Here the user's login is the subject token of every
+      outbound assertion, and the IdP's registry of federated peers is the decision that lets
+      a user's identity travel at all.
+  - subject: Two blocks share the title Peer agent
+    reason: >
+      A vendor platform's agent and a partner's agent are the same kind of thing at different
+      surfaces; the band says whose. Drawing both is the point of the architecture: federation
+      lets the user's identity travel to one and not the other, and the two walks differ only
+      in that.
+  - subject: The package mirror and its sources are not drawn
+    reason: >
+      The harness anatomy standard draws Private pkg registry wherever native tools install
+      packages. This drawing's subject is identity between agents, its native tools exist for
+      memory, and the install path is drawn identically on the single agent workflow; adding it
+      here would spend two blocks on a path this architecture does not change.
+  - subject: A2A peer agents are blocks, not a Tool services item
+    reason: >
+      Elsewhere in the catalogue a peer agent is an item on Tool services — how an agent reaches
+      another agent over the network. Here the peer is the subject, its card and token endpoint
+      are where the identity work happens, and an item could not carry them; the registered
+      Peer agent block is used in both the vendor and external bands.
+
+sources:
+  - title: "Agent2Agent protocol — specification v1.0"
+    url: https://a2a-protocol.org/latest/specification/
+  - title: "Agent2Agent protocol — what's new in v1.0 (signed Agent Cards, A2A-Version, bindings)"
+    url: https://a2a-protocol.org/latest/whats-new-v1/
+  - title: "Agent2Agent protocol — enterprise readiness"
+    url: https://a2a-protocol.org/latest/topics/enterprise-ready/
+  - title: "IETF — identity assertion authorization grant (draft-ietf-oauth-identity-assertion-authz-grant)"
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-identity-assertion-authz-grant-04.html
+  - title: "IETF — OAuth 2.0 token exchange (RFC 8693)"
+    url: https://www.rfc-editor.org/rfc/rfc8693.html
+  - title: "OWASP Top 10 for Agentic Applications 2026 — ASI07 insecure inter-agent communication, ASI02 tool misuse"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+  - title: "A2A protocol auth, taken apart — where the spec is thin (community analysis)"
+    url: https://dev.to/kanywst/a2a-protocol-auth-taken-apart-why-the-spec-is-thin-and-where-that-leaves-holes-22ii

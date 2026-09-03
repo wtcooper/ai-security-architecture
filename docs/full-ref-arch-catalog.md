@@ -10,7 +10,7 @@ re-run `npm run data`).
 Most of the parked entries fell to one test: *is this a distinct architecture, or an agent
 workflow with a different tool set, a single node, or a control drawn as a place?*
 
-## Active — 13
+## Active — 14
 
 ### Endpoint (4)
 
@@ -63,7 +63,7 @@ workflow with a different tool set, a single node, or a control drawn as a place
   runtimes in common use. The weight fetch from a public hub is the other half — an unsigned
   artifact arriving over the same path.
 
-### Cloud & hosted (6)
+### Cloud & hosted (7)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
@@ -73,8 +73,13 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 4 | Remote MCP server | `archRemoteMcpServer` | `cloud-remote-mcp-server.yaml` |
 | 5 | Self-hosted open-weights inference | `archSelfHostedInference` | `cloud-self-hosted-inference.yaml` |
 | 6 | Fine-tuning and model registry pipeline | `archTrainingPipeline` | `cloud-training-pipeline.yaml` |
+| 7 | Agent-to-agent federation across platforms | `archAgentFederation` | `cloud-agent-federation.yaml` |
 
-- **All six are on the zone grammar.** The three agent architectures — single, chat and
+- **Agent-to-agent federation** (added 2026-09-03) is the identity drawing: our harness speaking
+  A2A both ways with a vendor platform's agent and a partner's, an identity provider and
+  authorization server doing the exchanges the protocol leaves out, and the gateway admitting
+  cards and enforcing scopes per skill. Its walks are the identity flows.
+- **All six earlier drawings are on the zone grammar.** The three agent architectures — single, chat and
   multi-agent — are deliberately one drawing three times, differing only in their trigger and
   their fan-out. The other three each stress the grammar somewhere different: the MCP server
   inverts the band mapping because it is drawn from the publisher's chair, the training

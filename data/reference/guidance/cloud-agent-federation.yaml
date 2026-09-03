@@ -1,0 +1,121 @@
+# Controls guidance for the agent-to-agent federation archetype. Audience: the teams
+# connecting our agents to other organisations' agents over A2A, and the identity and risk
+# teams setting the requirements. A build pattern: each item is a property the design must
+# have before a peer is admitted, with the evidence the risk team collects.
+archetype: archAgentFederation
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository. Protocol claims follow A2A v1.0 (March 2026) and the OAuth
+  token-exchange and identity-assertion drafts it leaves the identity work to; adoption claims
+  are stated as the early state they are.
+
+overview:
+  - >-
+    A2A defines discovery (a signed Agent Card), work (tasks, messages, artifacts) and which
+    authentication schemes a peer accepts, and deliberately stops there: credentials are
+    obtained out of band, the authenticated identity is the calling agent rather than its
+    user, card signing is optional, and per-skill authorization is left to whatever sits in
+    front of the agent. Every requirement below is that missing identity layer, made
+    mandatory by our policy rather than by the protocol.
+  - >-
+    Two identities travel on every task and are never confused: the agent's (a registered
+    client with a private key or a mutual-TLS certificate, one per relationship) and the
+    user's (an identity assertion the peer's platform can verify because it federates with
+    our identity provider — or nothing, and the person is asked). Authority never propagates:
+    every hop gets a token bound to that hop's audience and skill, exchanged at our
+    authorization server and logged as a delegation step.
+
+items:
+  - title: Give every agent an identity of its own, per relationship
+    capabilities: [capabilityNhiManagement, capabilitySecretsManagement, capabilityTransportSecurity]
+    body:
+      - >-
+        Require our harness to be registered as a client in each peer platform under its own
+        identity, authenticating with `private_key_jwt` or mutual TLS — never a shared secret,
+        never a human's session — with the key held by the secrets service and rotated. Require
+        the same of every peer agent we admit: a registered client with a key, scopes limited
+        to the skills it was admitted for, an owner and a decommission date. Inside a trust
+        boundary, mutual TLS; across one, OAuth 2.0 with sender-constrained tokens where the
+        peer supports them, so a bearer lifted from a log cannot be replayed. Evidence: the
+        registration record on each side, a token from a test task showing agent identity,
+        audience and skill scope, and the key rotation log.
+
+  - title: Let the user's identity travel only where it is honoured, and never further
+    capabilities: [capabilityIga, capabilityCredentialIsolation, capabilityHitlControls]
+    body:
+      - >-
+        Decide federation per peer platform in the identity provider's registry: which peers
+        may be told about which users. Where federation exists, the user's login is exchanged
+        at our authorization server for an assertion whose audience is the peer's authorization
+        server, whose subject is the user and whose scope is the one skill being invoked — the
+        JWT-bearer grant at the peer's token endpoint, no browser, no per-peer consent. Where
+        it does not, the user's identity does not travel: the task stops in
+        `TASK_STATE_AUTH_REQUIRED` and the person authenticates to the peer themselves, in
+        their own session, and our agent never holds that credential. Inbound, the same
+        discipline: a peer's token is exchanged for a downstream token naming our tool server,
+        the skill and the peer's tenant before our systems are touched. Assessment probe: send a
+        task to a federated peer and confirm the token the peer received names our user and one
+        skill; send one to an unfederated peer and confirm the person, not our agent, was asked.
+
+  - title: Admit cards; never discover them live
+    capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiTprm]
+    body:
+      - >-
+        A peer's Agent Card is admitted into the gateway's registry by an owner: JWS signature
+        verified against a published key, hash pinned, skills, `securitySchemes`, token
+        endpoint and bindings reviewed, and the assessment behind the platform agreement on
+        file. Every task begins by re-verifying the card; a changed hash stops the task and
+        alerts the owner, because a moved token endpoint is how a redirected card steals every
+        credential sent to it. Publish our own card signed, with the key discoverable, and treat
+        a change to it as a release. Assessment probe: alter a pinned card's token endpoint in a
+        test registry and confirm the next task is refused and the owner notified.
+
+  - title: Enforce per-skill authorization at the crossing, in both directions
+    capabilities: [capabilityAgentRuntimeEnforcement, capabilityRateLimiting, capabilityAiDlp]
+    body:
+      - >-
+        The protocol says scopes SHOULD grant access to some skills and not others and leaves
+        enforcement to us. Require the gateway to enforce it: which peer may invoke which of our
+        skills, which of a peer's skills our agent may invoke for which users, decided per task
+        against the token's scope. Meter per peer, per task and per skill, because a peer's
+        agent that retries or fans out is another organisation's loop spending our budget. Inspect
+        the outbound task payload and the inbound artifacts as the boundary crossings they are.
+        Assessment probe: a valid peer token for skill A invoking skill B, and a task payload
+        carrying a record the user may not export.
+
+  - title: Treat everything a peer returns as content, and store nothing unclassified
+    capabilities: [capabilityPromptInjectionDefense, capabilityMemoryProtection]
+    body:
+      - >-
+        Artifacts, status messages and card descriptions are text composed by a model another
+        organisation runs; they land in our agent's context as instruction. Classify at the
+        crossing with the peer's identity attached, write to memory only after classification
+        and scoped to the task, and keep consequential actions behind the person regardless of
+        how many agents recommended them. Assessment probe: an artifact containing an
+        instruction to call a third agent, and confirmation that the loop surfaced it rather
+        than acted on it.
+
+  - title: Make one audit trail out of two organisations' logs, and be able to cut a peer off
+    capabilities: [capabilityAgentObservability, capabilityAuditLogging, capabilityKillSwitch]
+    body:
+      - >-
+        Carry W3C trace context and the task id on every hop and require the peer to do the
+        same as part of the agreement, so a delegation chain that spans two audits can be read
+        as one — the delegation-chain opacity OWASP names is otherwise exactly this. Log every
+        task in and out with peer, user, skill, scope and outcome. Revocation is one action at
+        the registry and the authorization server, made real for issued tokens by introspection
+        and short lifetimes. Assessment probe: revoke a test peer and confirm its next call fails
+        within one token lifetime and its card is no longer served as a peer's.
+
+sources:
+  - title: "Agent2Agent protocol — specification v1.0"
+    url: https://a2a-protocol.org/latest/specification/
+  - title: "Agent2Agent protocol — enterprise readiness"
+    url: https://a2a-protocol.org/latest/topics/enterprise-ready/
+  - title: "IETF — identity assertion authorization grant"
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-identity-assertion-authz-grant-04.html
+  - title: "IETF — OAuth 2.0 token exchange (RFC 8693)"
+    url: https://www.rfc-editor.org/rfc/rfc8693.html
+  - title: "OWASP Top 10 for Agentic Applications 2026"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/

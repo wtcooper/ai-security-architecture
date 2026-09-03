@@ -252,6 +252,16 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **A fourteenth architecture: agent-to-agent federation (2026-09-03).** A2A v1.0 defines
+  discovery, work and which auth schemes a peer accepts and leaves identity to the deployment,
+  so the drawing is that identity layer: Identity provider and Authorization server doing the
+  exchanges (agent client credentials per relationship, user identity assertions where a peer
+  platform federates, downstream tokens inbound), the gateway admitting signed cards and
+  enforcing scopes per skill, and Peer agent — a new registered provider block — in both the
+  vendor and external bands so the federated and unfederated walks sit side by side. The
+  harness gains A2A client and Agent card items; the gateway an A2A gateway item. The
+  authorization server is reached through the gateway's crossing here, recorded as a
+  deviation from the MCP publisher's shape. Adoption is described as early, honestly.
 - **The published MCP server draws its identity flows in full (2026-09-03).** Identity
   provider is registered as a block for the one place tokens flow through it: under
   enterprise-managed authorization the caller signs in there, exchanges its ID token for an
