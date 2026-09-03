@@ -43,8 +43,9 @@ export function ArchitecturesBrowser() {
   );
   // Index into the walk list, or null for the resting drawing. Every walk behaves identically:
   // the first is the complete walk through the architecture and the rest are variations, but
-  // nothing about the selection treats them differently.
-  const [walkIndex, setWalkIndex] = useState<number | null>(0);
+  // nothing about the selection treats them differently. A page opens on the resting drawing —
+  // the whole architecture, nothing faded — and a walk is something the reader chooses.
+  const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
@@ -67,7 +68,7 @@ export function ArchitecturesBrowser() {
 
   const select = (id: string) => {
     setArchetypeId(id);
-    setWalkIndex(0);
+    setWalkIndex(null);
     setHighlight(null);
   };
   const onWalk = (i: number | null) => {

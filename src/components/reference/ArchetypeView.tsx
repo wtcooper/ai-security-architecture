@@ -33,9 +33,9 @@ interface ArchetypeViewProps {
 }
 
 export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
-  // Opens on the flows tab with the walkthrough traced: a reader's first sight of a drawing is
-  // the numbered complete walk and its sequence, not an empty canvas waiting for a click.
-  const [tab, setTab] = useState<Tab>("flows");
+  // Opens on the overview with the full drawing: a reader's first sight is the whole
+  // architecture, nothing faded. Choosing the flows tab traces the walkthrough.
+  const [tab, setTab] = useState<Tab>("overview");
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const guidance = guidanceByArchetype.get(archetype.id);
 

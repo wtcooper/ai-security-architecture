@@ -138,7 +138,7 @@ Done, on `main`:
   components, personas, architectures and incidents.
 - Risks and Controls are master-detail pages: sticky grouped list, arrow keys, URL-backed
   selection; risks list the incidents that name them.
-- Reference page opens on the traced walkthrough, the picker sits in the header, the page
+- Reference page opens on the full resting drawing (reverted 2026-09-03 from the traced walkthrough at Wade's request), the picker sits in the header, the page
   title names the architecture; on phones the drawing folds behind a toggle and the tabs
   scroll sideways.
 - Incidents open on the architecture view, accept `?incident=` links, and their risk chips
