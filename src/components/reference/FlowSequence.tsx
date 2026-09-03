@@ -146,10 +146,17 @@ export function FlowSequence({
           {walk.steps.map((st, step) => {
             const [from, to] = st.follow.split("->");
             const edge = edgeOf(from, to);
-            // A reply is the leg back of a round trip inside this walk — the same pair already
-            // went the other way — not merely a step against the authored arrow direction,
-            // which on a bidirectional edge says nothing.
-            const reply = walk.steps.slice(0, step).some((prev) => prev.follow === `${to}->${from}`);
+            // A reply is the leg back of a round trip inside this walk: an earlier step went the
+            // other way between the same two lifelines and has not been answered yet. Pairing
+            // requests with replies (rather than asking whether the pair ever went the other way)
+            // keeps a second, later request on the same pair solid — a client that exchanges a
+            // token twice is making two calls, not one call and one reply.
+            let open = 0;
+            for (const prev of walk.steps.slice(0, step)) {
+              if (prev.follow === `${to}->${from}`) open += 1;
+              else if (prev.follow === st.follow && open > 0) open -= 1;
+            }
+            const reply = open > 0;
             const color = PATH_COLOR[edge?.path ?? "primary"] ?? PATH_COLOR.primary;
             const x1 = xOf(lifelines.indexOf(from));
             const x2 = xOf(lifelines.indexOf(to));

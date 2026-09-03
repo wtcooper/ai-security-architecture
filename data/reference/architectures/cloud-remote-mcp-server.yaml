@@ -104,11 +104,52 @@ blocks:
     title: MCP clients
     zone: zoneCloud
     col: 0
-    row: 1
+    row: 0
     note: >
-      Deliberately unnamed. Agents, chat products and other services all reach a published
-      server the same way, and naming any one of them would make the drawing about that
-      integration rather than about the server we are building.
+      Deliberately unnamed. Agents, chat products and other services all reach a published server
+      the same way, and naming any one of them would make the drawing about that integration rather
+      than about the server we are building. Three kinds of caller matter for identity: a public
+      client nobody pre-registered (a developer's tool, identified by a client-ID metadata
+      document), an enterprise client the IdP knows (single sign-on, no per-server consent), and
+      an autonomous workload with no user behind it (its own workload identity).
+
+  - id: idp
+    kind: service
+    title: Identity provider
+    zone: zoneCloud
+    col: 0
+    row: 2
+    note: >
+      The enterprise identity provider, drawn because tokens flow through it: under
+      enterprise-managed authorization the caller signs in here once, and trades that login
+      for an identity-assertion grant (ID-JAG) naming this server — after the IdP has checked
+      its own registry of approved MCP servers, the user's groups and roles, and any
+      conditional-access rule. Nobody consents per server; the administrator decided once.
+      For a customer organisation's callers this is their IdP, federated to our authorization
+      server by trusting its issuer and keys — the same mechanism, somebody else's policy.
+    items:
+      - id: sso
+        label: SSO login
+        icon: person
+        note: >
+          The corporate sign-in the client already does. The ID token it yields is the
+          subject token for everything that follows.
+      - id: exchange
+        label: Token exchange
+        icon: key
+        note: >
+          RFC 8693 at the IdP: `grant_type=token-exchange`, `subject_token` = the ID token,
+          `requested_token_type` = `id-jag`, `audience` = our authorization server's issuer,
+          `resource` = this server's canonical URI, `scope` as requested. The answer is a
+          signed JWT (`typ: oauth-id-jag+jwt`) with `iss`, `sub`, `aud`, `client_id`,
+          `resource`, `scope`, `jti`, `exp` — or a policy denial.
+      - id: policy
+        label: App registry & policy
+        icon: scale
+        note: >
+          Which MCP servers exist for this organisation, who may reach each, with which
+          scopes, under which conditions. Evaluated at every exchange, so removing a user
+          from a group is revocation for every new token from that moment.
 
   - id: gateway
     kind: service
@@ -139,17 +180,28 @@ blocks:
     col: 2
     row: 0
     note: >
-      Token issuance for the server we publish. The normative flow is the authorization code
-      grant with PKCE and the `resource` parameter naming this server, through a consent
-      screen for any public client — what the two exemplars run. For callers whose identity
-      provider we federate, the enterprise-managed profile replaces the consent screen: the
-      client exchanges a corporate SSO assertion for a short-lived grant, and that grant for
-      the access token, which puts revocation back in one place. Same server, both flows.
+      Token issuance for the server we publish, and the one place every identity flow converges.
+      It speaks three grant profiles: the authorization-code grant with PKCE and `resource` for a
+      public client through a consent screen; the JWT-bearer grant that accepts an ID-JAG from a
+      trusted identity provider and issues an access token without any redirect (enterprise-managed
+      authorization); and `client_credentials` with `private_key_jwt` for an autonomous workload.
+      It also performs the token exchange a handler needs to call an upstream system on the caller's
+      behalf — a downstream-audience token, never the inbound one. Every token it mints is
+      audience-bound to this server by canonical URI and short-lived; refresh tokens rotate.
     items:
       - id: tokenIssuance
         label: Token issuance
         icon: key
         note: Audience-bound to this server by name, so a token minted for another is refused.
+      - id: grantProfiles
+        label: Grant profiles
+        icon: scale
+        note: >
+          Advertised in the authorization-server metadata: `code_challenge_methods_supported`
+          (S256, or the client must refuse to proceed), `client_id_metadata_document_supported`,
+          `authorization_grant_profiles_supported` including `id-jag`, and the token-exchange
+          grant for on-behalf-of calls upstream. Dynamic client registration is deprecated and
+          absent.
       - id: consent
         label: Consent records
         icon: doc
@@ -173,10 +225,13 @@ blocks:
     row: 1
     note: >
       A stateless HTTP application — in practice an ASGI app, mounted on its own or inside an
-      existing API. Stateless is not a style choice: sticky sessions do not work reliably with
-      MCP clients, so horizontal scale requires it. The 2026-07 revision removed protocol
-      sessions entirely, which moved a security burden out of the transport and into this
-      application, where it is the most likely thing to get wrong.
+      existing API. Stateless is not a style choice: sticky sessions do not work reliably with MCP
+      clients, so horizontal scale requires it. The 2026-07 revision removed protocol sessions
+      entirely, which moved a security property with it: there is nothing to validate once and trust
+      afterwards, so every request carries a bearer token and every request is validated —
+      signature or introspection, audience equals this server's canonical URI, expiry, scope against
+      the tool being called, and the subject the handler will act as. What it does with the token
+      stops there: never forwarded, never accepted for another audience.
     items:
       - id: endpoint
         label: Protocol endpoint
@@ -322,21 +377,35 @@ blocks:
 
 edges:
   - from: callers
+    to: idp
+    path: external
+    bidir: true
+    label: SSO & exchange / ID-JAG
+    note: >
+      The enterprise path. The client signs the user in at the IdP once and keeps the ID token;
+      when a server requires enterprise-managed authorization it comes back here to exchange
+      that ID token for an identity-assertion grant naming this server — and the IdP's policy
+      says yes or no before our authorization server ever sees a request. Repeat exchanges
+      happen at token expiry and at every scope step-up, so a policy change bites within one
+      token lifetime.
+  - from: callers
     to: authServer
     path: external
     bidir: true
-    route: vh
-    label: token issuance
+    label: authorization / tokens
     note: >
-      Before any tool call: the PKCE authorization-code flow with `resource` naming this
-      server, through a consent screen — or, for a caller whose IdP we federate, a corporate
-      SSO assertion exchanged for a short-lived grant and that grant for the access token,
-      with no consent screen at all. Either way the token is audience-bound to this server.
+      Where every grant is redeemed. A public client arrives through the browser: the PKCE
+      authorization-code flow with `resource` naming this server, a client-ID metadata document as
+      its identity, a consent screen showing the client's name and redirect host, and an `iss` in
+      the response the client checks before it will redeem the code. An enterprise client arrives
+      with an ID-JAG and no browser at all. An autonomous workload arrives with a signed client
+      assertion. All three leave with the same thing: a short-lived access token whose audience is
+      this server and nothing else.
   - from: callers
     to: gateway
     path: external
     bidir: true
-    label: tool calls
+    label: tool calls / results
     note: >
       Whoever they are. Machine traffic at machine rates, arriving with the method and tool
       name mirrored into headers so this tier can act on them without reading bodies.
@@ -350,12 +419,15 @@ edges:
     to: authServer
     path: primary
     bidir: true
-    label: token validation
+    label: validate & exchange / verdict
     note: >
-      Audience, scope and subject are verified per request, because there is no session left
-      to verify them once. Drawn as introspection — the deliberate choice here; the common
-      alternative is local JWT validation against the issuer's published keys, which removes
-      this network hop but not the per-request check.
+      Audience, scope, expiry and subject are verified per request, because there is no session
+      left to verify them once. Drawn as introspection — the deliberate choice here, because it is
+      also how revocation reaches a token that has not yet expired; the common alternative is local
+      JWT validation against the issuer's keys, which is faster and blind to revocation. The same
+      edge carries the on-behalf-of exchange: a handler that must call an upstream system swaps
+      the inbound token for one whose audience is the upstream, scoped down, so the caller's token
+      never leaves this service.
   - from: toolDefs
     to: service
     path: primary
@@ -376,11 +448,13 @@ edges:
     to: downstream
     path: external
     bidir: true
-    label: our own credential
+    label: downstream-audience token / result
     note: >
-      Where our implementation calls outward as itself. The spec is explicit that we must not
-      forward the caller's token, so we hold a separate one — and past this point the careful
-      delegation chain is gone.
+      Where our implementation calls outward. Two honest shapes: a token exchanged on the caller's
+      behalf (audience = the upstream, scope narrowed to what this tool needs), so the upstream
+      sees who is really asking; or our own service credential where no delegation exists. The
+      one forbidden shape is the third — forwarding the caller's token — which the spec rules out
+      outright, because it breaks audit, rate limits and the trust boundary in one move.
 
 pins:
   risks:
@@ -444,6 +518,18 @@ pins:
       note: >
         A LiteLLM-class tier with its own CVE stream and its own release channel — the
         backdoored gateway release is this component, fronting everything we publish.
+    - risk: riskStaleAgentIdentityBinding
+      at: service->authServer
+      note: >
+        A token issued a minute before the IdP removed the user is still cryptographically valid;
+        local JWT validation would honour it until expiry. Introspection, short lifetimes and
+        rotating refresh tokens are what make revocation real for a running agent.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: callers->authServer
+      note: >
+        The mix-up: a client that talks to many authorization servers can be steered into redeeming
+        an honest code at an attacker's token endpoint. Recording the issuer before redirecting and
+        checking `iss` in the response is the mitigation; PKCE alone does not stop it.
   capabilities:
     - capability: capabilityIga
       at: service->authServer
@@ -513,44 +599,344 @@ pins:
       note: >
         The SDK, the gateway and the handlers behind them tracked as a patch stream with an
         owner and a clock; a published server ages like any other application.
+    - capability: capabilityIga
+      at: callers->idp
+      note: >
+        Identity governance where it already lives: the IdP's registry of approved MCP servers, the
+        groups and roles that may reach each, and the conditional-access rules — evaluated at every
+        ID-JAG exchange. Joiners get access by group; leavers lose every new token at once.
+    - capability: capabilityNhiManagement
+      at: authServer
+      note: >
+        An autonomous workload is a client with no user: it authenticates with `private_key_jwt`
+        under `client_credentials`, its key registered against its own identity, and receives
+        narrower scopes than a delegated user would — no consent, no step-up, no borrowed authority.
+    - capability: capabilityCredentialIsolation
+      at: service->authServer
+      note: >
+        The inbound token stops at the service. A handler that needs an upstream system exchanges it
+        for a downstream-audience token scoped to the tool, or calls as the service on its own
+        credential — and the exchange is logged as a delegation step, so the chain stays legible.
+
 walkthrough:
-  title: A caller invokes a tool
+  title: A public client authorizes and invokes a tool
   moves: >-
-    Somebody else's agent calling a tool we publish, and the tenant data it reaches.
+    Discovery, consent and a bounded token — then one tool call inside that bound.
   steps:
     - follow: callers->gateway
       note: >
-        An unauthenticated first call. The answer is a 401 carrying Protected Resource
-        Metadata — the public document naming which authorization server this resource
-        trusts, and a security artifact for exactly that reason.
+        An unauthenticated first call. The answer is a 401 whose `WWW-Authenticate` header carries
+        `resource_metadata` — the URL of this server's Protected Resource Metadata — and the
+        `scope` this operation needs, so the client asks for no more than that.
     - follow: gateway->callers
-      note: The 401 and the metadata go back; the client now knows where to authenticate.
+      note: >
+        The 401 goes back. The client now knows where to read the metadata and which scopes to request.
+    - follow: callers->gateway
+      note: >
+        The client fetches the Protected Resource Metadata: `resource` (this server's canonical URI),
+        `authorization_servers`, `scopes_supported`, `bearer_methods_supported`. Fetched over
+        HTTPS, private address ranges refused — the metadata URL came from a stranger.
+    - follow: gateway->callers
+      note: >
+        The document returns; the client picks an authorization server from the list and keeps
+        separate client state for it — credentials for one issuer are never reused at another.
     - follow: callers->authServer
       note: >
-        The PKCE authorization-code flow with `resource` naming this server, through a
-        consent screen for a public client — or, for a caller whose IdP we federate, an SSO
-        assertion exchanged for a grant with no consent screen, and revocation kept central.
+        Authorization-server metadata discovery: RFC 8414 well-known first, OpenID discovery second,
+        path components handled in the specified order. The client verifies `issuer` in the document
+        equals the URL it built, refuses to proceed unless `code_challenge_methods_supported` is
+        present, and notes `client_id_metadata_document_supported`.
     - follow: authServer->callers
-      note: The token comes back to the caller, short-lived and audience-bound to this server.
-    - follow: callers->gateway
-      note: The request arrives bearing that token, with its method and tool name mirrored into headers.
-    - follow: gateway->service
-      note: Routed and metered per tool without the body being parsed — provided the headers are checked against it.
-    - follow: service->authServer
-      note: Audience, scope and subject are checked for this request, because there is no session to have validated once.
-    - follow: authServer->service
-      note: Validated — the delegation the token carries is now the bound on the call.
-    - follow: service->orgData
-      note: The read happens inside that delegation, and not one record wider.
-    - follow: orgData->service
-      note: The record comes back inside the same delegation.
-    - follow: service->downstream
       note: >
-        Where the delegation stops: our own service calling outward on its own credential, with
-        the caller's token no longer in play. Everything past this point is our authority, not
-        theirs.
-
+        The metadata returns and the client records the issuer it will hold every later response to.
+    - follow: callers->authServer
+      note: >
+        The authorization request through the user's browser: `client_id` is the HTTPS URL of the
+        client's metadata document, `redirect_uri` one of those it lists, PKCE `S256`, `resource`
+        naming this server, `state`, and the challenged scopes. The authorization server fetches the
+        metadata document (private ranges blocked), checks `client_id` matches the URL and the
+        redirect URI matches exactly, applies its domain trust policy, and shows a consent screen
+        naming the client and the redirect host — with a warning if that host is `localhost`.
+    - follow: authServer->callers
+      note: >
+        The user approves; the code returns with `iss`. The client compares `iss` to the issuer it
+        recorded before redirecting and abandons the code on any mismatch — the mix-up defence.
+    - follow: callers->authServer
+      note: >
+        The token request: code, `code_verifier`, `resource`. For a public client the `state` was
+        single-use and the code is bound to the verifier, so an intercepted code is worthless.
+    - follow: authServer->callers
+      note: >
+        An access token audience-bound to this server's canonical URI, short-lived, with the granted
+        scopes — possibly fewer than asked — and a refresh token that rotates on every use.
+    - follow: callers->gateway
+      note: >
+        The tool call, `Authorization: Bearer`, never in the query string, with `Mcp-Method` and
+        `Mcp-Name` mirrored into headers so the gateway can route, meter and authorize per tool.
+    - follow: gateway->service
+      note: >
+        Routed and metered per tool without the body being parsed — and the service checks the
+        headers against the body, refusing a mismatch outright.
+    - follow: service->authServer
+      note: >
+        Per-request validation: signature or introspection, `aud` equals this server, not expired,
+        scope covers this tool, and the subject the handler will act as.
+    - follow: authServer->service
+      note: >
+        Valid. The delegation the token carries is now the bound on the call — and the tenant on the
+        token is what the handler must match against the record.
+    - follow: service->orgData
+      note: >
+        The read happens inside that delegation, and not one record wider.
+    - follow: orgData->service
+      note: >
+        The record comes back inside the same delegation.
+    - follow: service->gateway
+      note: >
+        The result — bounded in size, because it lands in somebody else's context window.
+    - follow: gateway->callers
+      note: >
+        Logged per call against client, user, tenant and tool, and returned.
 scenarios:
+  - title: Enterprise-managed authorization — sign in once, no per-server consent
+    steps:
+      - follow: callers->idp
+        note: >
+          The client already signed the user in at the corporate IdP and kept the ID token. It declares
+          support for the `enterprise-managed-authorization` extension in its request capabilities.
+      - follow: idp->callers
+        note: >
+          The ID token is the subject token for what follows; nothing else from the login is reused.
+      - follow: callers->gateway
+        note: >
+          The first tool call, unauthenticated, is answered with a 401 and the resource metadata URL.
+      - follow: gateway->callers
+        note: >
+          The client reads the Protected Resource Metadata and finds this server's authorization server.
+      - follow: callers->authServer
+        note: >
+          Authorization-server metadata: `authorization_grant_profiles_supported` includes `id-jag`,
+          so the client knows to use the enterprise flow and does not open a browser.
+      - follow: authServer->callers
+        note: >
+          The client records the issuer — it becomes the `audience` of the exchange it is about to ask for.
+      - follow: callers->idp
+        note: >
+          Token exchange at the IdP: `grant_type=token-exchange`, `subject_token` = the ID token,
+          `requested_token_type` = `id-jag`, `audience` = our authorization server's issuer,
+          `resource` = this server's canonical URI, `scope` = what the challenge asked for. The IdP
+          evaluates its policy — is this server approved for this organisation, is this user in a
+          group that may reach it with these scopes, do conditional-access rules pass.
+      - follow: idp->callers
+        note: >
+          An ID-JAG: a signed JWT, `typ: oauth-id-jag+jwt`, with `iss` (the IdP), `sub` (the user),
+          `aud` (our authorization server), `client_id`, `resource` (this server), `scope`, `jti`, `exp`.
+          Or a policy denial the client surfaces as such — no token, no consent screen, nothing to retry.
+      - follow: callers->authServer
+        note: >
+          The JWT-bearer grant: `grant_type=jwt-bearer`, `assertion` = the ID-JAG, `client_id`, and
+          `private_key_jwt` client authentication where the client has a key. Our server validates the
+          assertion against the IdP's published keys, checks `iss` is a trusted IdP, `aud` is itself,
+          `exp` and `jti` unused, and links the account by `sub` — `email` only as a fallback for
+          accounts that predate the federation.
+      - follow: authServer->callers
+        note: >
+          An access token audience-bound to the `resource` in the assertion, scopes no wider than the
+          ID-JAG carried. The user never saw a consent screen for this server; their administrator
+          decided once, in the IdP.
+      - follow: callers->gateway
+        note: >
+          The tool call, bearer token in the header, method and tool name mirrored into headers.
+      - follow: gateway->service
+        note: >
+          Routed and metered per tool.
+      - follow: service->authServer
+        note: >
+          Validated per request — audience, scope, expiry, subject — exactly as for any other token.
+      - follow: authServer->service
+        note: >
+          Valid; the delegation bounds the call.
+      - follow: service->orgData
+        note: >
+          The read, inside the tenant and the scope the token names.
+      - follow: orgData->service
+        note: >
+          The record comes back.
+      - follow: service->gateway
+        note: >
+          The result, bounded and logged against client, user, tenant and tool.
+      - follow: gateway->callers
+        note: >
+          Returned. Onboarding was a group membership; offboarding will be its removal.
+  - title: Step-up — a consequential tool needs a scope the token lacks
+    steps:
+      - follow: callers->gateway
+        note: >
+          A call to a write tool with a token that carries only the read scopes it started with —
+          least privilege at first grant, by design.
+      - follow: gateway->service
+        note: >
+          Routed and metered like any call.
+      - follow: service->authServer
+        note: >
+          The token is valid — audience, expiry, subject all good — but its scopes do not cover this tool.
+      - follow: authServer->service
+        note: >
+          Insufficient, not invalid.
+      - follow: service->gateway
+        note: >
+          A 403 with `WWW-Authenticate: Bearer error="insufficient_scope"`, `scope` listing every
+          scope this operation needs in one challenge, and `resource_metadata`. One round trip, not
+          one scope per retry.
+      - follow: gateway->callers
+        note: >
+          The client computes the union of what it already holds and what was challenged, so nothing
+          previously granted is lost.
+      - follow: callers->idp
+        note: >
+          For an enterprise client the step-up is another token exchange, with the wider scope — and
+          the IdP's policy decides again. A user who may read but not write is told so here, by the
+          organisation, not by a consent screen.
+      - follow: idp->callers
+        note: >
+          A new ID-JAG with the widened scope, or a denial the client treats as final after a few tries.
+      - follow: callers->authServer
+        note: >
+          The JWT-bearer grant again (a public client would re-run the authorization-code flow and
+          see a consent screen listing exactly the added scope).
+      - follow: authServer->callers
+        note: >
+          A new token with the union of scopes.
+      - follow: callers->gateway
+        note: >
+          The original request, retried once.
+      - follow: gateway->service
+        note: >
+          Routed and metered.
+      - follow: service->orgData
+        note: >
+          The write, inside the widened delegation — and, for a consequential action, only on the retry
+          that carries the confirmation the tool asked for through `input_required`.
+      - follow: orgData->service
+        note: >
+          The record confirms the change.
+      - follow: service->gateway
+        note: >
+          Logged with the scope elevation that preceded it, so the audit shows why this token could write.
+  - title: A handler calls an upstream system on the caller's behalf
+    steps:
+      - follow: callers->gateway
+        note: >
+          An ordinary call to a tool whose handler wraps an existing internal API.
+      - follow: gateway->service
+        note: >
+          The handler has the caller's token in hand, and the upstream wants a credential.
+      - follow: service->authServer
+        note: >
+          Not that one. The service exchanges the inbound token: `grant_type=token-exchange`,
+          `subject_token` = the caller's access token, `audience` = the upstream API, `scope`
+          narrowed to what this tool needs — an on-behalf-of token that still names the user.
+      - follow: authServer->service
+        note: >
+          A downstream-audience token. The exchange is logged as a delegation step: who asked, through
+          which tool, for which upstream, with which scope.
+      - follow: service->downstream
+        note: >
+          The upstream call carries that token, so the upstream sees who is really asking and applies
+          its own authorization — instead of a service account that can see everything, or the
+          caller's token forwarded, which the spec forbids outright.
+      - follow: downstream->service
+        note: >
+          The upstream result returns.
+      - follow: service->gateway
+        note: >
+          Composed into the tool result, bounded in size.
+      - follow: gateway->callers
+        note: >
+          Returned, with two audit lines that join on the same delegation: ours and the upstream's.
+  - title: An autonomous workload calls with no user behind it
+    steps:
+      - follow: callers->authServer
+        note: >
+          A scheduled agent, not a person. `grant_type=client_credentials`, authenticated with
+          `private_key_jwt` under its own registered identity, `resource` naming this server, and the
+          scopes its registration allows — narrower than any user's, because nobody will be asked to
+          approve a step-up.
+      - follow: authServer->callers
+        note: >
+          An access token whose subject is the workload itself. No consent, because there is no
+          resource owner; the registration of that identity was the approval.
+      - follow: callers->gateway
+        note: >
+          The tool call, on the workload's token and its own rate limits.
+      - follow: gateway->service
+        note: >
+          Routed and metered against a machine identity.
+      - follow: service->authServer
+        note: >
+          Validated per request. The handler notes the subject is a workload and applies the policy
+          for autonomous callers: no delegation chain to honour, so the scopes are the whole bound.
+      - follow: authServer->service
+        note: >
+          Valid.
+      - follow: service->orgData
+        note: >
+          The read, inside what the workload's registration permits — and nothing a human's
+          membership would have added.
+      - follow: orgData->service
+        note: >
+          The record comes back, logged against a non-human identity with its own lifecycle.
+  - title: A token minted for another server is refused
+    steps:
+      - follow: callers->gateway
+        note: >
+          A call carrying a perfectly valid token — issued by the same authorization server, for a
+          different MCP server, or for an upstream API the client also uses.
+      - follow: gateway->service
+        note: >
+          Routed like any call; the gateway may pre-check the audience but the service must not rely on it.
+      - follow: service->authServer
+        note: >
+          Validation: signature good, not expired — and `aud` is not this server's canonical URI.
+      - follow: authServer->service
+        note: >
+          Refused. A server that accepts a token issued for any other audience is the passthrough
+          failure in its first form, and everything downstream of it inherits the confusion.
+      - follow: service->gateway
+        note: >
+          A 401 with the resource metadata, so an honest client can start the right flow.
+      - follow: gateway->callers
+        note: >
+          Returned. The client that keeps per-issuer, per-resource token state never sends this.
+  - title: Revocation reaches an agent mid-task
+    steps:
+      - follow: callers->gateway
+        note: >
+          An agent mid-task calls again with a token issued a minute ago — and in that minute the user
+          left the group that grants this server, or an administrator pulled the client.
+      - follow: gateway->service
+        note: >
+          Routed like any call.
+      - follow: service->authServer
+        note: >
+          Introspection, not local validation: the authorization server knows the grant was revoked,
+          because revocation at the IdP propagated to it — the reason introspection was the choice here.
+      - follow: authServer->service
+        note: >
+          Revoked.
+      - follow: service->gateway
+        note: >
+          A 401. Nothing the agent holds works any more, including the refresh token.
+      - follow: gateway->callers
+        note: >
+          The agent tries to recover the way an honest client would.
+      - follow: callers->idp
+        note: >
+          A fresh token exchange — and the IdP's policy, which is the source of truth, says no.
+      - follow: idp->callers
+        note: >
+          Denied. The revocation was one change in one place and it reached every client of every
+          server within one token lifetime, which is the argument for lifetimes measured in minutes.
   - title: A description edit ships
     steps:
       - follow: toolDefs->service
@@ -615,14 +1001,16 @@ deviations:
       with items — the thing a team ships and scales. Tool definitions stay separate because
       they are a different artifact class: versioned content with a review pipeline, whose
       distinctive edge runs into the caller's context rather than through the service.
-  - subject: The consuming organisation's identity provider is not drawn
+  - subject: The identity provider is drawn because tokens flow through it
     reason: >
-      The customer's IdP sits behind the consent exchange rather than on our drawing: what
-      reaches us is an assertion we swap for an audience-bound token, and their admin policy,
-      lifecycle and revocation keep working without us drawing or operating any of it. Drawing
-      it would put a block we neither run nor can control in the middle of our own
-      architecture. The federation is stated on the authorization server and pinned as
-      identity governance instead.
+      The catalogue keeps identity providers as a governance call-out, drawn as a block only where
+      tokens genuinely flow through them. Here they do: under enterprise-managed authorization the
+      client's ID token is exchanged at the IdP for an identity-assertion grant, and the IdP's policy
+      is the authorization decision. For a customer organisation's callers the block stands for their
+      IdP, federated by trusting its issuer and keys; the mechanism is identical and the policy is
+      theirs. The authorization server's trust in the IdP — issuer allowlist and key fetch — is
+      configuration rather than a data path, and is carried on the Grant profiles item rather than
+      drawn as an edge (2026-09-03).
   - subject: The callers origin sits in our cloud band as a layout necessity
     reason: >
       Whoever calls a published server — internal agents, chat products, other services — the

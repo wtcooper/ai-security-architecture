@@ -252,6 +252,18 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **The published MCP server draws its identity flows in full (2026-09-03).** Identity
+  provider is registered as a block for the one place tokens flow through it: under
+  enterprise-managed authorization the caller signs in there, exchanges its ID token for an
+  identity-assertion grant (ID-JAG) the IdP's app registry and policy approved, and redeems it
+  at our authorization server with the JWT-bearer grant — no consent screen. The drawing now
+  carries seven identity walks against the 2026-07-28 authorization spec: the public-client
+  baseline (protected-resource metadata, issuer-validated metadata discovery, client-ID
+  metadata documents, PKCE S256, `resource`, `iss` checked on the response), the enterprise
+  flow, scope step-up in one challenge, on-behalf-of token exchange for upstream calls, an
+  autonomous workload under `client_credentials`, an audience refusal, and revocation reaching
+  a running agent through introspection. The layout engine now lets an 8px origin count as
+  overlapping the block beneath it, so its arrow is vertical rather than a stub.
 - **Public package sources feed the mirror; they are not a downstream (2026-09-03).** The two
   coding agents listed "Package registries" as an item of Downstream services, which said the
   agent acts on PyPI. It does not: it pulls from the mirror, and the mirror pulls from PyPI.

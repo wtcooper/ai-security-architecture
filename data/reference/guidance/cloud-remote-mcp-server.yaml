@@ -7,8 +7,9 @@ archetype: archRemoteMcpServer
 mode: build
 status: draft
 attribution: >-
-  Authored in this repository. Protocol claims follow the 2026-07-28 MCP revision and its
-  stable extensions; pattern-level by design.
+  Authored in this repository. Protocol claims follow the 2026-07-28 MCP revision, its
+  authorization security considerations, and the stable enterprise-managed authorization
+  extension (ID-JAG, June 2026); pattern-level by design.
 
 overview:
   - >-
@@ -28,22 +29,41 @@ overview:
     the build matches it.
 
 items:
-  - title: Front the endpoint and federate identity — before any tool code is written
+  - title: Front the endpoint, and decide the three identity flows before any tool code is written
     capabilities: [capabilityRateLimiting, capabilityIga, capabilityNhiManagement]
     body:
       - >-
         Require a gateway tier in front of the service: WAF, per-client and per-tenant rate
         limits sized for machine callers, and routing on the protocol's method and tool-name
-        headers so metering never needs to parse bodies. Require identity to be federated,
-        not invented: users consent at the enterprise IdP, the assertion is exchanged for an
-        audience-bound token (the enterprise-managed authorization profile), and clients are
-        pre-registered or use client-ID metadata documents — dynamic client registration is
-        deprecated and should fail review. Evidence: the gateway config, the IdP federation
-        record, and a token from a test client showing audience, expiry and scopes.
+        headers so metering never needs to parse bodies. Then require the build to name which
+        of the three caller types it serves and implement each by the book. Enterprise
+        callers: enterprise-managed authorization — single sign-on at the IdP, an ID-JAG
+        exchanged there under the administrator's app registry and policy, redeemed at our
+        authorization server with the JWT-bearer grant, no per-server consent. Public clients
+        with no prior relationship: the authorization-code grant with PKCE (S256), `resource`
+        on both requests, a client-ID metadata document as the client identity, `iss` checked
+        on the response, and a consent screen that names the client and its redirect host.
+        Autonomous workloads: `client_credentials` with `private_key_jwt` under the workload's
+        own registered identity, with scopes narrower than any user's. Dynamic client
+        registration is deprecated and fails review. Evidence: the gateway config, the IdP's
+        app-registry entry for this server, the authorization-server metadata showing the
+        grant profiles, and one token per flow from a test client showing audience, expiry
+        and scopes.
       - >-
-        Tokens are validated on every request — client, user, scopes, audience, expiry — and
-        audience validation is the server's own obligation even when the gateway pre-checks.
-        A server that accepts a token issued for any other audience fails the assessment.
+        Tokens are validated on every request — signature or introspection, audience equals
+        this server's canonical URI, expiry, scope against the tool being called, subject —
+        and audience validation is the server's own obligation even when the gateway
+        pre-checks. Prefer introspection where revocation must reach running agents; local
+        JWT validation is faster and blind to it. A server that accepts a token issued for any
+        other audience fails the assessment.
+      - >-
+        Scopes are a catalogue owned outside the service: narrow, no omnibus scope, minimal
+        set at first grant, and every scope an operation needs emitted in one
+        `insufficient_scope` challenge so the client steps up in one round trip. Under
+        enterprise-managed authorization a step-up is another exchange at the IdP, and the
+        organisation's policy answers; under the public flow it is a consent screen listing
+        exactly the added scope. Assessment probe: call a write tool with a read token and
+        confirm a single 403 challenge names every scope the write needs.
 
   - title: Build stateless; a state handle is a name, not a capability
     capabilities: [capabilityTransportSecurity]
@@ -59,16 +79,20 @@ items:
         different subject's token and confirm the request fails.
 
   - title: The caller's token never travels upstream
-    capabilities: [capabilitySecretsManagement, capabilityEgressControl, capabilityDataAccessGovernance]
+    capabilities: [capabilitySecretsManagement, capabilityEgressControl, capabilityDataAccessGovernance, capabilityCredentialIsolation]
     body:
       - >-
         Most servers wrap existing systems, and the one rule with no exceptions is at that
-        boundary: handlers call upstream as this service, on credentials a secrets manager
-        issues, scopes and rotates — never by forwarding the inbound token. Token passthrough
-        is the confused deputy the protocol forbids by name, and it is also the finding most
-        often discovered in production. Bound egress to named upstream destinations;
-        unbounded outbound reach from a tool server is the exfiltration path a steered agent
-        is looking for.
+        boundary: the inbound token stops at the service. Two shapes pass review. On-behalf-of:
+        the handler exchanges the inbound token at the authorization server for one whose
+        audience is the upstream and whose scope is narrowed to the tool, so the upstream
+        sees who is really asking and applies its own authorization — the preferred shape for
+        internal systems that already understand the user. Service credential: the handler
+        calls as itself on a credential the secrets manager issues, scopes and rotates, where
+        no delegation exists. The third shape — forwarding the inbound token — is the confused
+        deputy the protocol forbids by name, and the finding most often discovered in
+        production. Bound egress to named upstream destinations; unbounded outbound reach from
+        a tool server is the exfiltration path a steered agent is looking for.
       - >-
         On the data path, require the dual check on every operation — the scope permits it,
         and the tenant on the token matches the tenant on the record — enforced in a shared
@@ -109,9 +133,13 @@ items:
         to a customer asking what their agent did. Scope design is where a hijacked agent's
         blast radius is decided: a catalogue of narrow scopes owned outside the service, no
         omnibus scope, and step-up challenges rather than over-asking at consent. Revocation
-        must work at three grains without a deploy: a user (at the IdP), a client (at the
-        authorization server), and a tool (at the definition layer). Assessment probe:
-        revoke a test client and confirm its next call fails within the token lifetime.
+        must work at three grains without a deploy: a user (at the IdP — a group removal ends
+        every new ID-JAG at once), a client (at the authorization server), and a tool (at the
+        definition layer) — and it must reach tokens already issued, which is what
+        introspection, short access-token lifetimes and rotating refresh tokens buy.
+        Assessment probe: remove a test user from the granting group and confirm the agent's
+        next call fails within one token lifetime, and that its refresh and re-exchange both
+        fail.
 
 sources:
   - title: "Model Context Protocol — authorization (2026-07-28)"
@@ -120,6 +148,12 @@ sources:
     url: https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices
   - title: "MCP auth extensions — enterprise-managed authorization"
     url: https://github.com/modelcontextprotocol/ext-auth/blob/main/specification/stable/enterprise-managed-authorization.mdx
+  - title: "Model Context Protocol — authorization security considerations (2026-07-28)"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/security-considerations
+  - title: "Model Context Protocol — client registration (client-ID metadata documents)"
+    url: https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration
+  - title: "IETF — identity assertion authorization grant (draft-ietf-oauth-identity-assertion-authz-grant)"
+    url: https://www.ietf.org/archive/id/draft-ietf-oauth-identity-assertion-authz-grant-04.html
   - title: "OWASP MCP Top 10"
     url: https://github.com/OWASP/www-project-mcp-top-10
   - title: "Microsoft — MCP security guide (Azure reference deployment)"

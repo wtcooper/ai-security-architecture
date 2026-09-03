@@ -94,7 +94,11 @@ export function itemCells(block: ArchBlock, rect: Rect): Rect[] {
 const overlap = (a0: number, a1: number, b0: number, b1: number): [number, number] | null => {
   const lo = Math.max(a0, b0);
   const hi = Math.min(a1, b1);
-  return hi - lo > 24 ? [lo, hi] : null;
+  // A narrower block than the 24px threshold — an origin is 8px wide — overlaps when it is
+  // fully inside the other's span; otherwise a line to the block beneath it would grow a
+  // 4px horizontal stub and put its badges on the origin.
+  const need = Math.min(24, a1 - a0, b1 - b0);
+  return hi - lo >= need && hi > lo ? [lo, hi] : null;
 };
 
 /** Padding inside a container, and the room its title tab needs above its children. */
