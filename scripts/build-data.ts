@@ -654,7 +654,7 @@ function checkArchetypes(
     // Same shape, validated the same way. The walkthrough is what the canvas numbers at rest;
     // a scenario re-numbers it. Every architecture needs the walkthrough, because a drawing
     // that cannot say how the thing is meant to work is not finished.
-    const walks: { at: string; walk: { steps?: { follow: string }[] } }[] = [
+    const walks: { at: string; walk: { steps?: { follow: string; label?: string }[] } }[] = [
       ...(arch.walkthrough ? [{ at: `${where} walkthrough`, walk: arch.walkthrough }] : []),
       ...(arch.scenarios ?? []).map((s) => ({ at: `${where} scenario "${s.title}"`, walk: s })),
     ];
@@ -684,6 +684,11 @@ function checkArchetypes(
         const [a, b] = (step.follow ?? "").split("->");
         if (!edgeKeys.has(step.follow) && !(a && b && bidir.has(`${b}->${a}`))) {
           fail(`${at}: step "${step.follow}" follows no edge (reverse needs bidir: true)`);
+        }
+        // A step label sits on a sequence arrow between two lifelines; past ~40 characters it
+        // collides with its neighbours.
+        if (step.label !== undefined && (!step.label.trim() || step.label.length > 44)) {
+          fail(`${at}: step ${i + 1} label must be 1–44 characters ("${step.label}")`);
         }
         if (!a || !b) return;
         const ends = [...lineage(a), ...lineage(b)];

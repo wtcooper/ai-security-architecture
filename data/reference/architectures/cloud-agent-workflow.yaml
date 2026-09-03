@@ -803,62 +803,82 @@ walkthrough:
     A long-running process: work delegated to specialists, journalled at every step.
   steps:
     - follow: events->harness
+      label: request with delegated grant
       note: >
         The request arrives as an API call or a queue message, and a delegated grant scoped
         to this workflow is bound to it — a binding that must outlive the session, because
         the work does. Nobody stays connected for what follows.
     - follow: orchestration->state
+      label: first checkpoint
       note: >
         The run is journaled from its first step by the durable engine — everything a step returns
         will persist here, which is the durability the drawing exists to show.
     - follow: state->orchestration
+      label: durable identity
       note: >
         The journal acknowledges; the run now has a durable identity.
     - follow: harness->gateway
+      label: plan request
       note: >
         The supervisor's first call is for a plan — nothing is delegated before the goal is
         decomposed — and every network call any agent makes funnels through this one door.
     - follow: gateway->provider
+      label: inference
       note: Inference on brokered credentials, limits applied.
     - follow: provider->gateway
+      label: decomposition
       note: The decomposition comes back across the crossing.
     - follow: gateway->harness
+      label: plan into supervisor
       note: Into the supervisor as a plan — unauthenticated content, now the work breakdown.
     - follow: orchestration->subagents
+      label: delegate narrowed task
       note: >
         The supervisor delegates; each specialist takes its task with a narrowed grant, not
         the supervisor's authority.
     - follow: localTools->state
+      label: shared memory read
       note: >
         The specialist reads shared memory and the retrieval context through the tool handlers —
         state another specialist, or an earlier run, wrote.
     - follow: state->localTools
+      label: context, unattributed
       note: >
         It comes back as context, with nothing marking whose it was.
     - follow: harness->gateway
+      label: specialist's calls
       note: A specialist's model and tool calls leave through the same door, on its own grant.
     - follow: gateway->internalTools
+      label: scoped tool call
       note: Tool calls carry the narrowed per-step grant.
     - follow: internalTools->orgData
+      label: write behind gate
       note: >
         The write lands — behind the approval gate when it is consequential; the escalation
         scenario walks that suspension.
     - follow: orgData->internalTools
+      label: record confirmed
       note: The record confirms the write.
     - follow: internalTools->gateway
+      label: result
       note: The result crosses back through the same door.
     - follow: gateway->extTools
+      label: third-party call
       note: Work reaches third parties through the same crossing.
     - follow: extTools->gateway
+      label: classified return
       note: What returns is classified before any agent reads it, because one confused agent propagates.
     - follow: gateway->harness
+      label: results to specialist
       note: Results land with the specialist that asked.
     - follow: subagents->orchestration
+      label: slice reported
       note: >
         Each specialist reports its slice back to the supervisor, which checkpoints the step
         to the journal. Days may pass before an event wakes the run — the journal is what it
         wakes into.
     - follow: orchestration->state
+      label: final checkpoint
       note: >
         The final checkpoint. The result is delivered the way anything leaves here — a tool
         call to whatever channel asked — possibly days after the request.
@@ -867,77 +887,104 @@ scenarios:
   - title: A step replays after a crash
     steps:
       - follow: state->orchestration
+        label: rebuild from journal
         note: >
           The engine rebuilds state from the journal — including anything a step persisted.
       - follow: orchestration->subagents
+        label: replayed steps
         note: Replayed steps land on their specialists again.
       - follow: harness->gateway
+        label: fresh credentials
         note: Replayed steps re-request credentials; nothing survives from the first run.
       - follow: gateway->internalTools
+        label: fencing check
         note: Idempotency fencing decides whether the side effect may run again.
       - follow: internalTools->orgData
+        label: write, once or twice
         note: Without fencing, the payment executes twice. The journal replays; the world does not.
   - title: A consequential write escalates for approval
     steps:
       - follow: harness->gateway
+        label: write above threshold
         note: A step proposes a write above the threshold.
       - follow: gateway->internalTools
+        label: threshold trips; suspend
         note: The per-call policy trips the threshold; the engine suspends the workflow rather than executing.
       - follow: internalTools->gateway
+        label: suspension
         note: The suspension comes back as the step's result.
       - follow: gateway->harness
+        label: step parked in journal
         note: The supervisor parks the step in the journal.
       - follow: harness->gateway
+        label: approval-channel call
         note: The workflow reaches back — a call to the approval channel, admitted like any tool.
       - follow: gateway->internalTools
+        label: approval channel (tool)
         note: "The approval channel is a tool: a work queue, a ticket, a chat."
       - follow: internalTools->operator
+        label: queue item for operator
         note: >
           An operator finds the proposal in the queue, bound to the exact action, arguments
           and workflow state, with an expiry. Nothing is waiting on a socket for them.
       - follow: operator->events
+        label: approval signal
         note: >
           The approval returns as a signal, possibly days later, and is validated against the
           suspended step — a blanket "resume" approves nothing in particular.
       - follow: events->harness
+        label: step resumes
         note: The suspended step resumes, on credentials fetched now.
       - follow: harness->gateway
+        label: action leaves
         note: Only then does the action leave.
       - follow: gateway->internalTools
+        label: admitted with approval
         note: Under the same per-call policy as before.
       - follow: internalTools->orgData
+        label: write lands
         note: The write lands, attributable to both the workflow and the approver.
   - title: An event fires days into the process
     steps:
       - follow: events->harness
+        label: timer or webhook resumes
         note: >
           A timer or webhook resumes work with nobody watching — the waiting step wakes days
           after the request that started the process.
       - follow: harness->gateway
+        label: re-plan on fresh grant
         note: >
           The supervisor re-plans from the journal, on credentials fetched now — the ones from
           day one would be stale authority.
       - follow: gateway->provider
+        label: inference
         note: Inference on the fresh grant.
       - follow: provider->gateway
+        label: plan for waking step
         note: The plan for the waking step comes back.
       - follow: gateway->harness
+        label: into supervisor
         note: Into the supervisor.
       - follow: orchestration->subagents
+        label: re-narrowed delegation
         note: Delegation re-narrows — the waking specialist gets its slice, not the run's whole grant.
       - follow: harness->gateway
+        label: specialist's call
         note: The specialist's call leaves through the same door.
       - follow: gateway->internalTools
+        label: action under per-call policy
         note: The action proceeds under the same per-call policy as an attended run.
 
   - title: A dependency arrives with the task
     steps:
       - follow: localTools->registry
+        label: package install (pinned)
         note: >
           A sandboxed step needs a package its generated code imports; the package manager
           runs as a shell command inside the harness's own tool surface and pulls from the
           mirror — the one destination the sandbox's network policy allows.
       - follow: registry->localTools
+        label: admitted build
         note: >
           The admitted build comes back, pinned by digest — the hop a poisoned package actually
           arrives on, which is why admission and pinning are the controls that live here.

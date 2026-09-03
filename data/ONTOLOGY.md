@@ -258,6 +258,15 @@ reached from several surfaces and naming any one of them would be arbitrary.
 
 ## 4b. Walks and the sequence view
 
+Every walk step carries a `label` — a few words for what that arrow carries on that walk —
+because the edge's own label is too generic once a walk crosses one edge for several reasons:
+a client that reaches its authorization server five times in one flow is doing five different
+things, and "authorization" five times is not a sequence anyone can read. The sequence view
+draws a step as a reply (dashed) only when it answers a request still open on the same pair;
+a second request on a pair it has already used is drawn as a call. A walkthrough that begins
+at an actor returns to one, so the diagram closes (2026-09-03).
+
+
 A static drawing answers "what is connected to what". It cannot answer "in what order, and in
 which direction" — and for this catalogue's most-misread path, an instruction typed on a phone
 that ends up executing on the user's own laptop by way of a vendor relay, the ordering *is* the

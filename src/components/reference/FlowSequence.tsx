@@ -151,12 +151,18 @@ export function FlowSequence({
             // requests with replies (rather than asking whether the pair ever went the other way)
             // keeps a second, later request on the same pair solid — a client that exchanges a
             // token twice is making two calls, not one call and one reply.
-            let open = 0;
-            for (const prev of walk.steps.slice(0, step)) {
-              if (prev.follow === `${to}->${from}`) open += 1;
-              else if (prev.follow === st.follow && open > 0) open -= 1;
+            // Simulate the conversation: a step answers an open request on its pair if one
+            // exists (and closes it); otherwise it opens a request of its own.
+            const openReq = new Map<string, number>();
+            let reply = false;
+            for (let i = 0; i <= step; i++) {
+              const f = walk.steps[i].follow;
+              const back = f.split("->").reverse().join("->");
+              const answers = (openReq.get(back) ?? 0) > 0;
+              if (answers) openReq.set(back, openReq.get(back)! - 1);
+              else openReq.set(f, (openReq.get(f) ?? 0) + 1);
+              if (i === step) reply = answers;
             }
-            const reply = open > 0;
             const color = PATH_COLOR[edge?.path ?? "primary"] ?? PATH_COLOR.primary;
             const x1 = xOf(lifelines.indexOf(from));
             const x2 = xOf(lifelines.indexOf(to));
@@ -167,10 +173,13 @@ export function FlowSequence({
             // Every arrow carries the edge's label. A bidirectional edge may author it as
             // "call / return", and the leg that runs against the authored direction shows
             // the return half.
+            // A step may carry its own label — what this arrow carries, on this walk — and
+            // falls back to the edge's label, split "call / return" by direction on a
+            // bidirectional edge.
             const authored = archetype.edges.some((e) => e.from === from && e.to === to);
             const halves = edge?.label?.split(" / ") ?? [];
             const label =
-              edge?.bidir && halves.length === 2 ? halves[authored ? 0 : 1] : edge?.label;
+              st.label ?? (edge?.bidir && halves.length === 2 ? halves[authored ? 0 : 1] : edge?.label);
             return (
               <g key={`${st.follow}-${step}`}>
                 <title>{`${step + 1}. ${titleOf(from)} → ${titleOf(to)}${st.note ? ` — ${st.note}` : ""}`}</title>

@@ -709,32 +709,43 @@ walkthrough:
     A queue message in, the agent's chosen action out, and the record it changed.
   steps:
     - follow: events->planner
+      label: refund request (queue message)
       note: >
         A refund request arrives as a queue message — written by a customer through some
         upstream system, bound to an account and carrying the grant the run will act on.
         Nobody is waiting on a socket for the answer.
     - follow: localTools->stateRetrieval
+      label: policy & history lookup
       note: >
         Policy and the customer's history are requested through the retrieval handler, scoped to
         this account.
     - follow: stateRetrieval->localTools
+      label: case context
       note: >
         They come back into the context window.
     - follow: planner->gateway
+      label: context on brokered credential
       note: The context leaves the loop through the gateway, on a brokered credential.
     - follow: gateway->provider
+      label: inference
       note: The model proposes an action and parameters from the catalogue.
     - follow: provider->gateway
+      label: proposed action
       note: The proposal comes back across the crossing — unauthenticated content, now the plan.
     - follow: gateway->internalTools
+      label: validated action
       note: The proposal is validated — well-formed, in policy, under the value threshold.
     - follow: internalTools->orgData
+      label: refund executes
       note: The refund executes, with its compensating transaction on file.
     - follow: orgData->internalTools
+      label: record confirmed
       note: The record confirms the change.
     - follow: internalTools->gateway
+      label: result, logged
       note: The result crosses back, logged against the call that caused it.
     - follow: gateway->planner
+      label: outcome posted back
       note: >
         The loop closes its plan with the outcome and posts it back on the channel the request
         came from — within seconds, and the audit holds the reasoning.
@@ -743,35 +754,47 @@ scenarios:
   - title: The payload is the attack
     steps:
       - follow: events->planner
+        label: poisoned ticket text
         note: >
           The ticket text instructs the agent to ignore policy and refund in full; whatever
           survives classification enters the same context window as the system instruction,
           as the task.
       - follow: planner->gateway
+        label: context with injected text
         note: Whatever survived classification rides out with the context.
       - follow: gateway->provider
+        label: inference
         note: A steered model proposes the most generous action available.
       - follow: provider->gateway
+        label: steered proposal
         note: The steered proposal comes back as the plan.
       - follow: gateway->internalTools
+        label: catalogue bounds it
         note: The catalogue does not care what steered the model — parameters and policy bounds hold.
       - follow: internalTools->orgData
+        label: compensable below threshold
         note: Below the threshold the action is compensable; above it the approval gate fires.
   - title: A timer fires with nobody in the room
     steps:
       - follow: events->planner
+        label: schedule fires
         note: >
           A schedule starts the run — no request, no payload authored by anyone, and nobody to
           return an outcome to.
       - follow: planner->gateway
+        label: unattended context
         note: The unattended run crosses on the same brokered credential an attended one would.
       - follow: gateway->provider
+        label: inference, nobody watching
         note: The model proposes an action with nobody watching the proposal.
       - follow: provider->gateway
+        label: proposal, nobody reading
         note: The proposal comes back with nobody to read it.
       - follow: gateway->extTools
+        label: outbound action
         note: The action reaches outward, admitted by the same catalogue and egress allowlist.
       - follow: extTools->downstream
+        label: effect lands outside
         note: >
           The effect lands outside the company, and what returns re-enters the next call as
           somebody else's content. With no human anywhere on this path, the catalogue, the
@@ -779,67 +802,91 @@ scenarios:
   - title: The injection was written months ago
     steps:
       - follow: planner->gateway
+        label: lookup for a record
         note: >
           The loop needs a customer record — and crosses first, because nothing on the agent
           tier reaches a tool surface directly.
       - follow: gateway->internalTools
+        label: admitted lookup
         note: The lookup is admitted against the catalogue and narrowed to this case.
       - follow: internalTools->orgData
+        label: record read
         note: The record is read like any other.
       - follow: orgData->internalTools
+        label: note from another case
         note: A note written into it long ago, in someone else's case, comes back with the content.
       - follow: internalTools->gateway
+        label: tool result
         note: It crosses back as an ordinary tool result.
       - follow: gateway->planner
+        label: lands in context
         note: And lands in context beside the system instruction.
       - follow: planner->gateway
+        label: context with injected note
         note: The assembled context — injected note included — leaves for the model.
       - follow: gateway->provider
+        label: inference
         note: The model reads it with nothing marking it apart.
       - follow: provider->gateway
+        label: attacker's proposal
         note: The proposal it produces is the attacker's, in the model's voice.
       - follow: gateway->internalTools
+        label: catalogue & policy hold
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
 
   - title: A refund above the threshold escalates
     steps:
       - follow: planner->gateway
+        label: refund above threshold
         note: The loop proposes a refund well above the compensable threshold.
       - follow: gateway->internalTools
+        label: threshold trips
         note: The per-call policy trips the threshold; the catalogue refuses to execute and returns a suspension.
       - follow: internalTools->gateway
+        label: suspension
         note: The suspension comes back as the call's result.
       - follow: gateway->planner
+        label: proposal parked
         note: The loop parks the proposal rather than retrying it.
       - follow: planner->gateway
+        label: approval-channel call
         note: The loop reaches back — a call to the approval channel, admitted like any tool.
       - follow: gateway->internalTools
+        label: approval channel (tool)
         note: "The approval channel is a tool: a work queue, a ticket, a chat."
       - follow: internalTools->operator
+        label: queue item for operator
         note: >
           An operator, never the customer, finds the proposal in the queue — the action, the
           amount, the case, an expiry. Nothing is waiting on a socket for them.
       - follow: operator->events
+        label: approval event
         note: >
           Approved — this action, these arguments; a blanket "yes" approves nothing in
           particular. The answer arrives as an event, like everything else here.
       - follow: events->planner
+        label: validated against proposal
         note: The approval is validated against the parked proposal before anything moves.
       - follow: planner->gateway
+        label: action leaves again
         note: Only then does the action leave again.
       - follow: gateway->internalTools
+        label: admitted with approval
         note: Admitted now, carrying the approval it lacked before.
       - follow: internalTools->orgData
+        label: refund executes
         note: The refund executes, attributable to both the loop and the approver.
 
   - title: A dependency arrives with the task
     steps:
       - follow: localTools->registry
+        label: package install (pinned)
         note: >
           A sandboxed step needs a package its generated code imports; the package manager
           runs as a shell command inside the harness's own tool surface and pulls from the
           mirror — the one destination the sandbox's network policy allows.
       - follow: registry->localTools
+        label: admitted build
         note: >
           The admitted build comes back, pinned by digest — the hop a poisoned package actually
           arrives on, which is why admission and pinning are the controls that live here.

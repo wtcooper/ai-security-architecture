@@ -387,6 +387,12 @@ export interface CapabilityPin {
 export interface ScenarioStep {
   /** "from->to"; the reverse direction of a bidirectional edge is legal. */
   follow: string;
+  /**
+   * What this arrow carries on this walk, in a few words — shown on the sequence arrow. Falls
+   * back to the edge's label, which is too generic once a walk crosses one edge for several
+   * different reasons.
+   */
+  label?: string;
   note?: string;
 }
 

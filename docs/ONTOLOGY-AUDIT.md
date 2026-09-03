@@ -252,6 +252,14 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **Every sequence arrow says what it carries (2026-09-03).** The MCP walkthrough read as
+  "authorization / tokens / authorization / tokens" because sequence arrows took the edge's
+  label, and the reply-pairing marked any step against a pair's earlier direction as a reply.
+  Steps now carry their own `label` (all 542 steps across 76 walks were written and reviewed;
+  the build refuses a step label over 44 characters), replies are paired with the open request
+  they answer, and the walkthroughs that began at a person and ended at a downstream service
+  (both coding agents, the personal agent) and the MCP scenarios that ended without an answer
+  now return. Incidents were checked against the current edges: all nine resolve.
 - **A fourteenth architecture: agent-to-agent federation (2026-09-03).** A2A v1.0 defines
   discovery, work and which auth schemes a peer accepts and leaves identity to the deployment,
   so the drawing is that identity layer: Identity provider and Authorization server doing the

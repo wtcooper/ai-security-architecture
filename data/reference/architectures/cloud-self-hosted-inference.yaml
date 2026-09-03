@@ -511,32 +511,41 @@ walkthrough:
     Prompts from our own services into weights we host, and completions back.
   steps:
     - follow: consumers->gateway
+      label: request with workload identity
       note: The workload identity on the request decides its quota and its cache scope.
     - follow: gateway->api
+      label: admitted; input guardrail
       note: Admitted within quota, with the input-side guardrail applied at the crossing.
     - follow: api->runtime
+      label: batched, tenant-scoped cache
       note: >
         Scheduled into a batch alongside other tenants' traffic; tenant-scoped cache keys are
         what keep the prefix lookup safe.
     - follow: runtime->api
+      label: raw completion
       note: The completion leaves the batch — raw model output, nothing yet between it and the caller.
     - follow: api->gateway
+      label: output guardrail
       note: Back through the crossing, where the output-side guardrail runs — the half most often omitted.
     - follow: gateway->consumers
+      label: completion, metered
       note: The completion returns to the tenant that asked, attributed and metered.
 
 scenarios:
   - title: A new checkpoint is promoted
     steps:
       - follow: sources->storage
+        label: hub artifact with provenance
         note: >
           A hub artifact arrives with provenance recorded. Scanning and per-version evaluation
           gate its promotion here — blocking, or it is not a gate.
       - follow: registry->storage
+        label: signed release
         note: >
           A release from our own pipeline arrives already gated: its signature and lineage are
           verified, and nothing is evaluated twice.
       - follow: storage->runtime
+        label: digest-verified load
         note: >
           The promoted artifact loads, digest-verified against the promotion record, and
           serves a staged slice first — with the previous version still loadable if the slice
@@ -544,17 +553,22 @@ scenarios:
   - title: A spike hits finite capacity
     steps:
       - follow: consumers->gateway
+        label: spike
         note: Admission control decides who waits. There is no provider to absorb the spike.
       - follow: gateway->api
+        label: within-quota scheduled
         note: Within-quota traffic is scheduled; everything else is shed at the front door rather than at the accelerator.
 
   - title: A tenant probes another's prefix
     steps:
       - follow: consumers->gateway
+        label: crafted prompt
         note: A crafted prompt sharing a suspected prefix with another tenant's traffic, well within quota.
       - follow: gateway->api
+        label: admitted
         note: Admitted like any call; nothing at the crossing knows what the prefix is for.
       - follow: api->runtime
+        label: timing reveals cache
         note: >
           Time to first token says whether the prefix was already cached by someone else.
           Tenant-scoped cache keys make the answer always no — the drawing's sharpest risk,
