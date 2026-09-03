@@ -64,7 +64,7 @@ const ACTOR_H = 66;
 
 /** How tall a block wants to be, before row heights are settled. */
 function naturalHeight(block: ArchBlock): number {
-  if (block.kind === "actor") return ACTOR_H;
+  if (block.kind === "actor" || block.kind === "origin") return ACTOR_H;
   const items = block.items?.length ?? 0;
   // A call-out block — an icon plus the chip numbers of the controls it delivers — needs room
   // for both. Governance-band services are drawn this way.
@@ -104,8 +104,8 @@ const overlap = (a0: number, a1: number, b0: number, b1: number): [number, numbe
 /** Padding inside a container, and the room its title tab needs above its children. */
 const NEST_PAD = 20;
 const NEST_HEAD = 34;
-/** An anonymous origin occupies a cell but draws nothing; the line starts in empty space. */
-const ORIGIN_W = 8;
+/** An anonymous origin draws as a figure the size of an actor: an icon in a dashed ring. */
+const ORIGIN_W = 64;
 
 type Placed = { block: ArchBlock; w: number; h: number; kids: Placed[]; inner?: GridResult };
 type GridResult = {

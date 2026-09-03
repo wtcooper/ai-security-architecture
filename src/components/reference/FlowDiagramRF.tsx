@@ -72,47 +72,48 @@ const HANDLE_POS = {
 
 function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   const { block, w, h, dim } = data;
-  // A deliberately unnamed source: it anchors an edge and draws no box, so the line begins
-  // at a small marker rather than in a component. The marker and its title make the source
-  // legible — a line from nowhere read as a rendering error — without claiming a component.
+  // A deliberately unnamed source: drawn as a figure like an actor — an icon inside a dashed
+  // ring, its title beneath — so a line has somewhere legible to begin without the drawing
+  // claiming a component it does not own.
   if (block.kind === "origin") {
     return (
       <div style={{ width: w, height: h, position: "relative", opacity: dim ? 0.25 : 1, transition: "opacity 150ms" }}>
-        <div
-          style={{
-            position: "absolute",
-            left: w / 2 - 7,
-            top: h / 2 - 7,
-            width: 14,
-            height: 14,
-            borderRadius: 7,
-            border: "1.5px dashed var(--ink-3, #888)",
-            background: "var(--paper, #fff)",
-          }}
-        />
-        <div
-          className="ident"
-          style={{
-            position: "absolute",
-            left: w / 2 - 64,
-            top: h / 2 - 30,
-            width: 128,
-            textAlign: "center",
-            fontSize: 9,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "var(--ink-3, #888)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {block.title}
-        </div>
         {(["t", "b", "l", "r"] as const).map((side) => (
           <span key={side}>
             <Handle type="source" id={side} position={HANDLE_POS[side]} style={{ opacity: 0 }} />
             <Handle type="target" id={`${side}-in`} position={HANDLE_POS[side]} style={{ opacity: 0 }} />
           </span>
         ))}
+        <div
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 5,
+            fontSize: 11,
+            color: "var(--ink-2, #444)",
+          }}
+        >
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              border: "1.5px dashed var(--ink-3, #888)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--paper, #fff)",
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24">
+              <FlowIcon name={block.icon ?? "agent"} x={12} y={12} size={20} color="var(--ink-2)" />
+            </svg>
+          </div>
+          <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{block.title}</span>
+        </div>
       </div>
     );
   }
