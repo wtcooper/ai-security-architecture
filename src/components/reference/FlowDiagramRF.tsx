@@ -72,11 +72,41 @@ const HANDLE_POS = {
 
 function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   const { block, w, h, dim } = data;
-  // A deliberately unnamed source: it anchors an edge and draws nothing, so the line appears
-  // to begin in empty space. Handles still render, which is the entire point of the node.
+  // A deliberately unnamed source: it anchors an edge and draws no box, so the line begins
+  // at a small marker rather than in a component. The marker and its title make the source
+  // legible — a line from nowhere read as a rendering error — without claiming a component.
   if (block.kind === "origin") {
     return (
-      <div style={{ width: w, height: h, opacity: 0 }}>
+      <div style={{ width: w, height: h, position: "relative", opacity: dim ? 0.25 : 1, transition: "opacity 150ms" }}>
+        <div
+          style={{
+            position: "absolute",
+            left: w / 2 - 7,
+            top: h / 2 - 7,
+            width: 14,
+            height: 14,
+            borderRadius: 7,
+            border: "1.5px dashed var(--ink-3, #888)",
+            background: "var(--paper, #fff)",
+          }}
+        />
+        <div
+          className="ident"
+          style={{
+            position: "absolute",
+            left: w / 2 - 64,
+            top: h / 2 - 30,
+            width: 128,
+            textAlign: "center",
+            fontSize: 9,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--ink-3, #888)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {block.title}
+        </div>
         {(["t", "b", "l", "r"] as const).map((side) => (
           <span key={side}>
             <Handle type="source" id={side} position={HANDLE_POS[side]} style={{ opacity: 0 }} />
