@@ -104,7 +104,7 @@ blocks:
     icon: person
     zone: zoneUser
     col: 0
-    row: 1
+    row: 0
     note: >
       Starts the process and is absent for the rest of it. The approval they gave at the start is
       the only human decision until something escalates.
@@ -184,6 +184,13 @@ blocks:
         label: APIs & connectors
         icon: plug
         note: Ordinary outbound calls the application makes itself, with no broker in front.
+      - id: sandboxedTools
+        label: Sandboxed tools
+        icon: shield
+        note: >
+          Code execution in an isolated runtime inside the harness's own tool surface — the
+          loop writes code, only the sandbox runs it, and what it installs comes from the
+          mirror and nowhere else. Bash is where the package manager lives.
 
   - id: orchestration
     kind: service
@@ -234,7 +241,7 @@ blocks:
     title: Memory & state
     zone: zoneCloud
     col: 2
-    row: 2
+    row: 3
     cosaiComponent: componentDataStorage
     note: >
       What the workflow knows and what it has done. The journal is a reliability feature and a
@@ -274,7 +281,7 @@ blocks:
     kind: provider
     title: Model provider
     zone: zoneExternal
-    col: 5
+    col: 4
     row: 0
     cosaiComponent: componentModelServing
     note: >
@@ -294,13 +301,6 @@ blocks:
     row: 2
     cosaiComponent: componentTools
     pack: toolServicesRemote
-    items:
-      - id: sandboxedTools
-        label: Sandboxed tools
-        icon: shield
-        note: >
-          Code execution and browsing in an isolated runtime, admitted by the registry like any
-          other tool — the agents write code; only the sandbox should run it.
     note: >
       Our own action surface, admitted by the registry and reached only through the gateway.
       The same component as the external surface, at a different band.
@@ -329,8 +329,8 @@ blocks:
     kind: service
     title: Tool services
     zone: zoneExternal
-    col: 5
-    row: 2
+    col: 4
+    row: 1
     cosaiComponent: componentTools
     pack: toolServicesRemote
     items:
@@ -347,8 +347,8 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
-    row: 3
+    col: 4
+    row: 2
     pack: downstreamPublic
     note: >
       Where effects land outside the company, and where the untrusted content that returns
@@ -420,7 +420,7 @@ blocks:
     title: Private pkg registry
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 4
+    col: 1
     row: 2
     note: >
       The organisation-maintained mirror that serves whatever the sandbox installs: a
@@ -476,21 +476,22 @@ edges:
     bidir: true
     label: model & tool calls
     note: Every network call the agents make crosses here on a brokered, step-scoped credential.
-  - from: internalTools
+  - from: localTools
     to: registry
     path: primary
     bidir: true
+    route: vh
     label: pinned installs
     note: >
-      What a sandboxed step installs is pulled straight from the mirror, pinned by digest —
-      never from a public registry. The sandbox's network policy is what makes the mirror the
-      only place it can fetch from; the AI gateway brokers model and tool calls and is not on
-      this path.
+      What the harness's sandbox installs — a package manager running as a shell command —
+      is pulled straight from the mirror, pinned by digest, never from a public registry. The
+      gateway is the other doorway into the harness, for inference, MCP, skills and APIs; it
+      is not on this path.
   - from: gateway
     to: provider
     path: external
     bidir: true
-    route: hv
+    route: vh
     note: Inference on the brokered credential, for every agent in the graph.
   - from: gateway
     to: internalTools
@@ -508,7 +509,6 @@ edges:
       reads back as context are stored.
   - from: gateway
     to: extTools
-    route: hv
     path: external
     bidir: true
     label: brokered external calls
@@ -602,7 +602,7 @@ pins:
         The vector index is written by steps and read by every later one; a poisoned entry is
         retrieved into the context of an agent that never saw it arrive.
     - risk: riskToolSourceProvenance
-      at: internalTools->registry
+      at: localTools->registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task or a tool
         result; the mirror decides which build answers to that name, and whoever can write to
@@ -736,7 +736,7 @@ pins:
         instances that were meant to be isolated, and a proxying mirror is a road to the
         internet the sandbox was not supposed to have.
     - capability: capabilityEgressControl
-      at: internalTools
+      at: localTools
       note: >
         The sandbox's network policy: the only routes out are the AI gateway and the package
         mirror. Shell commands, fetches and anything else a tool emits are bounded here — not at
@@ -871,20 +871,16 @@ scenarios:
 
   - title: A dependency arrives with the task
     steps:
-      - follow: harness->gateway
-        note: A step needs a package its generated code imports, on a name the model chose.
-      - follow: gateway->internalTools
-        note: The code runs in the sandboxed tools, admitted like any other tool call.
-      - follow: internalTools->registry
-        note: The sandbox pulls from the mirror directly — the one destination its network policy allows.
-      - follow: registry->internalTools
-        note: The admitted build comes back, pinned by digest — the hop a poisoned package actually arrives on.
-      - follow: internalTools->gateway
-        note: The step's result crosses back like any tool result.
-      - follow: gateway->harness
+      - follow: localTools->registry
         note: >
-          And the loop continues. The mirror stays read-only to the sandbox: a cache it could
-          write to would be a message board between sandboxes.
+          A sandboxed step needs a package its generated code imports; the package manager
+          runs as a shell command inside the harness's own tool surface and pulls from the
+          mirror — the one destination the sandbox's network policy allows.
+      - follow: registry->localTools
+        note: >
+          The admitted build comes back, pinned by digest — the hop a poisoned package actually
+          arrives on. The mirror stays read-only to the sandbox: a cache it could write to
+          would be a message board between sandboxes.
 
 deviations:
   - subject: In-process tool handlers are drawn with no edges

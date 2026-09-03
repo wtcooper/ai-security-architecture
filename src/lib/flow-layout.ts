@@ -377,6 +377,18 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     const within = level ? dy : outerFirst ? -dx : dx;
     return group * 1e6 + within;
   };
+  const parentOf = new Map(arch.blocks.filter((b) => b.parent).map((b) => [b.id, b.parent!]));
+  const ancestors = (id: string): string[] => {
+    const out: string[] = [];
+    for (let p = parentOf.get(id); p; p = parentOf.get(p)) out.push(p);
+    return out;
+  };
+  // An arrow that leaves a container through one of its sides takes a lane on that side
+  // alongside the container's own arrows. Otherwise a child's arrow and its parent's arrow
+  // both start at the same centre x and share a corridor — the harness's memory arrow and
+  // its sandbox's registry arrow read as one line.
+  const exitsThrough = (blockId: string, otherId: string): string | undefined =>
+    ancestors(blockId).find((p) => p !== otherId && !ancestors(otherId).includes(p));
   const sideLists = new Map<string, { ref: string; sort: number }[]>();
   plans.forEach((p, i) => {
     const add = (blockId: string, side: Side, self: Rect, other: Rect, end: "a" | "b") => {
@@ -387,25 +399,41 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     };
     add(p.e.from, p.aSide, p.a, p.b, "a");
     add(p.e.to, p.bSide, p.b, p.a, "b");
+    const outerA = exitsThrough(p.e.from, p.e.to);
+    if (outerA) add(outerA, p.aSide, blocks[outerA], p.b, "a");
+    const outerB = exitsThrough(p.e.to, p.e.from);
+    if (outerB) add(outerB, p.bSide, blocks[outerB], p.a, "b");
   });
   const slot = new Map<string, { idx: number; total: number }>();
   for (const [k, list] of sideLists) {
     list.sort((x, y) => x.sort - y.sort);
     list.forEach((entry, idx) => slot.set(`${k}|${entry.ref}`, { idx, total: list.length }));
   }
-  const anchorAt = (blockId: string, side: Side, r: Rect, i: number, end: "a" | "b") => {
+  const anchorAt = (blockId: string, side: Side, r: Rect, i: number, end: "a" | "b", outer?: string) => {
     const s = slot.get(`${blockId}|${side}|${i}|${end}`) ?? { idx: 0, total: 1 };
-    const f = (s.idx + 1) / (s.total + 1);
-    if (side === "t") return { x: r.x + r.w * f, y: r.y };
-    if (side === "b") return { x: r.x + r.w * f, y: r.y + r.h };
-    if (side === "l") return { x: r.x, y: r.y + r.h * f };
-    return { x: r.x + r.w, y: r.y + r.h * f };
+    let f = (s.idx + 1) / (s.total + 1);
+    // Position along the side comes from the container's lane, clamped onto the child so the
+    // line still starts on the block it belongs to.
+    let along = r;
+    if (outer) {
+      const o = slot.get(`${outer}|${side}|${i}|${end}`);
+      if (o) {
+        f = (o.idx + 1) / (o.total + 1);
+        along = blocks[outer];
+      }
+    }
+    const clampX = (x: number) => Math.min(Math.max(x, r.x + 12), r.x + r.w - 12);
+    const clampY = (y: number) => Math.min(Math.max(y, r.y + 12), r.y + r.h - 12);
+    if (side === "t") return { x: clampX(along.x + along.w * f), y: r.y };
+    if (side === "b") return { x: clampX(along.x + along.w * f), y: r.y + r.h };
+    if (side === "l") return { x: r.x, y: clampY(along.y + along.h * f) };
+    return { x: r.x + r.w, y: clampY(along.y + along.h * f) };
   };
 
   const edges = plans.map((p, i) => {
     const { e, a, b, kind, aSide, bSide } = p;
-    const A = anchorAt(e.from, aSide, a, i, "a");
-    const B = anchorAt(e.to, bSide, b, i, "b");
+    const A = anchorAt(e.from, aSide, a, i, "a", exitsThrough(e.from, e.to));
+    const B = anchorAt(e.to, bSide, b, i, "b", exitsThrough(e.to, e.from));
     const base = { from: e.from, to: e.to };
     if (kind === "h") {
       // Straight where the anchors line up; a shallow Z where they do not.

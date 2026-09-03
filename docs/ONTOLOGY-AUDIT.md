@@ -232,14 +232,20 @@ surface for customer-owned agent definitions.
   incident step's blocks and arrows in the step's phase colour and everything else faded.
   Blocks are no longer draggable — a moved block broke the routed arrows and the pins seated
   on them. Pan and zoom remain.
-- **The package mirror is standard wherever an agent executes code, and the sandbox reaches
-  it directly (2026-09-02).** The cloud agent trio and the third-party coding agent now draw
-  `Private pkg registry`, as the first-party coding agent, the personal agent and the training
-  pipeline already did. The install edge runs from the sandboxed tool surface to the mirror —
-  never through the AI gateway, which brokers model and MCP traffic and is not on a package
-  manager's path (LiteLLM-class tiers do not speak the package protocols; Codex, Claude Code
-  and AgentCore sandboxes enforce egress with their own network policy). The pins on that
-  edge are tool-source provenance and egress control (the sandbox's allowlist, one entry);
+- **The package mirror is standard wherever an agent executes code, and the harness's own
+  local tools reach it directly (2026-09-02).** The cloud agent trio and the third-party coding
+  agent now draw `Private pkg registry`, as the first-party coding agent, the personal agent and
+  the training pipeline already did. The install edge runs from the harness's nested Tool
+  services — the shell command the package manager is — to the mirror, never through the AI
+  gateway, which brokers model and MCP traffic and is not on a package manager's path
+  (LiteLLM-class tiers do not speak the package protocols; Codex, Claude Code and AgentCore
+  sandboxes enforce egress with their own network policy). The same shape holds on every
+  surface: the cloud harness's local tools, the endpoint tool plane and the personal agent's
+  sandbox all install from the mirror; the gateway is the other doorway into the harness, for
+  inference, MCP, skills and API tools. The layout engine now lanes an arrow that leaves a
+  container beside the container's own arrows, so the harness's memory arrow and its local
+  tools' registry arrow no longer share a corridor. The pins on the install edge are
+  tool-source provenance and egress control (the sandbox's allowlist, one entry);
   the mirror carries AI BOM at admission and read-only-to-agents access governance, because
   a writable cache is a message board between sandboxes and an escape route — the OpenAI–
   Hugging Face incident began there, and its replay lands on the block. `patternSupplyBackhaul`
@@ -252,7 +258,8 @@ surface for customer-owned agent definitions.
   catalogue. What the gateway bounds is its registry of destinations, pinned as tool
   permission scoping on its external edges; what a local tool may reach at all is the
   sandbox's network policy, pinned as network segmentation & egress control on the sandboxed
-  tool surface (cloud Tool services, the endpoint tool plane, the personal agent's sandbox).
+  tool surface (the cloud harness's local Tool services, the endpoint tool plane, the personal
+  agent's sandbox).
   The coding agents' "bundles an egress-proxy function" deviation is retired; the vocabulary
   re-points egress control's embodiment from the AI gateway to the tool surface, the sandbox
   and the browser.
