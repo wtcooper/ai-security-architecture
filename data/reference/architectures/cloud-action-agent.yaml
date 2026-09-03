@@ -121,28 +121,27 @@ blocks:
 
   - id: localTools
     kind: service
-    title: Tool services
+    title: Native tools
     cosaiComponent: componentTools
     zone: zoneCloud
     parent: planner
     col: 0
     row: 1
     note: >
-      The tools compiled into the application itself — decorated functions running in the
-      loop's own process, under its identity, with its egress and its secrets. This is the
-      default and most common way a tool gets attached, and the reason it is drawn: **the
-      in-process tool set is invisible to any gateway**. Only what leaves over the network
-      shows up at a chokepoint, so whatever lives here is governed by code review or by
-      nothing.
+      The tools compiled into the application itself, nested because the loop calling them is
+      not a hop: decorated functions running in the loop's own process, under its identity,
+      with its egress and its secrets, and the sandbox the loop's generated code runs in. This
+      is the default way a tool gets attached, and the reason it is drawn: the in-process tool
+      set is invisible to any gateway. What these tools reach is drawn — memory and retrieval
+      through their handlers, and the package mirror through the sandbox's package manager.
     items:
       - id: inProcess
         label: Tool handlers
         icon: code
-        note: Functions in the application, holding whatever the application holds.
-      - id: connectors
-        label: APIs & connectors
-        icon: plug
-        note: Ordinary outbound calls the application makes itself, without a broker in front.
+        note: >
+          Functions in the application, holding whatever the application holds — including the
+          outbound calls it makes itself, with no broker in front, and the retrieval and state
+          reads the loop treats as context.
       - id: sandboxedTools
         label: Sandboxed tools
         icon: shield
@@ -171,6 +170,12 @@ blocks:
         icon: doc
         note: Merges the instruction, the memory and the tool results into one prompt.
 
+      - id: mcpClient
+        label: MCP client
+        icon: plug
+        note: >
+          The harness's own MCP client — the party that connects out, through the gateway's
+          MCP brokerage, to remote servers.
   - id: stateRetrieval
     kind: service
     title: Memory & state
@@ -407,19 +412,19 @@ edges:
       The human's answer arrives the way everything arrives here: as an event. It is
       validated against the parked proposal before anything executes — a blanket "yes"
       approves nothing in particular.
-  - from: planner
+  - from: localTools
     to: stateRetrieval
     label: read & write / context
     path: primary
     bidir: true
     note: >
       Business policy, the customer's history and the working state of this case, read back as
-      context and written forward as the run proceeds.
+      context through the retrieval and state handlers, and written forward by them.
   - from: planner
     to: gateway
     path: primary
     bidir: true
-    label: model & tool calls
+    label: inference, MCP & skills
     note: >
       Every network call out of the loop crosses here on a brokered credential. The agent tier
       holds no standing keys of its own.
@@ -535,7 +540,7 @@ pins:
       note: Per-token inference behind an open trigger surface makes unbounded requests a spend problem.
 
     - risk: riskToolSourceProvenance
-      at: localTools->registry
+      at: registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task or a tool
         result; the mirror decides which build answers to that name, and whoever can write to
@@ -671,10 +676,13 @@ walkthrough:
         A refund request arrives as a queue message — written by a customer through some
         upstream system, bound to an account and carrying the grant the run will act on.
         Nobody is waiting on a socket for the answer.
-    - follow: planner->stateRetrieval
-      note: Policy and the customer's history are requested, scoped to this account.
-    - follow: stateRetrieval->planner
-      note: They come back into the context window.
+    - follow: localTools->stateRetrieval
+      note: >
+        Policy and the customer's history are requested through the retrieval handler, scoped to
+        this account.
+    - follow: stateRetrieval->localTools
+      note: >
+        They come back into the context window.
     - follow: planner->gateway
       note: The context leaves the loop through the gateway, on a brokered credential.
     - follow: gateway->provider
@@ -800,14 +808,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: In-process tool handlers are drawn with one edge — the install path
-    reason: >
-      The localTools block warns rather than models: tools compiled into the application run
-      in its process, so their calls traverse no drawable path of ours, and drawing call edges
-      would assert a governed hop that does not exist. The bound is code review at admission,
-      which is why the risk is pinned on the block itself. The one edge drawn is the package
-      manager's pull from the mirror — a shell command reaching a network destination, a hop
-      that is real and that the sandbox's network policy governs.
   - subject: The gateway's Skills catalogue item has no drawn supply path
     reason: >
       The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps

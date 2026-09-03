@@ -228,6 +228,30 @@ Two container flavours:
 - **A normal block with children** — keeps its border and its own items. An agent harness
   containing a supervisor and its subagents.
 
+### The harness anatomy (2026-09-03)
+
+Every harness we operate is drawn the same way. **Agent harness** is the application — the
+loop, context assembly and the MCP client — and it contains **Native tools**, the built-in
+tool surface (file and edit tools, shell, local MCP servers, sandboxed tools, skills, computer
+use; in the cloud, tool handlers and sandboxed tools). Containment is the call relationship, so
+there is no loop-to-tools edge; the edges that are drawn leave Native tools for what the tools
+reach: **Memory & state** (file and retrieval tools are how the loop reads and writes it),
+**Private pkg registry** (the package manager is a shell command), the **AI gateway** (a local
+server's brokered API and MCP calls) and, on the endpoints, **Downstream services** directly
+(a local MCP server holding its own token). Memory stays outside the harness because it
+outlives the process. No frame is drawn around the harness to say "this is the application":
+the harness block with its child is the application, and a boundary around one block is
+nesting for its own sake. Boundary frames are for real technical or ownership containers — a
+microVM sandbox, a vendor tenant. Vendor-operated fused runtimes do not nest at all; their
+tools stay items on the provider block, because we cannot see inside.
+
+MCP is three things and the drawings keep them apart: the **MCP client** is an item of the
+harness; **Local MCP servers** are an item of Native tools, processes on the endpoint whether
+spawned by the harness or already running; **Remote MCP servers** are an item of Tool services
+in whichever band operates them, the server layer in front of Enterprise data or Downstream
+services. Local and remote carry different icons on purpose — the protocol is the same, the
+industry vocabulary is not.
+
 One more kind exists for a different job: **`kind: origin`** occupies a grid cell and draws
 nothing, so an edge can arrive from a deliberately unnamed source — used where a component is
 reached from several surfaces and naming any one of them would be arbitrary.

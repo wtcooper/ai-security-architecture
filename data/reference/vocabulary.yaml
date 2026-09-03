@@ -128,12 +128,6 @@ itemPacks:
       - { label: Model proxy, icon: model }
       - { label: MCP & API gateway, icon: plug }
       - { label: Skills catalogue, icon: gear }
-  toolServicesLocal:
-    when: Tool services in the endpoint band — the action surface running as the user.
-    items:
-      - { label: File & edit tools, icon: folder }
-      - { label: Shell commands, icon: code }
-      - { label: MCP servers, icon: plug }
   toolServicesRemote:
     when: >
       Tool services in the cloud, vendor and external bands. Deliberately identical in all
@@ -142,7 +136,7 @@ itemPacks:
       including one we host ourselves in the enterprise cloud; a laptop's local file and shell
       tools have no such thing.
     items:
-      - { label: MCP servers, icon: plug }
+      - { label: Remote MCP servers, icon: plug }
       - { label: APIs & connectors, icon: plug }
       - { label: A2A peer agents, icon: agent }
   memoryLocal:
@@ -183,7 +177,7 @@ patterns:
       brokers it and the cloud tool surface serves it.
     requires: [Agent harness, AI gateway, Tool services, Enterprise data]
     legs:
-      - { from: Agent harness, to: AI gateway, path: primary, bidir: true, label: model & tool calls }
+      - { from: Agent harness, to: AI gateway, path: primary, bidir: true, label: "inference, MCP & skills" }
       - { from: AI gateway, to: Tool services, toBand: cloud, path: primary, bidir: true, route: vh, label: internal tool calls }
       - { from: Tool services, fromBand: cloud, to: Enterprise data, path: primary, bidir: true, label: scoped reads & writes }
   patternLocalSession:
@@ -194,24 +188,23 @@ patterns:
     requires: [Agent harness]
     legs:
       - { from: actor, to: Agent harness, toBand: endpoint, path: primary, bidir: true, label: local session }
-  patternLocalTools:
-    when: the harness driving its own tool surface on the endpoint.
-    requires: [Agent harness, Tool services]
-    legs:
-      - { from: Agent harness, to: Tool services, toBand: endpoint, path: primary, bidir: true, route: hv, label: local tool calls }
+  # patternLocalTools retired 2026-09-03: the harness's own tools are Native tools nested
+  # inside it, and containment is the call relationship — no leg to draw.
   patternMemory:
-    when: cross-session state beside the loop. Unlabelled — the endpoints say it.
-    requires: [Agent harness, Memory & state]
+    when: >
+      cross-session state beside the loop, read and written by the harness's file and
+      retrieval tools.
+    requires: [Native tools, Memory & state]
     legs:
-      - { from: Agent harness, to: Memory & state, path: primary, bidir: true }
+      - { from: Native tools, to: Memory & state, path: primary, bidir: true, label: read & write / context }
   patternSupplyBackhaul:
     when: >
-      what a sandboxed tool surface installs, pulled straight from the organisation's mirror
+      what the harness's native tools install, pulled straight from the organisation's mirror
       under its egress policy. The AI gateway brokers model and tool calls and is never on a
       package manager's path; agents pull from the registry, build pipelines publish to it.
-    requires: [Tool services, Private pkg registry]
+    requires: [Native tools, Private pkg registry]
     legs:
-      - { from: Tool services, to: Private pkg registry, path: primary, bidir: true }
+      - { from: Native tools, to: Private pkg registry, path: primary, bidir: true, label: pinned installs }
   patternExternalTools:
     when: brokered reach to third-party tool surfaces and what sits behind them.
     requires: [AI gateway, Tool services, Downstream services]
@@ -274,35 +267,61 @@ components:
     items:
       - { label: Agent loop, icon: agent }
       - { label: Context assembly, icon: doc }
+      - { label: MCP client, icon: plug }
       - { label: Heartbeat, icon: clock }
       - { label: Local API server, icon: plug }
   - title: Tool services
     kind: service
     cosaiComponent: componentTools
     when: >
-      the actuation surface — and it keeps this one name in every band. A tool surface on the
-      managed endpoint, in our cloud, at a vendor and out on the internet are the same kind of
-      thing at different surfaces, so the band says where it is and the item pack says what it
-      offers. Do not rename by location ("Internal MCP & APIs", "Remote tool services"): that
-      hides the symmetry a reader needs. Item packs by band — endpoint: file & edit tools,
-      shell, MCP servers, installed skills, computer use, sandboxed tools; cloud: MCP servers,
-      APIs & connectors; vendor and external: MCP servers, APIs & connectors, A2A peer agents,
-      admitted by assessment even when the service is free and unsupported, refused at the
-      crossing otherwise. MCP appears in every band because users install local servers too.
+      the network tool surface — the server layer between a caller and the data it acts on:
+      remote MCP servers, APIs and connectors, A2A peers. It keeps this one name in every
+      band: a tool surface in our cloud, at a vendor and out on the internet are the same kind
+      of thing at different surfaces, so the band says where it is and the item pack says what
+      it offers. Do not rename by location ("Internal MCP & APIs", "Remote tool services"):
+      that hides the symmetry a reader needs. What sits behind it is drawn as its own block —
+      Enterprise data or Downstream services — because the server and the data are two
+      things, and the controls differ. The harness's own built-in tools are not this: they are
+      Native tools, nested inside the harness (restructured 2026-09-03).
+    items:
+      - { label: Remote MCP servers, icon: plug }
+      - { label: APIs & connectors, icon: plug }
+      - { label: A2A peer agents, icon: agent }
+  - title: Native tools
+    kind: service
+    cosaiComponent: componentTools
+    when: >
+      the harness's built-in tool surface, nested inside the Agent harness (`parent`) wherever
+      we operate the harness — the three cloud agents, the two coding agents, the personal
+      agent. Containment is the call relationship: the loop calling its own tools is not a
+      drawable hop, so there is no loop-to-tools edge. What Native tools reach IS drawn:
+      Memory & state (the file and retrieval tools are how the loop reads and writes it),
+      Private pkg registry (the package manager is a shell command), the AI gateway (a local
+      server's API and MCP calls through our brokerage) and, on the endpoints, Downstream
+      services directly — the local MCP server holding its own token and calling the SaaS
+      itself, which is the common shape and the finding worth drawing. Local MCP servers carry
+      a different icon from Remote MCP servers deliberately: technically the same protocol, but
+      industry vocabulary splits them by surface, and a reader looks for that split.
+      Vendor-operated fused runtimes (Managed runtime, Agent builder platform) do not nest —
+      their tools stay items on the provider block, because we cannot see inside.
     items:
       - { label: File & edit tools, icon: folder }
       - { label: Shell commands, icon: code }
-      - { label: Local & remote MCP, icon: plug }
-      - { label: MCP servers, icon: plug }
-      - { label: APIs & connectors, icon: plug }
-      - { label: A2A peer agents, icon: agent }
+      - { label: Local MCP servers, icon: code }
+      - { label: Sandboxed tools, icon: shield }
       - { label: Installed skills, icon: gear }
       - { label: Computer use, icon: eye }
-      - { label: Sandboxed tools, icon: shield }
+      - { label: Tool handlers, icon: code }
   - title: Memory & state
     kind: service
     cosaiComponent: componentDataStorage
-    when: cross-session state the loop reads back as context.
+    when: >
+      cross-session state the loop reads back as context. Outside the harness, because it
+      outlives the process and is what an attacker poisons between sessions; reached from
+      Native tools, because the file and retrieval tools are how the loop reads and writes it
+      (the startup load of rules and instructions reads the same files — a note on Context
+      assembly, not a second edge). The one exception is a durable engine's journal, which the
+      engine writes as machinery: the multi-agent workflow draws that from Supervisor agent.
     items:
       - { label: Memory files, icon: folder }
       - { label: Rules & instructions, icon: doc }
@@ -448,7 +467,7 @@ components:
   - title: Downstream services
     kind: external
     cosaiComponent: componentDataSources
-    when: what the tool plane reaches; drawn directly beneath Tool services. Items extend
+    when: what the native tools reaches; drawn directly beneath Tool services. Items extend
       this set but never rename it.
     items:
       - { label: Org data, icon: db }
@@ -543,6 +562,7 @@ components:
       - { label: Tunnel service, icon: plug }
       - { label: Chat channels, icon: chat }
 
+  - { title: MCP clients, kind: origin, when: "the MCP publisher's callers — harnesses whose MCP client dials the published server; an origin because naming any one surface would be arbitrary (2026-09-03)." }
   - { title: Callers, kind: origin, when: a deliberately unnamed edge source — used where a component is reached from several surfaces and naming any one of them would make the drawing about that integration instead }
 
   - title: Browser
@@ -787,7 +807,7 @@ components:
       - { label: Agent loop, icon: agent }
       - { label: Memory store, icon: folder }
       - { label: Sandboxed tools, icon: shield }
-      - { label: MCP & connectors, icon: plug }
+      - { label: Remote MCP & connectors, icon: plug }
   # Deprecated 2026-09-01 (review remediation): under the three-zone rule the provider's
   # decomposition is assured, not drawn — these live as items on the Managed runtime block,
   # zone-2 surfaces the customer configures. Re-activate only if the rule changes.
@@ -827,7 +847,7 @@ capabilityEnforcement:
     capabilityRateLimiting: [AI gateway]
     # Re-pointed 2026-09-02: network egress is enforced where local tools run, not at the
     # AI gateway, which brokers model, MCP and API calls and sees nothing else.
-    capabilityEgressControl: [Tool services, Sandbox, Browser]
+    capabilityEgressControl: [Native tools, Sandbox, Browser]
     capabilityAgentSandboxing: [Sandbox, Sandboxed tools, Managed sandbox]
     capabilityIga: [Authorization server, Identity provider, Identity binding]
     capabilityNhiManagement: [Authorization server, Identity provider, AI gateway, Agent identities]

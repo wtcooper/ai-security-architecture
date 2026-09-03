@@ -176,9 +176,10 @@ blocks:
     col: 1
     row: 1
     note: >
-      The loop behind the terminal, editor or chat window, running as the user. Unlike the
-      vendor products it commonly does open a port of its own — localhost by default, and the
-      thing exposure scans keep finding when that default is changed.
+      The installed application — the loop behind the terminal, editor or chat window, running
+      as the user, with its built-in tools nested inside it. Unlike the vendor products it
+      commonly does open a port of its own — localhost by default, and the thing exposure scans
+      keep finding when that default is changed.
     items:
       - id: apiServer
         label: Local API server
@@ -196,12 +197,18 @@ blocks:
         icon: doc
         note: Merges the instruction, the memory and the tool results into one prompt.
 
+      - id: mcpClient
+        label: MCP client
+        icon: plug
+        note: >
+          The harness's own MCP client — the party that connects out: to local servers in its
+          native tools, and through the gateway's MCP brokerage to remote ones.
   - id: memory
     kind: service
     title: Memory & state
     cosaiComponent: componentDataStorage
     zone: zoneEndpoint
-    col: 1
+    col: 2
     row: 2
     note: >
       Agent-written notes and the rules files merged into every later session — on by default
@@ -225,14 +232,19 @@ blocks:
 
   - id: toolPlane
     kind: service
-    title: Tool services
+    title: Native tools
     cosaiComponent: componentTools
     zone: zoneEndpoint
-    col: 2
-    row: 2
+    parent: harness
+    col: 0
+    row: 0
     note: >
-      The application's action surface, running as the user on a machine that also holds their
-      SSH keys, cloud credentials and browser sessions.
+      The application's built-in tools, nested because the loop calling them is not a hop:
+      file and edit tools, the shell, the local MCP servers it spawns or attaches to, the
+      sandbox for builds and tests, skills and computer use — running as the user on a machine
+      that also holds their SSH keys, cloud credentials and browser sessions. What these tools
+      reach is drawn: memory files, the package mirror, the gateway's API brokerage, and the
+      internet directly when a local server holds its own token.
     items:
       - id: editTools
         label: File & edit tools
@@ -243,11 +255,13 @@ blocks:
         icon: code
         note: Command execution with the user's authority when it runs outside the sandbox.
       - id: mcp
-        label: MCP servers
-        icon: plug
+        label: Local MCP servers
+        icon: code
         note: >
-          The servers a developer installs on their own machine — local child processes with
-          the user's privileges. Remote ones are reached through the gateway, not from here.
+          Local MCP servers: child processes the harness spawns through npx or uv, or servers
+          already running on the machine, holding the user's privileges and, often, their own API
+          tokens in a config dotfile. Remote MCP servers are a different thing on this catalogue —
+          reached through the gateway, drawn in Tool services — and the industry names them apart.
       - id: sandboxedTools
         label: Sandboxed tools
         icon: shield
@@ -276,7 +290,7 @@ blocks:
       component in this drawing that can hold a control at all: the vault for the key the
       developer would otherwise paste, the registry of MCP servers, APIs and connectors it will
       broker, and the admission decision for the remote surface. Which build of the agent runs is the
-      mirror's decision, reached by the tool plane directly. Its items are the traffic classes
+      mirror's decision, reached by the native tools directly. Its items are the traffic classes
       it brokers; the checks are the numbered pins on this block and its edges, and the
       call-outs beneath.
     pack: aiGatewayTraffic
@@ -294,7 +308,7 @@ blocks:
       reach, and what the gateway in front of it decides it may.
     items:
       - id: internalMcp
-        label: MCP servers
+        label: Remote MCP servers
         icon: plug
         note: Our own servers, listed in the catalogue the gateway enforces.
       - id: internalApis
@@ -356,14 +370,14 @@ blocks:
     cosaiComponent: componentTools
     zone: zoneExternal
     col: 5
-    row: 2
+    row: 3
     note: >
       Third-party servers and connectors — the same component again, out where nobody we
       contracted with operates it. Admitted by assessment even when the service is free and
       unsupported, or refused at the crossing.
     items:
       - id: mcp
-        label: MCP servers
+        label: Remote MCP servers
         icon: plug
         note: Remote servers whose tool descriptions enter context as model input.
       - id: apis
@@ -393,9 +407,9 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 5
-    row: 3
+    row: 5
     note: >
-      What the tool plane reaches on the open internet — dependency registries, the web, and
+      What the native tools reaches on the open internet — dependency registries, the web, and
       third-party SaaS the developer has grants into.
     items:
       - id: registries
@@ -417,7 +431,7 @@ blocks:
     icon: person
     zone: zoneGovernance
     col: 0
-    row: 5
+    row: 6
     capabilities: [capabilityIga]
     note: >
       The IdP and device-posture plane deciding who may open a session at all, and on what
@@ -429,7 +443,7 @@ blocks:
     icon: key
     zone: zoneGovernance
     col: 1
-    row: 5
+    row: 6
     capabilities: [capabilitySecretsManagement, capabilityCredentialIsolation]
     note: >
       Vaulted, short-lived, connector-scoped grants on our own keys — and keeping the
@@ -441,7 +455,7 @@ blocks:
     icon: scale
     zone: zoneGovernance
     col: 2
-    row: 5
+    row: 6
     capabilities: [capabilityAgentRuntimeEnforcement, capabilityEgressControl, capabilityAiDlp, capabilityRateLimiting]
     note: >
       The decisions the one crossing enforces per call — what may be reached, what may leave,
@@ -454,7 +468,7 @@ blocks:
     icon: db
     zone: zoneGovernance
     col: 4
-    row: 5
+    row: 6
     capabilities: [capabilityAgentRegistry, capabilityMcpToolSecurity, capabilityAiBom, capabilitySystemPromptManagement]
     note: >
       Which agents, connectors and servers are admitted, and pinned to which versions. This
@@ -467,7 +481,7 @@ blocks:
     icon: eye
     zone: zoneGovernance
     col: 6
-    row: 5
+    row: 6
     capabilities: [capabilityAuditLogging, capabilityShadowAiDiscovery, capabilityKillSwitch]
     note: >
       Our gateway tap is the only session record there is — no vendor export exists to fuse
@@ -512,59 +526,69 @@ edges:
       the machine without passing through the corporate network at all. The third shape — a
       direct connection to the listening port with no relay anywhere — traverses nothing
       drawable at all, and is carried as the exposure risk pinned on the harness.
-  - from: harness
+  - from: toolPlane
     to: memory
     label: read & write / context
+    route: vh
     path: primary
     bidir: true
-    note: The loop writes what it learns and reads it back as instruction on the next task.
-  - from: harness
-    to: toolPlane
-    path: primary
-    bidir: true
-    route: hv
-    label: local tool calls
-    note: Tool calls out with whatever scope the permission model granted; results back into context.
+    note: >
+      The file tools are how the loop reads and writes what it learns — memory files written
+      by the agent, rules and instructions read back on the next task. Context assembly loads
+      the same rules at session start, through the same files.
   - from: harness
     to: aiGateway
+    route: hv
     path: primary
     bidir: true
-    route: hv
-    label: model & tool calls
+    label: inference, MCP & skills
     note: >
       The one general-purpose crossing: every model call and every remote tool call leave the
       endpoint here — in the target state. In the common install the model call goes straight
       out on a pasted key and never sees this tier.
   - from: toolPlane
     to: aiGateway
+    route: hv
     path: primary
     bidir: true
-    label: brokered calls
+    label: API & MCP calls via gateway
     note: >
-      The local tool surface reaches nothing on its own. Remote MCP servers, APIs and
-      connectors are brokered here — the gateway's registry of destinations is what admits
-      them. Package installs go to the mirror and web fetches go where the endpoint's egress
-      allowlist permits; neither crosses this tier.
+      A local server's or tool's own calls to remote MCP servers, APIs and connectors, brokered
+      here on the gateway's registry of destinations and on credentials it injects. Package
+      installs go to the mirror, and the direct path below is the one this brokerage exists
+      to replace.
   - from: aiGateway
     to: provider
     label: inference / completion
+    route: hv
     path: external
     bidir: true
-    route: vh
     note: >
       Inference on a credential the gateway brokers, rather than the long-lived key the
       developer would otherwise paste into a dotfile. With no vendor between them, this is the
       whole model path — and in the common install it does not cross the gateway at all.
   - from: toolPlane
     to: registry
+    route: vh
     path: primary
     bidir: true
-    route: vh
     label: pinned installs
     note: >
       Harness, extension and skill releases pulled straight from the mirror, pinned by digest — never from a community channel.
       The endpoint's egress allowlist is what makes the mirror the only place the sandbox can
       fetch from; the AI gateway brokers model and tool calls and is not on this path.
+  - from: toolPlane
+    to: downstream
+    route: vh
+    path: external
+    bidir: true
+    label: direct egress
+    note: >
+      The common shape of a local MCP server and of a shell command: a process on the machine
+      holding its own token and calling the SaaS, the API or the web itself — no gateway, no
+      broker, and no record on our side. What bounds it is the endpoint's egress policy and
+      where the token lives; both are pinned here, because this is the path a phone-home
+      actually takes.
   - from: aiGateway
     to: hostedTools
     route: hv
@@ -584,6 +608,7 @@ edges:
       recorded on our side of the boundary.
   - from: aiGateway
     to: extTools
+    route: hv
     path: external
     bidir: true
     label: brokered external calls
@@ -613,7 +638,7 @@ pins:
     - risk: riskToolRegistryTampering
       at: toolPlane
       note: >
-        Configuration admits the whole tool plane and can arrive with the clone. Injecting into
+        Configuration admits the whole native tools and can arrive with the clone. Injecting into
         it and swapping it after approval are the disclosed paths.
     - risk: riskInsecureModelOutput
       at: harness
@@ -686,6 +711,13 @@ pins:
         Hooks and settings are executed, not read: a session-start hook or folder-open task
         written into the agent's configuration is code execution as the developer on every
         launch — the persistence the CHAINDROP worm chose.
+    - risk: riskSensitiveDataDisclosure
+      at: toolPlane->downstream
+      note: >
+        The path a phone-home takes: a shell command or a local server bundles a token, a file
+        or a key into a request and sends it itself. Nothing of ours is on this hop unless the
+        endpoint's egress policy is — and the token a local MCP server uses lives in a dotfile
+        on the same disk.
   capabilities:
     - capability: capabilityIga
       at: relay
@@ -714,10 +746,10 @@ pins:
         Spend ceilings at the crossing, because the only native meter in this category is the
         provider's invoice — there is no vendor console showing seat usage or session counts.
     - capability: capabilityToolPermissionScoping
-      at: harness->toolPlane
+      at: toolPlane
       note: >
-        Per-tool grants scoped to the working tree and the task, instead of the developer's
-        full authority on the machine.
+        Per-tool grants scoped to the working tree and the task, instead of the developer's full
+        authority on the machine — enforced where the tools run, inside the application.
     - capability: capabilityAgentSandboxing
       at: toolPlane
       note: >
@@ -727,7 +759,7 @@ pins:
       at: toolPlane
       note: Keep SSH keys, cloud credentials and browser profiles outside the agent's reachable filesystem.
     - capability: capabilityMemoryProtection
-      at: harness->memory
+      at: toolPlane->memory
       note: Treat memory and rules as untrusted input on read; a repo-committed rules change is a code change.
     - capability: capabilityPromptInjectionDefense
       at: hostedTools->orgData
@@ -788,8 +820,9 @@ pins:
     - capability: capabilityEgressControl
       at: toolPlane
       note: >
-        The endpoint's egress allowlist, enforced by device management: the only routes out of
-        the tool plane are the AI gateway and the package mirror. Shell commands, fetches and
+        The endpoint's egress allowlist, enforced by device management, decides where the
+        direct path may go: the AI gateway, the package mirror, and the named services a local
+        server is approved to call — nothing else. Shell commands, fetches and
         browser traffic are bounded here — not at the gateway, which brokers model, MCP and API
         calls and sees nothing else.
     - capability: capabilityToolPermissionScoping
@@ -821,12 +854,11 @@ walkthrough:
         kept rare enough that each prompt is read.
     - follow: developer->harness
       note: Approved — this action, these arguments, not a blanket yes.
-    - follow: harness->toolPlane
-      note: Edits and commands execute with whatever scope the permission model granted.
     - follow: toolPlane->aiGateway
       note: >
-        Anything leaving the machine crosses our tier — a dependency fetch bound for an
-        allowlisted registry, a call to our own servers, all on the same bundled crossing.
+        Edits and commands execute inside the application's native tools, with whatever scope
+        the permission model granted. Anything a local tool sends to a remote server or
+        connector crosses our tier here — brokered, on a credential the gateway injects.
     - follow: aiGateway->extTools
       note: A third-party server or connector, admitted by the catalogue on a scoped credential.
     - follow: extTools->downstream
@@ -848,12 +880,6 @@ scenarios:
           The relay hands the instruction down a connection the harness dialled out. Admission
           is a bearer secret at best; with no relay at all the phone connects straight to a
           listening port and admission is whatever that port checks, which is often nothing.
-      - follow: harness->toolPlane
-        note: >
-          The work executes locally with the developer's files, credentials and browser sessions
-          around it, on the authority of whoever got past that secret.
-      - follow: toolPlane->harness
-        note: The result comes back to the loop.
       - follow: harness->relay
         note: The result goes back up the same dialled-out connection.
       - follow: relay->remoteDevice
@@ -883,32 +909,24 @@ scenarios:
         note: The completion carries the attacker's instruction as the plan.
       - follow: aiGateway->harness
         note: The loop treats it as the next step.
-      - follow: harness->toolPlane
-        note: A shell command or edit tool bundles a token, a file or a key into a request.
-      - follow: toolPlane->aiGateway
-        note: The exfiltration attempt has to cross the egress allowlist — the last control standing.
-      - follow: aiGateway->extTools
+      - follow: toolPlane->downstream
         note: >
-          To an allowlisted destination the attacker controls, or a domain nobody reviewed. On
-          the common install with no gateway, there was no allowlist to cross.
+          A shell command or a local server bundles a token, a file or a key into a request and
+          sends it itself — the direct path, where the endpoint's egress allowlist is the last
+          control standing, and on the common install there is none.
   - title: The harness updates itself
     steps:
-      - follow: harness->toolPlane
-        note: >
-          A new release of the harness or one of its extensions is requested — the package
-          manager runs as the developer, on the supply chain's proven path.
       - follow: toolPlane->registry
         note: >
-          Straight to the mirror, the one destination the egress allowlist permits. The mirror
-          is where a version is pinned and a review has happened; straight to a community
-          channel, this step is publisher self-attestation and nothing else.
+          A new release of the harness or one of its extensions is requested — the package manager
+          runs as the developer, in the application's own tools, on the supply chain's proven path,
+          straight to the mirror: the one destination the egress allowlist permits, and where a
+          version is pinned and a review has happened.
       - follow: registry->toolPlane
-        note: The approved build comes back, digest-checked against the pin — the hop a compromised release actually arrives on.
-      - follow: toolPlane->harness
         note: >
-          The update loads into the running process with everything the agent has. A
-          compromised release is code execution as the developer.
-
+          The approved build comes back, digest-checked against the pin — the hop a compromised
+          release actually arrives on — and loads into the running process with everything the
+          agent has. A compromised release is code execution as the developer.
 deviations:
   - subject: There is no vendor band
     reason: >
@@ -933,7 +951,7 @@ deviations:
       In this archetype the registry delivers the agent itself, not merely what the agent
       calls. Drawing it in the enterprise band rather than out among the downstream services
       says the thing that matters: which build of the harness is permitted to run is a
-      decision the organisation makes at its own mirror, which the tool plane reaches directly
+      decision the organisation makes at its own mirror, which the native tools reaches directly
       under the endpoint's egress allowlist.
   - subject: The sandbox is a Sandboxed tools item, not a frame
     reason: >

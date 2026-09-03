@@ -154,27 +154,27 @@ blocks:
 
   - id: localTools
     kind: service
-    title: Tool services
+    title: Native tools
     cosaiComponent: componentTools
     zone: zoneCloud
     parent: agent
     col: 0
     row: 1
     note: >
-      The tools compiled into the application itself — decorated functions running in the
-      loop's own process, under its identity, with its egress and its secrets. This is the
-      default way a tool gets attached, and the reason it is drawn: **the in-process tool set
-      is invisible to any gateway**. Only what leaves over the network appears at a chokepoint,
-      so whatever lives here is governed by code review or by nothing.
+      The tools compiled into the application itself, nested because the loop calling them is
+      not a hop: decorated functions running in the loop's own process, under its identity,
+      with its egress and its secrets, and the sandbox the loop's generated code runs in. This
+      is the default way a tool gets attached, and the reason it is drawn: the in-process tool
+      set is invisible to any gateway. What these tools reach is drawn — memory and retrieval
+      through their handlers, and the package mirror through the sandbox's package manager.
     items:
       - id: inProcess
         label: Tool handlers
         icon: code
-        note: Functions in the application, holding whatever the application holds.
-      - id: connectors
-        label: APIs & connectors
-        icon: plug
-        note: Ordinary outbound calls the application makes itself, with no broker in front.
+        note: >
+          Functions in the application, holding whatever the application holds — including the
+          outbound calls it makes itself, with no broker in front, and the retrieval and state
+          reads the loop treats as context.
       - id: sandboxedTools
         label: Sandboxed tools
         icon: shield
@@ -206,6 +206,12 @@ blocks:
           Merges the turn, the conversation memory and the tool results into one prompt.
           Everything merged stands beside the system instruction.
 
+      - id: mcpClient
+        label: MCP client
+        icon: plug
+        note: >
+          The harness's own MCP client — the party that connects out, through the gateway's
+          MCP brokerage, to remote servers.
   - id: memory
     kind: service
     title: Memory & state
@@ -423,19 +429,20 @@ edges:
     note: >
       The turn arrives with the user's identity attached; the reply and any action proposal
       return on the same path.
-  - from: agent
+  - from: localTools
     to: memory
     label: read & write / context
     path: primary
     bidir: true
     note: >
-      The conversation so far reads back as context on every call, and each turn's results are
-      written forward — the session's persistence surface.
+      The conversation so far reads back as context on every call through the state and
+      retrieval handlers, and each turn's results are written forward by them — the persistence
+      that lets one turn's injection reach the next.
   - from: agent
     to: gateway
     path: primary
     bidir: true
-    label: model & tool calls
+    label: inference, MCP & skills
     note: >
       Every network call out of the loop crosses here on a brokered credential scoped to the
       conversing user. The agent holds no standing keys of its own.
@@ -554,7 +561,7 @@ pins:
         The agent acts for the user with the service's reach. Keeping every tool call on the
         user's grant, not the workload's, is what closes the gap.
     - risk: riskSensitiveDataDisclosure
-      at: agent->memory
+      at: localTools->memory
       note: >
         The session accumulates everything retrieved on earlier turns; a late question can
         surface records the current topic never needed.
@@ -563,7 +570,7 @@ pins:
       note: Per-token inference behind a public chat surface makes unbounded conversation a spend problem.
 
     - risk: riskToolSourceProvenance
-      at: localTools->registry
+      at: registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task or a tool
         result; the mirror decides which build answers to that name, and whoever can write to
@@ -633,7 +640,7 @@ pins:
         The thread renders model output — sanitise markup and links before display, because a
         rendered image URL can carry the conversation to an attacker without a single click.
     - capability: capabilityAiDlp
-      at: agent->memory
+      at: localTools->memory
       note: Redaction on what a session may accumulate, because the thread outlives the turn that needed it.
     - capability: capabilityRateLimiting
       at: entry
@@ -698,9 +705,9 @@ walkthrough:
       note: The user asks for something consequential, in their own words.
     - follow: entry->agent
       note: The turn enters the loop with the user's identity attached.
-    - follow: agent->memory
+    - follow: localTools->memory
       note: The conversation so far is requested.
-    - follow: memory->agent
+    - follow: memory->localTools
       note: And loads as context.
     - follow: agent->gateway
       note: The context leaves the loop on a brokered, user-scoped credential.
@@ -754,9 +761,9 @@ scenarios:
         note: The poisoned content crosses back through the gateway like any tool result.
       - follow: gateway->agent
         note: And re-enters the loop as context.
-      - follow: agent->memory
+      - follow: localTools->memory
         note: It persists into conversation state like any other result.
-      - follow: memory->agent
+      - follow: memory->localTools
         note: Every later turn this session reads it back.
       - follow: agent->gateway
         note: And carries it out with the next call.
@@ -787,9 +794,9 @@ scenarios:
         note: An innocuous late question, many turns into the conversation.
       - follow: entry->agent
         note: It enters the loop like any other turn.
-      - follow: agent->memory
+      - follow: localTools->memory
         note: Context assembly asks for the thread.
-      - follow: memory->agent
+      - follow: memory->localTools
         note: Everything earlier turns retrieved comes back with it.
       - follow: agent->gateway
         note: Records the current question never needed travel with it.
@@ -832,14 +839,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: In-process tool handlers are drawn with one edge — the install path
-    reason: >
-      The localTools block warns rather than models: tools compiled into the application run
-      in its process, so their calls traverse no drawable path of ours, and drawing call edges
-      would assert a governed hop that does not exist. The bound is code review at admission,
-      which is why the risk is pinned on the block itself. The one edge drawn is the package
-      manager's pull from the mirror — a shell command reaching a network destination, a hop
-      that is real and that the sandbox's network policy governs.
   - subject: The gateway's Skills catalogue item has no drawn supply path
     reason: >
       The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps

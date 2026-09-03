@@ -140,6 +140,13 @@ blocks:
     zone: zoneCloud
     col: 2
     row: 1
+    items:
+      - id: mcpClient
+        label: MCP client
+        icon: plug
+        note: >
+          The harness's own MCP client — the party that connects out, through the gateway's
+          MCP brokerage, to remote servers.
     note: >
       One runtime, not a fleet of services. A supervisor and its specialists are objects in the
       same process, dispatched by the graph's own scheduler — no service boundary, no network
@@ -149,27 +156,27 @@ blocks:
 
   - id: localTools
     kind: service
-    title: Tool services
+    title: Native tools
     cosaiComponent: componentTools
     zone: zoneCloud
     parent: harness
-    col: 0
+    col: 1
     row: 1
     note: >
-      The tools compiled into the application itself — decorated functions running in the
-      loop's own process, under its identity, with its egress and its secrets. This is the
-      default way a tool gets attached, and the reason it is drawn: **the in-process tool set
-      is invisible to any gateway**. Only what leaves over the network appears at a chokepoint,
-      so whatever lives here is governed by code review or by nothing.
+      The tools compiled into the application itself, nested because the loop calling them is
+      not a hop: decorated functions running in the loop's own process, under its identity,
+      with its egress and its secrets, and the sandbox the loop's generated code runs in. This
+      is the default way a tool gets attached, and the reason it is drawn: the in-process tool
+      set is invisible to any gateway. What these tools reach is drawn — memory and retrieval
+      through their handlers, and the package mirror through the sandbox's package manager.
     items:
       - id: inProcess
         label: Tool handlers
         icon: code
-        note: Functions in the application, holding whatever the application holds.
-      - id: connectors
-        label: APIs & connectors
-        icon: plug
-        note: Ordinary outbound calls the application makes itself, with no broker in front.
+        note: >
+          Functions in the application, holding whatever the application holds — including the
+          outbound calls it makes itself, with no broker in front, and the retrieval and state
+          reads the loop treats as context.
       - id: sandboxedTools
         label: Sandboxed tools
         icon: shield
@@ -445,15 +452,23 @@ edges:
       The human's answer arrives the way everything arrives here: as an event. It is
       validated against the parked proposal before anything executes — a blanket "yes"
       approves nothing in particular.
-  - from: harness
+  - from: localTools
     to: state
-    label: checkpoint & read / journal & context
+    label: read & write / context
     path: primary
     bidir: true
-    route: vh
     note: >
-      The journal, the shared memory and the retrieval context. Durable by design, which is why
-      everything a step returns is persisted — including things that should not be.
+      The shared memory and the retrieval context, read and written through the tool handlers
+      every specialist runs. Durable by design, which is why everything a step returns persists.
+  - from: orchestration
+    to: state
+    path: primary
+    bidir: true
+    label: checkpoint / journal
+    note: >
+      The durable engine's own path: every step checkpointed to the journal as machinery, not
+      as a tool call, and the journal read back to rebuild a run after a crash or a sleep of
+      days. Replay re-executes side effects unless the fencing on the tool path stops it.
   - from: orchestration
     to: subagents
     path: primary
@@ -467,7 +482,7 @@ edges:
     to: gateway
     path: primary
     bidir: true
-    label: model & tool calls
+    label: inference, MCP & skills
     note: Every network call the agents make crosses here on a brokered, step-scoped credential.
   - from: localTools
     to: registry
@@ -591,12 +606,12 @@ pins:
       note: The admission list is the tool supply chain; whoever writes it programs the agents.
 
     - risk: riskRetrievalVectorStorePoisoning
-      at: harness->state
+      at: localTools->state
       note: >
         The vector index is written by steps and read by every later one; a poisoned entry is
         retrieved into the context of an agent that never saw it arrive.
     - risk: riskToolSourceProvenance
-      at: localTools->registry
+      at: registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task or a tool
         result; the mirror decides which build answers to that name, and whoever can write to
@@ -754,12 +769,13 @@ walkthrough:
         The request arrives as an API call or a queue message, and a delegated grant scoped
         to this workflow is bound to it — a binding that must outlive the session, because
         the work does. Nobody stays connected for what follows.
-    - follow: harness->state
+    - follow: orchestration->state
       note: >
-        The run is journaled from its first step — everything a step returns will persist
-        here, which is the durability the drawing exists to show.
-    - follow: state->harness
-      note: The journal acknowledges; the run now has a durable identity.
+        The run is journaled from its first step by the durable engine — everything a step returns
+        will persist here, which is the durability the drawing exists to show.
+    - follow: state->orchestration
+      note: >
+        The journal acknowledges; the run now has a durable identity.
     - follow: harness->gateway
       note: >
         The supervisor's first call is for a plan — nothing is delegated before the goal is
@@ -774,6 +790,13 @@ walkthrough:
       note: >
         The supervisor delegates; each specialist takes its task with a narrowed grant, not
         the supervisor's authority.
+    - follow: localTools->state
+      note: >
+        The specialist reads shared memory and the retrieval context through the tool handlers —
+        state another specialist, or an earlier run, wrote.
+    - follow: state->localTools
+      note: >
+        It comes back as context, with nothing marking whose it was.
     - follow: harness->gateway
       note: A specialist's model and tool calls leave through the same door, on its own grant.
     - follow: gateway->internalTools
@@ -797,7 +820,7 @@ walkthrough:
         Each specialist reports its slice back to the supervisor, which checkpoints the step
         to the journal. Days may pass before an event wakes the run — the journal is what it
         wakes into.
-    - follow: harness->state
+    - follow: orchestration->state
       note: >
         The final checkpoint. The result is delivered the way anything leaves here — a tool
         call to whatever channel asked — possibly days after the request.
@@ -805,8 +828,9 @@ walkthrough:
 scenarios:
   - title: A step replays after a crash
     steps:
-      - follow: state->harness
-        note: The engine rebuilds state from the journal — including anything a step persisted.
+      - follow: state->orchestration
+        note: >
+          The engine rebuilds state from the journal — including anything a step persisted.
       - follow: orchestration->subagents
         note: Replayed steps land on their specialists again.
       - follow: harness->gateway
@@ -881,14 +905,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: In-process tool handlers are drawn with one edge — the install path
-    reason: >
-      The localTools block warns rather than models: tools compiled into the application run
-      in its process, so their calls traverse no drawable path of ours, and drawing call edges
-      would assert a governed hop that does not exist. The bound is code review at admission,
-      which is why the risk is pinned on the block itself. The one edge drawn is the package
-      manager's pull from the mirror — a shell command reaching a network destination, a hop
-      that is real and that the sandbox's network policy governs.
   - subject: The gateway's Skills catalogue item has no drawn supply path
     reason: >
       The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps

@@ -252,6 +252,27 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **One harness anatomy, and MCP kept as three things (2026-09-03).** The cloud trio nested its
+  built-in tools inside the harness; the endpoints drew the same tools beside it with a
+  "local tool calls" edge; memory hung off the harness everywhere, though on an endpoint the
+  file tools are what read and write it. Now every harness we operate is drawn one way:
+  Agent harness (loop, context assembly, MCP client) containing Native tools — a new
+  registered block, because "Tool services" three times in one band meant three different
+  things. Containment is the call relationship, so the loop-to-tools edge is gone; the edges
+  that remain leave Native tools for what the tools reach: Memory & state, Private pkg
+  registry, the AI gateway's brokerage and, on the coding agents, Downstream services
+  directly — the local MCP server holding its own token, the path a phone-home takes. The
+  multi-agent workflow keeps a second memory edge from Supervisor agent for the journal the
+  durable engine writes as machinery. No application frame is drawn around a harness: the
+  block with its child is the application, and the coding agents' sandbox stays an item.
+  MCP splits by surface the way the industry says it: MCP client on the harness, Local MCP
+  servers in Native tools (icon `code`, deliberately unlike the remote ones), Remote MCP
+  servers in Tool services — the server layer in front of Enterprise data or Downstream
+  services, which stay their own blocks. The third-party coding agent now draws both model
+  paths: the vendor's service on the subscription and our gateway on a key we hold, which
+  about half of an enterprise's seats use. The shared harness-to-gateway label reads
+  "inference, MCP & skills" everywhere. Incidents 02, 04, 05, 06, 07 and 08 follow the new
+  edges.
 - **The autonomous workflows have no front end (2026-09-02).** The single agent workflow and
   the multi-agent workflow both said so in prose — "the trigger is a queue or a timer, nobody
   is between the decision and the effect"; "there is no user interface, because nobody is

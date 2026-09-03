@@ -163,7 +163,7 @@ blocks:
       wildcards worth pruning. The target state runs local MCP servers inside this boundary
       with the rest of the tool surface; the common state runs them on the host with host
       privileges — the gap every implementation shares, carried as the risk pinned on the
-      tool plane.
+      native tools.
       What earns the boundary its keep: the model credential is injected into request headers
       by that host-side proxy, so the key never enters the sandbox and an agent that can
       exfiltrate cannot steal it.
@@ -171,10 +171,10 @@ blocks:
   - id: bridges
     kind: service
     title: Channel bridges
-    parent: sandbox
     cosaiComponent: componentAgentUserQuery
     zone: zoneEndpoint
-    col: 1
+    parent: sandbox
+    col: 0
     row: 0
     note: >
       One adapter per platform, each implementing its own sender check. The count of channels
@@ -195,10 +195,10 @@ blocks:
     kind: service
     title: Agent harness
     cosaiComponent: componentReasoningCore
-    parent: sandbox
     zone: zoneEndpoint
-    col: 0
-    row: 1
+    parent: sandbox
+    col: 1
+    row: 0
     note: >
       The long-lived loop that plans, calls tools and reads results back as context, with the
       heartbeat that starts it when nobody is watching.
@@ -215,6 +215,12 @@ blocks:
         label: Context assembly
         icon: doc
         note: Merges the message, the memory and the tool results into one prompt.
+      - id: mcpClient
+        label: MCP client
+        icon: plug
+        note: >
+          The harness's own MCP client — the party that connects out: to the local servers in
+          its native tools, and through the gateway's MCP brokerage to remote ones.
       - id: apiServer
         label: Local API server
         icon: plug
@@ -227,10 +233,10 @@ blocks:
     kind: service
     title: Memory & state
     cosaiComponent: componentDataStorage
-    parent: sandbox
     zone: zoneEndpoint
+    parent: sandbox
     col: 0
-    row: 2
+    row: 1
     note: >
       Cross-session files the agent writes and reads back as instruction — the persistence
       primitive, and the reason an injection outlives the message that carried it.
@@ -252,15 +258,18 @@ blocks:
 
   - id: toolPlane
     kind: service
-    title: Tool services
+    title: Native tools
     cosaiComponent: componentTools
-    parent: sandbox
     zone: zoneEndpoint
-    col: 1
-    row: 2
+    parent: harness
+    col: 0
+    row: 0
     note: >
-      The local surface inside the sandbox — files, shell and skills. Remote transports are not
-      here: they live behind the enterprise crossing by construction.
+      The harness's built-in tools, nested because the loop calling them is not a hop: files,
+      shell, the local MCP servers it spawns, skills and computer use — all inside the sandbox in
+      the target state, none of it on the host. Remote transports are not here: they live behind
+      the enterprise crossing by construction. What these tools reach is drawn — memory, the
+      mounted workspace and the package mirror.
     items:
       - id: editTools
         label: File & edit tools
@@ -271,8 +280,8 @@ blocks:
         icon: code
         note: Command execution inside the sandbox, never on the host.
       - id: localMcp
-        label: MCP servers
-        icon: plug
+        label: Local MCP servers
+        icon: code
         note: >
           Local child processes, run inside the boundary in the target state so they hold the
           sandbox's authority rather than the user's. The common state runs them on the host —
@@ -358,7 +367,7 @@ blocks:
     title: Private pkg registry
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 3
+    col: 2
     row: 3
     note: >
       The organisation-maintained mirror the sandbox pulls skills and images from — reviewed,
@@ -437,7 +446,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneCloud
-    col: 2
+    col: 3
     row: 3
     note: >
       The organisation's own tool servers and service APIs — the connectors we publish for our
@@ -445,7 +454,7 @@ blocks:
       of it is what decides which of them it may.
     items:
       - id: internalMcp
-        label: MCP servers
+        label: Remote MCP servers
         icon: plug
         note: Our own servers, listed in the catalogue the gateway enforces.
       - id: internalApis
@@ -458,7 +467,7 @@ blocks:
     title: Enterprise data
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 2
+    col: 3
     row: 4
     note: >
       The systems of record behind our own tool servers — the data the agent reads and the
@@ -516,7 +525,7 @@ blocks:
       reachable only through it.
     items:
       - id: mcp
-        label: MCP servers
+        label: Remote MCP servers
         icon: plug
         note: Admitted by catalogue, never discovered; their descriptions enter context as model input.
       - id: apis
@@ -585,6 +594,7 @@ edges:
       all, by whatever the platform asserts about the sender.
   - from: bridges
     to: relay
+    route: vh
     path: primary
     bidir: true
     label: outbound only
@@ -611,19 +621,16 @@ edges:
     path: primary
     bidir: true
     note: Normalised messages in; rendered replies out, to wherever the agent addresses them.
-  - from: harness
+  - from: toolPlane
     to: memory
     label: read & write / context
-    path: primary
-    bidir: true
-    note: The loop writes what it learns and reads it back as instruction on every later turn.
-  - from: harness
-    to: toolPlane
-    path: primary
-    bidir: true
     route: hv
-    label: local tool calls
-    note: Files, shell and skills — all inside the sandbox, none of it on the host.
+    path: primary
+    bidir: true
+    note: >
+      The file tools are how the loop writes what it learns and reads it back as instruction on
+      every later turn; context assembly loads the bootstrap files at start through the same
+      filesystem.
   - from: toolPlane
     to: workspace
     path: primary
@@ -636,7 +643,7 @@ edges:
     to: gateway
     path: primary
     bidir: true
-    label: model & tool calls
+    label: inference, MCP & skills
     note: >
       The one general-purpose crossing: every model call, every remote tool call and every
       skill fetch leaves the endpoint here, on a credential the gateway injects.
@@ -678,9 +685,9 @@ edges:
       account — and logged on our side of the boundary.
   - from: toolPlane
     to: registry
+    route: vh
     path: primary
     bidir: true
-    route: hv
     label: pinned installs
     note: >
       Skills, images and packages pulled straight from the mirror, pinned by digest — never
@@ -796,7 +803,7 @@ pins:
         outbound-only relay — so the endpoint never listens, and the browser next door is
         treated as hostile.
     - capability: capabilityMemoryProtection
-      at: harness->memory
+      at: toolPlane->memory
       note: Treat memory as untrusted input on read; scan what is written; scope what is kept.
     - capability: capabilityAgentSandboxing
       at: sandbox
@@ -806,8 +813,10 @@ pins:
         model credential injected at the host-side proxy, the key never enters the boundary, so
         an agent that can exfiltrate has nothing to exfiltrate.
     - capability: capabilityToolPermissionScoping
-      at: harness->toolPlane
-      note: Per-tool grants on the local surface instead of the daemon's full authority.
+      at: toolPlane
+      note: >
+        Per-tool grants on the native tools instead of the daemon's full authority — enforced
+        where the tools run, inside the harness.
     - capability: capabilityCredentialIsolation
       at: gateway->remoteTools
       note: >
@@ -902,12 +911,13 @@ walkthrough:
       note: >
         The owner is at the machine and talks to the loop directly — authorised by nothing but
         holding the device, which is the assumption the whole drawing rests on.
-    - follow: harness->memory
+    - follow: toolPlane->memory
       note: >
-        The loop assembles context: the system instruction, long-term memory files, and the
-        transcript of everything said before.
-    - follow: memory->harness
-      note: All of it loads as context — including whatever an earlier turn persisted.
+        The loop assembles context through its file tools: the system instruction, long-term
+        memory files, and the transcript of everything said before.
+    - follow: memory->toolPlane
+      note: >
+        All of it loads as context — including whatever an earlier turn persisted.
     - follow: harness->gateway
       note: The one exit the harness knows; direct provider domains are refused at this tier.
     - follow: gateway->provider
@@ -918,10 +928,14 @@ walkthrough:
       note: >
         And into the loop as a plan, not a decision — what happens next is the loop's to act
         on and ours to bound.
-    - follow: harness->toolPlane
-      note: Local work runs inside the sandbox, with the workspace mounted read-only.
-    - follow: toolPlane->harness
-      note: The result comes back to the loop.
+    - follow: toolPlane->workspace
+      note: >
+        Local work runs in the native tools inside the sandbox, on the workspace mounted
+        read-only.
+    - follow: workspace->toolPlane
+      note: >
+        An edit comes back as a reviewable diff on a private clone rather than a host write, and
+        the result lands in the loop.
     - follow: harness->gateway
       note: >
         The action leaves on the same brokered crossing, which is where scope, spend and the
@@ -987,11 +1001,11 @@ scenarios:
         note: Out to a chat the stranger chose — the second egress, and the one the gateway never inspects.
   - title: The heartbeat fires with nobody watching
     steps:
-      - follow: memory->harness
+      - follow: memory->toolPlane
         note: >
-          The heartbeat has no arrow of its own because it fires inside the harness rather
-          than calling it from outside — so what it actually carries into the loop is
-          whatever is written here, including anything an earlier turn persisted last week.
+          The heartbeat has no arrow of its own because it fires inside the harness rather than
+          calling it from outside — so what it actually carries into the loop is whatever memory
+          holds, read through the same file tools, and that is the injection's second life.
       - follow: harness->gateway
         note: >
           The unattended turn crosses like any other, but it belongs to a read-only or draft
@@ -1014,18 +1028,16 @@ scenarios:
           and the revocation, live.
   - title: A skill is installed
     steps:
-      - follow: harness->toolPlane
-        note: The install runs as a shell command inside the sandbox.
       - follow: toolPlane->registry
-        note: Served from the mirror — scanned, signed, pinned — and from nowhere else; the egress policy allows no other source.
-      - follow: registry->toolPlane
-        note: The signed skill comes back into the sandbox.
-      - follow: toolPlane->harness
         note: >
-          Its prerequisites run as shell — inside the boundary, where a stealer finds no
-          keychain and no key. Signing and pinning admit exactly this step; containment is
-          what bounds it.
-
+          The install runs as a shell command in the native tools inside the sandbox — served from
+          the mirror, scanned, signed, pinned, and from nowhere else; the egress policy allows no
+          other source.
+      - follow: registry->toolPlane
+        note: >
+          The signed skill comes back into the sandbox and its prerequisites run as shell — inside
+          the boundary, where a stealer finds no keychain and no key. Signing and pinning admit
+          exactly this step; containment bounds what it can do.
 deviations:
   - subject: The messaging tenant is contracted; consumer channels are a variant
     reason: >
