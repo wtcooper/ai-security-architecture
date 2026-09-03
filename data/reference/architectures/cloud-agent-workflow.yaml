@@ -79,7 +79,8 @@ zones:
   - id: zoneUser
     owner: user
     note: >
-      The initiator — present to start the process and absent for the rest of it. The approval
+      Nobody, most of the time: the operator appears only when a step escalates, reached
+      through a work queue and answering with a signal. The approval
       they gave at the start is the only human decision until something escalates.
   - id: zoneCloud
     owner: cloud
@@ -98,17 +99,6 @@ zones:
       oversight.
 
 blocks:
-  - id: initiator
-    kind: actor
-    title: Initiator
-    icon: person
-    zone: zoneUser
-    col: 0
-    row: 0
-    note: >
-      Starts the process and is absent for the rest of it. The approval they gave at the start is
-      the only human decision until something escalates.
-
   - id: events
     kind: service
     title: Triggers & schedules
@@ -117,35 +107,31 @@ blocks:
     col: 2
     row: 0
     note: >
-      Timers, webhooks and queue messages that start work with no human in the room — and the
-      resumptions that wake a workflow which has been suspended for hours or days.
+      Requests, timers, webhooks and queue messages that start work with no human in the room
+      — and the resumptions that wake a workflow which has been suspended for hours or days,
+      including an operator's approval. There is no front end: this is the only way in, and
+      whose authority the workflow carries for its whole life is bound here.
     items:
       - id: schedules
         label: Schedules & events
         icon: clock
-        note: The timer or queue message that starts a run, and the signal that resumes a suspended one.
-
-  - id: entry
-    kind: service
-    title: Application front end
-    cosaiComponent: componentApplication
-    zone: zoneCloud
-    col: 1
-    row: 1
-    note: >
-      Where a request arrives and the initiator's identity is bound to the workflow it starts.
-      That binding has to outlive the session, because the work does.
-    items:
-      - id: api
-        label: App & API endpoint
-        icon: globe
-        note: The published surface a process is started from.
-      - id: authn
-        label: Identity binding
-        icon: shield
         note: >
-          Whose authority the workflow carries for its whole life — days, in some deployments,
-          after the person who granted it has gone.
+          The request, timer or queue message that starts a run, and the signal that resumes a
+          suspended one. Each carries the grant the run acts on — a service principal with its
+          own named scope, or an on-behalf-of grant that must outlive the session, because the
+          work does.
+
+  - id: operator
+    kind: actor
+    title: Operator
+    icon: person
+    zone: zoneUser
+    col: 0
+    row: 2
+    note: >
+      The approver for consequential steps — an operator work queue, reached by a tool call
+      and answering with a signal that resumes the suspended step, possibly days later.
+      Present only when a step escalates; the workflow runs without them the rest of the time.
 
   - id: harness
     kind: service
@@ -421,7 +407,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 1
-    row: 2
+    row: 1
     note: >
       The organisation-maintained mirror that serves whatever the sandbox installs: a
       dependency the agent's generated code needs, a tool package a step pulls in. Read-only
@@ -433,19 +419,6 @@ blocks:
         icon: db
 
 edges:
-  - from: initiator
-    to: entry
-    path: primary
-    bidir: true
-    label: request / result
-    note: >
-      The process is started and the initiator's identity is bound to it. They are absent for
-      everything that follows.
-  - from: entry
-    to: harness
-    path: primary
-    bidir: true
-    note: The request reaches the supervisor carrying whose authority the workflow will run on.
   - from: events
     to: harness
     path: primary
@@ -453,6 +426,23 @@ edges:
     note: >
       Timers, webhooks and queue messages that start work with no human in the room — and the
       signals that resume a workflow suspended for hours or days.
+  - from: internalTools
+    to: operator
+    path: primary
+    label: escalation
+    note: >
+      The reach-back: a proposal above the threshold is written to an approval channel — a
+      work queue, a ticket, a chat — as an ordinary tool call, bound to the exact action,
+      arguments and case, with an expiry. Nobody is on a socket waiting for it.
+  - from: operator
+    to: events
+    path: primary
+    route: vh
+    label: approval / instruction
+    note: >
+      The human's answer arrives the way everything arrives here: as an event. It is
+      validated against the parked proposal before anything executes — a blanket "yes"
+      approves nothing in particular.
   - from: harness
     to: state
     path: primary
@@ -480,7 +470,6 @@ edges:
     to: registry
     path: primary
     bidir: true
-    route: vh
     label: pinned installs
     note: >
       What the harness's sandbox installs — a package manager running as a shell command —
@@ -535,9 +524,9 @@ pins:
         confused agent propagates to all the others — classified at the crossing or trusted by
         every specialist at once.
     - risk: riskPromptInjection
-      at: initiator->entry
+      at: events->harness
       note: >
-        The initiator's request text is model input like any other — it reaches the same
+        The request that starts a process is model input like any other — it reaches the same
         context window as the system instruction, and the workflow acts on it for days.
     - risk: riskInsecureModelOutput
       at: orchestration->subagents
@@ -625,8 +614,11 @@ pins:
         whose behalf, and what it passed to the next one — assembled here from the traces the
         gateway and the engine record.
     - capability: capabilityIga
-      at: initiator->entry
-      note: The user's identity and a delegated grant scoped to this request, not a standing power.
+      at: events->harness
+      note: >
+        The grant a run carries, bound at ingress: a service principal with its own named scope,
+        or an on-behalf-of grant scoped to this request — not a standing power, and governed in
+        the directory for as long as the work lives.
     - capability: capabilityNhiManagement
       at: orchestration
       note: >
@@ -748,16 +740,15 @@ pins:
         registered, and which tools each key may call on them. Configuration of a broker, not a
         network control.
 walkthrough:
-  title: A user asks the agent to act
+  title: A request starts a days-long process
   moves: >-
     A long-running process: work delegated to specialists, journalled at every step.
   steps:
-    - follow: initiator->entry
+    - follow: events->harness
       note: >
-        The request arrives authenticated, and a delegated grant scoped to this workflow is
-        bound to it — a binding that must outlive the session, because the work does.
-    - follow: entry->harness
-      note: The request reaches the supervisor carrying whose authority the workflow will run on.
+        The request arrives as an API call or a queue message, and a delegated grant scoped
+        to this workflow is bound to it — a binding that must outlive the session, because
+        the work does. Nobody stays connected for what follows.
     - follow: harness->state
       note: >
         The run is journaled from its first step — everything a step returns will persist
@@ -801,10 +792,10 @@ walkthrough:
         Each specialist reports its slice back to the supervisor, which checkpoints the step
         to the journal. Days may pass before an event wakes the run — the journal is what it
         wakes into.
-    - follow: harness->entry
-      note: The result heads back to the surface.
-    - follow: entry->initiator
-      note: The result returns, possibly days after the request.
+    - follow: harness->state
+      note: >
+        The final checkpoint. The result is delivered the way anything leaves here — a tool
+        call to whatever channel asked — possibly days after the request.
 
 scenarios:
   - title: A step replays after a crash
@@ -829,17 +820,20 @@ scenarios:
         note: The suspension comes back as the step's result.
       - follow: gateway->harness
         note: The supervisor parks the step in the journal.
-      - follow: harness->entry
-        note: The proposal surfaces toward a human.
-      - follow: entry->initiator
+      - follow: harness->gateway
+        note: The workflow reaches back — a call to the approval channel, admitted like any tool.
+      - follow: gateway->internalTools
+        note: "The approval channel is a tool: a work queue, a ticket, a chat."
+      - follow: internalTools->operator
         note: >
-          Bound to the exact action, arguments and workflow state, with an expiry.
-      - follow: initiator->entry
+          An operator finds the proposal in the queue, bound to the exact action, arguments
+          and workflow state, with an expiry. Nothing is waiting on a socket for them.
+      - follow: operator->events
         note: >
-          The approval returns and is validated against the suspended step — a blanket
-          "resume" approves nothing in particular.
-      - follow: entry->harness
-        note: The suspended step resumes.
+          The approval returns as a signal, possibly days later, and is validated against the
+          suspended step — a blanket "resume" approves nothing in particular.
+      - follow: events->harness
+        note: The suspended step resumes, on credentials fetched now.
       - follow: harness->gateway
         note: Only then does the action leave.
       - follow: gateway->internalTools
@@ -863,7 +857,7 @@ scenarios:
       - follow: gateway->harness
         note: Into the supervisor.
       - follow: orchestration->subagents
-        note: Delegation re-narrows — the waking specialist gets its slice, not the initiator's.
+        note: Delegation re-narrows — the waking specialist gets its slice, not the run's whole grant.
       - follow: harness->gateway
         note: The specialist's call leaves through the same door.
       - follow: gateway->internalTools
@@ -883,12 +877,14 @@ scenarios:
           would be a message board between sandboxes.
 
 deviations:
-  - subject: In-process tool handlers are drawn with no edges
+  - subject: In-process tool handlers are drawn with one edge — the install path
     reason: >
       The localTools block warns rather than models: tools compiled into the application run
-      in its process, so their calls traverse no drawable path of ours, and drawing edges
+      in its process, so their calls traverse no drawable path of ours, and drawing call edges
       would assert a governed hop that does not exist. The bound is code review at admission,
-      which is why the risk is pinned on the block itself.
+      which is why the risk is pinned on the block itself. The one edge drawn is the package
+      manager's pull from the mirror — a shell command reaching a network destination, a hop
+      that is real and that the sandbox's network policy governs.
   - subject: The gateway's Skills catalogue item has no drawn supply path
     reason: >
       The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps

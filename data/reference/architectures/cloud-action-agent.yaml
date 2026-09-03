@@ -79,14 +79,14 @@ zones:
   - id: zoneUser
     owner: user
     note: >
-      The requester — usually an authenticated customer, and usually the party who benefits
-      from the action. Present at the start and absent for the rest of it.
+      Nobody, most of the time. The operator appears only when a proposal escalates — reached
+      through a work queue, never waiting on a socket — and is absent for the rest of it.
   - id: zoneCloud
     owner: cloud
     note: >
-      Everything we operate: the surface the request arrives on, what triggers the loop when
-      nobody sends one, the loop itself, its state, the crossing every call leaves through, and
-      our own tool servers and systems of record.
+      Everything we operate: the queues, webhooks and timers that start the loop, the loop
+      itself, its state, the crossing every call leaves through, and our own tool servers and
+      systems of record.
   - id: zoneExternal
     owner: external
     note: Outside the company — the model provider, third-party tool servers, and the services an action lands on.
@@ -106,45 +106,18 @@ blocks:
     row: 0
     note: >
       Queue messages, file drops, webhooks and timers that start the loop with no human in the
-      room. In many deployments this is the common trigger and the front end is the exception,
-      which is the fact that reorganises this architecture's whole control set.
+      room — and the approval that resumes a parked proposal. There is no front end: this is
+      the only way in, which is the fact that reorganises this architecture's whole control
+      set. Whose authority a run carries is bound here, before the loop starts.
     items:
       - id: schedules
         label: Schedules & events
         icon: clock
-        note: The timer or queue message that starts a run nobody asked for interactively.
-
-  - id: entry
-    kind: service
-    title: Application front end
-    cosaiComponent: componentApplication
-    zone: zoneCloud
-    col: 1
-    row: 1
-    note: >
-      The surface a request arrives on, and where the requester's identity is bound before the
-      loop runs. Drawn even though triggers are the common path, because when a human does
-      start a run this is the component that decides whose authority it carries.
-    items:
-      - id: api
-        label: App & API endpoint
-        icon: globe
-        note: The published request surface.
-      - id: authn
-        label: Identity binding
-        icon: shield
-        note: Who is asking, bound before the loop runs — the identity the actions are taken on behalf of.
-
-  - id: requester
-    kind: actor
-    title: Requester
-    icon: person
-    zone: zoneUser
-    col: 0
-    row: 0
-    note: >
-      Usually an authenticated customer, and usually the party who benefits from the action. Both
-      the legitimate user and, on a bad day, the attacker.
+        note: >
+          The timer or queue message that starts a run nobody asked for interactively, and
+          the approval event that resumes one. Each carries the grant the run acts on — a
+          service principal with its own named scope, or an on-behalf-of grant attached to
+          the message.
 
   - id: localTools
     kind: service
@@ -386,8 +359,9 @@ blocks:
     row: 2
     note: >
       The approver for actions above the threshold — an operator work queue, never the
-      requester, because the beneficiary approving their own remedy is no gate at all. Present
-      only when a proposal escalates; the loop runs without them the rest of the time.
+      customer who benefits, because the beneficiary approving their own remedy is no gate at
+      all. Reached by a tool call and answering with an event; present only when a proposal
+      escalates, and the loop runs without them the rest of the time.
 
   - id: registry
     kind: external
@@ -395,7 +369,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 1
-    row: 2
+    row: 1
     note: >
       The organisation-maintained mirror that serves whatever the sandbox installs: a
       dependency the agent's generated code needs, a tool package a step pulls in. Read-only
@@ -414,29 +388,23 @@ edges:
     note: >
       A timer, queue message, file drop or webhook starts a run with nobody in the room. In
       many deployments this is the common path and the request surface is the exception.
+  - from: internalTools
+    to: operator
+    path: primary
+    label: escalation
+    note: >
+      The reach-back: a proposal above the threshold is written to an approval channel — a
+      work queue, a ticket, a chat — as an ordinary tool call, bound to the exact action,
+      arguments and case, with an expiry. Nobody is on a socket waiting for it.
   - from: operator
-    to: entry
+    to: events
     path: primary
-    bidir: true
     route: vh
-    label: escalation / approval
+    label: approval / instruction
     note: >
-      A proposal above the threshold surfaces here, bound to the exact action, arguments and
-      case, with an expiry; the approval returns the same way and is validated against the
-      pending proposal before anything executes.
-  - from: requester
-    to: entry
-    path: primary
-    bidir: true
-    label: request / outcome
-    note: >
-      When a human does start a run, this is where their identity is bound — and the outcome
-      is what they see rather than the reasoning that produced it.
-  - from: entry
-    to: planner
-    path: primary
-    bidir: true
-    note: The request arrives with the requester's identity attached; the outcome returns the same way.
+      The human's answer arrives the way everything arrives here: as an event. It is
+      validated against the parked proposal before anything executes — a blanket "yes"
+      approves nothing in particular.
   - from: planner
     to: stateRetrieval
     path: primary
@@ -456,7 +424,6 @@ edges:
     to: registry
     path: primary
     bidir: true
-    route: vh
     label: pinned installs
     note: >
       What the harness's sandbox installs — a package manager running as a shell command —
@@ -504,10 +471,11 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: requester->entry
+      at: events->planner
       note: >
-        The request text is supplied by the person who benefits from the outcome, and it reaches
-        the same context window as the system instruction.
+        The payload that starts a run — a ticket, a queue message, a webhook body — is authored by
+        the party who benefits from the outcome, and it reaches the same context window as the
+        system instruction.
     - risk: riskPromptInjection
       at: internalTools->orgData
       note: >
@@ -569,10 +537,12 @@ pins:
         the mirror programs every sandbox that pulls from it.
   capabilities:
     - capability: capabilityIga
-      at: requester->entry
+      at: events->planner
       note: >
-        Who is asking, established before the loop runs — the identity every downstream action
-        is taken on behalf of, and the thing that bounds the reachable set.
+        Whose authority a run carries, established at ingress before the loop runs — a service
+        principal with its own named scope, or the on-behalf-of grant attached to the message.
+        It is the identity every downstream action is taken on behalf of, and the thing that
+        bounds the reachable set.
     - capability: capabilityAgentRegistry
       at: govSupplyChain
       note: >
@@ -620,8 +590,10 @@ pins:
       at: internalTools->orgData
       note: Entitlement-filtered retrieval scoped to the account under discussion, enforced before fetching.
     - capability: capabilityPromptInjectionDefense
-      at: requester->entry
-      note: Classify request text before the loop; the caller cannot be trusted about their own request.
+      at: events->planner
+      note: >
+        Classify the payload before the loop; whoever authored it cannot be trusted about their
+        own request.
     - capability: capabilityMemoryProtection
       at: stateRetrieval
       note: Case-scoped memory with hard boundaries — no cross-case reads, ever.
@@ -685,14 +657,15 @@ pins:
         instances that were meant to be isolated, and a proxying mirror is a road to the
         internet the sandbox was not supposed to have.
 walkthrough:
-  title: A customer asks for a refund
+  title: A refund request lands on the queue
   moves: >-
-    A request in, the agent's chosen action out, and the record it changed.
+    A queue message in, the agent's chosen action out, and the record it changed.
   steps:
-    - follow: requester->entry
-      note: The request arrives authenticated and bound to an account; the loop starts with that identity intact.
-    - follow: entry->planner
-      note: The request enters the loop with the requester's identity attached.
+    - follow: events->planner
+      note: >
+        A refund request arrives as a queue message — written by a customer through some
+        upstream system, bound to an account and carrying the grant the run will act on.
+        Nobody is waiting on a socket for the answer.
     - follow: planner->stateRetrieval
       note: Policy and the customer's history are requested, scoped to this account.
     - follow: stateRetrieval->planner
@@ -712,21 +685,18 @@ walkthrough:
     - follow: internalTools->gateway
       note: The result crosses back, logged against the call that caused it.
     - follow: gateway->planner
-      note: The loop closes its plan with the outcome.
-    - follow: planner->entry
-      note: The outcome heads back to the surface.
-    - follow: entry->requester
-      note: Within seconds; the audit holds the reasoning.
+      note: >
+        The loop closes its plan with the outcome and posts it back on the channel the request
+        came from — within seconds, and the audit holds the reasoning.
 
 scenarios:
-  - title: The request text is the attack
+  - title: The payload is the attack
     steps:
-      - follow: requester->entry
+      - follow: events->planner
         note: >
-          The text instructs the agent to ignore policy and refund in full; whatever survives
-          classification enters the same context window as the system instruction.
-      - follow: entry->planner
-        note: The text enters the loop as the task.
+          The ticket text instructs the agent to ignore policy and refund in full; whatever
+          survives classification enters the same context window as the system instruction,
+          as the task.
       - follow: planner->gateway
         note: Whatever survived classification rides out with the context.
       - follow: gateway->provider
@@ -741,8 +711,8 @@ scenarios:
     steps:
       - follow: events->planner
         note: >
-          The common trigger in many deployments: a queue message or schedule starts the run,
-          and there is no requester to return an outcome to.
+          A schedule starts the run — no request, no payload authored by anyone, and nobody to
+          return an outcome to.
       - follow: planner->gateway
         note: The unattended run crosses on the same brokered credential an attended one would.
       - follow: gateway->provider
@@ -791,14 +761,20 @@ scenarios:
         note: The suspension comes back as the call's result.
       - follow: gateway->planner
         note: The loop parks the proposal rather than retrying it.
-      - follow: planner->entry
-        note: The proposal heads to the surface — the action, the amount, the case, an expiry.
-      - follow: entry->operator
-        note: An operator, never the requester, reads it in a work queue.
-      - follow: operator->entry
-        note: Approved — this action, these arguments; a blanket "yes" approves nothing in particular.
-      - follow: entry->planner
-        note: The approval is validated against the parked proposal.
+      - follow: planner->gateway
+        note: The loop reaches back — a call to the approval channel, admitted like any tool.
+      - follow: gateway->internalTools
+        note: "The approval channel is a tool: a work queue, a ticket, a chat."
+      - follow: internalTools->operator
+        note: >
+          An operator, never the customer, finds the proposal in the queue — the action, the
+          amount, the case, an expiry. Nothing is waiting on a socket for them.
+      - follow: operator->events
+        note: >
+          Approved — this action, these arguments; a blanket "yes" approves nothing in
+          particular. The answer arrives as an event, like everything else here.
+      - follow: events->planner
+        note: The approval is validated against the parked proposal before anything moves.
       - follow: planner->gateway
         note: Only then does the action leave again.
       - follow: gateway->internalTools
@@ -820,12 +796,14 @@ scenarios:
           would be a message board between sandboxes.
 
 deviations:
-  - subject: In-process tool handlers are drawn with no edges
+  - subject: In-process tool handlers are drawn with one edge — the install path
     reason: >
       The localTools block warns rather than models: tools compiled into the application run
-      in its process, so their calls traverse no drawable path of ours, and drawing edges
+      in its process, so their calls traverse no drawable path of ours, and drawing call edges
       would assert a governed hop that does not exist. The bound is code review at admission,
-      which is why the risk is pinned on the block itself.
+      which is why the risk is pinned on the block itself. The one edge drawn is the package
+      manager's pull from the mirror — a shell command reaching a network destination, a hop
+      that is real and that the sandbox's network policy governs.
   - subject: The gateway's Skills catalogue item has no drawn supply path
     reason: >
       The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
@@ -833,11 +811,11 @@ deviations:
       supply chain behind the item — a private package registry and its signing pipeline — is
       deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
       pull path.
-  - subject: The application front end absorbs inbound classification
+  - subject: The trigger ingress absorbs inbound classification
     reason: >
-      capabilityPromptInjectionDefense is embodied by the AI gateway, but request text is
-      classified where it arrives — the entry tier absorbs the duty in this simple deployment
-      shape, mirroring the chat sibling's recorded absorption of the service edge.
+      capabilityPromptInjectionDefense is embodied by the AI gateway, but a payload is
+      classified where it arrives — the trigger ingress absorbs the duty in this simple
+      deployment shape, mirroring the chat sibling's recorded absorption of the service edge.
   - subject: Memory poisoning is pinned as prompt injection
     reason: >
       OWASP's agentic taxonomy names memory poisoning as a distinct threat; CoSAI's risk set

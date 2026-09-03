@@ -252,6 +252,19 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **The autonomous workflows have no front end (2026-09-02).** The single agent workflow and
+  the multi-agent workflow both said so in prose — "the trigger is a queue or a timer, nobody
+  is between the decision and the effect"; "there is no user interface, because nobody is
+  conversing with it" — and both drew an Application front end with a Requester or Initiator
+  copied from the chat sibling. The front ends and the two actors are gone. Triggers &
+  schedules is the only way in: requests, queue messages, webhooks and timers, each carrying
+  the grant the run acts on (a service principal or an on-behalf-of grant), so identity
+  binding and inbound classification are pinned on the trigger edge. Reaching back to a human
+  is a tool call out and an event back: Tool services → Operator (a work queue, a ticket, a
+  chat) and Operator → Triggers & schedules (the approval, validated against the parked
+  proposal). The chat agent keeps its front end — the human in the thread is its primary
+  gate — and the sibling comparisons already argued exactly this split. Incidents 05 and 07
+  enter through the trigger ingress now.
 - **The AI gateway is not the network egress (2026-09-02).** An AI gateway brokers five
   things — model inference, MCP, APIs, the skills catalogue and, as products catch up, A2A —
   and sees nothing else. Its pack items now read Model proxy · MCP & API gateway · Skills
