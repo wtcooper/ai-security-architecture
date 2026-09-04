@@ -93,12 +93,16 @@ zones:
       The machine and everything the runtime puts on it: the local API, the process that loads
       the weights, and the artifacts on disk. The whole architecture lives here, which is why
       the one band that matters is the boundary around it.
+  - id: zoneUser
+    owner: user
+    note: >
+      The person at the machine — the only caller a local runtime is for. Editors, agents
+      and tools call the port on their behalf; nothing off the machine is meant to.
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company: the public hubs the weights come from — and, when the bind is
-      routable, whoever finds the port. The intended callers are all on the machine already;
-      the drawn origin is the unintended class the exposure scans keep documenting.
+      Outside the company: the public hubs the weights come from. Nothing else reaches in —
+      a routable bind is the failure this drawing's pins describe, not a path it draws.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -107,12 +111,24 @@ zones:
       decide which artifacts are allowed and notice the runtimes nobody registered.
 
 blocks:
+  - id: developer
+    kind: actor
+    title: Developer
+    icon: person
+    zone: zoneUser
+    col: 0
+    row: 1
+    note: >
+      The person the runtime was installed for. They drive it through local applications —
+      an editor, an agent, a chat window — and never through the port directly, which is why
+      the applications are the drawn caller and the person is the only principal.
+
   - id: localApps
     kind: service
     title: Local applications
     icon: code
     zone: zoneEndpoint
-    col: 0
+    col: 1
     row: 1
     note: >
       Everything on the machine that can open a socket to the port. The consumers the runtime was
@@ -125,7 +141,7 @@ blocks:
     kind: service
     title: Inference API
     zone: zoneEndpoint
-    col: 1
+    col: 2
     row: 1
     cosaiComponent: componentModelServing
     note: >
@@ -158,7 +174,7 @@ blocks:
     kind: service
     title: Inference runtime
     zone: zoneEndpoint
-    col: 2
+    col: 3
     row: 1
     cosaiComponent: componentModelServing
     note: >
@@ -182,7 +198,7 @@ blocks:
     kind: external
     title: Storage
     zone: zoneEndpoint
-    col: 2
+    col: 3
     row: 2
     cosaiComponent: componentModelStorage
     note: >
@@ -225,23 +241,12 @@ blocks:
       installed by one person in an afternoon and appears in no inventory, so discovery is not
       a supporting control here — it is the precondition for all the others.
 
-  - id: callers
-    kind: origin
-    title: Callers
-    icon: code
-    zone: zoneExternal
-    col: 3
-    row: 0
-    note: >
-      Deliberately unnamed: whoever finds the port when the bind is routable. Not a supported
-      caller — the drawn reminder that loopback is an assumption, not a policy.
-
   - id: hub
     kind: external
     title: Public model hub
     cosaiComponent: componentModelStorage
     zone: zoneExternal
-    col: 3
+    col: 4
     row: 2
     note: >
       Distribution for open weights. Publisher identity ranges from verified to arbitrary, and
@@ -254,6 +259,14 @@ blocks:
         note: Declared behaviour and actual behaviour are separate facts.
 
 edges:
+  - from: developer
+    to: localApps
+    path: primary
+    bidir: true
+    label: local session / replies
+    note: >
+      The person at the machine, authorised by holding it. Every call the port sees is made on
+      their behalf by software they run, which is the whole admission model of a local runtime.
   - from: localApps
     to: api
     path: primary
@@ -290,15 +303,6 @@ edges:
       load collapse into one step and the whole promotion story disappears. Transport is
       authenticated and the publisher may be verifiable; neither says anything about what the
       artifact does when the loader opens it.
-  - from: callers
-    to: api
-    path: external
-    label: found port
-    route: hv
-    note: >
-      The path that should not exist: a routable bind, and the endpoint is reachable from the
-      network with whatever authentication it shipped — usually none.
-
 pins:
   risks:
     - risk: riskMaliciousLoaderDeserialization
@@ -326,11 +330,12 @@ pins:
         Where no classifier sits on this path — the common case — raw model output goes straight
         to callers built expecting a hosted API's floor.
     - risk: riskDenialOfMLService
-      at: callers->api
+      at: api
       note: >
-        When the bind is routable, anyone who finds the port consumes the machine — free
-        inference, and on some runtimes the management surface too. The headline exposure
-        class the scans keep documenting.
+        Loopback is an assumption, not a policy: bound to a routable interface with the
+        authentication it shipped — usually none — the port serves free inference to whoever finds
+        it, and on some runtimes the management surface too. The headline exposure class the scans
+        keep documenting, and the reason the bind is a pinned control rather than a default.
     - risk: riskModelEvasion
       at: runtime
       note: >
@@ -408,6 +413,9 @@ walkthrough:
   moves: >-
     A prompt from local software into weights on the same machine, and the completion back.
   steps:
+    - follow: developer->localApps
+      label: task at the machine
+      note: The person asks their editor, agent or chat window for something that needs a model.
     - follow: localApps->api
       label: completion request
       note: A local tool calls the OpenAI-compatible endpoint as if it were hosted.
@@ -422,6 +430,10 @@ walkthrough:
     - follow: api->localApps
       label: response, no floor
       note: The response returns with no provider floor under it.
+
+    - follow: localApps->developer
+      label: answer
+      note: The answer reaches the person with nothing between the raw completion and them but the application that asked.
 
 scenarios:
   - title: A poisoned checkpoint
@@ -438,25 +450,6 @@ scenarios:
           Only after scan and promotion does the runtime open the file. In a pickle-class
           format the load is the execution event; in a safe format, a malformed header
           exercises the parser instead — either way, with the user's privileges.
-  - title: The port is on the internet
-    steps:
-      - follow: callers->api
-        label: scan finds bind
-        note: >
-          An exposure scan finds the bind that was never meant to be routable — tens of
-          thousands of them, in the published counts.
-      - follow: api->runtime
-        label: free inference
-        note: >
-          Free inference for whoever arrived, and on some runtimes the management surface too:
-          models pulled, deleted or swapped by a stranger, on a machine that appears in no
-          inventory.
-      - follow: weights->runtime
-        label: stranger's pull
-        note: >
-          The stranger's pull lands weights straight on disk and the runtime loads them — the
-          common-install collapse the deviation admits; a path-traversal flaw in that pull
-          turned it into remote code execution once already.
   - title: A browser tab finds the port
     steps:
       - follow: localApps->api

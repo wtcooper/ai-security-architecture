@@ -252,6 +252,16 @@ surface for customer-owned agent definitions.
   is re-registered as tool surface → mirror. The coding agents' "bundles an egress-proxy
   function" deviation is narrowed to remote tool and connector traffic. SaaS drawings do not
   draw a mirror: the vendor runs the sandbox and its supply chain is assessed.
+- **No external caller is drawn into a secure reference architecture (2026-09-04).** The local
+  model runtime drew an unnamed origin in the external band — whoever finds a routable port —
+  and the personal agent drew Unsolicited senders reaching the messaging platform. Both were
+  threat narratives given a block, and a target-state drawing does not draw the path it exists
+  to close. The local runtime now has a Developer in the user band driving local applications,
+  like every other endpoint drawing, with the routable-bind exposure carried as a risk pinned
+  on the inference API; the personal agent keeps whoever the platform admits as a risk pinned
+  on the relay edge, bounded by the bridge's allowlist. The MCP publisher's MCP clients stay:
+  they are internal callers in our cloud band. The A2A partner agent stays: a federated peer
+  is the subject of that drawing, authenticated in both directions.
 - **Every sequence arrow says what it carries (2026-09-03).** The MCP walkthrough read as
   "authorization / tokens / authorization / tokens" because sequence arrows took the edge's
   label, and the reply-pairing marked any step against a pair's earlier direction as a reply.
