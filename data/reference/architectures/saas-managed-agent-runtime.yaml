@@ -30,13 +30,14 @@ description:
     only there.
   - >
     The consequential choice is between the managed harness and the escape hatches, of which
-    there are two and they point in opposite directions. The first is bring-your-own-code: the
-    provider supplies the sandbox and the identity but the loop is the customer's, and it
-    inherits only the guardrails it explicitly calls. The second is the self-hosted sandbox:
-    the provider keeps the loop, the model and the orchestration, and tool execution moves to a
-    worker we run — code, filesystem and egress inside our perimeter, tool inputs and outputs
-    still crossing back to a loop we cannot see. Teams routinely start declarative, hit a
-    limitation, take one of the two, and do not notice which controls stopped applying.
+    there are two and they point in opposite directions. The first, offered by the hyperscaler
+    runtimes, is bring-your-own-code: the provider supplies the sandbox and the identity but
+    the loop is the customer's, and it inherits only the guardrails it explicitly calls. The
+    second, offered by the first-party runtime, is the self-hosted sandbox: the provider keeps
+    the loop, the model and the orchestration, and tool execution moves to a worker we run —
+    code, filesystem and egress inside our perimeter, tool inputs and outputs still crossing
+    back to a loop we cannot see. Teams routinely start declarative, hit a limitation, take
+    one of the two, and do not notice which controls stopped applying.
   - >
     The path back into our systems is the tool path, and both first-party vendors now ship an
     outbound-only tunnel for it: software we run inside our network that dials out, so the MCP
@@ -51,14 +52,18 @@ description:
     data-protection consequence, and cross-user scope means one user's content can shape
     another's turn.
   - >
-    The baseline this page targets is a distinct agent identity: a first-class, revocable
-    principal per agent, separate from the service and from the user, carrying on-behalf-of
-    user context per session. Platforms that supply that as a service make it the genuine
-    advantage of buying the runtime; platforms whose only identity is a credential vault
-    entry are a deficient variant — the agent then "is" whatever the vault holds, and the
-    deficiency is a named finding in the exemplar assessment, not a second architecture. The
-    costs either way are portability and opacity: the policy language moves to no other
-    provider, and debugging a misbehaviour means reading traces rather than code.
+    Identity on this surface is layered rather than singular, and the layers are what to
+    inventory. Our application authenticates to the vendor as a workload — short-lived tokens
+    from our own identity provider by federation, or a workspace API key where that is not
+    set up. The agent authenticates to our systems on whatever the vault holds for the
+    session: per-user OAuth credentials matched to the MCP server URL, injected by the
+    vendor's proxy at egress so the sandbox never sees them. A self-hosted worker holds an
+    environment key of its own. The first-party runtime mints no principal per agent; the
+    hyperscaler runtimes do, and where that exists it is worth selecting for, because it is
+    the one layer that makes "revoke this agent" a single operation. Without it, revoking an
+    agent means finding every vault entry it was ever attached to. The costs either way are
+    portability and opacity: the configuration moves to no other provider, and debugging a
+    misbehaviour means reading traces rather than code.
 
 distinguishedBy:
   - >
@@ -154,7 +159,10 @@ blocks:
     note: >
       The customer-owned surface an SDK-driven runtime is invoked from — our code, calling
       their API. User authentication and the delegated session context are bound here, before
-      anything reaches the vendor.
+      anything reaches the vendor. It is also the session client: it creates sessions, streams
+      events, answers the approval prompts for tools configured to ask, and executes custom
+      tools — the one path back into our systems that needs neither a tunnel nor a public
+      endpoint, because the request and the result ride the session stream we already hold.
     items:
       - id: api
         label: App & API endpoint
@@ -164,6 +172,13 @@ blocks:
         label: Identity binding
         icon: shield
         note: Which of our people a session runs for, established before it starts.
+      - id: handlers
+        label: Tool handlers
+        icon: code
+        note: >
+          Custom tools run here, in our code. The agent emits the call, the session idles,
+          our handler executes it against our own systems and posts the result back. The
+          vendor sees inputs and outputs, never the credential or the network behind them.
 
   - id: managedRuntime
     kind: provider
@@ -197,6 +212,15 @@ blocks:
         label: Memory store
         icon: folder
         note: Session and long-term state they hold, whose scope is a configuration flag rather than an architecture.
+      - id: vault
+        label: Credential vault
+        icon: key
+        note: >
+          Write-only secrets the vendor injects at egress: per-user OAuth for MCP servers,
+          matched by server URL, and environment-variable values substituted into outbound
+          requests to named hosts. The sandbox never holds a value. Workspace-scoped, so any
+          key with workspace access can attach one; where no credential matches, the
+          connection is attempted unauthenticated.
       - id: sandbox
         label: Sandboxed tools
         icon: shield
@@ -209,10 +233,13 @@ blocks:
         label: Remote MCP & connectors
         icon: plug
         note: >
-          Their tool gateway: hosted MCP servers and connectors the provider calls from its own
-          side, the tool list fetched by them. That path never touches our network — only the
-          tools we choose to front cross our gateway — so the risk sits on this item and the
-          control is the default-deny policy their gateway lets us set.
+          Hosted MCP servers and connectors the provider calls from its own side, the tool
+          list fetched by them, the credential drawn from the vault. That path never touches
+          our network, so the risk sits on this item and the control is per-tool enablement in
+          the definition. The alternative for any third-party connector is to register it on
+          our gateway instead and declare the gateway's tunnel hostname as the server: same
+          connector, now scoped and recorded at our tier — the choice per connector is which
+          of the two it is.
 
   - id: agentDef
     kind: service
@@ -222,20 +249,26 @@ blocks:
     col: 2
     row: 0
     note: >
-      Model, prompt, tools, MCP servers and skills, declared and pushed to the provider. On a
-      runtime we do not operate this artifact is very nearly the whole of what we control about
-      the agent, which makes reviewing it a release gate rather than a formality.
+      Model, prompt, tools, MCP servers and skills, declared and pushed to the provider —
+      and the environment those sessions run in. On a runtime we do not operate these
+      artifacts are very nearly the whole of what we control about the agent, which makes
+      reviewing them a release gate rather than a formality. The hyperscaler variant adds a
+      third artifact, the customer's own loop code, recorded in the escape-hatch scenario.
     items:
       - id: declarative
         label: Declarative definition
         icon: doc
-        note: What the agent may do, in a form somebody can read and approve before it ships.
-      - id: customCode
-        label: Custom loop code
-        icon: code
         note: >
-          The escape hatch: a bring-your-own-code runtime inherits only the guardrails it
-          explicitly calls — same deploy edge, thinner enforcement, per the bypass scenario.
+          What the agent may do — model, prompt, tool enablement and approval policy, MCP
+          servers, skills — versioned, so a session pins to one version and a rollback is a
+          pointer flip.
+      - id: environment
+        label: Environment definition
+        icon: gear
+        note: >
+          Where sessions run and what they may reach: the vendor's cloud sandbox or our own
+          worker, and the sandbox's egress policy — unrestricted, or a host list that governs
+          the sandbox's own network calls but not the vendor's web tools.
 
   - id: tunnel
     kind: service
@@ -251,7 +284,10 @@ blocks:
       address. Two things it does not do, on both vendors' own architecture notes: it does not
       make the data path local — requests and responses still traverse their cloud — and it
       does not authenticate to the upstream, which we still do ourselves. The tunnel token and
-      the TLS private key on this host are the load-bearing secrets.
+      the TLS private key on this host are the load-bearing secrets. Each hostname routes to
+      one upstream, and the upstream here is the gateway's aggregate MCP endpoint — one
+      hostname fronts every server the gateway admits, and the vault holds the gateway's own
+      credential for it.
     items:
       - id: tunnelClient
         label: Outbound connector
@@ -328,10 +364,10 @@ blocks:
     row: 5
     capabilities: [capabilityIga, capabilityNhiManagement]
     note: >
-      The baseline: a first-class, revocable principal per agent with on-behalf-of user
-      context, supplied by the platform. Where a product's only identity is a vault entry,
-      that is a deficiency the assessment names — and mapping its credentials back to our own
-      records becomes ours to maintain.
+      Three layers to govern: our workload's identity to the vendor (federated, short-lived,
+      never a pasted key), the per-user credentials the vault holds for our own servers, and
+      the worker's environment key where we self-host. Mapping each back to a person and an
+      expiry is ours to maintain, because the runtime keeps no principal per agent.
 
   - id: govSecrets
     kind: governance
@@ -409,8 +445,9 @@ edges:
     label: session invoke
     note: >
       Our code invokes their runtime over the SDK, carrying the delegated user context the
-      front end bound. The vendor-direct variant — no customer tier at all — is real for one
-      exemplar class and recorded as a deviation, not drawn as a second path.
+      front end bound, and the session stream carries everything after: events out, approvals
+      and custom tool results back. The vendor-direct variant — no customer tier at all — is
+      real for one exemplar class and recorded as a deviation, not drawn as a second path.
   - from: agentDef
     to: managedRuntime
     path: external
@@ -498,9 +535,10 @@ pins:
     - risk: riskStaleAgentIdentityBinding
       at: managedRuntime
       note: >
-        Where the product falls short of the identity baseline — a vault entry instead of a
-        principal — a credential that outlives the person it belonged to keeps acting as
-        them, and nothing in the platform ties it to a lifecycle.
+        The agent acts on our systems as whatever the vault holds. A per-user credential that
+        outlives the person it belonged to keeps acting as them, and nothing in the platform
+        ties a vault entry to that person's lifecycle — the vendor auto-refreshes the token
+        for as long as the refresh token works.
     - risk: riskShadowAndUnknownAgents
       at: agentDef->managedRuntime
       note: >
@@ -541,9 +579,10 @@ pins:
     - capability: capabilityNhiManagement
       at: managedRuntime
       note: >
-        A first-class, revocable principal per agent with on-behalf-of context — the platform
-        capability worth selecting for; where it is missing, the vault entry is the identity
-        and needs the lifecycle the platform will not give it.
+        Every vault entry, environment key and federated workload identity inventoried as a
+        non-human identity with an owner and an expiry — because the runtime mints no
+        principal per agent, and "revoke this agent" otherwise means finding every credential
+        it was ever attached to. Where a platform does mint one, select for it.
     - capability: capabilitySecretsManagement
       at: tunnel
       note: >
@@ -736,14 +775,32 @@ scenarios:
       - follow: aiGateway->internalTools
         label: scope, approval, record
         note: Scope, approval and the record are what stand between the steered plan and our data.
+  - title: A custom tool runs in our own code
+    steps:
+      - follow: endUser->entry
+        label: request
+        note: A request that will need something only our systems can answer.
+      - follow: entry->managedRuntime
+        label: session invoke
+        note: Our code starts the session; the loop decides it needs the custom tool.
+      - follow: managedRuntime->entry
+        label: custom tool call
+        note: >
+          The agent emits the call and the session idles. No tunnel, no public endpoint:
+          the request arrives on the stream our own application already holds.
+      - follow: entry->managedRuntime
+        label: tool result
+        note: >
+          Our handler runs it on our side, on our credentials, and posts the result back.
+          The vendor sees the inputs and the output, never the credential or the network.
   - title: The definition moves to custom code
     steps:
       - follow: agentDef->managedRuntime
         label: escape hatch shipped
         note: >
-          The team hits a limitation and ships the escape hatch: their sandbox, their identity,
-          but the loop is now our code — and it inherits only the guardrails it explicitly
-          calls.
+          On a hyperscaler runtime the team hits a limitation and ships the escape hatch:
+          their sandbox, their identity, but the loop is now our code — and it inherits only
+          the guardrails it explicitly calls.
       - follow: managedRuntime->tunnel
         label: same path in
         note: Calls still arrive the same way, through the connector we run.
