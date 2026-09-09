@@ -22,14 +22,29 @@ description:
     the three-zone rule what they operate inside their boundary is assured rather than drawn,
     and their tool gateway, memory and sandbox appear as the block's items — zone-2 surfaces
     we configure, not tiers we run. The loop's execution behind them remains genuinely
-    uninspectable.
+    uninspectable. So is the model: the runtime calls its own vendor's inference inside that
+    boundary, and nothing of ours is on the path — every control our AI gateway applies to
+    inference elsewhere in the catalogue (model allowlist, prompt inspection, spend ceilings,
+    the prompt-level record) does not see this traffic and has to be re-obtained as tenant
+    configuration and audit export. Our gateway is on the tool path back into our systems, and
+    only there.
   - >
-    The consequential choice is between the managed harness and the code escape hatch. Every
-    provider offers both: a declarative agent whose loop they run, and a bring-your-own-code
-    runtime where they supply the sandbox and the identity but the loop is the customer's. The
-    first inherits the platform's guardrails automatically; the second inherits only what it
-    explicitly calls. Teams routinely start with the first, hit a limitation, move to the
-    second, and do not notice which controls stopped applying.
+    The consequential choice is between the managed harness and the escape hatches, of which
+    there are two and they point in opposite directions. The first is bring-your-own-code: the
+    provider supplies the sandbox and the identity but the loop is the customer's, and it
+    inherits only the guardrails it explicitly calls. The second is the self-hosted sandbox:
+    the provider keeps the loop, the model and the orchestration, and tool execution moves to a
+    worker we run — code, filesystem and egress inside our perimeter, tool inputs and outputs
+    still crossing back to a loop we cannot see. Teams routinely start declarative, hit a
+    limitation, take one of the two, and do not notice which controls stopped applying.
+  - >
+    The path back into our systems is the tool path, and both first-party vendors now ship an
+    outbound-only tunnel for it: software we run inside our network that dials out, so the MCP
+    server stays private and no inbound rule is opened. The tunnel is transport only — it does
+    not authenticate to the upstream, and the payloads still traverse the vendor's cloud — which
+    is why it hands to our gateway rather than to the servers themselves. A second first-party
+    vendor has pre-announced the same product class for late 2026; it joins the exemplars when
+    it ships.
   - >
     Managed memory is the component most likely to be switched on without a decision. Its scope
     — per session, per user, or shared across users — is a configuration flag with a
@@ -58,6 +73,16 @@ distinguishedBy:
     publish button, which moves the risk from the definition to the population.
 
 exemplars:
+  - name: Claude Managed Agents
+    note: >
+      The class-defining first-party runtime: agent, environment, session and events declared
+      over an API; per-user vaults substituted at egress so the sandbox never holds a secret;
+      MCP tunnels (research preview) and self-hosted sandboxes (beta) as the two ways back
+      inside our perimeter. Inference and the loop stay on the vendor's side in every variant.
+      Verify per feature: cloud sessions are not eligible for zero data retention or a HIPAA
+      BAA, vault values sit outside customer-managed keys, and vaults are workspace-scoped.
+    url: https://platform.claude.com/docs/en/managed-agents/overview
+    asOf: "2026-09"
   - name: Amazon Bedrock AgentCore
     note: >
       The hyperscaler decomposition in full — runtime, memory, gateway, identity, browser and
@@ -87,7 +112,8 @@ zones:
     owner: cloud
     note: >
       What we still own on somebody else's platform: the definition that decides what the agent
-      may do, the gateway that admits it back into our systems, and the systems themselves.
+      may do, the tunnel their runtime reaches us through, the gateway that admits it into our
+      systems, and the systems themselves.
   - id: zoneExternal
     owner: external
     note: Where the agent's actions land outside both environments.
@@ -160,6 +186,13 @@ blocks:
         label: Agent loop
         icon: agent
         note: Their harness running our definition, with the reasoning and the retries theirs to operate.
+      - id: inference
+        label: Model inference
+        icon: model
+        note: >
+          Their model, called inside their boundary. It never crosses our AI gateway, so the
+          inference controls we enforce there elsewhere in the catalogue do not apply here and
+          have to be obtained as tenant configuration instead.
       - id: managedMemory
         label: Memory store
         icon: folder
@@ -169,7 +202,9 @@ blocks:
         icon: shield
         note: >
           Provider-operated code execution and browsing, one container per session — with its
-          own path to the open web that never touches anything we run.
+          own path to the open web that never touches anything we run. The self-hosted variant
+          moves this execution onto a worker inside our perimeter while the loop stays here;
+          recorded as a deviation rather than drawn.
       - id: hostedTools
         label: Remote MCP & connectors
         icon: plug
@@ -202,15 +237,37 @@ blocks:
           The escape hatch: a bring-your-own-code runtime inherits only the guardrails it
           explicitly calls — same deploy edge, thinner enforcement, per the bypass scenario.
 
-  - id: aiGateway
+  - id: tunnel
     kind: service
-    title: AI gateway
+    title: Tunnel connector
+    cosaiComponent: componentAgentUserQuery
     zone: zoneCloud
     col: 2
     row: 1
     note: >
+      Vendor-supplied software we run inside our own network so their runtime can reach an MCP
+      endpoint that is not publicly exposed. Outbound-only: it dials the vendor and carries
+      their requests in, so no inbound rule is opened and the endpoint stays on a private
+      address. Two things it does not do, on both vendors' own architecture notes: it does not
+      make the data path local — requests and responses still traverse their cloud — and it
+      does not authenticate to the upstream, which we still do ourselves. The tunnel token and
+      the TLS private key on this host are the load-bearing secrets.
+    items:
+      - id: tunnelClient
+        label: Outbound connector
+        icon: plug
+        note: Dials out to the vendor's edge; opens nothing inbound.
+
+  - id: aiGateway
+    kind: service
+    title: AI gateway
+    zone: zoneCloud
+    col: 3
+    row: 1
+    note: >
       The customer-operated crossing where a vendor-hosted agent is admitted into our systems.
-      The one component on that path we run, and therefore the only place the reach is scoped,
+      The tunnel hands here rather than to the servers themselves, because the tunnel is
+      transport and this is policy: the one component on that path where the reach is scoped,
       credentialed and recorded on our terms rather than theirs.
     items:
       - id: gwTools
@@ -363,20 +420,28 @@ edges:
       declares is the behaviour contract, and reviewing it is the last point at which we
       decide anything about the agent itself.
   - from: managedRuntime
-    to: aiGateway
+    to: tunnel
     path: external
     bidir: true
-    label: back into our systems
+    label: outbound-only tunnel
     note: >
-      The crossing this architecture exists to govern. Their runtime reaches our gateway rather
-      than reaching past it, so the grants are ours to scope and ours to revoke. The direct
-      invoke form is drawn; the tunnel form — an outbound-only connector we run inside our
-      network — is the enterprise chat drawing's Tunnel connector, by reference.
+      Their runtime reaching back into us through software they publish and we run. Note the
+      direction: our side dials out, so nothing is opened inbound and the endpoint stays
+      private. The public-endpoint form — their cloud calling an internet-facing URL of ours,
+      admitted by IP allowlist — is recorded as a deviation rather than drawn as a second path.
+  - from: tunnel
+    to: aiGateway
+    path: primary
+    bidir: true
+    label: tool call / result
+    note: >
+      The crossing this architecture exists to govern. The tunnel hands to our gateway rather
+      than reaching past it into the tool surface, so the grants are ours to scope and ours to
+      revoke.
   - from: aiGateway
     to: internalTools
     path: primary
     bidir: true
-    route: hv
     label: brokered tool calls
     note: Which of our servers a hosted agent may call, on short-lived grants we issue.
   - from: internalTools
@@ -414,10 +479,16 @@ edges:
 pins:
   risks:
     - risk: riskAgenticDelegationConfusedDeputy
-      at: managedRuntime->aiGateway
+      at: tunnel
       note: >
         Their infrastructure exercising our authority. The grant is the only thing bounding it,
         and the grant is issued at our gateway — which is the entire argument for drawing one.
+    - risk: riskCrossTenantCredentialPropagation
+      at: tunnel
+      note: >
+        The tunnel token and the TLS private key on this host are the load-bearing secrets on
+        the path — together they let an attacker impersonate our proxy and read tool payloads,
+        propagating our authority through infrastructure nobody watches.
     - risk: riskSensitiveDataDisclosure
       at: managedRuntime
       note: >
@@ -474,11 +545,12 @@ pins:
         capability worth selecting for; where it is missing, the vault entry is the identity
         and needs the lifecycle the platform will not give it.
     - capability: capabilitySecretsManagement
-      at: managedRuntime->aiGateway
+      at: tunnel
       note: >
-        Per-user vaults rather than a service credential, and the placeholder-substituted kind
-        where the platform offers it, so the secret is swapped in at egress and the agent never
-        holds the value.
+        Two secret stores, neither on the agent. On their side, per-user vaults substituted at
+        egress so the sandbox never holds a value — and, where no credential matches, the
+        connection is attempted unauthenticated. On ours, the tunnel token and TLS key on this
+        host, which the tunnel carries traffic on but never uses to authenticate to our server.
     - capability: capabilityEncryptionKeyManagement
       at: managedRuntime
       note: >
@@ -577,9 +649,15 @@ walkthrough:
     - follow: entry->managedRuntime
       label: invoke with user context
       note: Our code invokes their runtime, carrying the delegated user context.
-    - follow: managedRuntime->aiGateway
+    - follow: managedRuntime->tunnel
+      label: through the tunnel
+      note: >
+        Their runtime reaches back through software they publish and we run — outbound-only,
+        so nothing is opened inbound. The data path is not local, and the tunnel does not
+        authenticate for us.
+    - follow: tunnel->aiGateway
       label: to our gateway
-      note: Their runtime reaches our gateway rather than reaching past it into the tool surface.
+      note: Handed to our gateway rather than reaching past it into the tool surface.
     - follow: aiGateway->internalTools
       label: per-user grant
       note: Admitted to a named server on a short-lived, per-user grant.
@@ -605,7 +683,10 @@ walkthrough:
     - follow: extTools->aiGateway
       label: classified
       note: And is classified at our gateway before the hosted loop reads it as instruction.
-    - follow: aiGateway->managedRuntime
+    - follow: aiGateway->tunnel
+      label: into the tunnel
+      note: Back into the connector, bound for their cloud.
+    - follow: tunnel->managedRuntime
       label: tool results
       note: The tool results land in their runtime, which finishes the turn.
     - follow: managedRuntime->entry
@@ -621,11 +702,14 @@ scenarios:
       - follow: agentDef->managedRuntime
         label: deploy with vault reference
         note: An agent is deployed on a platform whose identity is a vault reference, not a principal.
-      - follow: managedRuntime->aiGateway
+      - follow: managedRuntime->tunnel
         label: stale credential presented
         note: >
           Sessions keep presenting that credential after the person has gone, because nothing in
-          the platform ties it to their lifecycle.
+          the platform ties it to their lifecycle. The tunnel carries it without looking.
+      - follow: tunnel->aiGateway
+        label: reaches our gateway
+        note: The first hop we govern.
       - follow: aiGateway->internalTools
         label: noticed & cut
         note: Our gateway is where that can be noticed and cut, since it is the only hop we watch.
@@ -639,11 +723,16 @@ scenarios:
       - follow: downstream->managedRuntime
         label: untrusted content
         note: Untrusted content enters the loop as instruction.
-      - follow: managedRuntime->aiGateway
+      - follow: managedRuntime->tunnel
         label: steered tool request
         note: >
-          A steered loop now asks our gateway for tools — the first tier we control, and the
-          reason its per-call policy cannot assume a well-behaved caller.
+          A steered loop now asks for our tools. The tunnel carries the request in without
+          judging it — transport, not policy.
+      - follow: tunnel->aiGateway
+        label: first tier we control
+        note: >
+          The first tier we control, and the reason its per-call policy cannot assume a
+          well-behaved caller.
       - follow: aiGateway->internalTools
         label: scope, approval, record
         note: Scope, approval and the record are what stand between the steered plan and our data.
@@ -655,11 +744,14 @@ scenarios:
           The team hits a limitation and ships the escape hatch: their sandbox, their identity,
           but the loop is now our code — and it inherits only the guardrails it explicitly
           calls.
-      - follow: managedRuntime->aiGateway
+      - follow: managedRuntime->tunnel
+        label: same path in
+        note: Calls still arrive the same way, through the connector we run.
+      - follow: tunnel->aiGateway
         label: per-call policy floor
         note: >
-          Calls still arrive here, which is why our per-call policy is the floor that survives
-          the migration — the platform's automatic guardrails did not.
+          Which is why our per-call policy is the floor that survives the migration — the
+          platform's automatic guardrails did not.
 
 deviations:
   - subject: The vendor band is drawn before our cloud band
@@ -681,11 +773,38 @@ deviations:
       second topology — its compensating posture is the narrow repository grant.
   - subject: The AI gateway carries tool and data traffic only
     reason: >
-      The provider calls its own model inside its own runtime — no Model provider block exists
-      on this drawing — and nothing fetches skills through our crossing. The gateway is drawn
-      with its one real traffic class rather than the registered aiGatewayTraffic pack,
-      following the low-code builder's precedent: the honest signal that a gateway is not on
-      the model path is its own contents.
+      The provider calls its own model inside its own runtime — drawn as the Model inference
+      item on the Managed runtime block, with no Model provider block on this drawing — and
+      nothing fetches skills through our crossing. The gateway is drawn with its one real
+      traffic class rather than the registered aiGatewayTraffic pack, following the low-code
+      builder's precedent: the honest signal that a gateway is not on the model path is its
+      own contents.
+  - subject: The tunnel absorbs secrets consumption
+    reason: >
+      capabilitySecretsManagement is embodied by the AI gateway, but the load-bearing secrets
+      on this path are the tunnel token and TLS key on the tunnel host — the pin sits where the
+      credentials live, the issuance and rotation story in the governance call-out. The same
+      absorption, for the same reason, as the enterprise chat drawing.
+  - subject: The public-endpoint return path is recorded, not drawn
+    reason: >
+      Both first-party vendors also reach a customer MCP endpoint the ordinary way — their
+      cloud calling an internet-facing URL of ours, admitted by allowlisting their IP ranges.
+      That is the same crossing with weaker admission: audience-bound tokens, per-user OAuth
+      and rate limiting on a public listener instead of an outbound-only connector. It is the
+      form to draw where a vendor's tunnel is unavailable (one vendor's tunnel is a research
+      preview with no continuity commitment), and it is recorded here rather than drawn as a
+      second edge into the same gateway.
+  - subject: The self-hosted sandbox variant is recorded, not drawn
+    reason: >
+      One exemplar lets tool execution move onto a worker we run — code, filesystem and egress
+      inside our perimeter — while the loop, the model and the orchestration stay with the
+      provider. The worker polls the provider outbound-only, the same shape as the tunnel, and
+      tool inputs and outputs still cross to the loop. It would add a Sandboxed execution block
+      to our cloud band; it is recorded here until the organisation adopts it, because a
+      drawing that shows both variants at once implies a choice nobody has made. Two facts to
+      carry into that drawing when it comes: placeholder-substituted credentials are not
+      supported there, so secrets fall back to the worker's own custom tools, and the worker
+      can act as the MCP client itself, in which case the provider sees only tool outputs.
 
   - subject: Hosted tools are an item on the runtime, not an edge to the external band
     reason: >
@@ -696,6 +815,12 @@ deviations:
       the zone-2 policy control; nothing of ours sits on the path either way.
 
 sources:
+  - title: "Anthropic — MCP tunnels: outbound-only cloudflared plus proxy, inner TLS terminated at the customer, transport does not authenticate to the upstream"
+    url: https://platform.claude.com/docs/en/agents-and-tools/mcp-tunnels/overview
+  - title: "Anthropic — self-hosted sandboxes: the loop stays with the provider, tool execution moves to a customer-run polling worker"
+    url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes
+  - title: "OpenAI — Secure MCP Tunnel: customer-run tunnel-client long-polls an OpenAI-hosted endpoint for ChatGPT, Codex, the Responses API and AgentKit"
+    url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
   - title: "CoSAI Shared Responsibility Framework V1.0 — AI and agent PaaS operating model"
     url: https://www.coalitionforsecureai.org/wp-content/uploads/2026/05/CoSAI-Shared-Responsibility-Framework.pdf
   - title: "AWS — Cedar-based default-deny policy enforced at the AgentCore gateway"
