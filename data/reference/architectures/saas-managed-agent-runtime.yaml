@@ -20,9 +20,13 @@ description:
     architectures never get is exactly what these services sell. This drawing still shows the
     provider as one block: the decomposition is documented and separately billed, but under
     the three-zone rule what they operate inside their boundary is assured rather than drawn,
-    and their tool gateway, memory and sandbox appear as the block's items — zone-2 surfaces
-    we configure, not tiers we run. The loop's execution behind them remains genuinely
-    uninspectable. So is the model: the runtime calls its own vendor's inference inside that
+    and their memory, vault and MCP client appear as the block's items — zone-2 surfaces we
+    configure, not tiers we run. The one thing drawn inside it is the built-in tool surface:
+    the harness is, in effect, the vendor's coding agent running in a harness they operate, so
+    its Native tools nest inside the runtime exactly as they nest inside a harness we run —
+    the environment definition decides what those tools may reach, which makes them ours to
+    configure even though the execution is theirs. The loop's execution behind them remains
+    genuinely uninspectable. So is the model: the runtime calls its own vendor's inference inside that
     boundary, and nothing of ours is on the path — every control our AI gateway applies to
     inference elsewhere in the catalogue (model allowlist, prompt inspection, spend ceilings,
     the prompt-level record) does not see this traffic and has to be re-obtained as tenant
@@ -198,9 +202,12 @@ blocks:
       product before relying on it.
     items:
       - id: agentLoop
-        label: Agent loop
+        label: Agent harness
         icon: agent
-        note: Their harness running our definition, with the reasoning and the retries theirs to operate.
+        note: >
+          Their harness running our definition — the loop, context assembly, compaction and
+          retries, theirs to operate. In effect the vendor's coding agent, hosted: the same
+          anatomy as the harnesses we run, with the built-in tools nested beneath.
       - id: inference
         label: Model inference
         icon: model
@@ -221,25 +228,61 @@ blocks:
           requests to named hosts. The sandbox never holds a value. Workspace-scoped, so any
           key with workspace access can attach one; where no credential matches, the
           connection is attempted unauthenticated.
-      - id: sandbox
-        label: Sandboxed tools
-        icon: shield
-        note: >
-          Provider-operated code execution and browsing, one container per session — with its
-          own path to the open web that never touches anything we run. The self-hosted variant
-          moves this execution onto a worker inside our perimeter while the loop stays here;
-          recorded as a deviation rather than drawn.
-      - id: hostedTools
-        label: Remote MCP & connectors
+      - id: mcpClient
+        label: MCP client
         icon: plug
         note: >
-          Hosted MCP servers and connectors the provider calls from its own side, the tool
-          list fetched by them, the credential drawn from the vault. That path never touches
-          our network, so the risk sits on this item and the control is per-tool enablement in
-          the definition. The alternative for any third-party connector is to register it on
-          our gateway instead and declare the gateway's tunnel hostname as the server: same
+          The harness's own MCP client — the party that connects out. Two directions: back
+          into us through the tunnel to our gateway, and out to third-party servers and
+          connectors in the external band, called from the vendor's side with the credential
+          drawn from the vault. Under this drawing's policy that outward path is the only way
+          the agent reaches external data: the vendor's own web search and fetch tools, which
+          run on their servers and ignore the environment's network policy, are switched off
+          in the definition. The alternative for any third-party connector is to register it
+          on our gateway instead and declare the gateway's tunnel hostname as the server: same
           connector, now scoped and recorded at our tier — the choice per connector is which
           of the two it is.
+
+  - id: nativeTools
+    kind: provider
+    title: Native tools
+    cosaiComponent: componentTools
+    zone: zoneVendor
+    parent: managedRuntime
+    col: 0
+    row: 0
+    note: >
+      The harness's built-in tools, nested because the loop calling them is not a hop: file
+      and edit tools, the shell, the skills the definition installs, and the hosted browser
+      and computer use where the product offers them — executing in one sandbox per session,
+      the provider's cloud sandbox or, in the self-hosted variant, a worker we run. What they
+      may reach is the environment definition's egress policy, which is why they are drawn
+      rather than assured: the policy is ours. Under this drawing's policy the sandbox reaches
+      no external data on its own — every outside call goes through the MCP client to a tool
+      service — so no edge leaves this block; the moment the egress list is opened, one does,
+      and it is the shape the endpoint drawings show.
+    items:
+      - id: editTools
+        label: File & edit tools
+        icon: folder
+        note: Read, write, edit, glob and grep across the session's filesystem.
+      - id: shell
+        label: Shell commands
+        icon: code
+        note: Command execution inside the session sandbox, bounded by the environment's egress policy.
+      - id: skills
+        label: Installed skills
+        icon: gear
+        note: >
+          Packaged instructions and helpers the definition names, downloaded into the sandbox
+          at session start — content that executes as instruction, versioned like code.
+      - id: computerUse
+        label: Computer use
+        icon: eye
+        note: >
+          The hosted browser and desktop toolsets, where the product offers them: the sharpest
+          tool the definition can switch on, and one this policy leaves off because its reach
+          is the open web.
 
   - id: agentDef
     kind: service
@@ -329,7 +372,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 3
-    row: 3
+    row: 4
     pack: enterpriseData
     note: The systems of record behind those servers, reached on grants we scope per session.
 
@@ -503,15 +546,19 @@ edges:
     bidir: true
     note: Actions landing outside, and the content they return.
   - from: managedRuntime
-    to: downstream
+    to: extTools
     path: external
     bidir: true
     route: vh
-    label: sandbox browsing
+    label: hosted MCP & connectors
     note: >
-      The provider's hosted browser and code interpreter reach the open web from their
-      environment — a path that never touches anything we run, and this archetype's dominant
-      untrusted ingress.
+      The runtime's MCP client calling third-party servers and connectors from the vendor's
+      side — the tool list fetched by them, the credential drawn from the vault — and the
+      content those tools return entering the loop. This is the agent's only route to external
+      data under this drawing's policy: the built-in web tools are off and the sandbox's egress
+      is closed, so everything outside arrives through a tool service first. Nothing we run is
+      on the path; the control is per-tool enablement in the definition, and the alternative
+      per connector is to register it at our gateway and reach it through the tunnel.
 
 pins:
   risks:
@@ -551,14 +598,15 @@ pins:
       at: aiGateway->extTools
       note: Content returning from a brokered outbound action re-enters a context we do not hold.
     - risk: riskPromptInjection
-      at: managedRuntime->downstream
+      at: managedRuntime->extTools
       note: >
-        The hosted browser reads the open web straight into the loop, vendor-side — the
-        dominant untrusted ingress of this archetype, on a path with no customer control
-        anywhere.
+        Content a third-party tool service returns enters the loop vendor-side — the dominant
+        untrusted ingress of this archetype, on a path with no customer control anywhere.
+        Closing the built-in web tools and the sandbox's egress narrows the ingress to this one
+        edge; it does not classify what comes back on it.
 
     - risk: riskToolSourceProvenance
-      at: managedRuntime
+      at: managedRuntime->extTools
       note: >
         Tool descriptions fetched vendor-side enter the loop as instruction, from servers named
         in the definition and vetted by nobody on the path.
@@ -661,6 +709,14 @@ pins:
       note: >
         Default-deny policy at their tool gateway — the floor a builder cannot lower, set in the
         tenant rather than enforced by us.
+    - capability: capabilityToolPermissionScoping
+      at: managedRuntime->extTools
+      note: >
+        Per-tool enablement and approval policy in the definition, the built-in web tools
+        disabled, and the environment's egress list closed: the three settings that make "the
+        agent reaches external data only through a tool service" true. Every one of them is
+        configuration the next definition can undo, which is why the definition is reviewed
+        like code.
     - capability: capabilityRateLimiting
       at: entry
       note: >
@@ -752,16 +808,22 @@ scenarios:
       - follow: aiGateway->internalTools
         label: noticed & cut
         note: Our gateway is where that can be noticed and cut, since it is the only hop we watch.
-  - title: The hosted browser reads the web
+  - title: A hosted connector returns untrusted content
     steps:
-      - follow: managedRuntime->downstream
-        label: browse on vendor side
+      - follow: managedRuntime->extTools
+        label: connector call, vendor side
         note: >
-          The sandbox browses on the vendor's side — no customer control sits anywhere on
-          the path.
-      - follow: downstream->managedRuntime
+          The MCP client calls a third-party connector from the vendor's side — no customer
+          control sits anywhere on the path.
+      - follow: extTools->downstream
+        label: effect lands
+        note: The connector acts on the service behind it.
+      - follow: downstream->extTools
+        label: returned content
+        note: What that service returns starts its way back.
+      - follow: extTools->managedRuntime
         label: untrusted content
-        note: Untrusted content enters the loop as instruction.
+        note: Untrusted content enters the loop as instruction, unclassified, because nothing of ours is on this path.
       - follow: managedRuntime->tunnel
         label: steered tool request
         note: >
@@ -856,20 +918,32 @@ deviations:
       One exemplar lets tool execution move onto a worker we run — code, filesystem and egress
       inside our perimeter — while the loop, the model and the orchestration stay with the
       provider. The worker polls the provider outbound-only, the same shape as the tunnel, and
-      tool inputs and outputs still cross to the loop. It would add a Sandboxed execution block
-      to our cloud band; it is recorded here until the organisation adopts it, because a
+      tool inputs and outputs still cross to the loop. It would move the nested Native tools
+      block into our cloud band; it is recorded here until the organisation adopts it, because a
       drawing that shows both variants at once implies a choice nobody has made. Two facts to
       carry into that drawing when it comes: placeholder-substituted credentials are not
       supported there, so secrets fall back to the worker's own custom tools, and the worker
       can act as the MCP client itself, in which case the provider sees only tool outputs.
 
-  - subject: Hosted tools are an item on the runtime, not an edge to the external band
+  - subject: The vendor's web tools are off, and the runtime's external reach is drawn once, to Tool services
     reason: >
-      Hosted MCP servers and connectors are called from the provider's side and never touch
-      our network — the low-code sibling draws that as a platform-to-tools edge. Here the
-      runtime's external reach is drawn once already (the hosted browser), and a second
-      vendor-side arrow would cross the front end. The item carries the provenance risk and
-      the zone-2 policy control; nothing of ours sits on the path either way.
+      A managed runtime has three routes to external data: its built-in web search and fetch
+      (run on the vendor's servers, outside the environment's network policy), the sandbox's
+      own egress, and the MCP client calling hosted servers and connectors. This drawing's
+      policy closes the first two in the definition and draws the third, so every external read
+      and action passes through a tool service — the same symmetry as the gateway-brokered
+      path on our side, without the gateway. An earlier revision drew the hosted browser as a
+      direct edge to Downstream services and kept the connectors as an item; the finding did
+      not change (the content returns unclassified), the topology did.
+  - subject: Native tools nest inside the Managed runtime, the exception to the fused-runtime rule
+    reason: >
+      The ontology keeps vendor-operated fused runtimes flat because we cannot see inside. The
+      API/SDK runtime is the exception, recorded here and in the ontology (2026-09-09): its
+      built-in tools are the vendor's coding-agent tool surface, enumerated in the definition
+      and bounded by an environment egress policy we author, and in the self-hosted variant
+      they execute on a worker we run. What we configure, we draw. The block is provider-kind
+      because the execution is still theirs; no edge leaves it because this policy gives the
+      sandbox no external reach of its own.
 
 sources:
   - title: "Anthropic — MCP tunnels: outbound-only cloudflared plus proxy, inner TLS terminated at the customer, transport does not authenticate to the upstream"

@@ -242,8 +242,13 @@ server's brokered API and MCP calls) and, on the endpoints, **Downstream service
 outlives the process. No frame is drawn around the harness to say "this is the application":
 the harness block with its child is the application, and a boundary around one block is
 nesting for its own sake. Boundary frames are for real technical or ownership containers — a
-microVM sandbox, a vendor tenant. Vendor-operated fused runtimes do not nest at all; their
-tools stay items on the provider block, because we cannot see inside.
+microVM sandbox, a vendor tenant. Vendor-operated fused runtimes do not nest; their tools
+stay items on the provider block, because we cannot see inside — with one exception since
+2026-09-09: the API/SDK managed runtime, whose built-in tools are the vendor's coding-agent
+tool surface, enumerated in the definition and bounded by an environment egress policy the
+customer authors. What the customer configures, the drawing shows: Native tools nest inside
+that runtime as a provider-kind child, and under the catalogue's policy no edge leaves them —
+external data reaches the agent only through a tool service, via the MCP client.
 
 MCP is three things and the drawings keep them apart: the **MCP client** is an item of the
 harness; **Local MCP servers** are an item of Native tools, processes on the endpoint whether

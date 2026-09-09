@@ -1104,7 +1104,20 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
         controlBlocks.push(
           `${arch.id}: block "${block.title}" names a control, not a thing we run — a control belongs as a numbered pin where it is enforced and a call-out in the governance band. If a real tier sits here, name the tier.`,
         );
-      if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor")
+      // A block nested inside a provider-kind block is operated by that provider: the
+      // container's operator is the child's (ONTOLOGY.md, the fused-runtime exception,
+      // 2026-09-09), so a canonical service-kind component drawn provider-kind there is not
+      // a vocabulary drift, it is what containment means.
+      const insideProvider = (() => {
+        for (let pid = block.parent; pid; ) {
+          const pb = arch.blocks.find((b) => b.id === pid);
+          if (!pb) return false;
+          if (pb.kind === "provider") return true;
+          pid = pb.parent;
+        }
+        return false;
+      })();
+      if (canon?.kind && block.kind !== canon.kind && block.kind !== "actor" && !(block.kind === "provider" && insideProvider))
         warnings.push(`${arch.id}: block "${block.title}" is kind ${block.kind}, vocabulary says ${canon.kind}`);
       for (const item of block.items ?? []) {
         if (CONTROL_ITEM_LABELS.has(item.label))
