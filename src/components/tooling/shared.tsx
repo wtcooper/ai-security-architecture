@@ -66,11 +66,11 @@ export function CellTile({
   const url = cell.parts.map((p) => configureUrl(p.control)).find(Boolean);
   return (
     <div
-      className={`flex h-full min-h-[36px] items-center gap-1.5 rounded-[4px] px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
+      className={`flex h-full min-h-[36px] items-center justify-center gap-1.5 rounded-[4px] px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
       style={m ? { background: m.bg, color: m.text, boxShadow: m.dashed ? "inset 0 0 0 1px var(--line-strong)" : undefined } : { color: "var(--ink-3)" }}
       title={title}
     >
-      <button type="button" onClick={onClick} className="min-w-0 flex-1 truncate text-left text-[11.5px] font-semibold hover:underline">
+      <button type="button" onClick={onClick} className="min-w-0 truncate text-center text-[11.5px] font-semibold hover:underline">
         {m ? m.label : "—"}
       </button>
       {status && (

@@ -17,34 +17,38 @@ export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[
   const cols = columnGroups(tools);
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
   const span = tools.length + 2;
+  // One vendor (the vendor view) needs no vendor sub-row under "Admin controls".
+  const headerRows = cols.length > 1 ? 3 : 2;
   return (
     <div className="space-y-3">
       <div className="max-h-[75vh] overflow-auto rounded-xl border border-line bg-paper">
         <table className="border-separate border-spacing-0 text-[12px]">
           <thead className="sticky top-0 z-20">
             <tr>
-              <th className="sticky left-0 z-30 min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+              <th rowSpan={headerRows} className="sticky left-0 z-30 min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-bottom text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
                 Reference control
               </th>
-              <th className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                Enterprise capabilities
+              <th rowSpan={headerRows} className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-bottom">
+                <span className="block text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">Enterprise capabilities</span>
+                <span className="block text-[10.5px] font-normal text-ink-3">deployed by the organisation, where the drawing pins them</span>
               </th>
-              {cols.map((g) => (
-                <th key={g.vendorId} colSpan={g.tools.length} className="border-b border-l border-line bg-mist px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                  Admin controls · {g.vendorName}
-                </th>
-              ))}
+              <th colSpan={tools.length} className="border-b border-l border-line bg-mist px-2 py-1.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+                Admin controls
+              </th>
             </tr>
+            {cols.length > 1 && (
+              <tr>
+                {cols.map((g) => (
+                  <th key={g.vendorId} colSpan={g.tools.length} className="border-b border-l border-line bg-mist px-2 py-1 text-center text-[10.5px] font-medium text-ink-2">
+                    {g.vendorName}
+                  </th>
+                ))}
+              </tr>
+            )}
             <tr>
-              <th className="sticky left-0 z-30 border-b border-r border-line bg-paper px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                &nbsp;
-              </th>
-              <th className="border-b border-r border-line bg-paper px-3 py-2 text-left text-[10.5px] font-normal normal-case tracking-normal text-ink-3">
-                deployed by the organisation, where the drawing pins them
-              </th>
               {cols.flatMap((g) =>
                 g.tools.map((t) => (
-                  <th key={t.id} className="min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-left align-bottom">
+                  <th key={t.id} className="min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-center align-bottom">
                     <Link href={`/tooling?tool=${t.id}`} className="block text-[11.5px] font-semibold leading-tight text-ink hover:text-introduced hover:underline">
                       {t.name}
                     </Link>
