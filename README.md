@@ -115,6 +115,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the capability-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
+| **AI Tooling** | The named products: every Anthropic, OpenAI, Cursor and GitHub Copilot surface mapped to the architecture it instantiates, with the controls that drawing pins, how the vendor lets an administrator switch each one on (linked to the vendor's page), and your organisation's status for each. A catalogue and a compare-on-one-architecture matrix. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
 Every diagram supports pan and zoom.
@@ -326,7 +327,14 @@ data/
 ├── incidents/                    5 authored incidents, replayed on the map
 ├── reference/
 │   ├── architectures/            ★ 28 flow-style reference architectures, one YAML each
+│   ├── guidance/                 controls guidance, one document per architecture
 │   └── archive/                  the superseded zone-style catalogue, kept for the record
+├── tooling/                      ★ the AI tooling registry: named products, one entity per
+│   ├── vendors.yaml                product × architecture, with per-control operator steps
+│   └── <vendor>/<family>.yaml      and vendor doc links, dated and verified
+├── org/                          ★ YOUR organisation's layer (see "Adopt this" below)
+│   ├── example/                    shipped, labelled "example" wherever it renders
+│   └── local/                      yours; preferred by the build, never shipped upstream
 └── PROVENANCE.md                 pinned SHA, extraction record, what is original work
 
 scripts/
@@ -394,6 +402,27 @@ npm run dev      # http://localhost:3000
 `dev` and `build` both compile the dataset first and fail on any dangling identifier — a risk
 pointing at a control that does not exist, an incident step naming an unknown component, an
 overlay phase with no components, a map that has drifted from CoSAI.
+
+## Adopt this in your organisation
+
+Everything is text. Clone the repository, and:
+
+1. **Cross-map your own standard.** Copy `data/org/example/` to `data/org/local/` and replace
+   its content with your control standard and risk register, each entry naming the CoSAI
+   controls, capabilities and risks it corresponds to. The build inverts that into the same
+   cross-reference the OWASP lenses use, so your identifiers appear on the Frameworks tab, on
+   every risk, control and capability card, in the rails and hover cards of every reference
+   architecture, and in the AI Tooling controls table. `local/` is gitignored here and never
+   shipped, so pulling upstream never conflicts; in your own clone, `git add -f data/org/local`
+   once.
+2. **Record your tool posture.** `data/org/local/tooling-status.yaml` holds, per product in the
+   registry, an adoption decision and a status per reference control. The AI Tooling tab and
+   each architecture's Tools tab render it; the compare matrix shows every vendor variant's
+   coverage against your status on one screen.
+3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
+   `tooling-onboard` skill under `.claude/skills/` carries the research protocol, and
+   `org-taxonomy-customize` walks through the mapping work. `npm run data` fails on any
+   dangling id and `npm run audit` lists what each product entry has not yet addressed.
 
 ## Deployment
 

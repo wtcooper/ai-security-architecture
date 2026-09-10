@@ -1,0 +1,394 @@
+# Claude Tag — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: the earlier "Claude Code in Slack" (routes @Claude coding mentions to a Claude Code
+# on the web session under the requesting user's own account) is being retired on Team and
+# Enterprise in favour of Claude Tag and remains only as the Pro/Max path; it is recorded as a
+# variant note here and its cloud runtime is toolClaudeCodeWeb.
+vendor: anthropic
+family: Claude Tag
+tools:
+  - id: toolClaudeTag
+    name: Claude Tag (Claude in Slack)
+    surfaceClasses:
+      - chatIntegration
+    variants:
+      - name: "@Claude in Slack channels (organisation agent identity)"
+        class: chatIntegration
+        url: https://claude.com/docs/claude-tag/overview
+      - name: "@Claude direct messages (runs on the member's own claude.ai account)"
+        class: chatIntegration
+        url: https://claude.com/docs/claude-tag/concepts/agent-identity
+        note: DMs use the member's personal connectors and seat; Owners can disable DMs organisation-wide.
+      - name: Claude Code in Slack (earlier per-user version; Pro/Max, retiring on Team/Enterprise)
+        class: chatIntegration
+        url: https://code.claude.com/docs/en/slack
+    architecture: archEnterpriseAiChat
+    status: beta
+    asOf: "2026-09"
+    summary:
+      - >-
+        Claude Tag is Anthropic's organisation-managed @Claude for Slack (public beta on Team and
+        Enterprise, first-party service only, not for ZDR organisations). In channels Claude acts
+        under its own service accounts that an Owner provisions, not as the person who tagged it;
+        each thread runs in an ephemeral sandbox on the same infrastructure as Claude Code on the
+        web (or in a self-hosted environment), and every outbound request crosses Agent Proxy,
+        which injects credentials from a write-only store and blocks hosts no allow layer covers.
+        Direct messages instead run on the sender's own claude.ai account with their personal
+        connectors.
+      - >-
+        Admin control lives at claude.ai/admin-settings/claude-tag (Owner role): pairing
+        workspaces, Access bundles of credentials, repository grants, domains, plugins and
+        instructions attached per scope (organisation, workspace or channel), the
+        "Enable Claude Tag for your organization" toggle, per-scope version Off, member and guest
+        restrictions, blocked channel patterns, DM toggle, auto-mode allow rules, and spend limits
+        at claude.ai/admin-settings/usage/claude-tag. Channel work bills to the organisation's
+        usage balance. Session transcripts, channel and workspace memory, routines and artifacts
+        are stored by Anthropic with no automatic retention period during the beta and are not
+        yet in the Compliance API session endpoints.
+    facts:
+      - label: Plans
+        value: >-
+          Team and Enterprise only; not on Free, Pro, Max, third-party deployments or ZDR
+          organisations. Routines must be enabled at claude.ai/admin-settings/claude-code. Slack
+          Connect (externally shared) channels are never served.
+        url: https://claude.com/docs/claude-tag/admins/setup-overview
+      - label: Inference & routing
+        value: Anthropic first-party API from Anthropic-managed sandboxes; self-hosted environments run the sandbox on your runners but still call api.anthropic.com.
+        url: https://claude.com/docs/claude-tag/concepts/security-and-data
+      - label: Data leaving the device
+        value: >-
+          Slack messages Claude is shown (including other people's and guests'), attached files,
+          Slack search results, data retrieved from connected tools and everything Claude did are
+          held as session transcripts on Anthropic's side; web search runs on Anthropic's servers
+          outside Agent Proxy rules.
+        url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+      - label: Retention & training
+        value: >-
+          No automatic retention period during the beta; custom organisation retention does not
+          apply to transcripts or memory (it does to artifacts); deletion is by disconnecting a
+          workspace, removing a channel scope, deleting memory files or routines, or uninstalling
+          the app. Commercial terms (no training).
+        url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+      - label: Docs index
+        value: claude.com/docs/claude-tag (concepts, admins, users)
+        url: https://claude.com/docs/claude-tag/overview
+    riskNotes:
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          Anyone in a channel under a bundle's scope can make Claude act with that bundle's
+          credentials; the docs say to connect a dedicated service account per tool, attach
+          narrow bundles to private channels, and never a personal login.
+      - risk: riskPromptInjection
+        note: >-
+          Claude reads whole threads and can respond without being tagged; guests' and other
+          members' messages become instructions and transcript content. Auto-mode allow rules
+          pre-approve actions per scope, and there is no per-thread deny list.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Public-channel memory is shared workspace-wide and survives a channel going private;
+          Claude can keyword-search public channels without being added to them; artifacts are
+          readable by anyone with access to the source channel.
+      - risk: riskCrossTenantCredentialPropagation
+        note: >-
+          On an Enterprise Grid paired to several Claude organisations, one organisation's access
+          settings govern the whole grid; bundle isolation comes from where a bundle is attached,
+          not from the bundle itself.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Routines and channel watches run unattended with the channel's credentials and are
+          created by any channel member; the Audit page's Scheduled work tab is the inventory.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: >-
+          Owner-only setup and configuration; "Restrict to roles with Claude Tag access"
+          (Enterprise custom roles with the Claude Tag in Slack capability) or "Restrict to your
+          organization" (Team); "Restrict to your verified domains" for account linking; channel
+          managers via custom roles
+        steps:
+          - title: Restrict who can invoke Claude
+            body:
+              - At claude.ai/admin-settings/claude-tag > Where Claude Tag works > Member access,
+                turn on "Restrict to roles with Claude Tag access" (Enterprise) or "Restrict to your
+                organization" (Team); the toggle covers channels and DMs.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
+          - title: Gate by custom role
+            body:
+              - Create groups at claude.ai/admin-settings/groups and a custom role at
+                claude.ai/admin-settings/roles with the "Claude Tag in Slack" capability; built-in
+                roles always grant it.
+            url: https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
+        verified: "2026-09-10"
+      - capability: capabilitySse
+        coverage: external
+        mechanism: Corporate proxy tenant-restriction header for claude.ai; Slack-side app approval and Enterprise Grid distribution controls
+        note: >-
+          Claude Tag runs server-side, so the only network-layer levers are the Slack admin's app
+          approval and the anthropic-allowed-org-ids header on claude.ai traffic for the account
+          linking flow.
+        steps:
+          - title: Control the Slack side
+            body:
+              - Slack workspace admins decide whether the Claude app is installed; on Enterprise
+                Grid, org admins choose which workspaces get it; removing the app revokes access
+                immediately.
+            url: https://code.claude.com/docs/en/slack
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: partial
+        mechanism: >-
+          Default-deny egress through Agent Proxy (data leaves only to allowed hosts); credentials
+          never enter the sandbox; Enterprise Inference hooks are not documented for Claude Tag
+        steps:
+          - title: Keep egress default-deny
+            body:
+              - Leave the environment at Trusted or pin a No access environment on the scope, list
+                only needed hosts on the bundle's Domains tab, and do not request allow-all egress
+                unless required.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+        note: No content inspection of prompts or outputs is offered; artifact publishing and Slack posting are the visible egress paths.
+        verified: "2026-09-10"
+      - capability: capabilityBrowserDetectionResponse
+        coverage: none
+        note: >-
+          Not applicable: the surface is Slack and a server-side sandbox, not a browser session the organisation instruments.
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: >-
+          Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
+          (uncredentialed, wildcard leftmost label, ports), and the scope's environment network
+          access level (Trusted default, Custom, Full, No access); private ranges and cloud
+          metadata always blocked; HTTP/HTTPS only
+        steps:
+          - title: Allow hosts per bundle
+            body:
+              - On the bundle's Domains tab add each hostname (and non-443 ports); requests to
+                unlisted hosts are blocked and Claude names the blocked host in the thread.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+          - title: Pin a stricter environment on the scope
+            body:
+              - Create an organisation-shared cloud environment with No access or a Custom list and
+                choose it under the scope's Advanced > Environment.
+            url: https://claude.com/docs/claude-tag/admins/customize
+        verified: "2026-09-10"
+      - capability: capabilityAiGovernancePlatform
+        coverage: partial
+        mechanism: Audit page (Scheduled work, Memory, Network events export), Access bundles page with per-connection status, analytics at claude.ai/analytics/claude-tag
+        steps:
+          - title: Inventory what Claude can do and does
+            body:
+              - Review the Access bundles page (Active / Never used per credential), the Audit page
+                tabs at claude.ai/admin-settings/claude-tag/audit, and the per-channel Access summary.
+            url: https://claude.com/docs/claude-tag/admins/audit
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: partial
+        mechanism: >-
+          Sessions run in auto mode (classifier); Owners add narrow auto-mode allow rules per scope;
+          pull requests are drafts for humans to merge; "Respond automatically" per channel
+        steps:
+          - title: Keep allow rules narrow
+            body:
+              - Add auto-mode allow rules only on the narrowest scope (up to 50 per scope, 1,024
+                characters each) and name the tool, action and environment; everything else stays
+                under the classifier.
+            url: https://claude.com/docs/claude-tag/admins/customize
+          - title: Stop proactive work where it is not wanted
+            body:
+              - Turn off a channel's Respond automatically setting so Claude only works when tagged;
+                proactive sessions bill under Proactive.
+            url: https://claude.com/docs/claude-tag/admins/set-spend-limit
+        note: There is no per-action approval prompt in a channel; the classifier and deny-by-egress are the gates.
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: Auto-mode classifier plus structural containment (credential-free sandbox, default-deny egress, service-account scoping)
+        steps:
+          - title: Contain rather than detect
+            body:
+              - Attach bundles holding sensitive credentials only to private channels, keep guest
+                channels Restricted, and rely on Agent Proxy blocking unlisted hosts.
+            url: https://claude.com/docs/claude-tag/concepts/security-and-data
+        verified: "2026-09-10"
+      - capability: capabilityNhiManagement
+        coverage: native
+        mechanism: >-
+          Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one
+          dedicated account per connected tool) so actions are attributable in each tool's audit
+          log; DMs use the member's identity
+        steps:
+          - title: Provision a dedicated identity per tool
+            body:
+              - Create a mailbox such as claude@yourcompany, add it to each tool with the narrowest
+                role, and paste that account's API key on the setup page; rotate or delete from the
+                bundle's Credentials tab.
+            url: https://claude.com/docs/claude-tag/admins/setup-overview
+        verified: "2026-09-10"
+      - capability: capabilityVendorAssurance
+        coverage: partial
+        mechanism: Admin console readback (Access bundles, scopes, Access summary), audit log entries for channel-manager and deletion actions via the Compliance API Activity Feed
+        steps:
+          - title: Evidence the configuration
+            body:
+              - Export the channel Access summary and bundle listings, and read channel-manager
+                credential changes and scope removals from the organisation audit log through the
+                Compliance API.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-09-10"
+      - capability: capabilityDspm
+        coverage: partial
+        mechanism: Memory files viewable, editable and deletable per scope by Owners; data lifecycle table for every deletion action; no retention window during beta
+        steps:
+          - title: Review and prune memory
+            body:
+              - Open a scope's View memory files (or the Audit page Memory tab) to read, edit or
+                delete what Claude saved; workspace memory from public channels is shared workspace-wide.
+            url: https://claude.com/docs/claude-tag/users/memory
+          - title: Delete data deliberately
+            body:
+              - Removing a channel scope deletes its sessions, memory, routines and artifacts;
+                disconnecting the workspace deletes everything for that workspace; version Off
+                deletes nothing.
+            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+        verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: Anthropic Trust Center artifacts plus the security-and-data and data-lifecycle pages feed the buyer's vendor assessment
+        steps:
+          - title: Record beta-specific gaps
+            body:
+              - Note in the vendor record that transcripts and memory have no retention period, are
+                excluded from data exports and Compliance API sessions during the beta, and that
+                ZDR organisations are excluded.
+            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+        verified: "2026-09-10"
+      - capability: capabilityEncryptionKeyManagement
+        coverage: partial
+        mechanism: Credentials kept in a separate write-only credential store and injected at the proxy; Anthropic infrastructure encryption; no CMEK documented for Claude Tag data
+        steps:
+          - title: Understand where credentials live
+            body:
+              - Saved credentials are never displayed again and travel only to the hosts named on
+                the connection; narrow to host, path prefix or read-only methods.
+            url: https://claude.com/docs/claude-tag/concepts/security-and-data
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: native
+        mechanism: >-
+          Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client
+          credentials, MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links
+          for another admin to submit a secret
+        steps:
+          - title: Add and rotate credentials in bundles
+            body:
+              - On the bundle's Credentials tab connect each service, set Allowed hosts, restrict by
+                HTTP method or path, and use Rotate secret; use "Copy link for another admin" so
+                the secret owner submits it directly.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: >-
+          Per-scope Access bundles (credentials, repositories, plugins, instructions) with
+          inheritance from Default Slack to workspace to channel; connection host/path/method
+          restrictions; plugin enable toggles per bundle
+        steps:
+          - title: Compose access by capability and channel
+            body:
+              - Create bundles such as data-readonly, github-write and monitoring, attach only what a
+                channel needs, and keep sensitive bundles on private channels.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+          - title: Narrow each connection
+            body:
+              - Edit a connection to restrict it to specific hosts, a path prefix and read-only
+                methods, and scope the underlying service account to the projects it needs.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+        verified: "2026-09-10"
+      - capability: capabilityDataAccessGovernance
+        coverage: partial
+        mechanism: Reach inside a tool equals what the service account can access; account-level scoping is the control; DMs run as the user
+        steps:
+          - title: Scope the service account, not just the connection
+            body:
+              - Share only the folders, spaces or projects Claude should see with its dedicated
+                account; host and path rules limit endpoints, not records.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: partial
+        mechanism: Scopes and bundles are the registry of where Claude runs and with what; Scheduled work tab lists every routine with Created by
+        steps:
+          - title: List where Claude operates and what is scheduled
+            body:
+              - The Slack tab under Claude Tag's access lists workspaces and channels with their
+                bundles; the Audit page Scheduled work tab lists routines with pause and delete.
+            url: https://claude.com/docs/claude-tag/admins/audit
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: >-
+          Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls,
+          excluding git and MCP), attribution under service accounts in each tool's logs,
+          organisation audit log via Compliance API for channel-manager and deletion events
+        steps:
+          - title: Download network events and read tool-side logs
+            body:
+              - Export hourly Network events from claude.ai/admin-settings/claude-tag/audit and
+                correlate with the service account's entries in GitHub, Datadog and other tools.
+            url: https://claude.com/docs/claude-tag/admins/audit
+        note: Session transcripts are not exportable and the Compliance API does not list Claude Tag sessions during the beta.
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: partial
+        mechanism: Blocked and auto-join channel name patterns; Claude responds only where added; per-scope version Off; Slack app inventory
+        steps:
+          - title: Fence channels by name
+            body:
+              - Add Blocked channel patterns (for example *-confidential-*) under Default Slack
+                access > Advanced so Claude stays silent even if invited.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: >-
+          Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow
+          direct messages off, /remove @Claude, bundle deletion (revokes credentials everywhere),
+          workspace disconnect, app uninstall, spend limit reached
+        steps:
+          - title: Stop responding and revoke credentials
+            body:
+              - Set the scope's version to Off (or the org toggle), then delete the bundle to revoke
+                its credentials; running sessions may hold a revoked credential briefly.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
+          - title: Decommission the data
+            body:
+              - Disconnect the workspace at claude.ai/admin-settings/claude-tag to delete its
+                sessions, memory, routines, artifacts and account links.
+            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+        verified: "2026-09-10"
+    sources:
+      - title: Claude Tag overview
+        url: https://claude.com/docs/claude-tag/overview
+      - title: Security and data handling
+        url: https://claude.com/docs/claude-tag/concepts/security-and-data
+      - title: How agent identity works
+        url: https://claude.com/docs/claude-tag/concepts/agent-identity
+      - title: Data lifecycle and deletion
+        url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+      - title: Restrict where Claude Tag operates
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+      - title: Give Claude access to your tools
+        url: https://claude.com/docs/claude-tag/admins/add-connections
+      - title: Set a spend limit
+        url: https://claude.com/docs/claude-tag/admins/set-spend-limit
+      - title: Customize Claude Tag
+        url: https://claude.com/docs/claude-tag/admins/customize
+      - title: Review what Claude Tag has done
+        url: https://claude.com/docs/claude-tag/admins/audit
+      - title: Set up Claude Tag
+        url: https://claude.com/docs/claude-tag/admins/setup-overview
+      - title: What Claude Tag remembers
+        url: https://claude.com/docs/claude-tag/users/memory
+      - title: Claude Tag (Claude Code docs pointer)
+        url: https://code.claude.com/docs/en/claude-tag

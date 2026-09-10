@@ -1,0 +1,408 @@
+# Cursor Cloud Agents — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Excluded: Cursor Origin (git forge, early beta 2026-08-17) — code hosting, not an agent runtime; its
+# admin switch and the code-egress concern are recorded as facts below and in README Exclusions.
+vendor: cursor
+family: Cursor Cloud Agents
+tools:
+  - id: toolCursorCloudAgents
+    name: Cursor Cloud Agents
+    surfaceClasses:
+      - cloudAgent
+      - chatIntegration
+      - ciIntegration
+    variants:
+      - name: Cursor Web (cursor.com/agents)
+        class: cloudAgent
+        url: https://cursor.com/docs/cloud-agent
+      - name: Cursor for iOS
+        class: cloudAgent
+        url: https://cursor.com/docs/cloud-agent/mobile
+      - name: Cloud Agents API / SDK
+        class: cloudAgent
+        url: https://cursor.com/docs/cloud-agent/api/endpoints
+      - name: Self-Hosted Machines (My Machines, Team Pools)
+        class: cloudAgent
+        url: https://cursor.com/docs/cloud-agent/self-hosted
+      - name: "@cursor in Slack"
+        class: chatIntegration
+        url: https://cursor.com/docs/integrations/slack
+      - name: "@cursor in Linear"
+        class: chatIntegration
+        url: https://cursor.com/docs/cloud-agent
+      - name: "@cursor on GitHub / Bitbucket pull requests"
+        class: ciIntegration
+        url: https://cursor.com/docs/integrations/github
+      - name: Bugbot
+        class: ciIntegration
+        url: https://cursor.com/docs/bugbot
+      - name: Security Agents (Security Reviewer, Vulnerability Scanner)
+        class: ciIntegration
+        url: https://cursor.com/docs/security-agents
+      - name: Approval Agents (PR Routing & Approval) and Automations
+        class: ciIntegration
+        url: https://cursor.com/docs/approval-agents
+    architecture: archManagedAgentRuntime
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Cloud Agents (formerly Background Agents) run the Cursor agent in a Firecracker microVM in a
+        dedicated AWS account, one VM boundary per agent rather than a shared process sandbox. They
+        clone repositories through a Cursor GitHub / GitLab / Bitbucket / Azure DevOps app an
+        account admin connected, work on a branch and hand back a draft pull request. Triggers are
+        the web app, iOS, the Desktop Cloud dropdown, @cursor in Slack, Linear, GitHub or Bitbucket,
+        the Cloud Agents API (public beta) and Automations that fire on schedules, source-control,
+        Slack, Linear, Sentry, PagerDuty or webhook events. Bugbot, Security Agents and Approval
+        Agents are Cloud Agents wired to pull-request events; Self-Hosted Machines move tool
+        execution onto customer workers while the agent loop and inference stay in Cursor's cloud.
+      - >-
+        Inference runs on Cursor's hosted providers under Privacy Mode (Cloud Agents do not support
+        Legacy Privacy Mode and never train on accessed code). Code is stored temporarily while a
+        run executes; conversation state is retained indefinitely by default until deleted, VM
+        snapshots are deleted after 90 days idle. Data at rest is AES-256 with per-agent keys, TLS
+        1.2+ in transit, and Enterprise teams can bring a customer-managed KMS key (CMEK/BYOK).
+        Egress leaves from published CIDR ranges (docs/ips.json) and a fixed three-IP git proxy;
+        AWS PrivateLink or Cloudflare Tunnel reach private git servers and registries.
+      - >-
+        The admin surface is the dashboard's Cloud Agents section plus Enterprise settings: a
+        network-access policy (Allow all / Default + allowlist / Allowlist only) that admins can lock
+        org-wide, Runtime Secrets that are redacted from transcripts, tool output and commits, OIDC
+        federation (issuer api.cursor.com, 5-minute RS256 tokens) so agents assume cloud roles
+        without stored credentials, Protected Git Scopes and Repository Blocklist, and per-team
+        toggles for agent summaries in Slack, Team follow-ups, Long running agents and Computer use.
+        The default network policy is allow-all, and an Approval Agent can be configured to approve
+        low-risk pull requests itself — both defaults an organisation should decide on deliberately.
+    facts:
+      - label: Plans
+        value: >-
+          Any paid plan can run Cloud Agents (Pro, Pro+, Ultra, Teams, Enterprise). Enterprise-only:
+          network-policy lock, CMEK, PrivateLink / Cloudflare Tunnel, service accounts, Team Pools for
+          Self-Hosted Machines, audit log and SIEM, OpenTelemetry export, Bugbot Admin API.
+        url: https://cursor.com/docs/cloud-agent
+      - label: Inference & routing
+        value: >-
+          Cursor's hosted model providers under the team's Model Access Control; Auto-review in the
+          cloud needs Claude 4.5 Haiku or GPT-5.4 Mini enabled. Self-Hosted Machines keep inference and
+          planning in Cursor's cloud and send only the content the agent needs; workers connect
+          outbound to api2.cursor.sh, api2direct.cursor.sh and the artifacts S3 bucket.
+        url: https://cursor.com/docs/cloud-agent/self-hosted/integrations
+      - label: Data leaving the device
+        value: >-
+          Nothing runs on the developer's device; the repository, secrets and environment live in the
+          VM. Slack, GitHub and Linear see agent summaries and diffs (file paths included) unless the
+          Display agent summary toggles are off; Slack Connect guests are governed by a separate
+          external-channels toggle.
+        url: https://cursor.com/docs/cloud-agent/settings
+      - label: Data retention / training
+        value: >-
+          Privacy Mode always: Cursor never trains on code accessed by Cloud Agents or on their prompts
+          and responses. Conversation state is retained indefinitely by default and deletable on
+          demand; VM snapshots auto-delete after 90 days of inactivity; the runtime workspace is
+          recycled when idle. Secrets are KMS-encrypted at rest.
+        url: https://cursor.com/docs/cloud-agent/security
+      - label: Docs index
+        value: Cloud Agents documentation (overview, security, secrets and network, identity, settings, private connectivity, self-hosted, automations, API).
+        url: https://cursor.com/docs/cloud-agent
+      - label: Isolation
+        value: Firecracker microVMs in a dedicated AWS account segregated from other Cursor services; one VM boundary per agent.
+        url: https://cursor.com/docs/cloud-agent/security
+      - label: Egress
+        value: >-
+          Published CIDR ranges per cluster (us3p, us4p, us5p) at cursor.com/docs/ips.json and a
+          three-IP git egress proxy (184.73.225.134, 3.209.66.12, 52.44.113.131); the default network
+          allowlist matches the desktop sandbox's defaults.
+        url: https://cursor.com/docs/cloud-agent/security-network
+      - label: Private connectivity
+        value: >-
+          AWS PrivateLink (endpoint service com.amazonaws.vpce.us-east-1.vpce-svc-054b15427d4bea2b7 for
+          the api2.cursor.sh webhook path) or Cloudflare Tunnel for GitHub Enterprise Server, GitLab
+          Enterprise, Bitbucket Data Center and package registries; shared by Cloud Agents, Bugbot and
+          backend services; Enterprise only, arranged via hi@cursor.com.
+        url: https://cursor.com/docs/cloud-agent/private-connectivity
+      - label: Cursor Origin (excluded surface)
+        value: >-
+          Cursor's git forge, early beta since 2026-08-17 on Pro, Teams and Enterprise, with two-way
+          GitHub PR sync; admins can disable Origin for the team from the dashboard, and a namespace
+          must be claimed before enabling. Left out of the registry as code hosting rather than an
+          agent runtime; treat repositories synced into Origin as a code-egress path to review.
+        url: https://cursor.com/docs/origin
+      - label: Vendor ownership
+        value: SpaceX closed its acquisition of Anysphere (Cursor) on 2026-08-15; Cloud Agent infrastructure and subprocessors should be re-confirmed under the new owner.
+        url: https://techcrunch.com/2026/08/15/spacex-officially-closes-its-cursor-acquisition/
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          A Cloud Agent reads repository content, PR comments, Slack threads and Linear issues as
+          instructions and can browse the web; the vendor's stated mitigations are egress
+          restriction, Runtime Secret redaction and the draft-PR gate. The default network policy is
+          allow-all, so the first mitigation only exists once an admin locks Allowlist only.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          The GitHub App is installed with eight permission categories including Administration; the
+          agent can only reach repositories the triggering user could, but Automations run under
+          the `cursor` account or a service account and Approval Agents can approve PRs on their own
+          criteria — a machine identity approving machine-authored changes unless you keep approvals
+          off.
+      - risk: riskCrossTenantCredentialPropagation
+        note: >-
+          OIDC tokens identify the whole run (cloud_agent_id, team_id, repo_urls) and any process on
+          the VM can mint one from the local socket; scope IAM trust policies on aud and sub, not on
+          the token existing. Egress IPs are shared across Cursor clusters, not per customer.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Agent summaries and diffs are posted into Slack, GitHub and Linear by default; conversation
+          state persists indefinitely. Turn off Display agent summary in external channels, mark
+          credentials as Runtime Secrets and set a deletion routine through the API.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Anyone on a paid plan can create Automations and any team member can create Private ones
+          billed to their own account; Protected Git Scopes and admin promotion to Team Owned are the
+          levers that bring them under the team's view.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: Team SSO / SCIM; source-control connection by an account admin; Protected Git Scopes; Remote Control and Self-Hosted enablement under Dashboard → Cloud Agents
+        steps:
+          - title: Gate who can trigger agents
+            body:
+              - Members authenticate through the team's SSO; a Cursor account admin must connect GitHub, GitLab, Bitbucket or Azure DevOps before any agent can clone, and the GitHub App can be installed on Selected repositories only.
+            url: https://cursor.com/docs/integrations/github
+          - title: Lock your git organisation to your Cursor organisation
+            body:
+              - Enable Protected Git Scopes (needs GitHub org owner or admin) so only your Cursor teams can use those repositories with Cloud Agents and Bugbot.
+            url: https://cursor.com/docs/enterprise/security-hardening
+          - title: Decide on Remote Control and self-hosted workers
+            body:
+              - Under Cursor Dashboard → Cloud Agents → Self-Hosted enable or disable Remote Control for members; enabling it also enables the team's self-hosted worker access.
+            url: https://cursor.com/docs/cloud-agent/mobile
+        verified: "2026-09-10"
+      - capability: capabilityNhiManagement
+        coverage: native
+        mechanism: OIDC federation (issuer https://api.cursor.com, discovery /.well-known/openid-configuration, keys /keys); Enterprise service accounts
+        steps:
+          - title: Federate agent identity instead of storing keys
+            body:
+              - Create an IAM OIDC provider (or GCP WIF, Azure federated credential, Vault JWT auth) trusting https://api.cursor.com; agents mint 5-minute RS256 tokens from the VM socket with claims sub (user:<id> or service_account:<id>), aud, cloud_agent_id, team_id, repo_urls and agent_runtime=managed.
+            url: https://cursor.com/docs/cloud-agent/identity
+          - title: Give automation its own identity
+            body:
+              - Create Enterprise service accounts under Dashboard → Settings → API Keys → Service Accounts; keys are shown once, can be rotated, and archiving the account revokes them; runs are visible to all team admins.
+            url: https://cursor.com/docs/account/enterprise/service-accounts
+        note: The token identifies the run, not a process — any process with socket access can mint one.
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: native
+        mechanism: Secrets tab per environment — Environment Variables, Runtime Secrets (redacted), Build Secrets (Docker build only); KMS at rest; OIDC short-lived tokens
+        steps:
+          - title: Mark credentials as Runtime Secrets
+            body:
+              - In the environment's Secrets tab store credentials as Runtime Secrets so values are replaced with [REDACTED] in tool results, transcript, commits and commit messages; use Build Secrets for values only the Docker build should see.
+            url: https://cursor.com/docs/cloud-agent/security-network
+          - title: Prefer federated tokens to stored keys
+            body:
+              - Replace long-lived cloud keys with AssumeRoleWithWebIdentity against the Cursor OIDC issuer; tokens expire in five minutes.
+            url: https://cursor.com/docs/cloud-agent/identity
+        verified: "2026-09-10"
+      - capability: capabilityEncryptionKeyManagement
+        coverage: native
+        mechanism: CMEK / BYOK for Cloud Agent server-side encryption (Enterprise, via sales); AES-256 with per-agent keys; TLS 1.2+
+        steps:
+          - title: Map a customer-managed key
+            body:
+              - Ask your account team to map your KMS key for Cloud Agent data so you control rotation and access; per-agent session keys sit under it.
+            url: https://cursor.com/help/security-and-privacy/privacy
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: partial
+        mechanism: Dashboard → Cloud Agents and Automations lists; service accounts visible to admins; Bugbot repository list via /bugbot/repos
+        steps:
+          - title: Bring automations under the team
+            body:
+              - Admins can view, disable and promote automations to Team Owned (regenerates webhook keys and OAuth); Private and Team Visible automations otherwise bill and belong to their creator.
+            url: https://cursor.com/docs/cloud-agent/automations
+          - title: Enumerate what Bugbot is enabled on
+            body:
+              - List repositories and settings with /bugbot/repos and set enabled or manualTriggerOnly per repository with /bugbot/repo/update.
+            url: https://cursor.com/docs/bugbot
+        note: No approval workflow or declared-capability record; the lists are inventories, not a register with reconciliation.
+        verified: "2026-09-10"
+      - capability: capabilityStagedRollout
+        coverage: partial
+        mechanism: Environment Builds and snapshots with version history; failed Builds do not replace the active one
+        steps:
+          - title: Pin environments to Builds
+            body:
+              - Define .cursor/environment.json (snapshot or build.dockerfile, install, start); a failed Build leaves agents on the last successful one and the Builds tab keeps the history.
+            url: https://cursor.com/docs/cloud-agent/setup
+        note: Rollout and rollback exist for the runtime image only; agent instructions and Automations have no versioning or staged release.
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: GitHub App scope (Selected repositories; access never wider than the triggering user); Protected Git Scopes; Repository Blocklist; Team feature settings (Long running agents, Computer use); per-automation tool enablement; MCP allowlist
+        steps:
+          - title: Scope repository reach
+            body:
+              - Install the GitHub App on Selected repositories, keep the Repository Blocklist for sensitive repos (glob patterns via /settings/repo-blocklists/repos), and rely on the rule that a Cloud Agent can only reach repositories the triggering user could.
+            url: https://cursor.com/docs/cloud-agent/security
+          - title: Switch off tools the team does not need
+            body:
+              - In Cloud Agent dashboard settings disable Computer use and Long running agents, and set Team follow-ups to Disabled or Service accounts only.
+            url: https://cursor.com/docs/cloud-agent/settings
+          - title: Keep the MCP allowlist in force
+            body:
+              - The Enterprise MCP Configuration applies to cloud runs; Automations only get the tools (PRs, Slack, MCP, memory, computer use) you enable per automation.
+            url: https://cursor.com/docs/enterprise/model-and-integration-management
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: partial
+        mechanism: Draft pull request as the review gate; Team follow-ups; Approval Agent approval toggle; Bugbot manualTriggerOnly
+        steps:
+          - title: Keep the PR gate human
+            body:
+              - Cloud Agents deliver draft PRs; branch protection in your forge is the deterministic gate. If you deploy PR Routing & Approval, leave approvals off unless you accept machine approval of low-risk PRs.
+            url: https://cursor.com/docs/approval-agents
+          - title: Restrict who can steer a running agent
+            body:
+              - Set Team follow-ups to Disabled or Service accounts only so only the owner can add instructions from Slack or the web.
+            url: https://cursor.com/docs/cloud-agent/settings
+        note: There is no per-command approval inside a cloud run; the human step is at the pull request.
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: Egress allowlist, Runtime Secret redaction and draft-PR gating (vendor's listed mitigations); Team and Enterprise hooks run in cloud agents
+        steps:
+          - title: Apply the vendor's three mitigations
+            body:
+              - Lock Allowlist only egress, mark credentials as Runtime Secrets and keep the draft-PR gate; these are the documented prompt-injection mitigations for Cloud Agents.
+            url: https://cursor.com/docs/cloud-agent/security
+          - title: Run enterprise hooks in the cloud
+            body:
+              - Team hooks distributed from the dashboard and Enterprise-managed hooks also run in cloud agents, so beforeShellExecution and beforeSubmitPrompt checks apply there.
+            url: https://cursor.com/docs/hooks
+        note: No classifier over retrieved web, PR or Slack content; CVE-2026-61613 showed attacker web content reaching an unauthenticated agent endpoint inside the container (fixed 2026-03-31).
+        verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: Vendor evidence (trust portal, cursor.com/security, published egress ranges) consumed by the organisation's TPRM platform
+        steps:
+          - title: Refresh the assessment for the hosted runtime
+            body:
+              - Record the dedicated-AWS-account and Firecracker isolation, the shared egress ranges, sub-processors, SOC 2 / ISO 27001 / ISO 42001 / AIUC-1 and the SpaceX ownership change.
+            url: https://cursor.com/security
+        verified: "2026-09-10"
+      - capability: capabilityAgentObservability
+        coverage: partial
+        mechanism: Team Settings → OpenTelemetry Export (cloud agent lifecycle, tool-call and token events); run stream via GET /v1/agents/{id}/runs/{runId}/stream; Automations run history
+        steps:
+          - title: Export lifecycle and tool events
+            body:
+              - Configure an OTLP/HTTP destination; logs include cloud agent lifecycle events, hook and plugin activation and builtin / MCP tool-call counts, with no prompt content, trace context or backfill.
+            url: https://cursor.com/docs/enterprise/opentelemetry-export
+          - title: Capture transcripts at run time
+            body:
+              - Stream each run with the SSE endpoint and archive it; the API keeps run history per agent with pagination.
+            url: https://cursor.com/docs/cloud-agent/api/endpoints
+        note: No structured trace of reasoning steps, memory reads or handoffs is exported; Grok Bot's Action Recording does not apply to Cloud Agents.
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: native
+        mechanism: Enterprise Audit Log with SIEM streaming; Admin API /teams/audit-logs
+        steps:
+          - title: Stream Cloud Agent audit events
+            body:
+              - The audit log records Cloud Agent environment creation, updates, restores and lifecycle changes, repository mappings, MCP authentication and Slack links; stream it to your SIEM or query /teams/audit-logs.
+            url: https://cursor.com/docs/enterprise/compliance-and-monitoring
+        note: Agent responses and generated code are explicitly not logged; retention and tamper-evidence are not stated on the page fetched.
+        verified: "2026-09-10"
+      - capability: capabilityModelGuardrails
+        coverage: none
+        mechanism: Not offered — no admin-configurable content or topic filter
+        note: Model Access Control chooses which models run and Anthropic applies its own cyber safeguards to Opus models (Enterprise groups can apply for the Cyber Verification Program to lift them), but there is no organisation-defined input or output guardrail.
+        verified: "2026-09-10"
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: Conversation state retained indefinitely, deletable on demand; agent archive / DELETE via API; Automations persistent memory as an opt-in tool
+        steps:
+          - title: Delete what you do not need
+            body:
+              - Archive or DELETE /v1/agents/{id} when work is merged; VM snapshots are removed after 90 days idle but conversation state is not.
+            url: https://cursor.com/docs/cloud-agent/api/endpoints
+          - title: Keep memory off unless required
+            body:
+              - Enable the persistent-memory tool per automation only where the workflow needs it.
+            url: https://cursor.com/docs/cloud-agent/automations
+        note: No validation, quarantine or rollback of memory content; the control is deletion.
+        verified: "2026-09-10"
+      - capability: capabilityModelEvals
+        coverage: none
+        mechanism: Not offered
+        note: Bugbot and Security Agent analytics report findings and acceptance rates, which is outcome tracking rather than a scored evaluation harness; run your own.
+        verified: "2026-09-10"
+      - capability: capabilityAiGovernancePlatform
+        coverage: external
+        mechanism: Admin API and audit log as feeds into the organisation's governance platform
+        note: Cursor has no catalogue with owners, risk tiers or intake workflow; the Admin API (members, model access, repo blocklists, audit logs) is the evidence source for one.
+        verified: "2026-09-10"
+      - capability: capabilityRateLimiting
+        coverage: native
+        mechanism: Usage-Based Pricing Settings (monthly team limit, admin-only changes); per-member spend limits (Enterprise) via /teams/user-spend-limit; API rate limits; one active run per agent
+        steps:
+          - title: Cap spend per team and member
+            body:
+              - Set the monthly team spending limit and, on Enterprise, individual limits per member from the dashboard or /teams/user-spend-limit; usage-based Cloud Agent, Bugbot and Automation runs draw from these pools.
+            url: https://cursor.com/docs/account/teams/dashboard
+        note: Limits are financial; there is no cap on tool-call depth or run duration beyond the Long running agents toggle.
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: POST /v1/agents/{id}/runs/{runId}/cancel; archive / delete agent; disable automation; archive service account (revokes keys); /teams/remove-member; Bugbot enabled=false
+        steps:
+          - title: Stop a run and revoke its identity
+            body:
+              - Cancel the run, then archive or delete the agent; archive the service account to revoke every key it holds while keeping the record for audit.
+            url: https://cursor.com/docs/cloud-agent/api/endpoints
+          - title: Disable the integration
+            body:
+              - Admins can disable any automation from the dashboard and set enabled false per repository for Bugbot through /bugbot/repo/update.
+            url: https://cursor.com/docs/cloud-agent/automations
+        verified: "2026-09-10"
+      - capability: capabilityVendorAssurance
+        coverage: external
+        mechanism: Admin API endpoints (/teams/model-access/configuration, /teams/audit-logs, /settings/repo-blocklists/repos) polled by an SSPM product
+        note: Cursor exposes configuration read APIs but ships no posture checks; the network-policy lock, Privacy Mode enforcement and Display-summary toggles are dashboard-only and must be verified manually.
+        verified: "2026-09-10"
+    advisories:
+      - title: "CVE-2026-61613 — Cloud Agent browser sandbox escape: web content reaches an unauthenticated local agent endpoint (patched 2026-03-31)"
+        url: https://github.com/cursor/cursor/security/advisories/GHSA-whx2-4gvm-m3r3
+        date: "2026-07"
+      - title: "CVE-2025-54135 CurXecute — Slack-sourced prompt injection writes MCP config (Cloud Agents read Slack threads and PR comments as input)"
+        url: https://www.tenable.com/blog/faq-cve-2025-54135-cve-2025-54136-vulnerabilities-in-cursor-curxecute-mcpoison
+        date: "2025-08"
+    sources:
+      - title: Cloud Agents overview
+        url: https://cursor.com/docs/cloud-agent
+      - title: Cloud Agents security overview
+        url: https://cursor.com/docs/cloud-agent/security
+      - title: Secrets and network
+        url: https://cursor.com/docs/cloud-agent/security-network
+      - title: Cloud Agent identity (OIDC)
+        url: https://cursor.com/docs/cloud-agent/identity
+      - title: Cloud Agent dashboard settings
+        url: https://cursor.com/docs/cloud-agent/settings
+      - title: Private connectivity (PrivateLink, Cloudflare Tunnel)
+        url: https://cursor.com/docs/cloud-agent/private-connectivity
+      - title: Self-Hosted Machines
+        url: https://cursor.com/docs/cloud-agent/self-hosted
+      - title: Cursor APIs overview
+        url: https://cursor.com/docs/api
+      - title: Slack integration
+        url: https://cursor.com/docs/integrations/slack
+      - title: Security Agents
+        url: https://cursor.com/docs/security-agents
+      - title: Cursor Origin
+        url: https://cursor.com/docs/origin
+      - title: Cursor changelog (Origin 2026-08-17, Self-hosted machines 2026-09-02)
+        url: https://cursor.com/changelog
+      - title: Cursor security page
+        url: https://cursor.com/security

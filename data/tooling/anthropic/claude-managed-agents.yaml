@@ -1,0 +1,392 @@
+# Claude Managed Agents — one entity per product × reference architecture. Facts are dated (asOf)
+# and cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+vendor: anthropic
+family: Claude Managed Agents
+tools:
+  - id: toolClaudeManagedAgents
+    name: Claude Managed Agents
+    surfaceClasses:
+      - managedRuntime
+    variants:
+      - name: Managed Agents API (agents, environments, sessions, vaults) on api.anthropic.com
+        class: managedRuntime
+        url: https://platform.claude.com/docs/en/managed-agents/overview
+      - name: Self-hosted sandboxes (your worker polls the environment work queue)
+        class: managedRuntime
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+        note: >-
+          Control plane stays with Anthropic; sandbox image, egress, service-key custody and
+          session-content retention are yours. Environment-variable vault credentials are not yet
+          supported here.
+    architecture: archManagedAgentRuntime
+    status: beta
+    asOf: "2026-09"
+    summary:
+      - >-
+        Anthropic's hosted agent harness (beta; every request carries the managed-agents-2026-04-01
+        beta header, enabled by default for API accounts): you define an agent (model, system
+        prompt, toolset, MCP servers, skills), an environment (Anthropic cloud sandbox — an
+        isolated Ubuntu container, up to 8 GB / 10 GB — or a self-hosted sandbox), then run
+        sessions that stream events over SSE. The sandbox runs bash, file tools and code;
+        web_search and web_fetch run on Anthropic's servers. Sessions are stateful: event history
+        persists until you delete the session and sandbox state is checkpointed for 30 days, so
+        Managed Agents is not ZDR- or HIPAA-BAA-eligible.
+      - >-
+        Governance is API-native and workspace-scoped: permission_policy always_allow /
+        always_ask per toolset or per tool (MCP toolsets default to always_ask), tool enable
+        flags, per-tool allowed_domains / blocked_domains, environment networking unrestricted /
+        limited with allowed_hosts, vault credentials injected at egress so the agent never sees
+        the secret, hard dollar session budgets, versioned agent definitions, memory stores with
+        immutable version history and redaction, signed webhooks and a persisted event stream.
+        Also available on Claude Platform on AWS with differences.
+    facts:
+      - label: Plans
+        value: >-
+          Any Claude API organisation (beta, on by default); MCP tunnels and dreaming are a
+          limited research preview. Billed per model token, $10 per 1,000 web searches and $0.08
+          per session hour at list rates.
+        url: https://platform.claude.com/docs/en/managed-agents/budgets
+      - label: Inference & routing
+        value: >-
+          Anthropic API only (plus Claude Platform on AWS); model pinned per agent with optional
+          inference_geo "us" validated against the workspace's allowed_inference_geos.
+        url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+      - label: Data leaving the device
+        value: >-
+          Everything runs on Anthropic infrastructure: conversation, tool inputs/outputs, files
+          and sandbox state; self-hosted sandboxes keep tool execution and files on your side while
+          the transcript still passes through Anthropic.
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+      - label: Retention & training
+        value: >-
+          Commercial terms (no training). Session transcripts persist until you delete the
+          session; sandbox checkpoints 30 days; memory versions retained 30 days (recent versions
+          longer); not eligible for ZDR or HIPAA BAA.
+        url: https://platform.claude.com/docs/en/manage-claude/api-and-data-retention
+      - label: Docs index
+        value: platform.claude.com/docs/en/managed-agents (overview through reference)
+        url: https://platform.claude.com/docs/en/managed-agents/overview
+    riskNotes:
+      - risk: riskCrossTenantCredentialPropagation
+        note: >-
+          Vaults and credentials are workspace-scoped: any API key with workspace access can
+          reference them at session creation, and the docs recommend separate workspaces and
+          environments per trust boundary for self-hosted sandboxes.
+      - risk: riskPromptInjection
+        note: >-
+          Memory stores attach read_write by default and the docs warn a successful injection
+          can write content later sessions read as trusted; use read_only for reference stores
+          and limited networking with allowed_hosts for production.
+      - risk: riskRogueActions
+        note: >-
+          The built-in agent toolset defaults to always_allow, including bash with unrestricted
+          egress on API-created environments; production guidance is limited networking and
+          always_ask on bash or MCP tools that write.
+      - risk: riskToolSourceProvenance
+        note: >-
+          MCP servers are declared by URL with no allowlist beyond the agent definition; MCP
+          toolsets default to always_ask so newly added server tools do not run unapproved, and
+          per-tool enabled flags can pin the set.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Custom tool results, uploaded files and outputs are stored server-side until deleted;
+          OAuth exchanges performed inside the sandbox return tokens unredacted, so perform
+          exchanges outside and store the result in the vault.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: >-
+          Claude Console organisation and workspace membership, roles, SSO/SCIM and API-key or
+          workload identity federation credentials gate who can create agents and sessions
+        steps:
+          - title: Scope operators by workspace
+            body:
+              - Create agents, environments and vaults in a dedicated Console workspace and issue
+                keys (or a WIF service account) scoped to it; Console SSO and SCIM govern the humans.
+            url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-09-10"
+      - capability: capabilityNhiManagement
+        coverage: partial
+        mechanism: >-
+          Agent resources with ids and versions; per-session vault identity (display_name and
+          metadata mapping to your user); environment service keys and per-session secrets for
+          self-hosted workers; no cryptographic agent identity presented to third parties
+        steps:
+          - title: Bind each session to an end-user vault
+            body:
+              - Create one vault per end user (metadata external_user_id) and pass vault_ids at
+                session creation so actions on MCP servers are attributable to that user's
+                credentials.
+            url: https://platform.claude.com/docs/en/managed-agents/vaults
+          - title: Protect the environment key
+            body:
+              - Store ANTHROPIC_ENVIRONMENT_KEY in a secrets manager, pass the per-session secret only
+                into the sandbox serving that session, and revoke on suspicion (validated on every
+                request).
+            url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: native
+        mechanism: >-
+          Vault credentials (mcp_oauth with managed refresh, static_bearer, environment_variable
+          with networking.allowed_hosts and injection_location) substituted at egress; secret
+          values are write-only; rotate via update, archive purges the secret
+        steps:
+          - title: Register credentials in a vault
+            body:
+              - Add mcp_oauth or static_bearer credentials keyed by mcp_server_url, or
+                environment_variable credentials keyed by secret_name with networking type limited
+                and allowed_hosts; the agent sees only an opaque placeholder.
+            url: https://platform.claude.com/docs/en/managed-agents/vaults
+          - title: Rotate and revoke
+            body:
+              - Update the credential's secret (running sessions re-resolve without restart),
+                archive to purge the secret while keeping the audit record, and subscribe to
+                vault_credential.refresh_failed webhooks.
+            url: https://platform.claude.com/docs/en/managed-agents/webhooks
+        verified: "2026-09-10"
+      - capability: capabilityEncryptionKeyManagement
+        coverage: partial
+        mechanism: Anthropic infrastructure encryption; inference_geo pinning; no customer-managed keys for Managed Agents session storage
+        steps:
+          - title: Pin inference geography
+            body:
+              - Set model.inference_geo "us" on the agent; it is validated against the workspace's
+                allowed_inference_geos on save, at session creation and on every turn.
+            url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+        note: CMEK is documented for Claude Enterprise data, not for Managed Agents sessions or memory stores.
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: native
+        mechanism: >-
+          Agents are first-class workspace resources with id, name, description, metadata, version
+          history, archive; environments, vaults, memory stores and deployments likewise; list
+          endpoints and lifecycle webhooks
+        steps:
+          - title: Treat the agent resource as the registry
+            body:
+              - Create agents once with metadata for ownership, list versions, and archive retired
+                agents (new sessions cannot reference them); subscribe to agent.created / updated /
+                archived webhooks.
+            url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+        verified: "2026-09-10"
+      - capability: capabilityStagedRollout
+        coverage: native
+        mechanism: >-
+          Agent version increments on every change with optimistic concurrency (version field, 409
+          on mismatch), full version history, coordinator rosters pinned to a version; sessions
+          keep the configuration they started with
+        steps:
+          - title: Roll forward and back by version
+            body:
+              - Update with the version field for safe concurrent edits, list versions to audit, and
+                re-apply an earlier configuration to roll back; environments are not versioned, so
+                keep your own record.
+            url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: >-
+          agent_toolset_20260401 default_config / configs with enabled false per tool, MCP toolset
+          per-tool enabled flags, web_search / web_fetch allowed_domains or blocked_domains,
+          permission_policy per tool
+        steps:
+          - title: Enable only the tools the agent needs
+            body:
+              - Set default_config.enabled false and enable bash, read, write and so on
+                individually; do the same on mcp_toolset entries so server-added tools stay off.
+            url: https://platform.claude.com/docs/en/managed-agents/tools
+          - title: Restrict the web tools
+            body:
+              - Put allowed_domains or blocked_domains on the web_search and web_fetch config
+                entries (up to 64 domains each); environment networking does not govern these tools.
+            url: https://platform.claude.com/docs/en/managed-agents/tools
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: >-
+          permission_policy always_ask pauses the session (session.status_idle with
+          requires_action) until a user.tool_confirmation allow/deny event; custom tools always
+          return to your application; webhooks notify on session.status_idled
+        steps:
+          - title: Require confirmation for risky tools
+            body:
+              - Set permission_policy type always_ask on the agent toolset (or on bash alone via
+                configs) and on MCP toolsets (the default); answer with user.tool_confirmation
+                including a deny_message.
+            url: https://platform.claude.com/docs/en/managed-agents/permission-policies
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: >-
+          Model-side safeguards plus structural limits: limited networking, read_only memory
+          stores, always_ask policies and domain lists; no configurable injection classifier
+        steps:
+          - title: Contain the blast radius
+            body:
+              - Use networking type limited with allowed_hosts, attach reference memory stores as
+                read_only, and keep MCP toolsets on always_ask when the agent processes untrusted
+                input.
+            url: https://platform.claude.com/docs/en/managed-agents/memory
+        verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: Anthropic Trust Center artifacts and the API data-retention page feed the buyer's TPRM platform
+        steps:
+          - title: Record the retention posture
+            body:
+              - Managed Agents is stateful and not ZDR- or HIPAA-eligible; capture this from the
+                retention page in the vendor assessment.
+            url: https://platform.claude.com/docs/en/manage-claude/api-and-data-retention
+        verified: "2026-09-10"
+      - capability: capabilityAgentObservability
+        coverage: native
+        mechanism: >-
+          Persisted session event stream (agent.tool_use / tool_result / mcp_tool_use / message,
+          span.model_request_start/end with usage, session.error, thread events) over SSE and list
+          endpoints; session.usage snapshots
+        steps:
+          - title: Consume and archive the event stream
+            body:
+              - Stream events per session (open the stream before sending), and list past events by
+                type for reconstruction; every persisted event has an id and processed_at.
+            url: https://platform.claude.com/docs/en/managed-agents/events-and-streaming
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: >-
+          Full event history persisted with the session until deletion; memory version history
+          attributed to sessions; vault archive keeps records after purging secrets; signed
+          webhooks (webhook-signature, 5-minute freshness)
+        steps:
+          - title: Keep an off-platform copy
+            body:
+              - Webhooks are not a durable log (three attempts, then dropped); reconcile by listing
+                session events and export memory versions before the 30-day window expires.
+            url: https://platform.claude.com/docs/en/managed-agents/webhooks
+        note: The event history is customer-deletable and not tamper-evident in the Five Eyes sense; your archive is the record.
+        verified: "2026-09-10"
+      - capability: capabilityModelGuardrails
+        coverage: partial
+        mechanism: >-
+          Anthropic's model safety systems (content blocks can be redacted by model policy); web
+          tool domain lists; no organisation-level content filter applies to Managed Agents
+          sessions
+        steps:
+          - title: Note what the Console settings do not cover
+            body:
+              - Organisation-level web search and fetch settings in the Console apply to the
+                Messages API only; configure allowed_domains / blocked_domains on the toolset
+                instead.
+            url: https://platform.claude.com/docs/en/managed-agents/tools
+        verified: "2026-09-10"
+      - capability: capabilityMemoryProtection
+        coverage: native
+        mechanism: >-
+          Memory stores are workspace-scoped resources attached per session with access read_write
+          or read_only, capped at 8 per session; every write creates an immutable version; versions
+          can be redacted; stores can be archived or deleted
+        steps:
+          - title: Segment and scope stores
+            body:
+              - Use one store per user, team or project, attach shared reference stores read_only,
+                and pass instructions per attachment.
+            url: https://platform.claude.com/docs/en/managed-agents/memory
+          - title: Audit and roll back memory
+            body:
+              - List memory versions, restore prior content by writing it back, and redact versions
+                that captured secrets or PII while keeping the audit trail.
+            url: https://platform.claude.com/docs/en/managed-agents/memory
+        verified: "2026-09-10"
+      - capability: capabilityModelEvals
+        coverage: partial
+        mechanism: Outcome-driven sessions run a grader that evaluates iterations against a defined outcome; no release-gate eval harness
+        steps:
+          - title: Use outcomes as an in-session check
+            body:
+              - Send user.define_outcome so a grader (without web tools) evaluates each iteration and
+                emits span.outcome_evaluation_end with satisfied / needs_revision / failed.
+            url: https://platform.claude.com/docs/en/managed-agents/reference
+        verified: "2026-09-10"
+      - capability: capabilityAiGovernancePlatform
+        coverage: external
+        mechanism: Agent, environment, vault and deployment listings plus webhooks feed the organisation's governance system of record
+        steps:
+          - title: Sync the inventory
+            body:
+              - Poll the list endpoints or subscribe to agent, environment, vault and deployment
+                webhooks to mirror owners, versions and archive state into your governance platform.
+            url: https://platform.claude.com/docs/en/managed-agents/webhooks
+        verified: "2026-09-10"
+      - capability: capabilityRateLimiting
+        coverage: native
+        mechanism: >-
+          Session budget (type limit, max_list_cost in USD cents) enforced between model requests,
+          budgets copied onto deployment runs, organisation spend limits and usage-tier rate
+          limits, per-org create/read request limits
+        steps:
+          - title: Cap each session and deployment
+            body:
+              - Pass budget.max_list_cost at session creation (cannot be added later); a session at
+                its cap goes idle with budget_reached and accepts only settle events until the cap
+                is raised or removed.
+            url: https://platform.claude.com/docs/en/managed-agents/budgets
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: >-
+          user.interrupt, session archive and delete (removes events and sandbox), agent archive
+          (blocks new sessions), vault or credential archive/delete (purges secrets, propagates to
+          running sessions), environment key revocation, deployment pause
+        steps:
+          - title: Stop and decommission
+            body:
+              - Send user.interrupt, then archive or delete the session; archive the agent so no new
+                sessions start; archive vault credentials to revoke access (running sessions
+                re-resolve credentials periodically).
+            url: https://platform.claude.com/docs/en/managed-agents/session-operations
+        verified: "2026-09-10"
+      - capability: capabilityVendorAssurance
+        coverage: partial
+        mechanism: Every configuration is readable through the API (agents, environments, vaults minus secrets, memory stores, deployments) for posture checks
+        steps:
+          - title: Check posture from the API
+            body:
+              - Enumerate environments for networking type unrestricted, agents for always_allow
+                bash or missing domain lists, and sessions without budgets; treat these as
+                findings.
+            url: https://platform.claude.com/docs/en/managed-agents/environments
+        verified: "2026-09-10"
+    sources:
+      - title: Claude Managed Agents overview
+        url: https://platform.claude.com/docs/en/managed-agents/overview
+      - title: Permission policies
+        url: https://platform.claude.com/docs/en/managed-agents/permission-policies
+      - title: Authenticate with vaults
+        url: https://platform.claude.com/docs/en/managed-agents/vaults
+      - title: Session budgets
+        url: https://platform.claude.com/docs/en/managed-agents/budgets
+      - title: Cloud environment setup (networking)
+        url: https://platform.claude.com/docs/en/managed-agents/environments
+      - title: Cloud sandbox reference
+        url: https://platform.claude.com/docs/en/managed-agents/cloud-sandboxes-reference
+      - title: Self-hosted sandboxes security model
+        url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+      - title: Session event stream
+        url: https://platform.claude.com/docs/en/managed-agents/events-and-streaming
+      - title: Define your agent (versioning)
+        url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+      - title: Using agent memory
+        url: https://platform.claude.com/docs/en/managed-agents/memory
+      - title: MCP connector
+        url: https://platform.claude.com/docs/en/managed-agents/mcp-connector
+      - title: Tools
+        url: https://platform.claude.com/docs/en/managed-agents/tools
+      - title: Subscribe to webhooks
+        url: https://platform.claude.com/docs/en/managed-agents/webhooks
+      - title: Session operations
+        url: https://platform.claude.com/docs/en/managed-agents/session-operations
+      - title: Reference (event types, rate limits)
+        url: https://platform.claude.com/docs/en/managed-agents/reference
+      - title: API and data retention
+        url: https://platform.claude.com/docs/en/manage-claude/api-and-data-retention

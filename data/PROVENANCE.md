@@ -262,9 +262,10 @@ surfaces those gaps are the work list, not a regression.
 
 `data/reference/guidance/` is original work: the rung below each reference architecture, for
 admins, architects and security teams — what an organisation enforces around that class of
-system. One document per architecture, named after the architecture's own file, plus a shared
-tool registry (`tools.yaml`). The audience split is deliberate: developer-facing setup guidance
-and secure starter templates live in the companion `ai-security-sdlc` project, not here.
+system. One document per architecture, named after the architecture's own file. Product
+specifics are referenced from the AI tooling registry (below), never written here. The audience
+split is deliberate: developer-facing setup guidance and secure starter templates live in the
+companion `ai-security-sdlc` project, not here.
 
 Two disciplines carry over from the layers above:
 
@@ -278,3 +279,25 @@ Two disciplines carry over from the layers above:
   from model memory. `npm run audit` flags entries older than six months for re-verification,
   and section 5 of `docs/AUDIT.md` tracks which architectures carry guidance and which pinned
   capabilities each document has not yet addressed.
+
+## AI tooling registry
+
+`data/tooling/` is original work and the only layer that names products: one entity per product
+× reference architecture, under `<vendor>/<family>.yaml`, with the product's UI shells as
+variants. Every entity is dated (`asOf`) and sourced from the vendor's own documentation, every
+control row carries a `verified` date, and every operator step links to the page that documents
+it; nothing is recalled from model memory. A tool may only describe its implementation of
+capabilities pinned on its architecture — the drawing is the reference control set — and the
+build fails otherwise. `npm run audit` lists the pinned capabilities each entity has not yet
+addressed and flags entries older than six months. The `tooling-onboard` skill under
+`.claude/skills/` carries the research protocol.
+
+## Organisation layer
+
+`data/org/` is the adopter's, not this repository's. Upstream ships `example/` (labelled as
+such everywhere it renders); an adopter creates `local/`, which the build prefers and which
+upstream never ships. Its catalogues become authored frameworks with `org: true`, inverted from
+the entry-keyed authoring into the same cross-reference shape as the OWASP lenses, so the
+Frameworks tab, the card badges, the architecture rails and hover cards and the AI Tooling tab
+all read them without special cases. Tool posture lives beside it, per tool × pinned capability,
+reusing the capability posture enum. The `org-taxonomy-customize` skill walks through it.

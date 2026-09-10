@@ -81,6 +81,8 @@ export function SettingsDrawer({
               organisation. Click a cell to cycle its status. Edits live in this browser only;
               this site is static, so to keep them, fork the repository, export below, and
               commit the file as <span className="ident">data/overlay/capabilities.yaml</span>.
+              This records posture per <em>surface</em>; your own control standard and per-tool
+              status live in text files under <span className="ident">data/org/</span>.
             </p>
           </div>
           <button

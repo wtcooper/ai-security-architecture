@@ -1,26 +1,70 @@
 # ChatGPT — one entity per product × reference architecture. Facts are dated (asOf) and
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+#
+# Verified 2026-09-10 against learn.chatgpt.com/docs/enterprise/*. help.openai.com returns 403
+# to automated fetch, so Help Center links kept in the migrated items: block are unverified today
+# and SSO/SAML setup steps (Help Center only) could not be recorded.
+# Excluded: ChatGPT Atlas — winding down (the Help Center article "Evolving Atlas into ChatGPT"
+# returned 403; the built-in browser is recorded as a variant here instead); ChatGPT Workspace
+# Agents — no official page resolved (openai.com 403, learn.chatgpt.com 404); see codex.yaml.
 vendor: openai
 family: ChatGPT
 tools:
   - id: toolChatgptDesktop
-    name: ChatGPT desktop app
+    name: ChatGPT Enterprise (web, desktop and Work)
     surfaceClasses:
       - desktopApp
       - saasChat
+      - browserExtension
     variants:
-      - name: ChatGPT desktop app
+      - name: ChatGPT desktop app (macOS, Windows MSIX, Linux preview)
         class: desktopApp
-      - name: ChatGPT web
+        url: https://learn.chatgpt.com/docs/enterprise/windows-deployment
+      - name: ChatGPT web (chatgpt.com)
         class: saasChat
+        url: https://learn.chatgpt.com/docs/use-chatgpt
+      - name: ChatGPT Work (Work Local and Work Cloud)
+        class: saasChat
+        url: https://learn.chatgpt.com/docs/get-started-with-work
+      - name: Built-in browser (browser_use) and Chrome extension
+        class: browserExtension
+        url: https://learn.chatgpt.com/docs/browser
     architecture: archEnterpriseAiChat
     status: ga
-    asOf: 2026-08
+    asOf: "2026-09"
     summary:
       - The current desktop app bundles Chat, Work and Codex, and is governed by the same
         managed-configuration system as Codex — requirements.toml cloud policies and the
         com.openai.codex MDM domain — plus workspace admin controls for plugins, apps, memory and
         identity from the ChatGPT admin panel.
+      - >-
+        Inference is at OpenAI for every mode. Chat and Work Cloud run entirely on OpenAI
+        infrastructure (Work Cloud in VM-backed sandboxes with a hosted browser whose cookies stay
+        separate from the device); Work Local runs on the desktop app with the Codex sandbox,
+        computer use and the built-in browser, and the vendor states that relevant file excerpts,
+        prompts, screenshots and browser content may be sent to OpenAI to complete a task.
+      - >-
+        Enterprise administration is role-based (Owner, Admin, Member, Analytics Viewer plus custom
+        roles, with an explicit Off in any role denying), provisioned by SCIM, with plugins off by
+        default on Enterprise and Edu, per-connection action controls, a GPT actions domain
+        allowlist, access-token lifetime limits, service accounts, and a Compliance API whose
+        records live 30 days at source.
+    facts:
+      - label: Plans
+        value: Business, Enterprise and Edu carry the admin controls; plugins default on for Business and off for Enterprise and Edu.
+        url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+      - label: Inference & routing
+        value: Work Cloud runs the Codex harness in an isolated OpenAI environment; the web cannot access local files, apps or tabs.
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
+      - label: Data leaving the device
+        value: Local execution does not mean device-only inference; file excerpts, prompts, screenshots, browser content and tool results may be sent to OpenAI.
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-local-security
+      - label: Docs index
+        value: learn.chatgpt.com/docs/enterprise/chatgpt-work-overview (links every admin page)
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
+      - label: Data retention / training
+        value: Conversations follow workspace retention settings with deletion scheduled within 30 days; Compliance Logs Platform keeps 30 days; connected-app data follows the source system.
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
     items:
       - title: Managed deployment and update control
         body:
@@ -49,11 +93,268 @@ tools:
             url: https://help.openai.com/en/articles/11509118
           - title: Compliance APIs and audit logs
             url: https://help.openai.com/en/articles/9261474
-    controls: []
+    riskNotes:
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Shared connections use the connected account's permissions, which the vendor warns may be
+          broader than the individual user's; Work Local ships file excerpts and screenshots.
+      - risk: riskPromptInjection
+        note: >-
+          The hosted and built-in browsers read arbitrary pages; a review model checks sign-in
+          pages for phishing and Auto approve applies automated risk checks, nothing more.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          Agent-owned and shared connected accounts act for whoever triggers the task; action
+          control (read-only or a custom set) is the bound.
+      - risk: riskToolSourceProvenance
+        note: >-
+          Plugins can carry MCP servers, hooks and browser extensions from a GitHub marketplace;
+          Admin > Plugins import and sync is the only provenance record.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: SCIM provisioning, workspace roles and custom roles (Permissions & roles), access-token expiration limit
+        note: SAML/OIDC setup lives in the Help Center, which returned 403 today; the roles model is verified.
+        steps:
+          - title: Provision from the IdP
+            body:
+              - SCIM provisions membership and groups (manually managed or IdP managed); group membership alone grants no feature permission.
+            url: https://learn.chatgpt.com/docs/enterprise/groups-and-provisioning
+          - title: Assign roles with deny-wins semantics
+            body:
+              - Owner, Admin, Member, Analytics Viewer and custom roles carry Default / On / Off per feature; an explicit Off in any role blocks access.
+            url: https://learn.chatgpt.com/docs/enterprise/roles-and-workspace-permissions
+          - title: Bound token lifetime
+            body:
+              - Owners set "Access token expiration limit" in Permissions & roles.
+            url: https://learn.chatgpt.com/docs/enterprise/access-tokens
+        verified: "2026-09-10"
+      - capability: capabilitySse
+        coverage: external
+        mechanism: Tenancy pinning in product (allowed_chatgpt_workspaces for the desktop app, IP access restrictions referenced); inline inspection is a third-party SSE
+        note: The Work overview references workspace IP access restrictions but its page did not resolve; treat tenancy enforcement at the proxy as external.
+        steps:
+          - title: Pin the desktop app to the workspace
+            body:
+              - allowed_chatgpt_workspaces in requirements.toml restricts sign-in to listed workspace UUIDs.
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: partial
+        mechanism: Action control per connection and requirements.toml deny_read / allow_appshots
+        note: In-product controls limit what agents can reach and screenshot; nothing inspects prompt or upload content.
+        steps:
+          - title: Limit what connections may do
+            body:
+              - Action control allows read-only, all or a custom set of actions per connection.
+            url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+          - title: Stop screenshots and secret reads on the desktop
+            body:
+              - allow_appshots = false and [permissions.filesystem] deny_read in requirements.toml.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-local-security
+        verified: "2026-09-10"
+      - capability: capabilityBrowserDetectionResponse
+        coverage: partial
+        mechanism: Managed browser controls for the built-in browser (origins, uploads, downloads, developer access; browser_use flags)
+        note: Covers the agent's browser, not the employee's browser session on chatgpt.com.
+        steps:
+          - title: Restrict the built-in browser
+            body:
+              - Set [features] browser_use and browser_use_full_cdp_access = false, or use the managed browser controls to restrict origins, uploads, downloads and developer access.
+            url: https://learn.chatgpt.com/docs/browser
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: partial
+        mechanism: "\"Allow public internet access\" for Work Cloud code/shell (managed allowlist when off); [experimental_network] for Work Local"
+        steps:
+          - title: Turn off public internet for cloud code and shell
+            body:
+              - When disabled, commands reach only required hostnames from a managed allowlist; this controls destinations, not commands.
+            url: https://learn.chatgpt.com/docs/sandboxing
+          - title: Allowlist domains for local commands
+            body:
+              - "[experimental_network] with managed_allowed_domains_only = true; browser tools and MCP are outside it."
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+        verified: "2026-09-10"
+      - capability: capabilityAiGovernancePlatform
+        coverage: external
+        mechanism: Workspace analytics, Analytics API and the GPT management dashboard feed an external system of record
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: App permissions (when ChatGPT asks before using a connection), website approval levels, per-app computer-use approval
+        steps:
+          - title: Require confirmation on connections
+            body:
+              - App permissions decide when ChatGPT asks before using a connection; start with read actions.
+            url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+          - title: Limit website approval levels
+            body:
+              - Always ask, Auto approve, Always allow; administrators can limit which levels users may select.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
+          - title: Keep computer use per-app
+            body:
+              - ChatGPT asks before using each application; "Always allow" is per app and listed under Always-allowed apps.
+            url: https://learn.chatgpt.com/docs/computer-use
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: Sign-in review model in the built-in browser, automated risk checks on Auto approve, safety review pauses
+        steps:
+          - title: Know what the vendor checks
+            body:
+              - A review model checks sign-in requests for phishing or deception; the feature is tested against prompt injection.
+            url: https://learn.chatgpt.com/docs/browser
+        verified: "2026-09-10"
+      - capability: capabilityNhiManagement
+        coverage: native
+        mechanism: Service accounts and workload identity federation
+        steps:
+          - title: Create service accounts for automation
+            body:
+              - Owners and admins create them; roles User / Configure / Manager; SCIM userType "ServiceAccount".
+            url: https://learn.chatgpt.com/docs/enterprise/service-accounts
+          - title: Federate short-lived tokens
+            body:
+              - OIDC or SPIFFE tokens exchange for workspace tokens capped at one hour; disabling a rule revokes issued tokens.
+            url: https://learn.chatgpt.com/docs/enterprise/workload-identity
+        verified: "2026-09-10"
+      - capability: capabilityVendorAssurance
+        coverage: external
+        mechanism: Compliance API, Analytics API and Admin API consumed by an SSPM product
+        verified: "2026-09-10"
+      - capability: capabilityDspm
+        coverage: partial
+        mechanism: Workspace retention settings, Compliance API 30-day window, HIPAA configuration
+        steps:
+          - title: Set retention and export
+            body:
+              - Conversations follow workspace settings with deletion within 30 days; export compliance records before the 30-day source window lapses.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
+          - title: Apply the regulated-workspace profile where PHI is possible
+            body:
+              - Keep [mcp_servers] empty by default, restrict sign-in with allowed_login_methods, and do not use Codex cloud with PHI.
+            url: https://learn.chatgpt.com/docs/hipaa-configuration
+        verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: Trust portal evidence (SOC 2 Type 2 scope names ChatGPT Enterprise, Edu and Team)
+        steps:
+          - title: Collect evidence
+            body:
+              - SOC 2 / SOC 3 reports, pen-test reports, subprocessor list and DPA are on the trust portal.
+            url: https://trust.openai.com/
+        verified: "2026-09-10"
+      - capability: capabilityEncryptionKeyManagement
+        coverage: partial
+        mechanism: Vendor-managed encryption under SOC 2 / ISO scope; residency honoured
+        note: No customer-managed key for ChatGPT workspaces is documented on a page that resolved.
+        steps:
+          - title: Verify scope
+            body:
+              - ISO 27001, 27017, 27018, 27701 and 42001 plus SOC 2 Type 2 cover ChatGPT Enterprise.
+            url: https://trust.openai.com/
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: partial
+        mechanism: Access-token expiration limit, service-account token lifetime (maximum one year), federation
+        steps:
+          - title: Bound and rotate tokens
+            body:
+              - Tokens require an expiry at creation; owners set the workspace-wide limit; treat tokens as automation secrets.
+            url: https://learn.chatgpt.com/docs/enterprise/access-tokens
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: Admin > Plugins availability per role, action control per connection, GPT actions domain allowlist
+        steps:
+          - title: Enable plugins per role
+            body:
+              - Plugins are off by default on Enterprise and Edu; limit availability to a role or pilot group in Admin > Plugins.
+            url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+          - title: Restrict GPT actions to approved domains
+            body:
+              - If no domains are allowed, custom GPT actions cannot execute (Administration > Workspace access, policy, and models > GPTs and Sharing).
+            url: https://learn.chatgpt.com/docs/enterprise/gpts-and-sharing
+        verified: "2026-09-10"
+      - capability: capabilityDataAccessGovernance
+        coverage: partial
+        mechanism: Connected-service permissions govern retrieval; source-system permission mapping
+        note: Shared connections use the connected account's permissions, potentially broader than the user's.
+        steps:
+          - title: Test with a least-privileged account
+            body:
+              - A member can use an MCP server only when the plugin is available to their role and they have access to the connected service; verify with an account holding only intended permissions.
+            url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: native
+        mechanism: Admin > Plugins (marketplace import and sync) and the GPT management dashboard
+        steps:
+          - title: Manage the plugin catalogue
+            body:
+              - Import a GitHub marketplace, sync daily, mark plugins Available or Installed per role, and flag "No longer in source".
+            url: https://learn.chatgpt.com/docs/enterprise/plugin-management
+          - title: Inventory GPTs
+            body:
+              - The dashboard shows builder, custom actions, who can access, activity and ownership for every workspace GPT.
+            url: https://learn.chatgpt.com/docs/enterprise/gpts-and-sharing
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: Compliance API (30-day source retention) and workspace analytics
+        note: Not every local file operation, screenshot or Chrome-extension action appears in the Compliance API.
+        steps:
+          - title: Export continuously
+            body:
+              - Use COMPLIANCE_API_KEY against the Admin API; the source window does not replace your retention policy.
+            url: https://learn.chatgpt.com/docs/enterprise/compliance-api
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: external
+        mechanism: None in product beyond workspace pinning of the desktop app
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: Role Off for Work Local / Work Cloud / plugins, token revocation, service-account disable
+        steps:
+          - title: Turn surfaces off by role
+            body:
+              - Work Cloud and Work Local are distinct toggles in Permissions & roles; plugins can be made unavailable in Admin > Plugins.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
+          - title: Revoke credentials
+            body:
+              - Owners and admins revoke any token; disabling a service account revokes all of its tokens.
+            url: https://learn.chatgpt.com/docs/enterprise/service-accounts
+        verified: "2026-09-10"
+    advisories:
+      - title: "CVE-2026-35603: writable ProgramData configuration trust in Windows AI coding tools — the desktop app shares the Codex config path"
+        url: https://cymulate.com/blog/cve-2026-35603-ai-coding-tools-privilege-escalation/
+        date: "2026-08"
     sources:
-      - title: ChatGPT desktop Windows deployment
-        url: https://learn.chatgpt.com/docs/enterprise/windows-deployment
+      - title: ChatGPT Work overview (enterprise index)
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
+      - title: ChatGPT Work cloud security
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
+      - title: ChatGPT Work local security
+        url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-local-security
+      - title: Plugin controls (apps and connectors)
+        url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+      - title: Plugin management
+        url: https://learn.chatgpt.com/docs/enterprise/plugin-management
+      - title: Roles and workspace permissions
+        url: https://learn.chatgpt.com/docs/enterprise/roles-and-workspace-permissions
+      - title: Groups and provisioning
+        url: https://learn.chatgpt.com/docs/enterprise/groups-and-provisioning
+      - title: Admin setup
+        url: https://learn.chatgpt.com/docs/enterprise/admin-setup
       - title: Codex/ChatGPT managed configuration
         url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
-      - title: ChatGPT Enterprise release notes
+      - title: Workspace analytics
+        url: https://learn.chatgpt.com/docs/enterprise/workspace-analytics
+      - title: Workspace skills
+        url: https://learn.chatgpt.com/docs/enterprise/skills
+      - title: What's new (Atlas browser features moved into ChatGPT; Linux preview)
+        url: https://learn.chatgpt.com/docs/whats-new
+      - title: ChatGPT Enterprise release notes (Help Center, 403 to automation today)
         url: https://help.openai.com/en/articles/10128477-chatgpt-enterprise-edu-release-notes

@@ -1,0 +1,339 @@
+# Claude in Chrome — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+vendor: anthropic
+family: Claude in Chrome
+tools:
+  - id: toolClaudeChrome
+    name: Claude in Chrome (Claude for Chrome)
+    surfaceClasses:
+      - browserExtension
+    variants:
+      - name: Claude in Chrome side panel (runs as a Cowork session on Max/Team, rolling out to Pro)
+        class: browserExtension
+        url: https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome
+      - name: Browser tools for Claude Code (claude --chrome, VS Code extension)
+        class: browserExtension
+        url: https://code.claude.com/docs/en/chrome
+        note: >-
+          Exposed to Claude Code as the claude-in-chrome MCP server over a native messaging host
+          and bridge.claudeusercontent.com; requires a claude.ai login (not API keys or
+          third-party providers).
+      - name: "Browser use from Cowork (Preferred browser: Claude in Chrome or the built-in browser)"
+        class: browserExtension
+        url: https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
+    architecture: archPersonalAgent
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        A Chrome (and Edge / Chromium) extension that lets Claude read, click, type and navigate
+        in the user's own browser with the user's live login state, from the side panel, from
+        Cowork, or as tools for Claude Code. Inference runs on the Anthropic API under the
+        signed-in claude.ai account (Pro, Max, Team, Enterprise); page content, screenshots and
+        actions leave the browser to Anthropic, and side-panel sessions are saved to history and
+        synced across devices. Modelling it as a personal autonomous agent is a stretch: it is a
+        vendor extension that inherits the user's identity in every site it touches rather than an
+        agent with its own runtime, and several pinned controls (sandboxing, EDR, transport) apply
+        only at the browser boundary.
+      - >-
+        Anthropic's safeguards are model training, injection classifiers and action screening
+        (reported attack success under 0.08% on internal testing), default-blocked site
+        categories (adult, piracy; financial sites need explicit permission), prohibited actions
+        (captcha solving, stock trading, facial images) and always-confirm actions (downloads,
+        sensitive data entry, publishing, payments). Admin controls sit in the claude.ai console
+        at Organization settings > Claude in Chrome: an org enable toggle (on by default on Team;
+        off by default on Enterprise until 10 September 2026), site allowlists and blocklists that
+        override user permissions, a per-role capability on Enterprise, and forceLoginOrgUUID as
+        a Chrome enterprise policy. Users choose Manually approve, Automatically approve or Skip
+        all approvals per task.
+    facts:
+      - label: Plans
+        value: Pro, Max, Team and Enterprise; extension 1.0.36+ for Claude Code; not through Bedrock, Vertex or Foundry.
+        url: https://code.claude.com/docs/en/chrome
+      - label: Inference & routing
+        value: Anthropic API with the claude.ai login; Claude Code sessions reach the extension through bridge.claudeusercontent.com, which must share the proxy egress used for claude.ai when IP allowlisting is on.
+        url: https://code.claude.com/docs/en/network-config
+      - label: Data leaving the device
+        value: >-
+          Page content, DOM and screenshots of the tabs Claude works in, console and network
+          readers when used, and uploaded files (up to 10 MB) go to Anthropic; GIF recordings
+          capture everything visible including logged-in account details.
+        url: https://code.claude.com/docs/en/chrome
+      - label: Retention & training
+        value: >-
+          Follows the account's plan policy (commercial: no training, 30-day retention); side-panel sessions are Cowork sessions saved to history.
+        url: https://support.claude.com/en/articles/12902428-use-claude-in-chrome-safely
+      - label: Docs index
+        value: support.claude.com Claude in Chrome articles (get started, safety, permissions, admin controls) and code.claude.com/docs/en/chrome
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          Web content is the attack surface; ShadowPrompt (March 2026, fixed 1.0.41) let any site
+          inject prompts through a trusted *.claude.ai subdomain, and Anthropic's own safety
+          article calls the product "still risky". Allowlists and separate browser profiles are the
+          practical containment.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          Claude acts inside every session the user is logged into (Gmail, GitHub, Drive, banking
+          if permitted) with no separate identity; ClaudeBleed (May 2026) showed another
+          zero-permission extension could issue commands to it.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          The extension requests 14 permissions including debugger, scripting and downloads; the
+          native messaging host for Claude Code runs outside the corporate launcher.
+      - risk: riskRogueActions
+        note: >-
+          "Skip all approvals" disables safety checks entirely; "Automatically approve" is the
+          Cowork default. Publishing, sending messages and payments still require confirmation in
+          the approving modes.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Screenshots and page text of authenticated apps leave the browser; Anthropic advises
+          against use for financial, legal, medical or regulated data.
+    controls:
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: Anthropic-side injection classifiers, RL-trained refusals and automatic action screening; no admin-tunable detector
+        steps:
+          - title: Keep the approving modes on
+            body:
+              - Advise users to stay in Manually approve or Automatically approve; Skip all approvals
+                turns off the safety checks that screen actions.
+            url: https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide
+          - title: Reduce exposure with allowlists and profiles
+            body:
+              - Start with a restrictive org allowlist and recommend a separate browser profile for
+                sensitive accounts, per the safety guidance.
+            url: https://support.claude.com/en/articles/12902428-use-claude-in-chrome-safely
+        verified: "2026-09-10"
+      - capability: capabilityIga
+        coverage: native
+        mechanism: >-
+          Org enable toggle "Enable for your team" at Organization settings > Claude in Chrome,
+          per-role capability on Enterprise custom roles (separate from Cowork access),
+          forceLoginOrgUUID deployable as a Chrome enterprise policy
+        steps:
+          - title: Decide who gets the extension
+            body:
+              - At Organization settings > Claude in Chrome set "Enable for your team" (Team default
+                on; Enterprise default off until 10 September 2026) and grant the Claude in Chrome
+                capability per custom role on Enterprise.
+            url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+          - title: Pin the extension to your organisation
+            body:
+              - Deploy forceLoginOrgUUID through Chrome enterprise policy so the extension can only
+                be used with your Claude organisation.
+            url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-09-10"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: partial
+        mechanism: >-
+          Org allowlist / blocklist enforced regardless of user permission; built-in prohibited
+          actions and always-confirm actions; in Claude Code, permission rules and PreToolUse hooks
+          on the claude-in-chrome MCP tools
+        steps:
+          - title: Enforce site policy centrally
+            body:
+              - Add approved sites to the allowlist and forbidden sites to the blocklist under
+                Organization settings > Claude in Chrome; the blocklist applies regardless of user
+                settings and beyond the default blocked categories.
+            url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+          - title: Gate browser tools in Claude Code
+            body:
+              - Deny or ask on mcp__claude-in-chrome__* tools in managed permissions, or block the
+                server with deniedMcpServers so the install prompt never appears.
+            url: https://code.claude.com/docs/en/chrome
+        verified: "2026-09-10"
+      - capability: capabilityTransportSecurity
+        coverage: partial
+        mechanism: Extension to Anthropic over TLS; Claude Code to extension over a native messaging host plus a WebSocket bridge (bridge.claudeusercontent.com); extension-to-extension messaging was the ClaudeBleed weakness
+        steps:
+          - title: Route the bridge through the same egress
+            body:
+              - Send bridge.claudeusercontent.com through the same proxy egress as claude.ai and
+                api.anthropic.com so IP allowlisting does not break it and traffic stays inspected.
+            url: https://code.claude.com/docs/en/network-config
+        verified: "2026-09-10"
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: Side-panel sessions are Cowork sessions saved to account history; per-site permission history in extension settings; no admin memory controls
+        steps:
+          - title: Review saved permissions
+            body:
+              - Users open Extension settings > Permissions to review approved sites and revoke
+                access; session history follows Cowork retention.
+            url: https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide
+        verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: none
+        note: >-
+          The agent acts inside the user's real browser profile and sessions by design; no
+          isolated profile, container or VM is provided. Use a separate browser profile per the
+          vendor's advice and Chrome enterprise policies for isolation.
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: >-
+          Per-site permissions (Allow this action / Always allow actions on this site), org
+          allowlist and blocklist, default-blocked categories, financial sites require explicit
+          permission, Claude Code plan-mode read-only tool split
+        steps:
+          - title: Scope by site
+            body:
+              - Configure the org allowlist so Claude can only browse approved sites; users then
+                grant per-site actions and can revoke them in Extension settings.
+            url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-09-10"
+      - capability: capabilityCredentialIsolation
+        coverage: none
+        note: >-
+          Claude uses the user's existing logins in every site; there is no separate agent
+          identity or on-behalf-of exchange. Prohibited actions (sensitive data entry, downloads
+          need approval) are the only mitigation.
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: none
+        note: The extension holds the claude.ai session; site credentials are the browser's. Nothing to vault; keep sensitive accounts in a separate profile.
+        verified: "2026-09-10"
+      - capability: capabilityModelGuardrails
+        coverage: partial
+        mechanism: Built-in blocked site categories, prohibited actions and always-confirm actions; Anthropic safety classifiers; no admin-editable policy beyond site lists
+        steps:
+          - title: Layer the org blocklist over the defaults
+            body:
+              - The blocklist adds to Claude's default blocked categories; use it for regulated
+                systems the safety guidance says not to automate.
+            url: https://support.claude.com/en/articles/12902428-use-claude-in-chrome-safely
+        verified: "2026-09-10"
+      - capability: capabilityMcpToolSecurity
+        coverage: partial
+        mechanism: In Claude Code the extension is the reserved claude-in-chrome MCP server governed by managed MCP allow/deny lists; the extension itself comes from the Chrome Web Store
+        steps:
+          - title: Allow or block the server organisation-wide
+            body:
+              - List claude-in-chrome in deniedMcpServers to block it (Claude Code then never
+                prompts to install the extension), or in allowedMcpServers to permit it.
+            url: https://code.claude.com/docs/en/managed-mcp
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: Manually approve (plan shown before acting), Automatically approve (pauses on flagged risks), always-confirm actions; Claude Code prompts "Claude in Chrome wants to" per site
+        steps:
+          - title: Set the approval mode
+            body:
+              - Choose Manually approve to review a plan naming the sites before any action;
+                Automatically approve still requires approval for publishing, messaging, payments,
+                downloads and sensitive data entry.
+            url: https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide
+        verified: "2026-09-10"
+      - capability: capabilityRateLimiting
+        coverage: partial
+        mechanism: Usage draws from the account's plan limits and organisation usage limits; scheduled shortcuts run recurring tasks; no per-task action budget
+        steps:
+          - title: Bound spend at the organisation
+            body:
+              - Set organisation, group and user usage limits under Organization settings > Usage;
+                the consumption guide notes Claude in Chrome does not yet honour model and effort
+                restrictions.
+            url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: Side-panel sessions are Cowork sessions (transcripts retrievable through the Compliance API on Enterprise); per-site permission history; Claude Code tool events via OpenTelemetry
+        steps:
+          - title: Retrieve session transcripts
+            body:
+              - Enterprise organisations pull Cowork local and remote session transcripts, including
+                side-panel sessions, through the Compliance API session endpoints.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        note: Browser actions themselves are visible only as tool calls in the transcript; there is no separate action log for the extension.
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: Org toggle off, role capability removal, Chrome enterprise policy (extension blocklist / force-uninstall), user revocation of site permissions
+        steps:
+          - title: Turn it off for the organisation
+            body:
+              - Disable "Enable for your team" at Organization settings > Claude in Chrome or remove
+                the capability from roles; pair with Chrome enterprise extension policy to
+                uninstall.
+            url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: external
+        mechanism: Chrome enterprise extension inventory and policy; tenant-restriction header blocks personal claude.ai accounts
+        steps:
+          - title: Inventory and pin the extension
+            body:
+              - Use Chrome enterprise policy to list installed extensions and inject
+                anthropic-allowed-org-ids at the proxy so the extension cannot be used with a
+                personal account.
+            url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+        verified: "2026-09-10"
+      - capability: capabilityEdr
+        coverage: external
+        mechanism: Browser and endpoint sensors; the native messaging host is started by the browser, outside Claude Code's corporate launcher
+        note: >-
+          The corporate-launcher page states the Chrome native-messaging host is not covered by
+          processWrapper; EDR must watch it directly.
+        steps:
+          - title: Cover the native messaging host
+            body:
+              - Monitor com.anthropic.claude_code_browser_extension host registrations and the
+                process it starts with endpoint tooling.
+            url: https://code.claude.com/docs/en/corporate-launcher
+        verified: "2026-09-10"
+      - capability: capabilityBehavioralDriftDetection
+        coverage: none
+        note: No baseline or drift detection is offered; the classifier screens individual actions only.
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: partial
+        mechanism: Always-confirm on sensitive data entry and downloads; org blocklist for data-bearing sites; Read deny rules govern uploads from Claude Code
+        steps:
+          - title: Block uploads of protected files from Claude Code
+            body:
+              - Permission rules that deny Read on a file also block uploading it through the
+                extension; uploads are capped at 10 MB.
+            url: https://code.claude.com/docs/en/chrome
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: none
+        note: There is no registry of which users have the extension beyond Chrome enterprise inventory; scheduled shortcuts are per user.
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: partial
+        mechanism: Org allowlist restricts browsing destinations; bridge.claudeusercontent.com and api.anthropic.com are the only vendor endpoints
+        steps:
+          - title: Use the allowlist as the egress policy
+            body:
+              - Approve only the sites Claude may open; Claude in Manually approve mode uses only
+                the sites listed in its plan.
+            url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-09-10"
+      - capability: capabilityModelScanning
+        coverage: none
+        note: >-
+          Not applicable: no model artifacts run locally.
+        verified: "2026-09-10"
+    advisories:
+      - title: "ShadowPrompt — zero-click prompt injection via a trusted *.claude.ai subdomain and third-party CAPTCHA XSS (fixed extension 1.0.41)"
+        url: https://cloudsecurityalliance.org/blog/2026/09/04/top-6-claude-in-chrome-security-risks-to-model-before-you-roll-it-out
+        date: "2026-03"
+      - title: "ClaudeBleed — zero-permission Chrome extensions could issue commands to Claude in Chrome; partial fix in 1.0.70 bypassed"
+        url: https://cloudsecurityalliance.org/blog/2026/09/04/top-6-claude-in-chrome-security-risks-to-model-before-you-roll-it-out
+        date: "2026-05"
+    sources:
+      - title: Get started with Claude in Chrome
+        url: https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome
+      - title: Claude in Chrome admin controls
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+      - title: Use Claude in Chrome safely
+        url: https://support.claude.com/en/articles/12902428-use-claude-in-chrome-safely
+      - title: Claude in Chrome permissions guide
+        url: https://support.claude.com/en/articles/12902446-claude-in-chrome-permissions-guide
+      - title: Use Claude Code with Chrome
+        url: https://code.claude.com/docs/en/chrome
+      - title: Set up browser use in Claude Cowork for Team and Enterprise plans
+        url: https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans

@@ -1,0 +1,404 @@
+# Claude Cowork — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Local and cloud Cowork sessions share one admin mechanism (Organization settings > Cowork, plus
+# device MDM keys that reach only local sessions), so they are variants of one entity; the cloud
+# variant is noted with archManagedAgentRuntime as a secondary architecture.
+vendor: anthropic
+family: Claude Cowork
+tools:
+  - id: toolClaudeCowork
+    name: Claude Cowork
+    surfaceClasses:
+      - desktopApp
+      - cloudAgent
+    variants:
+      - name: Cowork in Claude Desktop (local session in the Cowork VM sandbox)
+        class: desktopApp
+        url: https://claude.com/docs/cowork/overview
+      - name: Cowork in the cloud (web, mobile, Chrome side panel; sessions on Anthropic servers)
+        class: cloudAgent
+        url: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+        note: >-
+          Announced 7 July 2026 (beta, Max first). "Run Cowork in the cloud" is on by default on
+          Team and off by default on Enterprise until 10 September 2026. Device managed settings do
+          not reach these sessions.
+      - name: Dispatch (background tasks) and scheduled tasks
+        class: cloudAgent
+        url: https://claude.com/docs/cowork/guide/dispatch
+    architecture: archPersonalAgent
+    secondaryArchitectures:
+      - archManagedAgentRuntime
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Cowork is Anthropic's agentic workspace for non-developers: the Claude Code architecture
+        inside Claude Desktop, working on the user's own files, connectors, skills and plugins,
+        with sub-agents, browser use (Claude in Chrome or a built-in browser) and computer use.
+        Local sessions run shell and document tools in a hardened VM on the device with file
+        access scoped to connected folders and web fetches to an egress allowlist; cloud sessions
+        (web, mobile, Chrome side panel) run on Anthropic's servers, save sessions and files to the
+        account, keep working with every device offline, and can only touch local folders while
+        the desktop app is open. Inference is the Anthropic API on first-party plans, or the
+        organisation's provider on Claude Desktop on 3P.
+      - >-
+        Modelling it as a personal autonomous agent is a stretch in one direction (it is a
+        vendor-managed app, not a self-hosted agent) and apt in another (it acts with the user's
+        own folders, connectors and browser sessions). Admin control is in the claude.ai console at
+        Organization settings > Cowork: "Enable for your organization", "Run Cowork in the cloud",
+        the built-in browser toggle, "Allow 'Automatically approve' mode", "Allow 'Always allow'
+        for connector tools", an OTLP collector for session events, and required or hidden plugin
+        marketplaces, with role-based access on Enterprise; on the device, Claude Desktop's
+        managed configuration (com.anthropic.claudefordesktop, HKLM\SOFTWARE\Policies\Claude)
+        adds allowedWorkspaceFolders, coworkEgressAllowedHosts, disabledBuiltinTools,
+        disableBypassPermissionsMode and coworkTabEnabled. Cowork sessions never fetch Claude
+        Code server-managed settings.
+    facts:
+      - label: Plans
+        value: >-
+          Pro, Max, Team and Enterprise in Claude Desktop; web and mobile in beta for Pro, Max and
+          Team and for Enterprise where admins enable it; Claude Desktop on 3P runs Cowork on
+          Bedrock, Vertex, Foundry or a gateway.
+        url: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+      - label: Inference & routing
+        value: Anthropic API (first-party) or the provider configured in Claude Desktop managed configuration (inferenceProvider gateway / bedrock / vertex / foundry / anthropic) on 3P deployments.
+        url: https://claude.com/docs/third-party/claude-desktop/configuration
+      - label: Data leaving the device
+        value: >-
+          Prompts, the contents of files in connected folders that Claude reads, tool outputs,
+          browser page content and connector data go to the model provider; cloud sessions store
+          sessions and files in the account; the OTLP exporter (inside the VM, subject to egress
+          rules) sends events to the organisation's collector.
+        url: https://claude.com/docs/cowork/monitoring
+      - label: Retention & training
+        value: >-
+          Local conversation history stays on the device outside standard retention (Compliance
+          API captures local sessions server-side for 6 years or the custom period); cloud
+          sessions are saved to the account (remote transcripts 6 years unless deleted). Cowork is
+          not covered by ZDR. Commercial terms: no training.
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+      - label: Docs index
+        value: claude.com/docs/cowork plus the Help Center Cowork on Team and Enterprise article
+        url: https://claude.com/docs/cowork/overview
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          Cowork reads documents, web pages (via the built-in browser or Claude in Chrome) and
+          connector results as instructions with "Automatically approve" on by default; the
+          egress allowlist and connector tool approvals are the containment.
+      - risk: riskRogueActions
+        note: >-
+          "Always allow" for connector tools is off by default because it removes the per-tool
+          prompt; bypass permissions mode can be removed with disableBypassPermissionsMode in
+          managed configuration.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Users can attach home folders, Documents, AppData and whole drives (September 2026);
+          allowedWorkspaceFolders in managed configuration is the fence. OTLP export includes
+          user prompts by default on the Team/Enterprise console integration.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Cloud sessions, Dispatch and scheduled tasks run unattended without a device; the
+          Enterprise console can enable cloud capability per group, and the Compliance API lists
+          remote Cowork sessions including agent-owned scheduled runs.
+      - risk: riskToolSourceProvenance
+        note: >-
+          Users can add plugin marketplaces by URL and upload plugins; admins curate marketplaces
+          (required, auto-installed, available, hidden) and can disable user marketplaces and
+          uploads.
+    controls:
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: Auto-mode classifier ("Automatically approve"), browser safety classifiers, egress allowlist; Enterprise Inference hooks govern Cowork prompts
+        steps:
+          - title: Keep tool approvals in the loop
+            body:
+              - Leave "Allow 'Always allow' for connector tools" off and consider turning off
+                "Allow 'Automatically approve' mode" under Organization settings > Cowork >
+                Permissions for sensitive teams.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Inspect prompts inline (Enterprise, beta)
+            body:
+              - Inference hooks send every governed Cowork prompt, including tool results, to your
+                AI security server for an allow/deny verdict before inference.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+        verified: "2026-09-10"
+      - capability: capabilityIga
+        coverage: native
+        mechanism: >-
+          "Enable for your organization" toggle at Organization settings > Cowork; Enterprise
+          custom roles and groups gate Cowork and cloud capability; SSO/SCIM at the organisation;
+          forceLoginOrgUUID in Claude Desktop managed configuration
+        steps:
+          - title: Enable Cowork for the right people
+            body:
+              - Turn on "Enable for your organization" at Organization settings > Cowork and, on
+                Enterprise, grant Cowork and cloud sessions to specific groups through custom
+                roles.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Pin the desktop app to your organisation
+            body:
+              - Deploy forceLoginOrgUUID in the com.anthropic.claudefordesktop profile or
+                HKLM\SOFTWARE\Policies\Claude so the app only accepts your organisation's logins.
+            url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+        verified: "2026-09-10"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: partial
+        mechanism: >-
+          Managed configuration disabledBuiltinTools (tool or argument-scoped rules such as
+          Read(**/.env)) and builtinToolPolicy (ask / allow per tool); Claude Code managed deny
+          rules apply to Cowork's mcp__workspace__bash and web_fetch tools in local sessions
+        steps:
+          - title: Deny tools by policy on the device
+            body:
+              - Set disabledBuiltinTools (for example Bash, Read(**/.env)) and builtinToolPolicy
+                ask entries in Claude Desktop managed configuration; managed Bash and WebFetch deny
+                rules in Claude Code policy also stop Cowork's workspace tools.
+            url: https://claude.com/docs/third-party/claude-desktop/configuration
+        note: Cloud sessions do not read device policy; only the console toggles and connector tool settings reach them.
+        verified: "2026-09-10"
+      - capability: capabilityTransportSecurity
+        coverage: partial
+        mechanism: TLS to the provider; egressProxyUrl / egressProxyPacUrl and mTLS variables read only from managed settings and user settings in app-managed sessions
+        steps:
+          - title: Pin the proxy path from managed settings
+            body:
+              - Deliver HTTPS_PROXY, NODE_EXTRA_CA_CERTS and CLAUDE_CODE_CLIENT_CERT/KEY through
+                managed settings; Cowork sessions ignore these in repository settings so a
+                checked-out repo cannot redirect the TLS path.
+            url: https://code.claude.com/docs/en/network-config
+        verified: "2026-09-10"
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: desktopSessionCleanupPeriodDays for local transcripts; cloud sessions deletable by users; Compliance API retention follows custom periods; skills and memory managed in Customize
+        steps:
+          - title: Bound local transcripts
+            body:
+              - Set desktopSessionCleanupPeriodDays in managed settings; Desktop and Cowork
+                transcripts are otherwise exempt from cleanupPeriodDays.
+            url: https://code.claude.com/docs/en/settings-reference
+        verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: >-
+          Local tools run in the hardened Cowork VM with file access scoped to connected folders
+          (allowedWorkspaceFolders) and web fetches to coworkEgressAllowedHosts; cloud sessions run
+          on Anthropic-managed servers; requireCoworkFullVmSandbox is deprecated
+        steps:
+          - title: Restrict which folders Cowork can mount
+            body:
+              - Set allowedWorkspaceFolders in Claude Desktop managed configuration (unset means
+                unrestricted); September 2026 builds let users attach home folders and whole drives
+                otherwise.
+            url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Note the VM policy gap
+            body:
+              - In a full VM sandbox the device's MDM policy and managed-settings.json are not
+                present, and Cowork never fetches server-managed settings; deliver Cowork controls
+                through Claude Desktop managed configuration instead.
+            url: https://code.claude.com/docs/en/managed-settings
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: >-
+          Connector tool permissions (read vs write) set org-wide at Organization settings >
+          Connectors; "Allow 'Always allow' for connector tools" off by default;
+          disabledBuiltinTools and builtinToolPolicy on the device; browser toggles
+        steps:
+          - title: Limit connector actions organisation-wide
+            body:
+              - At Organization settings > Connectors restrict each connector's tools (for example
+                search but not send) and keep "Allow 'Always allow' for connector tools" off so
+                each call still prompts.
+            url: https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
+          - title: Decide on browsers
+            body:
+              - Toggle the built-in browser at Organization settings > Cowork and Claude in Chrome
+                at Organization settings > Claude in Chrome (both off by default on Enterprise until
+                10 September 2026).
+            url: https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
+        verified: "2026-09-10"
+      - capability: capabilityCredentialIsolation
+        coverage: partial
+        mechanism: Enterprise-managed connector authorisation through the IdP with per-role permission scoping; otherwise Claude acts with the user's own connector and browser sessions
+        steps:
+          - title: Provision connectors centrally with scoped permissions
+            body:
+              - Use managed authorisation (Organization settings > Connectors > Configuration) to
+                grant connectors by role through Okta with admin-chosen permission scopes rather
+                than personal OAuth grants.
+            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: partial
+        mechanism: Connector OAuth tokens held by the platform; inferenceCredentialHelper and credential-helper TTLs on 3P deployments; OTLP headers encrypted at rest on Anthropic servers
+        steps:
+          - title: Use a credential helper on third-party deployments
+            body:
+              - Set inferenceCredentialHelper (with inferenceCredentialHelperTtlSec) instead of a
+                static inferenceAnthropicApiKey / inferenceGatewayApiKey in managed configuration.
+            url: https://claude.com/docs/third-party/claude-desktop/configuration
+        verified: "2026-09-10"
+      - capability: capabilityModelGuardrails
+        coverage: partial
+        mechanism: Organisation model restrictions and effort caps (enforced across most products), browser safety classifiers, organizationInstructions appended to the system prompt on 3P
+        steps:
+          - title: Restrict models and effort for Cowork users
+            body:
+              - Set model access and effort limits under Organization settings > Models; the
+                consumption guide says these are enforced across most Claude products including
+                Cowork.
+            url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
+        verified: "2026-09-10"
+      - capability: capabilityMcpToolSecurity
+        coverage: native
+        mechanism: >-
+          Org-enabled connectors only (Organization settings > Connectors), desktop extension
+          allowlist, isLocalDevMcpEnabled, managedMcpServers, admin-curated plugin marketplaces
+          (required / auto-installed / available / hidden), userPluginMarketplacesEnabled and
+          userPluginUploadsEnabled
+        steps:
+          - title: Curate plugins and marketplaces
+            body:
+              - Configure organisation plugin marketplaces with installation tiers under
+                Organization settings and, on the device, set userPluginMarketplacesEnabled and
+                userPluginUploadsEnabled false to stop users adding sources.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Control local MCP and extensions
+            body:
+              - Set isLocalDevMcpEnabled false and turn on the desktop extension allowlist
+                (Organization settings > Connectors > Desktop) so only approved .mcpb extensions
+                load.
+            url: https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: Per-tool approval prompts for connector tools, "Automatically approve" (classifier) and manual modes, browser Manually approve mode, disableBypassPermissionsMode on the device
+        steps:
+          - title: Remove bypass and keep prompts
+            body:
+              - Set disableBypassPermissionsMode true in Claude Desktop managed configuration and
+                leave "Allow 'Always allow' for connector tools" off in the console.
+            url: https://claude.com/docs/third-party/claude-desktop/configuration
+        verified: "2026-09-10"
+      - capability: capabilityRateLimiting
+        coverage: partial
+        mechanism: Organisation, group and per-user usage limits (Organization settings > Usage) shared across Cowork, Claude Code and chat; no per-task budget
+        steps:
+          - title: Set consumption limits
+            body:
+              - Configure org, group and user limits under Organization settings > Usage; user
+                limits override group limits and the org limit is the ceiling.
+            url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: native
+        mechanism: >-
+          OpenTelemetry export configured at Admin settings > Cowork (OTLP endpoint, protocol,
+          headers) with user_prompt, tool_result (decision_type, decision_source), api_request and
+          tool_decision events carrying user.email; Compliance API local and remote Cowork session
+          transcripts (Enterprise)
+        steps:
+          - title: Stream Cowork events to the SIEM
+            body:
+              - At Admin settings > Cowork set the OTLP endpoint, protocol and headers; events
+                include prompts by default, so filter at the collector if needed.
+            url: https://claude.com/docs/cowork/monitoring
+          - title: Retrieve transcripts after the fact
+            body:
+              - Enterprise Compliance Access Keys with read:compliance_user_data list cowork and
+                cowork_remote sessions and return prompts, responses, tool calls and results.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: Org toggle off, "Run Cowork in the cloud" off, role removal, coworkTabEnabled / secureVmFeaturesEnabled false on the device, connector disable revokes access for everyone
+        steps:
+          - title: Disable Cowork or its cloud variant
+            body:
+              - Turn off "Enable for your organization" or "Run Cowork in the cloud" at Organization
+                settings > Cowork; on managed devices set coworkTabEnabled false.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: external
+        mechanism: Tenant-restriction header on claude.ai traffic; Compliance API session listing shows who is running Cowork; MDM inventory of Claude Desktop
+        steps:
+          - title: Block personal-account Cowork on the corporate network
+            body:
+              - Inject anthropic-allowed-org-ids at the TLS-inspecting proxy for claude.ai and
+                api.anthropic.com.
+            url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+        verified: "2026-09-10"
+      - capability: capabilityEdr
+        coverage: external
+        mechanism: Claude Desktop is an MDM-deployed app (PKG / MSIX); the Cowork VM is opaque to host sensors; OTLP tool_result events carry file paths and commands for the SIEM
+        steps:
+          - title: Use the OTLP feed as the endpoint signal
+            body:
+              - Enable toolDetails content capture so tool_input (paths, commands, URLs) reaches the
+                collector, since host EDR cannot see inside the Cowork VM.
+            url: https://claude.com/docs/cowork/monitoring
+        verified: "2026-09-10"
+      - capability: capabilityBehavioralDriftDetection
+        coverage: none
+        note: No baseline or drift detection is offered; build it on the OTLP event stream if required.
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: partial
+        mechanism: allowedWorkspaceFolders and Read deny rules limit what can be read; connector write permissions can be removed; Inference hooks (Enterprise) inspect prompts inline; coworkEgressAllowedHosts limits where data can go
+        steps:
+          - title: Fence data paths
+            body:
+              - Combine allowedWorkspaceFolders, disabledBuiltinTools Read rules for secret paths and
+                connector read-only permissions; add Inference hooks for inline DLP on Enterprise.
+            url: https://claude.com/docs/third-party/claude-desktop/configuration
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: partial
+        mechanism: Compliance API remote session list identifies user-owned and agent-owned (scheduled) Cowork sessions; admin console shows enabled connectors, plugins and roles
+        steps:
+          - title: List unattended sessions
+            body:
+              - Query /v1/compliance/apps/sessions/remote; agent-owned sessions carry agent_id and
+                started_by_user for scheduled tasks.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: coworkEgressAllowedHosts (managed configuration) and the Admin settings > Capabilities > Network egress allowlist; the OTLP collector host is added automatically; egressProxyUrl for the app
+        steps:
+          - title: Allowlist Cowork egress
+            body:
+              - Set coworkEgressAllowedHosts in Claude Desktop managed configuration (and the
+                Network egress allowlist in admin settings) so agent tools reach only named hosts.
+            url: https://claude.com/docs/third-party/claude-desktop/configuration
+        verified: "2026-09-10"
+      - capability: capabilityModelScanning
+        coverage: none
+        note: >-
+          Not applicable: no model artifacts run locally; inference is remote.
+        verified: "2026-09-10"
+    sources:
+      - title: Cowork overview
+        url: https://claude.com/docs/cowork/overview
+      - title: Use Claude Cowork on Team and Enterprise plans (admin toggles)
+        url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+      - title: Use Claude Cowork on web, desktop, and mobile
+        url: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+      - title: Claude Cowork on web and mobile (announcement, 7 July 2026)
+        url: https://claude.com/blog/cowork-web-mobile
+      - title: Cowork monitoring (OpenTelemetry)
+        url: https://claude.com/docs/cowork/monitoring
+      - title: Monitor Claude Cowork activity with OpenTelemetry
+        url: https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry
+      - title: Install plugins (Cowork)
+        url: https://claude.com/docs/cowork/guide/plugins
+      - title: Cowork changelog
+        url: https://claude.com/docs/cowork/changelog
+      - title: Claude Desktop configuration reference (managed keys)
+        url: https://claude.com/docs/third-party/claude-desktop/configuration
+      - title: Enterprise configuration for Claude Desktop
+        url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+      - title: Deploy managed settings (where a policy applies to Cowork sessions)
+        url: https://code.claude.com/docs/en/managed-settings

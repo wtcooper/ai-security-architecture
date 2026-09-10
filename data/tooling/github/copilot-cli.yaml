@@ -1,0 +1,439 @@
+# GitHub Copilot CLI — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Excluded: the retired `gh copilot` extension (2025-10-25); Copilot in Windows Terminal is a
+# variant because it is governed by the Copilot CLI policy.
+vendor: github
+family: GitHub Copilot CLI
+tools:
+  - id: toolCopilotCli
+    name: GitHub Copilot CLI
+    surfaceClasses:
+      - endpointCli
+      - desktopApp
+    variants:
+      - name: Copilot CLI (GA 2026-02-25)
+        class: endpointCli
+        url: https://github.blog/changelog/2026-02-25-github-copilot-cli-is-now-generally-available/
+      - name: GitHub Copilot app (desktop, GA 2026-06-17; same managed-settings plane, own policy since 2026-07-27)
+        class: desktopApp
+        url: https://docs.github.com/en/copilot/concepts/agents/github-copilot-app
+      - name: Copilot in Windows Terminal (Canary; governed by the Copilot CLI policy)
+        class: endpointCli
+        url: https://docs.github.com/en/copilot/how-tos/chat-with-copilot/chat-in-windows-terminal
+    architecture: archCodingAgentThirdParty
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - "Copilot CLI is the terminal-native coding agent (plan mode, autopilot, built-in Explore /
+        Task / Code Review / Plan agents, /fleet parallel sessions, hooks, plugins, MCP) and the
+        runtime behind the GitHub Copilot desktop app, the SDK and JetBrains agent mode. It runs on
+        the developer's machine with the developer's GitHub identity; inference goes to the Copilot
+        API by plan, or straight to a provider under local BYOK."
+      - "Prompts, file contents and tool output leave the device for the Copilot API; session
+        data (prompts, responses, tools, files changed) is written to ~/.copilot/session-state and,
+        by default, synced to the user's GitHub account under the \"Store local sessions in the
+        Cloud\" policy. Remote steering exposes the session to github.com and GitHub Mobile.
+        Nothing reaches the organisation's audit log except policy changes."
+      - "The admin plane is managed-settings.json: server-managed from the
+        .github-private repository (copilot/managed-settings.json, with team overrides), MDM
+        (HKLM\\SOFTWARE\\Policies\\GitHubCopilot, com.github.copilot) or a root-owned file. It
+        carries deny / ask / allow permissions with Shell, Read, Edit and Domain selectors (GA
+        2026-09-09), disableBypassPermissionsMode, allowedMcpServers / deniedMcpServers, plugin
+        marketplaces, the MXC local sandbox policy, OpenTelemetry export and remote-control mode."
+    facts:
+      - label: Plans
+        value: "All Copilot plans; Business and Enterprise gate it with the Copilot CLI policy (Enterprise > AI controls > Copilot > Configure features & clients > Clients), and the desktop app with its own GitHub Copilot app policy."
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
+      - label: Inference & routing
+        value: "Copilot API per plan; enterprise-enabled models only; local BYOK (OpenAI, Azure, Anthropic, Ollama) bypasses GitHub; enterprise BYOK models are served by the Copilot API."
+        url: https://docs.github.com/en/copilot/concepts/models/bring-your-own-key
+      - label: Data leaving the device
+        value: "Prompts and tool output to the Copilot API; session data synced to the GitHub account unless remoteExport is false; OTLP telemetry only where the enterprise configures it; remote-steering traffic to github.com."
+        url: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/chronicle
+      - label: Data retention / training
+        value: "Business and Enterprise prompts are not used for training; model providers run under ZDR except Claude Fable 5 / 5.1 (retain by default, exemption available through end-2026)."
+        url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
+      - label: Sandboxes
+        value: "Local sandbox uses Microsoft eXecution Container (MXC: Seatbelt on macOS 15+, bubblewrap on Linux, BaseContainer on Windows 11); cloud sandbox runs on Azure Container Apps Sandboxes behind the Cloud sandbox access policy (off by default). Both public preview."
+        url: https://docs.github.com/en/copilot/concepts/about-cloud-and-local-sandboxes
+      - label: Docs index
+        value: "Copilot CLI how-tos (install, authenticate, allowing tools, hooks, MCP, plugins, administer for your enterprise)."
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli
+    items:
+      - title: Managed settings — delivery and precedence
+        body:
+          - "Server-managed: an organisation in the enterprise hosts .github-private with
+            copilot/managed-settings.json (legacy .github/copilot/settings.json still read);
+            copilot/team-mappings.json and copilot/teams/*.json let named teams relax keys the
+            enterprise marks { \"overridable\": ... }. Clients refresh within about an hour, or on
+            restart. MDM and local-file delivery exist for machines that must not depend on the
+            server channel; the CLI falls back to its cached copy when a fetch fails."
+          - "Keys the CLI honours: permissions.deny / ask / allow, permissions.disableBypassPermissionsMode,
+            model, enabledPlugins / extraKnownMarketplaces / strictKnownMarketplaces, allowedMcpServers /
+            deniedMcpServers, telemetry.*, remoteControl and sandbox.* — sandbox is CLI-only, the app
+            ignores telemetry, the cloud agent honours only model and plugin keys."
+        links:
+          - title: Configuring enterprise-managed settings
+            url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-agents/configure-enterprise-managed-settings
+          - title: Enterprise managed settings reference
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+      - title: Permission model and its escape hatches
+        body:
+          - "Read-only operations run without asking; edits, destructive shell commands and URL
+            fetches prompt. Per-repo approvals persist in ~/.copilot/permissions-config.json and
+            allowed URLs in ~/.copilot/settings.json. --allow-all / --yolo, /allow-all, --allow-all-tools
+            and autopilot remove the prompts; deny rules still win. The managed file removes
+            these options with disableBypassPermissionsMode and pins its own deny / ask / allow."
+          - "Policy hooks — root-owned, machine-wide, immune to disableAllHooks — run preToolUse
+            (fail-closed on error, fail-open on timeout) and permissionRequest with a
+            permissionDecision of allow, deny or ask; HTTP hooks for those events must be https."
+        links:
+          - title: Allowing and denying tool use
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools
+          - title: Hooks reference
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
+      - title: Local sandbox policy
+        body:
+          - "Deny-by-default filesystem: read/write, read-only and denied paths, with automatic
+            grants for the working directory, PATH toolchains and package caches that managed
+            settings can switch off (addCurrentWorkingDirectory, allowDevToolAccess). Network
+            allowOutbound / allowLocalNetwork and an HTTP proxy; gitAuth / ghAuth token injection
+            and macOS keychainAccess are separate switches. Managed values combine in the most
+            restrictive direction; built-in file tools are software-checked only and remote MCP
+            servers are outside the policy."
+        links:
+          - title: Understanding filesystem policies for local sandboxing
+            url: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/understanding-local-sandboxing
+          - title: Configuring local sandbox settings
+            url: https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/configuring-local-sandbox-settings
+    riskNotes:
+      - risk: riskRogueActions
+        note: >-
+          Autopilot and --yolo exist by design; CVE-2026-29783 showed the read-only classifier
+          itself could be tricked by bash parameter expansion. disableBypassPermissionsMode plus a
+          managed sandbox is the only configuration where a bad tool call is contained rather than
+          merely prompted.
+      - risk: riskPromptInjection
+        note: >-
+          Repository files, MCP responses and hook output all feed the agent; the vendor's fix for
+          CVE-2026-29783 added parse-time blocking and prompt hardening but no classifier. Domain()
+          deny rules and sandbox allowOutbound=false bound the exfiltration path.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Session transcripts sync to github.com by default and remote steering publishes them to
+          the agents list; OTLP captureContent can also carry prompts. Decide the "Store local
+          sessions in the Cloud" policy and lockCaptureContent explicitly.
+      - risk: riskToolSourceProvenance
+        note: >-
+          Plugins and MCP servers install by name from marketplaces and npx commands; only
+          strictKnownMarketplaces and the managed allowlist (URL and stdio command match) bound the
+          sources — the registry restriction is name-only and bypassable.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: Copilot seat plus the Copilot CLI policy (and the separate GitHub Copilot app policy); OAuth device/browser flow or a fine-grained PAT with the Copilot Requests permission; SAML SSO authorisation per organisation
+        steps:
+          - title: Enable the CLI for the right organisations
+            body:
+              - "Enterprise > AI controls > Copilot > Configure features & clients > Clients: set Copilot CLI to Enabled everywhere, Disabled everywhere or Let organizations decide; users still need an assigned seat."
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
+          - title: Set the desktop app policy separately
+            body:
+              - Since 2026-07-27 the GitHub Copilot app has its own policy under AI Controls > Copilot Clients (default Enabled everywhere); it no longer follows the CLI policy.
+            url: https://github.blog/changelog/2026-07-27-manage-github-copilot-app-access-with-a-dedicated-policy/
+          - title: Constrain how the CLI authenticates
+            body:
+              - OAuth tokens (gho_) and fine-grained PATs (github_pat_, Copilot Requests permission) are accepted; classic PATs are not. Tokens live in the OS keychain with a plaintext fallback at ~/.copilot/config.json; SSO-protected organisations require Authorize at login.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli
+        verified: "2026-09-10"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: native
+        mechanism: managed-settings.json permissions.deny / ask / allow with Shell(), Read(), Edit(), Domain() selectors (GA 2026-09-09); root-owned policy hooks on preToolUse / permissionRequest
+        steps:
+          - title: Write the managed permission rules
+            body:
+              - "Under permissions set deny (blocked from any source), ask (fresh approval every time, bypass cannot satisfy) and allow (intersection across sources) with Shell(...) / Bash(...) / PowerShell(...), Read(path), Edit(path) / Write(path) and Domain(host) selectors; mark team-relaxable keys { \"overridable\": ... }."
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Add a machine-wide policy hook
+            body:
+              - Deploy a root-owned policy hook file; a preToolUse hook returning permissionDecision "deny" blocks the call, errors and exit code 2 deny (fail-closed), timeouts fail open — set timeoutSec accordingly. disableAllHooks cannot switch policy hooks off.
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
+        verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: No vendor feature; model-hosting page and provider ZDR terms are the assessment inputs
+        note: >-
+          Local BYOK changes the subprocessor set per developer — disable it through the
+          "Configure custom models" policy if the vendor assessment did not cover the providers.
+        steps:
+          - title: Record model providers and retention terms
+            body:
+              - Enumerate hosting per model (Azure, AWS Bedrock, Anthropic, GCP, xAI, Fireworks) and the Claude Fable 5 / 5.1 retention exception.
+            url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: partial
+        mechanism: Content exclusion applies to the CLI and the app; Read() deny rules and sandbox deniedPaths keep files out of tools; telemetry.captureContent=false with lockCaptureContent
+        note: >-
+          A context filter and path denies, not inspection: nothing scans the prompt stream for
+          sensitive content, and the model still sees whatever the developer pastes.
+        steps:
+          - title: Deny secret paths to the agent's tools
+            body:
+              - Put Read(**/.env) and similar under permissions.deny; add the same paths to sandbox.userPolicy.filesystem.deniedPaths, which managed values add to rather than replace.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Apply content exclusion and lock telemetry content
+            body:
+              - Enterprise and organisation content-exclusion rules apply to the CLI ("Excluded files are not used as context"); set telemetry.captureContent=false and lockCaptureContent=true so exports never carry prompts.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: permissions.deny / allow selectors, disableBypassPermissionsMode, --available-tools / --excluded-tools, MCP tool-level selectors such as MyMCP(create_issue)
+        steps:
+          - title: Remove the all-tools switches
+            body:
+              - "Set permissions.disableBypassPermissionsMode to \"disable\": --yolo, --allow-all and /allow-all are suppressed and autopilot cannot skip approvals."
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Scope shell, write and MCP tools
+            body:
+              - Use shell(git:*), write(path) and MyMCP(tool) selectors in --allow-tool / --deny-tool or the managed rules; --available-tools restricts the agent to a named set and deny always beats allow, even under --allow-all.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools
+        verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: managed sandbox.* keys (enabled, failIfUnavailable, allowBypass, sandboxMcpServers, sandboxLspServers, userPolicy.filesystem / network / seatbelt); Cloud sandbox access policy
+        note: >-
+          Public preview; requires macOS 15+, bubblewrap 0.5+ or recent Windows 11. Remote MCP
+          servers and the built-in file tools sit outside the OS enforcement.
+        steps:
+          - title: Make the local sandbox mandatory
+            body:
+              - "Set sandbox.enabled=true, sandbox.failIfUnavailable=true and sandbox.allowBypass=false so /sandbox disable, --no-sandbox and per-command bypass requests are refused; add sandboxMcpServers and sandboxLspServers=true."
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Narrow the filesystem and network policy
+            body:
+              - Set addCurrentWorkingDirectory and allowDevToolAccess as needed, pin userPolicy.filesystem readwritePaths / readonlyPaths / deniedPaths, and set userPolicy.network.allowOutbound and allowLocalNetwork; verify with /sandbox policy.
+            url: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/understanding-local-sandboxing
+          - title: Decide on cloud sandboxes
+            body:
+              - "Enterprise > Policies > Sandboxes > Cloud sandbox access is Disabled by default; choose Let organizations enable or Enabled by default. Cloud sessions run on GitHub-hosted Azure Container Apps Sandboxes and are usage-billed."
+            url: https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/enabling-or-disabling-cloud-sandboxes-for-your-organization
+        verified: "2026-09-10"
+      - capability: capabilityCredentialIsolation
+        coverage: native
+        mechanism: sandbox.gitAuth / ghAuth / seatbelt.keychainAccess=false stop the developer's tokens reaching sandboxed commands; fine-grained PATs with only Copilot Requests for automation
+        steps:
+          - title: Stop token injection into sandboxed commands
+            body:
+              - Set sandbox.gitAuth=false and sandbox.ghAuth=false so the GitHub token is not exported into git HTTPS or gh inside the sandbox, and seatbelt.keychainAccess=false on macOS.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Use narrow tokens for headless runs
+            body:
+              - For CI or scripted use pass COPILOT_GITHUB_TOKEN / GH_TOKEN as a fine-grained PAT with only the Copilot Requests account permission rather than the developer's OAuth token.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli
+        verified: "2026-09-10"
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: Copilot Memory policy (repository facts and user preferences, 28-day unused expiry, admin export / delete); "Store local sessions in the Cloud" policy and remoteExport
+        note: >-
+          Memory entries are validated against the current branch before use but there is no
+          quarantine or rollback; an admin can only delete. The CLI uses Memory, the supported-surfaces
+          table notwithstanding — treat the concept page as authoritative for scope.
+        steps:
+          - title: Set the Memory policy and keep the delete lever
+            body:
+              - "Enterprise > AI controls > Copilot > Configure features & clients > Features > Copilot Memory: Enabled / Disabled / Let organizations decide. Export or delete a user's memories from Organization Settings > Copilot > Access (Export / Delete Copilot memories) or in bulk from Get usage report."
+            url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/copilot-memory/manage-as-administrator
+          - title: Decide whether session transcripts leave the device
+            body:
+              - Sessions sync to the GitHub account by default; users can set "remoteExport": false, and the organisation controls availability with the "Store local sessions in the Cloud" policy. Enabling it does not give admins access to the data.
+            url: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/chronicle
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: Vendor-side parse-time blocking of dangerous shell patterns and hardened system prompts (post CVE-2026-29783); userPromptSubmitted / preToolUse hooks; no classifier
+        steps:
+          - title: Keep the CLI current and add hook-based screening
+            body:
+              - Run >= 0.0.423 (the fix blocks ${var@P}-style expansions unconditionally); use policy hooks on userPromptSubmitted and preToolUse to screen or deny suspicious inputs and tool arguments.
+            url: https://github.com/advisories/GHSA-g8r9-g2v8-jv6f
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: partial
+        mechanism: OS keychain storage for the GitHub token (plaintext ~/.copilot/config.json fallback); sandbox deniedPaths and Read() deny rules for secret files; no vault integration
+        steps:
+          - title: Keep credentials in the keychain
+            body:
+              - Ensure a keychain (Keychain Access, Credential Manager, libsecret) is available; without one the token is stored in plaintext in ~/.copilot/config.json.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli
+          - title: Deny secret files to tools and the sandbox
+            body:
+              - Add .env and credential paths to permissions.deny (Read / Edit) and to sandbox.userPolicy.filesystem.deniedPaths.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-09-10"
+      - capability: capabilityMcpToolSecurity
+        coverage: native
+        mechanism: allowedMcpServers / deniedMcpServers (serverName, serverUrl with wildcards and canonicalisation, serverCommand exact match; fail-closed with an empty allowlist); sandboxMcpServers; registry restriction (preview, bypassable)
+        steps:
+          - title: Publish the allowlist and denylist
+            body:
+              - "In copilot/managed-settings.json add allowedMcpServers (omit = allow all, [] = block all but built-ins) and deniedMcpServers (always wins); entries with unresolved variables are blocked. Prerequisites: MCP servers in Copilot enabled, registry restriction set to Allow all."
+            url: https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-enterprise-allowlist
+          - title: Run local MCP servers inside the sandbox
+            body:
+              - Set sandbox.sandboxMcpServers=true so stdio servers inherit the filesystem and network policy; remote servers remain outside it.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Treat the registry as discovery only
+            body:
+              - The custom registry (CLI 1.0.11+) shows approved servers but its Registry only mode matches by name/ID and can be bypassed by editing configuration files.
+            url: https://docs.github.com/en/copilot/reference/mcp-allowlist-enforcement
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: permissions.ask rules, disableBypassPermissionsMode, permissionRequest policy hook, remote steering on github.com / Mobile for out-of-terminal approval
+        steps:
+          - title: Force approval on privileged operations
+            body:
+              - Put Shell(git push*), Edit(**/.github/**) and Domain(*) style selectors under permissions.ask; ask rules need a fresh one-time approval each call and saved approvals cannot satisfy them.
+            url: https://github.blog/changelog/2026-09-09-enterprise-managed-permissions-for-github-copilot-agent-operations
+          - title: Decide who may answer prompts remotely
+            body:
+              - "remoteControl.mode = \"disabled\" prevents remote steering of sessions on the device; \"requireSSO\" with githubDotComOrganizations limits it to SSO-authorised clients."
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: partial
+        mechanism: Enterprise custom agents (available to the CLI), enterprise plugin standards (enabledPlugins, extraKnownMarketplaces, strictKnownMarketplaces), MCP registry
+        note: >-
+          Approved agents, plugins and servers can be published centrally; there is no inventory of
+          what sessions actually load and no reconciliation report.
+        steps:
+          - title: Pin marketplaces and required plugins
+            body:
+              - "Set strictKnownMarketplaces (an empty array locks all installation), extraKnownMarketplaces with source github / git / directory, and enabledPlugins as PLUGIN@MARKETPLACE: true|false."
+            url: https://docs.github.com/en/copilot/concepts/agents/about-enterprise-plugin-standards
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: Managed telemetry.* OTLP export (traces, metrics, events; content off by default); enterprise audit log records only policy changes; local session store and cloud session sync
+        note: >-
+          Without an OTLP collector the only records are on the developer's disk and in their
+          personal GitHub session history, which admins cannot read.
+        steps:
+          - title: Pin the OpenTelemetry export
+            body:
+              - "Set telemetry.enabled=true, telemetry.endpoint, telemetry.protocol (http/json or http/protobuf), telemetry.headers, serviceName and resourceAttributes; enforced across clients and not user-overridable."
+            url: https://docs.github.com/en/copilot/concepts/agents/opentelemetry
+          - title: Watch policy events in the audit log
+            body:
+              - Enterprise policy updates that affect the CLI are recorded as audit-log events (action:copilot, 180 days); client prompts are not.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: external
+        mechanism: No discovery feature; seat and policy gating prevent unlicensed use of the enterprise's Copilot but not personal accounts
+        note: >-
+          A developer can sign the CLI into a personal Copilot account; only an endpoint or
+          proxy-based inventory shows that. Note that the npm package @github/copilot installs
+          without any organisational hook.
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: Copilot CLI policy Disabled everywhere; GitHub Copilot app policy; seat removal; allowedMcpServers []; sandbox and permission rules refresh within an hour
+        steps:
+          - title: Disable the client at enterprise scope
+            body:
+              - Set the Copilot CLI policy (and separately the GitHub Copilot app policy) to Disabled everywhere; Windows Terminal Copilot follows the CLI policy.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
+          - title: Quarantine tooling without disabling the client
+            body:
+              - Set allowedMcpServers to [] and strictKnownMarketplaces to [] in managed settings to cut all MCP servers and plugin installs; clients pick it up within about an hour or on restart.
+            url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-agents/configure-enterprise-managed-settings
+        verified: "2026-09-10"
+      - capability: capabilityEdr
+        coverage: external
+        mechanism: None from the vendor; the MXC sandbox and root-owned policy hooks are the device-side integration points
+        note: >-
+          Policy hooks (preToolUse, permissionRequest) can call an endpoint agent over https; the
+          OTLP export gives an EDR/XDR the session context.
+        verified: "2026-09-10"
+      - capability: capabilitySystemPromptManagement
+        coverage: partial
+        mechanism: Enterprise custom agents, custom instructions, strictKnownMarketplaces; repository .github instruction and hook files remain writable by contributors
+        note: >-
+          Repository-level instructions, skills and hooks are loaded from the checked-out tree;
+          the CLI loads policy files before repository, user and plugin sources so a policy hook
+          can screen them, but there is no version pin.
+        steps:
+          - title: Prefer enterprise custom agents and policy hooks
+            body:
+              - Publish enterprise custom agents (available to the CLI) and deploy machine-wide policy hooks, which load ahead of repository and user hooks.
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
+        verified: "2026-09-10"
+      - capability: capabilityAiBom
+        coverage: none
+        mechanism: No manifests or signatures for plugins, skills or MCP servers
+        note: >-
+          strictKnownMarketplaces and extraKnownMarketplaces.autoUpdate=false give source pinning;
+          nothing verifies content or records versions.
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: Domain() deny / ask / allow managed permissions; sandbox.userPolicy.network.allowOutbound / allowLocalNetwork and HTTP proxy; documented service-domain allowlist
+        steps:
+          - title: Deny domains in managed permissions
+            body:
+              - Add Domain(...) selectors under permissions.deny (and ask for the rest); matching is host-based, case-insensitive, with *.example.com covering subdomains.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Cut sandboxed network access
+            body:
+              - Set sandbox.userPolicy.network.allowOutbound=false and allowLocalNetwork=false, or route through the sandbox HTTP proxy.
+            url: https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/configuring-local-sandbox-settings
+          - title: Allowlist the service domains at the perimeter
+            body:
+              - Permit *.githubcopilot.com with the plan-specific subdomain, the github.com login and api.github.com copilot_internal endpoints, and the Azure speech domains only if voice is used.
+            url: https://docs.github.com/en/copilot/reference/proxy-server-and-firewall-settings-for-copilot
+        verified: "2026-09-10"
+      - capability: capabilityModelScanning
+        coverage: none
+        mechanism: Not applicable to vendor-hosted models; local BYOK (Ollama and OpenAI-compatible endpoints) is outside the vendor's control
+        note: >-
+          Disable local BYOK with the "Configure custom models" policy if unscanned local models
+          are a concern.
+        verified: "2026-09-10"
+    advisories:
+      - title: "CVE-2026-29783 — Copilot CLI shell tool: bash parameter-expansion patterns bypass the read-only assessment and run arbitrary commands (@github/copilot ≤ 0.0.422, fixed 0.0.423); GitHub advisory GHSA-g8r9-g2v8-jv6f"
+        url: https://github.com/advisories/GHSA-g8r9-g2v8-jv6f
+        date: "2026-03"
+    sources:
+      - title: Copilot CLI how-to index
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli
+      - title: About GitHub Copilot CLI
+        url: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli
+      - title: Copilot CLI is generally available (2026-02-25)
+        url: https://github.blog/changelog/2026-02-25-github-copilot-cli-is-now-generally-available/
+      - title: GitHub Copilot app generally available (2026-06-17)
+        url: https://github.blog/changelog/2026-06-17-github-copilot-app-generally-available/
+      - title: Enterprise managed permissions for agent operations (2026-09-09)
+        url: https://github.blog/changelog/2026-09-09-enterprise-managed-permissions-for-github-copilot-agent-operations
+      - title: Allowing Copilot CLI to work autonomously (autopilot)
+        url: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/autopilot
+      - title: Using Copilot CLI session data
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/chronicle
+      - title: Steering a session from another device
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/steer-remotely
+      - title: Setting an AI credit session limit
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/set-session-limit
+      - title: Using hooks with Copilot CLI
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-hooks
+      - title: Configuring Copilot CLI (trusted folders)
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/configure-copilot-cli
+      - title: MCP server usage in your company
+        url: https://docs.github.com/en/copilot/concepts/enterprise/mcp-management
+      - title: Configure MCP server access (registry)
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/configure-mcp-server-access
+      - title: Enterprise agent management concepts
+        url: https://docs.github.com/en/copilot/concepts/agents/enterprise-management
+      - title: Application card — GitHub Copilot agents (CLI, app, SDK)
+        url: https://docs.github.com/en/copilot/responsible-use/copilot-cloud-agent

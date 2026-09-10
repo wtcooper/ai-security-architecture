@@ -1,0 +1,207 @@
+# Secure MCP Tunnel — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+#
+# Verified 2026-09-10 against developers.openai.com/api/docs/guides/secure-mcp-tunnels and the
+# openai/tunnel-client repository. Placed on archEnterpriseAiChat because its job is to let
+# ChatGPT connectors (and the Responses API and Codex) reach private MCP servers.
+vendor: openai
+family: Secure MCP Tunnel
+tools:
+  - id: toolOpenaiMcpTunnel
+    name: Secure MCP Tunnel (tunnel-client)
+    surfaceClasses:
+      - chatIntegration
+    variants:
+      - name: tunnel-client (binary and ghcr.io/openai/tunnel-client container)
+        class: chatIntegration
+        url: https://github.com/openai/tunnel-client
+    architecture: archEnterpriseAiChat
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Secure MCP Tunnel lets a private or localhost MCP server serve ChatGPT developer-mode
+        apps, the Responses API and Codex without inbound exposure: a customer-run tunnel-client
+        polls api.openai.com (or mtls.api.openai.com) over outbound HTTPS, forwards each request
+        to the local stdio or HTTP MCP server, and returns the response through the same tunnel.
+      - >-
+        The tunnel itself carries no inference; it is the connectivity leg between OpenAI's hosted
+        chat and the organisation's tool server, which is why it sits on the enterprise-chat
+        architecture. Tunnels are created, rotated and revoked in Platform tunnel settings, are
+        scoped to one or more Platform organisations or ChatGPT workspaces, authenticate with a
+        runtime API key (CONTROL_PLANE_API_KEY) and optionally mTLS in both directions, and
+        support outbound proxies and custom CA bundles.
+      - >-
+        Audit is split: tunnel.created / updated / deleted appear in Platform audit logs, but
+        control-plane tunnel traffic is not emitted as Compliance Platform app events; app-level
+        invocation and auth-lifecycle logging still applies when ChatGPT reaches the app through
+        the tunnel.
+    facts:
+      - label: Plans
+        value: Platform organisation permissions (Tunnels Read / Read + Manage / Read + Use); ChatGPT developer-mode access is granted separately by workspace admins.
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+      - label: Inference & routing
+        value: No inference; requests are polled from api.openai.com:443 or mtls.api.openai.com:443 and forwarded to the private MCP server.
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+      - label: Data leaving the device
+        value: MCP requests and responses transit OpenAI's control plane; the MCP server address stays private to the tunnel-client environment.
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+      - label: Docs index
+        value: developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+      - label: Data retention / training
+        value: Tunnel traffic is not emitted as Compliance Platform app events; app-level logs apply. API data is not used for training by default.
+        url: https://developers.openai.com/api/docs/guides/your-data
+    riskNotes:
+      - risk: riskCrossTenantCredentialPropagation
+        note: A tunnel can be associated with several organisations or workspaces; every association is a tenant that can reach the private server.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: The tunnel presents one runtime key; per-user authorization has to happen in the MCP server or the app's auth flow.
+      - risk: riskStaleAgentIdentityBinding
+        note: Rotation and revocation are manual in Platform tunnel settings; a forgotten tunnel keeps polling.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: Organisation-level Platform permissions Tunnels Read, Read + Manage, Read + Use; developer-mode grant in the ChatGPT workspace
+        steps:
+          - title: Separate managing from using
+            body:
+              - Read + Manage creates, edits and deletes tunnels; Read + Use runs tunnel-client or selects the tunnel in a connector.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+      - capability: capabilitySse
+        coverage: none
+        mechanism: Not applicable — the tunnel replaces inbound exposure; it does not broker employee access
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: external
+        mechanism: None in the tunnel; inspect at the MCP server or the outbound proxy
+        verified: "2026-09-10"
+      - capability: capabilityBrowserDetectionResponse
+        coverage: none
+        mechanism: Not applicable
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: Outbound-only to api.openai.com:443 / mtls.api.openai.com:443, outbound proxy and CA bundle support, Harpoon targets by label
+        steps:
+          - title: Allow only the two control-plane hosts
+            body:
+              - tunnel-client needs api.openai.com:443 (or mtls.api.openai.com:443 with mTLS) plus the private MCP server; nothing inbound.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+          - title: Route through the corporate proxy
+            body:
+              - The sample_mcp_enterprise_proxy profile shows env-backed proxy and CA bundle references.
+            url: https://github.com/openai/tunnel-client
+        verified: "2026-09-10"
+      - capability: capabilityAiGovernancePlatform
+        coverage: external
+        mechanism: Tunnel inventory from Platform settings feeds an external catalogue
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: none
+        mechanism: Not in the tunnel; approvals are the ChatGPT app-permission and connector controls
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: none
+        mechanism: Not in the tunnel; tool output is passed through unchanged
+        verified: "2026-09-10"
+      - capability: capabilityNhiManagement
+        coverage: native
+        mechanism: tunnel_id identity, runtime API key and optional control-plane client certificate
+        steps:
+          - title: Give each server its own tunnel
+            body:
+              - Initialise with tunnel-client init --tunnel-id tunnel_... and CONTROL_PLANE_API_KEY; present --control-plane.client-cert / client-key when mTLS is required.
+            url: https://github.com/openai/tunnel-client
+        verified: "2026-09-10"
+      - capability: capabilityVendorAssurance
+        coverage: external
+        mechanism: Platform audit logs consumed by an SSPM product
+        verified: "2026-09-10"
+      - capability: capabilityDspm
+        coverage: none
+        mechanism: Not applicable — no data store in the tunnel
+        verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: Trust portal evidence (API Platform is in SOC 2 scope)
+        steps:
+          - title: Attach API Platform evidence
+            body:
+              - The SOC 2 Type 2 scope names the API Platform alongside ChatGPT Enterprise.
+            url: https://trust.openai.com/
+        verified: "2026-09-10"
+      - capability: capabilityEncryptionKeyManagement
+        coverage: partial
+        mechanism: TLS to the control plane, optional mTLS on both legs, custom CA bundles
+        steps:
+          - title: Turn on mTLS where policy requires it
+            body:
+              - Control-plane mTLS goes to mtls.api.openai.com:443; the MCP-side leg accepts client certificates too.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: partial
+        mechanism: CONTROL_PLANE_API_KEY from the environment; rotation and revocation in Platform tunnel settings
+        steps:
+          - title: Rotate the runtime key from Platform settings
+            body:
+              - All creation, rotation and revocation happens at platform.openai.com/settings/organization/tunnels.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: partial
+        mechanism: Tunnel association to specific organisations or workspaces; Harpoon exposes only configured targets by label
+        note: Tool-level scoping belongs to the MCP server and the ChatGPT app's action controls.
+        steps:
+          - title: Scope discovery
+            body:
+              - Associate the tunnel only with the organisations or workspaces that should see it; Harpoon is bounded to configured targets, not a general proxy.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+      - capability: capabilityDataAccessGovernance
+        coverage: external
+        mechanism: The MCP server behind the tunnel enforces per-user access
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: native
+        mechanism: Platform tunnel settings list every tunnel with its associations; tunnel.* audit events
+        steps:
+          - title: Treat tunnel settings as the register
+            body:
+              - Every tunnel endpoint is created and listed in Platform tunnel settings and its lifecycle appears as tunnel.created / updated / deleted in audit logs.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: Platform audit logs for tunnel metadata; app-level invocation logs; tunnel-client /metrics and admin UI
+        note: Control-plane tunnel traffic is not emitted as Compliance Platform app events.
+        steps:
+          - title: Combine the three logs
+            body:
+              - Platform audit logs (tunnel.*), ChatGPT app invocation and auth-lifecycle logs, and tunnel-client's own /metrics and loopback-only /ui log export.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: external
+        mechanism: None; the tunnel register shows only sanctioned servers
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: Delete or revoke the tunnel in Platform tunnel settings (Tunnels Read + Manage)
+        steps:
+          - title: Revoke the tunnel
+            body:
+              - Deleting the tunnel endpoint stops every associated organisation and workspace from reaching the server; stop tunnel-client as well.
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-09-10"
+    sources:
+      - title: Secure MCP Tunnels guide
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+      - title: openai/tunnel-client repository
+        url: https://github.com/openai/tunnel-client
+      - title: API data usage
+        url: https://developers.openai.com/api/docs/guides/your-data
+      - title: OpenAI trust portal
+        url: https://trust.openai.com/

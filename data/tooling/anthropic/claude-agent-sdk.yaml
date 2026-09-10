@@ -1,0 +1,455 @@
+# Claude Agent SDK — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+vendor: anthropic
+family: Claude Agent SDK
+tools:
+  - id: toolClaudeAgentSdk
+    name: Claude Agent SDK
+    surfaceClasses:
+      - managedRuntime
+    variants:
+      - name: "@anthropic-ai/claude-agent-sdk (TypeScript)"
+        class: managedRuntime
+        url: https://code.claude.com/docs/en/agent-sdk/quickstart
+      - name: claude-agent-sdk (Python)
+        class: managedRuntime
+        url: https://code.claude.com/docs/en/agent-sdk/quickstart
+      - name: Headless CLI (claude -p) as a subprocess from other languages
+        class: managedRuntime
+        url: https://code.claude.com/docs/en/agent-sdk/overview
+    architecture: archAgentWorkflow
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        A library (Python and TypeScript) that runs the Claude Code agent loop inside the
+        customer's own process: each query() spawns a bundled claude CLI subprocess that owns a
+        shell, a working directory and JSONL transcripts on local disk, and calls the Anthropic
+        API (or Bedrock, Vertex, Foundry, Claude Platform on AWS) with an API key from the host's
+        environment. Nothing is hosted by Anthropic; sandboxing, egress, credential injection,
+        multi-tenant isolation and session persistence are the deployer's responsibility, and the
+        docs describe container, gVisor and Firecracker patterns with a credential-injecting
+        egress proxy.
+      - >-
+        Its controls are Claude Code's, reachable as options: permissionMode, allowedTools /
+        disallowedTools, a canUseTool callback, programmatic PreToolUse hooks that run before every
+        other check, settingSources to stop reading filesystem settings, mcpServers, maxTurns, and
+        OpenTelemetry export inherited from the environment. Managed policy on the host (MDM,
+        managed-settings.json) and server-managed settings fetched with an organisation credential
+        still apply and cannot be disabled from the SDK. Anthropic does not allow third parties to
+        offer claude.ai login through SDK-built products.
+    facts:
+      - label: Plans
+        value: >-
+          Anthropic API key (Console), Bedrock (CLAUDE_CODE_USE_BEDROCK), Claude Platform on AWS,
+          Google Cloud's Agent Platform (CLAUDE_CODE_USE_VERTEX) or Microsoft Foundry
+          (CLAUDE_CODE_USE_FOUNDRY); governed by Anthropic's Commercial Terms.
+        url: https://code.claude.com/docs/en/agent-sdk/quickstart
+      - label: Inference & routing
+        value: >-
+          Direct to api.anthropic.com or the provider's regional endpoint; ANTHROPIC_BASE_URL or
+          HTTPS_PROXY route model calls through a proxy that can inject the key outside the
+          container.
+        url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+      - label: Data leaving the device
+        value: >-
+          Prompts, tool results and file contents to the model provider; OTLP telemetry only to the
+          collector you configure (content redacted unless OTEL_LOG_* opt-ins are set); transcripts
+          on local disk or a SessionStore you provide.
+        url: https://code.claude.com/docs/en/agent-sdk/observability
+      - label: Retention & training
+        value: >-
+          API commercial terms: no training, 30-day retention by default, ZDR available for API
+          organisations; local transcripts under ~/.claude/projects/ or CLAUDE_CONFIG_DIR until you
+          delete them.
+        url: https://platform.claude.com/docs/en/manage-claude/api-and-data-retention
+      - label: Docs index
+        value: code.claude.com/docs/en/agent-sdk (overview, permissions, hooks, hosting, secure deployment)
+        url: https://code.claude.com/docs/en/agent-sdk/overview
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          The SDK's own guide opens with prompt injection as the threat model and recommends
+          defence in depth: bare-name deny rules, PreToolUse hooks, read-only mounts, --network
+          none containers and a credential-injecting proxy.
+      - risk: riskAgentDelegationChainOpacity
+        note: >-
+          Subagents inherit the parent's permission mode (never bypassPermissions unless the parent
+          has it) and hooks fire inside them with agent_id / agent_type; tracing nests subagent
+          spans under the parent tool span only when CLAUDE_CODE_ENHANCED_TELEMETRY_BETA is on.
+      - risk: riskRunawayAgentToolLoops
+        note: >-
+          There is no top-level session timeout; maxTurns is the only bound, and a stall watchdog
+          (CLAUDE_ASYNC_AGENT_STALL_TIMEOUT_MS) is not a deadline. Cost tracking is per-session in
+          the result stream.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Default query() options read user, project and local settings, CLAUDE.md and auto memory
+          from the host filesystem, and load claude.ai connectors when a claude.ai login is
+          present; multi-tenant deployments must set settingSources [] and per-tenant
+          CLAUDE_CONFIG_DIR / cwd.
+      - risk: riskToolSourceProvenance
+        note: >-
+          MCP servers are whatever the deployer configures; .mcp.json in the working directory is
+          loaded when the project setting source is on. Managed host policy (allowedMcpServers,
+          strictPluginOnlyCustomization) still applies to SDK sessions.
+    controls:
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: >-
+          settingSources [] plus CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 and per-tenant CLAUDE_CONFIG_DIR
+          and cwd; SessionStore adapter for transcripts; no memory validation or rollback
+        steps:
+          - title: Isolate tenants' memory and settings
+            body:
+              - Pass settingSources [] (Python setting_sources=[]), set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
+                and a per-tenant CLAUDE_CONFIG_DIR in env, and a per-tenant cwd on every query().
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+          - title: Control where transcripts persist
+            body:
+              - Configure a SessionStore adapter (S3, Redis, Postgres) and alert on mirror_error
+                messages; do not share a store across tenants.
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+        verified: "2026-09-10"
+      - capability: capabilityModelEvals
+        coverage: none
+        note: >-
+          The SDK ships no evaluation harness or release gate; build evals in your CI around
+          query() and the result message subtypes yourself.
+        verified: "2026-09-10"
+      - capability: capabilityAgentObservability
+        coverage: native
+        mechanism: >-
+          OpenTelemetry traces (claude_code.interaction / llm_request / tool / hook spans),
+          metrics and log events exported by the CLI subprocess; W3C trace context propagated from
+          the host application; OTEL_RESOURCE_ATTRIBUTES for enduser.id / tenant.id
+        steps:
+          - title: Turn on OTLP export
+            body:
+              - Set CLAUDE_CODE_ENABLE_TELEMETRY=1, OTEL_METRICS_EXPORTER / OTEL_LOGS_EXPORTER /
+                OTEL_TRACES_EXPORTER=otlp and OTEL_EXPORTER_OTLP_ENDPOINT in the container
+                environment; add CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1 for traces.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+          - title: Attribute actions to end users
+            body:
+              - Inject enduser.id and tenant.id through OTEL_RESOURCE_ATTRIBUTES per query() so
+                tool_decision, tool_result and mcp_server_connection events form a per-user audit
+                trail for the SIEM.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+        verified: "2026-09-10"
+      - capability: capabilityIga
+        coverage: external
+        mechanism: >-
+          Authentication of end users happens at your gateway; the agent receives pre-authenticated
+          requests. Claude Console roles and SSO govern who can mint API keys
+        steps:
+          - title: Put user authentication in front of the agent
+            body:
+              - The hosting guide says the agent should not be the component that validates user
+                tokens; terminate auth at a gateway and pass identity as resource attributes.
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+          - title: Control who can create API keys
+            body:
+              - Use Console roles (Claude Code role can only create Claude Code keys) and Console
+                SSO for the humans who provision credentials.
+            url: https://code.claude.com/docs/en/authentication
+        verified: "2026-09-10"
+      - capability: capabilityNhiManagement
+        coverage: partial
+        mechanism: >-
+          Console service accounts with workload identity federation (OIDC exchange, no static
+          keys) identify the workload to Anthropic; no per-agent identity beyond the API key or
+          service account
+        steps:
+          - title: Give the workload a federated identity
+            body:
+              - Exchange the runtime's OIDC token (GitHub Actions, AWS, GCP, Kubernetes, Entra,
+                Okta, SPIFFE) for Claude API access through a Console service account instead of
+                shipping ANTHROPIC_API_KEY; Claude Code reads ANTHROPIC_FEDERATION_RULE_ID and
+                ANTHROPIC_ORGANIZATION_ID.
+            url: https://code.claude.com/docs/en/authentication
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: partial
+        mechanism: >-
+          ANTHROPIC_API_KEY from your secret manager, ANTHROPIC_BASE_URL to a key-injecting proxy,
+          apiKeyHelper, workload identity federation; tool credentials via proxy injection
+        steps:
+          - title: Keep credentials outside the agent container
+            body:
+              - Route model calls through a proxy that injects the key (ANTHROPIC_BASE_URL) and
+                outbound tool calls through a TLS-terminating or custom-tool proxy so the agent never
+                holds the secret.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+          - title: Strip secrets from mounted directories
+            body:
+              - Exclude .env, ~/.aws, ~/.ssh, .npmrc, *.pem and similar files before mounting code
+                even read-only.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        verified: "2026-09-10"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: native
+        mechanism: >-
+          Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run
+          before every permission mode, including bypassPermissions; filesystem hooks from settings
+          also apply
+        steps:
+          - title: Gate every tool call in a hook
+            body:
+              - Register hooks.PreToolUse callbacks (with matcher patterns) that return
+                permissionDecision "deny" or "ask"; hooks run first in the evaluation order and a
+                deny holds even in bypassPermissions.
+            url: https://code.claude.com/docs/en/agent-sdk/hooks
+          - title: Add declarative deny rules
+            body:
+              - Pass disallowedTools (bare names remove the tool; Bash(rm *) scopes it) and, when
+                the project source is enabled, permissions.deny in .claude/settings.json.
+            url: https://code.claude.com/docs/en/agent-sdk/permissions
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: >-
+          allowedTools / disallowedTools, permissionMode (default, dontAsk, acceptEdits, plan, auto,
+          bypassPermissions), mcp__server__tool allow patterns, skills option, per-subagent
+          permissionMode
+        steps:
+          - title: Fix an explicit tool surface
+            body:
+              - Pair allowedTools with permissionMode "dontAsk" so listed tools run and everything
+                else is denied; note allowedTools does not constrain bypassPermissions.
+            url: https://code.claude.com/docs/en/agent-sdk/permissions
+          - title: Allow MCP tools narrowly
+            body:
+              - Use mcp__<server>__<tool> or mcp__<server>__* entries rather than a broad
+                permission mode; acceptEdits never auto-approves MCP tools.
+            url: https://code.claude.com/docs/en/agent-sdk/mcp
+        verified: "2026-09-10"
+      - capability: capabilityCredentialIsolation
+        coverage: partial
+        mechanism: >-
+          Proxy-injected credentials and custom tools that call authenticated services outside the
+          boundary; per-tenant egress rules at the proxy; no on-behalf-of exchange in the SDK
+        steps:
+          - title: Use the proxy pattern for every service credential
+            body:
+              - Run a credential-injecting proxy (Envoy credential_injector, mitmproxy, LiteLLM)
+                outside the container; give the agent no direct credentials and route git and API
+                calls through it.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        verified: "2026-09-10"
+      - capability: capabilityRateLimiting
+        coverage: partial
+        mechanism: >-
+          maxTurns per query and per subagent AgentDefinition; API organisation spend limits and
+          usage-tier rate limits; per-session cost tracking in the result stream
+        steps:
+          - title: Bound turns and cost
+            body:
+              - Set maxTurns on query() and on each subagent definition (there is no wall-clock
+                deadline); read total_cost_usd from the result message for per-session accounting.
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+        verified: "2026-09-10"
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: >-
+          Claude Code's built-in command parsing, web-search summarisation and sandbox mode;
+          defence in depth recommended via containers and egress proxy
+        steps:
+          - title: Layer the recommended controls
+            body:
+              - >-
+                Follow the secure-deployment guide: PreToolUse hooks, deny rules, read-only mounts,
+                --network none with a Unix-socket proxy, and gVisor or Firecracker for untrusted
+                content.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        note: No admin-configurable injection classifier is exposed; auto mode's classifier is available as a permission mode.
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: external
+        mechanism: Read/Edit deny rules keep named files out; inspection of prompts and outputs is the deployer's proxy or hook
+        steps:
+          - title: Inspect at the proxy or in a hook
+            body:
+              - Use a TLS-terminating proxy or a PreToolUse / UserPromptSubmit hook to scan content;
+                the SDK itself ships no DLP classifier.
+            url: https://code.claude.com/docs/en/agent-sdk/hooks
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: >-
+          canUseTool callback for unresolved calls, ask rules, plan mode, PreToolUse "ask" or
+          "defer" (ends the query for later resumption), AskUserQuestion
+        steps:
+          - title: Route sensitive calls to a human
+            body:
+              - Implement canUseTool (Python can_use_tool) and add ask rules; tools marked
+                anthropic/requiresUserInteraction and org connector tools set to ask always reach
+                the callback.
+            url: https://code.claude.com/docs/en/agent-sdk/permissions
+          - title: Pause for asynchronous approval
+            body:
+              - Return permissionDecision "defer" from a PreToolUse hook to end the query and resume
+                it after an out-of-band approval.
+            url: https://code.claude.com/docs/en/agent-sdk/hooks
+        verified: "2026-09-10"
+      - capability: capabilityDataAccessGovernance
+        coverage: external
+        mechanism: Retrieval runs with whatever filesystem mounts and MCP credentials the deployer grants
+        note: >-
+          The SDK reads whatever the working directory and MCP servers expose; least-privilege
+          mounts and per-user MCP credentials are your responsibility.
+        steps:
+          - title: Mount only what the task needs
+            body:
+              - Mount code read-only, give each session its own cwd, and use per-tenant MCP
+                credentials so retrieval runs as the requesting user.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: partial
+        mechanism: >-
+          Claude Code's sandbox settings (Seatbelt / bubblewrap) apply when configured;
+          Anthropic's sandbox-runtime package; documented Docker, gVisor and Firecracker patterns
+        steps:
+          - title: Choose the isolation tier
+            body:
+              - Use sandbox-runtime for lightweight OS-level isolation, hardened Docker (--cap-drop
+                ALL, --read-only, --network none), gVisor for syscall interception or Firecracker
+                microVMs per the isolation table.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+          - title: Size and recycle containers
+            body:
+              - One subprocess per session; start at 1 GiB RAM / 1 CPU, recycle long sessions, and
+                use ephemeral containers for one-off tasks.
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: none
+        note: >-
+          No registry of SDK-built agents exists on the vendor side; OTEL_SERVICE_NAME and
+          resource attributes are the only identifiers, so maintain the inventory in your own
+          governance platform.
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: >-
+          OTLP log events (tool_decision, tool_result, mcp_server_connection, permission_mode_changed)
+          to your collector; transcripts on disk or in a SessionStore; the Console Usage and Cost API
+        steps:
+          - title: Ship security events to the SIEM
+            body:
+              - Export OTEL_LOGS_EXPORTER=otlp with enduser.id attributes; the events are named with
+                a claude_code. prefix and carry the decision source.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+        note: Records live in your infrastructure; tamper evidence is what your collector provides.
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: partial
+        mechanism: >-
+          Revoke the Console API key or federation rule; kill the subprocess or container;
+          maxTurns; hooks can deny all calls
+        steps:
+          - title: Revoke and stop
+            body:
+              - Delete the API key in the Console (or the WIF rule), stop the container, and delete
+                session transcripts and working directories the container held.
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+        verified: "2026-09-10"
+      - capability: capabilityAiDetectionResponse
+        coverage: external
+        mechanism: OTLP events and traces correlated in your SIEM; no vendor-side detections for SDK workloads
+        steps:
+          - title: Build detections on the exported events
+            body:
+              - Correlate tool_decision rejections, permission_mode_changed and mcp_server_connection
+                events with enduser.id in your SIEM.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+        verified: "2026-09-10"
+      - capability: capabilityEncryptionKeyManagement
+        coverage: partial
+        mechanism: >-
+          TLS to the provider; AES-256 infrastructure encryption at Anthropic; customer-managed
+          keys via Bedrock KMS or Vertex CMEK when routed there; local transcripts rely on host disk
+          encryption
+        steps:
+          - title: Pick the provider for key custody
+            body:
+              - Route through Bedrock (AWS KMS CMK) or Google Cloud's Agent Platform (CMEK) when
+                customer-held keys are required; the Anthropic API uses infrastructure encryption.
+            url: https://code.claude.com/docs/en/data-usage
+        verified: "2026-09-10"
+      - capability: capabilityRagSecurity
+        coverage: none
+        note: >-
+          The SDK has no retrieval or vector store of its own; whatever you attach through MCP or
+          files carries its own trust tiering.
+        verified: "2026-09-10"
+      - capability: capabilityMcpToolSecurity
+        coverage: partial
+        mechanism: >-
+          mcpServers configured in code or .mcp.json, mcp__ allow patterns, strictMcpConfig /
+          disableClaudeAiConnectors, host managed policy (allowedMcpServers, strictPluginOnlyCustomization)
+        steps:
+          - title: Declare servers in code, not from the repository
+            body:
+              - Pass mcpServers in options and set settingSources [] so a checked-in .mcp.json cannot
+                add servers; set strictMcpConfig or disableClaudeAiConnectors to suppress claude.ai
+                connectors.
+            url: https://code.claude.com/docs/en/agent-sdk/claude-code-features
+          - title: Allow tools per server
+            body:
+              - Grant mcp__<server>__<tool> entries in allowedTools and treat needs-auth / failed
+                statuses in the init message as blockers.
+            url: https://code.claude.com/docs/en/agent-sdk/mcp
+        verified: "2026-09-10"
+      - capability: capabilityAiBom
+        coverage: none
+        note: >-
+          The SDK pins a bundled CLI binary per package version and follows semver, but publishes
+          no signed manifest of models, tools and plugins; record it from your lockfile and
+          options.
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: partial
+        mechanism: >-
+          Claude Code sandbox network allowlist when enabled; container --network none with a
+          Unix-socket or vsock proxy; HTTPS_PROXY / ANTHROPIC_BASE_URL; cloud security groups
+        steps:
+          - title: Remove the network interface and proxy everything
+            body:
+              - Run with --network none and mount a proxy socket, or in a private subnet with
+                firewall rules that allow only the proxy; enforce domain allowlists and log at the
+                proxy.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        verified: "2026-09-10"
+      - capability: capabilityModelScanning
+        coverage: none
+        note: >-
+          Not applicable: no model artifacts are loaded locally; inference is remote.
+        verified: "2026-09-10"
+    advisories:
+      - title: "CVE-2026-39861 — Claude Code sandbox symlink escape (the SDK bundles the same CLI; fixed 2.1.64)"
+        url: https://advisories.gitlab.com/npm/@anthropic-ai/claude-code/CVE-2026-39861/
+        date: "2026-04"
+      - title: "CVE-2026-21852 — repo settings could redirect ANTHROPIC_BASE_URL before trust (fixed 2.0.65)"
+        url: https://github.com/advisories/GHSA-jh7p-qr78-84p7
+        date: "2026-01"
+    sources:
+      - title: Agent SDK overview
+        url: https://code.claude.com/docs/en/agent-sdk/overview
+      - title: Agent SDK permissions
+        url: https://code.claude.com/docs/en/agent-sdk/permissions
+      - title: Agent SDK hooks
+        url: https://code.claude.com/docs/en/agent-sdk/hooks
+      - title: Hosting the Agent SDK
+        url: https://code.claude.com/docs/en/agent-sdk/hosting
+      - title: Securely deploying AI agents
+        url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+      - title: Observability with OpenTelemetry
+        url: https://code.claude.com/docs/en/agent-sdk/observability
+      - title: Use Claude Code features in the SDK (settingSources)
+        url: https://code.claude.com/docs/en/agent-sdk/claude-code-features
+      - title: Connect to external tools with MCP
+        url: https://code.claude.com/docs/en/agent-sdk/mcp
+      - title: API and data retention
+        url: https://platform.claude.com/docs/en/manage-claude/api-and-data-retention
