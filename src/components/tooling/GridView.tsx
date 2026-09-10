@@ -25,15 +25,15 @@ export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[
         <table className="border-separate border-spacing-0 text-[12px]">
           <thead className="sticky top-0 z-20">
             <tr>
-              <th rowSpan={headerRows} className="sticky left-0 z-30 min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-bottom text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+              <th rowSpan={headerRows} className="sticky left-0 z-30 min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
                 Reference control
               </th>
-              <th rowSpan={headerRows} className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-bottom">
+              <th rowSpan={headerRows} className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle">
                 <span className="block text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">Enterprise capabilities</span>
                 <span className="block text-[10.5px] font-normal text-ink-3">deployed by the organisation, where the drawing pins them</span>
               </th>
               <th colSpan={tools.length} className="border-b border-l border-line bg-mist px-2 py-1.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                Admin controls
+                {archetypeId === "archPersonalAgent" ? "Admin controls · the user is the admin here" : "Admin controls"}
               </th>
             </tr>
             {cols.length > 1 && (
@@ -48,7 +48,7 @@ export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[
             <tr>
               {cols.flatMap((g) =>
                 g.tools.map((t) => (
-                  <th key={t.id} className="min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-center align-bottom">
+                  <th key={t.id} className="min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-center align-middle">
                     <Link href={`/tooling?tool=${t.id}`} className="block text-[11.5px] font-semibold leading-tight text-ink hover:text-introduced hover:underline">
                       {t.name}
                     </Link>

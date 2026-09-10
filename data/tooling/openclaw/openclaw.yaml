@@ -1,5 +1,13 @@
 # OpenClaw — one entity per product × reference architecture. Facts are dated (asOf) and
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+#
+# Fetch log 2026-09-10: every docs.openclaw.ai page cited below resolved as Markdown (append
+# .md; index at https://docs.openclaw.ai/llms.txt). Guessed URLs plugins/sdk-hooks and
+# plugins/sdk/hooks returned 404 (the plugin hook page is plugins/hooks/tool-policy). The GitHub
+# advisories listing renders only 10 of 647 published advisories to a fetch; the full list was
+# read through the GitHub REST API (repos/openclaw/openclaw/security-advisories). NVD resolved
+# CVE-2026-25253; the project's own advisory for the same bug carries no CVE id
+# (GHSA-g8p2-7wf7-98mq). Earliest published advisory is 2026-01-31; there are no 2025 advisories.
 vendor: openclaw
 family: OpenClaw
 tools:
@@ -17,6 +25,38 @@ tools:
         sandboxed, and a container sandbox whose defaults are no network, a read-only root and all
         capabilities dropped. Sandboxing itself is off by default (agents.defaults.sandbox); latest
         release 2026.9.3 (2026-09-08)."
+      - "The operator model is the single trusted user: the person who runs the gateway is the
+        administrator, everything below is a config key in openclaw.json, a CLI command or a
+        Control UI setting that user sets, and the trust-model page says plainly that one gateway
+        is one trust boundary and not hostile multi-tenant isolation."
+    facts:
+      - label: Plans
+        value: >-
+          Open source, self-hosted; no vendor plan tiers. ClawHub is the public marketplace for
+          skills and plugins.
+        url: https://docs.openclaw.ai/clawhub
+      - label: Inference & routing
+        value: >-
+          The user picks the model provider under models.providers (hosted APIs, subscription
+          OAuth, or local servers); every reply and tool call runs on that provider, and web
+          search, embeddings and media features can call further paid APIs with their own keys.
+        url: https://docs.openclaw.ai/reference/api-usage-costs
+      - label: Data leaving the device
+        value: >-
+          Prompts, tool results and attachments go to the configured model and tool providers;
+          runtime traffic can be forced through an operator proxy (proxy.proxyUrl). Feature
+          telemetry is off by default (telemetry.enabled false) and rides the daily update check
+          when enabled.
+        url: https://docs.openclaw.ai/gateway/config-observability
+      - label: Retention & training
+        value: >-
+          Everything is local under ~/.openclaw: config, credentials, SQLite state and session
+          transcripts (JSONL). The metadata-only audit ledger keeps 30 days and at most 100,000
+          rows. No vendor training; provider terms apply to what is sent for inference.
+        url: https://docs.openclaw.ai/gateway/security/secrets-and-storage
+      - label: Docs index
+        value: https://docs.openclaw.ai/llms.txt
+        url: https://docs.openclaw.ai/llms.txt
     items:
       - title: Gateway lockdown and the version floor
         body:
@@ -57,7 +97,637 @@ tools:
             url: https://docs.openclaw.ai/gateway/sandboxing/docker-backend
           - title: "Docker: Run OpenClaw securely in Docker Sandboxes"
             url: https://www.docker.com/blog/run-openclaw-securely-in-docker-sandboxes/
-    controls: []
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          The docs treat every fetched page, email, attachment and hook payload as hostile even when
+          only the operator can message the bot; the shipped defences are boundary markers and
+          token stripping, not a classifier, so the recommended shape is a tool-less reader agent
+          plus tool policy, exec approvals and sandboxing.
+      - risk: riskRogueActions
+        note: >-
+          The trusted-operator default is host exec with security full and ask off; nothing prompts
+          until the user sets tools.exec.mode to allowlist or ask, and tools.elevated lets exec
+          leave the sandbox for allowlisted senders.
+    controls:
+      - capability: capabilityPromptInjectionDefense
+        coverage: partial
+        mechanism: >-
+          External content is wrapped in <<<EXTERNAL_UNTRUSTED_CONTENT>>> boundary markers with
+          chat-template special tokens stripped, and an outbound sanitizer strips leaked tool-call
+          scaffolding from replies; there is no injection classifier. Hardening is the reader-agent
+          pattern, tool policy and the audit's small-model warning.
+        steps:
+          - title: Keep the unsafe-content bypass flags off
+            body:
+              - Leave hooks.mappings[].allowUnsafeExternalContent,
+                hooks.gmail.allowUnsafeExternalContent and the cron payload field
+                allowUnsafeExternalContent unset; if one is needed for debugging, isolate that agent
+                with a sandbox, minimal tools and its own session namespace.
+            url: https://docs.openclaw.ai/gateway/security/prompt-injection
+          - title: Summarise untrusted content in a reader agent
+            body:
+              - Route web, mail and hook content to a read-only or tool-disabled agent under
+                agents.entries.<id> (sandbox mode all, tools.deny for exec/browser/write) and pass
+                only its summary to the main agent; constrain the handoff with tools.agentToAgent.allow.
+            url: https://docs.openclaw.ai/gateway/security/prompt-injection
+          - title: Deny the high-risk tools unless needed
+            body:
+              - Keep web_search, web_fetch and browser out of tool-enabled agents via tools.deny,
+                and set tools.exec.strictInlineEval true whenever interpreters (python, node, ruby,
+                osascript) are allowlisted so -c/-e forms still need approval.
+            url: https://docs.openclaw.ai/gateway/security/prompt-injection
+          - title: Let the audit catch weak-model exposure
+            body:
+              - "`openclaw security audit` warns when a model of 300B parameters or fewer runs
+                unsandboxed with web or browser tools enabled; fix that finding before exposing
+                the agent to untrusted inboxes."
+            url: https://docs.openclaw.ai/cli/security
+        verified: "2026-09-10"
+      - capability: capabilityIga
+        coverage: native
+        mechanism: >-
+          gateway.auth.mode (token | password | trusted-proxy; required by default, fail-closed),
+          dmPolicy pairing plus allowFrom allowlists per channel, device and node pairing
+          approvals, and gateway.roles / gateway.auth.identityScopes for operator.read | write |
+          admin scopes on team gateways
+        steps:
+          - title: Require gateway authentication
+            body:
+              - Set gateway.auth.mode "token" and a real gateway.auth.token (24+ characters;
+                `openclaw doctor --generate-gateway-token` mints one); startup rejects blank or
+                placeholder secrets and the audit flags short ones.
+            url: https://docs.openclaw.ai/gateway/security/network-exposure
+          - title: Gate who can message the agent
+            body:
+              - Keep dmPolicy "pairing" (the default) and approve senders with
+                `openclaw pairing approve <channel> <code>`, or switch to "allowlist" with an
+                explicit allowFrom list; "open" requires allowFrom to contain "*".
+            url: https://docs.openclaw.ai/gateway/security/access-control
+          - title: Approve devices and nodes explicitly
+            body:
+              - Review `openclaw devices list`, remove strays with
+                `openclaw devices remove <deviceId>`, and set gateway.nodes.pairing.autoApproveLocal
+                false to require a decision for every device; leave autoApproveCidrs unset.
+            url: https://docs.openclaw.ai/cli/devices
+          - title: Scope operator connections
+            body:
+              - On a shared gateway define gateway.roles with per-role scopes
+                (operator.read, operator.write, operator.approvals, operator.admin) and map
+                identities with gateway.auth.identityScopes; a required gateway.roles.default
+                caps everyone else.
+            url: https://docs.openclaw.ai/gateway/operator-scopes
+        verified: "2026-09-10"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: native
+        mechanism: >-
+          tools.exec.mode (deny | allowlist | ask | auto | full) evaluated on the execution host
+          against the per-agent allowlist, with approval-backed runs bound to resolved executables
+          and one file operand and denied on drift; plugin before_tool_call hooks can block or
+          require approval for any tool call. The trusted-operator default resolves to full/off.
+        steps:
+          - title: Choose an exec mode that enforces policy
+            body:
+              - "`openclaw config set tools.exec.mode allowlist` (silent deny on miss) or `ask`
+                (human prompt on miss); the default for gateway and node hosts is security full
+                with ask off, and `deny` blocks host exec entirely."
+            url: https://docs.openclaw.ai/tools/permission-modes
+          - title: Verify the effective policy
+            body:
+              - Run `openclaw approvals get` and `openclaw exec-policy show`; effective policy is
+                the stricter of tools.exec.* and the host approvals file, and askFallback defaults
+                to deny when no UI can answer a prompt.
+            url: https://docs.openclaw.ai/tools/exec-approvals
+          - title: Rely on approval binding
+            body:
+              - Approved commands bind cwd, exact argv, resolved executable identity (content hash
+                for writable binaries) and one concrete script or file operand; a change after
+                approval denies the run instead of executing drifted content.
+            url: https://docs.openclaw.ai/tools/exec-approvals
+          - title: Add a deterministic plugin gate
+            body:
+              - A plugin before_tool_call handler returning block true (or requiring an
+                allow-once | allow-always | deny decision) is terminal for that tool call and is
+                recorded as an enforced decision in the audit ledger.
+            url: https://docs.openclaw.ai/plugins/hooks/tool-policy
+        verified: "2026-09-10"
+      - capability: capabilityTransportSecurity
+        coverage: native
+        mechanism: >-
+          Authenticated Gateway WebSocket (token/password/device identity, fail-closed),
+          gateway.tls for HTTPS/WSS termination, gateway.remote.tlsFingerprint pinning for remote
+          clients, SSH-verified node pairing, and TLS / mTLS / OAuth settings per MCP server
+        steps:
+          - title: Terminate TLS at the gateway or pin the proxy
+            body:
+              - Set gateway.tls.enabled true with certPath, keyPath and optional caPath
+                (autoGenerate produces a self-signed pair for local use only), or terminate TLS at
+                a reverse proxy listed in gateway.trustedProxies.
+            url: https://docs.openclaw.ai/gateway/config-gateway
+          - title: Pin remote gateway connections
+            body:
+              - Use wss:// with gateway.remote.tlsFingerprint set to the expected SHA-256
+                certificate fingerprint; plaintext ws:// is accepted only for loopback, private IP
+                literals, .local and *.ts.net, and OPENCLAW_ALLOW_INSECURE_PRIVATE_WS is break-glass.
+            url: https://docs.openclaw.ai/gateway/security/network-exposure
+          - title: Authenticate MCP servers
+            body:
+              - Configure HTTP MCP servers with TLS verification and mTLS certificate/key paths
+                through `openclaw mcp add` / `openclaw mcp configure`, prefer auth "oauth" with
+                `openclaw mcp login <name>`, and keep literal bearer tokens out of config.
+            url: https://docs.openclaw.ai/cli/mcp/registry
+          - title: Keep node pairing key-verified
+            body:
+              - gateway.nodes.pairing.sshVerify (default on) approves a node only on an exact
+                device-key match read back over SSH with strict host keys; leave
+                gateway.nodes.pairing.autoApproveCidrs unset.
+            url: https://docs.openclaw.ai/gateway/config-gateway
+        verified: "2026-09-10"
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: >-
+          Per-agent workspaces and sandbox scope isolate memory files; a memory admission policy
+          keeps chosen sources out of dreaming ingestion; dreaming taint-gates untrusted candidates;
+          `openclaw memory forget` purges by session, participant or hook source using recorded
+          lineage. Memory is plain Markdown the agent writes; there is no write validation,
+          quarantine or rollback beyond forget.
+        steps:
+          - title: Give each agent its own workspace and sandbox scope
+            body:
+              - Set agents.entries.<id>.workspace per agent and keep
+                agents.defaults.sandbox.scope "agent" (or "session" for per-session isolation);
+                "shared" removes cross-session isolation.
+            url: https://docs.openclaw.ai/gateway/security/tool-permissions
+          - title: Exclude untrusted sources from long-term memory
+            body:
+              - Set plugins.entries.memory-core.config.memoryPolicy.excludeSessions with
+                hookExternalContentSources (for example ["email", "gmail"]), channels or
+                chatTypes so those sessions never enter dreaming ingestion or backfill.
+            url: https://docs.openclaw.ai/reference/memory-config
+          - title: Purge what a session wrote
+            body:
+              - "`openclaw memory forget --agent <id> --session <id-or-key> --dry-run --json`
+                previews lineage-based removal; rerun without --dry-run to delete, or purge by
+                --participant or --hook-source."
+            url: https://docs.openclaw.ai/concepts/memory-provenance
+          - title: Control background promotion
+            body:
+              - Dreaming promotes only scored, provenance-gated candidates into MEMORY.md and
+                writes a reviewable DREAMS.md diary; disable it with
+                plugins.entries.memory-core.config.dreaming.enabled false.
+            url: https://docs.openclaw.ai/concepts/memory
+        verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: >-
+          agents.defaults.sandbox (mode off | non-main | all; backend docker | podman | openshell |
+          ssh; scope session | agent | shared; workspaceAccess none | ro | rw) with container
+          defaults of network none, readOnlyRoot, capDrop ALL, non-root user, pids/memory/cpu
+          limits and optional seccomp/AppArmor profiles; off by default
+        steps:
+          - title: Turn the tool sandbox on
+            body:
+              - Set agents.defaults.sandbox.mode "all" (or "non-main" to sandbox everything but
+                the main session) and pick a backend; the audit warns when Docker settings exist
+                while mode is still off.
+            url: https://docs.openclaw.ai/gateway/config-agents/sandbox
+          - title: Keep the container defaults
+            body:
+              - 'The documented defaults are docker.network "none", readOnlyRoot true, capDrop
+                ["ALL"], user 1000:1000, tmpfs for /tmp, and pidsLimit/memory/cpus caps; add
+                seccompProfile or apparmorProfile paths and never use network "host".'
+            url: https://docs.openclaw.ai/gateway/config-agents/sandbox
+          - title: Limit what the sandbox can see
+            body:
+              - workspaceAccess "none" (default) hides the agent workspace, "ro" mounts it
+                read-only at /agent; extra docker.binds are validated against a denylist covering
+                /etc, /proc, the Docker socket paths and ~/.ssh, ~/.aws and similar.
+            url: https://docs.openclaw.ai/gateway/security/tool-permissions
+          - title: Close the escape hatch
+            body:
+              - Set tools.elevated.enabled false (and per agent agents.entries.<id>.tools.elevated)
+                so exec cannot leave the sandbox onto the gateway or node host.
+            url: https://docs.openclaw.ai/gateway/security/hardened-baseline
+        verified: "2026-09-10"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: >-
+          tools.profile (minimal | coding | messaging | full) plus tools.allow / tools.deny (deny
+          wins, wildcards, tool groups such as group:runtime and group:fs), layered per provider
+          (tools.byProvider), per sender (tools.toolsBySender), per agent (agents.entries.*.tools)
+          and per sub-agent (tools.subagents.tools)
+        steps:
+          - title: Start from a profile and deny the rest
+            body:
+              - Set tools.profile ("messaging" or "minimal" for a chat-facing agent) and list
+                tools.deny entries such as group:runtime, group:fs, browser; deny always wins and
+                applies even when the sandbox is off.
+            url: https://docs.openclaw.ai/gateway/config-tools/tool-policy
+          - title: Deny control-plane tools where untrusted content flows
+            body:
+              - "For any agent or surface that reads untrusted content set tools.deny to include
+                gateway, cron, sessions_spawn and sessions_send; non-owner senders already cannot
+                use cron or gateway."
+            url: https://docs.openclaw.ai/gateway/security/tool-permissions
+          - title: Scope per agent and per sender
+            body:
+              - Override with agents.entries.<id>.tools.{profile,allow,deny} and restrict
+                specific requesters with tools.toolsBySender keys such as
+                "id:<senderId>" or "*" (defence in depth on top of channel allowlists).
+            url: https://docs.openclaw.ai/gateway/config-tools/tool-policy
+          - title: Bound sub-agents and cross-agent reach
+            body:
+              - Narrow tools.subagents.tools.deny/allow and
+                agents.defaults.subagents.allowAgents; set tools.sessions.visibility "agent" and
+                tools.agentToAgent.enabled false as in the hardened baseline.
+            url: https://docs.openclaw.ai/gateway/security/hardened-baseline
+        verified: "2026-09-10"
+      - capability: capabilityCredentialIsolation
+        coverage: partial
+        mechanism: >-
+          SecretRefs keep provider credentials out of config and hand the model-call chain a
+          process-local sentinel; the default-off secret egress proxy gives Gateway-hosted
+          subprocesses sentinels that a loopback proxy swaps in only for host-bound destinations;
+          workspace .env cannot inject provider keys; MCP servers hold their own OAuth grants. The
+          agent still acts with the operator's own accounts — there is no on-behalf-of exchange.
+        steps:
+          - title: Replace plaintext credentials with SecretRefs
+            body:
+              - 'Point models.providers.<id>.apiKey and other supported fields at
+                { source: "store" | "file" | "env" | "exec", provider, id }; the runtime mints an
+                oc-sent-v2 sentinel and refuses to send an unresolved one.'
+            url: https://docs.openclaw.ai/gateway/secrets/runtime-model
+          - title: Bind subprocess secrets to destinations
+            body:
+              - "`openclaw secrets store set OPENAI_API_KEY --allow-host api.openai.com`, then
+                `openclaw config set secrets.egressProxy.enabled true --strict-json` and restart;
+                exec commands receive sentinels the proxy substitutes only for the bound host."
+            url: https://docs.openclaw.ai/gateway/secrets/secret-store-and-egress
+          - title: Keep workspace .env files powerless
+            body:
+              - Provider API-key variables, every OPENCLAW_* key and endpoint-routing variables are
+                blocked from untrusted workspace .env files; put credentials in the gateway process
+                environment, ~/.openclaw/.env or config instead.
+            url: https://docs.openclaw.ai/gateway/security/secrets-and-storage
+          - title: Give MCP servers their own grants
+            body:
+              - Configure HTTP servers with auth "oauth", authorise with `openclaw mcp login <name>`
+                and revoke with `openclaw mcp logout <name>`; tokens live in state/openclaw.sqlite.
+            url: https://docs.openclaw.ai/cli/mcp/registry
+        verified: "2026-09-10"
+      - capability: capabilitySecretsManagement
+        coverage: native
+        mechanism: >-
+          SecretRef providers env | file | exec | store, exec recipes for 1Password, Bitwarden,
+          HashiCorp Vault, pass and sops, a shared secret store with write-only "secret" entries,
+          per-run proxy credentials that expire when the agent run closes, and
+          `openclaw secrets audit --check` as the migration gate. The store itself is not
+          encrypted at rest (0600/0700 permissions only).
+        steps:
+          - title: Configure SecretRef providers
+            body:
+              - Declare secrets.providers (for example a file provider with mode "singleValue")
+                and reference entries from credential fields; the exec provider runs a trusted
+                local command such as a 1Password, Bitwarden, Vault, pass or sops CLI.
+            url: https://docs.openclaw.ai/gateway/secrets
+          - title: Use the shared store for write-only values
+            body:
+              - "`openclaw secrets store set <NAME>` (kind secret) values are never returned by
+                list/get or the Control UI and are inert until a SecretRef or the egress proxy uses
+                them; kind env values stay agent-readable by design."
+            url: https://docs.openclaw.ai/gateway/secrets/secret-store-and-egress
+          - title: Audit and scrub plaintext residue
+            body:
+              - Run `openclaw secrets audit --check`, then `secrets configure` and `secrets apply`
+                until the audit is clean; residue in openclaw.json, the SQLite auth store, .env and
+                generated models.json stays agent-readable until scrubbed.
+            url: https://docs.openclaw.ai/gateway/secrets/runtime-model
+          - title: Lock down the state directory
+            body:
+              - Keep ~/.openclaw at 700 and openclaw.json plus credential files at 600;
+                `openclaw security audit --fix` tightens them and full-disk encryption plus a
+                dedicated OS user are the documented host baseline.
+            url: https://docs.openclaw.ai/gateway/security/secrets-and-storage
+        verified: "2026-09-10"
+      - capability: capabilityModelGuardrails
+        coverage: none
+        note: >-
+          No harm-category, denied-topic or blocked-term filter on model inputs or outputs is
+          documented; the only output processing is the scaffolding sanitizer. Apply guardrails at
+          the provider (the Amazon Bedrock plugin advertises guardrail support but documents no
+          key) and keep /reasoning, /verbose and /trace off in shared rooms.
+        verified: "2026-09-10"
+      - capability: capabilityMcpToolSecurity
+        coverage: partial
+        mechanism: >-
+          plugins.allow exclusive allowlist plus plugins.deny, `--pin` exact versions with
+          digest-verified ClawHub artifacts and a security-audit trust check before download, a
+          security.installPolicy exec hook (allow | warn | block) for skill and plugin installs,
+          and per-MCP-server toolFilter and probes. MCP tool definitions are not hash-pinned and
+          there is no built-in static analysis of installed code.
+        steps:
+          - title: Allowlist plugins explicitly
+            body:
+              - Set plugins.allow to the plugin ids you trust (plugins.deny wins over it); the
+                gateway logs "plugins.allow is empty; discovered non-bundled plugins may auto-load"
+                and the audit flags loading without an allowlist.
+            url: https://docs.openclaw.ai/tools/plugin
+          - title: Pin and verify installs
+            body:
+              - "`openclaw plugins install <package> --pin` records the exact npm version; ClawHub
+                installs verify the artifact digest and print the release's security-audit
+                outcome, and `openclaw security audit` warns on unpinned or integrity-less records."
+            url: https://docs.openclaw.ai/cli/plugins/install
+          - title: Run your own install policy
+            body:
+              - Configure security.installPolicy (enabled, targets ["skill", "plugin"],
+                exec.command) to run a trusted local command that returns allow, warn or block
+                before any skill or plugin install commits; --force never bypasses it.
+            url: https://docs.openclaw.ai/tools/skills-config
+          - title: Filter and probe MCP servers
+            body:
+              - Restrict each server with mcp.servers.<name>.toolFilter.include, verify it with
+                `openclaw mcp doctor <name> --probe`, and disable all configured servers with
+                tools.deny ["bundle-mcp"] when none are needed.
+            url: https://docs.openclaw.ai/tools/mcp
+        verified: "2026-09-10"
+      - capability: capabilityHitlControls
+        coverage: native
+        mechanism: >-
+          Exec approvals (tools.exec.mode ask, exec.ask always, askFallback deny) broadcast
+          exec.approval.requested to the Control UI, macOS app and chat channels with Allow Once /
+          Always Allow Here; MCP tool approval mode per server; typed acknowledgement for
+          install-policy warnings; operator.approvals scope gates who may answer
+        steps:
+          - title: Require a human on new commands
+            body:
+              - Set tools.exec.mode "ask" (allowlist matches run, misses prompt) or exec.ask
+                "always" for every command; leave askFallback at its default deny so an unanswered
+                prompt blocks rather than allows.
+            url: https://docs.openclaw.ai/tools/exec-approvals
+          - title: Answer prompts where you are
+            body:
+              - Approvals arrive as exec.approval.requested; choose Allow Once (Command-Return on
+                macOS) or Always Allow Here, and the gateway forwards the stored plan, rejecting
+                any caller edits to command, cwd or session after the request was created.
+            url: https://docs.openclaw.ai/tools/exec-approvals
+          - title: Prompt on MCP tools
+            body:
+              - "`openclaw mcp configure <server> --approval prompt` keeps asking for that server's
+                tools regardless of stored grants; `auto` honours per-agent Allow Always grants."
+            url: https://docs.openclaw.ai/tools/mcp
+          - title: Acknowledge install warnings deliberately
+            body:
+              - A security.installPolicy warn result stops the install until the operator types the
+                plugin or skill name (or passes --acknowledge-install-policy-warning after review);
+                Gateway-backed installs with no confirmation flow stay blocked.
+            url: https://docs.openclaw.ai/gateway/security/tool-permissions
+        verified: "2026-09-10"
+      - capability: capabilityRateLimiting
+        coverage: partial
+        mechanism: >-
+          gateway.auth.rateLimit for failed auth, fixed control-plane write and webhook throttles,
+          tools.loopDetection with a post-compaction guard, sub-agent concurrency and depth caps,
+          tools.exec.timeoutSeconds, and usage/quota visibility per provider. No hard token or spend
+          cap is offered.
+        steps:
+          - title: Tune the brute-force limiter
+            body:
+              - gateway.auth.rateLimit { maxAttempts 10, windowMs 60000, lockoutMs 300000,
+                exemptLoopback true } are the defaults; webhook and control-plane write limits are
+                fixed.
+            url: https://docs.openclaw.ai/gateway/security/rate-limiting
+          - title: Break tool loops
+            body:
+              - Set tools.loopDetection.enabled true (off by default; the post-compaction guard
+                stays on unless explicitly false) so repeated (tool, args, result) patterns warn,
+                then block the batch and end the run.
+            url: https://docs.openclaw.ai/tools/loop-detection
+          - title: Cap delegation fan-out and command lifetime
+            body:
+              - agents.defaults.subagents.maxConcurrent (8), maxChildrenPerAgent (5) and
+                maxSpawnDepth (1-5) bound sub-agent trees; tools.exec.timeoutSeconds terminates
+                long commands even when backgrounded.
+            url: https://docs.openclaw.ai/gateway/config-agents/entries-and-multi-agent
+          - title: Watch spend
+            body:
+              - "`openclaw status --usage`, /usage cost and the Control UI Usage page show
+                provider quota windows and local cost estimates; set hard budgets on the provider
+                account since OpenClaw enforces none."
+            url: https://docs.openclaw.ai/concepts/usage-tracking
+        verified: "2026-09-10"
+      - capability: capabilityAuditLogging
+        coverage: partial
+        mechanism: >-
+          Metadata-only activity ledger (logging.audit.enabled on by default) with optional
+          execution identity and message lifecycle records, HMAC-pseudonymised identifiers, 30-day
+          retention and a 100,000-row cap, queried with `openclaw audit`; OTLP export via
+          diagnostics.otel. Persistence is best-effort and the store is a local SQLite file, so
+          it is not tamper-evident on its own.
+        steps:
+          - title: Turn on identity and message records
+            body:
+              - "`openclaw config set logging.audit.executionIdentity true` (off by default) and
+                logging.audit.messages \"direct\" or \"all\", then restart the gateway; keep
+                logging.audit.enabled true."
+            url: https://docs.openclaw.ai/gateway/config-observability
+          - title: Query who did what
+            body:
+              - "`openclaw audit --kind tool_action --json`, `--agent`, `--session`, `--after`,
+                and `openclaw audit --run <id> --explain` for the immutable execution identity and
+                decision receipts (approvals, plugin hook blocks)."
+            url: https://docs.openclaw.ai/cli/audit
+          - title: Export off the host
+            body:
+              - Set diagnostics.otel.enabled true with endpoint, traces/metrics/logs and
+                captureContent false to ship spans and log records to a collector you retain
+                beyond 30 days.
+            url: https://docs.openclaw.ai/gateway/config-observability
+        verified: "2026-09-10"
+      - capability: capabilityKillSwitch
+        coverage: native
+        mechanism: >-
+          `openclaw gateway stop`, the documented contain / rotate / audit runbook (bind loopback,
+          dmPolicy disabled, rotate gateway.auth and provider credentials), `openclaw devices remove`,
+          `openclaw sessions delete`, and commands.restart false to disable remote restarts
+        steps:
+          - title: Stop the agent
+            body:
+              - "`openclaw gateway stop` (add --force in a non-interactive shell) halts the managed
+                service; `openclaw gateway uninstall` removes it."
+            url: https://docs.openclaw.ai/cli/gateway/service
+          - title: Contain
+            body:
+              - Set gateway.bind "loopback" (or disable Tailscale Funnel/Serve), switch risky
+                channels to dmPolicy "disabled" or require mentions, and remove any "*" allow-all
+                entries.
+            url: https://docs.openclaw.ai/gateway/security/operator-incident-response
+          - title: Rotate
+            body:
+              - Rotate gateway.auth.token or gateway.auth.password, gateway.remote.* on every
+                client, and provider, channel and model credentials; then re-run
+                `openclaw security audit --deep`.
+            url: https://docs.openclaw.ai/gateway/security/operator-incident-response
+          - title: Revoke devices and sessions
+            body:
+              - "`openclaw devices remove <deviceId>` drops a paired device;
+                `openclaw sessions delete <sessionKey> --yes` removes a session's state."
+            url: https://docs.openclaw.ai/cli/devices
+        verified: "2026-09-10"
+      - capability: capabilityShadowAiDiscovery
+        coverage: partial
+        mechanism: >-
+          `openclaw security audit` reports plugins loading without an explicit allowlist and
+          unpinned or provenance-less installs; the gateway logs discovered non-bundled plugins
+          at startup; `openclaw plugins inspect` shows provenance. Scope is this gateway's own
+          extension roots — nothing discovers other agents or accounts on the device.
+        steps:
+          - title: Audit for unregistered extensions
+            body:
+              - Run `openclaw security audit`; findings prefixed plugins.* and skills.* cover
+                loading without plugins.allow, unpinned npm records and missing integrity metadata.
+            url: https://docs.openclaw.ai/gateway/security/running-the-audit
+          - title: Act on discovery diagnostics
+            body:
+              - Treat the startup warning "plugins.allow is empty; discovered non-bundled plugins
+                may auto-load" and provenance-missing results from
+                `openclaw plugins inspect <id>` as unregistered code; pin or reinstall from a trusted source.
+            url: https://docs.openclaw.ai/tools/plugin
+        verified: "2026-09-10"
+      - capability: capabilityEdr
+        coverage: external
+        note: >-
+          Nothing device-resident ships with the product; run the host's own EDR and a dedicated OS
+          user. The documented integration point for a security agent is a plugin before_tool_call
+          hook (block or require approval on every tool call) plus `openclaw security audit --deep`
+          for live probes.
+        verified: "2026-09-10"
+      - capability: capabilityBehavioralDriftDetection
+        coverage: none
+        note: >-
+          No baselining of goals or tool-use profiles is documented; tools.loopDetection catches
+          repetition only. Export /export-trajectory bundles or OTLP traces
+          (diagnostics.otel) to an external analyser if drift detection is required.
+        verified: "2026-09-10"
+      - capability: capabilityAiDlp
+        coverage: partial
+        mechanism: >-
+          Always-on secret redaction across console, file logs, OTLP records and transcripts with
+          logging.redactPatterns for custom patterns, tools.fs.workspaceOnly and
+          tools.exec.applyPatch.workspaceOnly to keep file tools inside the workspace, write-only
+          store secrets, and channel contextVisibility. No policy inspection of prompt or response
+          content for sensitive data.
+        steps:
+          - title: Add your own redaction patterns
+            body:
+              - Set logging.redactPatterns (regex strings) for tokens, hostnames and internal URLs;
+                note that setting it replaces the built-in defaults, so include the ones you still want.
+            url: https://docs.openclaw.ai/gateway/logging
+          - title: Keep file tools inside the workspace
+            body:
+              - Set tools.fs.workspaceOnly true and leave tools.exec.applyPatch.workspaceOnly at
+                its default true; avoid broad workspace roots such as the home directory.
+            url: https://docs.openclaw.ai/gateway/security/tool-permissions
+          - title: Limit what rooms feed the prompt
+            body:
+              - Use contextVisibility on group channels so the agent reads only what it needs, and
+                keep /reasoning, /verbose and /trace disabled outside trusted DMs.
+            url: https://docs.openclaw.ai/gateway/security/access-control
+        verified: "2026-09-10"
+      - capability: capabilityAgentRegistry
+        coverage: native
+        mechanism: >-
+          The gateway config is the authoritative record: agents.entries declares every agent and
+          its workspace, `openclaw agents list --bindings` shows agents and routing, plugins.allow
+          is the approval list for extensions, and mcp.servers plus `openclaw mcp status` inventory
+          tool servers
+        steps:
+          - title: Declare agents explicitly
+            body:
+              - "`openclaw agents list --bindings` (or `--json`) enumerates agents, workspaces and
+                channel bindings; add or remove them with `openclaw agents add|delete` rather than
+                ad-hoc config."
+            url: https://docs.openclaw.ai/cli/agents
+          - title: Approve extensions through the allowlist
+            body:
+              - plugins.allow is exclusive; a plugin outside it stays unavailable even when
+                tools.allow contains "*", and plugins.entries.<id>.enabled false disables one.
+            url: https://docs.openclaw.ai/tools/plugin
+          - title: Inventory tool servers
+            body:
+              - "`openclaw mcp status --verbose` lists every mcp.servers definition with
+                enablement, OAuth and filter state; Settings → MCP in the Control UI shows the same inventory."
+            url: https://docs.openclaw.ai/cli/mcp/registry
+        verified: "2026-09-10"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: >-
+          Sandbox containers default to network none; secrets.egressProxy.allowedHosts is an
+          exact-hostname traffic allowlist for Gateway-hosted exec; web_fetch and browser SSRF
+          policies block private ranges with allowedHostnames / blockedHostnames; proxy.proxyUrl
+          routes all runtime HTTP/WebSocket traffic through an operator-run forward proxy (the
+          proxy itself is external)
+        steps:
+          - title: Keep the sandbox offline
+            body:
+              - Leave agents.defaults.sandbox.docker.network at its default "none"; "host" is
+                blocked and container namespace joins need a dangerously* break-glass key.
+            url: https://docs.openclaw.ai/gateway/config-agents/sandbox
+          - title: Allowlist exec egress
+            body:
+              - "`openclaw config set secrets.egressProxy.allowedHosts '[\"api.openai.com\"]' --strict-json`
+                with the egress proxy enabled; an empty array is lockdown (only secret-bound and
+                bypass hosts). Cooperating clients only — raw sockets can bypass it."
+            url: https://docs.openclaw.ai/gateway/secrets/secret-store-and-egress
+          - title: Pin web_fetch destinations
+            body:
+              - Set tools.web.fetch.ssrfPolicy.allowedHostnames and blockedHostnames and keep
+                dangerouslyAllowPrivateNetwork false; private and internal hostnames are blocked by
+                default with DNS pinning.
+            url: https://docs.openclaw.ai/tools/web-fetch
+          - title: Route everything through your proxy
+            body:
+              - Set proxy.proxyUrl (or OPENCLAW_PROXY_URL) and validate with
+                `openclaw proxy validate --proxy-url <url>`; the proxy's destination policy is
+                the real boundary and OpenClaw ships none.
+            url: https://docs.openclaw.ai/security/network-proxy
+        verified: "2026-09-10"
+      - capability: capabilityModelScanning
+        coverage: none
+        note: >-
+          Models are remote provider APIs or local servers (Ollama, LM Studio, llama.cpp) the user
+          points models.providers at; nothing inspects model files. Scan any local GGUF or other
+          weights with an external tool before configuring them, including the local embedding
+          option for memory.search.provider.
+        verified: "2026-09-10"
+    advisories:
+      - title: "CVE-2026-25253 — Control UI auto-connected to an attacker-supplied gatewayUrl and sent the gateway token (1-click RCE); fixed in 2026.1.29"
+        url: https://nvd.nist.gov/vuln/detail/CVE-2026-25253
+        date: "2026-02"
+      - title: "CVE-2026-25593 — Unauthenticated local RCE via WebSocket config.apply; fixed in 2026.1.20"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-g55j-c2v4-pjcg
+        date: "2026-02"
+      - title: "CVE-2026-26322 — Gateway tool allowed unrestricted gatewayUrl override; fixed in 2026.2.14"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-g6q9-8fvw-f7rf
+        date: "2026-02"
+      - title: "CVE-2026-26325 — Node host system.run rawCommand/command mismatch bypassed allowlist and approvals; fixed in 2026.2.14"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-h3f9-mjwj-w476
+        date: "2026-02"
+      - title: "CVE-2026-27209 — Shell command injection in exec allowlist mode via unquoted heredoc; fixed in 2026.2.21"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-65rx-fvh6-r4h2
+        date: "2026-02"
+      - title: "CVE-2026-32302 — Browser-originated WebSocket connections bypassed origin validation in trusted-proxy mode; fixed in 2026.3.11"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-5wcw-8jjv-m286
+        date: "2026-03"
+      - title: "GHSA-52xj-c9p8-78cv — MCP loopback exposed owner-only tools to non-owner runs (high); fixed in 2026.6.6"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-52xj-c9p8-78cv
+        date: "2026-06"
+      - title: "GHSA-3fp5-v549-9v66 — flock wrapper bypassed durable exec approval binding (high); fixed in 2026.6.9"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-3fp5-v549-9v66
+        date: "2026-06"
+      - title: "GHSA-wgq8-x5wm-g4rw — Plugin install wrappers skipped security.installPolicy (moderate); fixed in 2026.6.9"
+        url: https://github.com/openclaw/openclaw/security/advisories/GHSA-wgq8-x5wm-g4rw
+        date: "2026-06"
     sources:
       - title: OpenClaw gateway security model
         url: https://docs.openclaw.ai/gateway/security
@@ -65,3 +735,85 @@ tools:
         url: https://docs.openclaw.ai/gateway/sandboxing
       - title: GitHub advisory GHSA-g8p2-7wf7-98mq
         url: https://github.com/advisories/GHSA-g8p2-7wf7-98mq
+      - title: OpenClaw docs index (llms.txt)
+        url: https://docs.openclaw.ai/llms.txt
+      - title: OpenClaw security trust model
+        url: https://docs.openclaw.ai/gateway/security/trust-model
+      - title: OpenClaw prompt injection
+        url: https://docs.openclaw.ai/gateway/security/prompt-injection
+      - title: OpenClaw tool and agent permissions
+        url: https://docs.openclaw.ai/gateway/security/tool-permissions
+      - title: OpenClaw hardened baselines
+        url: https://docs.openclaw.ai/gateway/security/hardened-baseline
+      - title: OpenClaw rate limiting
+        url: https://docs.openclaw.ai/gateway/security/rate-limiting
+      - title: OpenClaw running the security audit
+        url: https://docs.openclaw.ai/gateway/security/running-the-audit
+      - title: OpenClaw secrets, storage, and logs
+        url: https://docs.openclaw.ai/gateway/security/secrets-and-storage
+      - title: OpenClaw operator incident response
+        url: https://docs.openclaw.ai/gateway/security/operator-incident-response
+      - title: OpenClaw configuration — tool policy
+        url: https://docs.openclaw.ai/gateway/config-tools/tool-policy
+      - title: OpenClaw configuration — gateway
+        url: https://docs.openclaw.ai/gateway/config-gateway
+      - title: OpenClaw configuration — agent sandboxing
+        url: https://docs.openclaw.ai/gateway/config-agents/sandbox
+      - title: OpenClaw configuration — agents entries and multi-agent
+        url: https://docs.openclaw.ai/gateway/config-agents/entries-and-multi-agent
+      - title: OpenClaw configuration — audit, logging, diagnostics, telemetry
+        url: https://docs.openclaw.ai/gateway/config-observability
+      - title: OpenClaw permission modes
+        url: https://docs.openclaw.ai/tools/permission-modes
+      - title: OpenClaw exec approvals
+        url: https://docs.openclaw.ai/tools/exec-approvals
+      - title: OpenClaw plugin tool-policy hooks (before_tool_call)
+        url: https://docs.openclaw.ai/plugins/hooks/tool-policy
+      - title: OpenClaw operator scopes
+        url: https://docs.openclaw.ai/gateway/operator-scopes
+      - title: OpenClaw devices CLI
+        url: https://docs.openclaw.ai/cli/devices
+      - title: OpenClaw agents CLI
+        url: https://docs.openclaw.ai/cli/agents
+      - title: OpenClaw MCP client registry
+        url: https://docs.openclaw.ai/cli/mcp/registry
+      - title: OpenClaw connect MCP servers
+        url: https://docs.openclaw.ai/tools/mcp
+      - title: OpenClaw secrets management
+        url: https://docs.openclaw.ai/gateway/secrets
+      - title: OpenClaw secrets runtime model
+        url: https://docs.openclaw.ai/gateway/secrets/runtime-model
+      - title: OpenClaw shared secret store and egress proxy
+        url: https://docs.openclaw.ai/gateway/secrets/secret-store-and-egress
+      - title: OpenClaw memory overview
+        url: https://docs.openclaw.ai/concepts/memory
+      - title: OpenClaw memory provenance and deletion
+        url: https://docs.openclaw.ai/concepts/memory-provenance
+      - title: OpenClaw memory configuration reference
+        url: https://docs.openclaw.ai/reference/memory-config
+      - title: OpenClaw plugins
+        url: https://docs.openclaw.ai/tools/plugin
+      - title: OpenClaw plugins install CLI
+        url: https://docs.openclaw.ai/cli/plugins/install
+      - title: OpenClaw skills config (security.installPolicy)
+        url: https://docs.openclaw.ai/tools/skills-config
+      - title: OpenClaw tool-loop detection
+        url: https://docs.openclaw.ai/tools/loop-detection
+      - title: OpenClaw usage tracking
+        url: https://docs.openclaw.ai/concepts/usage-tracking
+      - title: OpenClaw API usage and costs
+        url: https://docs.openclaw.ai/reference/api-usage-costs
+      - title: OpenClaw audit records CLI
+        url: https://docs.openclaw.ai/cli/audit
+      - title: OpenClaw gateway service CLI
+        url: https://docs.openclaw.ai/cli/gateway/service
+      - title: OpenClaw logging
+        url: https://docs.openclaw.ai/gateway/logging
+      - title: OpenClaw web fetch
+        url: https://docs.openclaw.ai/tools/web-fetch
+      - title: OpenClaw network proxy
+        url: https://docs.openclaw.ai/security/network-proxy
+      - title: OpenClaw ClawHub
+        url: https://docs.openclaw.ai/clawhub
+      - title: OpenClaw GitHub security advisories
+        url: https://github.com/openclaw/openclaw/security/advisories
