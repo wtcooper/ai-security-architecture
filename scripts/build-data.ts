@@ -1463,9 +1463,6 @@ function checkTooling(
     if (!arch) {
       fail(`${where}: architecture "${tool.architecture}" is not a reference architecture`);
     }
-    for (const id of tool.secondaryArchitectures ?? []) {
-      if (!archetypeById.has(id)) fail(`${where}: unknown secondary architecture ${id}`);
-    }
 
     // The reference control set is the architecture's own pins. A tool cannot claim to
     // implement — or lack — a control the drawing does not show; the fix is a pin.

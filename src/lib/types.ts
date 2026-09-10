@@ -648,9 +648,13 @@ export interface Tool {
   name: string;
   surfaceClasses: ToolSurfaceClass[];
   variants?: ToolVariant[];
-  /** The reference architecture this product instantiates; fixes the reference control set. */
+  /**
+   * The one reference architecture this product instantiates. It fixes the reference control
+   * set — the drawing's pinned capabilities — so a product inherits "what controls this category
+   * of tool needs" from the architecture and only records how the vendor implements each one.
+   * A product with two runtimes (a local and a cloud form) is two entities.
+   */
   architecture: string;
-  secondaryArchitectures?: string[];
   status?: ToolStatus;
   /** When these facts were verified against the vendor's docs, e.g. "2026-09". */
   asOf: string;

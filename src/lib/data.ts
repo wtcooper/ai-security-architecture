@@ -267,11 +267,13 @@ export const toolsInOrder: Tool[] = vendors.flatMap((v) =>
 export const toolsForVendor = (vendorId: string): Tool[] =>
   toolsInOrder.filter((t) => t.vendor === vendorId);
 
-/** Every tool that instantiates this architecture, primary first. */
+/** Every product that instantiates this architecture — the variants of one category of tool. */
 export const toolsForArchetype = (archetypeId: string): Tool[] =>
-  toolsInOrder.filter(
-    (t) => t.architecture === archetypeId || t.secondaryArchitectures?.includes(archetypeId),
-  );
+  toolsInOrder.filter((t) => t.architecture === archetypeId);
+
+/** The architectures a vendor's products instantiate, in catalogue order. */
+export const archetypesForVendor = (vendorId: string) =>
+  archetypesInOrder.filter((a) => toolsInOrder.some((t) => t.vendor === vendorId && t.architecture === a.id));
 
 /** Every tool whose vendor implements this capability at least partly. */
 export const toolsForCapability = (capabilityId: string): Tool[] =>

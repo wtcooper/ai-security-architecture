@@ -110,7 +110,7 @@ const SECTIONS = [
     href: "/tooling",
     label: "AI Tooling",
     blurb:
-      "The named products — every vendor surface mapped to its architecture, the reference controls it can switch on, and your organisation's status for each.",
+      "Each category of tool is a reference architecture; the named products inherit its controls and record how the vendor switches each one on, with your status per product.",
     count: `${tools.length} tools · ${vendors.length} vendors`,
     accent: "var(--band-data-rail)",
   },

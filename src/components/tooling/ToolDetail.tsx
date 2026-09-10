@@ -16,7 +16,6 @@ const STATUS_LABEL = { ga: "GA", beta: "Beta", preview: "Preview", announced: "A
 export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
   const vendor = vendorById.get(tool.vendor);
   const arch = archetypeById.get(tool.architecture);
-  const secondary = (tool.secondaryArchitectures ?? []).map((id) => archetypeById.get(id)).filter(Boolean);
   const adoption = orgAdoptionFor(tool.id);
   const posture = orgPostureFor(tool.id);
 
@@ -75,16 +74,14 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
                 <Chip tone="introduced">{arch.title}</Chip>
               </Link>
             )}
-            {secondary.map((a) => (
-              <Link key={a!.id} href={`/reference?archetype=${a!.id}`}>
-                <Chip title="Also instantiates this architecture">{a!.abbrev ?? a!.title}</Chip>
-              </Link>
-            ))}
           </div>
           {arch && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-3">
               The drawing fixes the reference control set: {arch.capabilities.length} capabilities and{" "}
-              {arch.risks.length} risks pinned on it.
+              {arch.risks.length} risks pinned on it.{" "}
+              <Link href={`/tooling?arch=${arch.id}`} className="font-semibold text-introduced hover:underline">
+                All products in this category →
+              </Link>
             </p>
           )}
         </div>

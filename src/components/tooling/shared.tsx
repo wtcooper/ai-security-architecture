@@ -8,23 +8,13 @@ import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, ORG_STATUS_LABEL } from "./labels";
 import type { Cell, Row } from "./model";
 
-/** Hatched, for a control the tool's architecture does not pin: not a gap, not applicable. */
-export const NA_STYLE = {
-  background: "repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 5px)",
-  color: "var(--ink-3)",
-} as const;
-
 export function cellTitle(tool: Tool, row: Row, cell: Cell) {
   const cov = cell.coverage ? COVERAGE_META[cell.coverage] : null;
   return [
     `${tool.name} · ${row.title ?? row.label}`,
-    cell.applies
-      ? `Vendor: ${cov ? cov.label : "not assessed"}${cell.parts.length > 1 ? " (worst of " + cell.parts.filter((p) => p.pinned).length + ")" : ""}`
-      : "Not pinned on this product's architecture",
-    cell.applies ? `Status: ${cell.status ? ORG_STATUS_LABEL[cell.status] : "—"}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `Vendor: ${cov ? cov.label : "not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}`,
+    `Status: ${cell.status ? ORG_STATUS_LABEL[cell.status] : "—"}`,
+  ].join("\n");
 }
 
 /** The matrix and bar tile: status is the tint, vendor coverage the glyph. */
@@ -42,7 +32,7 @@ export function CellTile({
   onClick?: () => void;
 }) {
   const cov = cell.coverage ? COVERAGE_META[cell.coverage] : null;
-  const style = !cell.applies ? NA_STYLE : cell.status ? { background: STATUS_STYLE[cell.status].bg, color: STATUS_STYLE[cell.status].text } : undefined;
+  const style = cell.status ? { background: STATUS_STYLE[cell.status].bg, color: STATUS_STYLE[cell.status].text } : undefined;
   const base = size === "sm" ? "h-[18px] w-[18px] text-[11px]" : "h-full w-full min-h-[34px] px-2 py-1 text-left";
   return (
     <button
@@ -56,11 +46,11 @@ export function CellTile({
       style={style}
     >
       <span className={`shrink-0 ${size === "sm" ? "w-full text-center" : "w-3 text-center text-[13px]"} ${cov ? "text-ink" : "text-ink-3"}`}>
-        {!cell.applies ? "" : cov ? cov.glyph : "·"}
+        {cov ? cov.glyph : "·"}
       </span>
       {size === "md" && (
         <span className="truncate text-[10.5px] font-medium">
-          {!cell.applies ? "n/a" : cell.status ? ORG_STATUS_LABEL[cell.status] : cov ? cov.label : ""}
+          {cell.status ? ORG_STATUS_LABEL[cell.status] : cov ? cov.label : ""}
         </span>
       )}
     </button>
@@ -84,10 +74,6 @@ export function Legend({ compact = false }: { compact?: boolean }) {
           {COVERAGE_META[c].label}
         </span>
       ))}
-      <span className="flex items-center gap-1">
-        <span className="inline-block h-3 w-3 rounded-[2px] border border-line" style={NA_STYLE} />
-        not on this product&rsquo;s architecture
-      </span>
     </div>
   );
 }

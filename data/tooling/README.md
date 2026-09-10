@@ -31,8 +31,7 @@ tools:
     #  managedRuntime | chatIntegration | saasChat | officeAddin | ciIntegration
     variants:                           # named shells, each with a class from surfaceClasses
       - { name: Claude Code CLI, class: endpointCli, url: ... }
-    architecture: archCodingAgentThirdParty   # fixes the reference control set (its pins)
-    secondaryArchitectures: []
+    architecture: archCodingAgentThirdParty   # the ONE architecture it instantiates; its pins are the reference control set
     status: ga                          # ga | beta | preview | announced
     asOf: "2026-09"
     summary: [...]

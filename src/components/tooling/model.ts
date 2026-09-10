@@ -1,33 +1,26 @@
 /**
- * The view model the three visual lenses share: columns are tools grouped by vendor; rows are
- * either CoSAI capabilities (grouped by control category) or the organisation's own control
- * entries (grouped by their catalogue group); a cell is one tool × one row, resolved to the
- * vendor's coverage and the organisation's status. Rows in the organisation lens aggregate
- * several capabilities, so a cell there carries the worst of them — a gap anywhere is a gap.
+ * The view model both perspectives share. The organising unit is the reference architecture:
+ * its pinned capabilities are the controls every product of that category needs, and a product
+ * only records how its vendor implements each one. So rows always come from ONE architecture,
+ * columns are the products that instantiate it, and a cell is one product × one control.
+ *
+ * Rows can be relabelled with the organisation's own control entries; those aggregate several
+ * capabilities, so a cell there carries the worst of them — a gap anywhere is a gap.
  */
-import {
-  archetypeById,
-  capabilitiesInOrder,
-  controlCategories,
-  orgStatusFor,
-  vendors,
-} from "@/lib/data";
-import { authoredMappings, frameworkEntries } from "@/lib/data";
+import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, vendors } from "@/lib/data";
 import { orgFrameworks } from "@/lib/frameworks";
-import type { Capability, CapabilityStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
+import type { CapabilityStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
+import { controlCategories } from "@/lib/data";
 
 export type LabelMode = "cosai" | "org";
 
 export interface Row {
   id: string;
   label: string;
-  /** Short label for dense layouts. */
   short: string;
-  group: string;
-  /** Extra identifiers to show beside the label (org ids in the CoSAI lens, capability count in the org lens). */
+  /** Identifiers shown beside the label: org ids in the CoSAI lens, capability count in the org lens. */
   aside?: string;
   capabilities: string[];
-  /** Second line under the label, for hover text. */
   title?: string;
 }
 
@@ -44,15 +37,11 @@ export interface ColumnGroup {
 }
 
 export interface Cell {
-  /** False when none of the row's capabilities is pinned on the tool's architecture. */
-  applies: boolean;
   coverage?: ToolCoverage;
   status?: CapabilityStatus;
-  /** The per-capability records behind the cell, for the detail panel. */
-  parts: { capability: string; control?: ToolControl; status?: CapabilityStatus; pinned: boolean }[];
+  parts: { capability: string; control?: ToolControl; status?: CapabilityStatus }[];
 }
 
-/** Worst first, so a fold over `min` finds the weakest link. */
 const STATUS_RANK: CapabilityStatus[] = ["gap", "partial", "needsAssessment", "inPlace"];
 const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native"];
 const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {
@@ -66,7 +55,6 @@ export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
     .map((v) => ({ vendorId: v.id, vendorName: v.name, tools: tools.filter((t) => t.vendor === v.id) }))
     .filter((g) => g.tools.length);
 
-/** capability id -> the organisation's entry ids that reach it, across every org catalogue. */
 const orgIdsByCapability = (() => {
   const out = new Map<string, string[]>();
   for (const fw of orgFrameworks) {
@@ -76,64 +64,51 @@ const orgIdsByCapability = (() => {
   }
   return out;
 })();
-
 export const orgIdsFor = (capabilityId: string) => orgIdsByCapability.get(capabilityId) ?? [];
 export const hasOrgMappings = orgIdsByCapability.size > 0;
 
-const pinnedOn = (tool: Tool) => new Set(archetypeById.get(tool.architecture)?.capabilities ?? []);
-
-/**
- * Rows for the CoSAI lens: every capability pinned on at least one shown tool's architecture,
- * in taxonomy order, grouped by control category. `keyOnly` keeps those the organisation's
- * standard maps — its definition of "the controls that matter".
- */
-export function cosaiRows(tools: Tool[], keyOnly: boolean): RowGroup[] {
-  const pinnedAnywhere = new Set(tools.flatMap((t) => [...pinnedOn(t)]));
-  const rowOf = (c: Capability): Row => ({
-    id: c.id,
-    label: c.title,
-    short: c.abbrev ?? c.title,
-    group: c.category,
-    aside: orgIdsFor(c.id).join(" · ") || undefined,
-    capabilities: [c.id],
-  });
+/** The architecture's pinned capabilities as rows, grouped by CoSAI control category. */
+export function cosaiRows(archetypeId: string): RowGroup[] {
+  const pinned = archetypeById.get(archetypeId)?.capabilities ?? [];
   return controlCategories
     .map((cat) => ({
       id: cat.id,
       title: cat.title,
-      rows: capabilitiesInOrder
-        .filter((c) => c.category === cat.id && pinnedAnywhere.has(c.id))
-        .filter((c) => !keyOnly || orgIdsFor(c.id).length > 0)
-        .map(rowOf),
+      rows: pinned
+        .map((id) => capabilityById.get(id))
+        .filter((c): c is NonNullable<typeof c> => Boolean(c) && c!.category === cat.id)
+        .map((c) => ({
+          id: c.id,
+          label: c.title,
+          short: c.abbrev ?? c.title,
+          aside: orgIdsFor(c.id).join(" · ") || undefined,
+          capabilities: [c.id],
+        })),
     }))
     .filter((g) => g.rows.length);
 }
 
-/**
- * Rows for the organisation lens: one per entry of the organisation's catalogues that maps to
- * at least one capability, grouped by the entry's own group (or the catalogue name).
- */
-export function orgRows(tools: Tool[]): RowGroup[] {
-  const pinnedAnywhere = new Set(tools.flatMap((t) => [...pinnedOn(t)]));
+/** The same set, relabelled as the organisation's entries that reach it, grouped by its catalogue. */
+export function orgRows(archetypeId: string): RowGroup[] {
+  const pinned = new Set(archetypeById.get(archetypeId)?.capabilities ?? []);
   const groups = new Map<string, RowGroup>();
   for (const fw of orgFrameworks) {
     const byEntry = new Map<string, string[]>();
     for (const [capabilityId, entryIds] of Object.entries(authoredMappings[fw.id]?.capabilities ?? {})) {
+      if (!pinned.has(capabilityId)) continue;
       for (const e of entryIds) byEntry.set(e, [...(byEntry.get(e) ?? []), capabilityId]);
     }
     const reference = frameworkEntries[fw.id] ?? {};
     for (const entryId of Object.keys(reference)) {
-      const caps = (byEntry.get(entryId) ?? []).filter((c) => pinnedAnywhere.has(c));
-      if (!caps.length) continue;
+      const caps = byEntry.get(entryId);
+      if (!caps?.length) continue;
       const ref = reference[entryId];
-      const groupTitle = ref.group ? `${fw.name} · ${ref.group}` : fw.name;
       const groupId = `${fw.id}:${ref.group ?? ""}`;
-      if (!groups.has(groupId)) groups.set(groupId, { id: groupId, title: groupTitle, rows: [] });
+      if (!groups.has(groupId)) groups.set(groupId, { id: groupId, title: ref.group ? `${fw.name} · ${ref.group}` : fw.name, rows: [] });
       groups.get(groupId)!.rows.push({
         id: `${fw.id}:${entryId}`,
         label: `${entryId} ${ref.label}`,
         short: entryId,
-        group: groupId,
         aside: `${caps.length} capabilit${caps.length === 1 ? "y" : "ies"}`,
         capabilities: caps,
         title: ref.label,
@@ -143,35 +118,32 @@ export function orgRows(tools: Tool[]): RowGroup[] {
   return [...groups.values()];
 }
 
+export const rowsFor = (archetypeId: string, mode: LabelMode) => (mode === "org" ? orgRows(archetypeId) : cosaiRows(archetypeId));
+
 export function cellFor(tool: Tool, row: Row): Cell {
-  const pinned = pinnedOn(tool);
   const own = new Map(tool.controls.map((c) => [c.capability, c]));
   const parts = row.capabilities.map((capability) => ({
     capability,
     control: own.get(capability),
     status: orgStatusFor(tool.id, capability)?.status,
-    pinned: pinned.has(capability),
   }));
-  const applicable = parts.filter((p) => p.pinned);
   return {
-    applies: applicable.length > 0,
-    coverage: worst(COVERAGE_RANK, applicable.map((p) => p.control?.coverage)),
-    status: worst(STATUS_RANK, applicable.map((p) => p.status)),
+    coverage: worst(COVERAGE_RANK, parts.map((p) => p.control?.coverage)),
+    status: worst(STATUS_RANK, parts.map((p) => p.status)),
     parts,
   };
 }
 
-/** Counts for the scorecard bars. */
+/** Counts across a product's reference set, for the vendor perspective's bars. */
 export function summarise(tool: Tool) {
-  const pinned = [...pinnedOn(tool)];
+  const pinned = archetypeById.get(tool.architecture)?.capabilities ?? [];
   const own = new Map(tool.controls.map((c) => [c.capability, c]));
   const coverage: Record<ToolCoverage | "unassessed", number> = { native: 0, partial: 0, external: 0, none: 0, unknown: 0, unassessed: 0 };
   const status: Record<CapabilityStatus | "unset", number> = { inPlace: 0, partial: 0, gap: 0, needsAssessment: 0, unset: 0 };
   for (const id of pinned) {
     const c = own.get(id);
     coverage[c ? c.coverage : "unassessed"]++;
-    const s = orgStatusFor(tool.id, id)?.status;
-    status[s ?? "unset"]++;
+    status[orgStatusFor(tool.id, id)?.status ?? "unset"]++;
   }
   return { pinned: pinned.length, coverage, status };
 }
