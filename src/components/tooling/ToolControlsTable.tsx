@@ -10,14 +10,27 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { controlsForCapability, controlsForTool, org, orgStatusFor } from "@/lib/data";
+import { capabilitiesForArchetype, controlsForCapability, controlsForTool, org, orgStatusFor } from "@/lib/data";
 import { frameworkHref, orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
 import { COVERAGE_META } from "./labels";
 import { OrgStatusPill } from "./OrgStatusPill";
 
-export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
-  const rows = controlsForTool(tool.id);
+export function ToolControlsTable({
+  tool,
+  openCapability,
+  archetypeId,
+}: {
+  tool: Tool;
+  openCapability?: string | null;
+  /** Read the rows off another architecture the tool also instantiates (its pins, the tool's records). */
+  archetypeId?: string;
+}) {
+  const own = new Map(tool.controls.map((c) => [c.capability, c]));
+  const rows =
+    archetypeId && archetypeId !== tool.architecture
+      ? capabilitiesForArchetype(archetypeId).map((capability) => ({ capability, control: own.get(capability.id) }))
+      : controlsForTool(tool.id);
   const [open, setOpen] = useState<string | null>(openCapability ?? null);
   const addressed = rows.filter((r) => r.control).length;
 

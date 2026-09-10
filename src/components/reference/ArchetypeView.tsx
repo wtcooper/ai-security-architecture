@@ -2,7 +2,7 @@
 
 /**
  * One architecture on the page: the drawing at full width and everything else in one tab
- * strip beneath it — overview, sequence flows, capabilities, risks, guidance. One panel is
+ * strip beneath it — overview, sequence flows, tools, capabilities, risks, guidance. One panel is
  * visible at a time and nothing is expanded by default, so the page never shows two lists
  * and a sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
  * capability or risk tab clears the highlight, so the drawing always matches the panel.
@@ -64,10 +64,10 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
+    { id: "tools", label: "Tools", count: tools.length },
     { id: "capabilities", label: "Capabilities", count: archetype.capabilities.length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
     { id: "guidance", label: "Controls guidance", count: guidance?.items.length },
-    { id: "tools", label: "Tools", count: tools.length },
   ];
 
   return (
@@ -183,7 +183,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
             <p className="text-[13px] text-ink-3">No controls guidance has reached this architecture yet.</p>
           ))}
 
-        {tab === "tools" && <ToolsForArchitecture archetype={archetype} tools={tools} />}
+        {tab === "tools" && <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} />}
       </div>
     </div>
   );
