@@ -36,6 +36,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
         )}
         {control ? (
           <>
+            {!showTitle && <p className="eyebrow mb-1.5">Admin control · in {tool.name}</p>}
             {control.mechanism && (
               <p className="text-[12.5px] text-ink-2">
                 <span className="eyebrow mr-2">Mechanism</span>
@@ -78,7 +79,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
       </div>
       <div className="space-y-3">
         <div>
-          <p className="eyebrow">Enterprise layer · where the drawing enforces it</p>
+          <p className="eyebrow">Enterprise capability layers · deployed by the organisation</p>
           <ul className="mt-1.5 space-y-1.5">
             {enforcement.map((e) => (
               <li key={e.blockId} className="text-[12px] leading-snug text-ink-2">

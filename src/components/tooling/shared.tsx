@@ -1,6 +1,7 @@
 "use client";
 
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
+import Link from "next/link";
 import { STATUS_STYLE } from "@/components/capabilities/status";
 import { CAPABILITY_STATUSES, type Tool, type ToolControl, type ToolCoverage } from "@/lib/types";
 import { archetypeById, capabilityById, orgSurfacePostureFor, vendorById } from "@/lib/data";
@@ -16,7 +17,7 @@ export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
   const cov = cell.coverage ? COVERAGE_META[cell.coverage] : null;
   const steps = cell.parts.reduce((n, p) => n + (p.control?.steps?.length ?? 0), 0);
   return [
-    `${tool.name} · ${row.title ?? row.label}`,
+    `Admin control · ${tool.name} · ${row.title ?? row.label}`,
     `${cov ? cov.long : "Not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}${cov ? ` — ${cov.blurb}` : ""}`,
     steps ? `${steps} operator step${steps === 1 ? "" : "s"} with vendor links — click to open` : "",
     overlay ? `Status: ${cell.status ? ORG_STATUS_LABEL[cell.status] : "—"}` : "",
@@ -99,11 +100,17 @@ export function CellTile({
 export function Legend({ overlay, compact = false }: { overlay: boolean; compact?: boolean }) {
   return (
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink-3 ${compact ? "" : "rounded-lg border border-line bg-paper px-3 py-2"}`}>
-      <span className="eyebrow">Can an admin switch it on?</span>
+      <span className="eyebrow" title="Admin control: set by an administrator in the product itself.">Admin control</span>
       {COVERAGE_ORDER.map((c) => (
         <CoverageBadge key={c} coverage={c} />
       ))}
       <span className="ml-1">↗ = the vendor&rsquo;s page for configuring it</span>
+      <span className="eyebrow ml-2" title="Enterprise capability: a control class the organisation deploys around the products, at the place the drawing pins it.">Enterprise capability</span>
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-paper px-1.5 py-[2px] text-[10.5px] leading-none text-ink" style={{ borderStyle: "dashed" }}>
+        <span className="font-semibold">control class</span>
+        <span className="text-ink-3">· where it sits</span>
+      </span>
+      <span>layers stack: one, the other, or both</span>
       {overlay && (
         <>
           <span className="eyebrow ml-2">Your status</span>
@@ -120,34 +127,45 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
 }
 
 /**
- * The enterprise side of a control on one architecture: where the drawing enforces it (block
- * chips coloured by who operates the block) and, with the overlay on, the organisation's own
- * technology and status for that surface. Compact by design — one line under a control.
+ * The enterprise modules of one control on one architecture: the control's capability class,
+ * deployed by the organisation at each place the drawing pins it (a gateway, the managed
+ * endpoint, the governance plane). Each is an independent layer beside the products' admin
+ * controls — a control may have one, the other, or both. With the overlay on, the organisation's
+ * technology and status for that surface ride on each module.
  */
-export function EnterpriseLine({ row, archetypeId, overlay, className = "", bare = false }: { row: Row; archetypeId: string; overlay: boolean; className?: string; bare?: boolean }) {
+export function EnterpriseModules({ row, archetypeId, overlay, className = "" }: { row: Row; archetypeId: string; overlay: boolean; className?: string }) {
   const arch = archetypeById.get(archetypeId);
+  const capability = capabilityById.get(row.capabilities[0]);
   const posture = overlay && arch ? row.capabilities.map((c) => orgSurfacePostureFor(c, arch.surface)).find(Boolean) : undefined;
-  if (!row.enforcement.length && !posture) return null;
+  if (!row.enforcement.length) return null;
+  const label = capability?.abbrev ?? capability?.title ?? "Capability";
   return (
-    <span className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10.5px] text-ink-3 ${className}`}>
-      {!bare && <span className="eyebrow mr-0.5">Enforced at</span>}
+    <span className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       {row.enforcement.map((e) => (
-        <span
+        <Link
           key={e.blockId}
-          className="inline-flex items-center gap-1 rounded-full border border-line bg-paper px-1.5 py-px text-[10.5px] font-medium text-ink-2"
-          title={`${e.title} — ${OWNER_META[e.owner]?.label ?? e.owner}${e.notes.length ? `\n\n${e.notes.join("\n\n")}` : ""}`}
+          href={`/capabilities?capability=${row.capabilities[0]}`}
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-paper px-1.5 py-[3px] text-[11px] leading-none text-ink hover:border-ink"
+          style={{ borderStyle: "dashed" }}
+          title={`Enterprise capability: ${capability?.title ?? row.label}, deployed at ${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})${
+            capability?.examples?.length ? `\nBought as: ${capability.examples.join(", ")}` : ""
+          }${e.notes.length ? `\n\n${e.notes.join("\n\n")}` : ""}`}
         >
-          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: OWNER_META[e.owner]?.color ?? "var(--ink-3)" }} />
-          {e.title}
-        </span>
+          <span className="font-semibold">{label}</span>
+          <span className="text-ink-3">
+            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: OWNER_META[e.owner]?.color ?? "var(--ink-3)" }} />
+            {e.title}
+          </span>
+        </Link>
       ))}
       {posture && (
         <span
-          className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-semibold"
+          className="inline-flex items-center whitespace-nowrap rounded-full border px-1.5 py-[2px] text-[10px] font-semibold"
           style={{ borderColor: STATUS_STYLE[posture.status].border, color: STATUS_STYLE[posture.status].text, background: STATUS_STYLE[posture.status].bg }}
           title={`${ORG_STATUS_LABEL[posture.status]} on this surface${posture.technology ? ` with ${posture.technology}` : ""}${posture.note ? ` — ${posture.note}` : ""}`}
         >
-          {posture.technology ?? "Enterprise"} · {ORG_STATUS_LABEL[posture.status]}
+          {posture.technology ? `${posture.technology} · ` : ""}
+          {ORG_STATUS_LABEL[posture.status]}
         </span>
       )}
     </span>

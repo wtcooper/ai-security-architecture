@@ -116,10 +116,13 @@ block (the AI gateway, the managed endpoint, the governance plane), and the capa
 entry names the technology classes it is bought as. So the enterprise half is derived, not
 authored per product:
 
-- Under every control, one line — **Enforced at**: the drawing's blocks for that control, dotted
-  by who operates them (managed endpoint, enterprise cloud, vendor platform, governance). In the
-  grid it is a column of its own. Hovering a block shows the pin's note; opening the control
-  shows the notes in full and the classes the capability is bought as.
+- Under every control, two labelled layers. **Admin**: one chip per product, the coloured word
+  and the vendor's ↗. **Enterprise**: one module per place the drawing pins the control — the
+  control class (linking to its capability page) and the block it sits at, dotted by who
+  operates it. The layers are independent and composable: a control may be met by admin
+  settings alone, by enterprise capabilities alone, by both stacked, or by one delivering the
+  other (an MDM pushing a managed file). Nothing implies one enforces the other. In the grid the
+  enterprise modules are a column of their own.
 - With the overlay on, the organisation's **own technology and status for that surface** join the
   line, from a new `data/org/<profile>/capabilities.yaml` (per capability, per surface:
   status, technology, note). This is also the text-file home for the Capabilities tab's posture,

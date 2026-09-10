@@ -11,7 +11,7 @@ import Link from "next/link";
 
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Row, type RowGroup } from "./model";
-import { CellDetail, CellTile, cellTitle, docsUrlFor, EnterpriseLine } from "./shared";
+import { CellDetail, CellTile, cellTitle, docsUrlFor, EnterpriseModules } from "./shared";
 
 export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[]; groups: RowGroup[]; overlay: boolean; archetypeId: string }) {
   const cols = columnGroups(tools);
@@ -24,23 +24,23 @@ export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[
           <thead className="sticky top-0 z-20">
             <tr>
               <th className="sticky left-0 z-30 min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                Vendor
+                Reference control
               </th>
-              <th className="min-w-[210px] border-b border-r border-line bg-mist px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                Enterprise layer
+              <th className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+                Enterprise capabilities
               </th>
               {cols.map((g) => (
                 <th key={g.vendorId} colSpan={g.tools.length} className="border-b border-l border-line bg-mist px-2 py-1.5 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                  {g.vendorName}
+                  Admin controls · {g.vendorName}
                 </th>
               ))}
             </tr>
             <tr>
               <th className="sticky left-0 z-30 border-b border-r border-line bg-paper px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                Reference control ↓ · product →
+                &nbsp;
               </th>
               <th className="border-b border-r border-line bg-paper px-3 py-2 text-left text-[10.5px] font-normal normal-case tracking-normal text-ink-3">
-                where the drawing enforces it
+                deployed by the organisation, where the drawing pins them
               </th>
               {cols.flatMap((g) =>
                 g.tools.map((t) => (
@@ -103,7 +103,7 @@ function GroupRows({
             {overlay && row.aside && <span className="ident block text-[10px] text-ink-3">{row.aside}</span>}
           </td>
           <td className="border-b border-r border-line px-3 py-1 align-middle">
-            <EnterpriseLine row={row} archetypeId={archetypeId} overlay={overlay} bare />
+            <EnterpriseModules row={row} archetypeId={archetypeId} overlay={overlay} />
           </td>
           {cols.flatMap((g) =>
             g.tools.map((t) => {

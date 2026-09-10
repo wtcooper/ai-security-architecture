@@ -15,7 +15,7 @@ import type { Tool } from "@/lib/types";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, ORG_STATUS_LABEL } from "./labels";
 import { cellFor, type Row, type RowGroup } from "./model";
-import { configureUrl, EnterpriseLine } from "./shared";
+import { configureUrl, EnterpriseModules } from "./shared";
 
 export function ChecklistView({ tools, groups, overlay, archetypeId }: { tools: Tool[]; groups: RowGroup[]; overlay: boolean; archetypeId: string }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -49,7 +49,9 @@ function ControlRow({ row, tools, overlay, archetypeId, open, onToggle }: { row:
             {settable} of {tools.length} products admin-settable
           </span>
         </button>
+        <div className="space-y-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
+          <span className="ident mr-0.5 w-[72px] shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-ink-3">Admin</span>
           {tools.map((t) => {
             const cell = cellFor(t, row);
             const m = cell.coverage ? COVERAGE_META[cell.coverage] : null;
@@ -80,7 +82,13 @@ function ControlRow({ row, tools, overlay, archetypeId, open, onToggle }: { row:
             );
           })}
         </div>
-        <EnterpriseLine row={row} archetypeId={archetypeId} overlay={overlay} className="lg:col-start-2" />
+        {row.enforcement.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="ident mr-0.5 w-[72px] shrink-0 text-[9.5px] font-semibold uppercase tracking-[0.08em] text-ink-3">Enterprise</span>
+            <EnterpriseModules row={row} archetypeId={archetypeId} overlay={overlay} />
+          </div>
+        )}
+        </div>
       </div>
       {open && (
         <div className="divide-y divide-line border-t border-line bg-mist/20 px-4">
