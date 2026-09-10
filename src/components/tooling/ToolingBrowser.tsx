@@ -49,14 +49,14 @@ export function ToolingBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`${toolsInOrder.length} products · ${vendors.length} vendors · ${categories.length} categories · verified ${latest ?? "—"}`}
+        eyebrow={`${toolsInOrder.length} products · ${vendors.length} vendors · ${categories.length} architectures · verified ${latest ?? "—"}`}
         title="AI Tooling"
-        lead="A category of tool is a reference architecture: its drawing pins the controls every product of that kind needs. Each named product inherits that reference set and records how its vendor lets an administrator switch each control on, with the vendor's own page behind every step. An organisation that has recorded its status in data/org can switch that overlay on to see it beside the reference."
+        lead="A reference architecture is a category of tool: its drawing pins the controls every product of that kind needs. Each named product inherits that reference set and records how its vendor lets an administrator switch each control on, with the vendor's own page behind every step. An organisation that has recorded its status in data/org can switch that overlay on to see it beside the reference."
       >
         <div className="mt-6 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Perspective">
           {(
             [
-              { id: "category", label: "By category of tool" },
+              { id: "category", label: "By reference architecture" },
               { id: "vendor", label: "By vendor" },
             ] as { id: Perspective; label: string }[]
           ).map((p) => (
@@ -78,13 +78,31 @@ export function ToolingBrowser() {
         </div>
         {!tool && perspective === "category" && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="eyebrow mr-1.5">Category</span>
-            {categories.map((a) => (
-              <FilterPill key={a.id} active={arch === a.id} accent="var(--introduced)" onClick={() => setArch(a.id)}>
-                {a.abbrev ?? a.title}
-                <span className="ml-1.5 opacity-60">{toolsForArchetype(a.id).length}</span>
-              </FilterPill>
-            ))}
+            <span className="eyebrow mr-1.5">Architecture</span>
+            {categories.map((a) => {
+              const active = arch === a.id;
+              return (
+                <span
+                  key={a.id}
+                  className={`inline-flex items-stretch overflow-hidden rounded-full border text-[13px] font-medium transition-colors ${
+                    active ? "border-transparent text-white" : "border-line bg-paper text-ink-2 hover:border-line-strong"
+                  }`}
+                  style={active ? { background: "var(--introduced)" } : undefined}
+                >
+                  <button type="button" aria-pressed={active} onClick={() => setArch(a.id)} className="py-1.5 pl-3 pr-2">
+                    {a.title}
+                    <span className="ml-1.5 opacity-60">{toolsForArchetype(a.id).length}</span>
+                  </button>
+                  <Link
+                    href={`/reference?archetype=${a.id}`}
+                    title={`Open the ${a.title} drawing`}
+                    className={`flex items-center border-l py-1.5 pl-2 pr-2.5 text-[12px] ${active ? "border-white/30 hover:bg-white/15" : "border-line hover:bg-mist"}`}
+                  >
+                    ↗
+                  </Link>
+                </span>
+              );
+            })}
           </div>
         )}
         {!tool && perspective === "vendor" && (
