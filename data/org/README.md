@@ -35,13 +35,13 @@ architecture. Entries are authored your way round: your id, your label, and the 
 you deploy around the AI tools (an endpoint DLP agent, an SSE, an MDM, a gateway guardrail) and
 whether it is in place. This is where "we push managed settings with our MDM" lives: the
 managed setting is the product's control, the MDM is the enterprise capability that delivers
-it. It renders as the "Enforced at" line under every control on the AI Tooling tab and as the
-surface status on the Capabilities tab.
+it. It renders as the enterprise-capability modules beside every control on each architecture's
+Tools tab and as the surface status on the Capabilities tab.
 
 **`tooling-status.yaml`** records, per tool in `data/tooling/`, an adoption decision and a
 status per capability — the product's own settings. Only capabilities pinned on the tool's
 reference architecture may carry a status, because that pinned set *is* the reference control
-set the AI Tooling tab compares against.
+set the Tools tab compares against.
 
 Nothing from this directory renders until the **organisation overlay** switch (footer of every
 page) is on; it defaults on when `local/` exists.

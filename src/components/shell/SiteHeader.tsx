@@ -28,7 +28,6 @@ const NAV: NavItem[] = [
   },
   { href: "/capabilities", label: "Capabilities" },
   { href: "/reference", label: "Architectures" },
-  { href: "/tooling", label: "AI Tooling" },
   { href: "/examples", label: "Incidents" },
 ];
 

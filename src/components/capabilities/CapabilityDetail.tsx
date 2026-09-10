@@ -165,7 +165,7 @@ export function CapabilityDetail({
           <p className="eyebrow">Implemented by</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {tools.map((t) => (
-              <Link key={t.id} href={`/tooling?tool=${t.id}`}>
+              <Link key={t.id} href={`/reference?archetype=${t.architecture}&tool=${t.id}`}>
                 <Chip title={`${vendorById.get(t.vendor)?.name ?? t.vendor} · see how it is switched on`}>
                   {t.name}
                 </Chip>

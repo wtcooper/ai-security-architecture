@@ -4,10 +4,9 @@
  * One reference architecture's products against its reference controls, as a grid: controls
  * as rows, enterprise capability modules beside them, one admin-control column per product.
  * The header states the inheritance, carries the organisation overlay switch and, with it on,
- * the row-label switch. Used by the AI Tooling tab and by the Tools tab on the drawing itself.
+ * the row-label switch. Rendered by the Tools tab on the drawing.
  */
 import { useState } from "react";
-import Link from "next/link";
 
 import { archetypeById, org } from "@/lib/data";
 import type { Tool } from "@/lib/types";
@@ -20,11 +19,11 @@ import { Legend } from "./shared";
 export function ArchitectureViews({
   archetypeId,
   tools,
-  showDrawingLink = false,
+  onPickTool,
 }: {
   archetypeId: string;
   tools: Tool[];
-  showDrawingLink?: boolean;
+  onPickTool: (toolId: string) => void;
 }) {
   const archetype = archetypeById.get(archetypeId);
   const overlay = useOrgOverlay();
@@ -37,15 +36,8 @@ export function ArchitectureViews({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-2">
         <span>
           <span className="font-semibold text-ink">{archetype.capabilities.length} reference controls</span> every product of this kind
-          needs, from the drawing{showDrawingLink && (
-            <>
-              {" "}
-              <Link href={`/reference?archetype=${archetypeId}`} className="font-semibold text-introduced hover:underline">
-                {archetype.abbrev ?? archetype.title} →
-              </Link>
-            </>
-          )}
-          ; {tools.length} product{tools.length === 1 ? "" : "s"} rated against them.
+          needs, from the drawing; {tools.length} product{tools.length === 1 ? "" : "s"} rated against them. Click a product name for
+          its full record.
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <OverlayToggle />
@@ -77,7 +69,7 @@ export function ArchitectureViews({
           No product in the registry instantiates this architecture yet. The reference set above is still what one would need.
         </p>
       ) : (
-        <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} />
+        <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} onPickTool={onPickTool} />
       )}
     </div>
   );

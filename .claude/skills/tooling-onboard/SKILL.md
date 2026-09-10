@@ -64,7 +64,7 @@ architectures with their surface).
 5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-6. **Look at it.** `npm run dev`, open `/tooling?tool=<id>`, expand a few rows, then the
+6. **Look at it.** `npm run dev`, open `/reference?archetype=<arch>&tool=<id>`, expand a few rows, then the
    architecture's Tools tab and the compare view. Without a browser, confirm the compiled entry
    instead: `node -e 'const d=require("./src/data/generated/dataset.json");console.log(d.tools.find(t=>t.id==="<id>"))'`.
    Deliberate exclusions go in the file header comment and under "Exclusions" in

@@ -32,14 +32,24 @@ interface ArchetypeViewProps {
   onWalk: (index: number | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
+  /** A product record open on the Tools tab (deep link `?tool=`), or null. */
+  toolId: string | null;
+  onTool: (id: string | null) => void;
 }
 
 const MODE_LABEL = { build: "your teams build this", use: "your teams use a vendor's", hybrid: "built and consumed" } as const;
 
-export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight, toolId, onTool }: ArchetypeViewProps) {
   // Opens on the overview with the full drawing: a reader's first sight is the whole
   // architecture, nothing faded. Choosing the flows tab traces the walkthrough.
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(toolId ? "tools" : "overview");
+  // Opening a product (from search, a capability page or a rail) lands on the Tools tab.
+  // Adjusted during render, the Panel.tsx idiom, so there is no flash of the previous tab.
+  const [prevTool, setPrevTool] = useState(toolId);
+  if (prevTool !== toolId) {
+    setPrevTool(toolId);
+    if (toolId) setTab("tools");
+  }
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const guidance = guidanceByArchetype.get(archetype.id);
   const tools = toolsForArchetype(archetype.id);
@@ -49,6 +59,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
     if (next !== "capabilities" && next !== "risks") onHighlight(null);
+    if (next !== "tools") onTool(null);
   };
 
   // On a phone the drawing is unreadable at page width, so it folds behind a toggle and the
@@ -197,7 +208,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </div>
         )}
 
-        {tab === "tools" && <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} />}
+        {tab === "tools" && <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} toolId={toolId} onTool={onTool} />}
       </div>
     </div>
   );

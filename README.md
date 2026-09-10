@@ -115,7 +115,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the capability-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
-| **AI Tooling** | A category of tool is a reference architecture, and its drawing pins the controls every product of that kind needs. The named products — every Anthropic, OpenAI, Cursor, GitHub Copilot and Google surface — inherit that reference set and record how the vendor lets an administrator switch each control on, linked to the vendor's page. One grid, two entry points: **by reference architecture**, that drawing's controls as rows, the enterprise capability modules beside them, every vendor's products as admin-control columns; **by vendor**, the same grid per drawing the vendor's products instantiate. Rows switch between CoSAI names and your own control ids. Information first: nothing on these views is a posture until an organisation records one in `data/org` and switches the overlay on, which adds status pills and its own control ids. |
+| **Reference Architectures › Tools** | A category of tool is a reference architecture, and its drawing pins the controls every product of that kind needs. Each drawing's Tools tab rates the named products that instantiate it — every Anthropic, OpenAI, Cursor, GitHub Copilot and Google surface, plus the open-source personal agents — against that reference set: the drawing's controls as rows, the enterprise capability modules beside them, every product as an admin-control column, and how the vendor lets an administrator switch each control on, linked to the vendor's page. Click a product name for its full record. Rows switch between CoSAI names and your own control ids. Information first: nothing here is a posture until an organisation records one in `data/org` and switches the overlay on, which adds status pills and its own control ids. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
 Every diagram supports pan and zoom.
@@ -412,15 +412,15 @@ Everything is text. Clone the repository, and:
    controls, capabilities and risks it corresponds to. The build inverts that into the same
    cross-reference the OWASP lenses use, so your identifiers appear on the Frameworks tab, on
    every risk, control and capability card, in the rails and hover cards of every reference
-   architecture, and in the AI Tooling controls table. `local/` is gitignored here and never
+   architecture, and in the controls table of every product record. `local/` is gitignored here and never
    shipped, so pulling upstream never conflicts; in your own clone, `git add -f data/org/local`
    once.
 2. **Record your posture, in two halves.** `data/org/local/capabilities.yaml` is the enterprise
    layer: per capability and surface, the technology you run around the tools (MDM, endpoint
    DLP, SSE, gateway guardrails, SIEM) and its status. `tooling-status.yaml` is the product
    half: per product, its adoption decision and a status per reference control. Switch the
-   organisation overlay on (footer of every page) and both appear beside the reference on the
-   AI Tooling tab and each architecture's Tools tab.
+   organisation overlay on (footer of every page) and both appear beside the reference on each
+   architecture's Tools tab.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
    `tooling-onboard` skill under `.claude/skills/` carries the research protocol, and
    `org-taxonomy-customize` walks through the mapping work. `npm run data` fails on any

@@ -84,10 +84,7 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
           {arch && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-3">
               The drawing fixes the reference control set: {arch.capabilities.length} capabilities and{" "}
-              {arch.risks.length} risks pinned on it.{" "}
-              <Link href={`/tooling?arch=${arch.id}`} className="font-semibold text-introduced hover:underline">
-                All products in this category →
-              </Link>
+              {arch.risks.length} risks pinned on it.
             </p>
           )}
         </div>

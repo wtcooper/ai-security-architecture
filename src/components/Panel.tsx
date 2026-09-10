@@ -23,7 +23,6 @@ const LADDER = [
 export function Ladder({ className = "" }: { className?: string }) {
   const pathname = usePathname();
   const onIncidents = pathname.startsWith("/examples");
-  const onTooling = pathname.startsWith("/tooling");
   return (
     <nav aria-label="Where this page sits" className={`flex flex-wrap items-center gap-1 ${className}`}>
       {LADDER.map((rung, i) => {
@@ -49,11 +48,6 @@ export function Ladder({ className = "" }: { className?: string }) {
       {onIncidents && (
         <span className="ml-1 rounded-full border border-ink bg-ink px-2 py-[2px] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white">
           Incidents · replayed on 1 and 4
-        </span>
-      )}
-      {onTooling && (
-        <span className="ml-1 rounded-full border border-ink bg-ink px-2 py-[2px] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white">
-          AI Tooling · named products on 3 and 4
         </span>
       )}
     </nav>

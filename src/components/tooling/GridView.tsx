@@ -7,13 +7,25 @@
  * controls, and where.
  */
 import { useState } from "react";
-import Link from "next/link";
 
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Row, type RowGroup } from "./model";
 import { CellDetail, CellTile, cellTitle, docsUrlFor, EnterpriseModules } from "./shared";
 
-export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[]; groups: RowGroup[]; overlay: boolean; archetypeId: string }) {
+export function GridView({
+  tools,
+  groups,
+  overlay,
+  archetypeId,
+  onPickTool,
+}: {
+  tools: Tool[];
+  groups: RowGroup[];
+  overlay: boolean;
+  archetypeId: string;
+  /** Opens the product's full record beneath the grid. */
+  onPickTool: (toolId: string) => void;
+}) {
   const cols = columnGroups(tools);
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
   const span = tools.length + 2;
@@ -49,9 +61,14 @@ export function GridView({ tools, groups, overlay, archetypeId }: { tools: Tool[
               {cols.flatMap((g) =>
                 g.tools.map((t) => (
                   <th key={t.id} className="min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-center align-middle">
-                    <Link href={`/tooling?tool=${t.id}`} className="block text-[11.5px] font-semibold leading-tight text-ink hover:text-introduced hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => onPickTool(t.id)}
+                      title="Open this product's record"
+                      className="block w-full text-center text-[11.5px] font-semibold leading-tight text-ink hover:text-introduced hover:underline"
+                    >
                       {t.name}
-                    </Link>
+                    </button>
                     {docsUrlFor(t) && (
                       <a href={docsUrlFor(t)} target="_blank" rel="noreferrer" className="mt-0.5 inline-block text-[10px] font-medium text-ink-3 hover:text-introduced hover:underline">
                         vendor docs ↗

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces } from "@/lib/data";
+import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces, toolById } from "@/lib/data";
 import type { Archetype, Paragraph, Scenario } from "@/lib/types";
 import { ArchetypeView } from "./ArchetypeView";
 import type { Highlight } from "./FlowDiagram";
@@ -31,8 +31,12 @@ export function ArchitecturesBrowser() {
   const params = useSearchParams();
   const linkedArchetype = params.get("archetype");
   const linkedSurface = params.get("surface");
+  const linkedTool = params.get("tool");
+  const linkedToolArch = linkedTool ? toolById.get(linkedTool)?.architecture : undefined;
 
+  // A product deep link opens its own architecture, whatever else the URL says.
   const initial =
+    linkedToolArch ||
     (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) ||
     archetypesInOrder[0]?.id ||
     "";
@@ -47,6 +51,7 @@ export function ArchitecturesBrowser() {
   // the whole architecture, nothing faded — and a walk is something the reader chooses.
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
+  const [toolId, setToolId] = useState<string | null>(linkedToolArch ? linkedTool : null);
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
   const walks = useMemo(
@@ -58,9 +63,9 @@ export function ArchitecturesBrowser() {
   // GitHub Pages basePath, the same reason TourExplorer does it this way.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.history.replaceState(null, "", `?archetype=${archetypeId}`);
+    window.history.replaceState(null, "", `?archetype=${archetypeId}${toolId ? `&tool=${toolId}` : ""}`);
     document.title = `${archetype.title} · Reference architectures`;
-  }, [archetypeId, archetype.title]);
+  }, [archetypeId, archetype.title, toolId]);
 
   const shown = archetypesInOrder.filter((a) => !surface || a.surface === surface);
 
@@ -70,6 +75,7 @@ export function ArchitecturesBrowser() {
     setArchetypeId(id);
     setWalkIndex(null);
     setHighlight(null);
+    setToolId(null);
   };
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
@@ -145,6 +151,8 @@ export function ArchitecturesBrowser() {
           onWalk={onWalk}
           highlight={highlight}
           onHighlight={onHighlight}
+          toolId={toolId}
+          onTool={setToolId}
         />
       </div>
     </>

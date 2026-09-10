@@ -69,7 +69,7 @@ Read `references/schema.md` first. It is short and it is the contract.
 7. **Show them where it landed.** `npm run dev`, then: `/frameworks?fw=<framework id>` (their
    catalogue with coverage and the unmapped list), `/controls?control=<id>` and
    `/capabilities?capability=<id>` (their ids as badges), `/reference?archetype=<id>` →
-   Capabilities tab, expand a row (their ids under the chip), `/tooling` (status per tool).
+   Capabilities tab, expand a row (their ids under the chip), a product record on an architecture's Tools tab (status per tool).
 
 ## Judgement calls worth stating
 

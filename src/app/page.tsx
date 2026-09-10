@@ -11,7 +11,6 @@ import {
   risks,
   surfaces,
   tools,
-  vendors,
 } from "@/lib/data";
 import { visibleExternalFrameworks } from "@/lib/frameworks";
 
@@ -88,8 +87,8 @@ const SECTIONS = [
     href: "/reference",
     label: "Architectures",
     blurb:
-      "Down to the drawing: per application archetype, the trust boundaries and what authenticates every crossing.",
-    count: `${archetypes.length} archetypes`,
+      "Down to the drawing: per application archetype, the trust boundaries, what authenticates every crossing, and the named products rated against its controls.",
+    count: `${archetypes.length} archetypes · ${tools.length} tools`,
     accent: "var(--band-model-rail)",
   },
   {
@@ -105,14 +104,6 @@ const SECTIONS = [
     blurb: "Read the mapping backwards: pick OWASP, ATLAS or NIST and see where it lands.",
     count: `${visibleExternalFrameworks.length} frameworks`,
     accent: "var(--ink-2)",
-  },
-  {
-    href: "/tooling",
-    label: "AI Tooling",
-    blurb:
-      "Each category of tool is a reference architecture; the named products inherit its controls and record how the vendor switches each one on, with your status per product.",
-    count: `${tools.length} tools · ${vendors.length} vendors`,
-    accent: "var(--band-data-rail)",
   },
   {
     href: "/examples",

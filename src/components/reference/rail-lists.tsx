@@ -108,7 +108,7 @@ function GuidanceFor({ archetype, capabilityId }: { archetype: Archetype; capabi
               {item.tools!.map((id, i) => (
                 <span key={id}>
                   {i > 0 && ", "}
-                  <Link href={`/tooling?tool=${id}`} className="font-medium text-ink-2 hover:underline">
+                  <Link href={`/reference?archetype=${toolById.get(id)?.architecture}&tool=${id}`} className="font-medium text-ink-2 hover:underline">
                     {toolById.get(id)?.name ?? id}
                   </Link>
                 </span>
@@ -188,7 +188,7 @@ export function CapabilityList({
                       .map((t, ti) => (
                         <span key={t.id}>
                           {ti > 0 && ", "}
-                          <Link href={`/tooling?tool=${t.id}`} className="font-medium text-ink-2 hover:underline">
+                          <Link href={`/reference?archetype=${t.architecture}&tool=${t.id}`} className="font-medium text-ink-2 hover:underline">
                             {t.name}
                           </Link>
                         </span>

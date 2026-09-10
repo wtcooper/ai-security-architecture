@@ -80,7 +80,7 @@ function buildIndex(): Entry[] {
       kind: "Tool",
       title: t.name,
       hint: vendorById.get(t.vendor)?.name ?? t.vendor,
-      href: `/tooling?tool=${t.id}`,
+      href: `/reference?archetype=${t.architecture}&tool=${t.id}`,
       text: norm(t.name, t.family, t.vendor, t.id, ...(t.variants ?? []).map((v) => v.name)),
     })),
     ...incidents.map((i) => ({

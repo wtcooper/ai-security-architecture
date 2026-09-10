@@ -49,7 +49,7 @@ capabilities:
 
 Build rules: the capability and surface ids exist; status in enum. This is the text-file home
 for the Capabilities tab's posture (its browser-side drawer still wins in that browser), and it
-is what appears beside "Enforced at" on the AI Tooling tab: the product's own setting is one
+is what appears as the enterprise-capability modules on each architecture's Tools tab: the product's own setting is one
 half of a control, the enterprise technology that delivers or surrounds it is the other.
 
 ## tooling-status.yaml
@@ -76,6 +76,6 @@ status and adoption are in their enums. A tool may appear once.
 | Data | Where |
 | --- | --- |
 | Framework entries | Frameworks tab, grouped under the organisation name; entry detail with mapped risks/controls/capabilities and the risk map |
-| Entry ids | Badges on risk, control and capability cards; "Your controls" line under expanded rows on the architecture Capabilities/Risks tabs; hover cards on the drawing chips and tags; the AI Tooling controls table and compare matrix |
-| Adoption + statuses | AI Tooling tab (catalogue and compare), the Tools tab on each architecture |
+| Entry ids | Badges on risk, control and capability cards; "Your controls" line under expanded rows on the architecture Capabilities/Risks tabs; hover cards on the drawing chips and tags; the controls table of every product record on the Tools tab |
+| Adoption + statuses | The Tools tab on each architecture and its product records |
 | Organisation name | Footer (`org: <name>`), pill labels; the example profile is labelled "example" everywhere |
