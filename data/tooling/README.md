@@ -74,7 +74,9 @@ Applied by the `tooling-onboard` skill under `.claude/skills/`:
 ## Coverage status
 
 Verified 2026-09-10 for Anthropic, OpenAI, Cursor and GitHub: every entity addresses every
-capability pinned on its architecture. `toolOpenclaw` and `toolHermes` were carried over from the
+capability pinned on its architecture. A second pass the same day re-opened every URL against the
+vendor pages and corrected about 90 links, keys and claims; the findings and the unverifiable
+remainder are in `docs/VALIDATION-2026-09-10-TOOLING.md`. `toolOpenclaw` and `toolHermes` were carried over from the
 earlier guidance registry with their admin items only; they carry no control rows yet, and
 `docs/AUDIT.md` §5b lists them as unaddressed until someone runs the `tooling-onboard` skill on
 them.

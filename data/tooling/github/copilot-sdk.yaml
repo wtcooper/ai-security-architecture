@@ -36,18 +36,21 @@ tools:
       - "The controls are code: onPermissionRequest (deny-by-default), onPreToolUse allow / deny
         / ask / modify, mode \"empty\" with an explicit availableTools list, per-session gitHubToken,
         sessionIdleTimeoutSeconds, and an OpenTelemetry TelemetryConfig with W3C trace propagation.
-        Enterprise managed permissions are advertised for the SDK at GA; the managed-settings
-        reference does not list the SDK as a client, so treat that as unverified."
+        The SDK later added its own enterprise-permissions layer — enableManagedSettings and a
+        managedSettings option on session.create / session.resume (deny / ask / allow rules) —
+        but this shipped after GA (v1.0.2, v1.0.13) and the enterprise managed-settings client
+        matrix still does not list the SDK, so central managed-settings.json policy does not reach
+        SDK sessions automatically."
     facts:
       - label: Plans
         value: "Any Copilot subscriber including Free; non-Copilot users via BYOK. Sessions bill AI credits to the token's owner; usage is exposed as assistant.usage and session.usage.getMetrics (nano-AI units)."
-        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing
+        url: https://github.blog/changelog/2026-06-02-copilot-sdk-is-now-generally-available/
       - label: Inference & routing
         value: "Copilot API with the session's GitHub token, or BYOK ProviderConfig (type openai / azure / anthropic, baseUrl, apiKey, wireApi) with prompts sent directly to the provider; Azure managed identity can supply bearer tokens instead of keys."
         url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/byok
       - label: Data leaving the host
         value: "Prompts, tool results and file context to the Copilot API or the BYOK provider; OTLP traces only where configured; cloud sessions publish to github.com/copilot/tasks/{sessionId}; the CLI's telemetry stays on unless COPILOT_OFFLINE=true."
-        url: https://docs.github.com/en/copilot/responsible-use/copilot-cloud-agent
+        url: https://docs.github.com/en/copilot/responsible-use/agents
       - label: Data retention / training
         value: "Session state persists on the host filesystem (or a shared volume) with a 30-minute idle timeout in headless mode; GitHub-hosted models follow the Copilot ZDR terms (Claude Fable 5 / 5.1 retain by default); BYOK providers apply their own retention."
         url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
@@ -168,7 +171,7 @@ tools:
           - title: Prefer managed identity over static keys
             body:
               - Use the Azure managed identity setup so the SDK obtains bearer tokens through callbacks instead of storing apiKey values.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/azure-managed-identity
           - title: Keep keys in a secret manager
             body:
               - The scaling guide's production checklist names Vault or Kubernetes Secrets for credentials and persistent volumes for session state.
@@ -176,7 +179,7 @@ tools:
         verified: "2026-09-10"
       - capability: capabilityAgentRuntimeEnforcement
         coverage: native
-        mechanism: onPermissionRequest (deny-by-default) and onPreToolUse returning permissionDecision allow / deny / ask with modifiedArgs; enterprise managed permissions announced for SDK sessions
+        mechanism: onPermissionRequest (deny-by-default) and onPreToolUse returning permissionDecision allow / deny / ask with modifiedArgs; SDK-native enableManagedSettings / managedSettings enterprise-permissions layer added post-GA
         steps:
           - title: Implement the permission handler
             body:
@@ -188,8 +191,8 @@ tools:
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
           - title: Check whether managed permissions reach your sessions
             body:
-              - The GA post lists enterprise-managed permissions for agent operations as an SDK enterprise feature; the managed-settings client matrix does not name the SDK — verify with a deny rule before relying on it.
-            url: https://github.blog/changelog/2026-06-02-copilot-sdk-is-now-generally-available/
+              - The SDK's own enableManagedSettings flag and managedSettings option on session.create / session.resume are the SDK's enterprise-permissions layer, not the org-wide managed-settings.json feature; the enterprise managed-settings client matrix still does not name the SDK, so wire enableManagedSettings or managedSettings explicitly rather than assuming central policy reaches SDK sessions.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -215,11 +218,16 @@ tools:
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
         coverage: partial
-        mechanism: sessionIdleTimeoutSeconds, 30-minute idle cleanup, recommended concurrent-session cap and eviction, account.getQuota; no built-in rate limiting
+        mechanism: sessionLimits.maxAiCredits per-session soft cap (SDK 1.0.5+), sessionIdleTimeoutSeconds, 30-minute idle cleanup, recommended concurrent-session cap and eviction, account.getQuota; no account-wide or concurrent-session rate limiting
         note: >-
-          Quota is visible, not enforced: the application must cap sessions and spend. The CLI's
-          --max-ai-credits applies to programmatic CLI runs, not documented for SDK sessions.
+          maxAiCredits is a soft cap checked after each model call, so one response can exceed it
+          before the next call is blocked; quota beyond that is visible, not enforced, so the
+          application must still cap concurrent sessions and total spend.
         steps:
+          - title: Set a per-session credit cap
+            body:
+              - "Pass sessionLimits: { maxAiCredits } when creating or resuming a session; the SDK forwards it to the CLI, which triggers the exhausted-budget flow when the cap is hit."
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/session-limits
           - title: Cap and evict sessions
             body:
               - Limit concurrent active sessions (the guide suggests 50), evict the oldest idle ones, set sessionIdleTimeoutSeconds and delete expired sessions.
@@ -331,7 +339,7 @@ tools:
           - title: Choose MCP servers per session and name their tools
             body:
               - Register only trusted servers per session and allowlist their tools with mcp:tool patterns; the application card places responsibility for server trustworthiness on the developer.
-            url: https://docs.github.com/en/copilot/responsible-use/copilot-cloud-agent
+            url: https://docs.github.com/en/copilot/responsible-use/agents
         verified: "2026-09-10"
       - capability: capabilityAiBom
         coverage: none
@@ -363,8 +371,8 @@ tools:
       - title: Copilot SDK is generally available (2026-06-02)
         url: https://github.blog/changelog/2026-06-02-copilot-sdk-is-now-generally-available/
       - title: Application card — GitHub Copilot agents (SDK section)
-        url: https://docs.github.com/en/copilot/responsible-use/copilot-cloud-agent
+        url: https://docs.github.com/en/copilot/responsible-use/agents
       - title: OpenTelemetry for agent monitoring
-        url: https://docs.github.com/en/copilot/concepts/agents/opentelemetry
+        url: https://docs.github.com/en/copilot/concepts/enterprise/opentelemetry
       - title: Bring your own key for GitHub Copilot
         url: https://docs.github.com/en/copilot/concepts/models/bring-your-own-key

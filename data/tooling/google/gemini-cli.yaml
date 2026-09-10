@@ -109,7 +109,8 @@ tools:
         note: >-
           GEMINI.md context files are loaded from the repository, its parents and any directory a
           tool touches; the first public exploit (Tracebit, 2025-07) hid instructions in a
-          GEMINI.md and chained a payload behind an allowlisted grep. Trusted folders keep
+          README.md the CLI pulled into context and chained a payload behind an allowlisted
+          grep. Trusted folders keep
           workspace settings, .env, MCP servers, hooks and context files off until the user
           trusts the folder; nothing classifies the content.
       - risk: riskRogueActions
@@ -126,8 +127,8 @@ tools:
       - risk: riskSensitiveDataDisclosure
         note: >-
           API keys live in plaintext in .gemini/.env or shell profiles; telemetry.logPrompts
-          defaults are stated inconsistently across the vendor's own pages (true on the telemetry
-          page, false on the settings reference), so set it explicitly in the system file.
+          defaults to true on the telemetry page, the settings reference states no default and
+          the enterprise page recommends false, so set it explicitly in the system file.
     controls:
       - capability: capabilityIga
         coverage: native
@@ -152,7 +153,7 @@ tools:
             url: https://geminicli.com/docs/reference/policy-engine/
           - title: Add a BeforeTool gate
             body:
-              - "A hooks.BeforeTool command in the system settings receives tool_name and tool_input and blocks with {\"decision\": \"deny\"} or exit code 2; keep it there rather than in user settings, which users edit."
+              - "A hooks.BeforeTool command in the system settings receives tool_name and tool_input and blocks with {\"decision\": \"deny\"} or exit code 2. The hooks page ranks project and user settings above system settings for hooks, so treat the admin policy tier as the enforced layer and the hook as defence in depth."
             url: https://geminicli.com/docs/hooks/reference/
         verified: "2026-09-10"
       - capability: capabilityAiTprm
@@ -258,9 +259,9 @@ tools:
         mechanism: "${VAR} substitution in settings for MCP headers and env; automatic redaction of secret-named inherited variables"
         note: >-
           API keys are read from GEMINI_API_KEY / GOOGLE_API_KEY, shell profiles or a plaintext
-          .gemini/.env; nothing vaults them, and variables set in .gemini/.env bypass the
-          automatic exclusions. Prefer Sign in with Google (cached OAuth) or Vertex ADC over
-          long-lived keys.
+          .gemini/.env; nothing vaults them, and variables declared explicitly in a server's env
+          block (or by an extension) are trusted and skip the automatic redaction. Prefer Sign
+          in with Google (cached OAuth) or Vertex ADC over long-lived keys.
         steps:
           - title: Reference secrets, do not inline them
             body:
@@ -326,8 +327,8 @@ tools:
             url: https://geminicli.com/docs/cli/telemetry/
           - title: Turn on Code Assist logging
             body:
-              - "The Gemini Code Assist administrator settings carry a Logging setting (default disabled) that stores user input and responses in a Cloud Logging bucket for Standard/Enterprise."
-            url: https://docs.cloud.google.com/gemini/docs/admin-settings
+              - "In Admin for Gemini > Settings enable \"Logging for Code Assist metadata\" and \"Logging for Code Assist prompts and responses\" (both off by default) so Standard/Enterprise requests land in Cloud Logging; CLI entries carry client_name cloudcode_cli."
+            url: https://docs.cloud.google.com/gemini/docs/configure-logging
         verified: "2026-09-10"
       - capability: capabilityShadowAiDiscovery
         coverage: none
@@ -347,8 +348,8 @@ tools:
         steps:
           - title: Cut the licensed path
             body:
-              - "Revoke the user's Gemini Code Assist licence or the IAM binding on the Google Cloud project the CLI authenticates against."
-            url: https://docs.cloud.google.com/gemini/docs/codeassist/gemini-cli
+              - "In Admin for Gemini > Manage Gemini Code Assist > Manage Subscription > License Management select the user and Unassign License (needs consumerprocurement.licensePools.unassign), or remove the IAM binding on the Google Cloud project the CLI authenticates against."
+            url: https://docs.cloud.google.com/gemini/docs/codeassist/manage-licenses
         verified: "2026-09-10"
       - capability: capabilityEdr
         coverage: external
@@ -381,7 +382,7 @@ tools:
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: partial
-        mechanism: GOOGLE_GEMINI_BASE_URL / GOOGLE_VERTEX_BASE_URL proxy overrides; tools.sandboxNetworkAccess; *-proxied Seatbelt profiles; MCP env HTTP_PROXY
+        mechanism: GOOGLE_GEMINI_BASE_URL / GOOGLE_VERTEX_BASE_URL proxy overrides; tools.sandboxNetworkAccess; *-proxied Seatbelt profiles
         note: >-
           Model traffic can be pointed at an organisation gateway and sandboxed tools can be
           denied network or forced through a proxy, but web-fetch, MCP servers outside the sandbox
@@ -394,7 +395,7 @@ tools:
             url: https://geminicli.com/docs/reference/configuration/
           - title: Deny sandbox network
             body:
-              - "Keep tools.sandboxNetworkAccess false, or use a proxied Seatbelt profile so tool traffic exits through the proxy only."
+              - "On macOS set SEATBELT_PROFILE to a *-proxied profile so tool traffic exits through the proxy only; for containers keep tools.sandboxNetworkAccess at its default false (settings reference)."
             url: https://geminicli.com/docs/cli/sandbox/
         verified: "2026-09-10"
       - capability: capabilityModelScanning
@@ -403,10 +404,10 @@ tools:
         note: No model artifacts are loaded locally; every auth path is a remote Google endpoint.
         verified: "2026-09-10"
     advisories:
-      - title: "GHSA-wpqr-6v78-jr5g: RCE via workspace trust and tool allowlisting bypasses (CVSS 10.0); @google/gemini-cli < 0.39.1 and 0.40.0-preview.2, run-gemini-cli < 0.1.22"
+      - title: "GHSA-wpqr-6v78-jr5g: RCE via workspace trust and tool allowlisting bypasses (CVSS 10.0, 2026-04-24); @google/gemini-cli < 0.39.1 and < 0.40.0-preview.3, run-gemini-cli < 0.1.22"
         url: https://github.com/google-github-actions/run-gemini-cli/security/advisories/GHSA-wpqr-6v78-jr5g
         date: "2026-04"
-      - title: "Tracebit: GEMINI.md prompt injection plus shell allowlist bypass for silent exfiltration; fixed v0.1.14 (2025-07-25)"
+      - title: "Tracebit: README.md prompt injection via context loading plus shell allowlist bypass for silent exfiltration; fixed v0.1.14 (2025-07-25), disclosed 2025-07-28"
         url: https://tracebit.com/blog/code-exec-deception-gemini-ai-cli-hijack
         date: "2025-07"
     sources:
@@ -436,5 +437,7 @@ tools:
         url: https://docs.cloud.google.com/gemini/docs/codeassist/gemini-cli
       - title: Security, privacy and compliance for Gemini Code Assist Standard and Enterprise
         url: https://docs.cloud.google.com/gemini/docs/codeassist/security-privacy-compliance
+      - title: Gemini Code Assist consumer accounts deprecation
+        url: https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals
       - title: Gemini CLI releases
         url: https://github.com/google-gemini/gemini-cli/releases
