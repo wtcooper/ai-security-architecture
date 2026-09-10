@@ -2,7 +2,7 @@
 
 /**
  * One architecture on the page: the drawing at full width and everything else in one tab
- * strip beneath it — overview, sequence flows, tools, capabilities, risks, guidance. One panel is
+ * strip beneath it — overview, sequence flows, tools, controls (with the guidance folded in), risks. One panel is
  * visible at a time and nothing is expanded by default, so the page never shows two lists
  * and a sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
  * capability or risk tab clears the highlight, so the drawing always matches the panel.
@@ -17,10 +17,11 @@ import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
-import { GuidancePanel } from "./GuidancePanel";
+import { Section } from "./ArchetypeDetail";
+import { Prose } from "@/components/Prose";
 import { CapabilityList, RiskList, WalkList } from "./rail-lists";
 
-type Tab = "overview" | "flows" | "capabilities" | "risks" | "guidance" | "tools";
+type Tab = "overview" | "flows" | "capabilities" | "risks" | "tools";
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -32,6 +33,8 @@ interface ArchetypeViewProps {
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
 }
+
+const MODE_LABEL = { build: "your teams build this", use: "your teams use a vendor's", hybrid: "built and consumed" } as const;
 
 export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
   // Opens on the overview with the full drawing: a reader's first sight is the whole
@@ -65,9 +68,8 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
     { id: "tools", label: "Tools", count: tools.length },
-    { id: "capabilities", label: "Capabilities", count: archetype.capabilities.length },
+    { id: "capabilities", label: "Controls", count: archetype.capabilities.length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
-    { id: "guidance", label: "Controls guidance", count: guidance?.items.length },
   ];
 
   return (
@@ -157,8 +159,27 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
         {tab === "capabilities" && (
           <div>
             <p className="text-[12px] leading-snug text-ink-3">
-              The numbered chips on the drawing. Select one to see where it must sit and why.
+              The numbered chips on the drawing: the control technologies every product of this kind needs, each implementing one or
+              more CoSAI controls. Select one to see where it must sit, why, what the guidance says about it, and which products can
+              switch it on.
             </p>
+            {guidance && (
+              <div className="mt-3 rounded-xl border border-line bg-paper">
+                <Section title={`How to govern this · ${MODE_LABEL[guidance.mode]}${guidance.status === "draft" ? " · draft" : ""}`} count={null} last>
+                  <Prose blocks={guidance.overview} size="sm" />
+                  <p className="mt-2 text-[11.5px] text-ink-3">{guidance.attribution}</p>
+                  <ul className="mt-2 space-y-1">
+                    {guidance.sources.map((src) => (
+                      <li key={src.url} className="text-[12px] leading-snug">
+                        <a href={src.url} target="_blank" rel="noreferrer" className="text-ink-2 hover:text-introduced hover:underline">
+                          {src.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
+              </div>
+            )}
             <div className="mt-3">
               <CapabilityList archetype={archetype} highlight={highlight} onHighlight={onHighlight} columns={2} />
             </div>
@@ -175,13 +196,6 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
             </div>
           </div>
         )}
-
-        {tab === "guidance" &&
-          (guidance ? (
-            <GuidancePanel archetype={archetype} />
-          ) : (
-            <p className="text-[13px] text-ink-3">No controls guidance has reached this architecture yet.</p>
-          ))}
 
         {tab === "tools" && <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} />}
       </div>

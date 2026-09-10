@@ -8,9 +8,9 @@ import { Prose } from "@/components/Prose";
 import { capabilityById, controlsForCapability, org, orgStatusFor } from "@/lib/data";
 import { frameworkHref, orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
-import { COVERAGE_META } from "./labels";
 import { OrgStatusPill } from "./OrgStatusPill";
 import { useOrgOverlay } from "./overlay";
+import { CoverageBadge } from "./shared";
 
 export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { tool: Tool; capabilityId: string; showTitle?: boolean }) {
   const overlay = useOrgOverlay();
@@ -19,7 +19,6 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
   const status = orgStatusFor(tool.id, capabilityId);
   const orgIds = orgEntriesFor("capabilities", capabilityId);
   const cosai = controlsForCapability(capabilityId);
-  const coverage = control ? COVERAGE_META[control.coverage] : null;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -27,12 +26,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
         {showTitle && (
           <p className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">
             {capability?.title ?? capabilityId}
-            {coverage && (
-              <span className="text-[11.5px] font-medium text-ink-2" title={coverage.blurb}>
-                <span className="mr-1 text-ink">{coverage.glyph}</span>
-                {coverage.label}
-              </span>
-            )}
+            <CoverageBadge coverage={control?.coverage} long />
             {overlay && status && <OrgStatusPill status={status.status} compact />}
           </p>
         )}

@@ -7,7 +7,9 @@
  */
 import Link from "next/link";
 
-import { capabilityById, riskById, riskCode, toolsForCapability } from "@/lib/data";
+import { Chip } from "@/components/Chips";
+import { Prose } from "@/components/Prose";
+import { capabilityById, controlsForCapability, guidanceByArchetype, riskById, riskCode, toolById, toolsForCapability } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Archetype, Scenario } from "@/lib/types";
@@ -83,6 +85,53 @@ function notesFor(pins: { note?: string }[]) {
   return pins.map((p) => p.note).filter((n): n is string => Boolean(n));
 }
 
+/**
+ * What the controls-guidance document says about one control on this architecture: the items
+ * that cite it, with their prose, links and the products they name. Folded into the control
+ * row so guidance is read beside the control it is about rather than on a tab of its own.
+ */
+function GuidanceFor({ archetype, capabilityId }: { archetype: Archetype; capabilityId: string }) {
+  const doc = guidanceByArchetype.get(archetype.id);
+  const items = doc?.items.filter((i) => i.capabilities.includes(capabilityId)) ?? [];
+  if (!items.length) return null;
+  return (
+    <div className="space-y-2.5">
+      {items.map((item) => (
+        <div key={item.title} className="rounded-lg border border-line bg-mist/40 px-3 py-2.5">
+          <p className="text-[12.5px] font-semibold text-ink">{item.title}</p>
+          <div className="mt-1">
+            <Prose blocks={item.body} size="sm" />
+          </div>
+          {(item.tools?.length ?? 0) > 0 && (
+            <p className="mt-1.5 text-[11.5px] text-ink-3">
+              Product specifics:{" "}
+              {item.tools!.map((id, i) => (
+                <span key={id}>
+                  {i > 0 && ", "}
+                  <Link href={`/tooling?tool=${id}`} className="font-medium text-ink-2 hover:underline">
+                    {toolById.get(id)?.name ?? id}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+          {(item.links?.length ?? 0) > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {item.links!.map((l) => (
+                <li key={l.url} className="text-[11.5px]">
+                  <a href={l.url} target="_blank" rel="noreferrer" className="text-ink-2 hover:text-introduced hover:underline">
+                    {l.title} →
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function CapabilityList({
   archetype,
   highlight,
@@ -115,31 +164,44 @@ export function CapabilityList({
               <span className="text-[12.5px] leading-tight text-ink">{capability?.title ?? id}</span>
             </button>
             {active && (
-              <div className="mb-1 ml-8 mt-1 space-y-1">
+              <div className="mb-2 ml-8 mt-1 space-y-2">
                 {notes.map((note, ni) => (
                   <p key={ni} className="text-[11.5px] leading-snug text-ink-2">
                     {note}
                   </p>
                 ))}
+                <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-3">
+                  <span className="mr-0.5">CoSAI controls:</span>
+                  {controlsForCapability(id).map((c) => (
+                    <Link key={c.id} href={`/controls?control=${c.id}`}>
+                      <Chip tone="mitigated">{c.title}</Chip>
+                    </Link>
+                  ))}
+                </p>
                 <OrgRefs kind="capabilities" id={id} />
-                {toolsForCapability(id).length > 0 && (
+                <GuidanceFor archetype={archetype} capabilityId={id} />
+                {toolsForCapability(id).filter((t) => t.architecture === archetype.id).length > 0 && (
                   <p className="text-[11px] text-ink-3">
-                    Implemented by{" "}
-                    {toolsForCapability(id).map((t, ti) => (
-                      <span key={t.id}>
-                        {ti > 0 && ", "}
-                        <Link href={`/tooling?tool=${t.id}`} className="font-medium text-ink-2 hover:underline">
-                          {t.name}
-                        </Link>
-                      </span>
-                    ))}
+                    Admin-settable in{" "}
+                    {toolsForCapability(id)
+                      .filter((t) => t.architecture === archetype.id)
+                      .map((t, ti) => (
+                        <span key={t.id}>
+                          {ti > 0 && ", "}
+                          <Link href={`/tooling?tool=${t.id}`} className="font-medium text-ink-2 hover:underline">
+                            {t.name}
+                          </Link>
+                        </span>
+                      ))}
+                    <span className="mx-1">·</span>
+                    <span className="text-ink-3">see the Tools tab for every product</span>
                   </p>
                 )}
                 <Link
                   href={`/capabilities?capability=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
                 >
-                  Open on the Capabilities tab →
+                  This control class across every surface →
                 </Link>
               </div>
             )}

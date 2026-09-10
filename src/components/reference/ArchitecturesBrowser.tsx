@@ -132,7 +132,7 @@ export function ArchitecturesBrowser() {
               <span>{archetype.risks.length} risks</span>
               <span>{(archetype.scenarios?.length ?? 0) + 1} sequence walks</span>
               {guidanceByArchetype.has(archetype.id) && (
-                <span>{guidanceByArchetype.get(archetype.id)!.items.length} controls-guidance items</span>
+                <span>{guidanceByArchetype.get(archetype.id)!.items.length} guidance items</span>
               )}
             </p>
           </div>

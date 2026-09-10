@@ -20,7 +20,7 @@ import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { archetypeById, archetypesInOrder, toolById, toolsForArchetype, toolsInOrder, vendorById, vendors } from "@/lib/data";
-import { ArchitectureMatrix } from "./ArchitectureMatrix";
+import { ArchitectureViews } from "./ArchitectureViews";
 import { ToolDetail } from "./ToolDetail";
 import { VendorView } from "./VendorView";
 
@@ -136,7 +136,7 @@ export function ToolingBrowser() {
           </div>
         ) : perspective === "category" ? (
           arch ? (
-            <ArchitectureMatrix key={arch} archetypeId={arch} tools={toolsForArchetype(arch)} showDrawingLink />
+            <ArchitectureViews key={arch} archetypeId={arch} tools={toolsForArchetype(arch)} showDrawingLink />
           ) : null
         ) : (
           <VendorView key={vendor} vendorId={vendor} onPickArchitecture={pickArchitecture} />

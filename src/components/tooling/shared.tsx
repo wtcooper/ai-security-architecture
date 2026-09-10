@@ -2,10 +2,10 @@
 
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
 import { STATUS_STYLE } from "@/components/capabilities/status";
-import { CAPABILITY_STATUSES, type Tool, type ToolCoverage } from "@/lib/types";
+import { CAPABILITY_STATUSES, type Tool, type ToolControl, type ToolCoverage } from "@/lib/types";
 import { vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
-import { COVERAGE_META, ORG_STATUS_LABEL } from "./labels";
+import { COVERAGE_META, COVERAGE_ORDER, ORG_STATUS_LABEL } from "./labels";
 import type { Cell, Row } from "./model";
 
 /** The vendor's own documentation index for a product, for the attributable link beside its name. */
@@ -17,7 +17,7 @@ export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
   const steps = cell.parts.reduce((n, p) => n + (p.control?.steps?.length ?? 0), 0);
   return [
     `${tool.name} · ${row.title ?? row.label}`,
-    `Vendor: ${cov ? cov.label : "not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}${cov ? ` — ${cov.blurb}` : ""}`,
+    `${cov ? cov.long : "Not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}${cov ? ` — ${cov.blurb}` : ""}`,
     steps ? `${steps} operator step${steps === 1 ? "" : "s"} with vendor links — click to open` : "",
     overlay ? `Status: ${cell.status ? ORG_STATUS_LABEL[cell.status] : "—"}` : "",
   ]
@@ -25,68 +25,85 @@ export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
     .join("\n");
 }
 
-/** The matrix and bar tile: status is the tint, vendor coverage the glyph. */
+/** The vendor page for one control on one product: the first operator step's link, else none. */
+export const configureUrl = (control?: ToolControl) => control?.steps?.find((st) => st.url)?.url;
+
+/** The coverage word in its colour. The one encoding every view shares. */
+export function CoverageBadge({ coverage, long = false, className = "" }: { coverage?: ToolCoverage; long?: boolean; className?: string }) {
+  const m = coverage ? COVERAGE_META[coverage] : null;
+  return (
+    <span
+      title={m?.blurb ?? "The registry has no vendor record for this control yet."}
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-[2px] text-[11px] font-semibold ${className}`}
+      style={
+        m
+          ? { background: m.bg, color: m.text, borderColor: m.border, borderStyle: m.dashed ? "dashed" : "solid" }
+          : { background: "var(--paper)", color: "var(--ink-3)", borderColor: "var(--line)" }
+      }
+    >
+      {m ? (long ? m.long : m.label) : "Not assessed"}
+    </span>
+  );
+}
+
+/** A grid cell: the coverage word on its colour, the configure link, and the status pill when the overlay is on. */
 export function CellTile({
   cell,
   title,
   overlay,
-  size = "md",
   selected = false,
   onClick,
 }: {
   cell: Cell;
   title: string;
-  /** With the organisation overlay on, the tint is its status and a small pill names it. */
   overlay: boolean;
-  size?: "sm" | "md";
   selected?: boolean;
   onClick?: () => void;
 }) {
-  const cov = cell.coverage ? COVERAGE_META[cell.coverage] : null;
+  const m = cell.coverage ? COVERAGE_META[cell.coverage] : null;
   const status = overlay ? cell.status : undefined;
-  const style = status ? { background: STATUS_STYLE[status].bg, color: STATUS_STYLE[status].text } : undefined;
-  const base = size === "sm" ? "h-[18px] w-[18px] text-[11px]" : "h-full w-full min-h-[34px] px-2 py-1 text-left";
+  const url = cell.parts.map((p) => configureUrl(p.control)).find(Boolean);
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
+      className={`flex h-full min-h-[36px] items-center gap-1.5 rounded-[4px] px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
+      style={m ? { background: m.bg, color: m.text, boxShadow: m.dashed ? "inset 0 0 0 1px var(--line-strong)" : undefined } : { color: "var(--ink-3)" }}
       title={title}
-      aria-pressed={selected}
-      className={`flex items-center gap-1.5 rounded-[3px] transition-[filter] hover:brightness-95 ${base} ${
-        selected ? "outline outline-2 outline-ink" : ""
-      }`}
-      style={style}
     >
-      <span className={`shrink-0 ${size === "sm" ? "w-full text-center" : "w-3 text-center text-[13px]"} ${cov ? "text-ink" : "text-ink-3"}`}>
-        {cov ? cov.glyph : "·"}
-      </span>
-      {size === "md" && (
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[10.5px] font-medium text-ink-2">{cov ? cov.label : ""}</span>
-          {status && (
-            <span
-              className="shrink-0 rounded-full border px-1.5 py-px text-[9.5px] font-semibold"
-              style={{ borderColor: STATUS_STYLE[status].border, color: STATUS_STYLE[status].text, background: "var(--paper)" }}
-            >
-              {ORG_STATUS_LABEL[status]}
-            </span>
-          )}
+      <button type="button" onClick={onClick} className="min-w-0 flex-1 truncate text-left text-[11.5px] font-semibold hover:underline">
+        {m ? m.label : "—"}
+      </button>
+      {status && (
+        <span
+          className="shrink-0 rounded-full border px-1.5 py-px text-[9.5px] font-semibold"
+          style={{ borderColor: STATUS_STYLE[status].border, color: STATUS_STYLE[status].text, background: "var(--paper)" }}
+        >
+          {ORG_STATUS_LABEL[status]}
         </span>
       )}
-    </button>
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          title="How to configure — the vendor's page"
+          className="shrink-0 rounded px-1 text-[12px] font-bold opacity-70 hover:bg-white/60 hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          ↗
+        </a>
+      )}
+    </div>
   );
 }
 
 export function Legend({ overlay, compact = false }: { overlay: boolean; compact?: boolean }) {
   return (
-    <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-ink-3 ${compact ? "" : "rounded-lg border border-line bg-paper px-3 py-2"}`}>
-      <span className="eyebrow">Vendor coverage</span>
-      {(Object.keys(COVERAGE_META) as ToolCoverage[]).map((c) => (
-        <span key={c} className="flex items-center gap-1" title={COVERAGE_META[c].blurb}>
-          <span className="w-3 text-center text-[12px] text-ink">{COVERAGE_META[c].glyph}</span>
-          {COVERAGE_META[c].label}
-        </span>
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink-3 ${compact ? "" : "rounded-lg border border-line bg-paper px-3 py-2"}`}>
+      <span className="eyebrow">Can an admin switch it on?</span>
+      {COVERAGE_ORDER.map((c) => (
+        <CoverageBadge key={c} coverage={c} />
       ))}
+      <span className="ml-1">↗ = the vendor&rsquo;s page for configuring it</span>
       {overlay && (
         <>
           <span className="eyebrow ml-2">Your status</span>

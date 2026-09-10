@@ -66,6 +66,27 @@ record, and the organisation's badges on the risk, control and capability cards 
 rails. Adoption decisions appear only on the product record under the overlay; the matrices are
 never about decisions.
 
+## Round two: words instead of glyphs, and three shapes to choose from
+
+The half-circle glyphs carried a judgement with no words and no action, and the per-product
+bars compressed it further. Coverage is now a plain phrase in a colour — **Settable · Partly ·
+3rd-party · Not offered · Unverified** — answering one question, "can an administrator switch
+this on in this product?", and every settable or partly settable cell carries ↗, the vendor's
+own page for doing so. The same reference set is offered in three shapes, switchable on the AI
+Tooling tab and on each drawing's Tools tab, so the one that reads best for leadership can be
+kept and the others removed:
+
+1. **Control checklist** — one row per reference control, every product as a chip on the line;
+   a row opens to the vendor steps for all products at once.
+2. **Grid** — controls × products, each cell a coloured word with its link.
+3. **Product cards** — a runbook per product: every reference control, the word, the link. The
+   same card grouped by architecture is the vendor perspective.
+
+On the drawing, the tab formerly called *Capabilities* is now **Controls** (the chips are the
+control technologies that implement CoSAI controls; each row names them), and the separate
+*Controls guidance* tab is folded into it: a control row opens to its pin notes, its CoSAI
+controls, the guidance items that cite it, and the products that can switch it on.
+
 ## What onboarding now means
 
 Adding a product is choosing its category and then answering, for each inherited control, how

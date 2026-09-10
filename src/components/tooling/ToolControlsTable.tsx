@@ -11,9 +11,9 @@ import { controlsForCapability, controlsForTool, org, orgStatusFor } from "@/lib
 import { orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
 import { ControlRowDetail } from "./ControlRowDetail";
-import { COVERAGE_META } from "./labels";
 import { OrgStatusPill } from "./OrgStatusPill";
 import { useOrgOverlay } from "./overlay";
+import { CoverageBadge, configureUrl } from "./shared";
 
 export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
   const rows = controlsForTool(tool.id);
@@ -40,7 +40,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
               <th className="px-3 py-2 font-semibold">Capability</th>
               <th className="px-3 py-2 font-semibold">CoSAI controls</th>
               {overlay && <th className="px-3 py-2 font-semibold">Your controls</th>}
-              <th className="px-3 py-2 font-semibold">Vendor</th>
+              <th className="px-3 py-2 font-semibold">Admin-settable?</th>
               {overlay && <th className="px-3 py-2 font-semibold">Status</th>}
             </tr>
           </thead>
@@ -50,7 +50,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
               const status = orgStatusFor(tool.id, capability.id);
               const orgIds = orgEntriesFor("capabilities", capability.id);
               const cosai = controlsForCapability(capability.id);
-              const coverage = control ? COVERAGE_META[control.coverage] : null;
+              const url = configureUrl(control);
               return (
                 <RowGroup key={capability.id}>
                   <tr
@@ -85,15 +85,11 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                     </td>
                     )}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {coverage ? (
-                        <span title={coverage.blurb} className="font-medium text-ink-2">
-                          <span className="mr-1.5 text-ink">{coverage.glyph}</span>
-                          {coverage.label}
-                        </span>
-                      ) : (
-                        <span className="text-ink-3" title="The registry does not yet describe how this vendor handles this capability.">
-                          not assessed
-                        </span>
+                      <CoverageBadge coverage={control?.coverage} />
+                      {url && (
+                        <a href={url} target="_blank" rel="noreferrer" title="How to configure — the vendor's page" className="ml-1.5 text-[12px] font-bold text-introduced hover:underline" onClick={(e) => e.stopPropagation()}>
+                          ↗
+                        </a>
                       )}
                     </td>
                     {overlay && (
