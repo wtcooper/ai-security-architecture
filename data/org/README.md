@@ -7,7 +7,8 @@ into the app by `npm run data` like every other dataset. Nothing is edited in th
 data/org/
 ├── example/                shipped upstream; renders with an "example" label
 │   ├── frameworks.yaml     your control standard(s) and risk register, cross-mapped to CoSAI
-│   └── tooling-status.yaml your posture per tool × capability
+│   ├── capabilities.yaml   the enterprise layer: your technology and status per capability per surface
+│   └── tooling-status.yaml your posture per tool × capability (the product's own settings)
 └── local/                  yours. Preferred by the build when present; never shipped upstream
 ```
 
@@ -30,7 +31,17 @@ architecture. Entries are authored your way round: your id, your label, and the 
 `controls`, `capabilities` and `risks` it corresponds to. Ids must exist in `data/cosai/` and
 `data/overlay/capabilities.yaml`.
 
+**`capabilities.yaml`** is the enterprise layer: per capability and per surface, the technology
+you deploy around the AI tools (an endpoint DLP agent, an SSE, an MDM, a gateway guardrail) and
+whether it is in place. This is where "we push managed settings with our MDM" lives: the
+managed setting is the product's control, the MDM is the enterprise capability that delivers
+it. It renders as the "Enforced at" line under every control on the AI Tooling tab and as the
+surface status on the Capabilities tab.
+
 **`tooling-status.yaml`** records, per tool in `data/tooling/`, an adoption decision and a
-status per capability. Only capabilities pinned on the tool's reference architecture may carry a
-status, because that pinned set *is* the reference control set the AI Tooling tab compares
-against.
+status per capability — the product's own settings. Only capabilities pinned on the tool's
+reference architecture may carry a status, because that pinned set *is* the reference control
+set the AI Tooling tab compares against.
+
+Nothing from this directory renders until the **organisation overlay** switch (footer of every
+page) is on; it defaults on when `local/` exists.

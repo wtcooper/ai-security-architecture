@@ -415,10 +415,12 @@ Everything is text. Clone the repository, and:
    architecture, and in the AI Tooling controls table. `local/` is gitignored here and never
    shipped, so pulling upstream never conflicts; in your own clone, `git add -f data/org/local`
    once.
-2. **Record your tool posture.** `data/org/local/tooling-status.yaml` holds, per product in the
-   registry, an adoption decision and a status per reference control. The AI Tooling tab and
-   each architecture's Tools tab render it; the compare matrix shows every vendor variant's
-   coverage against your status on one screen.
+2. **Record your posture, in two halves.** `data/org/local/capabilities.yaml` is the enterprise
+   layer: per capability and surface, the technology you run around the tools (MDM, endpoint
+   DLP, SSE, gateway guardrails, SIEM) and its status. `tooling-status.yaml` is the product
+   half: per product, its adoption decision and a status per reference control. Switch the
+   organisation overlay on (footer of every page) and both appear beside the reference on the
+   AI Tooling tab and each architecture's Tools tab.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
    `tooling-onboard` skill under `.claude/skills/` carries the research protocol, and
    `org-taxonomy-customize` walks through the mapping work. `npm run data` fails on any

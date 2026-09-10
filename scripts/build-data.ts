@@ -26,6 +26,7 @@ import type {
   FrameworkNote,
   Guidance,
   Incident,
+  OrgCapabilityPosture,
   OrgMeta,
   OrgToolPosture,
   Persona,
@@ -175,6 +176,7 @@ async function loadOrg(): Promise<{
   meta: OrgMeta;
   frameworks: OrgFrameworkDoc[];
   posture: OrgToolPosture[];
+  capabilityPosture: OrgCapabilityPosture;
 }> {
   const base = join(ROOT, "data", "org");
   const profile: OrgMeta["profile"] = existsSync(join(base, "local")) ? "local" : "example";
@@ -193,6 +195,7 @@ async function loadOrg(): Promise<{
     frameworks?: OrgFrameworkDoc[];
   }>("frameworks.yaml");
   const status = await read<{ tools?: OrgToolPosture[] }>("tooling-status.yaml");
+  const caps = await read<{ capabilities?: OrgCapabilityPosture }>("capabilities.yaml");
   const name = fw?.organisation?.name?.trim() || (profile === "example" ? "Example organisation" : "Your organisation");
   return {
     meta: {
@@ -203,6 +206,7 @@ async function loadOrg(): Promise<{
     },
     frameworks: fw?.frameworks ?? [],
     posture: status?.tools ?? [],
+    capabilityPosture: caps?.capabilities ?? {},
   };
 }
 
@@ -385,6 +389,10 @@ async function main() {
 
   // --- Organisation tool posture -------------------------------------------------
   const orgToolPosture = checkToolingStatus(org.posture, { tools, archetypes });
+  const orgCapabilityPosture = checkOrgCapabilities(org.capabilityPosture, {
+    capabilityIds,
+    surfaceIds: new Set(capabilitiesDoc.surfaces.map((s) => s.id)),
+  });
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -501,6 +509,7 @@ async function main() {
     tools,
     toolingAttribution: toolingLoaded.attribution,
     orgToolPosture,
+    orgCapabilityPosture,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -1546,6 +1555,31 @@ function checkToolingStatus(
     }
   }
   return posture.map((p) => ({ ...p, controls: p.controls ?? {} }));
+}
+
+/**
+ * The organisation's enterprise layer: per capability, per surface, the technology it deploys
+ * and whether it is in place. Same enum as the Capabilities tab's posture — this is the
+ * text-file home for the answers that tab's browser-side drawer collects.
+ */
+function checkOrgCapabilities(
+  posture: OrgCapabilityPosture,
+  ctx: { capabilityIds: Set<string>; surfaceIds: Set<string> },
+): OrgCapabilityPosture {
+  for (const [capabilityId, bySurface] of Object.entries(posture)) {
+    const where = `org capabilities ${capabilityId}`;
+    if (!ctx.capabilityIds.has(capabilityId)) {
+      fail(`${where}: unknown capability — ids live in data/overlay/capabilities.yaml`);
+      continue;
+    }
+    for (const [surfaceId, entry] of Object.entries(bySurface ?? {})) {
+      if (!ctx.surfaceIds.has(surfaceId)) fail(`${where}: unknown surface ${surfaceId}`);
+      if (!STATUSES.has(entry?.status)) {
+        fail(`${where} ${surfaceId}: status must be one of ${[...STATUSES].join(", ")}`);
+      }
+    }
+  }
+  return posture;
 }
 
 /**

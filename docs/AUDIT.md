@@ -672,11 +672,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-14 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+15 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
-| Endpoint | 4 — First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
+| Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
 | Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
@@ -816,6 +816,21 @@ Highlights below are Google's original mapping, not ours.
 | Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
 | Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
 | Fine-tuning and model registry pipeline | Identity services | governance | (none) |
+| Browser AI agents & extensions | Browser profile | boundary | (none) |
+| Browser AI agents & extensions | Agent harness | service | `componentReasoningCore` |
+| Browser AI agents & extensions | Native tools | service | `componentTools` |
+| Browser AI agents & extensions | Browser | service | `componentAgentUserQuery` |
+| Browser AI agents & extensions | Memory & state | service | `componentDataStorage` |
+| Browser AI agents & extensions | AI gateway | service | (none) |
+| Browser AI agents & extensions | Vendor service | provider | (none) |
+| Browser AI agents & extensions | Model provider | provider | `componentModelServing` |
+| Browser AI agents & extensions | Open web | external | `componentDataSources` |
+| Browser AI agents & extensions | Downstream services | external | `componentDataSources` |
+| Browser AI agents & extensions | Identity services | governance | (none) |
+| Browser AI agents & extensions | Secrets & key management | governance | (none) |
+| Browser AI agents & extensions | Policy & authorization | governance | (none) |
+| Browser AI agents & extensions | Supply-chain assurance | governance | (none) |
+| Browser AI agents & extensions | Observability & response | governance | (none) |
 | First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Remote relay | external | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
@@ -924,11 +939,11 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-14 of 14 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+14 of 15 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
-| Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
+| Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | Browser AI agents & extensions |
 | Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
@@ -958,10 +973,10 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
-| Claude in Chrome (Claude for Chrome) | anthropic | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
+| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 18/18 | _none_ |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | Claude Code on the web (cloud sessions) | anthropic | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
-| Claude Cowork | anthropic | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
+| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |

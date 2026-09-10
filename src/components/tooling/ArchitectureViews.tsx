@@ -106,11 +106,11 @@ export function ArchitectureViews({
           No product in the registry instantiates this architecture yet. The reference set above is still what one would need.
         </p>
       ) : shape === "grid" ? (
-        <GridView tools={tools} groups={groups} overlay={overlay} />
+        <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} />
       ) : shape === "cards" ? (
         <CardsView tools={tools} groups={groups} overlay={overlay} />
       ) : (
-        <ChecklistView tools={tools} groups={groups} overlay={overlay} />
+        <ChecklistView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} />
       )}
     </div>
   );

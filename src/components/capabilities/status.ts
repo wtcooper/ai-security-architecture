@@ -2,7 +2,8 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { stringify } from "yaml";
-import { capabilities, dataset, surfaces } from "@/lib/data";
+import { capabilities, dataset, orgSurfacePostureFor, surfaces } from "@/lib/data";
+import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Capability, CapabilityStatus } from "@/lib/types";
 
 /**
@@ -72,12 +73,16 @@ export function useStatusOverrides() {
 
   const reset = useCallback(() => write(EMPTY), []);
 
+  // Browser edits win, then the organisation's text-file answer (data/org, when the overlay is
+  // on), then whatever the shipped taxonomy carries, then unassessed.
+  const overlay = useOrgOverlay();
   const effective = useCallback(
     (capability: Capability, surfaceId: string): CapabilityStatus =>
       overrides[capability.id]?.[surfaceId] ??
+      (overlay ? orgSurfacePostureFor(capability.id, surfaceId)?.status : undefined) ??
       capability.surfaces[surfaceId]?.status ??
       DEFAULT_STATUS,
-    [overrides],
+    [overrides, overlay],
   );
 
   const hasEdits = Object.values(overrides).some((s) => Object.values(s).some((v) => v != null));

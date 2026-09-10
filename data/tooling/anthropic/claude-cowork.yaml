@@ -25,7 +25,7 @@ tools:
       - name: Dispatch (background tasks) and scheduled tasks
         class: cloudAgent
         url: https://claude.com/docs/cowork/guide/dispatch
-    architecture: archPersonalAgent
+    architecture: archCodingAgentThirdParty
     status: ga
     asOf: "2026-09"
     summary:
@@ -40,9 +40,12 @@ tools:
         the desktop app is open. Inference is the Anthropic API on first-party plans, or the
         organisation's provider on Claude Desktop on 3P.
       - >-
-        Modelling it as a personal autonomous agent is a stretch in one direction (it is a
-        vendor-managed app, not a self-hosted agent) and apt in another (it acts with the user's
-        own folders, connectors and browser sessions). Admin control is in the claude.ai console at
+        Modelled as a third-party coding and desktop agent: it is the Claude Code runtime inside
+        a vendor desktop app, driven by a present user who connects folders and approves tool
+        calls, and administered through the same two planes as Claude Code (the claude.ai console
+        and device managed configuration). It is not the self-hosted autonomous personal-agent
+        class; the cloud variant stretches towards a managed agent runtime and is noted on the
+        variant. Admin control is in the claude.ai console at
         Organization settings > Cowork: "Enable for your organization", "Run Cowork in the cloud",
         the built-in browser toggle, "Allow 'Automatically approve' mode", "Allow 'Always allow'
         for connector tools", an OTLP collector for session events, and required or hidden plugin
@@ -50,7 +53,8 @@ tools:
         managed configuration (com.anthropic.claudefordesktop, HKLM\SOFTWARE\Policies\Claude)
         adds allowedWorkspaceFolders, coworkEgressAllowedHosts, disabledBuiltinTools,
         disableBypassPermissionsMode and coworkTabEnabled. Cowork sessions never fetch Claude
-        Code server-managed settings.
+        Code server-managed settings. No behavioural baseline or drift detection is offered; the
+        OTLP event stream is the raw material if one is built.
     facts:
       - label: Plans
         value: >-
@@ -75,6 +79,20 @@ tools:
           sessions are saved to the account (remote transcripts 6 years unless deleted). Cowork is
           not covered by ZDR. Commercial terms: no training.
         url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+      - label: Usage limits & models
+        value: >-
+          Organisation, group and per-user usage limits (Organization settings > Usage) are shared
+          across Cowork, Claude Code and chat, with no per-task budget; model access and effort
+          caps under Organization settings > Models are enforced across most Claude products
+          including Cowork.
+        url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
+      - label: Network path
+        value: >-
+          TLS to the provider; egressProxyUrl / egressProxyPacUrl in Claude Desktop managed
+          configuration route app and agent traffic; HTTPS_PROXY, NODE_EXTRA_CA_CERTS and
+          CLAUDE_CODE_CLIENT_CERT/KEY are read from managed and user settings only in app-managed
+          sessions, never from repository settings.
+        url: https://code.claude.com/docs/en/network-config
       - label: Docs index
         value: claude.com/docs/cowork plus the Help Center Cowork on Team and Enterprise article
         url: https://claude.com/docs/cowork/overview
@@ -140,6 +158,27 @@ tools:
                 HKLM\SOFTWARE\Policies\Claude so the app only accepts your organisation's logins.
             url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
         verified: "2026-09-10"
+      - capability: capabilityAiTprm
+        coverage: external
+        mechanism: >-
+          Help Center "Claude Cowork architecture overview" (execution models, per-session cloud
+          sandbox, session-scoped tokens) and the Trust Center "Claude Cowork desktop security
+          architecture overview" plus certifications feed the buyer's TPRM platform; cadence and
+          reassessment live in the organisation's own tooling
+        steps:
+          - title: Attach the Cowork architecture evidence
+            body:
+              - Record the architecture overview (a sandbox per cloud session, a mandatory egress
+                proxy, connector tokens never entering the sandbox) and request the desktop
+                security architecture overview it points to on the Trust Center.
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: Collect certifications and the 3P data path
+            body:
+              - Pull the certifications and compliance reports from the Trust Center; for Claude
+                Desktop on 3P the legal page states conversation content goes only to the
+                configured inference endpoint and the compliance posture follows that provider.
+            url: https://claude.com/docs/third-party/claude-desktop/legal
+        verified: "2026-09-10"
       - capability: capabilityAgentRuntimeEnforcement
         coverage: partial
         mechanism: >-
@@ -154,17 +193,6 @@ tools:
                 rules in Claude Code policy also stop Cowork's workspace tools.
             url: https://claude.com/docs/third-party/claude-desktop/configuration
         note: Cloud sessions do not read device policy; only the console toggles and connector tool settings reach them.
-        verified: "2026-09-10"
-      - capability: capabilityTransportSecurity
-        coverage: partial
-        mechanism: TLS to the provider; egressProxyUrl / egressProxyPacUrl and mTLS variables read only from managed settings and user settings in app-managed sessions
-        steps:
-          - title: Pin the proxy path from managed settings
-            body:
-              - Deliver HTTPS_PROXY, NODE_EXTRA_CA_CERTS and CLAUDE_CODE_CLIENT_CERT/KEY through
-                managed settings; Cowork sessions ignore these in repository settings so a
-                checked-out repo cannot redirect the TLS path.
-            url: https://code.claude.com/docs/en/network-config
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: partial
@@ -237,17 +265,6 @@ tools:
                 static inferenceAnthropicApiKey / inferenceGatewayApiKey in managed configuration.
             url: https://claude.com/docs/third-party/claude-desktop/configuration
         verified: "2026-09-10"
-      - capability: capabilityModelGuardrails
-        coverage: partial
-        mechanism: Organisation model restrictions and effort caps (enforced across most products), browser safety classifiers, organizationInstructions appended to the system prompt on 3P
-        steps:
-          - title: Restrict models and effort for Cowork users
-            body:
-              - Set model access and effort limits under Organization settings > Models; the
-                consumption guide says these are enforced across most Claude products including
-                Cowork.
-            url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
-        verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: native
         mechanism: >-
@@ -269,6 +286,61 @@ tools:
                 load.
             url: https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
         verified: "2026-09-10"
+      - capability: capabilityAiBom
+        coverage: partial
+        mechanism: >-
+          Claude Desktop on 3P: allowedPluginMarketplaces must pin a full commit SHA (git) or
+          manifestSha256 plus a sha256 per archive (HTTPS) for the auto_install and required tiers,
+          and the app refuses unpinned content; isDesktopExtensionSignatureRequired rejects
+          unsigned .mcpb extensions; no manifest of the model or its composition
+        steps:
+          - title: Pin the plugin manifest the fleet loads
+            body:
+              - In allowedPluginMarketplaces set ref to a 40-character commit SHA, or for a url
+                source set manifestSha256 and a sha256 on every archive; Claude Desktop verifies
+                the digest before unpacking.
+            url: https://claude.com/docs/cowork/3p/extensions
+          - title: Require signed extensions
+            body:
+              - Set isDesktopExtensionSignatureRequired true so unsigned .mcpb extensions are
+                rejected.
+            url: https://claude.com/docs/cowork/3p/extensions
+        note: >-
+          First-party (claude.ai) marketplaces are curated in the console with installation tiers
+          but no digest pin is documented; the model, bundled skills and server-side connectors
+          have no published manifest.
+        verified: "2026-09-10"
+      - capability: capabilitySystemPromptManagement
+        coverage: partial
+        mechanism: >-
+          organizationInstructions in Claude Desktop managed configuration (MDM + bootstrap;
+          appended to the system prompt in Chat, Cowork and Code, up to 3,000 characters, guidance
+          not enforcement); skills and plugins locked to admin sources (skillCreationEnabled,
+          userPluginMarketplacesEnabled, userPluginUploadsEnabled false; required marketplaces);
+          Enterprise skill scanning; project instructions are user-authored and local
+        steps:
+          - title: Append organisation instructions
+            body:
+              - Set organizationInstructions in the com.anthropic.claudefordesktop profile or
+                HKLM\SOFTWARE\Policies\Claude; the docs state it is guidance the model follows,
+                not an enforced control.
+            url: https://claude.com/docs/third-party/claude-desktop/configuration
+          - title: Lock instruction sources to admin-provisioned plugins
+            body:
+              - Set skillCreationEnabled, userPluginMarketplacesEnabled and
+                userPluginUploadsEnabled false and deliver skills and hooks through
+                allowedPluginMarketplaces or org-plugins/ so only reviewed instructions load.
+            url: https://claude.com/docs/cowork/3p/extensions
+          - title: Scan skills and plugins (Enterprise)
+            body:
+              - Turn on skill scanning so skills and plugins are checked for malicious content;
+                classifiers separately flag injections in untrusted content entering context.
+            url: https://support.claude.com/en/articles/13364135-use-claude-cowork-safely
+        note: >-
+          Cowork does not read the Claude Code CLI's ~/.claude directory, and whether a managed
+          claudeMd policy reaches Cowork sessions is not documented; Cowork project instructions
+          live on the device and are not admin-controlled.
+        verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
         mechanism: Per-tool approval prompts for connector tools, "Automatically approve" (classifier) and manual modes, browser Manually approve mode, disableBypassPermissionsMode on the device
@@ -278,16 +350,6 @@ tools:
               - Set disableBypassPermissionsMode true in Claude Desktop managed configuration and
                 leave "Allow 'Always allow' for connector tools" off in the console.
             url: https://claude.com/docs/third-party/claude-desktop/configuration
-        verified: "2026-09-10"
-      - capability: capabilityRateLimiting
-        coverage: partial
-        mechanism: Organisation, group and per-user usage limits (Organization settings > Usage) shared across Cowork, Claude Code and chat; no per-task budget
-        steps:
-          - title: Set consumption limits
-            body:
-              - Configure org, group and user limits under Organization settings > Usage; user
-                limits override group limits and the org limit is the ceiling.
-            url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: native
@@ -337,10 +399,6 @@ tools:
               - Enable toolDetails content capture so tool_input (paths, commands, URLs) reaches the
                 collector, since host EDR cannot see inside the Cowork VM.
             url: https://claude.com/docs/cowork/monitoring
-        verified: "2026-09-10"
-      - capability: capabilityBehavioralDriftDetection
-        coverage: none
-        note: No baseline or drift detection is offered; build it on the OTLP event stream if required.
         verified: "2026-09-10"
       - capability: capabilityAiDlp
         coverage: partial
@@ -400,3 +458,13 @@ tools:
         url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
       - title: Deploy managed settings (where a policy applies to Cowork sessions)
         url: https://code.claude.com/docs/en/managed-settings
+      - title: Claude Cowork architecture overview (Help Center)
+        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+      - title: Use Claude Cowork safely
+        url: https://support.claude.com/en/articles/13364135-use-claude-cowork-safely
+      - title: MCP, plugins, skills, and hooks (Claude Desktop on 3P deployment guide)
+        url: https://claude.com/docs/cowork/3p/extensions
+      - title: Legal and compliance (Claude Desktop on 3P)
+        url: https://claude.com/docs/third-party/claude-desktop/legal
+      - title: Anthropic Trust Center
+        url: https://trust.anthropic.com

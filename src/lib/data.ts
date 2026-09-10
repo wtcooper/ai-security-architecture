@@ -42,6 +42,7 @@ export const {
   tools,
   toolingAttribution,
   orgToolPosture,
+  orgCapabilityPosture,
   meta,
 } = dataset;
 
@@ -307,3 +308,6 @@ export const orgAdoptionFor = (toolId: string): ToolAdoption =>
   postureByTool.get(toolId)?.adoption ?? "unassessed";
 export const orgStatusFor = (toolId: string, capabilityId: string) =>
   postureByTool.get(toolId)?.controls[capabilityId];
+/** The enterprise layer: the organisation's technology and status for a capability on a surface. */
+export const orgSurfacePostureFor = (capabilityId: string, surfaceId: string) =>
+  orgCapabilityPosture[capabilityId]?.[surfaceId];

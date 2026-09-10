@@ -35,6 +35,23 @@ frameworks:                       # any number of catalogues
 Build rules: `id`, `name`, ≥1 entry; each entry has `id` and `label`; every target id exists.
 An entry with no targets is allowed. Framework ids are checked against every other framework.
 
+## capabilities.yaml — the enterprise layer
+
+```yaml
+capabilities:
+  capabilityAiDlp:                # data/overlay/capabilities.yaml id
+    surfaceEndpoint:              # surfaceEndpoint | surfaceCloud | surfaceSaas
+      status: inPlace             # inPlace | partial | gap | needsAssessment
+      technology: Netskope endpoint DLP    # optional; the named product you run
+      note: ...                   # optional
+    surfaceSaas: { status: partial, technology: Netskope CASB }
+```
+
+Build rules: the capability and surface ids exist; status in enum. This is the text-file home
+for the Capabilities tab's posture (its browser-side drawer still wins in that browser), and it
+is what appears beside "Enforced at" on the AI Tooling tab: the product's own setting is one
+half of a control, the enterprise technology that delivers or surrounds it is the other.
+
 ## tooling-status.yaml
 
 ```yaml

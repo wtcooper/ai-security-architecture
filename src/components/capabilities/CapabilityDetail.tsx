@@ -12,11 +12,13 @@ import {
   controlCategories,
   controlsForCapability,
   risksForCapability,
+  orgSurfacePostureFor,
   surfaces,
   toolsForCapability,
   vendorById,
 } from "@/lib/data";
 import { mappingsForCapability } from "@/lib/frameworks";
+import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Capability, CapabilityStatus } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "./StatusPill";
@@ -36,6 +38,7 @@ export function CapabilityDetail({
   const categoryTitle = controlCategories.find((c) => c.id === capability.category)?.title;
   const orgMappings = mappingsForCapability(capability);
   const tools = toolsForCapability(capability.id);
+  const overlay = useOrgOverlay();
 
   return (
     <div className="rounded-xl border border-line bg-paper p-7">
@@ -97,6 +100,12 @@ export function CapabilityDetail({
                 )}
               </p>
               {info?.note && <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">{info.note}</p>}
+              {overlay && orgSurfacePostureFor(capability.id, s.id)?.technology && (
+                <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
+                  <span className="eyebrow mr-1">With</span>
+                  {orgSurfacePostureFor(capability.id, s.id)!.technology}
+                </p>
+              )}
             </div>
           );
         })}

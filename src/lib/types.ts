@@ -789,6 +789,20 @@ export interface OrgToolControlStatus {
   evidence?: string;
 }
 
+/**
+ * The organisation's posture on one capability on one surface — the enterprise layer: the
+ * technology it deploys around the tools (an endpoint DLP agent, a gateway, an MDM) and whether
+ * it is in place. Sits beside the per-tool posture, which is about the product's own settings.
+ */
+export interface OrgCapabilityStatus {
+  status: CapabilityStatus;
+  /** The named technology, e.g. "Netskope endpoint DLP", "Jamf Pro". */
+  technology?: string;
+  note?: string;
+}
+/** capability id -> surface id -> posture. */
+export type OrgCapabilityPosture = Record<string, Record<string, OrgCapabilityStatus>>;
+
 /** The organisation's posture on one tool: adoption decision plus per-capability status. */
 export interface OrgToolPosture {
   tool: string;
@@ -840,4 +854,5 @@ export interface Dataset {
   /** Provenance statement for the tool registry; each guidance document carries its own. */
   toolingAttribution: string;
   orgToolPosture: OrgToolPosture[];
+  orgCapabilityPosture: OrgCapabilityPosture;
 }

@@ -10,9 +10,9 @@ re-run `npm run data`).
 Most of the parked entries fell to one test: *is this a distinct architecture, or an agent
 workflow with a different tool set, a single node, or a control drawn as a place?*
 
-## Active — 14
+## Active — 15
 
-### Endpoint (4)
+### Endpoint (5)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
@@ -20,8 +20,9 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 2 | First-party coding & desktop agents | `archCodingAgentFirstParty` | `endpoint-coding-agent-first-party.yaml` |
 | 3 | Personal autonomous agent | `archPersonalAgent` | `endpoint-personal-agent.yaml` |
 | 4 | Local model runtime | `archLocalInference` | `endpoint-local-inference.yaml` |
+| 5 | Browser AI agents & extensions | `archAgenticBrowser` | `endpoint-browser-ai.yaml` |
 
-- **All four are on the zone grammar** (`data/ONTOLOGY.md` §4a and §4b): ownership bands as
+- **All five are on the zone grammar** (`data/ONTOLOGY.md` §4a and §4b): ownership bands as
   full-height columns, one numbered walkthrough over the canvas paired with a sequence diagram
   beneath it, and standalone governance call-outs across the bottom band. The two
   `-zones` research-preview files that proved the grammar have been folded into their originals
@@ -62,6 +63,17 @@ workflow with a different tool set, a single node, or a control drawn as a place
   block: the loopback inference API, which authenticates nothing by default on any of the three
   runtimes in common use. The weight fetch from a public hub is the other half — an unsigned
   artifact arriving over the same path.
+- **Browser AI agents & extensions** (reactivated 2026-09-10 from the parked agentic-browser
+  entry, redrawn on the zone grammar) is the drawing where the browser *is* the harness:
+  agentic browsers with a built-in agent and vendor extensions that drive the user's own tabs,
+  vendor-neutral. The Browser profile is the container — a self-contained browser instance
+  whose cookie jar is the credential — holding the agent and the tabs it reads; every rendered
+  page is untrusted input, the signed-in web apps are Downstream services, and the open web
+  and the extension stores are one external block. The AI gateway is the secure service edge,
+  carrying no model proxy: the browser trusts the enterprise root, so this is the one endpoint
+  drawing where the vendor session is inspected rather than merely admitted. The parked reason
+  ("a tool-calling use case") addressed the tool-set framing; the admission model — an unbounded
+  author set acting on every signed-in session — is what earned it the drawing.
 
 ### Cloud & hosted (7)
 
@@ -114,7 +126,7 @@ workflow with a different tool set, a single node, or a control drawn as a place
   on offer, drawing its orchestrator, harness and sandbox separately would imply a visibility
   we do not have.
 
-## Disabled — 17
+## Disabled — 16
 
 Parked under `data/reference/architectures/disabled/`, with the reason recorded here.
 
@@ -123,7 +135,6 @@ Parked under `data/reference/architectures/disabled/`, with the reason recorded 
 | Architecture | id | Reason |
 | --- | --- | --- |
 | Desktop AI assistant | `archDesktopAssistant` | Merged into **Coding and desktop agents** — same engine, different GUI shell; the differences are items and controls, not architecture. Its guidance items were merged into the coding-agent guidance doc. |
-| Agentic browser & AI extension | `archAgenticBrowser` | An agent with a browser tool set — a tool-calling use case, not a distinct architecture. |
 | Local MCP / tool plane | `archLocalToolPlane` | The tool plane is a component of the agent architectures (Tool services), not an architecture of its own. Its incident (MCP supply chain) replays on the coding and desktop agents. |
 
 ### Cloud & hosted

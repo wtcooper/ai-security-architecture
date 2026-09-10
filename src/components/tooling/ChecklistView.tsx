@@ -15,9 +15,9 @@ import type { Tool } from "@/lib/types";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, ORG_STATUS_LABEL } from "./labels";
 import { cellFor, type Row, type RowGroup } from "./model";
-import { configureUrl } from "./shared";
+import { configureUrl, EnterpriseLine } from "./shared";
 
-export function ChecklistView({ tools, groups, overlay }: { tools: Tool[]; groups: RowGroup[]; overlay: boolean }) {
+export function ChecklistView({ tools, groups, overlay, archetypeId }: { tools: Tool[]; groups: RowGroup[]; overlay: boolean; archetypeId: string }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="rounded-xl border border-line bg-paper">
@@ -25,7 +25,7 @@ export function ChecklistView({ tools, groups, overlay }: { tools: Tool[]; group
         <div key={group.id}>
           <p className="border-b border-line bg-mist/70 px-4 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">{group.title}</p>
           {group.rows.map((row) => (
-            <ControlRow key={row.id} row={row} tools={tools} overlay={overlay} open={open === row.id} onToggle={() => setOpen(open === row.id ? null : row.id)} />
+            <ControlRow key={row.id} row={row} tools={tools} overlay={overlay} archetypeId={archetypeId} open={open === row.id} onToggle={() => setOpen(open === row.id ? null : row.id)} />
           ))}
         </div>
       ))}
@@ -33,7 +33,7 @@ export function ChecklistView({ tools, groups, overlay }: { tools: Tool[]; group
   );
 }
 
-function ControlRow({ row, tools, overlay, open, onToggle }: { row: Row; tools: Tool[]; overlay: boolean; open: boolean; onToggle: () => void }) {
+function ControlRow({ row, tools, overlay, archetypeId, open, onToggle }: { row: Row; tools: Tool[]; overlay: boolean; archetypeId: string; open: boolean; onToggle: () => void }) {
   const cosai = row.capabilities.length === 1 ? controlsForCapability(row.capabilities[0]) : [];
   const settable = tools.filter((t) => cellFor(t, row).coverage === "native").length;
   return (
@@ -80,6 +80,7 @@ function ControlRow({ row, tools, overlay, open, onToggle }: { row: Row; tools: 
             );
           })}
         </div>
+        <EnterpriseLine row={row} archetypeId={archetypeId} overlay={overlay} className="lg:col-start-2" />
       </div>
       {open && (
         <div className="divide-y divide-line border-t border-line bg-mist/20 px-4">

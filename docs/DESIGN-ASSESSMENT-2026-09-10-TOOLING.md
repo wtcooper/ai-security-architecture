@@ -87,6 +87,53 @@ control technologies that implement CoSAI controls; each row names them), and th
 *Controls guidance* tab is folded into it: a control row opens to its pin notes, its CoSAI
 controls, the guidance items that cite it, and the products that can switch it on.
 
+## Round three: placements, a browser architecture, and the enterprise layer
+
+**Placements.** Claude Code was always on *Third-party coding & desktop agents*; nothing moved
+it. Claude Cowork had been placed on the personal autonomous agent by the research pass, on the
+grounds that it works unattended on the user's files. That was the wrong axis: the personal
+agent drawing is the OpenClaw class — a self-hosted harness with a bearer-secret serve port and
+no vendor control plane. Cowork is a vendor desktop app driven by a present user with the same
+managed-settings tier as Claude Code, so it now sits on the desktop-agent drawing and is rated
+against its 21 controls. Claude in Chrome was a stretch on the personal agent for the same
+reason and now has a category of its own.
+
+**Browser AI agents & extensions** (`archAgenticBrowser`, endpoint rank 5) is the drawing for
+agentic browsers and AI browser extensions: an agent that reads pages served by whoever owns
+them and acts through the sessions the user is already signed in to. Its distinctive controls
+are the browser profile as credential isolation, the secure web gateway as the SSE, site
+allowlists as tool scoping, browser detection & response, and extension-store supply chain.
+Products in this category so far: Claude in Chrome; the ChatGPT built-in browser, Edge Copilot
+Mode, Comet and Dia are exemplars awaiting entries.
+
+**The enterprise layer.** Every control on a product has two halves, and the views had shown
+only one. *The product half* is what the vendor lets an administrator set in the tool; that is
+the coloured word and the ↗. *The enterprise half* is what the organisation deploys around the
+tool — the MDM that delivers a managed-settings file, the endpoint DLP agent that inspects a
+prompt the product never sees, the SSE that enforces egress, the SIEM that receives the audit
+stream. The reference architecture already encodes this half: each capability is pinned to a
+block (the AI gateway, the managed endpoint, the governance plane), and the capability's own
+entry names the technology classes it is bought as. So the enterprise half is derived, not
+authored per product:
+
+- Under every control, one line — **Enforced at**: the drawing's blocks for that control, dotted
+  by who operates them (managed endpoint, enterprise cloud, vendor platform, governance). In the
+  grid it is a column of its own. Hovering a block shows the pin's note; opening the control
+  shows the notes in full and the classes the capability is bought as.
+- With the overlay on, the organisation's **own technology and status for that surface** join the
+  line, from a new `data/org/<profile>/capabilities.yaml` (per capability, per surface:
+  status, technology, note). This is also the text-file home for the Capabilities tab's posture,
+  which had only a browser-side drawer; the drawer still wins in that browser.
+
+The consumable read is therefore: *this control is needed (row) → the product can or cannot set
+it (word + link) → it is enforced here in the architecture (blocks) → and we do it with this
+(technology + status)*. Nothing is added to a row that a reader has not asked for: the general
+view shows the blocks only; the technology and status appear only under the overlay.
+
+What is deliberately not done: no attempt to compute an "effective" combined score from the
+two halves. A partly settable product control plus an in-place enterprise control is a judgement
+the organisation makes, not one a formula should.
+
 ## What onboarding now means
 
 Adding a product is choosing its category and then answering, for each inherited control, how

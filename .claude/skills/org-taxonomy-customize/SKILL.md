@@ -58,11 +58,15 @@ Read `references/schema.md` first. It is short and it is the contract.
    architecture may carry a status. Statuses are `inPlace` (shown as Enabled), `partial`
    (In progress), `gap`, `needsAssessment` (Unassessed); omit a key for "not applicable", and
    omit `controls` entirely for a tool with only an adoption decision.
-5. **Build and fix.** `npm run data`. Errors from this layer start with `org/…` or
+5. **Record the enterprise layer if they want it.** In `capabilities.yaml`, per capability and
+   surface, the technology the organisation runs (MDM, endpoint DLP, SSE, gateway guardrails,
+   SIEM) and its status. This is the other half of every control: a product's managed setting
+   is delivered by an MDM; a DLP requirement is met by an endpoint agent around the product.
+6. **Build and fix.** `npm run data`. Errors from this layer start with `org/…` or
    `org tooling-status …` and name the file, framework and entry; fix the id, never the CoSAI
    file. A failing line that does not start with `org` is upstream data, not the profile. Then
    `npm run audit` (it should still pass; it does not yet report on the org layer).
-6. **Show them where it landed.** `npm run dev`, then: `/frameworks?fw=<framework id>` (their
+7. **Show them where it landed.** `npm run dev`, then: `/frameworks?fw=<framework id>` (their
    catalogue with coverage and the unmapped list), `/controls?control=<id>` and
    `/capabilities?capability=<id>` (their ids as badges), `/reference?archetype=<id>` →
    Capabilities tab, expand a row (their ids under the chip), `/tooling` (status per tool).

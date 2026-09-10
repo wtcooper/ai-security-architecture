@@ -3,10 +3,10 @@
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
 import { STATUS_STYLE } from "@/components/capabilities/status";
 import { CAPABILITY_STATUSES, type Tool, type ToolControl, type ToolCoverage } from "@/lib/types";
-import { vendorById } from "@/lib/data";
+import { archetypeById, capabilityById, orgSurfacePostureFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, COVERAGE_ORDER, ORG_STATUS_LABEL } from "./labels";
-import type { Cell, Row } from "./model";
+import { OWNER_META, type Cell, type Row } from "./model";
 
 /** The vendor's own documentation index for a product, for the attributable link beside its name. */
 export const docsUrlFor = (tool: Tool) =>
@@ -118,6 +118,45 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
     </div>
   );
 }
+
+/**
+ * The enterprise side of a control on one architecture: where the drawing enforces it (block
+ * chips coloured by who operates the block) and, with the overlay on, the organisation's own
+ * technology and status for that surface. Compact by design — one line under a control.
+ */
+export function EnterpriseLine({ row, archetypeId, overlay, className = "", bare = false }: { row: Row; archetypeId: string; overlay: boolean; className?: string; bare?: boolean }) {
+  const arch = archetypeById.get(archetypeId);
+  const posture = overlay && arch ? row.capabilities.map((c) => orgSurfacePostureFor(c, arch.surface)).find(Boolean) : undefined;
+  if (!row.enforcement.length && !posture) return null;
+  return (
+    <span className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10.5px] text-ink-3 ${className}`}>
+      {!bare && <span className="eyebrow mr-0.5">Enforced at</span>}
+      {row.enforcement.map((e) => (
+        <span
+          key={e.blockId}
+          className="inline-flex items-center gap-1 rounded-full border border-line bg-paper px-1.5 py-px text-[10.5px] font-medium text-ink-2"
+          title={`${e.title} — ${OWNER_META[e.owner]?.label ?? e.owner}${e.notes.length ? `\n\n${e.notes.join("\n\n")}` : ""}`}
+        >
+          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: OWNER_META[e.owner]?.color ?? "var(--ink-3)" }} />
+          {e.title}
+        </span>
+      ))}
+      {posture && (
+        <span
+          className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-semibold"
+          style={{ borderColor: STATUS_STYLE[posture.status].border, color: STATUS_STYLE[posture.status].text, background: STATUS_STYLE[posture.status].bg }}
+          title={`${ORG_STATUS_LABEL[posture.status]} on this surface${posture.technology ? ` with ${posture.technology}` : ""}${posture.note ? ` — ${posture.note}` : ""}`}
+        >
+          {posture.technology ?? "Enterprise"} · {ORG_STATUS_LABEL[posture.status]}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The technology classes a capability is bought as — the vendor-neutral names for the enterprise layer. */
+export const technologyClasses = (capabilityIds: string[]) =>
+  [...new Set(capabilityIds.flatMap((c) => capabilityById.get(c)?.examples ?? []))];
 
 /** What a click on any tile opens: every capability behind the cell, in full. */
 export function CellDetail({ tool, row, onClose }: { tool: Tool; row: Row; onClose: () => void }) {

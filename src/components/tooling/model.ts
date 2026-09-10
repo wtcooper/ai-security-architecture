@@ -22,7 +22,52 @@ export interface Row {
   aside?: string;
   capabilities: string[];
   title?: string;
+  /** Where the drawing enforces this control — the enterprise layer around the products. */
+  enforcement: Enforcement[];
 }
+
+/** One place the architecture pins a control: a block (or both ends of a flow) and who operates it. */
+export interface Enforcement {
+  blockId: string;
+  title: string;
+  owner: string;
+  notes: string[];
+}
+
+/**
+ * Where an architecture places a capability: every block it is pinned on, and both ends of
+ * every flow it is pinned on, with who operates that block. This is the enterprise side of
+ * a control — the gateway, the managed endpoint, the governance plane — as distinct from what
+ * the product's own admin settings offer.
+ */
+export function enforcementFor(archetypeId: string, capabilityIds: string[]): Enforcement[] {
+  const arch = archetypeById.get(archetypeId);
+  if (!arch) return [];
+  const blocks = new Map(arch.blocks.map((b) => [b.id, b]));
+  const zoneOwner = new Map((arch.zones ?? []).map((z) => [z.id, z.owner]));
+  const out = new Map<string, Enforcement>();
+  for (const pin of arch.pins.capabilities) {
+    if (!capabilityIds.includes(pin.capability)) continue;
+    const ids = pin.at.includes("->") ? pin.at.split("->") : [pin.at];
+    for (const id of ids) {
+      const b = blocks.get(id);
+      if (!b) continue;
+      const e = out.get(id) ?? { blockId: id, title: b.title, owner: zoneOwner.get(b.zone ?? "") ?? "cloud", notes: [] };
+      if (pin.note && !e.notes.includes(pin.note)) e.notes.push(pin.note);
+      out.set(id, e);
+    }
+  }
+  return [...out.values()];
+}
+
+export const OWNER_META: Record<string, { label: string; color: string }> = {
+  user: { label: "the user's own device", color: "var(--ink-3)" },
+  endpoint: { label: "managed endpoint", color: "var(--band-infra-rail)" },
+  cloud: { label: "enterprise cloud", color: "var(--band-app-rail)" },
+  vendor: { label: "vendor platform", color: "var(--band-data-rail)" },
+  external: { label: "outside the organisation", color: "var(--ink-3)" },
+  governance: { label: "governance plane", color: "var(--ink-2)" },
+};
 
 export interface RowGroup {
   id: string;
@@ -83,6 +128,7 @@ export function cosaiRows(archetypeId: string): RowGroup[] {
           short: c.abbrev ?? c.title,
           aside: orgIdsFor(c.id).join(" · ") || undefined,
           capabilities: [c.id],
+          enforcement: enforcementFor(archetypeId, [c.id]),
         })),
     }))
     .filter((g) => g.rows.length);
@@ -112,6 +158,7 @@ export function orgRows(archetypeId: string): RowGroup[] {
         aside: `${caps.length} capabilit${caps.length === 1 ? "y" : "ies"}`,
         capabilities: caps,
         title: ref.label,
+        enforcement: enforcementFor(archetypeId, caps),
       });
     }
   }
