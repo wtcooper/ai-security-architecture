@@ -30,26 +30,38 @@ Read `references/schema.md` first. It is short and it is the contract.
    PDF, or a pasted list. You need per entry: an id (their numbering, e.g. `AIS-3.2`), a label,
    optionally a description, a group/domain, an owner, and a deep link. Ask whether there is
    more than one catalogue (a control standard and a risk register are the common pair) — each
-   becomes one item under `frameworks:`.
+   becomes one item under `frameworks:`. If the entries were supplied inline, do not stop to
+   interview; proceed, and state the mapping choices you made so they can be corrected.
 2. **Set up the profile.** If `data/org/local/` does not exist, copy `data/org/example/` to it.
-   Set `organisation.name` and `shortName`. Keep the example's comments; delete its entries.
+   Set `organisation.name` and `shortName`. The example files open with two comment blocks: the
+   first says the file *is* the example — drop it; the second explains the format — keep it.
+   Delete the example entries.
 3. **Map each entry to CoSAI ids.** Run `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs`
-   (optionally with a keyword: `... mcp`) to list controls, capabilities and risks with titles
-   and one-line descriptions. For each org entry pick:
+   to list controls, capabilities and risks with titles and one-line descriptions. It takes one
+   optional argument, a single substring matched against id, title and description
+   (`... permission`, `... sandbox`, `... disclosure` are productive; `tool` matches nearly
+   everything). `references/mapping-cheatsheet.md` gives the usual targets for the requirements
+   every standard has. For each org entry pick:
    - `controls`: the CoSAI control(s) the requirement satisfies (the "what");
    - `capabilities`: the technology class(es) that implement it (the "with what") — this is
      what puts the org id next to the numbered chips on the architecture drawings;
-   - `risks`: only for a risk register, or where a requirement is explicitly about a threat.
+   - `risks`: for a risk register, every entry; for a control standard, only when the
+     requirement names the threat it exists to prevent. "Prompts are inspected for customer
+     data before leaving custody" → `riskSensitiveDataDisclosure`; "Agents may only call
+     approved tools" → no risk (it is a control, several risks benefit).
    Prefer one or two precise targets over five loose ones; a mapping is a claim the org will be
    measured against. When unsure, ask the adopter — they know what the requirement means.
 4. **Record tool status if they want it.** In `tooling-status.yaml`, one item per tool id from
-   `data/tooling/` (run `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools`
-   to list them), with `adoption` and a `controls` map keyed by capability id. Only capabilities
-   pinned on the tool's architecture may carry a status — the script prints each tool's
-   reference set. Statuses are `inPlace` (shown as Enabled), `partial` (In progress), `gap`,
-   `needsAssessment` (Unassessed); omit a key for "not applicable".
-5. **Build and fix.** `npm run data`. A dangling id fails with the file, framework and entry
-   named; fix the id (never the CoSAI file). Then `npm run audit` refreshes `docs/AUDIT.md`.
+   `data/tooling/` (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools`
+   lists them; `... tools toolClaudeCode` prints one tool's reference set), with `adoption` and
+   an optional `controls` map keyed by capability id. Only capabilities pinned on the tool's
+   architecture may carry a status. Statuses are `inPlace` (shown as Enabled), `partial`
+   (In progress), `gap`, `needsAssessment` (Unassessed); omit a key for "not applicable", and
+   omit `controls` entirely for a tool with only an adoption decision.
+5. **Build and fix.** `npm run data`. Errors from this layer start with `org/…` or
+   `org tooling-status …` and name the file, framework and entry; fix the id, never the CoSAI
+   file. A failing line that does not start with `org` is upstream data, not the profile. Then
+   `npm run audit` (it should still pass; it does not yet report on the org layer).
 6. **Show them where it landed.** `npm run dev`, then: `/frameworks?fw=<framework id>` (their
    catalogue with coverage and the unmapped list), `/controls?control=<id>` and
    `/capabilities?capability=<id>` (their ids as badges), `/reference?archetype=<id>` →

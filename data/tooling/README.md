@@ -36,8 +36,9 @@ tools:
     status: ga                          # ga | beta | preview | announced
     asOf: "2026-09"
     summary: [...]
-    facts:                              # plans, inference location, routing, what leaves the device
-      - { label: Inference, value: "...", url: ... }
+    facts:                              # canonical labels, in order: Plans · Inference & routing ·
+      - { label: Plans, value: "...", url: ... }   # Data leaving the device · Retention & training · Docs index
+      - { label: Inference & routing, value: "...", url: ... }
     items:                              # admin-configuration detail (also on the Controls-guidance panel)
       - { title: ..., body: [...], links: [{ title, url }] }
     riskNotes:                          # tool-specific emphasis; risk must be pinned on the architecture
@@ -100,3 +101,5 @@ Recorded here when a surface is deliberately left out, with the reason.
 - Anthropic — Bedrock / Google Cloud's Agent Platform (Vertex) / Microsoft Foundry / Claude apps gateway / LLM gateway routing — deployment facts on `toolClaudeCode` and `toolClaudeDesktop`, not entities.
 - Anthropic — Claude Desktop on 3P — a deployment mode of Claude Desktop (variant on `toolClaudeDesktop`), not a separate product.
 - Anthropic — Computer use, Skills, the connector directory and the Developer Console — features and planes, recorded as facts and steps on the entities that expose them.
+- Google Antigravity CLI — the consumer replacement for Gemini CLI since 2026-06-18 (unpaid tier and Google One users); not onboarded, its docs were not fetched on 2026-09-10. Gemini CLI remains the Code Assist Standard/Enterprise, API-key and Vertex AI product and is recorded as `toolGeminiCli`.
+- Google run-gemini-cli GitHub Action — a CI runtime for the same engine; its advisory GHSA-wpqr-6v78-jr5g is recorded on `toolGeminiCli` because it patched the CLI itself.

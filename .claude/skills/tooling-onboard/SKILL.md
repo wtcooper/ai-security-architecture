@@ -32,10 +32,15 @@ architectures with their surface).
 1. **Enumerate the surfaces** from the vendor's own docs index. Decide entity vs variant: one
    entity per product × architecture; UI shells (CLI, IDE extension, desktop app) are
    `variants`. A shell becomes its own entity when its architecture differs (a cloud-hosted
-   variant) or its admin mechanism differs materially.
+   variant) or its admin mechanism differs materially. A companion extension that only bridges
+   the product into an IDE (no engine of its own) is a variant, or a `facts` line if it adds
+   no admin surface.
 2. **Choose the architecture** by what runs where:
-   - coding shell driven by a present developer, vendor-built → `archCodingAgentThirdParty`
-     (open-source harnesses the developer runs with their own keys → `archCodingAgentFirstParty`)
+   - coding shell driven by a present developer with a vendor control plane (managed settings,
+     vendor identity, an admin console) → `archCodingAgentThirdParty`. Being open source does
+     not change that: Codex CLI and Gemini CLI are third-party here. `archCodingAgentFirstParty`
+     is only for harnesses with no vendor control plane at all — the developer supplies the
+     model key and nothing an administrator can switch on ships with the tool.
    - vendor-hosted agent, CI reviewer, hosted sandbox → `archManagedAgentRuntime`
    - SDK / runtime the customer hosts → `archAgentWorkflow`
    - vendor chat, Office add-in, chat/connector integration → `archEnterpriseAiChat`
@@ -43,19 +48,27 @@ architectures with their surface).
      `archPersonalAgent` (say in `summary` that it is a stretch when it is)
 3. **Fetch the admin documentation**: managed-settings / policy files, MDM keys, admin console
    pages, org/enterprise policies, network/proxy pages, audit-log and data-retention pages, the
-   security or trust page, and 2025–26 advisories. Keep a list of every URL and its HTTP status.
+   security or trust page, and 2025–26 advisories. Keep a list of every URL that redirected or
+   failed; it goes in the file's header comment as a short fetch log, so the next re-verification
+   knows which pages moved. When two vendor pages disagree (a default stated both ways), record
+   both in the row's `note`, prefer the settings reference, and tell the operator to set the key
+   explicitly. A vendor without a product trust portal gets its corporate compliance page as
+   `trust`.
 4. **Write the entity.** For every pinned capability, one `controls[]` row: `coverage`,
-   `mechanism`, 1–4 `steps` (title, one-sentence body naming the exact key or toggle, url),
-   `verified`. Then `summary` (what it is, where inference runs, what leaves the device),
-   `facts` (Plans, Inference & routing, Data leaving the device, Retention/training, Docs index),
-   `variants` with urls, `riskNotes` for the pinned risks this product changes the shape of,
-   `advisories`, `sources`. Add the vendor to `vendors.yaml` if new.
-5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root; fix every error naming your
-   file. Then `npm run audit` and read section 5b of `docs/AUDIT.md`: the "Unaddressed" column
-   should be empty for your entity.
+   `mechanism`, `verified`, and for `native`/`partial` rows 1–4 `steps` (title, one-sentence
+   body naming the exact key or toggle, url). Rows rated `none`, `external` or `unknown` carry a
+   `note` saying what the organisation should do instead, and may omit steps. Then `summary`
+   (what it is, where inference runs, what leaves the device), `facts` with the canonical labels
+   from `references/schema.md`, `variants` with urls, `riskNotes` for the pinned risks this
+   product changes the shape of, `advisories`, `sources`. Add the vendor to `vendors.yaml` if new.
+5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
+   script); fix every error naming your file. Then `npm run audit` and read section 5b of
+   `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
 6. **Look at it.** `npm run dev`, open `/tooling?tool=<id>`, expand a few rows, then the
-   architecture's Tools tab and the compare view. Deliberate exclusions go in the file header
-   comment and under "Exclusions" in `data/tooling/README.md`.
+   architecture's Tools tab and the compare view. Without a browser, confirm the compiled entry
+   instead: `node -e 'const d=require("./src/data/generated/dataset.json");console.log(d.tools.find(t=>t.id==="<id>"))'`.
+   Deliberate exclusions go in the file header comment and under "Exclusions" in
+   `data/tooling/README.md`.
 
 ## Refreshing an existing entity
 

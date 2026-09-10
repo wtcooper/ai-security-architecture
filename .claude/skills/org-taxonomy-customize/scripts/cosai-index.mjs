@@ -4,6 +4,7 @@
 //   node cosai-index.mjs            -> everything
 //   node cosai-index.mjs mcp        -> entries whose id/title/description mention "mcp"
 //   node cosai-index.mjs tools      -> tools with the capabilities that may carry a status
+//   node cosai-index.mjs tools toolClaudeCode -> one tool's reference set
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -19,7 +20,9 @@ const hit = (...parts) => !q || parts.join(" ").toLowerCase().includes(q);
 
 if (q === "tools") {
   const arch = new Map(d.archetypes.map((a) => [a.id, a]));
+  const only = process.argv[3];
   for (const t of d.tools) {
+    if (only && t.id !== only) continue;
     const a = arch.get(t.architecture);
     console.log(`\n${t.id} — ${t.name} (${t.vendor}) on ${t.architecture}`);
     for (const c of a?.capabilities ?? []) console.log(`  ${c}`);
