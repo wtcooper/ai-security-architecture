@@ -672,12 +672,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-13 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+14 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 4 — First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
-| Cloud & hosted | 6 — Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
+| Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
 ### 4a. Risks no architecture pins — 2 of 36
@@ -707,8 +707,7 @@ Highlights below are Google's original mapping, not ours.
 | Architecture | Block | Kind | CoSAI anchor |
 | --- | --- | --- | --- |
 | Single agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
-| Single agent workflow | Application front end | service | `componentApplication` |
-| Single agent workflow | Tool services | service | `componentTools` |
+| Single agent workflow | Native tools | service | `componentTools` |
 | Single agent workflow | Agent harness | service | `componentReasoningCore` |
 | Single agent workflow | Memory & state | service | `componentDataStorage` |
 | Single agent workflow | AI gateway | service | (none) |
@@ -717,15 +716,33 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | Enterprise data | external | `componentDataSources` |
 | Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Downstream services | external | `componentDataSources` |
+| Single agent workflow | Public package sources | external | (none) |
 | Single agent workflow | Identity services | governance | (none) |
 | Single agent workflow | Secrets & key management | governance | (none) |
 | Single agent workflow | Policy & authorization | governance | (none) |
 | Single agent workflow | Supply-chain assurance | governance | (none) |
 | Single agent workflow | Observability & response | governance | (none) |
+| Single agent workflow | Private pkg registry | external | `componentDataSources` |
+| Agent-to-agent federation across platforms | Identity provider | service | (none) |
+| Agent-to-agent federation across platforms | Application front end | service | `componentApplication` |
+| Agent-to-agent federation across platforms | Authorization server | service | (none) |
+| Agent-to-agent federation across platforms | Agent harness | service | `componentReasoningCore` |
+| Agent-to-agent federation across platforms | Native tools | service | `componentTools` |
+| Agent-to-agent federation across platforms | Memory & state | service | `componentDataStorage` |
+| Agent-to-agent federation across platforms | AI gateway | service | (none) |
+| Agent-to-agent federation across platforms | Tool services | service | `componentTools` |
+| Agent-to-agent federation across platforms | Enterprise data | external | `componentDataSources` |
+| Agent-to-agent federation across platforms | Peer agent | provider | (none) |
+| Agent-to-agent federation across platforms | Model provider | provider | (none) |
+| Agent-to-agent federation across platforms | Peer agent | provider | (none) |
+| Agent-to-agent federation across platforms | Identity services | governance | (none) |
+| Agent-to-agent federation across platforms | Secrets & key management | governance | (none) |
+| Agent-to-agent federation across platforms | Policy & authorization | governance | (none) |
+| Agent-to-agent federation across platforms | Supply-chain assurance | governance | (none) |
+| Agent-to-agent federation across platforms | Observability & response | governance | (none) |
 | Multi-agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
-| Multi-agent workflow | Application front end | service | `componentApplication` |
 | Multi-agent workflow | Agent harness | service | `componentReasoningCore` |
-| Multi-agent workflow | Tool services | service | `componentTools` |
+| Multi-agent workflow | Native tools | service | `componentTools` |
 | Multi-agent workflow | Supervisor agent | service | `componentReasoningCore` |
 | Multi-agent workflow | Subagents | service | `componentReasoningCore` |
 | Multi-agent workflow | Memory & state | service | `componentDataStorage` |
@@ -735,14 +752,16 @@ Highlights below are Google's original mapping, not ours.
 | Multi-agent workflow | Enterprise data | external | `componentDataSources` |
 | Multi-agent workflow | Tool services | service | `componentTools` |
 | Multi-agent workflow | Downstream services | external | `componentDataSources` |
+| Multi-agent workflow | Public package sources | external | (none) |
 | Multi-agent workflow | Identity services | governance | (none) |
 | Multi-agent workflow | Secrets & key management | governance | (none) |
 | Multi-agent workflow | Policy & authorization | governance | (none) |
 | Multi-agent workflow | Supply-chain assurance | governance | (none) |
 | Multi-agent workflow | Observability & response | governance | (none) |
+| Multi-agent workflow | Private pkg registry | external | `componentDataSources` |
 | Chat agent with tools | Triggers & schedules | service | `componentAgentUserQuery` |
 | Chat agent with tools | Application front end | service | `componentApplication` |
-| Chat agent with tools | Tool services | service | `componentTools` |
+| Chat agent with tools | Native tools | service | `componentTools` |
 | Chat agent with tools | Agent harness | service | `componentReasoningCore` |
 | Chat agent with tools | Memory & state | service | `componentDataStorage` |
 | Chat agent with tools | AI gateway | service | (none) |
@@ -751,12 +770,15 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | Enterprise data | external | `componentDataSources` |
 | Chat agent with tools | Tool services | service | `componentTools` |
 | Chat agent with tools | Downstream services | external | `componentDataSources` |
+| Chat agent with tools | Public package sources | external | (none) |
 | Chat agent with tools | Identity services | governance | (none) |
 | Chat agent with tools | Secrets & key management | governance | (none) |
 | Chat agent with tools | Policy & authorization | governance | (none) |
 | Chat agent with tools | Supply-chain assurance | governance | (none) |
 | Chat agent with tools | Observability & response | governance | (none) |
-| Remote MCP server you publish | Callers | origin | (none) |
+| Chat agent with tools | Private pkg registry | external | `componentDataSources` |
+| Remote MCP server you publish | MCP clients | origin | (none) |
+| Remote MCP server you publish | Identity provider | service | (none) |
 | Remote MCP server you publish | AI gateway | service | (none) |
 | Remote MCP server you publish | Authorization server | service | (none) |
 | Remote MCP server you publish | MCP service | service | `componentApplication` |
@@ -798,7 +820,7 @@ Highlights below are Google's original mapping, not ours.
 | First-party coding & desktop agents | Remote relay | external | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
 | First-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
-| First-party coding & desktop agents | Tool services | service | `componentTools` |
+| First-party coding & desktop agents | Native tools | service | `componentTools` |
 | First-party coding & desktop agents | AI gateway | service | (none) |
 | First-party coding & desktop agents | Tool services | service | `componentTools` |
 | First-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
@@ -806,6 +828,7 @@ Highlights below are Google's original mapping, not ours.
 | First-party coding & desktop agents | Tool services | service | `componentTools` |
 | First-party coding & desktop agents | Model provider | provider | `componentModelServing` |
 | First-party coding & desktop agents | Downstream services | external | `componentDataSources` |
+| First-party coding & desktop agents | Public package sources | external | (none) |
 | First-party coding & desktop agents | Identity services | governance | (none) |
 | First-party coding & desktop agents | Secrets & key management | governance | (none) |
 | First-party coding & desktop agents | Policy & authorization | governance | (none) |
@@ -814,7 +837,7 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
 | Third-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
 | Third-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
-| Third-party coding & desktop agents | Tool services | service | `componentTools` |
+| Third-party coding & desktop agents | Native tools | service | `componentTools` |
 | Third-party coding & desktop agents | AI gateway | service | (none) |
 | Third-party coding & desktop agents | Tool services | service | `componentTools` |
 | Third-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
@@ -822,29 +845,31 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | Tool services | service | `componentTools` |
 | Third-party coding & desktop agents | Model provider | provider | `componentModelServing` |
 | Third-party coding & desktop agents | Downstream services | external | `componentDataSources` |
+| Third-party coding & desktop agents | Public package sources | external | (none) |
 | Third-party coding & desktop agents | Identity services | governance | (none) |
 | Third-party coding & desktop agents | Secrets & key management | governance | (none) |
 | Third-party coding & desktop agents | Policy & authorization | governance | (none) |
 | Third-party coding & desktop agents | Supply-chain assurance | governance | (none) |
 | Third-party coding & desktop agents | Observability & response | governance | (none) |
+| Third-party coding & desktop agents | Private pkg registry | external | `componentDataSources` |
 | Local model runtime | Local applications | service | (none) |
 | Local model runtime | Inference API | service | `componentModelServing` |
 | Local model runtime | Inference runtime | service | `componentModelServing` |
 | Local model runtime | Storage | external | `componentModelStorage` |
 | Local model runtime | Supply-chain assurance | governance | (none) |
 | Local model runtime | Observability & response | governance | (none) |
-| Local model runtime | Callers | origin | (none) |
 | Local model runtime | Public model hub | external | `componentModelStorage` |
 | Personal autonomous agent | Remote device | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Sandbox | boundary | (none) |
 | Personal autonomous agent | Channel bridges | service | `componentAgentUserQuery` |
 | Personal autonomous agent | Agent harness | service | `componentReasoningCore` |
 | Personal autonomous agent | Memory & state | service | `componentDataStorage` |
-| Personal autonomous agent | Tool services | service | `componentTools` |
+| Personal autonomous agent | Native tools | service | `componentTools` |
 | Personal autonomous agent | Owner workspace | external | `componentDataSources` |
 | Personal autonomous agent | Messaging relay | service | (none) |
 | Personal autonomous agent | AI gateway | service | (none) |
 | Personal autonomous agent | Private pkg registry | external | `componentDataSources` |
+| Personal autonomous agent | Public package sources | external | (none) |
 | Personal autonomous agent | Identity services | governance | (none) |
 | Personal autonomous agent | Secrets & key management | governance | (none) |
 | Personal autonomous agent | Policy & authorization | governance | (none) |
@@ -883,7 +908,9 @@ Highlights below are Google's original mapping, not ours.
 | UI/low-code managed agent runtime | Observability & response | governance | (none) |
 | API/SDK managed agent runtime | Application front end | service | `componentApplication` |
 | API/SDK managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
+| API/SDK managed agent runtime | Native tools | provider | `componentTools` |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
+| API/SDK managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | API/SDK managed agent runtime | AI gateway | service | (none) |
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
 | API/SDK managed agent runtime | Enterprise data | external | `componentDataSources` |
@@ -897,43 +924,44 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-13 of 13 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+14 of 14 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
-| Cloud & hosted | Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
+| Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
 ### 5a. Documents
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 7 | _none_ |
-| Multi-agent workflow | build | draft | 8 | _none_ |
-| Chat agent with tools | build | draft | 7 | _none_ |
+| Single agent workflow | build | draft | 7 | Model artifact scanning & safe deserialization |
+| Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
+| Multi-agent workflow | build | draft | 8 | Model artifact scanning & safe deserialization |
+| Chat agent with tools | build | draft | 7 | Model artifact scanning & safe deserialization |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 7 | _none_ |
-| First-party coding & desktop agents | hybrid | draft | 6 | _none_ |
-| Third-party coding & desktop agents | use | draft | 9 | Kill switch, quarantine & decommissioning |
+| First-party coding & desktop agents | hybrid | draft | 6 | Model artifact scanning & safe deserialization |
+| Third-party coding & desktop agents | use | draft | 9 | Kill switch, quarantine & decommissioning, Model artifact scanning & safe deserialization |
 | Local model runtime | use | draft | 4 | _none_ |
-| Personal autonomous agent | use | draft | 7 | _none_ |
+| Personal autonomous agent | use | draft | 7 | Model artifact scanning & safe deserialization |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 7 | _none_ |
+| API/SDK managed agent runtime | hybrid | draft | 9 | _none_ |
 
-### 5b. Tool registry
+### 5b. AI tooling registry
 
-Vendor-specific entries, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation.
+Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the capabilities pinned on the tool's architecture that the entry does not yet describe — the research work list.
 
-| Tool | Vendor | asOf | Referenced by | |
-| --- | --- | --- | --- | --- |
-| Claude Code | Anthropic | 2026-08 | Third-party coding & desktop agents |  |
-| Cursor | Anysphere | 2026-08 | Third-party coding & desktop agents |  |
-| GitHub Copilot | GitHub | 2026-08 | Third-party coding & desktop agents |  |
-| Codex | OpenAI | 2026-08 | Third-party coding & desktop agents |  |
-| ChatGPT desktop app | OpenAI | 2026-08 | Third-party coding & desktop agents |  |
-| Claude Desktop | Anthropic | 2026-08 | Third-party coding & desktop agents |  |
-| OpenClaw | OpenClaw (open source) | 2026-08 | Personal autonomous agent |  |
-| Hermes Agent | Nous Research | 2026-08 | Personal autonomous agent |  |
+| Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |
+| --- | --- | --- | --- | --- | --- | --- |
+| Claude Code | anthropic | Third-party coding & desktop agents | 2026-08 | 0/21 | Identity & access management for AI applications, Runtime action authorization, Third-party risk management platform for AI vendors, Data loss prevention for AI interactions, Tool permission scoping & least agency, Agent execution sandboxing, Agent credential isolation & delegation control, Agent memory & context protection, Prompt injection & jailbreak detection, Secrets management & ephemeral credentials, Tool & MCP supply-chain security, Human-in-the-loop approval & escalation, Agent & tool registry, Audit logging & non-repudiation, Shadow AI discovery, Kill switch, quarantine & decommissioning, Endpoint detection & response, System prompt & instruction hierarchy management, AI bill of materials & artifact signing, Network segmentation & egress control, Model artifact scanning & safe deserialization |  |
+| Claude Desktop | anthropic | Enterprise AI chat with connectors | 2026-08 | 0/20 | Identity & access management for AI applications, Secure service edge for AI services, Data loss prevention for AI interactions, Browser detection & response, Network segmentation & egress control, AI governance platform, Human-in-the-loop approval & escalation, Prompt injection & jailbreak detection, Non-human & agent identity management, SaaS security posture management for AI features, Data security posture management for AI, Third-party risk management platform for AI vendors, Encryption & key management for AI assets, Secrets management & ephemeral credentials, Tool permission scoping & least agency, Data access governance for retrieval, Agent & tool registry, Audit logging & non-repudiation, Shadow AI discovery, Kill switch, quarantine & decommissioning |  |
+| Cursor | cursor | Third-party coding & desktop agents | 2026-08 | 0/21 | Identity & access management for AI applications, Runtime action authorization, Third-party risk management platform for AI vendors, Data loss prevention for AI interactions, Tool permission scoping & least agency, Agent execution sandboxing, Agent credential isolation & delegation control, Agent memory & context protection, Prompt injection & jailbreak detection, Secrets management & ephemeral credentials, Tool & MCP supply-chain security, Human-in-the-loop approval & escalation, Agent & tool registry, Audit logging & non-repudiation, Shadow AI discovery, Kill switch, quarantine & decommissioning, Endpoint detection & response, System prompt & instruction hierarchy management, AI bill of materials & artifact signing, Network segmentation & egress control, Model artifact scanning & safe deserialization |  |
+| GitHub Copilot | github | Third-party coding & desktop agents | 2026-08 | 0/21 | Identity & access management for AI applications, Runtime action authorization, Third-party risk management platform for AI vendors, Data loss prevention for AI interactions, Tool permission scoping & least agency, Agent execution sandboxing, Agent credential isolation & delegation control, Agent memory & context protection, Prompt injection & jailbreak detection, Secrets management & ephemeral credentials, Tool & MCP supply-chain security, Human-in-the-loop approval & escalation, Agent & tool registry, Audit logging & non-repudiation, Shadow AI discovery, Kill switch, quarantine & decommissioning, Endpoint detection & response, System prompt & instruction hierarchy management, AI bill of materials & artifact signing, Network segmentation & egress control, Model artifact scanning & safe deserialization |  |
+| Hermes Agent | nous | Personal autonomous agent | 2026-08 | 0/22 | Prompt injection & jailbreak detection, Identity & access management for AI applications, Runtime action authorization, Inter-component & inter-agent transport security, Agent memory & context protection, Agent execution sandboxing, Tool permission scoping & least agency, Agent credential isolation & delegation control, Secrets management & ephemeral credentials, Runtime content & policy guardrails, Tool & MCP supply-chain security, Human-in-the-loop approval & escalation, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Kill switch, quarantine & decommissioning, Shadow AI discovery, Endpoint detection & response, Agent behavioural & goal-drift detection, Data loss prevention for AI interactions, Agent & tool registry, Network segmentation & egress control, Model artifact scanning & safe deserialization |  |
+| ChatGPT desktop app | openai | Enterprise AI chat with connectors | 2026-08 | 0/20 | Identity & access management for AI applications, Secure service edge for AI services, Data loss prevention for AI interactions, Browser detection & response, Network segmentation & egress control, AI governance platform, Human-in-the-loop approval & escalation, Prompt injection & jailbreak detection, Non-human & agent identity management, SaaS security posture management for AI features, Data security posture management for AI, Third-party risk management platform for AI vendors, Encryption & key management for AI assets, Secrets management & ephemeral credentials, Tool permission scoping & least agency, Data access governance for retrieval, Agent & tool registry, Audit logging & non-repudiation, Shadow AI discovery, Kill switch, quarantine & decommissioning |  |
+| Codex | openai | Third-party coding & desktop agents | 2026-08 | 0/21 | Identity & access management for AI applications, Runtime action authorization, Third-party risk management platform for AI vendors, Data loss prevention for AI interactions, Tool permission scoping & least agency, Agent execution sandboxing, Agent credential isolation & delegation control, Agent memory & context protection, Prompt injection & jailbreak detection, Secrets management & ephemeral credentials, Tool & MCP supply-chain security, Human-in-the-loop approval & escalation, Agent & tool registry, Audit logging & non-repudiation, Shadow AI discovery, Kill switch, quarantine & decommissioning, Endpoint detection & response, System prompt & instruction hierarchy management, AI bill of materials & artifact signing, Network segmentation & egress control, Model artifact scanning & safe deserialization |  |
+| OpenClaw | openclaw | Personal autonomous agent | 2026-08 | 0/22 | Prompt injection & jailbreak detection, Identity & access management for AI applications, Runtime action authorization, Inter-component & inter-agent transport security, Agent memory & context protection, Agent execution sandboxing, Tool permission scoping & least agency, Agent credential isolation & delegation control, Secrets management & ephemeral credentials, Runtime content & policy guardrails, Tool & MCP supply-chain security, Human-in-the-loop approval & escalation, Rate limiting, quotas & spend controls, Audit logging & non-repudiation, Kill switch, quarantine & decommissioning, Shadow AI discovery, Endpoint detection & response, Agent behavioural & goal-drift detection, Data loss prevention for AI interactions, Agent & tool registry, Network segmentation & egress control, Model artifact scanning & safe deserialization |  |

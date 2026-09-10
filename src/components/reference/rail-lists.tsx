@@ -7,9 +7,31 @@
  */
 import Link from "next/link";
 
-import { capabilityById, riskById, riskCode } from "@/lib/data";
+import { capabilityById, riskById, riskCode, toolsForCapability } from "@/lib/data";
+import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
+
+/** The organisation's own identifiers for a pinned entity, linked into the Frameworks tab. */
+function OrgRefs({ kind, id }: { kind: EntityKind; id: string }) {
+  const refs = orgEntriesFor(kind, id);
+  if (!refs.length) return null;
+  return (
+    <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-3">
+      <span className="mr-0.5">Your controls:</span>
+      {refs.map((o) => (
+        <Link
+          key={`${o.frameworkId}:${o.id}`}
+          href={frameworkHref(o.frameworkId, o.id)}
+          title={o.label}
+          className="ident rounded bg-mist px-1.5 py-[1px] text-ink-2 hover:underline"
+        >
+          {o.id}
+        </Link>
+      ))}
+    </p>
+  );
+}
 
 export function WalkList({
   walks,
@@ -97,6 +119,20 @@ export function CapabilityList({
                     {note}
                   </p>
                 ))}
+                <OrgRefs kind="capabilities" id={id} />
+                {toolsForCapability(id).length > 0 && (
+                  <p className="text-[11px] text-ink-3">
+                    Implemented by{" "}
+                    {toolsForCapability(id).map((t, ti) => (
+                      <span key={t.id}>
+                        {ti > 0 && ", "}
+                        <Link href={`/tooling?tool=${t.id}`} className="font-medium text-ink-2 hover:underline">
+                          {t.name}
+                        </Link>
+                      </span>
+                    ))}
+                  </p>
+                )}
                 <Link
                   href={`/capabilities?capability=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
@@ -150,6 +186,7 @@ export function RiskList({
                     {note}
                   </p>
                 ))}
+                <OrgRefs kind="risks" id={id} />
                 <Link
                   href={`/risks?risk=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"

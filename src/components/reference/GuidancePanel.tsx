@@ -12,8 +12,8 @@
 import Link from "next/link";
 
 import { Prose } from "@/components/Prose";
-import { capabilityById, guidanceByArchetype, guidanceToolById } from "@/lib/data";
-import type { Archetype, GuidanceItem, GuidanceMode, GuidanceTool } from "@/lib/types";
+import { capabilityById, guidanceByArchetype, toolById, vendorById } from "@/lib/data";
+import type { Archetype, GuidanceItem, GuidanceMode, Tool } from "@/lib/types";
 import { Section } from "./ArchetypeDetail";
 
 const MODE_LABEL: Record<GuidanceMode, string> = {
@@ -84,8 +84,8 @@ export function GuidancePanel({ archetype }: { archetype: Archetype }) {
 
 function GuidanceItemBody({ item }: { item: GuidanceItem }) {
   const tools = (item.tools ?? [])
-    .map((id) => guidanceToolById.get(id))
-    .filter((t): t is GuidanceTool => Boolean(t));
+    .map((id) => toolById.get(id))
+    .filter((t): t is Tool => Boolean(t));
 
   return (
     <div className="space-y-3">
@@ -139,12 +139,16 @@ function GuidanceItemBody({ item }: { item: GuidanceItem }) {
   );
 }
 
-function ToolBlock({ tool }: { tool: GuidanceTool }) {
+function ToolBlock({ tool }: { tool: Tool }) {
   return (
     <div className="rounded-lg border border-line bg-mist/40 px-3.5 py-3">
       <p className="text-[13.5px] font-semibold text-ink">
-        {tool.name}
-        <span className="ml-2 text-[11.5px] font-medium text-ink-3">{tool.vendor}</span>
+        <Link href={`/tooling?tool=${tool.id}`} className="hover:underline">
+          {tool.name}
+        </Link>
+        <span className="ml-2 text-[11.5px] font-medium text-ink-3">
+          {vendorById.get(tool.vendor)?.name ?? tool.vendor}
+        </span>
         <span className="ident ml-2 text-[10.5px] font-medium text-ink-3">as of {tool.asOf}</span>
       </p>
       <div className="mt-1">

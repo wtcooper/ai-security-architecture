@@ -28,7 +28,7 @@ import type {
   Component,
   Control,
   Guidance,
-  GuidanceTool,
+  Tool,
   Paragraph,
   Risk,
   Surface,
@@ -304,7 +304,7 @@ async function main() {
     capabilities: Capability[];
     surfaces: Surface[];
     guidance: Guidance[];
-    guidanceTools: GuidanceTool[];
+    tools: Tool[];
   };
   const archetypes = dataset.archetypes ?? [];
 
@@ -388,7 +388,7 @@ async function main() {
   // state while it rolls out; the lists below are its work list. Staleness matters more than
   // coverage here: tool entries carry dated vendor facts that rot silently.
   const guidance = dataset.guidance ?? [];
-  const guidanceTools = dataset.guidanceTools ?? [];
+  const tools = dataset.tools ?? [];
   const guidanceByArchetype = new Map(guidance.map((g) => [g.archetype, g]));
 
   p("## 5. Controls-guidance coverage");
@@ -430,28 +430,32 @@ async function main() {
   }
   p();
 
-  p("### 5b. Tool registry");
+  p("### 5b. AI tooling registry");
   p();
   p(
-    "Vendor-specific entries, each dated. An entry older than six months is due a " +
-      "re-verification pass against the vendor's current documentation.",
+    "Named products (data/tooling/), one entity per product × architecture, each dated. An " +
+      "entry older than six months is due a re-verification pass against the vendor's current " +
+      "documentation. *Unaddressed* lists the capabilities pinned on the tool's architecture " +
+      "that the entry does not yet describe — the research work list.",
   );
   p();
-  const referencedBy = (toolId: string) =>
-    guidance
-      .filter((g) => g.items.some((i) => (i.tools ?? []).includes(toolId)))
-      .map((g) => archetypes.find((a) => a.id === g.archetype)?.title ?? g.archetype);
+  const archTitle = (id: string) => archetypes.find((a) => a.id === id)?.title ?? id;
   // Staleness is measured against the build date; six months is the stated cadence.
   const now = new Date();
   const staleBefore = `${now.getFullYear() - (now.getMonth() < 6 ? 1 : 0)}-${String(
     ((now.getMonth() - 6 + 12) % 12) + 1,
   ).padStart(2, "0")}`;
-  p("| Tool | Vendor | asOf | Referenced by | |");
-  p("| --- | --- | --- | --- | --- |");
-  for (const tool of guidanceTools) {
+  p("| Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |");
+  p("| --- | --- | --- | --- | --- | --- | --- |");
+  for (const tool of tools) {
     const stale = tool.asOf < staleBefore;
+    const pinned = archetypes.find((a) => a.id === tool.architecture)?.capabilities ?? [];
+    const addressed = new Set(tool.controls.map((c) => c.capability));
+    const missing = pinned.filter((id) => !addressed.has(id));
     p(
-      `| ${tool.name} | ${tool.vendor} | ${tool.asOf} | ${referencedBy(tool.id).join(", ")} | ` +
+      `| ${tool.name} | ${tool.vendor} | ${archTitle(tool.architecture)} | ${tool.asOf} | ` +
+        `${pinned.length - missing.length}/${pinned.length} | ` +
+        `${missing.map((id) => capTitle.get(id) ?? id).join(", ") || "_none_"} | ` +
         `${stale ? "**stale — re-verify**" : ""} |`,
     );
   }
@@ -464,7 +468,7 @@ async function main() {
       `${authored.length} authored + ${seeded.length} seeded overlays, ` +
       `${archetypes.length} flow-style architectures (${unreachedRisks.length} risks and ` +
       `${unusedCaps.length} capabilities not yet pinned), ` +
-      `${guidance.length} guidance docs (${guidanceTools.length} tools)`,
+      `${guidance.length} guidance docs, ${tools.length} tools`,
   );
 }
 

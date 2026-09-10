@@ -28,6 +28,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
+import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
@@ -40,6 +41,18 @@ interface HoverCard {
   y: number;
   title: string;
   body?: string;
+}
+
+/**
+ * A pin's hover text: its note, then the organisation's own identifiers that reach the same
+ * CoSAI entity, so a reader sees their control number next to the chip without leaving the
+ * drawing. Rendered pre-line, so the org line stays its own line.
+ */
+function pinBody(note: string | undefined, kind: EntityKind, id: string): string | undefined {
+  const own = orgEntriesFor(kind, id);
+  if (!own.length) return note;
+  const line = `Your controls: ${own.map((o) => o.id).join(" · ")}`;
+  return note ? `${note}\n${line}` : line;
 }
 
 type BlockNodeData = {
@@ -694,7 +707,7 @@ export function FlowDiagramRF({
             n,
             dim: false,
             title: `${n} · ${cap?.title ?? pin.capability}`,
-            body: pin.note,
+            body: pinBody(pin.note, "capabilities", pin.capability),
           },
           draggable: false,
           selectable: false,
@@ -728,7 +741,7 @@ export function FlowDiagramRF({
             w: r.w,
             dim: false,
             title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
-            body: pin.note,
+            body: pinBody(pin.note, "risks", pin.risk),
           },
           draggable: false,
           selectable: false,
@@ -813,7 +826,7 @@ export function FlowDiagramRF({
           dy: spot.y - geo.midY,
           n,
           title: `${n} · ${cap?.title ?? pin.capability}`,
-          body: pin.note,
+          body: pinBody(pin.note, "capabilities", pin.capability),
         });
       });
       pinsByEdge.set(at, list);
@@ -842,7 +855,7 @@ export function FlowDiagramRF({
           code: codes[i],
           w: r.w,
           title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
-          body: pin.note,
+          body: pinBody(pin.note, "risks", pin.risk),
         });
       });
       pinsByEdge.set(at, list);
@@ -985,7 +998,14 @@ export function FlowDiagramRF({
             {card.title}
           </div>
           {card.body && (
-            <div style={{ marginTop: 4, font: "400 10.5px/1.45 var(--font-body, sans-serif)", color: "var(--ink-2, #555)" }}>
+            <div
+              style={{
+                marginTop: 4,
+                font: "400 10.5px/1.45 var(--font-body, sans-serif)",
+                color: "var(--ink-2, #555)",
+                whiteSpace: "pre-line",
+              }}
+            >
               {card.body}
             </div>
           )}

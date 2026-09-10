@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Chip } from "@/components/Chips";
+import { Chip, MappingBadges } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
 import { bandFor } from "@/lib/bands";
 import { BAND_TOKENS } from "@/lib/map-layout";
@@ -13,7 +13,10 @@ import {
   controlsForCapability,
   risksForCapability,
   surfaces,
+  toolsForCapability,
+  vendorById,
 } from "@/lib/data";
+import { mappingsForCapability } from "@/lib/frameworks";
 import type { Capability, CapabilityStatus } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "./StatusPill";
@@ -31,6 +34,8 @@ export function CapabilityDetail({
   const risks = risksForCapability(capability.id);
   const components = componentsForCapability(capability.id);
   const categoryTitle = controlCategories.find((c) => c.id === capability.category)?.title;
+  const orgMappings = mappingsForCapability(capability);
+  const tools = toolsForCapability(capability.id);
 
   return (
     <div className="rounded-xl border border-line bg-paper p-7">
@@ -58,6 +63,12 @@ export function CapabilityDetail({
       </div>
 
       <Prose blocks={capability.description} className="mt-4" />
+
+      {orgMappings.length > 0 && (
+        <div className="mt-4">
+          <MappingBadges extra={orgMappings} />
+        </div>
+      )}
 
       <div className="mt-5">
         <p className="eyebrow">Example technology classes</p>
@@ -139,6 +150,21 @@ export function CapabilityDetail({
           </div>
         </div>
       </div>
+
+      {tools.length > 0 && (
+        <div className="mt-6">
+          <p className="eyebrow">Implemented by</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tools.map((t) => (
+              <Link key={t.id} href={`/tooling?tool=${t.id}`}>
+                <Chip title={`${vendorById.get(t.vendor)?.name ?? t.vendor} · see how it is switched on`}>
+                  {t.name}
+                </Chip>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6">
         <ArchetypeLinks

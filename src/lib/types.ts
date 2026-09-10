@@ -65,12 +65,26 @@ export interface Framework {
    * offered as a lens, because an obsolete edition of a list is noise next to the current one.
    */
   superseded?: boolean;
+  /**
+   * An organisation's own catalogue (data/org/<profile>/frameworks.yaml): a control standard
+   * or a risk register, cross-mapped onto CoSAI here. Authored like the others, but by the
+   * adopter rather than this repository, and badged as theirs.
+   */
+  org?: boolean;
+  /**
+   * Every entry of the framework is present in `frameworkEntries`, so an entry nothing maps
+   * to is a finding to show, not a build failure. Set by the build for org catalogues; the
+   * upstream equivalent is FULL_LIST_FRAMEWORKS.
+   */
+  entriesComplete?: boolean;
 }
 
 /** Entity id -> framework entry ids, per entity kind. Personas carry no authored mappings. */
 export type AuthoredMappings = {
   risks?: Record<string, string[]>;
   controls?: Record<string, string[]>;
+  /** Only organisation catalogues map onto capabilities; external frameworks stop at controls. */
+  capabilities?: Record<string, string[]>;
 };
 
 /** An editorial note on a framework CoSAI does carry, where upstream has moved on. */
@@ -100,6 +114,10 @@ export interface FrameworkEntryInfo {
   description: string;
   /** Set where the framework's own data disagrees with the version CoSAI declares. */
   note?: string;
+  /** A per-entry deep link, where the framework has one (organisation catalogues). */
+  url?: string;
+  /** A heading the entry sits under in its own catalogue, e.g. a control domain. */
+  group?: string;
 }
 
 export interface ComponentCategory {
@@ -546,18 +564,105 @@ export interface GuidanceToolItem {
 }
 
 /**
- * One product in the shared tool registry (data/reference/guidance/tools.yaml). Tools are the
- * one place this layer goes vendor-specific, because the option space is narrow; the exemplar
- * rule applies — every entry is dated and cites the vendor's own documentation.
+ * ------------------------------------------------------------------ AI tooling registry
+ *
+ * Named products, one entity per product × reference architecture (data/tooling/). This is
+ * the only layer that names vendors, so every entry carries the exemplar rule: dated (asOf)
+ * and sourced from the vendor's own documentation, with each operator step linking to the page
+ * that documents it.
  */
-export interface GuidanceTool {
+
+/** How the product reaches the user; a tool may ship as several of these. */
+export type ToolSurfaceClass =
+  | "endpointCli"
+  | "ideExtension"
+  | "desktopApp"
+  | "browserExtension"
+  | "cloudAgent"
+  | "managedRuntime"
+  | "chatIntegration"
+  | "saasChat"
+  | "officeAddin"
+  | "ciIntegration";
+export const TOOL_SURFACE_CLASSES: ToolSurfaceClass[] = [
+  "endpointCli",
+  "ideExtension",
+  "desktopApp",
+  "browserExtension",
+  "cloudAgent",
+  "managedRuntime",
+  "chatIntegration",
+  "saasChat",
+  "officeAddin",
+  "ciIntegration",
+];
+
+export type ToolStatus = "ga" | "beta" | "preview" | "announced";
+
+/**
+ * Whether the vendor implements a pinned capability on this tool: natively, partially, not at
+ * all, only through a third-party product (`external`), or nobody could verify (`unknown`).
+ */
+export type ToolCoverage = "native" | "partial" | "none" | "external" | "unknown";
+export const TOOL_COVERAGES: ToolCoverage[] = ["native", "partial", "none", "external", "unknown"];
+
+/** A named shell of the product: CLI, IDE extension, desktop app, ... */
+export interface ToolVariant {
+  name: string;
+  class: ToolSurfaceClass;
+  url?: string;
+  note?: string;
+}
+
+export interface ToolStep {
+  title: string;
+  body: Paragraph[];
+  url?: string;
+}
+
+/** The vendor's implementation of one capability pinned on the tool's architecture. */
+export interface ToolControl {
+  capability: string;
+  coverage: ToolCoverage;
+  /** Where the control is set: a managed file, an MDM key, an admin-console path. */
+  mechanism?: string;
+  steps?: ToolStep[];
+  /** When the steps were checked against the vendor's page, e.g. "2026-09-10". */
+  verified?: string;
+  note?: string;
+}
+
+export interface ToolVendor {
   id: string;
   name: string;
+  url?: string;
+  /** Trust centre or security page. */
+  trust?: string;
+}
+
+export interface Tool {
+  id: string;
   vendor: string;
-  /** When these facts were verified against the vendor's docs, e.g. "2026-08". */
+  /** Product family the entity belongs to, e.g. "Claude Code", "GitHub Copilot". */
+  family: string;
+  name: string;
+  surfaceClasses: ToolSurfaceClass[];
+  variants?: ToolVariant[];
+  /** The reference architecture this product instantiates; fixes the reference control set. */
+  architecture: string;
+  secondaryArchitectures?: string[];
+  status?: ToolStatus;
+  /** When these facts were verified against the vendor's docs, e.g. "2026-09". */
   asOf: string;
   summary: Paragraph[];
+  /** Plans, inference location, routing, what leaves the device — a definition list. */
+  facts?: { label: string; value: string; url?: string }[];
+  /** Admin-configuration detail, rendered on the Controls-guidance panel and the tool page. */
   items: GuidanceToolItem[];
+  /** Tool-specific emphasis on risks pinned on the architecture. */
+  riskNotes?: { risk: string; note: string }[];
+  controls: ToolControl[];
+  advisories?: { title: string; url: string; date?: string }[];
   sources: GuidanceLink[];
 }
 
@@ -653,12 +758,49 @@ export interface Incident {
   sources: IncidentSource[];
 }
 
+/**
+ * ------------------------------------------------------------------ Organisation layer
+ *
+ * What an adopter records about itself in data/org/<profile>/. Its catalogues become org
+ * frameworks (see Framework.org); its tool posture is the one place a deployment states what
+ * it has actually switched on.
+ */
+
+export interface OrgMeta {
+  /** "local" when data/org/local/ was used, else "example". */
+  profile: "local" | "example";
+  name: string;
+  shortName?: string;
+  /** True when the shipped example content is rendering — badged so nobody reads it as a posture. */
+  example: boolean;
+}
+
+export type ToolAdoption = "approved" | "pilot" | "blocked" | "unassessed";
+export const TOOL_ADOPTIONS: ToolAdoption[] = ["approved", "pilot", "blocked", "unassessed"];
+
+export interface OrgToolControlStatus {
+  status: CapabilityStatus;
+  note?: string;
+  /** A ticket, document or evidence reference. */
+  evidence?: string;
+}
+
+/** The organisation's posture on one tool: adoption decision plus per-capability status. */
+export interface OrgToolPosture {
+  tool: string;
+  adoption: ToolAdoption;
+  note?: string;
+  /** Keyed by capability id; every key must be pinned on the tool's architecture. */
+  controls: Record<string, OrgToolControlStatus>;
+}
+
 /** Everything the app renders, emitted by scripts/build-data.ts. */
 export interface Dataset {
   meta: {
     cosaiRef: string;
     generatedAt: string;
     counts: Record<string, number>;
+    org: OrgMeta;
   };
   componentCategories: ComponentCategory[];
   components: Component[];
@@ -689,7 +831,9 @@ export interface Dataset {
   capabilitiesAttribution: string;
   archetypes: Archetype[];
   guidance: Guidance[];
-  guidanceTools: GuidanceTool[];
+  vendors: ToolVendor[];
+  tools: Tool[];
   /** Provenance statement for the tool registry; each guidance document carries its own. */
-  guidanceAttribution: string;
+  toolingAttribution: string;
+  orgToolPosture: OrgToolPosture[];
 }

@@ -8,7 +8,7 @@
  *   npm run data
  */
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
@@ -25,16 +25,26 @@ import type {
   FrameworkEntryInfo,
   FrameworkNote,
   Guidance,
-  GuidanceTool,
   Incident,
+  OrgMeta,
+  OrgToolPosture,
   Persona,
   Rect,
   Risk,
   RiskOverlay,
   Surface,
+  Tool,
+  ToolVendor,
   Vocabulary,
 } from "../src/lib/types";
-import { CAPABILITY_STATUSES, FULL_LIST_FRAMEWORKS, PHASES } from "../src/lib/types";
+import {
+  CAPABILITY_STATUSES,
+  FULL_LIST_FRAMEWORKS,
+  PHASES,
+  TOOL_ADOPTIONS,
+  TOOL_COVERAGES,
+  TOOL_SURFACE_CLASSES,
+} from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
 import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
 import {
@@ -97,34 +107,123 @@ async function loadArchetypes(): Promise<{ file: string; arch: AuthoredArchetype
 }
 
 /**
- * The controls-guidance layer: one document per architecture plus the shared tool registry.
- * Guidance files are named after the architecture file they implement, so the pairing is
- * visible in a directory listing.
+ * The controls-guidance layer: one document per architecture. Guidance files are named after
+ * the architecture file they implement, so the pairing is visible in a directory listing.
  */
-async function loadGuidance(): Promise<{
-  docs: { file: string; doc: Guidance }[];
-  tools: GuidanceTool[];
-  toolsAttribution: string;
-}> {
+async function loadGuidance(): Promise<{ file: string; doc: Guidance }[]> {
   const dir = join(ROOT, "data", "reference", "guidance");
   const files = (await readdir(dir)).filter((f) => f.endsWith(".yaml")).sort();
   const docs: { file: string; doc: Guidance }[] = [];
-  let tools: GuidanceTool[] = [];
-  let toolsAttribution = "";
   for (const f of files) {
     try {
-      if (f === "tools.yaml") {
-        const doc = await loadYaml<{ attribution?: string; tools?: GuidanceTool[] }>(join(dir, f));
-        tools = doc.tools ?? [];
-        toolsAttribution = doc.attribution ?? "";
-      } else {
-        docs.push({ file: f, doc: await loadYaml<Guidance>(join(dir, f)) });
-      }
+      docs.push({ file: f, doc: await loadYaml<Guidance>(join(dir, f)) });
     } catch (e) {
       throw new Error(`guidance/${f}: ${(e as Error).message}`);
     }
   }
-  return { docs, tools, toolsAttribution };
+  return docs;
+}
+
+/**
+ * The AI tooling registry: data/tooling/vendors.yaml plus one file per product family under
+ * data/tooling/<vendor>/. Each file carries a `tools:` list — one entity per product ×
+ * reference architecture; the UI shells a product ships as are `variants` on the entity.
+ */
+async function loadTooling(): Promise<{
+  attribution: string;
+  vendors: ToolVendor[];
+  tools: { file: string; tool: Tool }[];
+}> {
+  const dir = join(ROOT, "data", "tooling");
+  const vendorsDoc = await loadYaml<{ attribution?: string; vendors?: ToolVendor[] }>(
+    join(dir, "vendors.yaml"),
+  );
+  const tools: { file: string; tool: Tool }[] = [];
+  const subdirs = (await readdir(dir, { withFileTypes: true }))
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+  for (const sub of subdirs) {
+    const files = (await readdir(join(dir, sub))).filter((f) => f.endsWith(".yaml")).sort();
+    for (const f of files) {
+      const file = `${sub}/${f}`;
+      try {
+        const doc = await loadYaml<{ vendor?: string; family?: string; tools?: Partial<Tool>[] }>(
+          join(dir, sub, f),
+        );
+        for (const t of doc.tools ?? []) {
+          // File-level vendor and family are defaults; a tool may restate them.
+          tools.push({
+            file,
+            tool: { vendor: doc.vendor, family: doc.family, ...t } as Tool,
+          });
+        }
+      } catch (e) {
+        throw new Error(`tooling/${file}: ${(e as Error).message}`);
+      }
+    }
+  }
+  return { attribution: vendorsDoc.attribution ?? "", vendors: vendorsDoc.vendors ?? [], tools };
+}
+
+/**
+ * The organisation layer: data/org/local/ when the adopter has created it, else the shipped
+ * example. Missing files inside the chosen profile are an empty layer, not an error — an
+ * organisation may cross-map its standard long before it records any tool posture.
+ */
+async function loadOrg(): Promise<{
+  meta: OrgMeta;
+  frameworks: OrgFrameworkDoc[];
+  posture: OrgToolPosture[];
+}> {
+  const base = join(ROOT, "data", "org");
+  const profile: OrgMeta["profile"] = existsSync(join(base, "local")) ? "local" : "example";
+  const dir = join(base, profile);
+  const read = async <T,>(name: string): Promise<T | undefined> => {
+    const path = join(dir, name);
+    if (!existsSync(path)) return undefined;
+    try {
+      return await loadYaml<T>(path);
+    } catch (e) {
+      throw new Error(`org/${profile}/${name}: ${(e as Error).message}`);
+    }
+  };
+  const fw = await read<{
+    organisation?: { name?: string; shortName?: string };
+    frameworks?: OrgFrameworkDoc[];
+  }>("frameworks.yaml");
+  const status = await read<{ tools?: OrgToolPosture[] }>("tooling-status.yaml");
+  const name = fw?.organisation?.name?.trim() || (profile === "example" ? "Example organisation" : "Your organisation");
+  return {
+    meta: {
+      profile,
+      name,
+      shortName: fw?.organisation?.shortName?.trim() || undefined,
+      example: profile === "example",
+    },
+    frameworks: fw?.frameworks ?? [],
+    posture: status?.tools ?? [],
+  };
+}
+
+/** An organisation catalogue as authored: entry-keyed, each entry naming its CoSAI targets. */
+interface OrgFrameworkDoc {
+  id: string;
+  name: string;
+  fullName?: string;
+  version?: string;
+  url?: string;
+  description?: string;
+  entries: {
+    id: string;
+    label: string;
+    description?: string;
+    group?: string;
+    url?: string;
+    controls?: string[];
+    capabilities?: string[];
+    risks?: string[];
+  }[];
 }
 
 /**
@@ -225,14 +324,30 @@ async function main() {
     ...frameworksDoc.frameworks,
     ...authoredDoc.frameworks.map(stripMappings),
   ]);
+  const capabilityIds = new Set(capabilitiesDoc.capabilities.map((c) => c.id));
   const authoredMappings = checkAuthoredFrameworks(authoredDoc, {
     riskIds,
     controlIds,
+    capabilityIds,
     frameworksDoc,
   });
 
+  // --- Organisation catalogues -----------------------------------------------------
+  // The adopter's own standard and risk register, inverted into the same shapes as the
+  // authored frameworks so every badge, coverage count and gap list works unchanged.
+  const org = await loadOrg();
+  const orgFrameworks = checkOrgFrameworks(org, {
+    riskIds,
+    controlIds,
+    capabilityIds,
+    takenIds: new Set(allFrameworks.map((f) => f.id)),
+  });
+  allFrameworks.push(...orgFrameworks.frameworks);
+  Object.assign(authoredMappings, orgFrameworks.mappings);
+  const declaredEntries = { ...entriesDoc.frameworks, ...orgFrameworks.entries };
+
   // --- Framework entry reference text ----------------------------------------------
-  const frameworkEntries = checkFrameworkEntries(entriesDoc.frameworks, {
+  const frameworkEntries = checkFrameworkEntries(declaredEntries, {
     frameworks: allFrameworks,
     risks,
     controls,
@@ -256,12 +371,20 @@ async function main() {
     mapTargets,
   });
 
+  // --- AI tooling registry -------------------------------------------------------
+  const toolingLoaded = await loadTooling();
+  const tools = checkTooling(toolingLoaded, { archetypes, riskIds });
+
   // --- Controls guidance ---------------------------------------------------------
   const guidanceLoaded = await loadGuidance();
   const guidance = checkGuidance(guidanceLoaded, {
     archetypes,
     archetypeFileById: new Map(archetypeFiles.map((e) => [e.arch.id, e.file])),
+    toolIds: new Set(tools.map((t) => t.id)),
   });
+
+  // --- Organisation tool posture -------------------------------------------------
+  const orgToolPosture = checkToolingStatus(org.posture, { tools, archetypes });
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -346,8 +469,12 @@ async function main() {
         capabilities: capabilitiesDoc.capabilities.length,
         archetypes: archetypes.length,
         guidance: guidance.length,
-        guidanceTools: guidanceLoaded.tools.length,
+        tools: tools.length,
+        vendors: toolingLoaded.vendors.length,
+        orgFrameworks: orgFrameworks.frameworks.length,
+        orgToolPosture: orgToolPosture.length,
       },
+      org: org.meta,
     },
     componentCategories: componentsDoc.categories,
     components,
@@ -370,8 +497,10 @@ async function main() {
     capabilitiesAttribution: capabilitiesDoc.attribution ?? "",
     archetypes,
     guidance,
-    guidanceTools: guidanceLoaded.tools,
-    guidanceAttribution: guidanceLoaded.toolsAttribution,
+    vendors: toolingLoaded.vendors,
+    tools,
+    toolingAttribution: toolingLoaded.attribution,
+    orgToolPosture,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -382,8 +511,9 @@ async function main() {
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
       `${incidents.length} incidents, ${capabilitiesDoc.capabilities.length} capabilities, ` +
-      `${archetypes.length} archetypes, ${guidance.length} guidance docs ` +
-      `(${guidanceLoaded.tools.length} tools)`,
+      `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
+      `${tools.length} tools, org profile "${org.meta.profile}" ` +
+      `(${orgFrameworks.frameworks.length} catalogues, ${orgToolPosture.length} tool postures)`,
   );
 }
 
@@ -1204,66 +1334,37 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
 /**
  * The controls-guidance layer: what an organisation enforces around each architecture, for
  * admins, architects and security teams. Same contract as everything else here — a dangling
- * id fails the build — plus the rules that encode this layer's editorial discipline:
+ * id fails the build — plus the rule that encodes this layer's editorial discipline:
  *
  *   - Every guidance item cites at least one capability, and each must be pinned on its
  *     architecture. Guidance cannot recommend deploying something the drawing does not show;
  *     when it needs to, the fix is a pin, exactly as controlsForArchetype() treats controls.
- *   - Tool entries are the one place the layer goes vendor-specific, so they carry the
- *     exemplar rule: dated (asOf) and sourced from the vendor's own documentation.
- *   - An unreferenced tool entry fails: the registry exists to serve the guidance documents,
- *     not to grow a freestanding product catalogue.
+ *
+ * Tool references resolve against the AI tooling registry (checkTooling), which carries the
+ * vendor-specific discipline itself.
  */
 const GUIDANCE_MODES = new Set(["build", "use", "hybrid"]);
 const GUIDANCE_STATUSES = new Set(["draft", "reviewed"]);
 
+const checkLinks = (where: string, links: { title?: string; url?: string }[] | undefined) => {
+  for (const link of links ?? []) {
+    if (!link.title?.trim() || !link.url?.trim()) fail(`${where}: link needs a title and a url`);
+  }
+};
+
 function checkGuidance(
-  loaded: {
-    docs: { file: string; doc: Guidance }[];
-    tools: GuidanceTool[];
-    toolsAttribution: string;
-  },
+  docs: { file: string; doc: Guidance }[],
   ctx: {
     archetypes: Archetype[];
     archetypeFileById: Map<string, string>;
+    toolIds: Set<string>;
   },
 ): Guidance[] {
   const archetypeById = new Map(ctx.archetypes.map((a) => [a.id, a]));
-
-  const checkLinks = (where: string, links: { title?: string; url?: string }[] | undefined) => {
-    for (const link of links ?? []) {
-      if (!link.title?.trim() || !link.url?.trim()) fail(`${where}: link needs a title and a url`);
-    }
-  };
-
-  const toolIds = new Set<string>();
-  if (loaded.tools.length && !loaded.toolsAttribution.trim()) {
-    fail("guidance tools: attribution is required");
-  }
-  for (const tool of loaded.tools) {
-    const where = `guidance tool ${tool.id}`;
-    if (!/^tool[A-Z]/.test(tool.id ?? "")) fail(`${where}: id must match ^tool[A-Z]`);
-    if (toolIds.has(tool.id)) fail(`${where}: duplicate id`);
-    toolIds.add(tool.id);
-    if (!tool.name?.trim()) fail(`${where}: needs a name`);
-    if (!tool.vendor?.trim()) fail(`${where}: needs a vendor`);
-    // Product configuration surfaces age as fast as the products; an undated claim silently
-    // becomes a wrong one, the same rule exemplars carry.
-    if (!tool.asOf?.trim()) fail(`${where}: needs an asOf date`);
-    if (!tool.summary?.length) fail(`${where}: needs a summary`);
-    if (!tool.items?.length) fail(`${where}: needs at least one item`);
-    for (const item of tool.items ?? []) {
-      if (!item.title?.trim()) fail(`${where}: an item needs a title`);
-      if (!item.body?.length) fail(`${where} item "${item.title}": needs a body`);
-      checkLinks(`${where} item "${item.title}"`, item.links);
-    }
-    if (!tool.sources?.length) fail(`${where}: needs at least one vendor documentation source`);
-    checkLinks(where, tool.sources);
-  }
+  const toolIds = ctx.toolIds;
 
   const seenArchetypes = new Set<string>();
-  const referencedTools = new Set<string>();
-  for (const { file, doc } of loaded.docs) {
+  for (const { file, doc } of docs) {
     const where = `guidance ${file}`;
     const archetype = archetypeById.get(doc.archetype);
     if (!archetype) {
@@ -1298,7 +1399,6 @@ function checkGuidance(
       }
       for (const id of item.tools ?? []) {
         if (!toolIds.has(id)) fail(`${at}: unknown tool ${id}`);
-        referencedTools.add(id);
       }
       checkLinks(at, item.links);
     }
@@ -1306,13 +1406,234 @@ function checkGuidance(
     checkLinks(where, doc.sources);
   }
 
-  for (const tool of loaded.tools) {
-    if (!referencedTools.has(tool.id)) {
-      fail(`guidance tool ${tool.id}: referenced by no guidance document`);
-    }
+  return docs.map((e) => e.doc);
+}
+
+/**
+ * The AI tooling registry. A tool is a named product mapped onto one reference architecture,
+ * and the architecture fixes its reference control set: a tool may only describe how it
+ * implements capabilities pinned on that drawing. Every entry is dated and sourced from the
+ * vendor's own documentation, and every operator step links to the page that documents it.
+ */
+const TOOL_STATUSES = new Set(["ga", "beta", "preview", "announced"]);
+const SURFACE_CLASSES = new Set<string>(TOOL_SURFACE_CLASSES);
+const COVERAGES = new Set<string>(TOOL_COVERAGES);
+
+function checkTooling(
+  loaded: { attribution: string; vendors: ToolVendor[]; tools: { file: string; tool: Tool }[] },
+  ctx: { archetypes: Archetype[]; riskIds: Set<string> },
+): Tool[] {
+  const archetypeById = new Map(ctx.archetypes.map((a) => [a.id, a]));
+  const vendorIds = new Set<string>();
+  if (loaded.tools.length && !loaded.attribution.trim()) fail("tooling: attribution is required");
+  for (const v of loaded.vendors) {
+    if (!v.id?.trim() || !v.name?.trim()) fail(`tooling vendor ${v.id}: needs an id and a name`);
+    if (vendorIds.has(v.id)) fail(`tooling vendor ${v.id}: duplicate id`);
+    vendorIds.add(v.id);
   }
 
-  return loaded.docs.map((e) => e.doc);
+  const seen = new Set<string>();
+  for (const { file, tool } of loaded.tools) {
+    const where = `tooling ${file} ${tool.id}`;
+    if (!/^tool[A-Z]/.test(tool.id ?? "")) fail(`${where}: id must match ^tool[A-Z]`);
+    if (seen.has(tool.id)) fail(`${where}: duplicate id`);
+    seen.add(tool.id);
+    if (!tool.name?.trim()) fail(`${where}: needs a name`);
+    if (!tool.family?.trim()) fail(`${where}: needs a family`);
+    if (!vendorIds.has(tool.vendor)) fail(`${where}: unknown vendor ${tool.vendor} — add it to vendors.yaml`);
+    // Product configuration surfaces age as fast as the products; an undated claim silently
+    // becomes a wrong one, the same rule exemplars carry.
+    if (!tool.asOf?.trim()) fail(`${where}: needs an asOf date`);
+    if (tool.status && !TOOL_STATUSES.has(tool.status)) {
+      fail(`${where}: status must be one of ${[...TOOL_STATUSES].join(", ")}`);
+    }
+    if (!tool.summary?.length) fail(`${where}: needs a summary`);
+    if (!tool.surfaceClasses?.length) fail(`${where}: needs at least one surface class`);
+    for (const c of tool.surfaceClasses ?? []) {
+      if (!SURFACE_CLASSES.has(c)) fail(`${where}: unknown surface class ${c}`);
+    }
+    for (const v of tool.variants ?? []) {
+      if (!v.name?.trim()) fail(`${where}: a variant needs a name`);
+      if (!tool.surfaceClasses?.includes(v.class)) {
+        fail(`${where} variant "${v.name}": class ${v.class} is not in the tool's surfaceClasses`);
+      }
+    }
+
+    const arch = archetypeById.get(tool.architecture);
+    if (!arch) {
+      fail(`${where}: architecture "${tool.architecture}" is not a reference architecture`);
+    }
+    for (const id of tool.secondaryArchitectures ?? []) {
+      if (!archetypeById.has(id)) fail(`${where}: unknown secondary architecture ${id}`);
+    }
+
+    // The reference control set is the architecture's own pins. A tool cannot claim to
+    // implement — or lack — a control the drawing does not show; the fix is a pin.
+    const pinned = new Set(arch?.capabilities ?? []);
+    const covered = new Set<string>();
+    for (const c of tool.controls ?? []) {
+      const at = `${where} control ${c.capability}`;
+      if (!pinned.has(c.capability) && arch) {
+        fail(`${at}: not pinned on ${arch.id} — add a pin or drop the claim`);
+      }
+      if (covered.has(c.capability)) fail(`${at}: listed twice`);
+      covered.add(c.capability);
+      if (!COVERAGES.has(c.coverage)) {
+        fail(`${at}: coverage must be one of ${[...COVERAGES].join(", ")}`);
+      }
+      for (const step of c.steps ?? []) {
+        if (!step.title?.trim()) fail(`${at}: a step needs a title`);
+        if (!step.body?.length) fail(`${at} step "${step.title}": needs a body`);
+      }
+    }
+    for (const rn of tool.riskNotes ?? []) {
+      if (!ctx.riskIds.has(rn.risk)) fail(`${where}: unknown risk ${rn.risk}`);
+      else if (arch && !arch.risks.includes(rn.risk)) {
+        fail(`${where}: risk ${rn.risk} is not pinned on ${arch.id}`);
+      }
+      if (!rn.note?.trim()) fail(`${where}: risk note ${rn.risk} needs a note`);
+    }
+    for (const f of tool.facts ?? []) {
+      if (!f.label?.trim() || !f.value?.trim()) fail(`${where}: a fact needs a label and a value`);
+    }
+    for (const item of tool.items ?? []) {
+      if (!item.title?.trim()) fail(`${where}: an item needs a title`);
+      if (!item.body?.length) fail(`${where} item "${item.title}": needs a body`);
+      checkLinks(`${where} item "${item.title}"`, item.links);
+    }
+    checkLinks(`${where} advisories`, tool.advisories);
+    if (!tool.sources?.length) fail(`${where}: needs at least one vendor documentation source`);
+    checkLinks(where, tool.sources);
+  }
+
+  console.log(`tooling: ${loaded.tools.length} tools across ${vendorIds.size} vendors`);
+  return loaded.tools.map((e) => ({ ...e.tool, items: e.tool.items ?? [], controls: e.tool.controls ?? [] }));
+}
+
+/**
+ * The organisation's tool posture: which tools it has approved and, per pinned capability,
+ * whether the control is switched on. Statuses reuse the capability posture enum so the
+ * same pills render both; a capability not pinned on the tool's architecture cannot carry a
+ * status, because the reference set is the drawing.
+ */
+const ADOPTIONS = new Set<string>(TOOL_ADOPTIONS);
+const STATUSES = new Set<string>(CAPABILITY_STATUSES);
+
+function checkToolingStatus(
+  posture: OrgToolPosture[],
+  ctx: { tools: Tool[]; archetypes: Archetype[] },
+): OrgToolPosture[] {
+  const toolById = new Map(ctx.tools.map((t) => [t.id, t]));
+  const archetypeById = new Map(ctx.archetypes.map((a) => [a.id, a]));
+  const seen = new Set<string>();
+  for (const p of posture) {
+    const where = `org tooling-status ${p.tool}`;
+    const tool = toolById.get(p.tool);
+    if (!tool) {
+      fail(`${where}: unknown tool — ids live in data/tooling/`);
+      continue;
+    }
+    if (seen.has(p.tool)) fail(`${where}: listed twice`);
+    seen.add(p.tool);
+    if (!ADOPTIONS.has(p.adoption)) {
+      fail(`${where}: adoption must be one of ${[...ADOPTIONS].join(", ")}`);
+    }
+    const pinned = new Set(archetypeById.get(tool.architecture)?.capabilities ?? []);
+    for (const [capabilityId, entry] of Object.entries(p.controls ?? {})) {
+      if (!pinned.has(capabilityId)) {
+        fail(`${where}: ${capabilityId} is not pinned on ${tool.architecture}, so it has no status here`);
+      }
+      if (!STATUSES.has(entry?.status)) {
+        fail(`${where} ${capabilityId}: status must be one of ${[...STATUSES].join(", ")}`);
+      }
+    }
+  }
+  return posture.map((p) => ({ ...p, controls: p.controls ?? {} }));
+}
+
+/**
+ * Organisation catalogues become authored frameworks. They are authored by the adopter, not
+ * this repository, so the editorial requirements of checkAuthoredFrameworks (a one-line
+ * summary, a mapping rationale) do not apply; what does apply is that every CoSAI target
+ * exists. The entry-keyed authoring is inverted here into the framework-side shape the rest
+ * of the build and the UI already read, and every entry is registered as reference text so
+ * an org control nothing maps to shows as a gap rather than vanishing.
+ */
+function checkOrgFrameworks(
+  org: { meta: OrgMeta; frameworks: OrgFrameworkDoc[] },
+  ctx: {
+    riskIds: Set<string>;
+    controlIds: Set<string>;
+    capabilityIds: Set<string>;
+    takenIds: Set<string>;
+  },
+): {
+  frameworks: Framework[];
+  mappings: Record<string, AuthoredMappings>;
+  entries: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>;
+} {
+  const frameworks: Framework[] = [];
+  const mappings: Record<string, AuthoredMappings> = {};
+  const entries: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }> = {};
+  const known = { risks: ctx.riskIds, controls: ctx.controlIds, capabilities: ctx.capabilityIds };
+  const seen = new Set<string>();
+
+  for (const doc of org.frameworks) {
+    const where = `org/${org.meta.profile} framework ${doc.id}`;
+    if (!doc.id?.trim()) fail(`org/${org.meta.profile}: a framework needs an id`);
+    if (ctx.takenIds.has(doc.id) || seen.has(doc.id)) fail(`${where}: id is already a framework`);
+    seen.add(doc.id);
+    if (!doc.name?.trim()) fail(`${where}: needs a name`);
+    if (!doc.entries?.length) fail(`${where}: needs at least one entry`);
+
+    const mapped: AuthoredMappings = {};
+    const reference: Record<string, FrameworkEntryInfo> = {};
+    const entryIds = new Set<string>();
+    for (const entry of doc.entries ?? []) {
+      const at = `${where} entry ${entry.id}`;
+      if (!entry.id?.trim()) fail(`${where}: an entry needs an id`);
+      if (entryIds.has(entry.id)) fail(`${at}: duplicate id`);
+      entryIds.add(entry.id);
+      if (!entry.label?.trim()) fail(`${at}: needs a label`);
+      reference[entry.id] = {
+        label: entry.label,
+        description: entry.description ?? "",
+        ...(entry.url ? { url: entry.url } : {}),
+        ...(entry.group ? { group: entry.group } : {}),
+      };
+      for (const kind of ["risks", "controls", "capabilities"] as const) {
+        for (const target of entry[kind] ?? []) {
+          if (!known[kind].has(target)) {
+            fail(`${at}: unknown ${kind.slice(0, -1)} ${target}`);
+            continue;
+          }
+          const byId = (mapped[kind] ??= {});
+          (byId[target] ??= []).push(entry.id);
+        }
+      }
+    }
+
+    frameworks.push({
+      id: doc.id,
+      name: doc.name,
+      fullName: doc.fullName ?? doc.name,
+      description: doc.description,
+      version: doc.version ?? null,
+      documentUri: doc.url,
+      baseUri: doc.url,
+      authored: true,
+      org: true,
+      entriesComplete: true,
+      attribution: `Authored by ${org.meta.name}. Mappings onto CoSAI are that organisation's judgement, recorded in data/org/${org.meta.profile}/frameworks.yaml.`,
+    });
+    mappings[doc.id] = mapped;
+    entries[doc.id] = { source: `data/org/${org.meta.profile}/frameworks.yaml`, entries: reference };
+  }
+
+  if (frameworks.length) {
+    console.log(`org: profile "${org.meta.profile}" (${org.meta.name}), ${frameworks.length} catalogue(s)`);
+  }
+  return { frameworks, mappings, entries };
 }
 
 /**
@@ -1763,6 +2084,7 @@ function checkAuthoredFrameworks(
   ctx: {
     riskIds: Set<string>;
     controlIds: Set<string>;
+    capabilityIds: Set<string>;
     frameworksDoc: { frameworks: Framework[] };
   },
 ): Record<string, AuthoredMappings> {
@@ -1785,9 +2107,10 @@ function checkAuthoredFrameworks(
     const known: Record<keyof AuthoredMappings, Set<string>> = {
       risks: ctx.riskIds,
       controls: ctx.controlIds,
+      capabilities: ctx.capabilityIds,
     };
     const mapped: AuthoredMappings = {};
-    for (const kind of ["risks", "controls"] as (keyof AuthoredMappings)[]) {
+    for (const kind of ["risks", "controls", "capabilities"] as (keyof AuthoredMappings)[]) {
       const byId = framework.mappings?.[kind];
       if (!byId) continue;
       for (const [id, entries] of Object.entries(byId)) {
@@ -1796,7 +2119,9 @@ function checkAuthoredFrameworks(
       }
       mapped[kind] = byId;
     }
-    if (!mapped.risks && !mapped.controls) fail(`${where}: declares no mappings at all`);
+    if (!mapped.risks && !mapped.controls && !mapped.capabilities) {
+      fail(`${where}: declares no mappings at all`);
+    }
     out[framework.id] = mapped;
   }
 
@@ -1821,7 +2146,7 @@ function checkFrameworkEntries(
   const frameworkIds = new Set(ctx.frameworks.map((f) => f.id));
 
   for (const id of Object.keys(declared)) {
-    if (!frameworkIds.has(id)) fail(`framework entries: "${id}" is not a CoSAI framework`);
+    if (!frameworkIds.has(id)) fail(`framework entries: "${id}" is not a framework`);
   }
 
   let total = 0;
@@ -1846,11 +2171,12 @@ function checkFrameworkEntries(
         continue;
       }
       if (!entry.label?.trim()) fail(`framework entries: ${framework.id} "${id}" has no label`);
-      if (!entry.description?.trim())
+      // Organisation catalogues may carry bare identifiers; external frameworks explain theirs.
+      if (!entry.description?.trim() && !framework.org)
         fail(`framework entries: ${framework.id} "${id}" has no description`);
     }
     for (const id of Object.keys(entries)) {
-      if (!mapped.has(id) && !FULL_LIST.has(framework.id)) {
+      if (!mapped.has(id) && !FULL_LIST.has(framework.id) && !framework.entriesComplete) {
         fail(`framework entries: ${framework.id} "${id}" has an entry but CoSAI maps nothing to it`);
       }
     }

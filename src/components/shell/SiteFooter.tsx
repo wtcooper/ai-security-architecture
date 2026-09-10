@@ -29,7 +29,17 @@ export function SiteFooter() {
         </span>
         <span>
           {meta.counts.risks} risks · {meta.counts.controls} controls · {meta.counts.capabilities}{" "}
-          capabilities · {meta.counts.archetypes} architectures · {meta.counts.incidents} incidents
+          capabilities · {meta.counts.archetypes} architectures · {meta.counts.tools} tools ·{" "}
+          {meta.counts.incidents} incidents
+        </span>
+        <span
+          title={
+            meta.org.example
+              ? "The organisation layer is rendering the example profile shipped with the repository. Create data/org/local to replace it."
+              : `Organisation layer: data/org/local (${meta.org.name}).`
+          }
+        >
+          org: <span className="ident text-ink-2">{meta.org.example ? "example" : meta.org.name}</span>
         </span>
         <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"

@@ -11,6 +11,8 @@ import type {
   Persona,
   Risk,
   RiskOverlay,
+  Tool,
+  ToolAdoption,
 } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -36,8 +38,10 @@ export const {
   capabilities,
   archetypes,
   guidance,
-  guidanceTools,
-  guidanceAttribution,
+  vendors,
+  tools,
+  toolingAttribution,
+  orgToolPosture,
   meta,
 } = dataset;
 
@@ -248,4 +252,56 @@ export function controlsForArchetype(archetypeId: string): Control[] {
 /** The controls-guidance document for an architecture, where one has been authored. */
 export const guidanceByArchetype = new Map(guidance.map((g) => [g.archetype, g]));
 
-export const guidanceToolById = index(guidanceTools);
+// --- AI tooling registry ----------------------------------------------------------
+
+export const vendorById = index(vendors);
+export const toolById = index(tools);
+
+/** Tools in display order: vendors as listed in vendors.yaml, then family, then name. */
+export const toolsInOrder: Tool[] = vendors.flatMap((v) =>
+  tools
+    .filter((t) => t.vendor === v.id)
+    .sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name)),
+);
+
+export const toolsForVendor = (vendorId: string): Tool[] =>
+  toolsInOrder.filter((t) => t.vendor === vendorId);
+
+/** Every tool that instantiates this architecture, primary first. */
+export const toolsForArchetype = (archetypeId: string): Tool[] =>
+  toolsInOrder.filter(
+    (t) => t.architecture === archetypeId || t.secondaryArchitectures?.includes(archetypeId),
+  );
+
+/** Every tool whose vendor implements this capability at least partly. */
+export const toolsForCapability = (capabilityId: string): Tool[] =>
+  toolsInOrder.filter((t) =>
+    t.controls.some(
+      (c) => c.capability === capabilityId && c.coverage !== "none" && c.coverage !== "unknown",
+    ),
+  );
+
+/**
+ * A tool's reference control set is its architecture's pinned capabilities, in pin order; the
+ * tool's own record for each is joined on, absent where the vendor has not been assessed.
+ */
+export const controlsForTool = (toolId: string) => {
+  const tool = toolById.get(toolId);
+  if (!tool) return [];
+  const own = new Map(tool.controls.map((c) => [c.capability, c]));
+  return capabilitiesForArchetype(tool.architecture).map((capability) => ({
+    capability,
+    control: own.get(capability.id),
+  }));
+};
+
+// --- Organisation layer -----------------------------------------------------------
+
+export const org = meta.org;
+const postureByTool = new Map(orgToolPosture.map((p) => [p.tool, p]));
+
+export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
+export const orgAdoptionFor = (toolId: string): ToolAdoption =>
+  postureByTool.get(toolId)?.adoption ?? "unassessed";
+export const orgStatusFor = (toolId: string, capabilityId: string) =>
+  postureByTool.get(toolId)?.controls[capabilityId];

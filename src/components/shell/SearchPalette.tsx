@@ -2,7 +2,7 @@
 
 /**
  * ⌘K over everything with a name: risks (with their R-codes), controls, capabilities (with
- * their abbreviations), components, personas, architectures and incidents. The dataset is
+ * their abbreviations), components, personas, architectures, tools and incidents. The dataset is
  * already in the bundle, so the index is built once and matched in the browser; a result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
  * Pages base path exactly as every other link does.
@@ -20,6 +20,8 @@ import {
   incidents,
   riskCode,
   risksInOrder,
+  toolsInOrder,
+  vendorById,
 } from "@/lib/data";
 
 interface Entry {
@@ -74,6 +76,13 @@ function buildIndex(): Entry[] {
       href: `/reference?archetype=${a.id}`,
       text: norm(a.title, a.abbrev, a.id),
     })),
+    ...toolsInOrder.map((t) => ({
+      kind: "Tool",
+      title: t.name,
+      hint: vendorById.get(t.vendor)?.name ?? t.vendor,
+      href: `/tooling?tool=${t.id}`,
+      text: norm(t.name, t.family, t.vendor, t.id, ...(t.variants ?? []).map((v) => v.name)),
+    })),
     ...incidents.map((i) => ({
       kind: "Incident",
       title: i.title,
@@ -84,7 +93,7 @@ function buildIndex(): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Architecture", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
+const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);

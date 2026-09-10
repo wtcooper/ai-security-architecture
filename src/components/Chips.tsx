@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { frameworkById } from "@/lib/data";
+import { frameworkById, org } from "@/lib/data";
 import { FRAMEWORK_ORDER, frameworkHref } from "@/lib/frameworks";
 import type { Mappings } from "@/lib/types";
 
@@ -49,9 +49,17 @@ export function MappingBadges({
     if (e.authored && e.values.length) merged[e.frameworkId] = { values: e.values, authored: true };
   }
 
-  const entries = FRAMEWORK_ORDER.filter((id) => merged[id]).map(
-    (id) => [id, merged[id].values, merged[id].authored] as const,
-  );
+  // Organisation catalogues lead — they are what the reader is measured against — then the
+  // external frameworks in their usual order, then anything else so a new one appears rather
+  // than vanishing.
+  const rank = (id: string) => {
+    if (frameworkById.get(id)?.org) return -1;
+    const i = FRAMEWORK_ORDER.indexOf(id);
+    return i === -1 ? FRAMEWORK_ORDER.length : i;
+  };
+  const entries = Object.keys(merged)
+    .sort((a, b) => rank(a) - rank(b))
+    .map((id) => [id, merged[id].values, merged[id].authored] as const);
   if (!entries.length) return null;
 
   return (
@@ -63,14 +71,25 @@ export function MappingBadges({
             <Link href={frameworkHref(id)} className="shrink-0 hover:opacity-70">
               <span className="eyebrow">{fw?.name ?? id}</span>
             </Link>
-            {authored && (
+            {authored && fw?.org ? (
+              <span
+                className="ident shrink-0 text-ink-3"
+                title={
+                  org.example
+                    ? "Example content shipped with the repository — replace data/org/example with your own catalogue."
+                    : `Cross-mapped by ${org.name} in data/org/local.`
+                }
+              >
+                {org.example ? "example organisation" : "your organisation"}
+              </span>
+            ) : authored ? (
               <span
                 className="ident shrink-0 text-ink-3"
                 title="CoSAI does not publish this mapping — it was authored in this repository."
               >
                 authored
               </span>
-            )}
+            ) : null}
             {values.map((v) => {
               const bare = v.split("@")[0];
               return (

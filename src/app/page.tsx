@@ -10,8 +10,10 @@ import {
   activePersonas,
   risks,
   surfaces,
+  tools,
+  vendors,
 } from "@/lib/data";
-import { visibleFrameworks } from "@/lib/frameworks";
+import { visibleExternalFrameworks } from "@/lib/frameworks";
 
 export const metadata = {
   title: "AI Security Architecture",
@@ -30,7 +32,7 @@ const LADDER = [
     href: "/risks",
     label: "Taxonomy",
     blurb: "The components, risks, controls and personas behind the picture, with the framework crosswalks.",
-    count: `${components.length} components · ${controls.length} controls · ${visibleFrameworks.length} frameworks`,
+    count: `${components.length} components · ${controls.length} controls · ${visibleExternalFrameworks.length} frameworks`,
   },
   {
     href: "/capabilities",
@@ -101,8 +103,16 @@ const SECTIONS = [
     href: "/frameworks",
     label: "Frameworks",
     blurb: "Read the mapping backwards: pick OWASP, ATLAS or NIST and see where it lands.",
-    count: `${visibleFrameworks.length} frameworks`,
+    count: `${visibleExternalFrameworks.length} frameworks`,
     accent: "var(--ink-2)",
+  },
+  {
+    href: "/tooling",
+    label: "AI Tooling",
+    blurb:
+      "The named products — every vendor surface mapped to its architecture, the reference controls it can switch on, and your organisation's status for each.",
+    count: `${tools.length} tools · ${vendors.length} vendors`,
+    accent: "var(--band-data-rail)",
   },
   {
     href: "/examples",

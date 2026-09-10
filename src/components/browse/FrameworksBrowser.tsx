@@ -8,7 +8,7 @@ import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { componentTitle, overlayFor } from "@/lib/data";
+import { componentTitle, org, overlayFor } from "@/lib/data";
 import {
   frameworkView,
   isVisibleFramework,
@@ -40,7 +40,10 @@ export function FrameworksBrowser() {
         ...new Set([
           ...entry.risks.flatMap((r) => overlayFor(r.id)?.[phase] ?? []),
           ...(phase === "mitigated"
-            ? entry.controls.flatMap((c) => (Array.isArray(c.components) ? c.components : []))
+            ? [
+                ...entry.controls.flatMap((c) => (Array.isArray(c.components) ? c.components : [])),
+                ...entry.capabilities.flatMap((c) => c.components),
+              ]
             : []),
         ]),
       ]
@@ -55,19 +58,28 @@ export function FrameworksBrowser() {
       <PageHeader
         eyebrow="Cross-reference"
         title="Frameworks"
-        lead="CoSAI maps its risks, controls and personas onto external frameworks, and three more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map."
+        lead="CoSAI maps its risks, controls and personas onto external frameworks, and three more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map. Your organisation's own standard and risk register sit alongside, from data/org."
       >
-        <div className="mt-6 flex flex-wrap gap-1.5">
-          {visibleFrameworks.map((f) => {
-            const v = frameworkView(f.id)!;
-            return (
-              <FilterPill key={f.id} active={f.id === frameworkId} onClick={() => select(f.id)}>
-                {f.name}
-                <span className="ml-1.5 opacity-60">{v.entries.length || "—"}</span>
-              </FilterPill>
-            );
-          })}
-        </div>
+        {(["external", "org"] as const).map((group) => {
+          const items = visibleFrameworks.filter((f) => Boolean(f.org) === (group === "org"));
+          if (!items.length) return null;
+          return (
+            <div key={group} className="mt-5 flex flex-wrap items-center gap-1.5">
+              <span className="eyebrow mr-1.5 w-full sm:w-auto">
+                {group === "org" ? (org.example ? "Example organisation" : org.name) : "External"}
+              </span>
+              {items.map((f) => {
+                const v = frameworkView(f.id)!;
+                return (
+                  <FilterPill key={f.id} active={f.id === frameworkId} onClick={() => select(f.id)}>
+                    {f.name}
+                    <span className="ml-1.5 opacity-60">{v.entries.length || "—"}</span>
+                  </FilterPill>
+                );
+              })}
+            </div>
+          );
+        })}
       </PageHeader>
 
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-6 py-8 lg:flex-row">
@@ -84,22 +96,35 @@ export function FrameworksBrowser() {
               {view.framework.version && (
                 <span className="ident">version {view.framework.version}</span>
               )}
-              {view.framework.authored && (
+              {view.framework.org ? (
+                <span
+                  className="rounded-full bg-mist px-2 py-[2px] text-[11px] font-semibold text-ink-2"
+                  title={
+                    org.example
+                      ? "Example content shipped with the repository. Copy data/org/example to data/org/local and replace it with your own catalogue."
+                      : `Your organisation's catalogue, from data/org/local — mappings onto CoSAI are ${org.name}'s judgement.`
+                  }
+                >
+                  {org.example ? "example data — replace data/org/example" : "your organisation"}
+                </span>
+              ) : view.framework.authored ? (
                 <span
                   className="rounded-full bg-mist px-2 py-[2px] text-[11px] font-semibold text-ink-2"
                   title="CoSAI does not carry this framework. The mappings onto it were authored in this repository."
                 >
                   mappings authored here
                 </span>
+              ) : null}
+              {(view.framework.documentUri ?? view.framework.baseUri) && (
+                <a
+                  href={view.framework.documentUri ?? view.framework.baseUri}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[12.5px] font-semibold text-introduced hover:underline"
+                >
+                  Official reference ↗
+                </a>
               )}
-              <a
-                href={view.framework.documentUri ?? view.framework.baseUri}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[12.5px] font-semibold text-introduced hover:underline"
-              >
-                Official reference ↗
-              </a>
             </div>
 
             {(view.framework.summary || view.note) && (
@@ -181,7 +206,10 @@ export function FrameworksBrowser() {
               <div className="rounded-xl border border-line bg-paper p-6">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                   <div>
-                    <p className="ident">{entry.id}</p>
+                    <p className="ident">
+                      {entry.id}
+                      {entry.group && <span className="ml-2 text-ink-3">· {entry.group}</span>}
+                    </p>
                     <h2 className="display mt-1 text-[24px] font-bold leading-tight text-ink">
                       {entry.label}
                     </h2>
@@ -219,9 +247,11 @@ export function FrameworksBrowser() {
 
                 {entry.total === 0 ? (
                   <p className="mt-4 rounded-lg border-l-[3px] border-exposed bg-exposed-soft/40 py-3 pl-4 pr-4 text-[13.5px] leading-relaxed text-ink-2">
-                    {view.framework.authored
-                      ? "Nothing maps to this entry. CoSAI has no risk that describes it, so there was nothing to map — a real gap in the taxonomy rather than a missing judgement."
-                      : "Nothing in CoSAI maps to this entry. That is a gap in the cross-reference worth knowing about if this framework is what you are measured against."}
+                    {view.framework.org
+                      ? "This entry maps to nothing in CoSAI. Either it is a process requirement with no technology behind it, or the cross-map in data/org has not reached it yet — worth deciding which."
+                      : view.framework.authored
+                        ? "Nothing maps to this entry. CoSAI has no risk that describes it, so there was nothing to map — a real gap in the taxonomy rather than a missing judgement."
+                        : "Nothing in CoSAI maps to this entry. That is a gap in the cross-reference worth knowing about if this framework is what you are measured against."}
                   </p>
                 ) : (
                   <div className="mt-5 grid gap-6 sm:grid-cols-2">
@@ -249,6 +279,18 @@ export function FrameworksBrowser() {
                         </div>
                       </div>
                     )}
+                    {entry.capabilities.length > 0 && (
+                      <div>
+                        <p className="eyebrow">{entry.capabilities.length} capabilities</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {entry.capabilities.map((c) => (
+                            <Link key={c.id} href={`/capabilities?capability=${c.id}`}>
+                              <Chip tone="introduced">{c.title}</Chip>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {entry.personas.length > 0 && (
                       <div>
                         <p className="eyebrow">{entry.personas.length} personas</p>
@@ -265,7 +307,7 @@ export function FrameworksBrowser() {
                 )}
               </div>
 
-              {entry.risks.length > 0 || entry.controls.length > 0 ? (
+              {entry.risks.length > 0 || entry.controls.length > 0 || entry.capabilities.length > 0 ? (
                 <div className="mt-4 rounded-xl border border-line bg-paper p-6">
                   <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>

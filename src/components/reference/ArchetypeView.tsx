@@ -10,7 +10,8 @@
  */
 import { useEffect, useState } from "react";
 
-import { guidanceByArchetype } from "@/lib/data";
+import { guidanceByArchetype, toolsForArchetype } from "@/lib/data";
+import { ToolsForArchitecture } from "@/components/tooling/ToolsForArchitecture";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
@@ -19,7 +20,7 @@ import { FlowSequence } from "./FlowSequence";
 import { GuidancePanel } from "./GuidancePanel";
 import { CapabilityList, RiskList, WalkList } from "./rail-lists";
 
-type Tab = "overview" | "flows" | "capabilities" | "risks" | "guidance";
+type Tab = "overview" | "flows" | "capabilities" | "risks" | "guidance" | "tools";
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -38,6 +39,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
   const [tab, setTab] = useState<Tab>("overview");
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const guidance = guidanceByArchetype.get(archetype.id);
+  const tools = toolsForArchetype(archetype.id);
 
   const go = (next: Tab) => {
     setTab(next);
@@ -65,6 +67,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     { id: "capabilities", label: "Capabilities", count: archetype.capabilities.length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
     { id: "guidance", label: "Controls guidance", count: guidance?.items.length },
+    { id: "tools", label: "Tools", count: tools.length },
   ];
 
   return (
@@ -179,6 +182,8 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           ) : (
             <p className="text-[13px] text-ink-3">No controls guidance has reached this architecture yet.</p>
           ))}
+
+        {tab === "tools" && <ToolsForArchitecture archetype={archetype} tools={tools} />}
       </div>
     </div>
   );
