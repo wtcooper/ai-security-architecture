@@ -1,45 +1,33 @@
 "use client";
 
 /**
- * One reference architecture's products against its reference controls, in one of three
- * shapes the reader can switch between. The header states the inheritance, carries the
- * organisation overlay switch and, with it on, the row-label switch. Used by the AI Tooling
- * tab and by the Tools tab on the drawing itself.
+ * One reference architecture's products against its reference controls, as a grid: controls
+ * as rows, enterprise capability modules beside them, one admin-control column per product.
+ * The header states the inheritance, carries the organisation overlay switch and, with it on,
+ * the row-label switch. Used by the AI Tooling tab and by the Tools tab on the drawing itself.
  */
 import { useState } from "react";
 import Link from "next/link";
 
 import { archetypeById, org } from "@/lib/data";
 import type { Tool } from "@/lib/types";
-import { CardsView } from "./CardsView";
-import { ChecklistView } from "./ChecklistView";
 import { GridView } from "./GridView";
 import { hasOrgMappings, rowsFor, type LabelMode } from "./model";
 import { useOrgOverlay } from "./overlay";
 import { OverlayToggle } from "./OverlayToggle";
 import { Legend } from "./shared";
 
-export type Shape = "checklist" | "grid" | "cards";
-const SHAPES: { id: Shape; label: string; blurb: string }[] = [
-  { id: "checklist", label: "1 · Control checklist", blurb: "What this category needs, top to bottom, with every product on each line." },
-  { id: "grid", label: "2 · Grid", blurb: "Controls × products on one screen." },
-  { id: "cards", label: "3 · Product cards", blurb: "One runbook-style card per product." },
-];
-
 export function ArchitectureViews({
   archetypeId,
   tools,
   showDrawingLink = false,
-  initialShape = "checklist",
 }: {
   archetypeId: string;
   tools: Tool[];
   showDrawingLink?: boolean;
-  initialShape?: Shape;
 }) {
   const archetype = archetypeById.get(archetypeId);
   const overlay = useOrgOverlay();
-  const [shape, setShape] = useState<Shape>(initialShape);
   const [labels, setLabels] = useState<LabelMode>("cosai");
   if (!archetype) return null;
   const groups = rowsFor(archetypeId, overlay ? labels : "cosai");
@@ -82,35 +70,14 @@ export function ArchitectureViews({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Shape">
-        {SHAPES.map((s) => (
-          <button
-            key={s.id}
-            role="tab"
-            aria-selected={shape === s.id}
-            onClick={() => setShape(s.id)}
-            title={s.blurb}
-            className={`rounded-md border px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-              shape === s.id ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-line-strong"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
       <Legend overlay={overlay} />
 
       {tools.length === 0 ? (
         <p className="rounded-xl border border-line bg-paper px-4 py-6 text-[13px] text-ink-3">
           No product in the registry instantiates this architecture yet. The reference set above is still what one would need.
         </p>
-      ) : shape === "grid" ? (
-        <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} />
-      ) : shape === "cards" ? (
-        <CardsView tools={tools} groups={groups} overlay={overlay} />
       ) : (
-        <ChecklistView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} />
+        <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} />
       )}
     </div>
   );

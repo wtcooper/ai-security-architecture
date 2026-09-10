@@ -137,6 +137,15 @@ What is deliberately not done: no attempt to compute an "effective" combined sco
 two halves. A partly settable product control plus an in-place enterprise control is a judgement
 the organisation makes, not one a formula should.
 
+## Decision: the grid, across the board
+
+Wade picked the grid. The checklist and product-card shapes are removed; the category view,
+the vendor view (one grid per drawing the vendor's products instantiate) and the Tools tab on
+every drawing all render the same grid: reference controls as rows, the enterprise capability
+modules beside them, one admin-control column per product with the coverage word and the
+vendor's link. The product record keeps its per-product table, which is the same grid with one
+column.
+
 ## What onboarding now means
 
 Adding a product is choosing its category and then answering, for each inherited control, how
