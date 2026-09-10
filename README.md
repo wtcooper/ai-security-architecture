@@ -115,7 +115,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the capability-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
-| **AI Tooling** | The named products: every Anthropic, OpenAI, Cursor and GitHub Copilot surface mapped to the architecture it instantiates, with the controls that drawing pins, how the vendor lets an administrator switch each one on (linked to the vendor's page), and your organisation's status for each. A catalogue and a compare-on-one-architecture matrix. |
+| **AI Tooling** | The named products: every Anthropic, OpenAI, Cursor and GitHub Copilot surface mapped to the architecture it instantiates, with the controls that drawing pins, how the vendor lets an administrator switch each one on (linked to the vendor's page), and your organisation's status for each. A catalogue plus three visual lenses — a matrix of variants × controls, per-product scorecards, and per-control coverage bars — each switchable between CoSAI capability names and your own control ids. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
 Every diagram supports pan and zoom.

@@ -197,7 +197,7 @@ function ToolBrief({ tool, archetype }: { tool: Tool; archetype: Archetype }) {
             Full record on the AI Tooling tab →
           </Link>
           <span className="mx-2">·</span>
-          <Link href={`/tooling?view=compare&arch=${archetype.id}`} className="font-semibold text-introduced hover:underline">
+          <Link href={`/tooling?view=matrix&arch=${archetype.id}`} className="font-semibold text-introduced hover:underline">
             Compare every product on this architecture →
           </Link>
         </p>
