@@ -9,11 +9,14 @@ import { Section } from "@/components/reference/ArchetypeDetail";
 import { archetypeById, org, orgAdoptionFor, orgPostureFor, riskById, riskCode, vendorById } from "@/lib/data";
 import type { Tool, ToolVariant } from "@/lib/types";
 import { ADOPTION_META, SURFACE_CLASS_META } from "./labels";
+import { useOrgOverlay } from "./overlay";
+import { OverlayToggle } from "./OverlayToggle";
 import { ToolControlsTable } from "./ToolControlsTable";
 
 const STATUS_LABEL = { ga: "GA", beta: "Beta", preview: "Preview", announced: "Announced" } as const;
 
 export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
+  const overlay = useOrgOverlay();
   const vendor = vendorById.get(tool.vendor);
   const arch = archetypeById.get(tool.architecture);
   const adoption = orgAdoptionFor(tool.id);
@@ -31,16 +34,19 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
           </span>
         )}
         <span className="ident text-[10.5px] text-ink-3">as of {tool.asOf}</span>
+        <OverlayToggle className="ml-auto" />
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <h2 className="display text-[27px] font-bold leading-tight text-ink">{tool.name}</h2>
-        <span
-          className="rounded-full border border-ink px-2.5 py-[3px] text-[11.5px] font-semibold text-ink"
-          title={`${org.example ? "Example organisation" : org.name}: ${ADOPTION_META[adoption].blurb}${posture?.note ? ` — ${posture.note}` : ""}`}
-        >
-          {ADOPTION_META[adoption].label}
-          {org.example && <span className="ml-1 font-normal text-ink-3">· example</span>}
-        </span>
+        {overlay && (
+          <span
+            className="rounded-full border border-ink px-2.5 py-[3px] text-[11.5px] font-semibold text-ink"
+            title={`${org.example ? "Example organisation" : org.name}: ${ADOPTION_META[adoption].blurb}${posture?.note ? ` — ${posture.note}` : ""}`}
+          >
+            {ADOPTION_META[adoption].label}
+            {org.example && <span className="ml-1 font-normal text-ink-3">· example</span>}
+          </span>
+        )}
       </div>
 
       <Prose blocks={tool.summary} className="mt-4" />

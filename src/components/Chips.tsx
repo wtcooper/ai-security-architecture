@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { frameworkById, org } from "@/lib/data";
 import { FRAMEWORK_ORDER, frameworkHref } from "@/lib/frameworks";
+import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Mappings } from "@/lib/types";
 
 export function Chip({
@@ -41,11 +44,15 @@ export function MappingBadges({
   mappings?: Mappings;
   extra?: { frameworkId: string; values: string[]; authored: boolean }[];
 }) {
+  // The organisation's ids are an overlay, not part of the reference; they appear only when the
+  // viewer has switched the overlay on (see components/tooling/overlay.ts).
+  const overlay = useOrgOverlay();
   const merged: Record<string, { values: string[]; authored: boolean }> = {};
   for (const [id, values] of Object.entries(mappings ?? {})) {
     if (values?.length) merged[id] = { values, authored: false };
   }
   for (const e of extra ?? []) {
+    if (!overlay && frameworkById.get(e.frameworkId)?.org) continue;
     if (e.authored && e.values.length) merged[e.frameworkId] = { values: e.values, authored: true };
   }
 

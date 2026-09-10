@@ -10,11 +10,12 @@
 import { useState } from "react";
 import Link from "next/link";
 
-import { archetypeById, org, orgAdoptionFor } from "@/lib/data";
+import { archetypeById, org } from "@/lib/data";
 import type { Tool } from "@/lib/types";
-import { ADOPTION_META } from "./labels";
 import { cellFor, columnGroups, hasOrgMappings, rowsFor, type LabelMode, type Row } from "./model";
-import { CellDetail, CellTile, Legend, cellTitle } from "./shared";
+import { useOrgOverlay } from "./overlay";
+import { OverlayToggle } from "./OverlayToggle";
+import { CellDetail, CellTile, Legend, cellTitle, docsUrlFor } from "./shared";
 
 export function ArchitectureMatrix({
   archetypeId,
@@ -27,11 +28,12 @@ export function ArchitectureMatrix({
   showDrawingLink?: boolean;
 }) {
   const archetype = archetypeById.get(archetypeId);
+  const overlay = useOrgOverlay();
   const [labels, setLabels] = useState<LabelMode>("cosai");
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
   if (!archetype) return null;
   const cols = columnGroups(tools);
-  const groups = rowsFor(archetypeId, labels);
+  const groups = rowsFor(archetypeId, overlay ? labels : "cosai");
   const total = cols.reduce((n, g) => n + g.tools.length, 0);
 
   return (
@@ -49,9 +51,12 @@ export function ArchitectureMatrix({
           )}
           , {total} product{total === 1 ? "" : "s"} rated against them.
         </span>
-        <span className="ml-auto flex items-center gap-1.5">
-          <span className="eyebrow">Rows</span>
-          {(["cosai", "org"] as LabelMode[]).map((m) => (
+        <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <OverlayToggle />
+          {overlay && hasOrgMappings && (
+            <span className="flex items-center gap-1.5">
+              <span className="eyebrow">Rows</span>
+              {(["cosai", "org"] as LabelMode[]).map((m) => (
             <button
               key={m}
               type="button"
@@ -65,7 +70,9 @@ export function ArchitectureMatrix({
             >
               {m === "cosai" ? "CoSAI names" : org.example ? "Example org's control ids" : `${org.shortName ?? org.name} control ids`}
             </button>
-          ))}
+              ))}
+            </span>
+          )}
         </span>
       </div>
 
@@ -89,39 +96,33 @@ export function ArchitectureMatrix({
               </tr>
               <tr>
                 <th className="sticky left-0 z-30 border-b border-r border-line bg-paper px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                  Control · decision ↓
+                  Reference control ↓ · product →
                 </th>
                 {cols.flatMap((g) =>
-                  g.tools.map((t) => {
-                    const adoption = orgAdoptionFor(t.id);
-                    return (
-                      <th key={t.id} className="min-w-[110px] max-w-[140px] border-b border-l border-line bg-paper px-2 py-2 text-left align-bottom">
-                        <Link href={`/tooling?tool=${t.id}`} className="block text-[11.5px] font-semibold leading-tight text-ink hover:text-introduced hover:underline">
-                          {t.name}
-                        </Link>
-                        <span
-                          className={`mt-1 inline-block rounded-full border px-1.5 py-px text-[9.5px] font-semibold ${
-                            adoption === "approved" ? "border-mitigated text-mitigated" : adoption === "blocked" ? "border-exposed text-exposed" : "border-line-strong text-ink-2"
-                          }`}
-                          title={ADOPTION_META[adoption].blurb}
-                        >
-                          {ADOPTION_META[adoption].label}
-                        </span>
-                      </th>
-                    );
-                  }),
+                  g.tools.map((t) => (
+                    <th key={t.id} className="min-w-[118px] max-w-[150px] border-b border-l border-line bg-paper px-2 py-2 text-left align-bottom">
+                      <Link href={`/tooling?tool=${t.id}`} className="block text-[11.5px] font-semibold leading-tight text-ink hover:text-introduced hover:underline">
+                        {t.name}
+                      </Link>
+                      {docsUrlFor(t) && (
+                        <a href={docsUrlFor(t)} target="_blank" rel="noreferrer" className="mt-0.5 inline-block text-[10px] font-medium text-ink-3 hover:text-introduced hover:underline">
+                          vendor docs ↗
+                        </a>
+                      )}
+                    </th>
+                  )),
                 )}
               </tr>
             </thead>
             <tbody>
               {groups.map((group) => (
-                <GroupRows key={group.id} group={group} cols={cols} picked={picked} onPick={setPicked} />
+                <GroupRows key={group.id} group={group} cols={cols} picked={picked} onPick={setPicked} overlay={overlay} />
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <Legend compact />
+      <Legend overlay={overlay} compact />
       {picked && <CellDetail tool={picked.tool} row={picked.row} onClose={() => setPicked(null)} />}
     </div>
   );
@@ -132,11 +133,13 @@ function GroupRows({
   cols,
   picked,
   onPick,
+  overlay,
 }: {
   group: { id: string; title: string; rows: Row[] };
   cols: ReturnType<typeof columnGroups>;
   picked: { tool: Tool; row: Row } | null;
   onPick: (p: { tool: Tool; row: Row }) => void;
+  overlay: boolean;
 }) {
   const span = cols.reduce((n, g) => n + g.tools.length, 0) + 1;
   return (
@@ -152,7 +155,7 @@ function GroupRows({
             <span className="block text-[12px] font-medium leading-tight text-ink" title={row.title ?? row.label}>
               {row.label}
             </span>
-            {row.aside && <span className="ident block text-[10px] text-ink-3">{row.aside}</span>}
+            {overlay && row.aside && <span className="ident block text-[10px] text-ink-3">{row.aside}</span>}
           </td>
           {cols.flatMap((g) =>
             g.tools.map((t) => {
@@ -160,7 +163,7 @@ function GroupRows({
               const selected = picked?.tool.id === t.id && picked.row.id === row.id;
               return (
                 <td key={t.id} className="border-b border-l border-line p-[2px] align-middle">
-                  <CellTile cell={cell} title={cellTitle(t, row, cell)} selected={selected} onClick={() => onPick({ tool: t, row })} />
+                  <CellTile cell={cell} title={cellTitle(t, row, cell, overlay)} overlay={overlay} selected={selected} onClick={() => onPick({ tool: t, row })} />
                 </td>
               );
             }),

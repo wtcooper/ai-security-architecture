@@ -10,8 +10,10 @@ import { frameworkHref, orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
 import { COVERAGE_META } from "./labels";
 import { OrgStatusPill } from "./OrgStatusPill";
+import { useOrgOverlay } from "./overlay";
 
 export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { tool: Tool; capabilityId: string; showTitle?: boolean }) {
+  const overlay = useOrgOverlay();
   const capability = capabilityById.get(capabilityId);
   const control = tool.controls.find((c) => c.capability === capabilityId);
   const status = orgStatusFor(tool.id, capabilityId);
@@ -31,7 +33,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
                 {coverage.label}
               </span>
             )}
-            {status && <OrgStatusPill status={status.status} compact />}
+            {overlay && status && <OrgStatusPill status={status.status} compact />}
           </p>
         )}
         {control ? (
@@ -90,7 +92,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
             </Link>
           </div>
         </div>
-        {orgIds.length > 0 && (
+        {overlay && orgIds.length > 0 && (
           <div>
             <p className="eyebrow">{org.example ? "Example organisation" : org.name}</p>
             <ul className="mt-1.5 space-y-1">
@@ -105,7 +107,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
             </ul>
           </div>
         )}
-        {status && (status.note || status.evidence) && (
+        {overlay && status && (status.note || status.evidence) && (
           <div>
             <p className="eyebrow">Status note</p>
             <p className="mt-1 text-[12.5px] leading-snug text-ink-2">

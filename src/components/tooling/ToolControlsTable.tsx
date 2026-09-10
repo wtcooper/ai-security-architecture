@@ -13,9 +13,11 @@ import type { Tool } from "@/lib/types";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META } from "./labels";
 import { OrgStatusPill } from "./OrgStatusPill";
+import { useOrgOverlay } from "./overlay";
 
 export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
   const rows = controlsForTool(tool.id);
+  const overlay = useOrgOverlay();
   const [open, setOpen] = useState<string | null>(openCapability ?? null);
   const addressed = rows.filter((r) => r.control).length;
 
@@ -26,7 +28,9 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
           Reference controls · {rows.length} pinned on the architecture · {addressed} addressed by the vendor
         </p>
         <p className="text-[11.5px] text-ink-3">
-          Coverage is the vendor&rsquo;s; status is {org.example ? "the example organisation's" : `${org.name}'s`}.
+          {overlay
+            ? `Coverage is the vendor's; status is ${org.example ? "the example organisation's" : `${org.name}'s`}.`
+            : "Coverage is the vendor's, from its own documentation. Open a row for the steps and links."}
         </p>
       </div>
       <div className="mt-2 overflow-x-auto rounded-lg border border-line">
@@ -35,9 +39,9 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
             <tr className="bg-mist text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
               <th className="px-3 py-2 font-semibold">Capability</th>
               <th className="px-3 py-2 font-semibold">CoSAI controls</th>
-              <th className="px-3 py-2 font-semibold">Your controls</th>
+              {overlay && <th className="px-3 py-2 font-semibold">Your controls</th>}
               <th className="px-3 py-2 font-semibold">Vendor</th>
-              <th className="px-3 py-2 font-semibold">Status</th>
+              {overlay && <th className="px-3 py-2 font-semibold">Status</th>}
             </tr>
           </thead>
           <tbody>
@@ -65,6 +69,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                     <td className="px-3 py-2 text-ink-2">
                       {cosai.map((c) => c.title).join(" · ")}
                     </td>
+                    {overlay && (
                     <td className="px-3 py-2">
                       {orgIds.length ? (
                         <span className="flex flex-wrap gap-1">
@@ -78,6 +83,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                         <span className="text-ink-3">—</span>
                       )}
                     </td>
+                    )}
                     <td className="px-3 py-2 whitespace-nowrap">
                       {coverage ? (
                         <span title={coverage.blurb} className="font-medium text-ink-2">
@@ -90,17 +96,15 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {status ? (
-                        <OrgStatusPill status={status.status} title={status.note} />
-                      ) : (
-                        <span className="text-ink-3">—</span>
-                      )}
-                    </td>
+                    {overlay && (
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {status ? <OrgStatusPill status={status.status} title={status.note} /> : <span className="text-ink-3">—</span>}
+                      </td>
+                    )}
                   </tr>
                   {isOpen && (
                     <tr className="border-t border-line/60 bg-paper">
-                      <td colSpan={5} className="px-4 pb-4 pt-3">
+                      <td colSpan={overlay ? 5 : 3} className="px-4 pb-4 pt-3">
                         <ControlRowDetail tool={tool} capabilityId={capability.id} />
                       </td>
                     </tr>

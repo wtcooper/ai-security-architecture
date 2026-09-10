@@ -29,6 +29,7 @@ import "@xyflow/react/dist/style.css";
 
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
+import { useOrgOverlay } from "@/components/tooling/overlay";
 import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
@@ -48,8 +49,8 @@ interface HoverCard {
  * CoSAI entity, so a reader sees their control number next to the chip without leaving the
  * drawing. Rendered pre-line, so the org line stays its own line.
  */
-function pinBody(note: string | undefined, kind: EntityKind, id: string): string | undefined {
-  const own = orgEntriesFor(kind, id);
+function pinBody(note: string | undefined, kind: EntityKind, id: string, show: boolean): string | undefined {
+  const own = show ? orgEntriesFor(kind, id) : [];
   if (!own.length) return note;
   const line = `Your controls: ${own.map((o) => o.id).join(" · ")}`;
   return note ? `${note}\n${line}` : line;
@@ -556,6 +557,7 @@ export function FlowDiagramRF({
   // sequence data flow numbers its steps onto the arrows it uses and dims the rest. Every walk
   // behaves the same way, so a number on a drawing means one thing — the step you are on — and
   // it is only ever there because somebody asked for it.
+  const orgOverlay = useOrgOverlay();
   const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => s.follow) ?? []), [walk]);
   const walkBlocks = useMemo(
     () => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []),
@@ -707,7 +709,7 @@ export function FlowDiagramRF({
             n,
             dim: false,
             title: `${n} · ${cap?.title ?? pin.capability}`,
-            body: pinBody(pin.note, "capabilities", pin.capability),
+            body: pinBody(pin.note, "capabilities", pin.capability, orgOverlay),
           },
           draggable: false,
           selectable: false,
@@ -741,7 +743,7 @@ export function FlowDiagramRF({
             w: r.w,
             dim: false,
             title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
-            body: pinBody(pin.note, "risks", pin.risk),
+            body: pinBody(pin.note, "risks", pin.risk, orgOverlay),
           },
           draggable: false,
           selectable: false,
@@ -750,7 +752,7 @@ export function FlowDiagramRF({
       });
     }
     return nodes;
-  }, [archetype, cardAt]);
+  }, [archetype, cardAt, orgOverlay]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [lastId, setLastId] = useState(archetype.id);
@@ -826,7 +828,7 @@ export function FlowDiagramRF({
           dy: spot.y - geo.midY,
           n,
           title: `${n} · ${cap?.title ?? pin.capability}`,
-          body: pinBody(pin.note, "capabilities", pin.capability),
+          body: pinBody(pin.note, "capabilities", pin.capability, orgOverlay),
         });
       });
       pinsByEdge.set(at, list);
@@ -855,7 +857,7 @@ export function FlowDiagramRF({
           code: codes[i],
           w: r.w,
           title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
-          body: pinBody(pin.note, "risks", pin.risk),
+          body: pinBody(pin.note, "risks", pin.risk, orgOverlay),
         });
       });
       pinsByEdge.set(at, list);
@@ -934,7 +936,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay]);
+  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay]);
 
   return (
     <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>

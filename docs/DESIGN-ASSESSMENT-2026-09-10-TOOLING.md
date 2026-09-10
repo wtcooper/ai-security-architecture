@@ -50,6 +50,22 @@ heading jumps to that category's matrix; a product name opens its record.
 **The drawing.** The Tools tab on every reference architecture is the category matrix for that
 drawing, so the drawing, its reference set and its products read as one page.
 
+## Two audiences, one switch
+
+The pages are information first. With nothing switched on, a general consumer sees the
+reference set a category needs, every vendor's products in it, how far each vendor documents
+each control (native · partial · external · none · unverified), and a link to the vendor's own
+page on the product and on every operator step. Nothing on that view is anyone's posture.
+
+An organisation that has recorded its answers in `data/org` switches the **organisation
+overlay** on — one switch, in the footer of every page and beside the matrices, remembered
+per browser, on by default when `data/org/local` exists and off on the shipped example. The
+same views then gain small status pills on the cells, the organisation's control ids beside the
+CoSAI names (and a row-label switch to lead with them), the status column on the product
+record, and the organisation's badges on the risk, control and capability cards and the drawing
+rails. Adoption decisions appear only on the product record under the overlay; the matrices are
+never about decisions.
+
 ## What onboarding now means
 
 Adding a product is choosing its category and then answering, for each inherited control, how

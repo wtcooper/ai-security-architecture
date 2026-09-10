@@ -19,7 +19,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { archetypeById, archetypesInOrder, org, toolById, toolsForArchetype, toolsInOrder, vendorById, vendors } from "@/lib/data";
+import { archetypeById, archetypesInOrder, toolById, toolsForArchetype, toolsInOrder, vendorById, vendors } from "@/lib/data";
 import { ArchitectureMatrix } from "./ArchitectureMatrix";
 import { ToolDetail } from "./ToolDetail";
 import { VendorView } from "./VendorView";
@@ -51,7 +51,7 @@ export function ToolingBrowser() {
       <PageHeader
         eyebrow={`${toolsInOrder.length} products · ${vendors.length} vendors · ${categories.length} categories · verified ${latest ?? "—"}`}
         title="AI Tooling"
-        lead={`A category of tool is a reference architecture: its drawing pins the controls every product of that kind needs. Each named product below inherits that reference set and records how its vendor lets an administrator switch each control on. Status is ${org.example ? "the example organisation's, from data/org/example" : `${org.name}'s, from data/org/local`}.`}
+        lead="A category of tool is a reference architecture: its drawing pins the controls every product of that kind needs. Each named product inherits that reference set and records how its vendor lets an administrator switch each control on, with the vendor's own page behind every step. An organisation that has recorded its status in data/org can switch that overlay on to see it beside the reference."
       >
         <div className="mt-6 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Perspective">
           {(

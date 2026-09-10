@@ -10,10 +10,13 @@
 import Link from "next/link";
 
 import { STATUS_STYLE } from "@/components/capabilities/status";
-import { archetypesForVendor, orgAdoptionFor, toolsForVendor } from "@/lib/data";
+import { archetypesForVendor, toolsForVendor } from "@/lib/data";
 import type { CapabilityStatus, Tool, ToolCoverage } from "@/lib/types";
-import { ADOPTION_META, COVERAGE_META, ORG_STATUS_LABEL, SURFACE_CLASS_META } from "./labels";
+import { COVERAGE_META, ORG_STATUS_LABEL, SURFACE_CLASS_META } from "./labels";
 import { summarise } from "./model";
+import { useOrgOverlay } from "./overlay";
+import { OverlayToggle } from "./OverlayToggle";
+import { docsUrlFor } from "./shared";
 
 const COVERAGE_FILL: Record<ToolCoverage | "unassessed", string> = {
   native: "var(--ink)",
@@ -29,13 +32,17 @@ const COVERAGES: (ToolCoverage | "unassessed")[] = ["native", "partial", "extern
 export function VendorView({ vendorId, onPickArchitecture }: { vendorId: string; onPickArchitecture: (id: string) => void }) {
   const archetypes = archetypesForVendor(vendorId);
   const tools = toolsForVendor(vendorId);
+  const overlay = useOrgOverlay();
   return (
     <div className="space-y-5">
-      <p className="text-[12px] text-ink-2">
-        <span className="font-semibold text-ink">{tools.length} products</span> across{" "}
-        <span className="font-semibold text-ink">{archetypes.length} categories</span>. Each product inherits its reference
-        controls from its category&rsquo;s drawing; the bars are measured against that set.
-      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-2">
+        <span>
+          <span className="font-semibold text-ink">{tools.length} products</span> across{" "}
+          <span className="font-semibold text-ink">{archetypes.length} categories</span>. Each product inherits its reference
+          controls from its category&rsquo;s drawing; the bar is measured against that set.
+        </span>
+        <OverlayToggle className="ml-auto" />
+      </div>
       {archetypes.map((a) => (
         <section key={a.id} className="rounded-xl border border-line bg-paper">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-4 py-2.5">
@@ -51,7 +58,7 @@ export function VendorView({ vendorId, onPickArchitecture }: { vendorId: string;
             {tools
               .filter((t) => t.architecture === a.id)
               .map((t) => (
-                <ProductRow key={t.id} tool={t} />
+                <ProductRow key={t.id} tool={t} overlay={overlay} />
               ))}
           </div>
         </section>
@@ -60,38 +67,36 @@ export function VendorView({ vendorId, onPickArchitecture }: { vendorId: string;
   );
 }
 
-function ProductRow({ tool }: { tool: Tool }) {
+function ProductRow({ tool, overlay }: { tool: Tool; overlay: boolean }) {
   const s = summarise(tool);
-  const adoption = orgAdoptionFor(tool.id);
   return (
-    <div className="grid items-center gap-x-5 gap-y-2 px-4 py-2.5 md:grid-cols-[minmax(220px,1.2fr)_minmax(0,2fr)_minmax(0,2fr)]">
+    <div className={`grid items-center gap-x-5 gap-y-2 px-4 py-2.5 ${overlay ? "md:grid-cols-[minmax(220px,1.2fr)_minmax(0,2fr)_minmax(0,2fr)]" : "md:grid-cols-[minmax(220px,1.2fr)_minmax(0,3fr)]"}`}>
       <div className="min-w-0">
         <Link href={`/tooling?tool=${tool.id}`} className="text-[13px] font-semibold text-ink hover:underline">
           {tool.name}
         </Link>
         <span className="ml-2 text-[11px] text-ink-3">{tool.surfaceClasses.map((c) => SURFACE_CLASS_META[c].short).join(" · ")}</span>
-        <span
-          className={`ml-2 inline-block rounded-full border px-1.5 py-px text-[10px] font-semibold ${
-            adoption === "approved" ? "border-mitigated text-mitigated" : adoption === "blocked" ? "border-exposed text-exposed" : "border-line-strong text-ink-2"
-          }`}
-          title={ADOPTION_META[adoption].blurb}
-        >
-          {ADOPTION_META[adoption].label}
-        </span>
+        {docsUrlFor(tool) && (
+          <a href={docsUrlFor(tool)} target="_blank" rel="noreferrer" className="ml-2 text-[10.5px] font-medium text-ink-3 hover:text-introduced hover:underline">
+            vendor docs ↗
+          </a>
+        )}
       </div>
       <Bar
         title="Vendor coverage"
         total={s.pinned}
         segments={COVERAGES.map((c) => ({ key: c, n: s.coverage[c], fill: COVERAGE_FILL[c], label: c === "unassessed" ? "unassessed" : COVERAGE_META[c].label.toLowerCase() }))}
       />
-      <Bar
-        title="Your status"
-        total={s.pinned}
-        segments={[
-          ...STATUSES.map((st) => ({ key: st, n: s.status[st], fill: STATUS_STYLE[st].bg, border: STATUS_STYLE[st].border, label: ORG_STATUS_LABEL[st].toLowerCase() })),
-          { key: "unset", n: s.status.unset, fill: "transparent", label: "no status" },
-        ]}
-      />
+      {overlay && (
+        <Bar
+          title="Your status"
+          total={s.pinned}
+          segments={[
+            ...STATUSES.map((st) => ({ key: st, n: s.status[st], fill: STATUS_STYLE[st].bg, border: STATUS_STYLE[st].border, label: ORG_STATUS_LABEL[st].toLowerCase() })),
+            { key: "unset", n: s.status.unset, fill: "transparent", label: "no status" },
+          ]}
+        />
+      )}
     </div>
   );
 }

@@ -9,13 +9,15 @@ import Link from "next/link";
 
 import { capabilityById, riskById, riskCode, toolsForCapability } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
+import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
 
 /** The organisation's own identifiers for a pinned entity, linked into the Frameworks tab. */
 function OrgRefs({ kind, id }: { kind: EntityKind; id: string }) {
+  const overlay = useOrgOverlay();
   const refs = orgEntriesFor(kind, id);
-  if (!refs.length) return null;
+  if (!overlay || !refs.length) return null;
   return (
     <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-3">
       <span className="mr-0.5">Your controls:</span>
