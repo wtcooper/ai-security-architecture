@@ -48,8 +48,8 @@ capabilities:
 ```
 
 Build rules: the capability and surface ids exist; status in enum. This is the only source of
-the Capabilities tab's status, and it is what appears as the enterprise-capability modules on
-each architecture's Tools tab: the product's own setting is one half of a control, the enterprise
+status on the Capabilities matrix and in the "Your status" line on a drawing's Controls tab, and
+it tints the enterprise-capability tag beside every control on the Tools tab: the product's own setting is one half of a control, the enterprise
 technology that delivers or surrounds it is the other. A capability × surface not listed reads
 as a gap once status is shown.
 
@@ -71,13 +71,18 @@ tools:
 Build rules: the tool exists; each capability key is pinned on that tool's architecture
 (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools` prints the set);
 `available` is a boolean and control statuses are in the enum. A tool may appear once. A tool not
-listed is not available and renders greyed out; a pinned capability with no key under an onboarded tool reads as a gap.
+listed is not available and its column renders greyed out; a pinned capability with no key under
+an available tool reads as a gap.
 
 ## Where it renders
 
 | Data | Where |
 | --- | --- |
 | Framework entries | Frameworks tab, grouped under the organisation name; entry detail with mapped risks/controls/capabilities and the risk map |
-| Entry ids | Badges on risk, control and capability cards; "Your controls" line under expanded rows on the architecture Capabilities/Risks tabs; hover cards on the drawing chips and tags; the controls table of every product record on the Tools tab |
-| Adoption + statuses | The Tools tab on each architecture and its product records |
+| Entry ids | Badges on risk, control and capability cards; "Your controls" line under expanded rows on the architecture Controls/Risks tabs; hover cards on the drawing chips and tags; the row labels and controls table on the Tools tab |
+| Capability statuses | The Capabilities matrix (pill tints), each capability's surface cards, the "Your status" line on the Controls tab, and the enterprise-capability tag on the Tools tab |
+| Availability + control statuses | The Tools tab: the product header pill (Available / Not available), the tint on every cell, and the product record |
 | Organisation name | Footer (`org: <name>`), pill labels; the example profile is labelled "example" everywhere |
+
+Everything in this table is behind the **Show status** switch beside the Capabilities and
+Reference architectures titles; it defaults on when `data/org/local/` exists.

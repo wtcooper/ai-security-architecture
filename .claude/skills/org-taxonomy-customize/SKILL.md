@@ -1,6 +1,6 @@
 ---
 name: org-taxonomy-customize
-description: Cross-map an organisation's own control standard, policy catalogue or risk register onto this repository's CoSAI taxonomy (risks, controls, capabilities) by editing text files under data/org/, and record the organisation's status per AI tool. Use this whenever someone wants to see their own control IDs, standards, requirements, "top risks" or posture on the Frameworks tab, the risk/control/capability cards, the reference architecture pages or the AI Tooling tab — including phrases like "map our controls", "add our standard", "our risk register", "cross-walk to CoSAI", "customise this for my company", "mark what we have enabled", "org profile", or "data/org". Also use it when an adopter has cloned the repo and asks how to make it theirs without touching the UI.
+description: Cross-map an organisation's own control standard, policy catalogue or risk register onto this repository's CoSAI taxonomy (risks, controls, capabilities) by editing text files under data/org/, and record the organisation's status per AI tool. Use this whenever someone wants to see their own control IDs, standards, requirements, "top risks" or posture on the Frameworks tab, the risk/control/capability cards, the Capabilities matrix or a reference architecture's Controls and Tools tabs — including phrases like "map our controls", "add our standard", "our risk register", "cross-walk to CoSAI", "customise this for my company", "mark what we have enabled", "org profile", or "data/org". Also use it when an adopter has cloned the repo and asks how to make it theirs without touching the UI.
 ---
 
 # Customise the taxonomy for an organisation
@@ -54,23 +54,32 @@ Read `references/schema.md` first. It is short and it is the contract.
 4. **Record tool status if they want it.** In `tooling-status.yaml`, one item per tool id from
    `data/tooling/` (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools`
    lists them; `... tools toolClaudeCode` prints one tool's reference set), with
-   `available: true` when people may install it (a tool not listed, or `false`, is not available
-   and renders greyed out) and an optional `controls` map keyed by capability id. Only capabilities pinned on the tool's
-   architecture may carry a status. One vocabulary everywhere: `enabled`, `inProgress`, `gap`;
-   a pinned capability with no key reads as a gap once status is shown, so record the ones
-   that are enabled or in progress and let the rest fall out as gaps.
+   `available: true` when people may install it and an optional `controls` map keyed by
+   capability id. Availability is deliberately a boolean: the organisation either provides the
+   product or blocks it, and how well an available product is locked down is what the control
+   statuses say. A tool not listed, or `false`, is not available and its column renders greyed
+   out. Only capabilities pinned on the tool's architecture may carry a status, and one
+   vocabulary serves every control: `enabled`, `inProgress`, `gap`. A pinned capability with no
+   key reads as a gap once status is shown, so record the ones that are enabled or in progress
+   and let the rest fall out as gaps.
 5. **Record the enterprise layer if they want it.** In `capabilities.yaml`, per capability and
    surface, the technology the organisation runs (MDM, endpoint DLP, SSE, gateway guardrails,
-   SIEM) and its status. This is the other half of every control: a product's managed setting
-   is delivered by an MDM; a DLP requirement is met by an endpoint agent around the product.
+   SIEM) and its status, in the same three words. This is the other half of every control: a
+   product's managed setting is delivered by an MDM; a DLP requirement is met by an endpoint
+   agent around the product. It is the only source of status on the Capabilities matrix — there
+   is no UI editor, and `data/overlay/capabilities.yaml` carries no posture.
 6. **Build and fix.** `npm run data`. Errors from this layer start with `org/…` or
    `org tooling-status …` and name the file, framework and entry; fix the id, never the CoSAI
    file. A failing line that does not start with `org` is upstream data, not the profile. Then
    `npm run audit` (it should still pass; it does not yet report on the org layer).
-7. **Show them where it landed.** `npm run dev`, then: `/frameworks?fw=<framework id>` (their
+7. **Show them where it landed.** `npm run dev`, then switch **Show status** on — the toggle
+   beside the Capabilities and Reference architectures titles, one state shared by both pages.
+   Nothing from `data/org` renders until it is on. Then: `/frameworks?fw=<framework id>` (their
    catalogue with coverage and the unmapped list), `/controls?control=<id>` and
-   `/capabilities?capability=<id>` (their ids as badges), `/reference?archetype=<id>` →
-   Capabilities tab, expand a row (their ids under the chip), a product record on an architecture's Tools tab (status per tool).
+   `/capabilities?capability=<id>` (their ids as badges), `/capabilities` (every pill tinted by
+   their surface status), `/reference?archetype=<id>` → Controls tab, expand a row (their status
+   and ids under the chip) → Tools tab (status per control per product, unavailable products
+   greyed, and each product's record beneath the grid).
 
 ## Judgement calls worth stating
 
