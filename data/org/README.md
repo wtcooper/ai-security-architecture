@@ -39,7 +39,8 @@ it. It renders as the enterprise-capability modules beside every control on each
 Tools tab and as the surface status on the Capabilities tab.
 
 **`tooling-status.yaml`** records, per tool in `data/tooling/`, `available: true|false` — whether
-people may install and use it at all — and a status per capability — the product's own settings. Only capabilities pinned on the tool's
+people may install and use it at all — and a status per capability — the product's own settings — with a `note` (the justification: what
+you configured) and `evidence` that appear when someone hovers that cell of the Tools grid. Only capabilities pinned on the tool's
 reference architecture may carry a status, because that pinned set *is* the reference control
 set the Tools tab compares against.
 

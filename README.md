@@ -235,7 +235,7 @@ them, which makes them a predictable real-world gap.
 **Nothing ships assessed.** The matrix carries no status until you switch *Show status* on,
 because this repository maps what the taxonomy covers and must never imply a posture anyone
 holds. Status comes from text files under `data/org` (see "Adopt this in your organisation"):
-per capability and surface, *enabled / in progress / gap*, and anything not recorded is a gap.
+per capability and surface, *enabled / in progress or partial / gap*, and anything not recorded is a gap.
 Vendor names are deliberately absent from the taxonomy for the same reason: a fork adds its own.
 
 Deliberate exclusions are recorded with reasons in the file header — bias and fairness testing

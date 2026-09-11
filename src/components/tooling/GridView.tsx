@@ -11,8 +11,8 @@ import { useState } from "react";
 import { AvailabilityPill } from "@/components/StatusPill";
 import { orgToolAvailableFor } from "@/lib/data";
 import type { Tool } from "@/lib/types";
-import { cellFor, columnGroups, type Row, type RowGroup } from "./model";
-import { CellDetail, CellTile, cellTitle, docsUrlFor, EnterpriseModules } from "./shared";
+import { cellFor, columnGroups, type Cell, type Row, type RowGroup } from "./model";
+import { CellDetail, CellHoverCard, CellTile, docsUrlFor, EnterpriseModules } from "./shared";
 
 export function GridView({
   tools,
@@ -30,6 +30,8 @@ export function GridView({
 }) {
   const cols = columnGroups(tools);
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
+  // The hovered cell, with its rectangle, for the justification card.
+  const [hover, setHover] = useState<{ tool: Tool; row: Row; cell: Cell; rect: DOMRect } | null>(null);
   const span = tools.length + 2;
   // With status shown, a product the organisation does not run fades so the gaps are the picture.
   const dim = (t: Tool) => overlay && !orgToolAvailableFor(t.id);
@@ -90,11 +92,12 @@ export function GridView({
           </thead>
           <tbody>
             {groups.map((group) => (
-              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={setPicked} overlay={overlay} archetypeId={archetypeId} dim={dim} />
+              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={setPicked} overlay={overlay} archetypeId={archetypeId} dim={dim} onHover={setHover} />
             ))}
           </tbody>
         </table>
       </div>
+      {hover && <CellHoverCard tool={hover.tool} row={hover.row} cell={hover.cell} overlay={overlay} rect={hover.rect} />}
       {picked && <CellDetail tool={picked.tool} row={picked.row} onClose={() => setPicked(null)} />}
     </div>
   );
@@ -109,6 +112,7 @@ function GroupRows({
   overlay,
   archetypeId,
   dim,
+  onHover,
 }: {
   group: RowGroup;
   cols: ReturnType<typeof columnGroups>;
@@ -118,6 +122,7 @@ function GroupRows({
   overlay: boolean;
   archetypeId: string;
   dim: (t: Tool) => boolean;
+  onHover: (h: { tool: Tool; row: Row; cell: Cell; rect: DOMRect } | null) => void;
 }) {
   return (
     <>
@@ -142,8 +147,15 @@ function GroupRows({
               const cell = cellFor(t, row);
               const selected = picked?.tool.id === t.id && picked.row.id === row.id;
               return (
-                <td key={t.id} className={`border-b border-l border-line p-[3px] align-middle ${dim(t) ? "opacity-40" : ""}`}>
-                  <CellTile cell={cell} title={cellTitle(t, row, cell, overlay)} overlay={overlay} selected={selected} onClick={() => onPick({ tool: t, row })} />
+                <td
+                  key={t.id}
+                  className={`border-b border-l border-line p-[3px] align-middle ${dim(t) ? "opacity-40" : ""}`}
+                  onMouseEnter={(e) => onHover({ tool: t, row, cell, rect: e.currentTarget.getBoundingClientRect() })}
+                  onMouseLeave={() => onHover(null)}
+                  onFocusCapture={(e) => onHover({ tool: t, row, cell, rect: e.currentTarget.getBoundingClientRect() })}
+                  onBlurCapture={() => onHover(null)}
+                >
+                  <CellTile cell={cell} overlay={overlay} selected={selected} onClick={() => onPick({ tool: t, row })} />
                 </td>
               );
             }),

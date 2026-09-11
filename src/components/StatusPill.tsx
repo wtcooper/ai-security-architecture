@@ -8,7 +8,7 @@ import { ORG_STATUSES, type OrgStatus } from "@/lib/types";
  */
 export const STATUS_META: Record<OrgStatus, { label: string; blurb: string }> = {
   enabled: { label: "Enabled", blurb: "In place and switched on." },
-  inProgress: { label: "In progress", blurb: "Partly in place, or being rolled out." },
+  inProgress: { label: "In progress / Partial", blurb: "Partly in place — some of it configured, or still being rolled out." },
   gap: { label: "Gap", blurb: "Not in place, or not recorded — which reads as a gap." },
 };
 

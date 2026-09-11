@@ -63,8 +63,8 @@ tools:
     controls:                     # keyed by capability id pinned on the tool's architecture
       capabilityToolPermissionScoping:
         status: enabled           # enabled | inProgress | gap
-        note: permissions.deny via managed-settings.json   # optional
-        evidence: CHG-1042        # optional ticket / document reference
+        note: permissions.deny via managed-settings.json   # the justification: what you set up
+        evidence: CHG-1042        # optional ticket / document reference; both show on hover in the grid
       capabilityAgentSandboxing: { status: gap }
 ```
 

@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
 import type { Tool, ToolControl, ToolCoverage } from "@/lib/types";
-import { archetypeById, capabilityById, orgSurfacePostureFor, orgSurfaceStatusFor, vendorById } from "@/lib/data";
+import { archetypeById, capabilityById, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, COVERAGE_ORDER } from "./labels";
 import { OWNER_META, type Cell, type Row } from "./model";
@@ -13,17 +13,73 @@ import { OWNER_META, type Cell, type Row } from "./model";
 export const docsUrlFor = (tool: Tool) =>
   tool.facts?.find((f) => /docs/i.test(f.label) && f.url)?.url ?? tool.sources[0]?.url;
 
-export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
-  const cov = cell.coverage ? COVERAGE_META[cell.coverage] : null;
-  const steps = cell.parts.reduce((n, p) => n + (p.control?.steps?.length ?? 0), 0);
-  return [
-    `Admin control · ${tool.name} · ${row.title ?? row.label}`,
-    `${cov ? cov.long : "Not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}${cov ? ` — ${cov.blurb}` : ""}`,
-    steps ? `${steps} operator step${steps === 1 ? "" : "s"} with vendor links — click to open` : "",
-    overlay ? `Status: ${cell.status ? STATUS_META[cell.status].label : "product not available"}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+/**
+ * The hover card for one grid cell: the vendor's mechanism for the control, and, with status
+ * shown, the organisation's justification for the status it recorded (the note and evidence in
+ * data/org/<profile>/tooling-status.yaml). Positioned fixed from the cell's rectangle so it
+ * escapes the scrolling table; pointer-events off so it never steals the hover.
+ */
+export function CellHoverCard({ tool, row, cell, overlay, rect }: { tool: Tool; row: Row; cell: Cell; overlay: boolean; rect: DOMRect }) {
+  const width = 340;
+  const vw = typeof window === "undefined" ? 1200 : window.innerWidth;
+  const vh = typeof window === "undefined" ? 800 : window.innerHeight;
+  const left = Math.max(12, Math.min(rect.left, vw - width - 12));
+  // Open below the cell, or above it when there is more room there than below.
+  const below = vh - rect.bottom >= Math.max(240, rect.top) || vh - rect.bottom >= 320;
+  const place = below ? { top: rect.bottom + 6 } : { bottom: vh - rect.top + 6 };
+  const available = orgToolAvailableFor(tool.id);
+  const profile = org.example ? "data/org/example" : "data/org/local";
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none fixed z-50 rounded-lg border border-line-strong bg-paper p-3 text-[11.5px] leading-snug text-ink-2 shadow-lg"
+      style={{ left, width, ...place }}
+    >
+      <p className="text-[12px] font-semibold text-ink">
+        {tool.name} <span className="font-normal text-ink-3">· {row.title ?? row.label}</span>
+      </p>
+      {cell.parts.map((p) => {
+        const capability = capabilityById.get(p.capability);
+        const cov = p.control ? COVERAGE_META[p.control.coverage] : null;
+        const status = overlay ? orgStatusFor(tool.id, p.capability) : undefined;
+        return (
+          <div key={p.capability} className="mt-2 border-t border-line pt-2 first:mt-1.5">
+            {cell.parts.length > 1 && <p className="font-semibold text-ink">{capability?.title ?? p.capability}</p>}
+            <p>
+              <span className="eyebrow mr-1">Vendor</span>
+              <span className="font-semibold text-ink">{cov ? cov.long : "Not assessed"}</span>
+              {p.control?.mechanism ? <span> — {p.control.mechanism}</span> : cov ? <span> — {cov.blurb}</span> : null}
+            </p>
+            {overlay && (
+              <p className="mt-1">
+                <span className="eyebrow mr-1">Your justification</span>
+                {!available ? (
+                  <span>Not available in the organisation, so nothing is configured.</span>
+                ) : status?.note || status?.evidence ? (
+                  <>
+                    <span className="font-semibold" style={{ color: STATUS_STYLE[status.status].text }}>
+                      {STATUS_META[status.status].label}
+                    </span>
+                    {status.note && <span> — {status.note}</span>}
+                    {status.evidence && <span className="ident ml-1 text-ink-3">{status.evidence}</span>}
+                  </>
+                ) : (
+                  <span>
+                    <span className="font-semibold" style={{ color: STATUS_STYLE[status?.status ?? "gap"].text }}>
+                      {STATUS_META[status?.status ?? "gap"].label}
+                    </span>
+                    {" — "}nothing recorded yet. Add <span className="ident">note</span> and <span className="ident">evidence</span> under this
+                    control in <span className="ident">{profile}/tooling-status.yaml</span>.
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <p className="mt-2 border-t border-line pt-1.5 text-[10.5px] text-ink-3">Click the cell for the operator steps · the word ↗ opens the vendor&rsquo;s page</p>
+    </div>
+  );
 }
 
 /** The vendor page for one control on one product: the first operator step's link, else none. */
@@ -58,13 +114,11 @@ export function CoverageBadge({ coverage, long = false, url, className = "" }: {
  */
 export function CellTile({
   cell,
-  title,
   overlay,
   selected = false,
   onClick,
 }: {
   cell: Cell;
-  title: string;
   overlay: boolean;
   selected?: boolean;
   onClick?: () => void;
@@ -85,7 +139,6 @@ export function CellTile({
       }}
       className={`flex h-full min-h-[36px] cursor-pointer items-center justify-center rounded-[4px] border px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
       style={{ background: tint.bg, borderColor: tint.border, color: tint.text, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid" }}
-      title={title}
     >
       {cell.coverage ? <CoverageBadge coverage={cell.coverage} url={url} className="border-transparent" /> : <span className="text-[11.5px] text-ink-3">—</span>}
     </div>
