@@ -12,7 +12,7 @@ import type {
   Risk,
   RiskOverlay,
   Tool,
-  ToolAdoption,
+  OrgStatus,
 } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -296,10 +296,13 @@ export const org = meta.org;
 const postureByTool = new Map(orgToolPosture.map((p) => [p.tool, p]));
 
 export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
-export const orgAdoptionFor = (toolId: string): ToolAdoption =>
-  postureByTool.get(toolId)?.adoption ?? "unassessed";
+/** Whether the organisation runs this tool; not listed reads as a gap. */
+export const orgToolStatusFor = (toolId: string): OrgStatus => postureByTool.get(toolId)?.status ?? "gap";
 export const orgStatusFor = (toolId: string, capabilityId: string) =>
   postureByTool.get(toolId)?.controls[capabilityId];
 /** The enterprise layer: the organisation's technology and status for a capability on a surface. */
 export const orgSurfacePostureFor = (capabilityId: string, surfaceId: string) =>
   orgCapabilityPosture[capabilityId]?.[surfaceId];
+/** The same, as a status: nothing recorded is a gap. */
+export const orgSurfaceStatusFor = (capabilityId: string, surfaceId: string): OrgStatus =>
+  orgCapabilityPosture[capabilityId]?.[surfaceId]?.status ?? "gap";

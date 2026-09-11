@@ -3,8 +3,7 @@
 /**
  * One reference architecture's products against its reference controls, as a grid: controls
  * as rows, enterprise capability modules beside them, one admin-control column per product.
- * The header states the inheritance, carries the organisation overlay switch and, with it on,
- * the row-label switch. Rendered by the Tools tab on the drawing.
+ * The header states the inheritance and, with status shown, carries the row-label switch. Rendered by the Tools tab on the drawing.
  */
 import { useState } from "react";
 
@@ -13,7 +12,6 @@ import type { Tool } from "@/lib/types";
 import { GridView } from "./GridView";
 import { hasOrgMappings, rowsFor, type LabelMode } from "./model";
 import { useOrgOverlay } from "./overlay";
-import { OverlayToggle } from "./OverlayToggle";
 import { Legend } from "./shared";
 
 export function ArchitectureViews({
@@ -40,7 +38,6 @@ export function ArchitectureViews({
           its full record.
         </span>
         <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <OverlayToggle />
           {overlay && hasOrgMappings && (
             <span className="flex items-center gap-1.5">
               <span className="eyebrow">Rows</span>

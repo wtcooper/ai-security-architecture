@@ -2,11 +2,11 @@
 
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
 import Link from "next/link";
-import { STATUS_STYLE } from "@/components/capabilities/status";
-import { CAPABILITY_STATUSES, type Tool, type ToolControl, type ToolCoverage } from "@/lib/types";
-import { archetypeById, capabilityById, orgSurfacePostureFor, vendorById } from "@/lib/data";
+import { ORG_STATUSES, STATUS_META, STATUS_STYLE, StatusPill } from "@/components/StatusPill";
+import type { Tool, ToolControl, ToolCoverage } from "@/lib/types";
+import { archetypeById, capabilityById, orgSurfacePostureFor, orgSurfaceStatusFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
-import { COVERAGE_META, COVERAGE_ORDER, ORG_STATUS_LABEL } from "./labels";
+import { COVERAGE_META, COVERAGE_ORDER } from "./labels";
 import { OWNER_META, type Cell, type Row } from "./model";
 
 /** The vendor's own documentation index for a product, for the attributable link beside its name. */
@@ -20,7 +20,7 @@ export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
     `Admin control · ${tool.name} · ${row.title ?? row.label}`,
     `${cov ? cov.long : "Not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}${cov ? ` — ${cov.blurb}` : ""}`,
     steps ? `${steps} operator step${steps === 1 ? "" : "s"} with vendor links — click to open` : "",
-    overlay ? `Status: ${cell.status ? ORG_STATUS_LABEL[cell.status] : "—"}` : "",
+    overlay ? `Status: ${cell.status ? STATUS_META[cell.status].label : "not onboarded"}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -73,14 +73,7 @@ export function CellTile({
       <button type="button" onClick={onClick} className="min-w-0 truncate text-center text-[11.5px] font-semibold hover:underline">
         {m ? m.label : "—"}
       </button>
-      {status && (
-        <span
-          className="shrink-0 rounded-full border px-1.5 py-px text-[9.5px] font-semibold"
-          style={{ borderColor: STATUS_STYLE[status].border, color: STATUS_STYLE[status].text, background: "var(--paper)" }}
-        >
-          {ORG_STATUS_LABEL[status]}
-        </span>
-      )}
+      {status && <StatusPill status={status} compact />}
       {url && (
         <a
           href={url}
@@ -114,12 +107,13 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
       {overlay && (
         <>
           <span className="eyebrow ml-2">Your status</span>
-          {CAPABILITY_STATUSES.map((s) => (
+          {ORG_STATUSES.map((s) => (
             <span key={s} className="flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded-[2px] border" style={{ background: STATUS_STYLE[s].bg, borderColor: STATUS_STYLE[s].border }} />
-              {ORG_STATUS_LABEL[s]}
+              {STATUS_META[s].label}
             </span>
           ))}
+          <span className="text-ink-3">· greyed product = not onboarded</span>
         </>
       )}
     </div>
@@ -137,6 +131,7 @@ export function EnterpriseModules({ row, archetypeId, overlay, className = "" }:
   const arch = archetypeById.get(archetypeId);
   const capability = capabilityById.get(row.capabilities[0]);
   const posture = overlay && arch ? row.capabilities.map((c) => orgSurfacePostureFor(c, arch.surface)).find(Boolean) : undefined;
+  const status = overlay && arch ? orgSurfaceStatusFor(row.capabilities[0], arch.surface) : undefined;
   if (!row.enforcement.length) return null;
   const label = capability?.abbrev ?? capability?.title ?? "Capability";
   return (
@@ -158,14 +153,14 @@ export function EnterpriseModules({ row, archetypeId, overlay, className = "" }:
           </span>
         </Link>
       ))}
-      {posture && (
+      {status && (
         <span
           className="inline-flex items-center whitespace-nowrap rounded-full border px-1.5 py-[2px] text-[10px] font-semibold"
-          style={{ borderColor: STATUS_STYLE[posture.status].border, color: STATUS_STYLE[posture.status].text, background: STATUS_STYLE[posture.status].bg }}
-          title={`${ORG_STATUS_LABEL[posture.status]} on this surface${posture.technology ? ` with ${posture.technology}` : ""}${posture.note ? ` — ${posture.note}` : ""}`}
+          style={{ borderColor: STATUS_STYLE[status].border, color: STATUS_STYLE[status].text, background: STATUS_STYLE[status].bg }}
+          title={`${STATUS_META[status].label} on this surface${posture?.technology ? ` with ${posture.technology}` : ""}${posture?.note ? ` — ${posture.note}` : ""}`}
         >
-          {posture.technology ? `${posture.technology} · ` : ""}
-          {ORG_STATUS_LABEL[posture.status]}
+          {posture?.technology ? `${posture.technology} · ` : ""}
+          {STATUS_META[status].label}
         </span>
       )}
     </span>

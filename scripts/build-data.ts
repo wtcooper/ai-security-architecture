@@ -39,10 +39,9 @@ import type {
   Vocabulary,
 } from "../src/lib/types";
 import {
-  CAPABILITY_STATUSES,
+  ORG_STATUSES,
   FULL_LIST_FRAMEWORKS,
   PHASES,
-  TOOL_ADOPTIONS,
   TOOL_COVERAGES,
   TOOL_SURFACE_CLASSES,
 } from "../src/lib/types";
@@ -591,9 +590,6 @@ function checkCapabilities(
       if (!surfaceIds.includes(key)) fail(`${where}: unknown surface ${key}`);
       const info = cap.surfaces[key];
       if (typeof info?.applies !== "boolean") fail(`${where}: surface ${key} needs applies`);
-      if (info?.status && !CAPABILITY_STATUSES.includes(info.status)) {
-        fail(`${where}: surface ${key} has invalid status ${info.status}`);
-      }
     }
     if (!keys.some((k) => cap.surfaces[k]?.applies)) {
       fail(`${where}: must apply to at least one surface`);
@@ -1517,13 +1513,12 @@ function checkTooling(
 }
 
 /**
- * The organisation's tool posture: which tools it has approved and, per pinned capability,
- * whether the control is switched on. Statuses reuse the capability posture enum so the
- * same pills render both; a capability not pinned on the tool's architecture cannot carry a
- * status, because the reference set is the drawing.
+ * The organisation's tool posture: which tools it runs and, per pinned capability, whether
+ * the control is switched on. One status enum serves tools, their controls and the enterprise
+ * layer so the same pills render everywhere; a capability not pinned on the tool's
+ * architecture cannot carry a status, because the reference set is the drawing.
  */
-const ADOPTIONS = new Set<string>(TOOL_ADOPTIONS);
-const STATUSES = new Set<string>(CAPABILITY_STATUSES);
+const STATUSES = new Set<string>(ORG_STATUSES);
 
 function checkToolingStatus(
   posture: OrgToolPosture[],
@@ -1541,8 +1536,8 @@ function checkToolingStatus(
     }
     if (seen.has(p.tool)) fail(`${where}: listed twice`);
     seen.add(p.tool);
-    if (!ADOPTIONS.has(p.adoption)) {
-      fail(`${where}: adoption must be one of ${[...ADOPTIONS].join(", ")}`);
+    if (p.status !== undefined && !STATUSES.has(p.status)) {
+      fail(`${where}: status must be one of ${[...STATUSES].join(", ")}`);
     }
     const pinned = new Set(archetypeById.get(tool.architecture)?.capabilities ?? []);
     for (const [capabilityId, entry] of Object.entries(p.controls ?? {})) {
@@ -1559,8 +1554,7 @@ function checkToolingStatus(
 
 /**
  * The organisation's enterprise layer: per capability, per surface, the technology it deploys
- * and whether it is in place. Same enum as the Capabilities tab's posture — this is the
- * text-file home for the answers that tab's browser-side drawer collects.
+ * and whether it is in place. This is the only source of the Capabilities tab's status.
  */
 function checkOrgCapabilities(
   posture: OrgCapabilityPosture,

@@ -1,5 +1,4 @@
 import { dataset } from "@/lib/data";
-import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { REPO_URL } from "./SiteHeader";
 
 /**
@@ -42,7 +41,6 @@ export function SiteFooter() {
         >
           org: <span className="ident text-ink-2">{meta.org.example ? "example" : meta.org.name}</span>
         </span>
-        <OverlayToggle />
         <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"
           style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}

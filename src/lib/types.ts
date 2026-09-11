@@ -195,17 +195,12 @@ export interface Vocabulary {
 }
 
 /**
- * Assessment states a fork can record per capability per surface. Shipped unset — the
- * repository maps the taxonomy, a deployment maps its own posture onto it.
+ * The organisation's status vocabulary, shared by capabilities on a surface, the tools it runs
+ * and the controls inside them (data/org). Anything not recorded reads as a gap once status is
+ * shown, so there is no "unassessed" value.
  */
-export type CapabilityStatus = "needsAssessment" | "inPlace" | "partial" | "gap";
-/** Cycle and legend order. `needsAssessment` leads: it is the shipped state of everything. */
-export const CAPABILITY_STATUSES: CapabilityStatus[] = [
-  "needsAssessment",
-  "inPlace",
-  "partial",
-  "gap",
-];
+export type OrgStatus = "enabled" | "inProgress" | "gap";
+export const ORG_STATUSES: OrgStatus[] = ["enabled", "inProgress", "gap"];
 
 /** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */
 export interface Surface {
@@ -219,8 +214,6 @@ export interface CapabilitySurfaceInfo {
   applies: boolean;
   /** How it shows up (or why it cannot) on this surface. */
   note?: string;
-  /** Optional posture assessment. Never set in the shipped dataset; forks may commit it. */
-  status?: CapabilityStatus;
 }
 
 /**
@@ -779,11 +772,8 @@ export interface OrgMeta {
   example: boolean;
 }
 
-export type ToolAdoption = "approved" | "pilot" | "blocked" | "unassessed";
-export const TOOL_ADOPTIONS: ToolAdoption[] = ["approved", "pilot", "blocked", "unassessed"];
-
 export interface OrgToolControlStatus {
-  status: CapabilityStatus;
+  status: OrgStatus;
   note?: string;
   /** A ticket, document or evidence reference. */
   evidence?: string;
@@ -794,19 +784,22 @@ export interface OrgToolControlStatus {
  * technology it deploys around the tools (an endpoint DLP agent, a gateway, an MDM) and whether
  * it is in place. Sits beside the per-tool posture, which is about the product's own settings.
  */
-export interface OrgCapabilityStatus {
-  status: CapabilityStatus;
+export interface OrgOrgStatus {
+  status: OrgStatus;
   /** The named technology, e.g. "Netskope endpoint DLP", "Jamf Pro". */
   technology?: string;
   note?: string;
 }
 /** capability id -> surface id -> posture. */
-export type OrgCapabilityPosture = Record<string, Record<string, OrgCapabilityStatus>>;
+export type OrgCapabilityPosture = Record<string, Record<string, OrgOrgStatus>>;
 
-/** The organisation's posture on one tool: adoption decision plus per-capability status. */
+/**
+ * The organisation's posture on one tool: whether it runs it (enabled / inProgress; a tool not
+ * listed, or listed as gap, is not onboarded and renders greyed) plus per-capability status.
+ */
 export interface OrgToolPosture {
   tool: string;
-  adoption: ToolAdoption;
+  status?: OrgStatus;
   note?: string;
   /** Keyed by capability id; every key must be pinned on the tool's architecture. */
   controls: Record<string, OrgToolControlStatus>;

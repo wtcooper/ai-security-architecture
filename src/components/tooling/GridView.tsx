@@ -8,6 +8,8 @@
  */
 import { useState } from "react";
 
+import { StatusPill } from "@/components/StatusPill";
+import { orgToolStatusFor } from "@/lib/data";
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Row, type RowGroup } from "./model";
 import { CellDetail, CellTile, cellTitle, docsUrlFor, EnterpriseModules } from "./shared";
@@ -29,6 +31,8 @@ export function GridView({
   const cols = columnGroups(tools);
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
   const span = tools.length + 2;
+  // With status shown, a product the organisation does not run fades so the gaps are the picture.
+  const dim = (t: Tool) => overlay && orgToolStatusFor(t.id) === "gap";
   // One vendor (the vendor view) needs no vendor sub-row under "Admin controls".
   const headerRows = cols.length > 1 ? 3 : 2;
   return (
@@ -60,7 +64,7 @@ export function GridView({
             <tr>
               {cols.flatMap((g) =>
                 g.tools.map((t) => (
-                  <th key={t.id} className="min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-center align-middle">
+                  <th key={t.id} className={`min-w-[124px] max-w-[160px] border-b border-l border-line bg-paper px-2 py-2 text-center align-middle ${dim(t) ? "opacity-40" : ""}`}>
                     <button
                       type="button"
                       onClick={() => onPickTool(t.id)}
@@ -74,6 +78,11 @@ export function GridView({
                         vendor docs ↗
                       </a>
                     )}
+                    {overlay && (
+                      <span className="mt-1 block">
+                        <StatusPill status={orgToolStatusFor(t.id)} compact title={dim(t) ? "Not onboarded by the organisation" : undefined} />
+                      </span>
+                    )}
                   </th>
                 )),
               )}
@@ -81,7 +90,7 @@ export function GridView({
           </thead>
           <tbody>
             {groups.map((group) => (
-              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={setPicked} overlay={overlay} archetypeId={archetypeId} />
+              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={setPicked} overlay={overlay} archetypeId={archetypeId} dim={dim} />
             ))}
           </tbody>
         </table>
@@ -99,6 +108,7 @@ function GroupRows({
   onPick,
   overlay,
   archetypeId,
+  dim,
 }: {
   group: RowGroup;
   cols: ReturnType<typeof columnGroups>;
@@ -107,6 +117,7 @@ function GroupRows({
   onPick: (p: { tool: Tool; row: Row }) => void;
   overlay: boolean;
   archetypeId: string;
+  dim: (t: Tool) => boolean;
 }) {
   return (
     <>
@@ -131,7 +142,7 @@ function GroupRows({
               const cell = cellFor(t, row);
               const selected = picked?.tool.id === t.id && picked.row.id === row.id;
               return (
-                <td key={t.id} className="border-b border-l border-line p-[3px] align-middle">
+                <td key={t.id} className={`border-b border-l border-line p-[3px] align-middle ${dim(t) ? "opacity-40" : ""}`}>
                   <CellTile cell={cell} title={cellTitle(t, row, cell, overlay)} overlay={overlay} selected={selected} onClick={() => onPick({ tool: t, row })} />
                 </td>
               );

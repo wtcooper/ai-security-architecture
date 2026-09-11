@@ -7,9 +7,9 @@
  * Rows can be relabelled with the organisation's own control entries; those aggregate several
  * capabilities, so a cell there carries the worst of them — a gap anywhere is a gap.
  */
-import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, vendors } from "@/lib/data";
+import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, orgToolStatusFor, vendors } from "@/lib/data";
 import { orgFrameworks } from "@/lib/frameworks";
-import type { CapabilityStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
+import type { OrgStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 import { controlCategories } from "@/lib/data";
 
 export type LabelMode = "cosai" | "org";
@@ -83,11 +83,11 @@ export interface ColumnGroup {
 
 export interface Cell {
   coverage?: ToolCoverage;
-  status?: CapabilityStatus;
-  parts: { capability: string; control?: ToolControl; status?: CapabilityStatus }[];
+  status?: OrgStatus;
+  parts: { capability: string; control?: ToolControl; status?: OrgStatus }[];
 }
 
-const STATUS_RANK: CapabilityStatus[] = ["gap", "partial", "needsAssessment", "inPlace"];
+const STATUS_RANK: OrgStatus[] = ["gap", "inProgress", "enabled"];
 const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native"];
 const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {
   const present = values.filter((v): v is T => v !== undefined);
@@ -169,28 +169,17 @@ export const rowsFor = (archetypeId: string, mode: LabelMode) => (mode === "org"
 
 export function cellFor(tool: Tool, row: Row): Cell {
   const own = new Map(tool.controls.map((c) => [c.capability, c]));
+  // A tool the organisation runs has a status on every control (unrecorded = gap); a tool it
+  // does not run has none, and the grid greys its column instead.
+  const onboarded = orgToolStatusFor(tool.id) !== "gap";
   const parts = row.capabilities.map((capability) => ({
     capability,
     control: own.get(capability),
-    status: orgStatusFor(tool.id, capability)?.status,
+    status: onboarded ? orgStatusFor(tool.id, capability)?.status ?? "gap" : undefined,
   }));
   return {
     coverage: worst(COVERAGE_RANK, parts.map((p) => p.control?.coverage)),
     status: worst(STATUS_RANK, parts.map((p) => p.status)),
     parts,
   };
-}
-
-/** Counts across a product's reference set, for the vendor perspective's bars. */
-export function summarise(tool: Tool) {
-  const pinned = archetypeById.get(tool.architecture)?.capabilities ?? [];
-  const own = new Map(tool.controls.map((c) => [c.capability, c]));
-  const coverage: Record<ToolCoverage | "unassessed", number> = { native: 0, partial: 0, external: 0, none: 0, unknown: 0, unassessed: 0 };
-  const status: Record<CapabilityStatus | "unset", number> = { inPlace: 0, partial: 0, gap: 0, needsAssessment: 0, unset: 0 };
-  for (const id of pinned) {
-    const c = own.get(id);
-    coverage[c ? c.coverage : "unassessed"]++;
-    status[orgStatusFor(tool.id, id)?.status ?? "unset"]++;
-  }
-  return { pinned: pinned.length, coverage, status };
 }

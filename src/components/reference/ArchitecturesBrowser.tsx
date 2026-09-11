@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
+import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { archetypeById, archetypesInOrder, guidanceByArchetype, surfaces, toolById } from "@/lib/data";
 import type { Archetype, Paragraph, Scenario } from "@/lib/types";
@@ -94,6 +95,7 @@ export function ArchitecturesBrowser() {
         eyebrow={`${archetypesInOrder.length} application archetypes · authored`}
         title="Reference architectures"
         lead="Target-state architectures in the reference-architecture grammar the industry actually reads: capability blocks connected by typed data paths, the capabilities to deploy numbered onto the drawing, the risks tagged where they surface, and a numbered walkthrough paired with its sequence diagram. Built to be copied, not audited against."
+        aside={<OverlayToggle />}
       >
         {/* --- Picker: a searchable dropdown + surface filter pills -------------------- */}
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">

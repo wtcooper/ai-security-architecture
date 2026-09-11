@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
+import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
+import { OverlayToggle } from "@/components/tooling/OverlayToggle";
+import { useOrgOverlay } from "@/components/tooling/overlay";
 import { FilterPill, RISK_CATEGORY_ACCENT } from "@/components/browse/RisksBrowser";
 import type { BandId } from "@/lib/bands";
 import {
@@ -10,16 +13,14 @@ import {
   capabilitiesInOrder,
   capabilityById,
   controlCategories,
+  orgSurfaceStatusFor,
   riskById,
   riskCategories,
   surfaces,
 } from "@/lib/data";
 import type { Capability } from "@/lib/types";
 import { CapabilityDetail } from "./CapabilityDetail";
-import { SettingsDrawer } from "./SettingsDrawer";
 import { StackFilter } from "./StackFilter";
-import { STATUS_META, STATUS_STYLE, useStatusOverrides } from "./status";
-import { CAPABILITY_STATUSES } from "@/lib/types";
 
 const BAND_IDS: BandId[] = ["application", "model", "modelInfrastructure", "dataInfrastructure"];
 
@@ -30,8 +31,7 @@ export function CapabilitiesBrowser() {
   const [riskCategory, setRiskCategory] = useState<string | null>(null);
   const [band, setBand] = useState<BandId | null>(null);
   const [clicked, setClicked] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const { overrides, set, reset, effective, hasEdits } = useStatusOverrides();
+  const overlay = useOrgOverlay();
 
   const selectedId = clicked ?? (linked && capabilityById.has(linked) ? linked : null);
   const selected = selectedId ? capabilityById.get(selectedId) : undefined;
@@ -59,6 +59,7 @@ export function CapabilitiesBrowser() {
         eyebrow={`${capabilitiesInOrder.length} technology capabilities · authored taxonomy`}
         title="Capabilities"
         lead="CoSAI names the control strategies; this taxonomy names the tooling classes that deliver them. Every surface — endpoint, cloud, third-party SaaS — runs its own instance of the same component stack, but the capabilities that work there differ. Rows are CoSAI control groups; columns are surfaces."
+        aside={<OverlayToggle />}
       >
         <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
@@ -104,19 +105,12 @@ export function CapabilitiesBrowser() {
               </button>
             )}
           </p>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="rounded-lg border border-line bg-paper px-3.5 py-2 text-[13px] font-semibold text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
-          >
-            Assess your posture
-            {hasEdits && <span className="ml-1.5 font-normal text-introduced">· in progress</span>}
-          </button>
         </div>
 
-        {hasEdits && (
+        {overlay && (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-paper px-4 py-2.5">
-          <span className="eyebrow">Coverage</span>
-          {CAPABILITY_STATUSES.map((s) => {
+          <span className="eyebrow">Your status</span>
+          {ORG_STATUSES.map((s) => {
             const tint = STATUS_STYLE[s];
             return (
               <span key={s} className="flex items-center gap-1.5 text-[12.5px] text-ink-2">
@@ -133,15 +127,8 @@ export function CapabilitiesBrowser() {
             );
           })}
           <span className="text-[12.5px] text-ink-3">
-            Nothing ships assessed — this repository maps what the taxonomy covers, not what
-            anyone has deployed. Use{" "}
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="font-semibold text-introduced hover:underline"
-            >
-              Assess your posture
-            </button>{" "}
-            to record your own.
+            From data/org: what the organisation has deployed per capability and surface. Anything
+            not recorded is a gap.
           </span>
         </div>
         )}
@@ -176,19 +163,19 @@ export function CapabilitiesBrowser() {
                           <div className="flex flex-wrap gap-1.5">
                             {cellCaps.map((cap) => {
                               const active = selectedId === cap.id;
-                              const status = effective(cap, s.id);
-                              const tint = STATUS_STYLE[status];
+                              const status = overlay ? orgSurfaceStatusFor(cap.id, s.id) : null;
+                              const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
                               return (
                                 <button
                                   key={cap.id}
                                   onClick={() => setClicked(active ? null : cap.id)}
                                   aria-pressed={active}
-                                  title={`${cap.title} — ${STATUS_META[status].label}`}
+                                  title={status ? `${cap.title} — ${STATUS_META[status].label}` : cap.title}
                                   className="inline-flex items-center rounded-full border px-2.5 py-[5px] text-[12px] font-medium transition-shadow"
                                   style={{
                                     background: tint.bg,
                                     borderColor: active ? "var(--ink)" : tint.border,
-                                    borderStyle: tint.dashed ? "dashed" : "solid",
+                                    borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid",
                                     color: tint.text,
                                     boxShadow: active ? "0 0 0 1px var(--ink)" : undefined,
                                   }}
@@ -218,23 +205,11 @@ export function CapabilitiesBrowser() {
 
         <div ref={detailRef} className="mt-6 scroll-mt-20">
           {selected && (
-            <CapabilityDetail
-              capability={selected}
-              effective={effective}
-              onClose={() => setClicked(null)}
-            />
+            <CapabilityDetail capability={selected} onClose={() => setClicked(null)} />
           )}
         </div>
       </div>
 
-      <SettingsDrawer
-        open={drawerOpen}
-        overrides={overrides}
-        effective={effective}
-        onSet={set}
-        onReset={reset}
-        onClose={() => setDrawerOpen(false)}
-      />
     </>
   );
 }

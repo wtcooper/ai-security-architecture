@@ -9,13 +9,29 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { capabilityById, controlsForCapability, guidanceByArchetype, riskById, riskCode } from "@/lib/data";
+import { capabilityById, controlsForCapability, guidanceByArchetype, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
+import { StatusPill } from "@/components/StatusPill";
 import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
 
 /** The organisation's own identifiers for a pinned entity, linked into the Frameworks tab. */
+/** With status shown, what the organisation has on this surface for the capability. */
+function OrgSurfaceStatus({ capabilityId, surfaceId }: { capabilityId: string; surfaceId: string }) {
+  const overlay = useOrgOverlay();
+  if (!overlay) return null;
+  const posture = orgSurfacePostureFor(capabilityId, surfaceId);
+  return (
+    <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
+      <span className="mr-0.5">Your status:</span>
+      <StatusPill status={orgSurfaceStatusFor(capabilityId, surfaceId)} compact />
+      {posture?.technology && <span className="text-ink-2">{posture.technology}</span>}
+      {posture?.note && <span>— {posture.note}</span>}
+    </p>
+  );
+}
+
 function OrgRefs({ kind, id }: { kind: EntityKind; id: string }) {
   const overlay = useOrgOverlay();
   const refs = orgEntriesFor(kind, id);
@@ -165,6 +181,7 @@ export function CapabilityList({
                     </Link>
                   ))}
                 </p>
+                <OrgSurfaceStatus capabilityId={id} surfaceId={archetype.surface} />
                 <OrgRefs kind="capabilities" id={id} />
                 <GuidanceFor archetype={archetype} capabilityId={id} />
                 <Link

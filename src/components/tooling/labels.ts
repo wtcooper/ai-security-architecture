@@ -1,4 +1,4 @@
-import type { CapabilityStatus, ToolAdoption, ToolCoverage, ToolSurfaceClass } from "@/lib/types";
+import type { ToolCoverage, ToolSurfaceClass } from "@/lib/types";
 
 /** Display names for the registry's enums, in one place so every view says the same thing. */
 export const SURFACE_CLASS_META: Record<ToolSurfaceClass, { label: string; short: string }> = {
@@ -73,18 +73,3 @@ export const COVERAGE_META: Record<
   },
 };
 export const COVERAGE_ORDER: ToolCoverage[] = ["native", "partial", "external", "none", "unknown"];
-
-export const ADOPTION_META: Record<ToolAdoption, { label: string; blurb: string }> = {
-  approved: { label: "Approved", blurb: "Approved for use in the organisation." },
-  pilot: { label: "Pilot", blurb: "In a limited pilot." },
-  blocked: { label: "Blocked", blurb: "Not permitted." },
-  unassessed: { label: "Unassessed", blurb: "No adoption decision recorded." },
-};
-
-/** The posture enum wearing the words leadership asked for on this tab. */
-export const ORG_STATUS_LABEL: Record<CapabilityStatus, string> = {
-  inPlace: "Enabled",
-  partial: "In progress",
-  gap: "Gap",
-  needsAssessment: "Unassessed",
-};

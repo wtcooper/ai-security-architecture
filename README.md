@@ -111,7 +111,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
-| **Capabilities** | The layer neither framework has: 56 vendor-neutral technology classes, as a matrix of CoSAI control groups × three deployment surfaces. Filter by risk category or stack layer, click any capability for its controls, risks, components and sources, and record your own posture in the edit pane. |
+| **Capabilities** | The layer neither framework has: 56 vendor-neutral technology classes, as a matrix of CoSAI control groups × three deployment surfaces. Filter by risk category or stack layer, click any capability for its controls, risks, components and sources. Switch **Show status** on to see what your organisation has enabled, in progress or as a gap, from `data/org`. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the capability-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
@@ -232,12 +232,11 @@ protection, no injection defence; it is a governance catalogue. And **no major c
 ships model signing**; AI-BOM and artifact signing are standards-mandated with no product behind
 them, which makes them a predictable real-world gap.
 
-**Nothing ships assessed.** Every capability starts at *needs assessed*, because this repository
-maps what the taxonomy covers and must never imply a posture anyone holds. The edit pane cycles
-each cell through *in place / partial / gap*, stores it in your browser, and exports a
-`capabilities.yaml` that round-trips through `npm run data` — so a fork commits its own answers
-and the site rebuilds around them. Vendor names are deliberately absent for the same reason: a
-fork adds its own.
+**Nothing ships assessed.** The matrix carries no status until you switch *Show status* on,
+because this repository maps what the taxonomy covers and must never imply a posture anyone
+holds. Status comes from text files under `data/org` (see "Adopt this in your organisation"):
+per capability and surface, *enabled / in progress / gap*, and anything not recorded is a gap.
+Vendor names are deliberately absent from the taxonomy for the same reason: a fork adds its own.
 
 Deliberate exclusions are recorded with reasons in the file header — bias and fairness testing
 and standalone hallucination detection (safety, not security: CoSAI carries no matching risk),
@@ -418,9 +417,11 @@ Everything is text. Clone the repository, and:
 2. **Record your posture, in two halves.** `data/org/local/capabilities.yaml` is the enterprise
    layer: per capability and surface, the technology you run around the tools (MDM, endpoint
    DLP, SSE, gateway guardrails, SIEM) and its status. `tooling-status.yaml` is the product
-   half: per product, its adoption decision and a status per reference control. Switch the
-   organisation overlay on (footer of every page) and both appear beside the reference on each
-   architecture's Tools tab.
+   half: per product, whether you run it and a status per reference control. One vocabulary
+   for all of it: `enabled | inProgress | gap`, and anything not recorded is a gap. Switch
+   **Show status** on (beside the Capabilities and Reference architectures titles) and the
+   matrix, the Tools grid and every product record show it; products you do not run are greyed
+   out so the gaps are the picture.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
    `tooling-onboard` skill under `.claude/skills/` carries the research protocol, and
    `org-taxonomy-customize` walks through the mapping work. `npm run data` fails on any

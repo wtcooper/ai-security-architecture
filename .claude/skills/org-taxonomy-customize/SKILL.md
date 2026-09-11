@@ -53,11 +53,12 @@ Read `references/schema.md` first. It is short and it is the contract.
    measured against. When unsure, ask the adopter — they know what the requirement means.
 4. **Record tool status if they want it.** In `tooling-status.yaml`, one item per tool id from
    `data/tooling/` (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools`
-   lists them; `... tools toolClaudeCode` prints one tool's reference set), with `adoption` and
+   lists them; `... tools toolClaudeCode` prints one tool's reference set), with `status`
+   (`enabled` or `inProgress`; a tool not listed is not onboarded and renders greyed out) and
    an optional `controls` map keyed by capability id. Only capabilities pinned on the tool's
-   architecture may carry a status. Statuses are `inPlace` (shown as Enabled), `partial`
-   (In progress), `gap`, `needsAssessment` (Unassessed); omit a key for "not applicable", and
-   omit `controls` entirely for a tool with only an adoption decision.
+   architecture may carry a status. One vocabulary everywhere: `enabled`, `inProgress`, `gap`;
+   a pinned capability with no key reads as a gap once status is shown, so record the ones
+   that are enabled or in progress and let the rest fall out as gaps.
 5. **Record the enterprise layer if they want it.** In `capabilities.yaml`, per capability and
    surface, the technology the organisation runs (MDM, endpoint DLP, SSE, gateway guardrails,
    SIEM) and its status. This is the other half of every control: a product's managed setting
@@ -79,6 +80,7 @@ Read `references/schema.md` first. It is short and it is the contract.
   authored ones (`owasp-*`, `mitre-atlas`, `stride`, `nist-ai-rmf`, `iso-22989`, `eu-ai-act`).
   Prefix with `org-`.
 - Keep the example profile untouched so upstream diffs stay clean; all edits go in `local/`.
-- The Capabilities tab's browser-side "Assess your posture" drawer records posture per
-  **surface** and round-trips through `data/overlay/capabilities.yaml`. Tool status here is per
-  **tool**. They answer different questions; do not derive one from the other.
+- `capabilities.yaml` records status per **surface** (the enterprise layer); `tooling-status.yaml`
+  records it per **tool**. They answer different questions; do not derive one from the other.
+  Both show under the **Show status** switch beside the Capabilities and Reference architectures
+  titles.

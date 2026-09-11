@@ -5,10 +5,10 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { archetypeById, capabilityById, controlsForCapability, org, orgStatusFor, orgSurfacePostureFor, surfaceById } from "@/lib/data";
+import { archetypeById, capabilityById, controlsForCapability, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolStatusFor, surfaceById } from "@/lib/data";
 import { frameworkHref, orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
-import { OrgStatusPill } from "./OrgStatusPill";
+import { StatusPill } from "@/components/StatusPill";
 import { useOrgOverlay } from "./overlay";
 import { enforcementFor, OWNER_META } from "./model";
 import { CoverageBadge } from "./shared";
@@ -18,11 +18,13 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
   const capability = capabilityById.get(capabilityId);
   const control = tool.controls.find((c) => c.capability === capabilityId);
   const status = orgStatusFor(tool.id, capabilityId);
+  const onboarded = orgToolStatusFor(tool.id) !== "gap";
   const orgIds = orgEntriesFor("capabilities", capabilityId);
   const cosai = controlsForCapability(capabilityId);
   const arch = archetypeById.get(tool.architecture);
   const enforcement = enforcementFor(tool.architecture, [capabilityId]);
   const surfacePosture = overlay && arch ? orgSurfacePostureFor(capabilityId, arch.surface) : undefined;
+  const surfaceStatus = overlay && arch ? orgSurfaceStatusFor(capabilityId, arch.surface) : undefined;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -31,7 +33,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
           <p className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">
             {capability?.title ?? capabilityId}
             <CoverageBadge coverage={control?.coverage} long />
-            {overlay && status && <OrgStatusPill status={status.status} compact />}
+            {overlay && onboarded && <StatusPill status={status?.status ?? "gap"} compact />}
           </p>
         )}
         {control ? (
@@ -100,11 +102,11 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
               {capability.examples.join(" · ")}
             </p>
           ) : null}
-          {surfacePosture && arch && (
+          {surfaceStatus && arch && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
-              <OrgStatusPill status={surfacePosture.status} compact />{" "}
-              {surfacePosture.technology ?? "Enterprise capability"} on {surfaceById.get(arch.surface)?.title.toLowerCase()}
-              {surfacePosture.note && <span className="block text-[11.5px] text-ink-3">{surfacePosture.note}</span>}
+              <StatusPill status={surfaceStatus} compact />{" "}
+              {surfacePosture?.technology ?? "Enterprise capability"} on {surfaceById.get(arch.surface)?.title.toLowerCase()}
+              {surfacePosture?.note && <span className="block text-[11.5px] text-ink-3">{surfacePosture.note}</span>}
             </p>
           )}
         </div>

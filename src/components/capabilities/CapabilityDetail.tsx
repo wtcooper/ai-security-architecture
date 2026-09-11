@@ -13,23 +13,16 @@ import {
   controlsForCapability,
   risksForCapability,
   orgSurfacePostureFor,
+  orgSurfaceStatusFor,
   surfaces,
 } from "@/lib/data";
 import { mappingsForCapability } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
-import type { Capability, CapabilityStatus } from "@/lib/types";
+import type { Capability } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
-import { StatusPill } from "./StatusPill";
+import { StatusPill } from "@/components/StatusPill";
 
-export function CapabilityDetail({
-  capability,
-  effective,
-  onClose,
-}: {
-  capability: Capability;
-  effective: (capability: Capability, surfaceId: string) => CapabilityStatus;
-  onClose: () => void;
-}) {
+export function CapabilityDetail({ capability, onClose }: { capability: Capability; onClose: () => void }) {
   const controls = controlsForCapability(capability.id);
   const risks = risksForCapability(capability.id);
   const components = componentsForCapability(capability.id);
@@ -82,7 +75,7 @@ export function CapabilityDetail({
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         {surfaces.map((s) => {
           const info = capability.surfaces[s.id];
-          const status = effective(capability, s.id);
+          const status = overlay ? orgSurfaceStatusFor(capability.id, s.id) : null;
           return (
             <div
               key={s.id}
@@ -91,7 +84,7 @@ export function CapabilityDetail({
               <p className="flex items-center justify-between gap-2 text-[13px] font-semibold text-ink">
                 {s.title}
                 {info?.applies ? (
-                  <StatusPill status={status} />
+                  status && <StatusPill status={status} />
                 ) : (
                   <span className="text-[11px] font-medium text-ink-3">not available</span>
                 )}

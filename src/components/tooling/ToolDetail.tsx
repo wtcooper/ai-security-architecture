@@ -6,11 +6,11 @@ import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
 import { Section } from "@/components/reference/ArchetypeDetail";
-import { archetypeById, org, orgAdoptionFor, orgPostureFor, riskById, riskCode, vendorById } from "@/lib/data";
+import { StatusPill } from "@/components/StatusPill";
+import { archetypeById, org, orgPostureFor, orgToolStatusFor, riskById, riskCode, vendorById } from "@/lib/data";
 import type { Tool, ToolVariant } from "@/lib/types";
-import { ADOPTION_META, SURFACE_CLASS_META } from "./labels";
+import { SURFACE_CLASS_META } from "./labels";
 import { useOrgOverlay } from "./overlay";
-import { OverlayToggle } from "./OverlayToggle";
 import { ToolControlsTable } from "./ToolControlsTable";
 
 const STATUS_LABEL = { ga: "GA", beta: "Beta", preview: "Preview", announced: "Announced" } as const;
@@ -19,7 +19,7 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
   const overlay = useOrgOverlay();
   const vendor = vendorById.get(tool.vendor);
   const arch = archetypeById.get(tool.architecture);
-  const adoption = orgAdoptionFor(tool.id);
+  const orgStatus = orgToolStatusFor(tool.id);
   const posture = orgPostureFor(tool.id);
 
   return (
@@ -34,18 +34,14 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
           </span>
         )}
         <span className="ident text-[10.5px] text-ink-3">as of {tool.asOf}</span>
-        <OverlayToggle className="ml-auto" />
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <h2 className="display text-[27px] font-bold leading-tight text-ink">{tool.name}</h2>
         {overlay && (
-          <span
-            className="rounded-full border border-ink px-2.5 py-[3px] text-[11.5px] font-semibold text-ink"
-            title={`${org.example ? "Example organisation" : org.name}: ${ADOPTION_META[adoption].blurb}${posture?.note ? ` — ${posture.note}` : ""}`}
-          >
-            {ADOPTION_META[adoption].label}
-            {org.example && <span className="ml-1 font-normal text-ink-3">· example</span>}
-          </span>
+          <StatusPill
+            status={orgStatus}
+            title={`${org.example ? "Example organisation" : org.name}: ${orgStatus === "gap" ? "not onboarded" : "runs this product"}${posture?.note ? ` — ${posture.note}` : ""}`}
+          />
         )}
       </div>
 

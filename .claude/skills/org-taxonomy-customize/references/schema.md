@@ -41,27 +41,28 @@ An entry with no targets is allowed. Framework ids are checked against every oth
 capabilities:
   capabilityAiDlp:                # data/overlay/capabilities.yaml id
     surfaceEndpoint:              # surfaceEndpoint | surfaceCloud | surfaceSaas
-      status: inPlace             # inPlace | partial | gap | needsAssessment
+      status: enabled             # enabled | inProgress | gap
       technology: Netskope endpoint DLP    # optional; the named product you run
       note: ...                   # optional
-    surfaceSaas: { status: partial, technology: Netskope CASB }
+    surfaceSaas: { status: inProgress, technology: Netskope CASB }
 ```
 
-Build rules: the capability and surface ids exist; status in enum. This is the text-file home
-for the Capabilities tab's posture (its browser-side drawer still wins in that browser), and it
-is what appears as the enterprise-capability modules on each architecture's Tools tab: the product's own setting is one
-half of a control, the enterprise technology that delivers or surrounds it is the other.
+Build rules: the capability and surface ids exist; status in enum. This is the only source of
+the Capabilities tab's status, and it is what appears as the enterprise-capability modules on
+each architecture's Tools tab: the product's own setting is one half of a control, the enterprise
+technology that delivers or surrounds it is the other. A capability × surface not listed reads
+as a gap once status is shown.
 
 ## tooling-status.yaml
 
 ```yaml
 tools:
   - tool: toolClaudeCode          # an id from data/tooling/
-    adoption: approved            # approved | pilot | blocked | unassessed
+    status: enabled               # enabled | inProgress; omit the tool (or say gap) if not onboarded
     note: ...                     # optional
     controls:                     # keyed by capability id pinned on the tool's architecture
       capabilityToolPermissionScoping:
-        status: inPlace           # inPlace | partial | gap | needsAssessment
+        status: enabled           # enabled | inProgress | gap
         note: permissions.deny via managed-settings.json   # optional
         evidence: CHG-1042        # optional ticket / document reference
       capabilityAgentSandboxing: { status: gap }
@@ -69,7 +70,8 @@ tools:
 
 Build rules: the tool exists; each capability key is pinned on that tool's architecture
 (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools` prints the set);
-status and adoption are in their enums. A tool may appear once.
+statuses are in the enum. A tool may appear once. A tool not listed is not onboarded and renders
+greyed out; a pinned capability with no key under an onboarded tool reads as a gap.
 
 ## Where it renders
 
