@@ -18,58 +18,14 @@ export const SURFACE_CLASS_ORDER = Object.keys(SURFACE_CLASS_META) as ToolSurfac
 
 /**
  * How far the vendor goes on a pinned capability, in plain words a reader can act on: can an
- * administrator switch it on in this product, or not. Each carries its own colour; the
- * organisation's status, when shown, rides on top as a pill.
+ * administrator switch it on in this product, or not. The words carry no colour of their own;
+ * colour is reserved for the organisation's status, the same tints the Capabilities matrix uses.
  */
-export const COVERAGE_META: Record<
-  ToolCoverage,
-  { label: string; long: string; glyph: string; blurb: string; bg: string; text: string; border: string; dashed?: boolean }
-> = {
-  native: {
-    label: "Settable",
-    long: "Admin-settable",
-    glyph: "●",
-    blurb: "An administrator can switch this on in the product itself.",
-    bg: "var(--mitigated-soft)",
-    text: "var(--mitigated)",
-    border: "transparent",
-  },
-  partial: {
-    label: "Partly",
-    long: "Partly settable",
-    glyph: "◐",
-    blurb: "Part of it is settable in the product; the rest needs process or another product.",
-    bg: "#fdf3e4",
-    text: "#b45309",
-    border: "transparent",
-  },
-  external: {
-    label: "3rd-party",
-    long: "Needs a third-party product",
-    glyph: "○",
-    blurb: "The product offers nothing itself; a separate product around it provides this.",
-    bg: "var(--mist)",
-    text: "var(--ink-2)",
-    border: "var(--line-strong)",
-  },
-  none: {
-    label: "Not offered",
-    long: "Not offered",
-    glyph: "—",
-    blurb: "The vendor offers nothing for this, and nothing around it fills the gap.",
-    bg: "var(--exposed-soft)",
-    text: "var(--exposed)",
-    border: "transparent",
-  },
-  unknown: {
-    label: "Unverified",
-    long: "Unverified",
-    glyph: "?",
-    blurb: "Could not be confirmed against the vendor's documentation.",
-    bg: "var(--paper)",
-    text: "var(--ink-3)",
-    border: "var(--line-strong)",
-    dashed: true,
-  },
+export const COVERAGE_META: Record<ToolCoverage, { label: string; long: string; blurb: string; linkable: boolean }> = {
+  native: { label: "Settable", long: "Admin-settable", blurb: "An administrator can switch this on in the product itself.", linkable: true },
+  partial: { label: "Partly", long: "Partly settable", blurb: "Part of it is settable in the product; the rest needs process or another product.", linkable: true },
+  external: { label: "3rd-party", long: "Needs a third-party product", blurb: "The product offers nothing itself; a separate product around it provides this.", linkable: true },
+  none: { label: "Not offered", long: "Not offered", blurb: "The vendor offers nothing for this, and nothing around it fills the gap.", linkable: false },
+  unknown: { label: "Unverified", long: "Unverified", blurb: "Could not be confirmed against the vendor's documentation.", linkable: true },
 };
 export const COVERAGE_ORDER: ToolCoverage[] = ["native", "partial", "external", "none", "unknown"];

@@ -2,7 +2,7 @@
 
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
 import Link from "next/link";
-import { ORG_STATUSES, STATUS_META, STATUS_STYLE, StatusPill } from "@/components/StatusPill";
+import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
 import type { Tool, ToolControl, ToolCoverage } from "@/lib/types";
 import { archetypeById, capabilityById, orgSurfacePostureFor, orgSurfaceStatusFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
@@ -29,25 +29,33 @@ export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
 /** The vendor page for one control on one product: the first operator step's link, else none. */
 export const configureUrl = (control?: ToolControl) => control?.steps?.find((st) => st.url)?.url;
 
-/** The coverage word in its colour. The one encoding every view shares. */
-export function CoverageBadge({ coverage, long = false, className = "" }: { coverage?: ToolCoverage; long?: boolean; className?: string }) {
+/**
+ * The coverage word as a tag. Neutral by itself; when `url` is given (the vendor's page for
+ * configuring it, never for "Not offered") the tag is the link.
+ */
+export function CoverageBadge({ coverage, long = false, url, className = "" }: { coverage?: ToolCoverage; long?: boolean; url?: string; className?: string }) {
   const m = coverage ? COVERAGE_META[coverage] : null;
+  const text = m ? (long ? m.long : m.label) : "Not assessed";
+  const cls = `inline-flex items-center whitespace-nowrap rounded-full border border-current/30 px-2 py-[2px] text-[11px] font-semibold ${className}`;
+  if (m?.linkable && url) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" title={`${m.blurb} Opens the vendor's page for configuring it.`} className={`${cls} underline decoration-dotted underline-offset-2 hover:decoration-solid`} onClick={(e) => e.stopPropagation()}>
+        {text} ↗
+      </a>
+    );
+  }
   return (
-    <span
-      title={m?.blurb ?? "The registry has no vendor record for this control yet."}
-      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-[2px] text-[11px] font-semibold ${className}`}
-      style={
-        m
-          ? { background: m.bg, color: m.text, borderColor: m.border, borderStyle: m.dashed ? "dashed" : "solid" }
-          : { background: "var(--paper)", color: "var(--ink-3)", borderColor: "var(--line)" }
-      }
-    >
-      {m ? (long ? m.long : m.label) : "Not assessed"}
+    <span title={m?.blurb ?? "The registry has no vendor record for this control yet."} className={cls}>
+      {text}
     </span>
   );
 }
 
-/** A grid cell: the coverage word on its colour, the configure link, and the status pill when the overlay is on. */
+/**
+ * A grid cell: tinted by the organisation's status when shown (the Capabilities matrix's
+ * colours), neutral otherwise; the coverage word inside is the link to the vendor's page.
+ * Clicking the cell itself opens the steps beneath the grid.
+ */
 export function CellTile({
   cell,
   title,
@@ -61,31 +69,25 @@ export function CellTile({
   selected?: boolean;
   onClick?: () => void;
 }) {
-  const m = cell.coverage ? COVERAGE_META[cell.coverage] : null;
   const status = overlay ? cell.status : undefined;
+  const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
   const url = cell.parts.map((p) => configureUrl(p.control)).find(Boolean);
   return (
     <div
-      className={`flex h-full min-h-[36px] items-center justify-center gap-1.5 rounded-[4px] px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
-      style={m ? { background: m.bg, color: m.text, boxShadow: m.dashed ? "inset 0 0 0 1px var(--line-strong)" : undefined } : { color: "var(--ink-3)" }}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      className={`flex h-full min-h-[36px] cursor-pointer items-center justify-center rounded-[4px] border px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
+      style={{ background: tint.bg, borderColor: tint.border, color: tint.text, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid" }}
       title={title}
     >
-      <button type="button" onClick={onClick} className="min-w-0 truncate text-center text-[11.5px] font-semibold hover:underline">
-        {m ? m.label : "—"}
-      </button>
-      {status && <StatusPill status={status} compact />}
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          title="How to configure — the vendor's page"
-          className="shrink-0 rounded px-1 text-[12px] font-bold opacity-70 hover:bg-white/60 hover:opacity-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          ↗
-        </a>
-      )}
+      {cell.coverage ? <CoverageBadge coverage={cell.coverage} url={url} className="border-transparent" /> : <span className="text-[11.5px] text-ink-3">—</span>}
     </div>
   );
 }
@@ -94,10 +96,8 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
   return (
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink-3 ${compact ? "" : "rounded-lg border border-line bg-paper px-3 py-2"}`}>
       <span className="eyebrow" title="Admin control: set by an administrator in the product itself.">Admin control</span>
-      {COVERAGE_ORDER.map((c) => (
-        <CoverageBadge key={c} coverage={c} />
-      ))}
-      <span className="ml-1">↗ = the vendor&rsquo;s page for configuring it</span>
+      <span>{COVERAGE_ORDER.map((c) => COVERAGE_META[c].label).join(" · ")}</span>
+      <span className="ml-1">the word ↗ links to the vendor&rsquo;s page for configuring it; click a cell for the steps</span>
       <span className="eyebrow ml-2" title="Enterprise capability: a control class the organisation deploys around the products, at the place the drawing pins it.">Enterprise capability</span>
       <span className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-paper px-1.5 py-[2px] text-[10.5px] leading-none text-ink" style={{ borderStyle: "dashed" }}>
         <span className="font-semibold">control class</span>

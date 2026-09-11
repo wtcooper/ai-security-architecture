@@ -86,12 +86,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                     </td>
                     )}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <CoverageBadge coverage={control?.coverage} />
-                      {url && (
-                        <a href={url} target="_blank" rel="noreferrer" title="How to configure — the vendor's page" className="ml-1.5 text-[12px] font-bold text-introduced hover:underline" onClick={(e) => e.stopPropagation()}>
-                          ↗
-                        </a>
-                      )}
+                      <CoverageBadge coverage={control?.coverage} url={url} />
                     </td>
                     {overlay && (
                       <td className="px-3 py-2 whitespace-nowrap">
