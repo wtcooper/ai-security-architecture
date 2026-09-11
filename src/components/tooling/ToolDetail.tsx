@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
 import { Section } from "@/components/reference/ArchetypeDetail";
-import { StatusPill } from "@/components/StatusPill";
+import { StatusPill, TOOL_STATUS_LABEL } from "@/components/StatusPill";
 import { archetypeById, org, orgPostureFor, orgToolStatusFor, riskById, riskCode, vendorById } from "@/lib/data";
 import type { Tool, ToolVariant } from "@/lib/types";
 import { SURFACE_CLASS_META } from "./labels";
@@ -40,7 +40,8 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
         {overlay && (
           <StatusPill
             status={orgStatus}
-            title={`${org.example ? "Example organisation" : org.name}: ${orgStatus === "gap" ? "not onboarded" : "runs this product"}${posture?.note ? ` — ${posture.note}` : ""}`}
+            label={TOOL_STATUS_LABEL[orgStatus]}
+            title={`${org.example ? "Example organisation" : org.name}: ${orgStatus === "gap" ? "does not run this product" : "runs this product"}${posture?.note ? ` — ${posture.note}` : ""}`}
           />
         )}
       </div>

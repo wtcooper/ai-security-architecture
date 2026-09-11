@@ -19,6 +19,16 @@ export const STATUS_STYLE: Record<OrgStatus, { bg: string; border: string; text:
   gap: { bg: "#fdeadf", border: "#f0c1a3", text: "#c2410c", dashed: true },
 };
 
+/**
+ * The same three states said as availability, for a product rather than a control: the
+ * question a reader asks of a tool is "can I use it here", not "is this control in place".
+ */
+export const TOOL_STATUS_LABEL: Record<OrgStatus, string> = {
+  enabled: "Available",
+  inProgress: "Rolling out",
+  gap: "Not available",
+};
+
 /** How a capability pill looks with status off: unanswered, neutral. */
 export const NEUTRAL_STYLE = { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675" };
 
@@ -27,10 +37,13 @@ export { ORG_STATUSES };
 export function StatusPill({
   status,
   title,
+  label,
   compact = false,
 }: {
   status: OrgStatus;
   title?: string;
+  /** Overrides the control wording, e.g. TOOL_STATUS_LABEL for a product. */
+  label?: string;
   compact?: boolean;
 }) {
   const s = STATUS_STYLE[status];
@@ -42,7 +55,7 @@ export function StatusPill({
       }`}
       style={{ background: s.bg, borderColor: s.border, color: s.text, borderStyle: s.dashed ? "dashed" : "solid" }}
     >
-      {STATUS_META[status].label}
+      {label ?? STATUS_META[status].label}
     </span>
   );
 }

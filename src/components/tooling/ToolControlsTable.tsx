@@ -90,7 +90,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                     </td>
                     {overlay && (
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {onboarded ? <StatusPill status={status?.status ?? "gap"} title={status?.note} /> : <span className="text-ink-3">not onboarded</span>}
+                        {onboarded ? <StatusPill status={status?.status ?? "gap"} title={status?.note} /> : <span className="text-ink-3">not available</span>}
                       </td>
                     )}
                   </tr>

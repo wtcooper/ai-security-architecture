@@ -8,7 +8,7 @@
  */
 import { useState } from "react";
 
-import { StatusPill } from "@/components/StatusPill";
+import { StatusPill, TOOL_STATUS_LABEL } from "@/components/StatusPill";
 import { orgToolStatusFor } from "@/lib/data";
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Row, type RowGroup } from "./model";
@@ -80,7 +80,12 @@ export function GridView({
                     )}
                     {overlay && (
                       <span className="mt-1 block">
-                        <StatusPill status={orgToolStatusFor(t.id)} compact title={dim(t) ? "Not onboarded by the organisation" : undefined} />
+                        <StatusPill
+                          status={orgToolStatusFor(t.id)}
+                          compact
+                          label={TOOL_STATUS_LABEL[orgToolStatusFor(t.id)]}
+                          title={dim(t) ? "The organisation does not run this product" : undefined}
+                        />
                       </span>
                     )}
                   </th>
