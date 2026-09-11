@@ -121,48 +121,48 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
 }
 
 /**
- * The enterprise modules of one control on one architecture: the control's capability class,
- * deployed by the organisation at each place the drawing pins it (a gateway, the managed
- * endpoint, the governance plane). Each is an independent layer beside the products' admin
- * controls — a control may have one, the other, or both. With the overlay on, the organisation's
- * technology and status for that surface ride on each module.
+ * The enterprise capability of one control on one architecture, as one tag: the capability
+ * class, then every block the drawing pins it on ("where it sits", with the zone owner's dot).
+ * With status shown the tag is tinted by the organisation's status on this surface, the same
+ * colours as everywhere else; the technology it runs and its note live in the tooltip.
  */
 export function EnterpriseModules({ row, archetypeId, overlay, className = "" }: { row: Row; archetypeId: string; overlay: boolean; className?: string }) {
   const arch = archetypeById.get(archetypeId);
   const capability = capabilityById.get(row.capabilities[0]);
+  if (!row.enforcement.length) return null;
   const posture = overlay && arch ? row.capabilities.map((c) => orgSurfacePostureFor(c, arch.surface)).find(Boolean) : undefined;
   const status = overlay && arch ? orgSurfaceStatusFor(row.capabilities[0], arch.surface) : undefined;
-  if (!row.enforcement.length) return null;
+  const tint = status ? STATUS_STYLE[status] : null;
   const label = capability?.abbrev ?? capability?.title ?? "Capability";
+  const title = [
+    `Enterprise capability: ${capability?.title ?? row.label}`,
+    `Where it sits: ${row.enforcement.map((e) => `${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})`).join(", ")}`,
+    capability?.examples?.length ? `Bought as: ${capability.examples.join(", ")}` : "",
+    status ? `Your status: ${STATUS_META[status].label}${posture?.technology ? ` with ${posture.technology}` : ""}${posture?.note ? ` — ${posture.note}` : ""}` : "",
+    ...row.enforcement.flatMap((e) => e.notes),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   return (
     <span className={`flex flex-wrap items-center gap-1.5 ${className}`}>
-      {row.enforcement.map((e) => (
-        <Link
-          key={e.blockId}
-          href={`/capabilities?capability=${row.capabilities[0]}`}
-          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-paper px-1.5 py-[3px] text-[11px] leading-none text-ink hover:border-ink"
-          style={{ borderStyle: "dashed" }}
-          title={`Enterprise capability: ${capability?.title ?? row.label}, deployed at ${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})${
-            capability?.examples?.length ? `\nBought as: ${capability.examples.join(", ")}` : ""
-          }${e.notes.length ? `\n\n${e.notes.join("\n\n")}` : ""}`}
-        >
-          <span className="font-semibold">{label}</span>
-          <span className="text-ink-3">
+      <Link
+        href={`/capabilities?capability=${row.capabilities[0]}`}
+        className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md border px-1.5 py-[3px] text-[11px] leading-none hover:border-ink"
+        style={
+          tint
+            ? { background: tint.bg, borderColor: tint.border, color: tint.text, borderStyle: tint.dashed ? "dashed" : "solid" }
+            : { background: "var(--paper)", borderColor: "var(--line-strong)", color: "var(--ink)", borderStyle: "dashed" }
+        }
+        title={title}
+      >
+        <span className="font-semibold">{label}</span>
+        {row.enforcement.map((e) => (
+          <span key={e.blockId} className={tint ? "opacity-80" : "text-ink-3"}>
             <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: OWNER_META[e.owner]?.color ?? "var(--ink-3)" }} />
             {e.title}
           </span>
-        </Link>
-      ))}
-      {status && (
-        <span
-          className="inline-flex items-center whitespace-nowrap rounded-full border px-1.5 py-[2px] text-[10px] font-semibold"
-          style={{ borderColor: STATUS_STYLE[status].border, color: STATUS_STYLE[status].text, background: STATUS_STYLE[status].bg }}
-          title={`${STATUS_META[status].label} on this surface${posture?.technology ? ` with ${posture.technology}` : ""}${posture?.note ? ` — ${posture.note}` : ""}`}
-        >
-          {posture?.technology ? `${posture.technology} · ` : ""}
-          {STATUS_META[status].label}
-        </span>
-      )}
+        ))}
+      </Link>
     </span>
   );
 }
