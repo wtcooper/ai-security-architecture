@@ -8,8 +8,8 @@
  */
 import { useState } from "react";
 
-import { StatusPill, TOOL_STATUS_LABEL } from "@/components/StatusPill";
-import { orgToolStatusFor } from "@/lib/data";
+import { AvailabilityPill } from "@/components/StatusPill";
+import { orgToolAvailableFor } from "@/lib/data";
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Row, type RowGroup } from "./model";
 import { CellDetail, CellTile, cellTitle, docsUrlFor, EnterpriseModules } from "./shared";
@@ -32,7 +32,7 @@ export function GridView({
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
   const span = tools.length + 2;
   // With status shown, a product the organisation does not run fades so the gaps are the picture.
-  const dim = (t: Tool) => overlay && orgToolStatusFor(t.id) === "gap";
+  const dim = (t: Tool) => overlay && !orgToolAvailableFor(t.id);
   // One vendor (the vendor view) needs no vendor sub-row under "Admin controls".
   const headerRows = cols.length > 1 ? 3 : 2;
   return (
@@ -80,12 +80,7 @@ export function GridView({
                     )}
                     {overlay && (
                       <span className="mt-1 block">
-                        <StatusPill
-                          status={orgToolStatusFor(t.id)}
-                          compact
-                          label={TOOL_STATUS_LABEL[orgToolStatusFor(t.id)]}
-                          title={dim(t) ? "The organisation does not run this product" : undefined}
-                        />
+                        <AvailabilityPill available={orgToolAvailableFor(t.id)} compact />
                       </span>
                     )}
                   </th>

@@ -20,7 +20,7 @@ export function cellTitle(tool: Tool, row: Row, cell: Cell, overlay: boolean) {
     `Admin control · ${tool.name} · ${row.title ?? row.label}`,
     `${cov ? cov.long : "Not assessed"}${cell.parts.length > 1 ? ` (worst of ${cell.parts.length})` : ""}${cov ? ` — ${cov.blurb}` : ""}`,
     steps ? `${steps} operator step${steps === 1 ? "" : "s"} with vendor links — click to open` : "",
-    overlay ? `Status: ${cell.status ? STATUS_META[cell.status].label : "product not available here"}` : "",
+    overlay ? `Status: ${cell.status ? STATUS_META[cell.status].label : "product not available"}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -113,7 +113,7 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
               {STATUS_META[s].label}
             </span>
           ))}
-          <span className="text-ink-3">· greyed product = not available in the organisation</span>
+          <span className="text-ink-3">· greyed product = not available</span>
         </>
       )}
     </div>

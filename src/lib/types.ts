@@ -794,12 +794,14 @@ export interface OrgOrgStatus {
 export type OrgCapabilityPosture = Record<string, Record<string, OrgOrgStatus>>;
 
 /**
- * The organisation's posture on one tool: whether it runs it (enabled / inProgress; a tool not
- * listed, or listed as gap, is not onboarded and renders greyed) plus per-capability status.
+ * The organisation's posture on one tool: whether people can install and use it at all, plus
+ * a status per control. Availability is binary on purpose — either the organisation provides
+ * the product or it blocks it; how well it is secured is what the control statuses say. A tool
+ * not listed here is not available, and renders greyed.
  */
 export interface OrgToolPosture {
   tool: string;
-  status?: OrgStatus;
+  available?: boolean;
   note?: string;
   /** Keyed by capability id; every key must be pinned on the tool's architecture. */
   controls: Record<string, OrgToolControlStatus>;

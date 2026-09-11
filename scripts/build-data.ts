@@ -1513,8 +1513,8 @@ function checkTooling(
 }
 
 /**
- * The organisation's tool posture: which tools it runs and, per pinned capability, whether
- * the control is switched on. One status enum serves tools, their controls and the enterprise
+ * The organisation's tool posture: which tools people may install (available, a boolean) and,
+ * per pinned capability, whether the control is switched on. One status enum serves tools, their controls and the enterprise
  * layer so the same pills render everywhere; a capability not pinned on the tool's
  * architecture cannot carry a status, because the reference set is the drawing.
  */
@@ -1536,8 +1536,8 @@ function checkToolingStatus(
     }
     if (seen.has(p.tool)) fail(`${where}: listed twice`);
     seen.add(p.tool);
-    if (p.status !== undefined && !STATUSES.has(p.status)) {
-      fail(`${where}: status must be one of ${[...STATUSES].join(", ")}`);
+    if (p.available !== undefined && typeof p.available !== "boolean") {
+      fail(`${where}: available must be true or false — a product is provided or it is blocked`);
     }
     const pinned = new Set(archetypeById.get(tool.architecture)?.capabilities ?? []);
     for (const [capabilityId, entry] of Object.entries(p.controls ?? {})) {

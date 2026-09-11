@@ -296,8 +296,8 @@ export const org = meta.org;
 const postureByTool = new Map(orgToolPosture.map((p) => [p.tool, p]));
 
 export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
-/** Whether the organisation runs this tool; not listed reads as a gap. */
-export const orgToolStatusFor = (toolId: string): OrgStatus => postureByTool.get(toolId)?.status ?? "gap";
+/** Whether people in the organisation may install and use this product; not listed means no. */
+export const orgToolAvailableFor = (toolId: string): boolean => postureByTool.get(toolId)?.available === true;
 export const orgStatusFor = (toolId: string, capabilityId: string) =>
   postureByTool.get(toolId)?.controls[capabilityId];
 /** The enterprise layer: the organisation's technology and status for a capability on a surface. */

@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 
-import { controlsForCapability, controlsForTool, org, orgStatusFor, orgToolStatusFor } from "@/lib/data";
+import { controlsForCapability, controlsForTool, org, orgStatusFor, orgToolAvailableFor } from "@/lib/data";
 import { orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
 import { ControlRowDetail } from "./ControlRowDetail";
@@ -18,7 +18,7 @@ import { CoverageBadge, configureUrl } from "./shared";
 export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
   const rows = controlsForTool(tool.id);
   const overlay = useOrgOverlay();
-  const onboarded = orgToolStatusFor(tool.id) !== "gap";
+  const available = orgToolAvailableFor(tool.id);
   const [open, setOpen] = useState<string | null>(openCapability ?? null);
   const addressed = rows.filter((r) => r.control).length;
 
@@ -90,7 +90,7 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                     </td>
                     {overlay && (
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {onboarded ? <StatusPill status={status?.status ?? "gap"} title={status?.note} /> : <span className="text-ink-3">not available</span>}
+                        {available ? <StatusPill status={status?.status ?? "gap"} title={status?.note} /> : <span className="text-ink-3">not available</span>}
                       </td>
                     )}
                   </tr>

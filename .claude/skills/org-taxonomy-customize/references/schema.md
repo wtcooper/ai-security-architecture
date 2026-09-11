@@ -58,7 +58,7 @@ as a gap once status is shown.
 ```yaml
 tools:
   - tool: toolClaudeCode          # an id from data/tooling/
-    status: enabled               # enabled | inProgress; omit the tool (or say gap) if not onboarded
+    available: true               # may people install and use it? omit the tool, or say false, if not
     note: ...                     # optional
     controls:                     # keyed by capability id pinned on the tool's architecture
       capabilityToolPermissionScoping:
@@ -70,8 +70,8 @@ tools:
 
 Build rules: the tool exists; each capability key is pinned on that tool's architecture
 (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools` prints the set);
-statuses are in the enum. A tool may appear once. A tool not listed is not onboarded and renders
-greyed out; a pinned capability with no key under an onboarded tool reads as a gap.
+`available` is a boolean and control statuses are in the enum. A tool may appear once. A tool not
+listed is not available and renders greyed out; a pinned capability with no key under an onboarded tool reads as a gap.
 
 ## Where it renders
 

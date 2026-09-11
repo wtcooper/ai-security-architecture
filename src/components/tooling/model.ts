@@ -7,7 +7,7 @@
  * Rows can be relabelled with the organisation's own control entries; those aggregate several
  * capabilities, so a cell there carries the worst of them — a gap anywhere is a gap.
  */
-import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, orgToolStatusFor, vendors } from "@/lib/data";
+import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, orgToolAvailableFor, vendors } from "@/lib/data";
 import { orgFrameworks } from "@/lib/frameworks";
 import type { OrgStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 import { controlCategories } from "@/lib/data";
@@ -169,9 +169,9 @@ export const rowsFor = (archetypeId: string, mode: LabelMode) => (mode === "org"
 
 export function cellFor(tool: Tool, row: Row): Cell {
   const own = new Map(tool.controls.map((c) => [c.capability, c]));
-  // A tool the organisation runs has a status on every control (unrecorded = gap); a tool it
-  // does not run has none, and the grid greys its column instead.
-  const onboarded = orgToolStatusFor(tool.id) !== "gap";
+  // An available product has a status on every control (unrecorded = gap); one the organisation
+  // does not provide has none, and the grid greys its column instead.
+  const onboarded = orgToolAvailableFor(tool.id);
   const parts = row.capabilities.map((capability) => ({
     capability,
     control: own.get(capability),

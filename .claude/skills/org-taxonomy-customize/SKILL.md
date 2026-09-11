@@ -53,9 +53,9 @@ Read `references/schema.md` first. It is short and it is the contract.
    measured against. When unsure, ask the adopter — they know what the requirement means.
 4. **Record tool status if they want it.** In `tooling-status.yaml`, one item per tool id from
    `data/tooling/` (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools`
-   lists them; `... tools toolClaudeCode` prints one tool's reference set), with `status`
-   (`enabled` or `inProgress`; a tool not listed is not onboarded and renders greyed out) and
-   an optional `controls` map keyed by capability id. Only capabilities pinned on the tool's
+   lists them; `... tools toolClaudeCode` prints one tool's reference set), with
+   `available: true` when people may install it (a tool not listed, or `false`, is not available
+   and renders greyed out) and an optional `controls` map keyed by capability id. Only capabilities pinned on the tool's
    architecture may carry a status. One vocabulary everywhere: `enabled`, `inProgress`, `gap`;
    a pinned capability with no key reads as a gap once status is shown, so record the ones
    that are enabled or in progress and let the rest fall out as gaps.

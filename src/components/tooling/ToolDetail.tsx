@@ -6,8 +6,8 @@ import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
 import { Section } from "@/components/reference/ArchetypeDetail";
-import { StatusPill, TOOL_STATUS_LABEL } from "@/components/StatusPill";
-import { archetypeById, org, orgPostureFor, orgToolStatusFor, riskById, riskCode, vendorById } from "@/lib/data";
+import { AvailabilityPill } from "@/components/StatusPill";
+import { archetypeById, org, orgPostureFor, orgToolAvailableFor, riskById, riskCode, vendorById } from "@/lib/data";
 import type { Tool, ToolVariant } from "@/lib/types";
 import { SURFACE_CLASS_META } from "./labels";
 import { useOrgOverlay } from "./overlay";
@@ -19,7 +19,7 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
   const overlay = useOrgOverlay();
   const vendor = vendorById.get(tool.vendor);
   const arch = archetypeById.get(tool.architecture);
-  const orgStatus = orgToolStatusFor(tool.id);
+  const available = orgToolAvailableFor(tool.id);
   const posture = orgPostureFor(tool.id);
 
   return (
@@ -38,10 +38,9 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
       <div className="mt-1.5 flex flex-wrap items-center gap-3">
         <h2 className="display text-[27px] font-bold leading-tight text-ink">{tool.name}</h2>
         {overlay && (
-          <StatusPill
-            status={orgStatus}
-            label={TOOL_STATUS_LABEL[orgStatus]}
-            title={`${org.example ? "Example organisation" : org.name}: ${orgStatus === "gap" ? "does not run this product" : "runs this product"}${posture?.note ? ` — ${posture.note}` : ""}`}
+          <AvailabilityPill
+            available={available}
+            title={`${org.example ? "Example organisation" : org.name}: ${available ? "people may install and use this product" : "not provided"}${posture?.note ? ` — ${posture.note}` : ""}`}
           />
         )}
       </div>

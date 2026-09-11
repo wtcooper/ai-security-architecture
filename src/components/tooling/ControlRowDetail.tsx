@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { archetypeById, capabilityById, controlsForCapability, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolStatusFor, surfaceById } from "@/lib/data";
+import { archetypeById, capabilityById, controlsForCapability, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, surfaceById } from "@/lib/data";
 import { frameworkHref, orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
 import { StatusPill } from "@/components/StatusPill";
@@ -18,7 +18,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
   const capability = capabilityById.get(capabilityId);
   const control = tool.controls.find((c) => c.capability === capabilityId);
   const status = orgStatusFor(tool.id, capabilityId);
-  const onboarded = orgToolStatusFor(tool.id) !== "gap";
+  const onboarded = orgToolAvailableFor(tool.id);
   const orgIds = orgEntriesFor("capabilities", capabilityId);
   const cosai = controlsForCapability(capabilityId);
   const arch = archetypeById.get(tool.architecture);

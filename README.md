@@ -417,8 +417,10 @@ Everything is text. Clone the repository, and:
 2. **Record your posture, in two halves.** `data/org/local/capabilities.yaml` is the enterprise
    layer: per capability and surface, the technology you run around the tools (MDM, endpoint
    DLP, SSE, gateway guardrails, SIEM) and its status. `tooling-status.yaml` is the product
-   half: per product, whether you run it and a status per reference control. One vocabulary
-   for all of it: `enabled | inProgress | gap`, and anything not recorded is a gap. Switch
+   half: per product, `available: true` when people may install it, and a status per reference
+   control (`enabled | inProgress | gap`). Availability is a boolean because a product is
+   provided or blocked; the control statuses say how well it is locked down. Anything not
+   recorded is a gap, and a product not listed is not available. Switch
    **Show status** on (beside the Capabilities and Reference architectures titles) and the
    matrix, the Tools grid and every product record show it; products you do not run are greyed
    out so the gaps are the picture.

@@ -38,14 +38,16 @@ managed setting is the product's control, the MDM is the enterprise capability t
 it. It renders as the enterprise-capability modules beside every control on each architecture's
 Tools tab and as the surface status on the Capabilities tab.
 
-**`tooling-status.yaml`** records, per tool in `data/tooling/`, whether the organisation runs it
-and a status per capability — the product's own settings. Only capabilities pinned on the tool's
+**`tooling-status.yaml`** records, per tool in `data/tooling/`, `available: true|false` — whether
+people may install and use it at all — and a status per capability — the product's own settings. Only capabilities pinned on the tool's
 reference architecture may carry a status, because that pinned set *is* the reference control
 set the Tools tab compares against.
 
-One status vocabulary serves both files and everything they render: `enabled`, `inProgress`,
-`gap`. Nothing is "unassessed": once status is shown, anything not recorded is a gap, and a tool
-not listed is not onboarded and renders greyed out.
+One status vocabulary serves every control in both files: `enabled`, `inProgress`, `gap`.
+Nothing is "unassessed": once status is shown, anything not recorded is a gap. A product's own
+`available` is deliberately not on that scale — either you provide it or you block it, and how
+well an available product is secured is what its control statuses say. A tool not listed is not
+available and renders greyed out.
 
 Nothing from this directory renders until the **Show status** switch (beside the Capabilities and
 Reference architectures titles) is on; it defaults on when `local/` exists.

@@ -20,14 +20,24 @@ export const STATUS_STYLE: Record<OrgStatus, { bg: string; border: string; text:
 };
 
 /**
- * The same three states said as availability, for a product rather than a control: the
- * question a reader asks of a tool is "can I use it here", not "is this control in place".
+ * A product is available or it is not: the organisation either lets people install it or
+ * blocks it. There is no middle state — how well an available product is locked down is what
+ * its control statuses say.
  */
-export const TOOL_STATUS_LABEL: Record<OrgStatus, string> = {
-  enabled: "Available",
-  inProgress: "Rolling out",
-  gap: "Not available",
-};
+export function AvailabilityPill({ available, title, compact = false }: { available: boolean; title?: string; compact?: boolean }) {
+  const s = available ? STATUS_STYLE.enabled : STATUS_STYLE.gap;
+  return (
+    <span
+      title={title ?? (available ? "People in the organisation may install and use this product." : "Not provided — the organisation does not make this product available.")}
+      className={`inline-flex items-center whitespace-nowrap rounded-full border font-semibold ${
+        compact ? "px-1.5 py-px text-[10.5px]" : "px-2 py-[2px] text-[11.5px]"
+      }`}
+      style={{ background: s.bg, borderColor: s.border, color: s.text, borderStyle: s.dashed ? "dashed" : "solid" }}
+    >
+      {available ? "Available" : "Not available"}
+    </span>
+  );
+}
 
 /** How a capability pill looks with status off: unanswered, neutral. */
 export const NEUTRAL_STYLE = { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675" };
@@ -37,13 +47,10 @@ export { ORG_STATUSES };
 export function StatusPill({
   status,
   title,
-  label,
   compact = false,
 }: {
   status: OrgStatus;
   title?: string;
-  /** Overrides the control wording, e.g. TOOL_STATUS_LABEL for a product. */
-  label?: string;
   compact?: boolean;
 }) {
   const s = STATUS_STYLE[status];
@@ -55,7 +62,7 @@ export function StatusPill({
       }`}
       style={{ background: s.bg, borderColor: s.border, color: s.text, borderStyle: s.dashed ? "dashed" : "solid" }}
     >
-      {label ?? STATUS_META[status].label}
+      {STATUS_META[status].label}
     </span>
   );
 }
