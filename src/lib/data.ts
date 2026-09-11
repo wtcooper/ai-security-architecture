@@ -276,14 +276,6 @@ export const toolsForArchetype = (archetypeId: string): Tool[] =>
 export const archetypesForVendor = (vendorId: string) =>
   archetypesInOrder.filter((a) => toolsInOrder.some((t) => t.vendor === vendorId && t.architecture === a.id));
 
-/** Every tool whose vendor implements this capability at least partly. */
-export const toolsForCapability = (capabilityId: string): Tool[] =>
-  toolsInOrder.filter((t) =>
-    t.controls.some(
-      (c) => c.capability === capabilityId && c.coverage !== "none" && c.coverage !== "unknown",
-    ),
-  );
-
 /**
  * A tool's reference control set is its architecture's pinned capabilities, in pin order; the
  * tool's own record for each is joined on, absent where the vendor has not been assessed.
