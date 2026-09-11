@@ -14,8 +14,6 @@ import {
   risksForCapability,
   orgSurfacePostureFor,
   surfaces,
-  toolsForCapability,
-  vendorById,
 } from "@/lib/data";
 import { mappingsForCapability } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
@@ -37,7 +35,6 @@ export function CapabilityDetail({
   const components = componentsForCapability(capability.id);
   const categoryTitle = controlCategories.find((c) => c.id === capability.category)?.title;
   const orgMappings = mappingsForCapability(capability);
-  const tools = toolsForCapability(capability.id);
   const overlay = useOrgOverlay();
 
   return (
@@ -159,21 +156,6 @@ export function CapabilityDetail({
           </div>
         </div>
       </div>
-
-      {tools.length > 0 && (
-        <div className="mt-6">
-          <p className="eyebrow">Implemented by</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {tools.map((t) => (
-              <Link key={t.id} href={`/reference?archetype=${t.architecture}&tool=${t.id}`}>
-                <Chip title={`${vendorById.get(t.vendor)?.name ?? t.vendor} · see how it is switched on`}>
-                  {t.name}
-                </Chip>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="mt-6">
         <ArchetypeLinks

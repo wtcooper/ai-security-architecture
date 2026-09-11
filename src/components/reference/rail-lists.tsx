@@ -9,7 +9,7 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { capabilityById, controlsForCapability, guidanceByArchetype, riskById, riskCode, toolById, toolsForCapability } from "@/lib/data";
+import { capabilityById, controlsForCapability, guidanceByArchetype, riskById, riskCode } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Archetype, Scenario } from "@/lib/types";
@@ -102,19 +102,6 @@ function GuidanceFor({ archetype, capabilityId }: { archetype: Archetype; capabi
           <div className="mt-1">
             <Prose blocks={item.body} size="sm" />
           </div>
-          {(item.tools?.length ?? 0) > 0 && (
-            <p className="mt-1.5 text-[11.5px] text-ink-3">
-              Product specifics:{" "}
-              {item.tools!.map((id, i) => (
-                <span key={id}>
-                  {i > 0 && ", "}
-                  <Link href={`/reference?archetype=${toolById.get(id)?.architecture}&tool=${id}`} className="font-medium text-ink-2 hover:underline">
-                    {toolById.get(id)?.name ?? id}
-                  </Link>
-                </span>
-              ))}
-            </p>
-          )}
           {(item.links?.length ?? 0) > 0 && (
             <ul className="mt-1 space-y-0.5">
               {item.links!.map((l) => (
@@ -180,23 +167,6 @@ export function CapabilityList({
                 </p>
                 <OrgRefs kind="capabilities" id={id} />
                 <GuidanceFor archetype={archetype} capabilityId={id} />
-                {toolsForCapability(id).filter((t) => t.architecture === archetype.id).length > 0 && (
-                  <p className="text-[11px] text-ink-3">
-                    Admin-settable in{" "}
-                    {toolsForCapability(id)
-                      .filter((t) => t.architecture === archetype.id)
-                      .map((t, ti) => (
-                        <span key={t.id}>
-                          {ti > 0 && ", "}
-                          <Link href={`/reference?archetype=${t.architecture}&tool=${t.id}`} className="font-medium text-ink-2 hover:underline">
-                            {t.name}
-                          </Link>
-                        </span>
-                      ))}
-                    <span className="mx-1">·</span>
-                    <span className="text-ink-3">see the Tools tab for every product</span>
-                  </p>
-                )}
                 <Link
                   href={`/capabilities?capability=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
