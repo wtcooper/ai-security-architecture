@@ -41,7 +41,7 @@ export function GridView({
         <table className="border-separate border-spacing-0 text-[12px]">
           <thead className="sticky top-0 z-20">
             <tr>
-              <th rowSpan={headerRows} className="sticky left-0 z-30 min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+              <th rowSpan={headerRows} className="min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
                 Reference control
               </th>
               <th rowSpan={headerRows} className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle">
@@ -122,13 +122,13 @@ function GroupRows({
   return (
     <>
       <tr>
-        <td colSpan={span} className="sticky left-0 border-b border-t border-line bg-mist/70 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+        <td colSpan={span} className="border-b border-t border-line bg-mist/70 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
           {group.title}
         </td>
       </tr>
       {group.rows.map((row) => (
         <tr key={row.id}>
-          <td className="sticky left-0 z-10 border-b border-r border-line bg-paper px-3 py-1 align-middle">
+          <td className="border-b border-r border-line bg-paper px-3 py-1 align-middle">
             <span className="block text-[12px] font-medium leading-tight text-ink" title={row.title ?? row.label}>
               {row.label}
             </span>
