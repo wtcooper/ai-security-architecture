@@ -52,7 +52,6 @@ export function CellHoverCard({ tool, row, cell, overlay, rect }: { tool: Tool; 
             </p>
             {overlay && (
               <p className="mt-1">
-                <span className="eyebrow mr-1">Your justification</span>
                 {!available ? (
                   <span>Not available in the organisation, so nothing is configured.</span>
                 ) : status?.note || status?.evidence ? (

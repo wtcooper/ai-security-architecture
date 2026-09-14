@@ -39,3 +39,7 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
 - **Header comment** of each file: the two-line schema pointer, then exclusions specific to the
   family, then a short fetch log of URLs that redirected or failed during the last verification.
 - **Ids are stable**: guidance documents and `data/org/*/tooling-status.yaml` reference them.
+- **The organisation's side lives next door.** `data/org/<profile>/tooling-status.yaml` carries,
+  per product, `available` and one `{ status, note, evidence? }` per pinned capability; the
+  `note` is what the grid shows on hover. Onboarding a product includes writing that block
+  (SKILL.md step 5).

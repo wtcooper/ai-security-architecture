@@ -39,10 +39,13 @@ it. It renders as the enterprise-capability modules beside every control on each
 Tools tab and as the surface status on the Capabilities tab.
 
 **`tooling-status.yaml`** records, per tool in `data/tooling/`, `available: true|false` — whether
-people may install and use it at all — and a status per capability — the product's own settings — with a `note` (the justification: what
-you configured) and `evidence` that appear when someone hovers that cell of the Tools grid. Only capabilities pinned on the tool's
-reference architecture may carry a status, because that pinned set *is* the reference control
-set the Tools tab compares against.
+people may install and use it at all — and a status per capability — the product's own settings —
+with a `note` (the justification: what you configured, or why a gap is a gap) and optional
+`evidence` that appear when someone hovers that cell of the Tools grid. The shipped example has
+a note on every control of every product it runs; it is the template — keep the products you
+run and rewrite the notes. Only capabilities pinned on the tool's reference architecture may
+carry a status, because that pinned set *is* the reference control set the Tools tab compares
+against.
 
 One status vocabulary serves every control in both files: `enabled`, `inProgress`, `gap`.
 Nothing is "unassessed": once status is shown, anything not recorded is a gap. A product's own

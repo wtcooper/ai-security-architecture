@@ -77,13 +77,26 @@ architectures with their surface).
    (what it is, where inference runs, what leaves the device), `facts` with the canonical labels
    from `references/schema.md`, `variants` with urls, `riskNotes` for the pinned risks this
    product changes the shape of, `advisories`, `sources`. Add the vendor to `vendors.yaml` if new.
-5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
+5. **Seed the organisation's justification text.** The Tools grid shows, on hover over each
+   cell, the organisation's `note` for that control from `data/org/<profile>/tooling-status.yaml`
+   (`example/` upstream, `local/` in an adopter's clone). That file is the template an
+   organisation edits, so a product is not finished until it has a block there: `available`,
+   and under `controls` one row per pinned capability with a `status` and a `note` written as
+   the justification an administrator would give — the setting or change that backs the status
+   (`permissions.deny and allowManagedPermissionRulesOnly in managed-settings.json`), or for a
+   `gap` why it is not in place (`sandbox.enabled pending bubblewrap packaging`; `Vendor offers
+   nothing; kept in the governance register`). Derive each note from the row's `mechanism` so it
+   names the real key or console path. Rows rated `none` still get a note saying what stands in.
+   Upstream, the example organisation runs a handful of products; set `available: true` only if
+   it plausibly would, otherwise `false` — the notes are still the adopter's starting text.
+6. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-6. **Look at it.** `npm run dev`, open `/reference?archetype=<arch>&tool=<id>`: the drawing's
+7. **Look at it.** `npm run dev`, open `/reference?archetype=<arch>&tool=<id>`: the drawing's
    Tools tab with your product as a column and its record open beneath the grid. Check that the
-   coverage word in each cell links to the page an administrator would actually use, and expand
-   a few rows for the steps. Without a browser, confirm the compiled entry instead:
+   coverage word in each cell links to the page an administrator would actually use, expand a
+   few rows for the steps, and switch **Show status** on and hover a few cells: every one should
+   show the note you seeded, none should say "nothing recorded yet". Without a browser, confirm the compiled entry instead:
    `node -e 'const d=require("./src/data/generated/dataset.json");console.log(d.tools.find(t=>t.id==="<id>"))'`.
    Deliberate exclusions go in the file header comment and under "Exclusions" in
    `data/tooling/README.md`.
@@ -113,6 +126,7 @@ about ninety wrong ones (`docs/VALIDATION-2026-09-10-TOOLING.md`). What it learn
 
 Re-fetch every URL in the entity under the rules above. Update facts that changed, bump `asOf`
 and each row's `verified`, and record retired surfaces as exclusions rather than deleting history
-silently. Keep the id — guidance documents and the organisation's `tooling-status.yaml` reference
+silently. If a mechanism changed, reread the organisation's `note` for that control in
+`tooling-status.yaml` — it names the old key. Keep the id — guidance documents and the organisation's `tooling-status.yaml` reference
 it, and that file says `available: true|false` per product plus a status per control, so a renamed
 id silently drops an organisation's posture.

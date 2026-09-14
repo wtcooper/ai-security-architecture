@@ -59,9 +59,13 @@ Read `references/schema.md` first. It is short and it is the contract.
    product or blocks it, and how well an available product is locked down is what the control
    statuses say. A tool not listed, or `false`, is not available and its column renders greyed
    out. Only capabilities pinned on the tool's architecture may carry a status, and one
-   vocabulary serves every control: `enabled`, `inProgress`, `gap`. A pinned capability with no
-   key reads as a gap once status is shown, so record the ones that are enabled or in progress
-   and let the rest fall out as gaps.
+   vocabulary serves every control: `enabled`, `inProgress`, `gap`. Each row's `note` is what the
+   Tools grid shows when someone hovers that cell — the justification: the setting or change
+   that backs the status, or for a gap why it is not in place — so give every pinned capability
+   a row with a note rather than leaving gaps implicit (an implicit gap hovers as "nothing
+   recorded yet"). The shipped `data/org/example/tooling-status.yaml` already has a note on every
+   control of the products it runs; treat it as the template — keep the block for each product
+   the organisation runs, drop the rest, and rewrite each note to say what was actually set up.
 5. **Record the enterprise layer if they want it.** In `capabilities.yaml`, per capability and
    surface, the technology the organisation runs (MDM, endpoint DLP, SSE, gateway guardrails,
    SIEM) and its status, in the same three words. This is the other half of every control: a

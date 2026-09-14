@@ -63,9 +63,9 @@ tools:
     controls:                     # keyed by capability id pinned on the tool's architecture
       capabilityToolPermissionScoping:
         status: enabled           # enabled | inProgress | gap
-        note: permissions.deny via managed-settings.json   # the justification: what you set up
-        evidence: CHG-1042        # optional ticket / document reference; both show on hover in the grid
-      capabilityAgentSandboxing: { status: gap }
+        note: permissions.deny via managed-settings.json   # the justification: what you set up; shown on hover in the grid
+        evidence: CHG-1042        # optional ticket / document reference; shown with the note
+      capabilityAgentSandboxing: { status: gap, note: sandbox.enabled pending bubblewrap packaging }   # a gap still says why
 ```
 
 Build rules: the tool exists; each capability key is pinned on that tool's architecture
