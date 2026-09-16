@@ -24,8 +24,9 @@ export const SURFACE_CLASS_ORDER = Object.keys(SURFACE_CLASS_META) as ToolSurfac
 export const COVERAGE_META: Record<ToolCoverage, { label: string; long: string; blurb: string; linkable: boolean }> = {
   native: { label: "Settable", long: "Admin-settable", blurb: "An administrator can switch this on in the product itself.", linkable: true },
   partial: { label: "Partly", long: "Partly settable", blurb: "Part of it is settable in the product; the rest needs process or another product.", linkable: true },
-  external: { label: "3rd-party", long: "Needs a third-party product", blurb: "The product offers nothing itself; a separate product around it provides this.", linkable: true },
-  none: { label: "Not offered", long: "Not offered", blurb: "The vendor offers nothing for this, and nothing around it fills the gap.", linkable: false },
+  external: { label: "3rd-party", long: "Needs a third-party product", blurb: "The product offers nothing itself; a named class of product placed around it provides this.", linkable: true },
+  none: { label: "Not offered", long: "Not offered", blurb: "The vendor offers nothing for this in the product; the organisation covers it by process or its own tooling.", linkable: false },
+  notApplicable: { label: "N/A", long: "Not applicable", blurb: "This product has no surface for this control; the objective belongs to another component or party.", linkable: false },
   unknown: { label: "Unverified", long: "Unverified", blurb: "Could not be confirmed against the vendor's documentation.", linkable: true },
 };
-export const COVERAGE_ORDER: ToolCoverage[] = ["native", "partial", "external", "none", "unknown"];
+export const COVERAGE_ORDER: ToolCoverage[] = ["native", "partial", "external", "none", "notApplicable", "unknown"];

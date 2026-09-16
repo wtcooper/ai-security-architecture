@@ -29,8 +29,28 @@ architectures with their surface).
 - **Only pinned capabilities.** A tool cannot claim, or disclaim, a control its drawing does not
   show. The build fails otherwise. If a real vendor control has no pin, the fix is a pin on the
   architecture (a separate change), not a row here.
-- **Honest coverage.** `none` and `external` are findings leadership needs; `unknown` is the
-  honest answer when a page would not resolve. Never upgrade a guess to `native`.
+- **Honest coverage.** `none` and `external` are findings leadership needs; `notApplicable`
+  is for a control the product has no surface for (not a gap — say whose objective it is);
+  `unknown` is the honest answer when a page would not resolve. Never upgrade a guess to
+  `native`.
+- **One rule per capability, every vendor.** Before rating a row, read how the same capability
+  is rated on the other products of that architecture and apply the same rule; write the rule
+  into the `note` when it decides the word ("rated partial on the same rule as X because …").
+  The 2026-09-15 control audit found the same mechanism rated differently across vendors.
+- **A related setting is not the control.** Retention is not DSPM; a settings readback API is
+  not SSPM; a server allowlist admits servers but does not verify what they serve; a file deny
+  keeps a path out but inspects nothing; an SDK hook is an attach point until something is
+  attached; a merge gate approves the output, not the actions that produced it; revoking
+  future access does not stop a running process. Credit the contribution, name what is
+  missing.
+- **Every row states its boundary.** Controlled asset or action; enforcing actor (vendor
+  server-side, product policy on the device, the deployer's code, a product around it);
+  product variant or platform it holds on; bypass and uncovered paths (remote MCP servers,
+  browser tools, unsandboxed commands, the host process); and, for a compound capability,
+  which sub-objective is claimed (storage versus ephemeral issuance; versioning versus
+  progressive rollout; encryption versus key custody; emission versus non-repudiation). For a
+  kill switch, the cessation delay and whether active work stops. For human approval, whether
+  a person, an AI reviewer or a merge gate decides, and at what point.
 
 ## Workflow
 
@@ -72,8 +92,11 @@ architectures with their surface).
    `trust`. The rules in **Verifying a link** below apply to every URL you are about to write.
 4. **Write the entity.** For every pinned capability, one `controls[]` row: `coverage`,
    `mechanism`, `verified`, and for `native`/`partial` rows 1–4 `steps` (title, one-sentence
-   body naming the exact key or toggle, url). Rows rated `none`, `external` or `unknown` carry a
-   `note` saying what the organisation should do instead, and may omit steps. Then `summary`
+   body naming the exact key or toggle, url). Rows rated `none`, `external`, `notApplicable`
+   or `unknown` carry a `note` saying what the organisation should do instead and an
+   `evidence` entry (title, url) naming the page the claim was checked against — usually the
+   vendor's docs index plus any page the note cites; the build fails on a row with neither a
+   step url nor evidence. Then `summary`
    (what it is, where inference runs, what leaves the device), `facts` with the canonical labels
    from `references/schema.md`, `variants` with urls, `riskNotes` for the pinned risks this
    product changes the shape of, `advisories`, `sources`. Add the vendor to `vendors.yaml` if new.
@@ -119,8 +142,11 @@ about ninety wrong ones (`docs/VALIDATION-2026-09-10-TOOLING.md`). What it learn
 - **Advisories belong to the vendor that assigned them.** One writeup covering four products
   usually carries one vendor's CVE; the others have the same class of bug and no id. Say so in
   the title rather than implying every vendor has that CVE.
-- To sweep the whole registry, extract every `url:` under `data/tooling/` and fetch each once,
-  reporting non-200s and any redirect whose path changed.
+- To sweep the whole registry, run `npm run links` (`scripts/check-links.ts`): it fetches every
+  URL under `data/tooling/` and in `data/overlay/capabilities.yaml` once and reports non-200s,
+  hosts known to wall or client-render (listed in the script — atlas.mitre.org answers 404 for
+  every route and renders client-side, so its deep links are fine), and redirects whose path
+  changed. A 200 is reachability, not relevance: the page must still document the claim.
 
 ## Refreshing an existing entity
 

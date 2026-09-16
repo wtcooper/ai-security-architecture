@@ -100,11 +100,12 @@ exemplars:
       customer-key behaviour per component before relying on any of them.
     url: https://aws.amazon.com/bedrock/agentcore/
     asOf: "2026-09"
-  - name: Vertex AI Agent Engine
+  - name: Vertex AI Agent Engine (now Gemini Enterprise Agent Platform)
     note: >
       A managed runtime with admin-enforced guardrail floors (Model Armor) — the zone-2
-      configuration surface this page pins, shipped as platform policy.
-    url: https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview
+      configuration surface this page pins, shipped as platform policy. The Agent Engine
+      overview page redirected to the renamed platform's docs on 2026-09-15.
+    url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/overview
     asOf: "2026-09"
 
 zones:
@@ -419,7 +420,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 5
-    capabilities: [capabilitySecretsManagement, capabilityEncryptionKeyManagement]
+    capabilities: [capabilitySecretsManagement, capabilityEncryptionKeyManagement, capabilityCredentialIsolation]
     note: >
       Per-user credential vaults and customer-managed keys over the platform's data — with
       the product-specific caveats (vault scoping, key exclusions) verified per exemplar
@@ -432,7 +433,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 5
-    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls]
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAgentRuntimeEnforcement]
     note: >
       What the hosted agent may reach in our systems, decided at our gateway rather than in
       their console — and the per-tool approval their connector configuration defaults to,
@@ -445,7 +446,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 5
-    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityStagedRollout, capabilityAiTprm, capabilityVendorAssurance]
+    capabilities: [capabilityAgentRegistry, capabilityModelEvals, capabilityStagedRollout, capabilityAiTprm, capabilityVendorAssurance, capabilityMcpToolSecurity]
     note: >
       Definition admission, the behavioural checks in front of every change, staged rollout of
       the definitions themselves, and the platform assessment behind adopting the runtime at
@@ -732,6 +733,43 @@ pins:
       note: >
         The platform's defaults drift as it ships — memory scope, guardrail coverage,
         tool-gateway policy — and are re-assessed on a clock, not once.
+    - capability: capabilityAgentSandboxing
+      at: nativeTools
+      note: >
+        One sandbox per session around the built-in tools — the provider's container or
+        microVM, or the worker we run. Inside it: the shell, file tools and browser the
+        definition enables. Outside it: the loop, inference and the MCP client, which the
+        provider operates. Where we self-host, the image, capabilities and process user are
+        ours to harden; the provider's boundary stops at the sandbox.
+    - capability: capabilityEgressControl
+      at: nativeTools
+      note: >
+        The environment definition's networking policy, authored by us and enforced by the
+        provider around the sandbox: named hosts only, opened deliberately for package
+        registries and MCP endpoints. The provider's own web tools and its MCP client take
+        separate paths the policy does not see, so each is bounded by its own domain list or
+        by the tool set. A self-hosted worker's egress is our firewall.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: managedRuntime
+      note: >
+        The per-tool permission policy the runtime evaluates before it executes a built-in
+        or MCP tool — always-ask as the deterministic gate, the server's own reviewer where
+        the product offers one. Custom tools return to our application unevaluated, so the
+        same decision must exist there.
+    - capability: capabilityCredentialIsolation
+      at: managedRuntime
+      note: >
+        The vault: credentials substituted at egress so the sandbox holds a placeholder and
+        the model never sees a value. It is a shared credential for every session the vault
+        is attached to unless we attach per-user vaults, so tenant-scoped delegation is our
+        arrangement, not the runtime's default.
+    - capability: capabilityMcpToolSecurity
+      at: managedRuntime
+      note: >
+        Which servers the MCP client may connect to is the agent definition's declaration,
+        admitted by whoever may edit that definition and gated by our pipeline; the runtime
+        verifies nothing about what a declared server serves, and per-tool approval defaults
+        are the only guard against a server's tool list changing underneath us.
 walkthrough:
   title: A user's request becomes a tool call on our systems
   moves: >-
@@ -957,7 +995,7 @@ sources:
   - title: "AWS — Cedar-based default-deny policy enforced at the AgentCore gateway"
     url: https://aws.amazon.com/blogs/security/why-policy-in-amazon-bedrock-agentcore-chose-cedar-for-securing-agentic-workflows/
   - title: "Google Cloud — Model Armor floor settings: admin-enforced guardrail minimums"
-    url: https://cloud.google.com/security-command-center/docs/model_armor_floor_settings
+    url: https://docs.cloud.google.com/model-armor/configure-floor-settings
   - title: "AWS Well-Architected Agentic AI Lens"
     url: https://docs.aws.amazon.com/wellarchitected/latest/agentic-ai-lens/agentic-ai-lens.html
   - title: "Google Cloud — choose agentic AI architecture components"

@@ -110,12 +110,19 @@ tools:
               - Configure a SessionStore adapter (S3, Redis, Postgres) and alert on mirror_error
                 messages; do not share a store across tenants.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
+        note: >-
+          Isolation only: per-tenant directories and disabled auto-memory bound where memory lives.
+          Nothing validates what is written, detects poisoning or restores a known-good state —
+          recovery is the SessionStore's backups.
         verified: "2026-09-10"
       - capability: capabilityModelEvals
         coverage: none
         note: >-
           The SDK ships no evaluation harness or release gate; build evals in your CI around
           query() and the result message subtypes yourself.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://code.claude.com/docs/en/agent-sdk/overview
         verified: "2026-09-10"
       - capability: capabilityAgentObservability
         coverage: native
@@ -136,9 +143,13 @@ tools:
                 tool_decision, tool_result and mcp_server_connection events form a per-user audit
                 trail for the SIEM.
             url: https://code.claude.com/docs/en/agent-sdk/observability
+        note: >-
+          Traces cover interactions, model requests, tool calls and hooks with W3C correlation;
+          content is off unless enabled. Emitting traces is not detection or an audit record — the
+          collector's rules and retention supply those.
         verified: "2026-09-10"
       - capability: capabilityIga
-        coverage: external
+        coverage: partial
         mechanism: >-
           Authentication of end users happens at your gateway; the agent receives pre-authenticated
           requests. Claude Console roles and SSO govern who can mint API keys
@@ -153,6 +164,11 @@ tools:
               - Use Console roles (Claude Code role can only create Claude Code keys) and Console
                 SSO for the humans who provision credentials.
             url: https://code.claude.com/docs/en/authentication
+        note: >-
+          Rated partial on the same rule as the Copilot SDK and Codex SDK: Console roles, SSO and
+          workload identity federation govern who can mint the credentials the agent uses;
+          authentication and authorisation of the application's end users happen at the deployer's
+          gateway, which the SDK does not provide.
         verified: "2026-09-10"
       - capability: capabilityNhiManagement
         coverage: partial
@@ -168,6 +184,10 @@ tools:
                 shipping ANTHROPIC_API_KEY; Claude Code reads ANTHROPIC_FEDERATION_RULE_ID and
                 ANTHROPIC_ORGANIZATION_ID.
             url: https://code.claude.com/docs/en/authentication
+        note: >-
+          The workload identity authenticates the deployment to Anthropic; every agent and subagent in
+          it shares that identity, and tool calls to other systems carry whatever credential the
+          application supplies. A per-agent principal is the application's to mint.
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: partial
@@ -186,6 +206,11 @@ tools:
               - Exclude .env, ~/.aws, ~/.ssh, .npmrc, *.pem and similar files before mounting code
                 even read-only.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        note: >-
+          Storage is the deployer's secret manager; ephemeral issuance exists only where apiKeyHelper
+          or workload identity federation is used. Readers: the SDK process holds the provider key;
+          shell commands and MCP servers read whatever environment the application passes them; the
+          model sees a secret only if a tool returns it.
         verified: "2026-09-10"
       - capability: capabilityAgentRuntimeEnforcement
         coverage: native
@@ -205,6 +230,11 @@ tools:
               - Pass disallowedTools (bare names remove the tool; Bash(rm *) scopes it) and, when
                 the project source is enabled, permissions.deny in .claude/settings.json.
             url: https://code.claude.com/docs/en/agent-sdk/permissions
+        note: >-
+          The hook API is the enforcement point; the policy is code the application writes. Deny rules
+          are deterministic; a canUseTool decision is whatever the application implements. Subagents
+          inherit hooks; custom tools the application registers are covered only if the hook logic
+          addresses them.
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -223,6 +253,12 @@ tools:
               - Use mcp__<server>__<tool> or mcp__<server>__* entries rather than a broad
                 permission mode; acceptEdits never auto-approves MCP tools.
             url: https://code.claude.com/docs/en/agent-sdk/mcp
+        note: >-
+          Options the application passes, not fleet policy: allowedTools hides tools, permissionMode
+          pre-approves classes of action, and argument limits come only from deny patterns or a
+          canUseTool implementation. bypassPermissions is available to the application unless the
+          host's managed settings disable it; MCP tools follow the same patterns, custom tools are
+          whatever the application registers.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
         coverage: partial
@@ -236,6 +272,11 @@ tools:
                 outside the container; give the agent no direct credentials and route git and API
                 calls through it.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        note: >-
+          Deployer-built: proxy-injected credentials and per-tenant egress rules exist only where the
+          application's proxy implements them; the SDK itself hands the process whatever environment
+          it starts with. No on-behalf-of exchange, so an agent serving several requesting users needs
+          the application to scope each call.
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
         coverage: partial
@@ -248,6 +289,10 @@ tools:
               - Set maxTurns on query() and on each subagent definition (there is no wall-clock
                 deadline); read total_cost_usd from the result message for per-session accounting.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
+        note: >-
+          Sub-limits: iterations (maxTurns per query and per subagent, hard), spend (organisation
+          limits and usage-tier rate limits, hard at the account). No wall-clock or per-session spend
+          cap — cost is reported per session, not enforced, so the application supplies that.
         verified: "2026-09-10"
       - capability: capabilityPromptInjectionDefense
         coverage: partial
@@ -265,7 +310,7 @@ tools:
         note: No admin-configurable injection classifier is exposed; auto mode's classifier is available as a permission mode.
         verified: "2026-09-10"
       - capability: capabilityAiDlp
-        coverage: external
+        coverage: partial
         mechanism: Read/Edit deny rules keep named files out; inspection of prompts and outputs is the deployer's proxy or hook
         steps:
           - title: Inspect at the proxy or in a hook
@@ -273,6 +318,10 @@ tools:
               - Use a TLS-terminating proxy or a PreToolUse / UserPromptSubmit hook to scan content;
                 the SDK itself ships no DLP classifier.
             url: https://code.claude.com/docs/en/agent-sdk/hooks
+        note: >-
+          Rated like Claude Code, Gemini CLI and the Copilot SDK: deny rules restrict paths and the
+          hooks are the attach point for a scanner. No scanner ships — until the deployer attaches
+          one, no prompt, upload or output content is inspected.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -291,6 +340,10 @@ tools:
               - Return permissionDecision "defer" from a PreToolUse hook to end the query and resume
                 it after an out-of-band approval.
             url: https://code.claude.com/docs/en/agent-sdk/hooks
+        note: >-
+          The SDK routes the decision to the application; the application must implement an
+          authenticated human approver and fail closed on timeout. Nothing in the SDK ships an
+          approval UI, so the control is complete only in the deployed application.
         verified: "2026-09-10"
       - capability: capabilityDataAccessGovernance
         coverage: external
@@ -322,6 +375,11 @@ tools:
               - One subprocess per session; start at 1 GiB RAM / 1 CPU, recycle long sessions, and
                 use ephemeral containers for one-off tasks.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
+        note: >-
+          Optional and deployer-built: Claude Code's sandbox applies only when the application
+          configures it, and container, gVisor or Firecracker isolation is the deployer's
+          infrastructure. Inside the boundary: shell commands; outside: MCP servers, WebFetch and the
+          SDK host process.
         verified: "2026-09-10"
       - capability: capabilityAgentRegistry
         coverage: none
@@ -329,6 +387,9 @@ tools:
           No registry of SDK-built agents exists on the vendor side; OTEL_SERVICE_NAME and
           resource attributes are the only identifiers, so maintain the inventory in your own
           governance platform.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://code.claude.com/docs/en/agent-sdk/overview
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: partial
@@ -364,6 +425,10 @@ tools:
               - Correlate tool_decision rejections, permission_mode_changed and mcp_server_connection
                 events with enduser.id in your SIEM.
             url: https://code.claude.com/docs/en/agent-sdk/observability
+        note: >-
+          The traces and events are the feed; the detections (unexpected tool sequences, egress to new
+          hosts, permission denials spiking) and the response playbook are written in the SIEM.
+          Required fields for that: session id, tool name, decision, host.
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
         coverage: partial
@@ -377,12 +442,22 @@ tools:
               - Route through Bedrock (AWS KMS CMK) or Google Cloud's Agent Platform (CMEK) when
                 customer-held keys are required; the Anthropic API uses infrastructure encryption.
             url: https://code.claude.com/docs/en/data-usage
+        note: >-
+          Assets and key owners: traffic to the provider (TLS, provider keys); data retained at
+          Anthropic (Anthropic keys, or the customer's KMS/CMEK when routed through Bedrock or
+          Vertex); local transcripts and working directories (host disk, deployer's keys). CMEK covers
+          the provider-side asset only.
         verified: "2026-09-10"
       - capability: capabilityRagSecurity
-        coverage: none
+        coverage: notApplicable
         note: >-
-          The SDK has no retrieval or vector store of its own; whatever you attach through MCP or
-          files carries its own trust tiering.
+          Conditional: the SDK ships no retrieval or vector store, so there is nothing for it to
+          secure. An application built on it that attaches a store through MCP or files owns
+          provenance, trust tiering and access scoping for that store — record it on the application,
+          not the SDK.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://code.claude.com/docs/en/agent-sdk/overview
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: partial
@@ -401,6 +476,10 @@ tools:
               - Grant mcp__<server>__<tool> entries in allowedTools and treat needs-auth / failed
                 statuses in the init message as blockers.
             url: https://code.claude.com/docs/en/agent-sdk/mcp
+        note: >-
+          The application decides which servers a session gets; host managed policy can constrain it
+          where Claude Code's managed settings are deployed. Admission is not integrity — nothing pins
+          the tool descriptions a server returns.
         verified: "2026-09-10"
       - capability: capabilityAiBom
         coverage: none
@@ -408,6 +487,9 @@ tools:
           The SDK pins a bundled CLI binary per package version and follows semver, but publishes
           no signed manifest of models, tools and plugins; record it from your lockfile and
           options.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://code.claude.com/docs/en/agent-sdk/overview
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: partial
@@ -421,11 +503,18 @@ tools:
                 firewall rules that allow only the proxy; enforce domain allowlists and log at the
                 proxy.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        note: >-
+          The sandbox allowlist bounds commands only when enabled; every other path (MCP servers,
+          WebFetch, the host process) is bounded by the container network and proxy the deployer
+          builds. Proxy variables are routing until direct egress is blocked.
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         note: >-
           Not applicable: no model artifacts are loaded locally; inference is remote.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://code.claude.com/docs/en/agent-sdk/overview
         verified: "2026-09-10"
     advisories:
       - title: "CVE-2026-39861 — Claude Code sandbox symlink escape (the SDK bundles the same CLI; fixed 2.1.64)"

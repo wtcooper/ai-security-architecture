@@ -1,5 +1,6 @@
 # Grok Bot — one entity per product × reference architecture. Facts are dated (asOf) and
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# 2026-09-15: added sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched grok-bot/teams, security, security-faq, private-networks (all 200).
 vendor: cursor
 family: Grok Bot
 tools:
@@ -131,10 +132,24 @@ tools:
         note: No vault or just-in-time issuance for secrets the Bot uses inside its shell or browser sessions.
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
-        coverage: none
-        mechanism: Not offered for Grok Bot — CMEK/BYOK is scoped to Cloud Agent server-side encryption only
-        note: cursor.com/docs/enterprise/privacy-and-data-governance documents customer-managed keys for Cloud Agent data only; the Grok Bot security, FAQ and Teams pages do not offer a customer-managed key for Bot computers.
-        verified: "2026-09-10"
+        coverage: partial
+        mechanism: >-
+          Vendor-managed encryption across Cursor infrastructure (TLS 1.2+ in transit, AES-256 at rest
+          per the privacy and data governance page); no customer-managed key for Grok Bot data — CMEK
+          is documented for Cloud Agent data only
+        steps:
+          - title: Record the key owner
+            body:
+              - >-
+                Cursor holds the keys for Bot computers and transcripts; the CMEK section of the privacy and
+                data governance page names Cloud Agent data only, so record a CMEK requirement as a gap on
+                this product, not as absent encryption.
+            url: https://cursor.com/docs/enterprise/privacy-and-data-governance
+        note: >-
+          Lack of a customer-managed key is not absence of encryption: the vendor encrypts, the vendor
+          holds the keys. Assets: Bot computer storage and transcripts (vendor keys); the member's
+          local machine (host disk encryption).
+        verified: "2026-09-15"
       - capability: capabilityAgentRegistry
         coverage: partial
         mechanism: Computer management (look up any member's computer, creation and last-active times); audit log of Bot creation and member access changes
@@ -149,6 +164,9 @@ tools:
         coverage: none
         mechanism: Not offered
         note: Team Setup manifests push install scripts to every computer but no versioning, staged release or rollback of Bots, routines or manifests is documented.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/grok-bot
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -166,17 +184,29 @@ tools:
             body:
               - Set Execution on Local Computer to Ask every time or Never allow; the default is Always allow, and the more restrictive of the admin and member setting wins.
             url: https://cursor.com/docs/grok-bot/teams
+        note: >-
+          Network Controls limit destinations, Ask first and Allow automatically rules pre-approve or
+          gate actions, and the local-execution setting caps what a Bot may run on a member's machine.
+          Tools are not individually hidden; a Bot's reach is its owner's.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
-        mechanism: Enforce Auto-review (Enterprise, off by default); Ask first rules; login, 2FA and payment always handed to the member
+        mechanism: Team-wide Ask first rules (the human gate); Enforce Auto-review (Enterprise, off by default, an AI reviewer); local-execution ceiling; login, 2FA and payment always handed to the member
         steps:
+          - title: Add team-wide Ask first rules
+            body:
+              - On the Grok Bot page add Ask first rules for the actions a person must approve; they apply to every member's Bots and win over Allow automatically when rules conflict. This is the human gate — Auto-review can allow an action without anyone seeing it.
+            url: https://cursor.com/docs/grok-bot/teams
           - title: Enforce Auto-review
             body:
-              - Turn on Enforce Auto-review on the Grok Bot page so members cannot switch the reviewer off; it evaluates shell commands, plugin calls, computer use, automation writes and delegation and can allow, require approval or deny.
+              - Turn on Enforce Auto-review so members cannot switch the AI reviewer off; it evaluates shell commands, plugin calls, computer use, automation writes and delegation and can allow, require approval or deny. An allow verdict is automatic, not human, review.
             url: https://cursor.com/docs/grok-bot/teams
-        note: The docs state Auto-review does not review all side effects, such as memory writes.
-        verified: "2026-09-10"
+          - title: Set the local-execution ceiling
+            body:
+              - Always allow, Ask every time or Never allow for local execution on the Grok Bot page is the team's ceiling; a member's own stricter setting still applies, so the ceiling is not every member's effective default.
+            url: https://cursor.com/docs/grok-bot/teams
+        note: Enforce Auto-review guarantees automatic review, not human review; the docs state Auto-review does not review all side effects, such as memory writes.
+        verified: "2026-09-15"
       - capability: capabilityPromptInjectionDefense
         coverage: partial
         mechanism: Auto-review LLM reviewer over actions; Network Controls allowlist
@@ -208,6 +238,10 @@ tools:
             body:
               - Configure Team Settings → OpenTelemetry Export; Grok Bot actions arrive as logs with no prompt content.
             url: https://cursor.com/docs/enterprise/opentelemetry-export
+        note: >-
+          Action Recording captures what the Bot did on its computer; OTel export carries lifecycle
+          and tool events. Neither is detection — the recordings and events feed a tool the
+          organisation runs.
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: native
@@ -217,11 +251,20 @@ tools:
             body:
               - Audit logs cover admin, security and authentication events plus Bot creation, member access changes, Team Setup manifests, MCP authentication, Slack account links and routines.
             url: https://cursor.com/docs/grok-bot/teams
+        note: >-
+          Control-plane events only — Bot actions are in Action Recording, not the audit log.
+          Retention and tamper evidence are not stated; the SIEM stream is the durable record.
         verified: "2026-09-10"
       - capability: capabilityModelGuardrails
         coverage: none
         mechanism: Not offered
-        note: No organisation-defined content or topic filter; Auto-review gates actions, not content.
+        note: >-
+          No organisation-defined content or topic filter, and Cursor operates no content safeguard of
+          its own on Bot inputs or outputs; whatever the upstream model provider applies is the
+          provider's, not this product's. Auto-review gates actions, not content.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/grok-bot
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: partial
@@ -237,11 +280,17 @@ tools:
         coverage: none
         mechanism: Not offered
         note: No evaluation harness for Bots or routines.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/grok-bot
         verified: "2026-09-10"
       - capability: capabilityAiGovernancePlatform
         coverage: external
         mechanism: Audit log and computer management as feeds to the organisation's governance platform
         note: No catalogue with owners, risk tiers or intake; Bots are created by members without an approval workflow.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://cursor.com/docs/grok-bot
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
         coverage: partial
@@ -261,12 +310,132 @@ tools:
             body:
               - Terminate the member's computer from computer management, remove the group in Manage Group Access, or flip the organisation-wide switch off.
             url: https://cursor.com/docs/grok-bot/teams
+        note: >-
+          Terminating a member's computer stops active work on it; the organisation-wide switch and
+          group removal block future work and the docs state no propagation delay, so measure it.
         verified: "2026-09-10"
       - capability: capabilityVendorAssurance
         coverage: external
         mechanism: Dashboard-only settings verified manually or through an SSPM product
         note: Network Controls, Enforce Auto-review and Action Recording have no documented API; posture checks must read the dashboard.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://cursor.com/docs/grok-bot
         verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: >-
+          Firecracker microVM per member with its own kernel, memory and virtual devices; all of a
+          member's Bots share that computer; durable disk across sessions; admin termination
+          from computer management
+        steps:
+          - title: Treat the computer as the member's boundary
+            body:
+              - >-
+                One member cannot reach another member's computer, but every Bot a member runs
+                shares one; Bots isolate personalities and workspaces, not compute, so give
+                separate people separate accounts rather than sharing a member login.
+            url: https://cursor.com/docs/grok-bot/teams
+          - title: Terminate a computer to reset it
+            body:
+              - >-
+                Local files, browser sessions and anything saved in the browser persist on the disk
+                across sessions; an admin terminates the computer from the dashboard and the next
+                session starts fresh.
+            url: https://cursor.com/docs/grok-bot/security
+        note: >-
+          Per member, not per Bot, and persistent, not ephemeral. Execution on the member's own
+          machine (Execution on Local Computer) runs outside the microVM entirely; set it to Never
+          allow if the boundary must hold.
+        verified: "2026-09-15"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: >-
+          Network Controls (Enterprise): No policy, Allow all, Defaults plus team allowlist, Team
+          allowlist only, with domains and IP ranges with ports; directory-group policies with a
+          lock; private networks through desktop routing or Team Setup networking clients
+        steps:
+          - title: Set Team allowlist only and lock it
+            body:
+              - >-
+                Pick Team allowlist only on the Grok Bot page, list the domains and IP ranges Bots
+                need, and lock the policy so directory groups cannot override it; the policy applies
+                when a computer is created or recreated.
+            url: https://cursor.com/docs/grok-bot/security
+          - title: Keep private-network routes inside the allowlist
+            body:
+              - >-
+                Desktop routing and Team Setup clients (Tailscale, Cloudflare Tunnel) give reach into
+                private networks but do not replace the destination allowlist; add coordination
+                servers, relays and gateways to it.
+            url: https://cursor.com/docs/grok-bot/private-networks
+        note: >-
+          Enterprise only; teams without a policy allow all destinations. Covers all traffic from the
+          Bot computer, which egresses through Cursor's shared static ranges unless routed through
+          a member's desktop. Connector calls run from Cursor's backend, outside the computer's
+          policy.
+        verified: "2026-09-15"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: native
+        mechanism: >-
+          Team-wide Ask first rules always stop matching actions; Never allow for Execution on
+          Local Computer; Auto-review (an AI reviewer) evaluates everything else and can allow,
+          require approval or deny; login, 2FA and payment always handed to the member
+        steps:
+          - title: Write Ask first rules for the actions that must stop
+            body:
+              - >-
+                Ask first rules always stop matching actions and win over Allow automatically when
+                rules conflict; admins set team rules and members may add only stricter ones.
+            url: https://cursor.com/docs/grok-bot/security-faq
+          - title: Deny local execution where the microVM must hold
+            body:
+              - >-
+                Set Execution on Local Computer to Never allow; the default Always allow delegates
+                the decision to the member.
+            url: https://cursor.com/docs/grok-bot/teams
+        note: >-
+          The deterministic part is Ask first and Never allow; Auto-review is a classifier that the
+          docs say does not review all side effects, such as memory writes. Rules match actions,
+          not shell commands individually, and the MCP allowlist decides which connector tools exist
+          at all.
+        verified: "2026-09-15"
+      - capability: capabilityCredentialIsolation
+        coverage: native
+        mechanism: >-
+          Connector OAuth tokens stay on Cursor's backend and are never stored on the computer;
+          Bots invoke tools without receiving tokens; a secure secret request masks an entered
+          value and keeps it out of the transcript
+        steps:
+          - title: Keep credentials off the computer
+            body:
+              - >-
+                Connect tools through connectors so tokens stay on the backend, and enter one-off
+                secrets through the secure secret request rather than in chat.
+            url: https://cursor.com/docs/grok-bot/security
+        note: >-
+          Covers connector tokens. The member's logged-in browser sessions on the durable disk are
+          inside the boundary — a Bot acts with them — so web credentials are isolated only by
+          terminating the computer. A Bot acts as its owner; there is no on-behalf-of exchange.
+        verified: "2026-09-15"
+      - capability: capabilityMcpToolSecurity
+        coverage: native
+        mechanism: >-
+          Enterprise MCP allowlist under the team's connector policy; a blocked connector shows
+          as Disabled by team admin on every Bot
+        steps:
+          - title: Allowlist connectors and MCP servers for the team
+            body:
+              - >-
+                Set the connector policy and MCP allowlist on the Grok Bot page; any permitted
+                connector is available to every Bot a member runs and a blocked one is disabled
+                for all of them.
+            url: https://cursor.com/docs/grok-bot/teams
+        note: >-
+          Enterprise only. Rated native on the same rule as Cursor: admission by identity,
+          organisation-wide. Admission is not integrity — nothing pins what a permitted server
+          serves.
+        verified: "2026-09-15"
     advisories: []
     sources:
       - title: Grok Bot overview

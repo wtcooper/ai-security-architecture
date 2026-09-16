@@ -158,6 +158,9 @@ tools:
             body:
               - Deploy a root-owned policy hook file; a preToolUse hook returning permissionDecision "deny" blocks the call, errors and exit code 2 deny (fail-closed), timeouts fail open — set timeoutSec accordingly. disableAllHooks cannot switch policy hooks off.
             url: https://docs.github.com/en/copilot/reference/hooks-reference
+        note: >-
+          Managed permissions are deterministic; policy hooks are an integration point whose logic the
+          organisation writes and must fail closed. Remote MCP servers' own actions are outside both.
         verified: "2026-09-10"
       - capability: capabilityAiTprm
         coverage: external
@@ -199,6 +202,10 @@ tools:
             body:
               - Use shell(git:*), write(path) and MyMCP(tool) selectors in --allow-tool / --deny-tool or the managed rules; --available-tools restricts the agent to a named set and deny always beats allow, even under --allow-all.
             url: https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools
+        note: >-
+          --excluded-tools hides tools, allow selectors pre-approve, Shell()/Edit()/Read() specifiers
+          limit arguments; MCP tools use MyMCP(tool) selectors. disableBypassPermissionsMode must be
+          set or --allow-all overrides the rules.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
@@ -232,6 +239,10 @@ tools:
             body:
               - For CI or scripted use pass COPILOT_GITHUB_TOKEN / GH_TOKEN as a fine-grained PAT with only the Copilot Requests account permission rather than the developer's OAuth token.
             url: https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli
+        note: >-
+          Covers the developer's git and GitHub tokens and the keychain for sandboxed commands; remote
+          MCP servers and unsandboxed commands still run with whatever the shell can reach. No
+          on-behalf-of exchange — the CLI acts as the signed-in developer.
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: partial
@@ -258,6 +269,10 @@ tools:
             body:
               - Run >= 0.0.423 (the fix blocks ${var@P}-style expansions unconditionally); use policy hooks on userPromptSubmitted and preToolUse to screen or deny suspicious inputs and tool arguments.
             url: https://github.com/advisories/GHSA-g8r9-g2v8-jv6f
+        note: >-
+          Parse-time blocking detects a class of injected shell commands; the hooks are the attach
+          point for a detector on prompts. Repository files, MCP results and fetched pages are not
+          classified.
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: partial
@@ -271,6 +286,10 @@ tools:
             body:
               - Add .env and credential paths to permissions.deny (Read / Edit) and to sandbox.userPolicy.filesystem.deniedPaths.
             url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        note: >-
+          Storage only: the GitHub token sits in the keychain or, as a fallback, in plaintext config;
+          nothing issues short-lived credentials for tools. Deny rules keep named secret files out of
+          tools; environment variables remain readable by unsandboxed commands.
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: native
@@ -288,6 +307,11 @@ tools:
             body:
               - The custom registry (CLI 1.0.11+) shows approved servers but its Registry only mode matches by name/ID and can be bypassed by editing configuration files.
             url: https://docs.github.com/en/copilot/reference/enterprise-administrators/mcp-private-registry-enforcement
+        note: >-
+          Admission by identity: allowedMcpServers and deniedMcpServers, fail-closed when empty; the
+          registry restriction is discovery and can be bypassed by editing configuration. Admission is
+          not integrity — nothing pins the tool descriptions a server returns or detects a changed
+          implementation.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -337,9 +361,12 @@ tools:
           A developer can sign the CLI into a personal Copilot account; only an endpoint or
           proxy-based inventory shows that. Note that the npm package @github/copilot installs
           without any organisational hook.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
-        coverage: native
+        coverage: partial
         mechanism: Copilot CLI policy Disabled everywhere; GitHub Copilot app policy; seat removal; allowedMcpServers []; sandbox and permission rules refresh within an hour
         steps:
           - title: Disable the client at enterprise scope
@@ -350,6 +377,11 @@ tools:
             body:
               - Set allowedMcpServers to [] and strictKnownMarketplaces to [] in managed settings to cut all MCP servers and plugin installs; clients pick it up within about an hour or on restart.
             url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/use-managed-settings/get-started
+        note: >-
+          Policy and managed-settings changes reach clients within about an hour or on restart; a
+          session already running on the device is not stopped remotely, and seat removal leaves it
+          working until its token expires. Treat one hour as the cessation delay and test it against
+          active, queued and delegated work.
         verified: "2026-09-10"
       - capability: capabilityEdr
         coverage: external
@@ -357,6 +389,9 @@ tools:
         note: >-
           Policy hooks (preToolUse, permissionRequest) can call an endpoint agent over https; the
           OTLP export gives an EDR/XDR the session context.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli
         verified: "2026-09-10"
       - capability: capabilitySystemPromptManagement
         coverage: partial
@@ -377,6 +412,9 @@ tools:
         note: >-
           strictKnownMarketplaces and extraKnownMarketplaces.autoUpdate=false give source pinning;
           nothing verifies content or records versions.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: native
@@ -394,13 +432,21 @@ tools:
             body:
               - Permit *.githubcopilot.com with the plan-specific subdomain, the github.com login and api.github.com copilot_internal endpoints, and the Azure speech domains only if voice is used.
             url: https://docs.github.com/en/copilot/reference/copilot-allowlist-reference
+        note: >-
+          Domain() permissions bound the CLI's own fetch and tool calls and the sandbox network policy
+          bounds commands; remote MCP servers make their own connections outside both. A proxy setting
+          is routing until direct egress is blocked at the host.
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable to vendor-hosted models; local BYOK (Ollama and OpenAI-compatible endpoints) is outside the vendor's control
         note: >-
-          Disable local BYOK with the "Enable custom models" policy if unscanned local models
-          are a concern.
+          The product loads no weights; vendor-hosted models are the vendor's. Local BYOK (Ollama,
+          OpenAI-compatible endpoints) is a separate server the organisation runs and scans; disable
+          it with the "Enable custom models" policy if that obligation is unwanted.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-cli
         verified: "2026-09-10"
     advisories:
       - title: "CVE-2026-29783 — Copilot CLI shell tool: bash parameter-expansion patterns bypass the read-only assessment and run arbitrary commands (@github/copilot ≤ 0.0.422, fixed 0.0.423); GitHub advisory GHSA-g8r9-g2v8-jv6f"

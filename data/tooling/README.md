@@ -44,7 +44,7 @@ tools:
       - { risk: riskPromptInjection, note: ... }
     controls:                           # one row per pinned capability the vendor addresses
       - capability: capabilityToolPermissionScoping
-        coverage: native                # native | partial | none | external | unknown
+        coverage: native                # native | partial | none | external | notApplicable | unknown
         mechanism: managed-settings.json (MDM/GPO) or server-managed settings
         steps:
           - { title: Pin permission rules, body: [...], url: https://... }
@@ -56,8 +56,37 @@ tools:
 
 Build rules: the vendor exists; the architecture exists; every `controls[].capability` and
 `riskNotes[].risk` is pinned on the primary architecture; every step, advisory and source has a
-title and a url; `asOf` is present. A tool cannot claim, or disclaim, a control its drawing does
-not show — the fix is a pin on the architecture.
+title and a url; `asOf` is present; every control row has either a step with a url or an
+`evidence` entry saying where the claim was checked. A tool cannot claim, or disclaim, a control
+its drawing does not show — the fix is a pin on the architecture.
+
+## Coverage: what each word claims
+
+One rule per capability, applied to every vendor the same way; the rule is written in the
+`note` of the rows it decided, so a reader can see why two products with the same mechanism
+carry the same word.
+
+- `native` — an administrator (on a personal agent, the user) can switch it on in the product
+  and the product enforces it. Says nothing about completeness: the row names what is inside
+  the boundary and what is not.
+- `partial` — part of the outcome is settable in the product; the rest is process, another
+  product, or the deployer's own code (an SDK hook is an attach point, not a control).
+- `external` — the product offers nothing itself and a named class of product placed around it
+  (EDR, SSE, TPRM platform, SSPM, a governance platform) provides the outcome; the row names
+  the integration point the product exposes to it.
+- `none` — the vendor offers nothing in the product and no product class fills it; the
+  organisation covers it by process or its own tooling. Rare, and the row says what stands in.
+- `notApplicable` — the product has no surface for the control (a hosted-inference client and
+  model-artifact scanning; an SDK with no vector store and retrieval security). The objective
+  belongs to another component or party, named in the row. Not a gap: the grid records no
+  organisation status for it, and it never drags a composite cell down.
+- `unknown` — could not be confirmed; the note says why.
+
+Three distinctions every row keeps, because the 2026-09-15 control audit found them collapsed:
+a related setting is not the control (retention is not DSPM; a settings API is not SSPM; an
+allowlist admits servers but does not verify what they serve; a file deny keeps a path out
+but inspects nothing); a merge gate approves the output, not the actions taken to produce it;
+revoking future access does not stop a running process, so kill-switch rows state the delay.
 
 ## Research protocol
 

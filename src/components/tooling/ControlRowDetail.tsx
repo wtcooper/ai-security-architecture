@@ -33,7 +33,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
           <p className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">
             {capability?.title ?? capabilityId}
             <CoverageBadge coverage={control?.coverage} long />
-            {overlay && onboarded && <StatusPill status={status?.status ?? "gap"} compact />}
+            {overlay && onboarded && control?.coverage !== "notApplicable" && <StatusPill status={status?.status ?? "gap"} compact />}
           </p>
         )}
         {control ? (
@@ -66,6 +66,19 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
                   </li>
                 ))}
               </ol>
+            ) : null}
+            {control.evidence?.length ? (
+              <p className="mt-2 text-[11.5px] leading-snug text-ink-3">
+                <span className="eyebrow mr-1">Checked at</span>
+                {control.evidence.map((e, i) => (
+                  <span key={e.url}>
+                    {i > 0 && " · "}
+                    <a href={e.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline">
+                      {e.title} ↗
+                    </a>
+                  </span>
+                ))}
+              </p>
             ) : null}
             {control.verified && <p className="ident mt-2 text-[10.5px] text-ink-3">verified {control.verified}</p>}
           </>
@@ -111,7 +124,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
           )}
         </div>
         <div>
-          <p className="eyebrow">CoSAI controls</p>
+          <p className="eyebrow">Contributes to CoSAI controls</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {cosai.map((c) => (
               <Link key={c.id} href={`/controls?control=${c.id}`}>

@@ -54,6 +54,8 @@ export function CellHoverCard({ tool, row, cell, overlay, rect }: { tool: Tool; 
               <p className="mt-1">
                 {!available ? (
                   <span>Not available in the organisation, so nothing is configured.</span>
+                ) : p.control?.coverage === "notApplicable" ? (
+                  <span>Does not apply to this product, so there is no status to record.</span>
                 ) : status?.note || status?.evidence ? (
                   <>
                     <span className="font-semibold" style={{ color: STATUS_STYLE[status.status].text }}>
@@ -124,7 +126,9 @@ export function CellTile({
 }) {
   const status = overlay ? cell.status : undefined;
   const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
-  const url = cell.parts.map((p) => configureUrl(p.control)).find(Boolean);
+  // The word and its link refer to the same component: the one whose coverage the cell shows.
+  const url = configureUrl(cell.decisive);
+  const missing = cell.missing.map((id) => capabilityById.get(id)?.title ?? id);
   return (
     <div
       role="button"
@@ -140,6 +144,11 @@ export function CellTile({
       style={{ background: tint.bg, borderColor: tint.border, color: tint.text, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid" }}
     >
       {cell.coverage ? <CoverageBadge coverage={cell.coverage} url={url} className="border-transparent" /> : <span className="text-[11.5px] text-ink-3">—</span>}
+      {cell.coverage && missing.length > 0 && (
+        <span className="ml-0.5 text-[10px] text-ink-3" title={`No vendor record yet for: ${missing.join(", ")}`}>
+          †
+        </span>
+      )}
     </div>
   );
 }
@@ -180,17 +189,22 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
  */
 export function EnterpriseModules({ row, archetypeId, overlay, className = "" }: { row: Row; archetypeId: string; overlay: boolean; className?: string }) {
   const arch = archetypeById.get(archetypeId);
-  const capability = capabilityById.get(row.capabilities[0]);
+  // A composite row (an organisation entry over several capabilities) is described by all of
+  // them: every name in the label, the worst status across them, each posture note attributed.
+  const capabilities = row.capabilities.map((id) => capabilityById.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
   if (!row.enforcement.length) return null;
-  const posture = overlay && arch ? row.capabilities.map((c) => orgSurfacePostureFor(c, arch.surface)).find(Boolean) : undefined;
-  const status = overlay && arch ? orgSurfaceStatusFor(row.capabilities[0], arch.surface) : undefined;
+  const statuses = overlay && arch ? row.capabilities.map((c) => orgSurfaceStatusFor(c, arch.surface)) : [];
+  const status = (["gap", "inProgress", "enabled"] as const).find((s) => statuses.includes(s));
+  const postures = overlay && arch ? capabilities.map((c) => ({ c, p: orgSurfacePostureFor(c.id, arch.surface) })).filter((x) => x.p) : [];
   const tint = status ? STATUS_STYLE[status] : null;
-  const label = capability?.abbrev ?? capability?.title ?? "Capability";
+  const label = capabilities.map((c) => c.abbrev ?? c.title).join(" + ") || "Capability";
+  const examples = [...new Set(capabilities.flatMap((c) => c.examples ?? []))];
   const title = [
-    `Enterprise capability: ${capability?.title ?? row.label}`,
+    `Enterprise capabilit${capabilities.length === 1 ? "y" : "ies"}: ${capabilities.map((c) => c.title).join("; ") || row.label}`,
     `Where it sits: ${row.enforcement.map((e) => `${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})`).join(", ")}`,
-    capability?.examples?.length ? `Bought as: ${capability.examples.join(", ")}` : "",
-    status ? `Your status: ${STATUS_META[status].label}${posture?.technology ? ` with ${posture.technology}` : ""}${posture?.note ? ` — ${posture.note}` : ""}` : "",
+    examples.length ? `Bought as: ${examples.join(", ")}` : "",
+    status ? `Your status (worst across ${capabilities.length}): ${STATUS_META[status].label}` : "",
+    ...postures.map(({ c, p }) => `${c.abbrev ?? c.title}: ${p!.technology ?? ""}${p!.note ? ` — ${p!.note}` : ""}`.trim()),
     ...row.enforcement.flatMap((e) => e.notes),
   ]
     .filter(Boolean)

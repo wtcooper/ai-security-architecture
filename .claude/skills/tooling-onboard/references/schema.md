@@ -23,10 +23,16 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
 
 ## Conventions
 
-- **Coverage**: `native` the vendor ships an admin-settable control; `partial` part of it;
-  `external` only via a third-party product placed around the tool; `none` nothing offered;
+- **Coverage**: `native` the vendor ships an admin-settable control; `partial` part of it (an
+  SDK hook or callback is an attach point, so partial until the deployer attaches something);
+  `external` only via a named class of third-party product placed around the tool, with the
+  integration point in the row; `none` nothing offered and no product class fills it;
+  `notApplicable` the product has no surface for the control (say whose objective it is);
   `unknown` could not verify (say why in `note`). On a personal agent the "admin" is the person
-  running it, so `native` means settable in the product's own config.
+  running it, so `native` means settable in the product's own config. Rows rated `none`,
+  `external`, `notApplicable` or `unknown` carry `evidence: [{ title, url }]` — the page the
+  absence or integration claim was checked against — because the build requires every row to
+  have a step url or an evidence entry.
 - **The first step's URL is the configure link.** In the grid the coverage word itself is the
   link (except `none`, which never links), so `steps[0].url` must be the page an administrator
   performs the step on. Coverage carries no colour of its own: colour on that screen means the

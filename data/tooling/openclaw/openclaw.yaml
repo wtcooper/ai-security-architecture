@@ -78,8 +78,10 @@ tools:
             url: https://docs.openclaw.ai/gateway/security/access-control
           - title: OpenClaw security CLI (audit, --fix)
             url: https://docs.openclaw.ai/cli/security
-          - title: NVD — CVE-2026-25253
-            url: https://nvd.nist.gov/vuln/detail/CVE-2026-25253
+          - title: GitHub Advisory GHSA-g8p2-7wf7-98mq — CVE-2026-25253 (readable primary advisory)
+            url: https://github.com/advisories/GHSA-g8p2-7wf7-98mq
+          - title: NVD — CVE-2026-25253 (record; client-rendered, thin to automated fetch)
+            url: https://nvd.nist.gov/vuln/detail/cve-2026-25253
       - title: Sandbox defaults and proxy-injected credentials
         body:
           - With the Docker sandbox backend enabled, tool execution runs in a container whose
@@ -143,6 +145,10 @@ tools:
                 unsandboxed with web or browser tools enabled; fix that finding before exposing
                 the agent to untrusted inboxes."
             url: https://docs.openclaw.ai/cli/security
+        note: >-
+          Boundary markers and token stripping reduce the chance an injected instruction is obeyed;
+          they detect nothing. Detection would be a scanner the operator adds in front of tool
+          results.
         verified: "2026-09-10"
       - capability: capabilityIga
         coverage: native
@@ -210,6 +216,10 @@ tools:
                 allow-once | allow-always | deny decision) is terminal for that tool call and is
                 recorded as an enforced decision in the audit ledger.
             url: https://docs.openclaw.ai/plugins/hooks/tool-policy
+        note: >-
+          exec mode and allowlists are deterministic and bound to resolved executables;
+          before_tool_call plugin hooks are an integration point. MCP tool calls pass tool policy; a
+          server's own actions are outside it.
         verified: "2026-09-10"
       - capability: capabilityTransportSecurity
         coverage: native
@@ -242,6 +252,12 @@ tools:
                 device-key match read back over SSH with strict host keys; leave
                 gateway.nodes.pairing.autoApproveCidrs unset.
             url: https://docs.openclaw.ai/gateway/config-gateway
+        note: >-
+          By channel: gateway WebSocket (authenticated, TLS when gateway.tls is set, fingerprint
+          pinning for remote clients); node pairing (SSH-verified); HTTPS MCP servers (TLS, optional
+          mTLS, OAuth); stdio MCP servers (a local process boundary, no transport authentication — do
+          not expect mTLS there). Bearer tokens over TLS give no replay protection, and message schema
+          validation is each server's job.
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: partial
@@ -276,6 +292,10 @@ tools:
                 writes a reviewable DREAMS.md diary; disable it with
                 plugins.entries.memory-core.config.dreaming.enabled false.
             url: https://docs.openclaw.ai/concepts/memory
+        note: >-
+          Admission policy and taint-gating are integrity contributions at ingestion; per-agent
+          workspaces are the boundary. What can still write: the agent's own turns. Recovery is forget
+          and re-ingest, not a versioned store.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
@@ -308,6 +328,10 @@ tools:
               - Set tools.elevated.enabled false (and per agent agents.entries.<id>.tools.elevated)
                 so exec cannot leave the sandbox onto the gateway or node host.
             url: https://docs.openclaw.ai/gateway/security/hardened-baseline
+        note: >-
+          Mode is off by default and non-main sandboxes only non-main agents; set all to cover every
+          agent. Inside the boundary: exec and file tools of sandboxed agents. Outside: the gateway
+          process, channel adapters and any MCP server launched on the host.
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -341,6 +365,10 @@ tools:
                 agents.defaults.subagents.allowAgents; set tools.sessions.visibility "agent" and
                 tools.agentToAgent.enabled false as in the hardened baseline.
             url: https://docs.openclaw.ai/gateway/security/hardened-baseline
+        note: >-
+          Profiles and allow/deny lists hide tools per provider, sender and agent; exec approvals
+          gate; argument limits come from exec allowlists bound to resolved executables. full profile
+          pre-approves everything.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
         coverage: partial
@@ -374,6 +402,12 @@ tools:
               - Configure HTTP servers with auth "oauth", authorise with `openclaw mcp login <name>`
                 and revoke with `openclaw mcp logout <name>`; tokens live in state/openclaw.sqlite.
             url: https://docs.openclaw.ai/cli/mcp/registry
+        note: >-
+          SecretRefs keep provider credentials out of the model-call chain by default; the secret
+          egress proxy for subprocesses is off by default, and workspace .env files are readable by
+          tools unless moved. Single-user gateway, so on-behalf-of exchange does not arise unless
+          several people share it — then every tool call carries the gateway's credentials, not the
+          requester's.
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: native
@@ -408,6 +442,10 @@ tools:
                 `openclaw security audit --fix` tightens them and full-disk encryption plus a
                 dedicated OS user are the documented host baseline.
             url: https://docs.openclaw.ai/gateway/security/secrets-and-storage
+        note: >-
+          SecretRefs pull from a vault and hand the model-call chain a sentinel; per-run proxy
+          credentials are the ephemeral path and expire with the run. Exec tools still read the
+          gateway process environment unless the secret egress proxy is on.
         verified: "2026-09-10"
       - capability: capabilityModelGuardrails
         coverage: none
@@ -416,9 +454,12 @@ tools:
           documented; the only output processing is the scaffolding sanitizer. Apply guardrails at
           the provider (the Amazon Bedrock plugin advertises guardrail support but documents no
           key) and keep /reasoning, /verbose and /trace off in shared rooms.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.openclaw.ai/llms.txt
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
-        coverage: partial
+        coverage: native
         mechanism: >-
           plugins.allow exclusive allowlist plus plugins.deny, `--pin` exact versions with
           digest-verified ClawHub artifacts and a security-audit trust check before download, a
@@ -450,6 +491,10 @@ tools:
                 `openclaw mcp doctor <name> --probe`, and disable all configured servers with
                 tools.deny ["bundle-mcp"] when none are needed.
             url: https://docs.openclaw.ai/tools/mcp
+        note: >-
+          Rated native on the personal-agent rule: the user can make plugins.allow exclusive and pin
+          digest-verified versions in the product's own config. Admission is not integrity — tool
+          definitions an MCP server returns are not pinned or re-verified between sessions.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -484,7 +529,7 @@ tools:
             url: https://docs.openclaw.ai/gateway/security/tool-permissions
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
-        coverage: partial
+        coverage: native
         mechanism: >-
           gateway.auth.rateLimit for failed auth, fixed control-plane write and webhook throttles,
           tools.loopDetection with a post-compaction guard, sub-agent concurrency and depth caps,
@@ -515,6 +560,12 @@ tools:
                 provider quota windows and local cost estimates; set hard budgets on the provider
                 account since OpenClaw enforces none."
             url: https://docs.openclaw.ai/concepts/usage-tracking
+        note: >-
+          Rated native on the same rule as Hermes: exec.timeoutSeconds, loopDetection and the
+          sub-agent concurrency and depth caps are hard bounds on runtime and iterations. No token or
+          currency spend cap exists — usage is visible per provider, not enforced.
+          gateway.auth.rateLimit throttles failed logins, which is access protection, not agent
+          resource control.
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: partial
@@ -593,6 +644,10 @@ tools:
                 may auto-load" and provenance-missing results from
                 `openclaw plugins inspect <id>` as unregistered code; pin or reinstall from a trusted source.
             url: https://docs.openclaw.ai/tools/plugin
+        note: >-
+          A narrow but real discovery contribution: it finds plugins and installs this gateway did not
+          explicitly allow. Its scope is one installation's extension root; other OpenClaw installs on
+          the estate are found by endpoint inventory.
         verified: "2026-09-10"
       - capability: capabilityEdr
         coverage: external
@@ -601,6 +656,9 @@ tools:
           user. The documented integration point for a security agent is a plugin before_tool_call
           hook (block or require approval on every tool call) plus `openclaw security audit --deep`
           for live probes.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://docs.openclaw.ai/llms.txt
         verified: "2026-09-10"
       - capability: capabilityBehavioralDriftDetection
         coverage: none
@@ -608,6 +666,9 @@ tools:
           No baselining of goals or tool-use profiles is documented; tools.loopDetection catches
           repetition only. Export /export-trajectory bundles or OTLP traces
           (diagnostics.otel) to an external analyser if drift detection is required.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.openclaw.ai/llms.txt
         verified: "2026-09-10"
       - capability: capabilityAiDlp
         coverage: partial
@@ -633,6 +694,10 @@ tools:
               - Use contextVisibility on group channels so the agent reads only what it needs, and
                 keep /reasoning, /verbose and /trace disabled outside trusted DMs.
             url: https://docs.openclaw.ai/gateway/security/access-control
+        note: >-
+          Redaction is pattern-based and applied to logs, transcripts and telemetry after the fact;
+          prompts sent to the model provider and tool results are not inspected. Treat it as log
+          hygiene, not prompt DLP.
         verified: "2026-09-10"
       - capability: capabilityAgentRegistry
         coverage: native
@@ -658,6 +723,11 @@ tools:
               - "`openclaw mcp status --verbose` lists every mcp.servers definition with
                 enablement, OAuth and filter state; Settings → MCP in the Control UI shows the same inventory."
             url: https://docs.openclaw.ai/cli/mcp/registry
+        note: >-
+          Native on the personal-agent rule: the config is the authoritative declaration of this
+          gateway's agents, plugins and servers. It is scoped to one installation and carries no owner
+          or approval workflow — a single-user product does not need one, but an organisation running
+          several gateways records them centrally.
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: native
@@ -691,18 +761,27 @@ tools:
                 `openclaw proxy validate --proxy-url <url>`; the proxy's destination policy is
                 the real boundary and OpenClaw ships none.
             url: https://docs.openclaw.ai/security/network-proxy
+        note: >-
+          Sandboxed exec is bounded by the container network and the egress proxy allowlist; the
+          gateway process's own model and channel calls follow proxy.proxyUrl but are not
+          destination-filtered, and a local (unsandboxed) exec backend is bounded only by the host.
         verified: "2026-09-10"
       - capability: capabilityModelScanning
         coverage: none
         note: >-
           Models are remote provider APIs or local servers (Ollama, LM Studio, llama.cpp) the user
           points models.providers at; nothing inspects model files. Scan any local GGUF or other
-          weights with an external tool before configuring them, including the local embedding
-          option for memory.search.provider.
+          weights with an external tool before configuring them, including the local embedding option
+          for memory.search.provider. Rated none rather than not applicable because the product's
+          optional local model and local embedding paths load weights the operator supplies, and
+          nothing in the product scans them.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.openclaw.ai/llms.txt
         verified: "2026-09-10"
     advisories:
-      - title: "CVE-2026-25253 — Control UI auto-connected to an attacker-supplied gatewayUrl and sent the gateway token (1-click RCE); fixed in 2026.1.29"
-        url: https://nvd.nist.gov/vuln/detail/CVE-2026-25253
+      - title: "CVE-2026-25253 — Control UI auto-connected to an attacker-supplied gatewayUrl and sent the gateway token (1-click RCE); fixed in 2026.1.29 (GitHub Advisory GHSA-g8p2-7wf7-98mq)"
+        url: https://github.com/advisories/GHSA-g8p2-7wf7-98mq
         date: "2026-02"
       - title: "CVE-2026-25593 — Unauthenticated local RCE via WebSocket config.apply; fixed in 2026.1.20"
         url: https://github.com/openclaw/openclaw/security/advisories/GHSA-g55j-c2v4-pjcg

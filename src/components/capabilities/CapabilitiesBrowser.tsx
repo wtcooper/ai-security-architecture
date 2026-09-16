@@ -137,7 +137,7 @@ export function CapabilitiesBrowser() {
           <div className="grid min-w-[860px] grid-cols-[180px_repeat(3,minmax(0,1fr))]">
             <div className="bg-ink px-4 py-3.5">
               <p className="text-[13.5px] font-bold text-white">CoSAI control group</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-white/60">what the tooling implements</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-white/60">what the tooling contributes to</p>
             </div>
             {surfaces.map((s) => (
               <div key={s.id} className="border-l border-white/10 bg-ink px-4 py-3.5">

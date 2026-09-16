@@ -118,13 +118,21 @@ tools:
             body:
               - Encode tenant and user in session IDs, verify ownership before resume or delete, set sessionIdleTimeoutSeconds (15–30 minutes for chat) and use baseDirectory / sessionFs to keep state per process or in your own store.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
+        note: >-
+          Isolation and retention are the application's: sessionFs decides where state lives,
+          ownership checks decide who reads it, and idle timeouts bound retention. Nothing validates
+          or restores memory.
         verified: "2026-09-10"
       - capability: capabilityModelEvals
         coverage: none
         mechanism: No evaluation harness in the SDK; GitHub evaluates hosted models vendor-side
         note: >-
-          Build evals in your own CI against the SDK; the application card describes GitHub's
-          internal benchmarks and red teaming only.
+          Rated none on the same rule as Copilot cloud's supplier evidence: GitHub's internal
+          benchmarks and red teaming are TPRM evidence, not a harness the application can run. Build
+          evals in your own CI against the SDK.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
       - capability: capabilityAgentObservability
         coverage: native
@@ -138,9 +146,12 @@ tools:
             body:
               - Subscribe to assistant.usage and session.usage_info events and call session.usage.getMetrics for per-model totals.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing
+        note: >-
+          Traces cover the SDK, CLI and tool handlers with W3C correlation; capture content is off by
+          default. Emission is not detection or an audit record.
         verified: "2026-09-10"
       - capability: capabilityIga
-        coverage: native
+        coverage: partial
         mechanism: GitHub OAuth per user with gitHubToken set per session; service-to-server installation tokens for services; application-level authentication and session ownership
         steps:
           - title: Authenticate users, not the runtime
@@ -151,6 +162,11 @@ tools:
             body:
               - GitHub OAuth for user-facing apps, short-lived installation access tokens for server-to-server, BYOK where GitHub auth is not wanted.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth
+        note: >-
+          Rated partial on the same rule as the Claude Agent SDK and Codex SDK: OAuth per user and
+          installation tokens authenticate the runtime to GitHub; who may use the deployed
+          application, with what roles, and how they are provisioned and removed is the application's
+          own identity layer, which the SDK does not provide.
         verified: "2026-09-10"
       - capability: capabilityNhiManagement
         coverage: partial
@@ -176,6 +192,10 @@ tools:
             body:
               - The scaling guide's production checklist names Vault or Kubernetes Secrets for credentials and persistent volumes for session state.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
+        note: >-
+          Storage and issuance are the application's: managed-identity callbacks give ephemeral
+          provider tokens, a static apiKey does not. Whatever the application passes the CLI process
+          is readable by the tools that process runs.
         verified: "2026-09-10"
       - capability: capabilityAgentRuntimeEnforcement
         coverage: native
@@ -193,6 +213,10 @@ tools:
             body:
               - The SDK's own enableManagedSettings flag and managedSettings option on session.create / session.resume are the SDK's enterprise-permissions layer, not the org-wide managed-settings.json feature; the enterprise managed-settings client matrix still does not name the SDK, so wire enableManagedSettings or managedSettings explicitly rather than assuming central policy reaches SDK sessions.
             url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        note: >-
+          The hooks are an integration point; the deny-by-default onPermissionRequest is real only
+          when the application implements it. managedSettings brings enterprise permissions into the
+          SDK, but the application must enable it.
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -202,9 +226,13 @@ tools:
             body:
               - "Set mode: \"empty\" so CLI defaults and ambient OS tools are disabled, then list availableTools explicitly; avoid builtin:* without review."
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
+        note: >-
+          Application integration required: mode empty plus availableTools hides everything not
+          listed, and hooks are the only argument limits. Nothing is enforced unless the application
+          sets these per session.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
-        coverage: native
+        coverage: partial
         mechanism: Per-session gitHubToken versus a single runtime service token; BYOK keys per session; loopback-only headless binding
         steps:
           - title: Scope GitHub auth to the requesting user
@@ -215,6 +243,11 @@ tools:
             body:
               - There is no built-in auth between SDK and CLI; keep copilot --headless on loopback or inside a private network.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
+        note: >-
+          Rated partial on the same rule as the Claude Agent SDK: a per-session token, per-session
+          BYOK keys and loopback binding are design choices the application makes, not isolation the
+          SDK enforces, and the token the session holds is readable by every tool in it. No
+          on-behalf-of exchange — the token's authority is the session's authority.
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
         coverage: partial
@@ -245,6 +278,9 @@ tools:
             body:
               - Filter or annotate prompts in onUserPromptSubmitted, inspect model-facing content in onUserPromptTransformed, and deny suspicious tool calls in onPreToolUse.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+        note: >-
+          The hooks are an attach point, not a detector: nothing is classified until the application
+          supplies the logic.
         verified: "2026-09-10"
       - capability: capabilityAiDlp
         coverage: partial
@@ -254,6 +290,9 @@ tools:
             body:
               - Use onPostToolUse to redact secrets from tool results before they reach the model; leave TelemetryConfig captureContent off in production.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+        note: >-
+          Redaction in onPostToolUse is code the application writes; the SDK ships no scanner, so
+          content inspection exists only where the application attaches one.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -263,6 +302,7 @@ tools:
             body:
               - "Return permissionDecision \"ask\" (interactive) or hold the onPermissionRequest promise until an operator approves for shell, write and network operations."
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
+        note: The SDK routes the decision to the application; the application must implement an authenticated human approver and fail closed on timeout, so the control is complete only in the deployed application.
         verified: "2026-09-10"
       - capability: capabilityDataAccessGovernance
         coverage: partial
@@ -272,6 +312,10 @@ tools:
             body:
               - Set gitHubToken per session; for custom tools, pass the user's identity into the tool handler rather than a service credential.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
+        note: >-
+          Delegated for GitHub sources when the application passes a per-user token; a shared token
+          makes retrieval service-owned. Every other source is the application's tool, enforcing
+          whatever it enforces.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: partial
@@ -295,6 +339,9 @@ tools:
         note: >-
           Keep the availableTools list and MCP configuration in version control and stamp
           GITHUB_COPILOT_INTEGRATION_ID so GitHub can attribute the integration.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: partial
@@ -320,6 +367,12 @@ tools:
       - capability: capabilityAiDetectionResponse
         coverage: external
         mechanism: OTLP traces and hook logs feed a SIEM; no vendor detections for SDK sessions
+        note: >-
+          The traces and hook logs are the feed; detection logic and response actions live in the
+          SIEM. Required fields: session id, tool name, permission decision, integration id.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
         coverage: none
@@ -327,10 +380,20 @@ tools:
         note: >-
           Mount encrypted persistent volumes for ~/.copilot/session-state or route state through
           sessionFs into an encrypted store.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
       - capability: capabilityRagSecurity
-        coverage: none
+        coverage: notApplicable
         mechanism: No retrieval store in the SDK; any corpus is the application's own tool or MCP server
+        note: >-
+          Conditional: no retrieval store ships in the SDK; any corpus is the application's own tool
+          or MCP server, and that application owns provenance, trust tiering and access scoping for
+          it.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: partial
@@ -340,12 +403,19 @@ tools:
             body:
               - Register only trusted servers per session and allowlist their tools with mcp:tool patterns; the application card places responsibility for server trustworthiness on the developer.
             url: https://docs.github.com/en/copilot/responsible-use/agents
+        note: >-
+          The application decides which servers a session gets; availableTools patterns filter by
+          name. No admission policy is enforced by the SDK, and nothing verifies or pins what a server
+          serves.
         verified: "2026-09-10"
       - capability: capabilityAiBom
         coverage: none
         mechanism: No manifests or signatures for tools, MCP servers or the bundled CLI
         note: >-
           Pin the SDK and CLI versions in your dependency manifest; the bundled-CLI path updates the runtime with the SDK package.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: partial
@@ -355,10 +425,19 @@ tools:
             body:
               - Run copilot --headless on loopback (default) or a private host; expose it through your application, never directly.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
+        note: >-
+          baseUrl pins the model endpoint only; commands, MCP servers and the host process egress
+          under the host's network policy, which the deployer builds.
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable to hosted models; BYOK local models (Ollama, OpenAI-compatible) are the deployer's artefacts
+        note: >-
+          The SDK loads no weights; hosted models are the vendor's. BYOK local models (Ollama,
+          OpenAI-compatible) are a separate server the deployer runs and scans.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
         verified: "2026-09-10"
     advisories: []
     sources:

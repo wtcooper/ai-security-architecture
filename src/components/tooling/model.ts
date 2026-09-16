@@ -85,14 +85,23 @@ export interface Cell {
   coverage?: ToolCoverage;
   status?: OrgStatus;
   parts: { capability: string; control?: ToolControl; status?: OrgStatus }[];
+  /** The component whose coverage the cell shows, so its link and its word refer to the same thing. */
+  decisive?: ToolControl;
+  /** Components with no vendor record at all: a composite that hides one is not a faithful summary. */
+  missing: string[];
 }
 
 const STATUS_RANK: OrgStatus[] = ["gap", "inProgress", "enabled"];
-const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native"];
+// A not-applicable component neither helps nor hurts a composite; it only shows when every part is.
+const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native", "notApplicable"];
 const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {
   const present = values.filter((v): v is T => v !== undefined);
   if (!present.length) return undefined;
   return rank[Math.min(...present.map((v) => rank.indexOf(v)))];
+};
+const worstCoverage = (values: (ToolCoverage | undefined)[]): ToolCoverage | undefined => {
+  const applicable = values.filter((v) => v !== "notApplicable");
+  return worst(COVERAGE_RANK, applicable) ?? (values.some((v) => v === "notApplicable") ? "notApplicable" : undefined);
 };
 
 export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
@@ -175,11 +184,15 @@ export function cellFor(tool: Tool, row: Row): Cell {
   const parts = row.capabilities.map((capability) => ({
     capability,
     control: own.get(capability),
-    status: onboarded ? orgStatusFor(tool.id, capability)?.status ?? "gap" : undefined,
+    // A control that does not apply to the product has no status to record: it is neither a gap nor enabled.
+    status: onboarded && own.get(capability)?.coverage !== "notApplicable" ? orgStatusFor(tool.id, capability)?.status ?? "gap" : undefined,
   }));
+  const coverage = worstCoverage(parts.map((p) => p.control?.coverage));
   return {
-    coverage: worst(COVERAGE_RANK, parts.map((p) => p.control?.coverage)),
+    coverage,
     status: worst(STATUS_RANK, parts.map((p) => p.status)),
     parts,
+    decisive: parts.find((p) => p.control?.coverage === coverage)?.control,
+    missing: parts.filter((p) => !p.control).map((p) => p.capability),
   };
 }

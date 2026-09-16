@@ -964,7 +964,7 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | use | draft | 7 | Model artifact scanning & safe deserialization |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 9 | _none_ |
+| API/SDK managed agent runtime | hybrid | draft | 9 | Agent execution sandboxing, Network segmentation & egress control, Runtime action authorization, Agent credential isolation & delegation control, Tool & MCP supply-chain security |
 
 ### 5b. AI tooling registry
 
@@ -975,25 +975,25 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 18/18 | _none_ |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
+| Claude Code on the web (cloud sessions) | anthropic | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
+| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Cursor Cloud Agents | cursor | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
+| Cursor Cloud Agents | cursor | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Grok Bot | cursor | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
+| Grok Bot | cursor | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| GitHub Copilot cloud agent | github | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
+| GitHub Copilot cloud agent | github | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Codex cloud | openai | API/SDK managed agent runtime | 2026-09 | 19/19 | _none_ |  |
+| Codex cloud | openai | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |

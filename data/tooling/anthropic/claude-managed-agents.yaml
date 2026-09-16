@@ -1,5 +1,6 @@
 # Claude Managed Agents — one entity per product × reference architecture. Facts are dated (asOf)
 # and cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# 2026-09-15: added sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched environments, cloud-sandboxes-reference, self-hosted-sandboxes-security, permission-policies, mcp-connector, vaults, tools (all 200).
 vendor: anthropic
 family: Claude Managed Agents
 tools:
@@ -124,6 +125,11 @@ tools:
                 into the sandbox serving that session, and revoke on suspicion (validated on every
                 request).
             url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+        note: >-
+          The agent id and version identify a configuration, not a principal third parties
+          authenticate; vault credentials carry the authority for outbound calls, so the identity a
+          tool sees is whatever credential the vault mapped — inventory those as the non-human
+          identities.
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: native
@@ -141,9 +147,16 @@ tools:
           - title: Rotate and revoke
             body:
               - Update the credential's secret (running sessions re-resolve without restart),
-                archive to purge the secret while keeping the audit record, and subscribe to
-                vault_credential.refresh_failed webhooks.
-            url: https://platform.claude.com/docs/en/managed-agents/webhooks
+                archive to purge the secret while keeping the audit record (vaults page), and
+                subscribe to vault_credential.refresh_failed on the webhooks page
+                (platform.claude.com/docs/en/managed-agents/webhooks) for the notification.
+            url: https://platform.claude.com/docs/en/managed-agents/vaults
+        note: >-
+          Vault substitution keeps values out of the sandbox and the model; it does not scope them per
+          requesting user. A credential in a vault is presented for every session that vault is
+          attached to, so tenant-scoped delegation — one user's authority, not a shared credential's —
+          is the application's to arrange through per-user vaults or mcp_oauth per user. Where no
+          credential matches, the connection is attempted unauthenticated.
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
         coverage: partial
@@ -169,9 +182,13 @@ tools:
                 agents (new sessions cannot reference them); subscribe to agent.created / updated /
                 archived webhooks.
             url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+        note: >-
+          A registry of deployed definitions with ids and versions. Ownership lives in metadata the
+          organisation writes, and there is no approval workflow before deploy — the change-gating the
+          architecture pins is the organisation's pipeline.
         verified: "2026-09-10"
       - capability: capabilityStagedRollout
-        coverage: native
+        coverage: partial
         mechanism: >-
           Agent version increments on every change with optimistic concurrency (version field, 409
           on mismatch), full version history, coordinator rosters pinned to a version; sessions
@@ -183,6 +200,12 @@ tools:
                 re-apply an earlier configuration to roll back; environments are not versioned, so
                 keep your own record.
             url: https://platform.claude.com/docs/en/managed-agents/agent-setup
+        note: >-
+          Immutable versions, full history and re-applying an earlier version are the versioning half;
+          there is no canary alias, percentage exposure or regression gate, environments are not
+          versioned, and rolling back the agent does not roll back credentials or running sessions
+          (they keep the configuration they started with). Rated partial on the same rule as the other
+          hosted runtimes.
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -201,6 +224,10 @@ tools:
               - Put allowed_domains or blocked_domains on the web_search and web_fetch config
                 entries (up to 64 domains each); environment networking does not govern these tools.
             url: https://platform.claude.com/docs/en/managed-agents/tools
+        note: >-
+          enabled false hides a tool, permission_policy pre-approves or gates it, domain lists limit
+          web tools' arguments. Custom tools are the application's: the runtime returns them to the
+          application without applying toolset policy.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -228,6 +255,10 @@ tools:
                 read_only, and keep MCP toolsets on always_ask when the agent processes untrusted
                 input.
             url: https://platform.claude.com/docs/en/managed-agents/memory
+        note: >-
+          Containment, not detection: networking limits, read-only memory and always_ask bound what an
+          injected instruction can do; nothing classifies tool results or retrieved content for
+          injection.
         verified: "2026-09-10"
       - capability: capabilityAiTprm
         coverage: external
@@ -251,6 +282,10 @@ tools:
               - Stream events per session (open the stream before sending), and list past events by
                 type for reconstruction; every persisted event has an id and processed_at.
             url: https://platform.claude.com/docs/en/managed-agents/events-and-streaming
+        note: >-
+          Events cover tool use, model requests with usage, errors and thread events, correlated by
+          session; there is no model chain-of-thought and no OTLP export — the stream is pulled
+          through the API. Observability is not detection; that logic runs in the consumer.
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: partial
@@ -279,6 +314,11 @@ tools:
                 Messages API only; configure allowed_domains / blocked_domains on the toolset
                 instead.
             url: https://platform.claude.com/docs/en/managed-agents/tools
+        note: >-
+          Vendor-operated safeguard, not an organisation-configured policy: Anthropic's model safety
+          systems act on every session, and the domain lists bound web tools, but no denied-topic,
+          blocked-term or output filter is configurable. Rated partial on the same rule as Claude Code
+          on the web, Copilot cloud and Codex cloud.
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: native
@@ -297,6 +337,11 @@ tools:
               - List memory versions, restore prior content by writing it back, and redact versions
                 that captured secrets or PII while keeping the audit trail.
             url: https://platform.claude.com/docs/en/managed-agents/memory
+        note: >-
+          Integrity and recovery are real here: read_only stops sessions writing, every write is an
+          immutable version, and recovery is re-pointing to an earlier version. What can still write:
+          any session attached read_write, and the API. Writes are trusted as the session's — nothing
+          scans content for poisoning before it is versioned.
         verified: "2026-09-10"
       - capability: capabilityModelEvals
         coverage: partial
@@ -307,6 +352,10 @@ tools:
               - Send user.define_outcome so a grader (without web tools) evaluates each iteration and
                 emits span.outcome_evaluation_end with satisfied / needs_revision / failed.
             url: https://platform.claude.com/docs/en/managed-agents/reference
+        note: >-
+          The outcome grader evaluates iterations within a session against a defined outcome; it is
+          not a release-gate regression suite with datasets and results across versions. Anthropic's
+          model evaluations are supplier evidence for TPRM.
         verified: "2026-09-10"
       - capability: capabilityAiGovernancePlatform
         coverage: external
@@ -331,6 +380,10 @@ tools:
                 its cap goes idle with budget_reached and accepts only settle events until the cap
                 is raised or removed.
             url: https://platform.claude.com/docs/en/managed-agents/budgets
+        note: >-
+          Sub-limits: spend (session budget, hard but checked between model requests, so the request
+          in flight can overshoot), account rate limits (hard), request-count limits per organisation
+          (hard). No turn or wall-clock cap per session.
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
         coverage: native
@@ -345,9 +398,12 @@ tools:
                 sessions start; archive vault credentials to revoke access (running sessions
                 re-resolve credentials periodically).
             url: https://platform.claude.com/docs/en/managed-agents/session-operations
+        note: >-
+          user.interrupt stops the active session; archiving credentials propagates at the sessions'
+          next periodic re-resolution, so that interval is the revocation delay for delegated work.
         verified: "2026-09-10"
       - capability: capabilityVendorAssurance
-        coverage: partial
+        coverage: external
         mechanism: Every configuration is readable through the API (agents, environments, vaults minus secrets, memory stores, deployments) for posture checks
         steps:
           - title: Check posture from the API
@@ -356,7 +412,147 @@ tools:
                 bash or missing domain lists, and sessions without budgets; treat these as
                 findings.
             url: https://platform.claude.com/docs/en/managed-agents/environments
+        note: >-
+          Every configuration is readable through the API, which is the input an SSPM product needs;
+          the checks listed in the step are ones the customer writes, not ones the product runs.
         verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: >-
+          Isolated Linux container per session on Anthropic infrastructure (Ubuntu 24.04, no
+          filesystem shared between sessions); self-hosted sandboxes run on a worker you operate
+        steps:
+          - title: Use cloud environments for the vendor's isolation
+            body:
+              - >-
+                Every session gets its own container even when sessions share an environment; the
+                sandbox holds the languages, databases and tools listed on the reference page and
+                nothing persists between sessions.
+            url: https://platform.claude.com/docs/en/managed-agents/cloud-sandboxes-reference
+          - title: Harden self-hosted sandboxes yourself
+            body:
+              - >-
+                Anthropic does not inspect your image: drop capabilities, run as a non-root user,
+                use a read-only root filesystem, and isolate untrusted workloads into separate
+                workspaces and environments so each service key covers one trust boundary.
+            url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+        note: >-
+          Inside the boundary: bash, file tools, packages and any custom tool served from the
+          sandbox. Outside: the loop, inference, web_search and web_fetch (which run on Anthropic's
+          servers) and the MCP client. Anthropic's boundary stops at the sandbox — how tools are
+          isolated from each other inside it, and everything about a self-hosted worker, is yours.
+        verified: "2026-09-15"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: >-
+          Environment networking type limited with allowed_hosts, allow_mcp_servers and
+          allow_package_managers; unrestricted (a general safety blocklist only) is the default
+          for API-created environments; web_search / web_fetch bounded separately by
+          allowed_domains or blocked_domains on the tool
+        steps:
+          - title: Set limited networking with an explicit host list
+            body:
+              - >-
+                Create environments with networking type limited and allowed_hosts naming only the
+                hosts the agent needs; set allow_mcp_servers true only if the agent's declared MCP
+                endpoints must be reachable from the sandbox, and allow_package_managers true only
+                when packages are installed.
+            url: https://platform.claude.com/docs/en/managed-agents/environments
+          - title: Bound the vendor's web tools separately
+            body:
+              - >-
+                The networking policy does not touch web_search or web_fetch, which run on
+                Anthropic's servers; set allowed_domains or blocked_domains on those tool entries in
+                the agent toolset, or disable them.
+            url: https://platform.claude.com/docs/en/managed-agents/tools
+        note: >-
+          Covers the sandbox's outbound traffic only. The web tools take their own path under their
+          own lists, the MCP client's connections are opened by allow_mcp_servers, and a self-hosted
+          sandbox's egress is your VPC and firewall. API-created environments start unrestricted,
+          so the least-privilege posture must be set deliberately.
+        verified: "2026-09-15"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: native
+        mechanism: >-
+          permission_policy per toolset and per tool (always_allow, always_ask, auto) evaluated
+          by the server before a built-in or MCP tool runs; auto denials cannot be overridden by
+          the client; evaluated_permission recorded on every tool event
+        steps:
+          - title: Gate the tools a person must see with always_ask
+            body:
+              - >-
+                Set permission_policy always_ask on bash and on every MCP toolset (their default) so
+                the session pauses with requires_action until a user.tool_confirmation arrives;
+                always_ask is the deterministic gate, auto is the server's own reviewer.
+            url: https://platform.claude.com/docs/en/managed-agents/permission-policies
+          - title: Keep the evaluation in your audit record
+            body:
+              - >-
+                Store evaluated_permission and the evaluation object (policy type, reason_code) from
+                each agent.tool_use and agent.mcp_tool_use event; a call denied under auto carries
+                reason_code high_risk and cannot be re-allowed.
+            url: https://platform.claude.com/docs/en/managed-agents/permission-policies
+        note: >-
+          Custom tools are not governed: the runtime returns agent.custom_tool_use to your
+          application unevaluated, so the same decision must exist there. Policy changes apply to
+          sessions created afterwards, not running ones. Under auto, what you post in user.message
+          counts as your intent — relayed end-user input can get a call allowed, so keep always_ask
+          on anything that user must not run unreviewed.
+        verified: "2026-09-15"
+      - capability: capabilityCredentialIsolation
+        coverage: native
+        mechanism: >-
+          Vault credentials substituted at egress (the sandbox holds a placeholder; values are
+          write-only); per-session secret for self-hosted workers; the environment service key
+          scoped to one environment's work queue
+        steps:
+          - title: Attach credentials through vaults, never the environment
+            body:
+              - >-
+                Register mcp_oauth, static_bearer or environment_variable credentials in a vault and
+                pass vault_ids at session creation; the agent sees only an opaque placeholder and the
+                proxy substitutes the value for matching hosts.
+            url: https://platform.claude.com/docs/en/managed-agents/vaults
+          - title: Scope self-hosted credentials per session
+            body:
+              - >-
+                Pass the per-session secret only into the sandbox serving that session, keep the
+                environment key in a secrets manager and out of images, and give each trust boundary
+                its own workspace and environment.
+            url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
+        note: >-
+          A vault credential is presented for every session the vault is attached to, so tenant-
+          scoped delegation — one user's authority rather than a shared credential — is your
+          arrangement through per-user vaults or per-user mcp_oauth, not the runtime's default.
+          Where no credential matches a server, the connection is attempted unauthenticated.
+        verified: "2026-09-15"
+      - capability: capabilityMcpToolSecurity
+        coverage: partial
+        mechanism: >-
+          mcp_servers declared by name and URL on the agent definition (up to 20, every entry
+          referenced by an mcp_toolset); default_config.enabled false plus configs to enable
+          named tools; MCP toolsets default to always_ask
+        steps:
+          - title: Enable only the tools you reviewed
+            body:
+              - >-
+                Set default_config.enabled false on each mcp_toolset and list the tools to enable,
+                so tools the server operator adds later stay off until reviewed.
+            url: https://platform.claude.com/docs/en/managed-agents/mcp-connector
+          - title: Leave MCP toolsets on always_ask
+            body:
+              - >-
+                The always_ask default exists so new tools an MCP server adds do not execute without
+                approval; only switch a server to always_allow after you have reviewed it.
+            url: https://platform.claude.com/docs/en/managed-agents/permission-policies
+        note: >-
+          Rated partial on the hosted-runtime rule: admission is per agent definition by whoever
+          may edit it — there is no workspace-wide allowlist of servers — and the runtime verifies
+          nothing a declared server serves; session creation does not even validate connectivity
+          or credentials. The always_ask default and per-tool enablement are the only guards
+          against a server's tool list changing underneath you. Gate definition changes in your
+          own pipeline.
+        verified: "2026-09-15"
     sources:
       - title: Claude Managed Agents overview
         url: https://platform.claude.com/docs/en/managed-agents/overview

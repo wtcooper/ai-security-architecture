@@ -155,6 +155,10 @@ tools:
             body:
               - "A hooks.BeforeTool command in the system settings receives tool_name and tool_input and blocks with {\"decision\": \"deny\"} or exit code 2. The hooks page ranks project and user settings above system settings for hooks, so treat the admin policy tier as the enforced layer and the hook as defence in depth."
             url: https://geminicli.com/docs/hooks/reference/
+        note: >-
+          The policy engine TOML is deterministic and admin-tiered; BeforeTool hooks are an
+          integration point whose logic the organisation writes. Sub-agents and MCP tools pass through
+          the same engine; a remote server's own actions are outside it.
         verified: "2026-09-10"
       - capability: capabilityAiTprm
         coverage: external
@@ -200,6 +204,10 @@ tools:
             body:
               - "tools.confirmationRequired forces approval for named tools even when tools.allowed would skip it."
             url: https://geminicli.com/docs/reference/configuration/
+        note: >-
+          tools.core hides built-ins, includeTools/excludeTools hide MCP tools, confirmationRequired
+          gates; argument limits come from the policy engine TOML, not these lists. YOLO mode must be
+          disabled or it pre-approves everything.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
@@ -213,6 +221,10 @@ tools:
             body:
               - "On macOS the default Seatbelt profile is permissive-open; choose restrictive-* or strict-* and a *-proxied variant via SEATBELT_PROFILE when network must go through a proxy."
             url: https://geminicli.com/docs/cli/sandbox/
+        note: >-
+          Inside the boundary: the CLI process and the tools it spawns, in docker, podman or a
+          Seatbelt profile. Outside: remote MCP servers and the model endpoint. Docker and podman need
+          the runtime installed on every developer machine; Seatbelt is macOS only.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
         coverage: partial
@@ -246,13 +258,25 @@ tools:
             url: https://geminicli.com/docs/cli/auto-memory/
         verified: "2026-09-10"
       - capability: capabilityPromptInjectionDefense
-        coverage: none
+        coverage: partial
         mechanism: Not offered; structural mitigations only
+        steps:
+          - title: Attach a detector in hooks
+            body:
+              - >-
+                Register a BeforeModel hook in the system settings file that sends the assembled prompt
+                (GEMINI.md context, MCP results, fetched pages) to your classifier and rejects on a hit;
+                without it nothing detects an injected instruction.
+            url: https://geminicli.com/docs/hooks/
         note: >-
-          No injection or jailbreak classifier is documented. The defences are trusted folders,
-          ask_user policies on write tools, the post-2025-07 shell-command validation fix and
-          hooks the organisation writes; treat every GEMINI.md, MCP response and fetched page as
-          untrusted.
+          Rated like Copilot CLI and the Copilot SDK: no injection or jailbreak classifier is
+          documented, but BeforeModel and AfterModel hooks are the attach point for one, and the
+          post-2025-07 shell-command validation blocks a class of injected commands. Trusted folders
+          and ask_user policies contain; they do not detect. Treat every GEMINI.md, MCP response and
+          fetched page as untrusted.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://geminicli.com/docs/
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: partial
@@ -269,11 +293,13 @@ tools:
             url: https://geminicli.com/docs/reference/configuration/
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
-        coverage: partial
+        coverage: native
         mechanism: mcp.allowed / mcp.excluded, the Management Console MCP allowlist and required servers, the extensions toggle
         note: >-
-          Allowlists are by server name and URL; no content-hash pinning or tool-definition
-          scanning is documented. v0.59.0 fixed SSRF in MCP OAuth metadata discovery.
+          Rated native on the same rule as Copilot CLI, Codex and Cowork: mcp.allowed / mcp.excluded
+          and the Management Console allowlist admit servers by name and URL. Admission is not
+          integrity — no content-hash pinning or tool-definition scanning is documented. v0.59.0 fixed
+          SSRF in MCP OAuth metadata discovery.
         steps:
           - title: Allowlist servers centrally
             body:
@@ -331,12 +357,15 @@ tools:
             url: https://docs.cloud.google.com/gemini/docs/configure-logging
         verified: "2026-09-10"
       - capability: capabilityShadowAiDiscovery
-        coverage: none
+        coverage: external
         mechanism: Not offered
         note: >-
           Discover installs with software inventory or EDR: the npm package @google/gemini-cli,
           the gemini binary, ~/.gemini and the Docker image ghcr.io/google/gemini-cli. An
           enforced auth type makes personal API-key use a detectable settings mismatch.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://geminicli.com/docs/
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
         coverage: partial
@@ -358,6 +387,9 @@ tools:
           Hooks in the system settings can call an endpoint agent before every tool call and
           deny on its verdict; otherwise watch for the sandbox container, writes under ~/.gemini
           and child processes of the gemini binary.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://geminicli.com/docs/
         verified: "2026-09-10"
       - capability: capabilitySystemPromptManagement
         coverage: partial
@@ -373,13 +405,18 @@ tools:
             url: https://geminicli.com/docs/cli/gemini-md/
         verified: "2026-09-10"
       - capability: capabilityAiBom
-        coverage: unknown
+        coverage: none
         mechanism: Not verified
         note: >-
-          Releases are published on GitHub and npm; whether the npm package carries provenance
-          attestations or a signed SBOM was not checked on 2026-09-10. Nothing manifests the
-          extensions and MCP servers a session loads.
-        verified: "2026-09-10"
+          Checked 2026-09-15 against the npm registry: @google/gemini-cli 0.60.0 carries npm registry
+          signatures (dist.signatures) but no provenance attestation (no dist.attestations), and
+          nothing manifests the extensions and MCP servers a session loads. Registry signatures prove
+          the registry served the tarball, not who built it. Record the CLI, extension and MCP server
+          versions yourself.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-15)
+            url: https://geminicli.com/docs/
+        verified: "2026-09-15"
       - capability: capabilityEgressControl
         coverage: partial
         mechanism: GOOGLE_GEMINI_BASE_URL / GOOGLE_VERTEX_BASE_URL proxy overrides; tools.sandboxNetworkAccess; *-proxied Seatbelt profiles
@@ -399,9 +436,12 @@ tools:
             url: https://geminicli.com/docs/cli/sandbox/
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable
         note: No model artifacts are loaded locally; every auth path is a remote Google endpoint.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://geminicli.com/docs/
         verified: "2026-09-10"
     advisories:
       - title: "GHSA-wpqr-6v78-jr5g: RCE via workspace trust and tool allowlisting bypasses (CVSS 10.0, 2026-04-24); @google/gemini-cli < 0.39.1 and < 0.40.0-preview.3, run-gemini-cli < 0.1.22"

@@ -596,8 +596,8 @@ export type ToolStatus = "ga" | "beta" | "preview" | "announced";
  * Whether the vendor implements a pinned capability on this tool: natively, partially, not at
  * all, only through a third-party product (`external`), or nobody could verify (`unknown`).
  */
-export type ToolCoverage = "native" | "partial" | "none" | "external" | "unknown";
-export const TOOL_COVERAGES: ToolCoverage[] = ["native", "partial", "none", "external", "unknown"];
+export type ToolCoverage = "native" | "partial" | "none" | "external" | "notApplicable" | "unknown";
+export const TOOL_COVERAGES: ToolCoverage[] = ["native", "partial", "none", "external", "notApplicable", "unknown"];
 
 /** A named shell of the product: CLI, IDE extension, desktop app, ... */
 export interface ToolVariant {
@@ -623,6 +623,12 @@ export interface ToolControl {
   /** When the steps were checked against the vendor's page, e.g. "2026-09-10". */
   verified?: string;
   note?: string;
+  /**
+   * Where an absence or an integration claim was checked, for rows with no operator step: the
+   * page that shows the vendor offers nothing, names the integration point, or explains why the
+   * control does not apply. Not a configuration page — the coverage word never links here.
+   */
+  evidence?: { title: string; url: string }[];
 }
 
 export interface ToolVendor {

@@ -1487,6 +1487,14 @@ function checkTooling(
         if (!step.title?.trim()) fail(`${at}: a step needs a title`);
         if (!step.body?.length) fail(`${at} step "${step.title}": needs a body`);
       }
+      for (const e of c.evidence ?? []) {
+        if (!e.title?.trim() || !e.url?.trim()) fail(`${at}: evidence needs a title and a url`);
+      }
+      // A claim that the vendor offers nothing, or that a control does not apply, still needs
+      // a place a reader can check it; a settable control shows that through its steps.
+      if (!(c.steps ?? []).some((s) => s.url) && !(c.evidence ?? []).length) {
+        fail(`${at}: ${c.coverage} with no step url and no evidence — say where this was checked`);
+      }
     }
     for (const rn of tool.riskNotes ?? []) {
       if (!ctx.riskIds.has(rn.risk)) fail(`${where}: unknown risk ${rn.risk}`);

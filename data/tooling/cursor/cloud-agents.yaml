@@ -2,6 +2,7 @@
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
 # Excluded: Cursor Origin (git forge, early beta 2026-08-17) — code hosting, not an agent runtime; its
 # admin switch and the code-egress concern are recorded as facts below and in README Exclusions.
+# 2026-09-15: added sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched cloud-agent/security, security-network, settings, identity, hooks, enterprise/model-and-integration-management (all 200).
 vendor: cursor
 family: Cursor Cloud Agents
 tools:
@@ -203,6 +204,10 @@ tools:
             body:
               - Replace long-lived cloud keys with AssumeRoleWithWebIdentity against the Cursor OIDC issuer; tokens expire in five minutes.
             url: https://cursor.com/docs/cloud-agent/identity
+        note: >-
+          Runtime Secrets are readable by commands the agent runs (redacted in logs, not from the
+          shell); Build Secrets are readable by the Docker build only; OIDC tokens are the ephemeral
+          path. The model sees a Runtime Secret if a command prints it.
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
         coverage: native
@@ -212,6 +217,10 @@ tools:
             body:
               - Ask your account team to map your KMS key for Cloud Agent data so you control rotation and access; per-agent session keys sit under it.
             url: https://cursor.com/help/security-and-privacy/privacy
+        note: >-
+          Assets and key owners: Cloud Agent data at rest (the customer's key under CMEK/BYOK,
+          Cursor's AES-256 per-agent keys otherwise); traffic (TLS 1.2+). CMEK is documented for Cloud
+          Agent data only, not other Cursor products.
         verified: "2026-09-10"
       - capability: capabilityAgentRegistry
         coverage: partial
@@ -257,6 +266,10 @@ tools:
             body:
               - The Enterprise MCP Configuration applies to cloud runs; Automations only get the tools (PRs, Slack, MCP, memory, computer use) you enable per automation.
             url: https://cursor.com/docs/enterprise/model-and-integration-management
+        note: >-
+          Repository scope, blocklists and Protected Git Scopes limit resources; per-automation tool
+          enablement hides tools; there is no pre-approval layer because runs are unattended. MCP
+          tools follow the MCP allowlist.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: partial
@@ -270,7 +283,7 @@ tools:
             body:
               - Set Team follow-ups to Disabled or Service accounts only so only the owner can add instructions from Slack or the web.
             url: https://cursor.com/docs/cloud-agent/settings
-        note: There is no per-command approval inside a cloud run; the human step is at the pull request.
+        note: The human gate is the pull request; commands, network access and tool calls taken while the agent runs are not individually approved.
         verified: "2026-09-10"
       - capability: capabilityPromptInjectionDefense
         coverage: partial
@@ -326,7 +339,14 @@ tools:
       - capability: capabilityModelGuardrails
         coverage: none
         mechanism: Not offered — no admin-configurable content or topic filter
-        note: Model Access Control chooses which models run and Anthropic applies its own cyber safeguards to Opus models (Enterprise groups can apply for the Cyber Verification Program to lift them), but there is no organisation-defined input or output guardrail.
+        note: >-
+          Cursor operates no content safeguard of its own; Model Access Control chooses which models
+          run and the upstream provider's safeguards (Anthropic's cyber safeguards on Opus models,
+          which Enterprise groups can apply to lift) are the provider's, not this product's. No
+          organisation-defined input or output guardrail exists.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/cloud-agent
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: partial
@@ -346,11 +366,17 @@ tools:
         coverage: none
         mechanism: Not offered
         note: Bugbot and Security Agent analytics report findings and acceptance rates, which is outcome tracking rather than a scored evaluation harness; run your own.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/cloud-agent
         verified: "2026-09-10"
       - capability: capabilityAiGovernancePlatform
         coverage: external
         mechanism: Admin API and audit log as feeds into the organisation's governance platform
         note: Cursor has no catalogue with owners, risk tiers or intake workflow; the Admin API (members, model access, repo blocklists, audit logs) is the evidence source for one.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://cursor.com/docs/cloud-agent
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
         coverage: native
@@ -378,12 +404,136 @@ tools:
             body:
               - Admins can disable any automation from the dashboard and set enabled false per repository for Bugbot through /bugbot/repo/update.
             url: https://cursor.com/docs/cloud-agent/automations
+        note: >-
+          Cancelling a run stops active work; archiving the service account revokes future access. A
+          run already pushing a commit completes that push.
         verified: "2026-09-10"
       - capability: capabilityVendorAssurance
         coverage: external
         mechanism: Admin API endpoints (/teams/model-access/configuration, /teams/audit-logs, /settings/repo-blocklists/repos) polled by an SSPM product
         note: Cursor exposes configuration read APIs but ships no posture checks; the network-policy lock, Privacy Mode enforcement and Display-summary toggles are dashboard-only and must be verified manually.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://cursor.com/docs/cloud-agent
         verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: >-
+          Firecracker microVM per agent in an AWS account separate from Cursor's production
+          infrastructure; workspace recycled after the run goes idle, snapshots expire after 90
+          days of inactivity
+        steps:
+          - title: Rely on per-agent microVMs and let them recycle
+            body:
+              - >-
+                Every agent gets a dedicated environment isolated from other agents and users;
+                do not extend idle timers beyond what a run needs, because the workspace persists
+                until the timer lapses.
+            url: https://cursor.com/docs/cloud-agent/security
+        note: >-
+          Inside the boundary: commands, Docker builds, local MCP servers and computer use when
+          enabled. Outside: the model and remote MCP servers. Self-hosted runners (Dashboard >
+          Cloud Agents > Self-Hosted) move the sandbox onto your infrastructure, where isolation is
+          yours.
+        verified: "2026-09-15"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: >-
+          Network access modes Allow all (default), Default + allowlist and Allowlist only, set per
+          user, per environment or as a team default; Enterprise Lock Network Access Policy;
+          per-server network modes for local MCP servers in the Enterprise MCP Configuration
+        steps:
+          - title: Set Allowlist only and lock it
+            body:
+              - >-
+                In Team settings choose Allowlist only with the domains agents need, then enable Lock
+                Network Access Policy so members and environments cannot widen it; core Cursor
+                services and your source-control provider stay reachable.
+            url: https://cursor.com/docs/cloud-agent/security-network
+          - title: Make environments inherit the policy
+            body:
+              - >-
+                Saved environments can inherit the user or team policy, add an environment allowlist
+                or define their own mode; keep them on inheritance so the lock applies.
+            url: https://cursor.com/docs/cloud-agent/settings
+        note: >-
+          Covers cloning and pushing, package downloads, API calls, web access and artifact uploads
+          from the VM. The default is allow-all, so the restriction must be set deliberately;
+          private resources are reached through Tailscale, Cloudflare Tunnel or PrivateLink and
+          still pass the allowlist. Published egress ranges are at cursor.com/docs/ips.json.
+        verified: "2026-09-15"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: partial
+        mechanism: >-
+          Command-based repository hooks (beforeShellExecution, beforeMCPExecution, preToolUse)
+          with failClosed run in cloud agents once the environment is writable; Enterprise MCP
+          Configuration Tools field; Protected Git Scopes and Repository Blocklist
+        steps:
+          - title: Commit fail-closed command hooks
+            body:
+              - >-
+                Cloud agents run command-based hooks from the repository (prompt-based hooks are not
+                supported there); set failClosed true on beforeShellExecution and beforeMCPExecution
+                so a crashed or timed-out hook blocks rather than allows.
+            url: https://cursor.com/docs/hooks
+          - title: Restrict MCP tools centrally
+            body:
+              - >-
+                Use the Tools field per server in the Enterprise MCP Configuration to name the tools
+                a server may run; it applies to Cloud Agents as well as the IDE.
+            url: https://cursor.com/docs/enterprise/model-and-integration-management
+        note: >-
+          Rated partial on the same rule as Copilot cloud: the hooks are repository code, writable
+          by anyone with push access, not enterprise policy, and they do not run during the
+          read-only exploratory turns a run starts with. The deterministic administrator rules
+          bound tools and repositories, not individual shell commands.
+        verified: "2026-09-15"
+      - capability: capabilityCredentialIsolation
+        coverage: partial
+        mechanism: >-
+          Runtime Secrets redacted from the transcript, tool output and commits; encrypted storage
+          with per-agent KMS keys; short-lived OIDC tokens (five minutes) minted inside the run
+          for cloud federation instead of stored keys
+        steps:
+          - title: Federate instead of storing cloud keys
+            body:
+              - >-
+                Verify tokens from the issuer https://api.cursor.com and scope the assumed role to
+                what you would grant the whole run; the token carries cloud_agent_id, repo_urls,
+                owner and team claims.
+            url: https://cursor.com/docs/cloud-agent/identity
+          - title: Mark values as Runtime Secrets
+            body:
+              - >-
+                Store credentials as Runtime Secrets so their values are stripped from transcript,
+                tool output and commits and never reach the model.
+            url: https://cursor.com/docs/cloud-agent/security
+        note: >-
+          Rated partial because the boundary is the transcript, not the execution: a Runtime
+          Secret remains readable by any command in the VM, and any process that can reach the
+          socket — the agent, code it runs, hooks — can mint the OIDC token, which identifies the
+          run, not a process. No on-behalf-of exchange: a run acts as the GitHub App and the
+          triggering user's repository reach.
+        verified: "2026-09-15"
+      - capability: capabilityMcpToolSecurity
+        coverage: native
+        mechanism: >-
+          Enterprise MCP Configuration: allowlist by full command string or URL with wildcards,
+          per-server network mode (Allow all, Allowlist, Deny all, No sandbox) and Tools field;
+          applies to Cloud Agents
+        steps:
+          - title: Allowlist servers for cloud runs
+            body:
+              - >-
+                Add each permitted server by command string or URL pattern in the Enterprise MCP
+                Configuration and give local servers an Allowlist or Deny all network mode; the
+                configuration applies to Cloud Agents and Bugbot as well as the IDE.
+            url: https://cursor.com/docs/enterprise/model-and-integration-management
+        note: >-
+          Rated native on the same rule as Cursor in the IDE: admission by identity,
+          organisation-wide. Admission is not integrity — nothing pins the tool descriptions a
+          server returns or detects a changed implementation between runs.
+        verified: "2026-09-15"
     advisories:
       - title: "CVE-2026-61613 — Cloud Agent browser sandbox escape: web content reaches an unauthenticated local agent endpoint (patched 2026-03-31)"
         url: https://github.com/cursor/cursor/security/advisories/GHSA-whx2-4gvm-m3r3

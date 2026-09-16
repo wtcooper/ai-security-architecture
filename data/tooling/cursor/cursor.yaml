@@ -234,6 +234,10 @@ tools:
             body:
               - Use Shell(commandBase), Read(pathOrGlob), Write(pathOrGlob), WebFetch(domain) and Mcp(server:tool) entries in permissions.allow / permissions.deny; project-level .cursor/cli.json carries permissions only.
             url: https://cursor.com/docs/cli/reference/permissions
+        note: >-
+          server:tool patterns hide MCP tools; permissions.json and CLI rules limit shell and file
+          arguments; Run Mode pre-approves. Run Everything bypasses all of it unless the Enterprise
+          policy removes that mode.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
@@ -251,12 +255,20 @@ tools:
             body:
               - Set sandbox.mode and sandbox.networkAccess in ~/.cursor/cli-config.json, or pass --sandbox enabled|disabled in headless runs.
             url: https://cursor.com/docs/cli/reference/parameters
-        note: Six sandbox-escape advisories were published Feb–Jul 2026 (git hooks, .claude hooks, working directory, symlinks, privileged Docker containers, tampered venvs); all fixed by 3.1.2. Treat the sandbox as blast-radius reduction.
+        note: >-
+          Six sandbox-escape advisories were published Feb–Jul 2026 (git hooks, .claude hooks, working
+          directory, symlinks, privileged Docker containers, tampered venvs); all fixed by 3.1.2.
+          Treat the sandbox as blast-radius reduction. Inside the boundary: sandboxed commands.
+          Outside: MCP servers set to No sandbox, Browser Controls and the IDE process itself; Run
+          Everything bypasses it entirely unless the team policy removes that mode.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
         coverage: none
         mechanism: Not offered for the local agent — it runs with the developer's own identity and credentials
         note: The local agent and CLI act as the signed-in user with whatever the shell can reach; Remote Control deliberately keeps credentials on the machine. Delegation controls (OIDC federation, Runtime Secrets, service accounts) exist only on Cloud Agents (toolCursorCloudAgents). Put scoped credentials in the developer's environment and use Runtime Secrets where the work can move to a Cloud Agent.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/enterprise
         verified: "2026-09-10"
       - capability: capabilityMemoryProtection
         coverage: partial
@@ -301,7 +313,7 @@ tools:
         note: No vault or just-in-time issuance for the secrets the local agent touches; .env files are ignored by default but not protected from terminal tools.
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
-        coverage: partial
+        coverage: native
         mechanism: Enterprise MCP Configuration allowlist by command / URL pattern with per-server network modes; mandatory re-approval of any MCP config change (since 1.3); admin-curated Team Marketplaces
         steps:
           - title: Pin approved servers by pattern
@@ -312,7 +324,11 @@ tools:
             body:
               - Publish approved MCP servers and plugins through Dashboard → Plugins, set installation mode (Default Off / Default On / Required) and turn off Allow Members to Publish.
             url: https://cursor.com/docs/plugins
-        note: No content-hash pinning of tool definitions or rug-pull detection; the 1.3 fix re-prompts on configuration change, not on a server's own tool-list change.
+        note: >-
+          Rated native on the same rule as Copilot CLI, Codex and Cowork: the Enterprise allowlist
+          admits servers by command or URL and Team Marketplaces admit plugins by source. Admission is
+          not integrity — no content-hash pinning of tool definitions or rug-pull detection; the 1.3
+          fix re-prompts on configuration change, not on a server's own tool-list change.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -356,7 +372,7 @@ tools:
         note: Tamper-evidence and the retention period are not stated on the pages fetched.
         verified: "2026-09-10"
       - capability: capabilityShadowAiDiscovery
-        coverage: partial
+        coverage: external
         mechanism: MDM AllowedTeamId to block personal logins; Members → Active Sessions; documented backend domains for proxy detection
         steps:
           - title: Block personal accounts on managed devices
@@ -367,7 +383,12 @@ tools:
             body:
               - Alert on traffic to *.cursor.sh, *.cursorapi.com, *.cursor-cdn.com and *.cursorvm.com from devices without the MDM policy.
             url: https://cursor.com/docs/enterprise/network-configuration
-        note: Discovery of undeclared MCP servers or extensions on endpoints is not offered; AllowedExtensions and the MCP allowlist prevent rather than find.
+        note: >-
+          Rated external on the same rule as Claude Code: AllowedTeamId prevents personal logins and
+          Active Sessions lists sanctioned use; neither discovers unsanctioned installs, personal
+          accounts on unmanaged devices or undeclared MCP servers and extensions. Discovery is
+          endpoint inventory of the Cursor binary and ~/.cursor, and proxy detection of the documented
+          backend domains.
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
         coverage: partial
@@ -391,6 +412,10 @@ tools:
             body:
               - Enterprise hooks.json runs at every tool boundary and can forward command and file events to an endpoint agent before execution.
             url: https://cursor.com/docs/hooks
+        note: >-
+          Sensor scope: the host, where Cursor and its sandboxed commands run; hooks are where the
+          sensor can be consulted, not a sensor themselves. Apply the documented process exclusions
+          rather than exempting the agent's child processes.
         verified: "2026-09-10"
       - capability: capabilitySystemPromptManagement
         coverage: native
@@ -404,12 +429,20 @@ tools:
             body:
               - Turn on .cursor Directory Protection so the agent cannot modify .cursor/rules, mcp.json or hooks in the project.
             url: https://cursor.com/docs/enterprise/llm-safety-and-controls
-        note: Rules files inside repositories remain untrusted input (Rules File Backdoor); the docs say AI guidance should not be your only security control.
+        note: >-
+          Rules files inside repositories remain untrusted input (Rules File Backdoor); the docs say
+          AI guidance should not be your only security control. Enforce protects the instruction
+          configuration — users cannot disable Team Rules — but rule text is guidance the model
+          weighs, not a runtime action boundary; pair it with hooks and Run Mode policy for anything
+          that must be deterministic.
         verified: "2026-09-10"
       - capability: capabilityAiBom
         coverage: none
         mechanism: Not offered
         note: No manifest or signature of the models, plugins and tools composing a session. Extension installs can require signature verification and an Install Cooldown (security hardening page), and the official marketplace is manually reviewed, but nothing is machine-readable or verified at load.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://cursor.com/docs/enterprise
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: native
@@ -426,9 +459,12 @@ tools:
         note: Applies to sandboxed commands only; commands that run outside the sandbox (Run Everything, No sandbox MCP servers) reach anything the device can.
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable — no model artifacts are loaded on the device
         note: All inference is on Cursor's hosted providers; which models may be used is governed by Model Access Control. Nothing to scan locally.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://cursor.com/docs/enterprise
         verified: "2026-09-10"
     advisories:
       - title: "Rules File Backdoor — hidden Unicode in rules files steers Cursor and Copilot (Pillar Security)"

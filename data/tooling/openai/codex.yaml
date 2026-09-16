@@ -8,6 +8,7 @@
 # scheduled shutdown 2026-11-30 (developers.openai.com/api/docs/guides/agent-builder); ChatGPT
 # Workspace Agents — no official page resolved today (openai.com 403, learn.chatgpt.com 404), only
 # a "Workspace Agents" access-token scope confirms it exists, so no control row could be verified.
+# 2026-09-15: toolCodexCloud gained sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched cloud/internet-access, environments/cloud-environment, enterprise/chatgpt-work-cloud-security, enterprise/apps-and-connectors, enterprise/plugin-management, extend/mcp (all 200; learn.chatgpt.com/docs/mcp 404).
 vendor: openai
 family: Codex
 tools:
@@ -196,6 +197,10 @@ tools:
                 call; set allow_managed_hooks_only = true so user, project and plugin hooks are
                 ignored.
             url: https://learn.chatgpt.com/docs/hooks
+        note: >-
+          [rules] forbidden entries are deterministic; managed hooks are an integration point. The
+          Guardian reviewer is a classifier, not a rule. MCP tool calls pass the rules; a server's own
+          actions are outside them.
         verified: "2026-09-10"
       - capability: capabilityAiTprm
         coverage: external
@@ -251,13 +256,20 @@ tools:
               - Set [features] computer_use = false, browser_use = false and
                 browser_use_full_cdp_access = false where the fleet does not need them.
             url: https://learn.chatgpt.com/docs/browser
+        note: >-
+          enabled_tools/disabled_tools hide MCP tools, permission profiles and sandbox modes limit
+          filesystem and network reach, feature pins remove surfaces; approval policy pre-approves.
+          All enforced by requirements.toml, which users cannot loosen.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
         mechanism: OS sandbox (Seatbelt / bubblewrap+seccomp / Windows sandbox) selected by sandbox_mode and pinned by allowed_sandbox_modes
         note: >-
           Three 2026 escapes (git show allowlist, Docker socket, ProgramData config trust) sit in
-          advisories; the Docker-socket one is by design unless a socket is explicitly allowed.
+          advisories; the Docker-socket one is by design unless a socket is explicitly allowed. Inside
+          the boundary: commands the agent runs. Outside: browser tools, web search and MCP servers,
+          which are bounded by their own controls. Seatbelt on macOS, bubblewrap plus seccomp on
+          Linux, a native Windows sandbox.
         steps:
           - title: Understand the boundary
             body:
@@ -337,6 +349,10 @@ tools:
               - Exchange an OIDC or SPIFFE token via OPENAI_FEDERATION_RULE_ID /
                 OPENAI_IDENTITY_TOKEN_FILE; the resulting token never lasts longer than one hour.
             url: https://learn.chatgpt.com/docs/enterprise/workload-identity
+        note: >-
+          The keyring stores the sign-in credential; federation is the ephemeral path for automation.
+          Shell commands read the developer's environment unless shell_environment_policy strips it,
+          and the model sees a secret only if a command prints it.
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: native
@@ -352,22 +368,39 @@ tools:
               - Set [marketplaces] with restrict_to_allowed_sources = true and pin
                 features.plugins; unmatched marketplace operations are rejected.
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+        note: >-
+          Admission by identity: the [mcp_servers] allowlist and marketplace source restriction.
+          Admission is not integrity — nothing pins the tool descriptions a server returns or detects
+          a changed implementation.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
-        mechanism: allowed_approval_policies in requirements.toml and the permission modes
+        mechanism: allowed_approval_policies and allowed_approvals_reviewers in requirements.toml, and the permission modes
         steps:
           - title: Require approval outside the sandbox
             body:
-              - Set allowed_approval_policies = ["on-request"] (or add "untrusted"); "never" is
-                then unavailable.
+              - >-
+                Set allowed_approval_policies = ["on-request"] so "never" is unavailable. Do not
+                list "untrusted" — approval_policy = "untrusted" is retired and must be removed from
+                managed defaults and user, project and profile configuration; project trust is
+                now trust_level in project configuration.
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+          - title: Make the reviewer a person
+            body:
+              - >-
+                An "on-request" policy alone lets the reviewer be the automatic (AI) reviewer. Set
+                allowed_approvals_reviewers = ["user"] where a human must decide; ["auto_review"]
+                requires automatic review instead, and listing both leaves the choice to the user.
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
           - title: Keep Full access out of the mode picker
             body:
               - Ask for approval, Approve for me (auto-review) and Full access are the user modes;
                 admins decide which profiles the workspace allows.
             url: https://learn.chatgpt.com/docs/permission-modes
-        verified: "2026-09-10"
+        note: >-
+          Approval is requested only for actions that leave the sandbox; commands inside the
+          permitted sandbox boundary run without a new prompt.
+        verified: "2026-09-15"
       - capability: capabilityAgentRegistry
         coverage: partial
         mechanism: Admin > Plugins marketplace import and the [mcp_servers] approved identities
@@ -405,9 +438,12 @@ tools:
         note: >-
           Discover unmanaged installs (npm @openai/codex, the openai.chatgpt extension, the MSIX)
           with EDR or software inventory; allowed_chatgpt_workspaces then blocks personal accounts.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
-        coverage: native
+        coverage: partial
         mechanism: Role permission off, token revocation, service-account disable, federation rule disable
         steps:
           - title: Turn the surface off
@@ -420,6 +456,11 @@ tools:
               - Owners and admins revoke any workspace access token; disabling a service account
                 revokes all of its tokens.
             url: https://learn.chatgpt.com/docs/enterprise/access-tokens
+        note: >-
+          The role toggle and token revocation block future access; a running local process and the
+          commands inside its sandbox are not stopped remotely — the operator stops the process. A
+          cloud-managed requirements bundle is re-fetched on its own schedule, so treat that interval
+          as the cessation delay.
         verified: "2026-09-10"
       - capability: capabilityEdr
         coverage: external
@@ -429,6 +470,9 @@ tools:
           Docker-socket use from the agent, and non-admin writes under
           %ProgramData%\OpenAI\Codex; pre-create and ACL that directory (Cymulate ProgramData
           config-trust report, 2026-08; no Codex CVE assigned).
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs
         verified: "2026-09-10"
       - capability: capabilitySystemPromptManagement
         coverage: partial
@@ -449,6 +493,9 @@ tools:
         note: >-
           No signed manifest of runtime, plugins or MCP servers; the closest is codex-version
           pinning in the GitHub Action and marketplace sync from a Git source.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://learn.chatgpt.com/docs
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: partial
@@ -469,11 +516,15 @@ tools:
             url: https://learn.chatgpt.com/docs/config-file/config-reference
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable
         note: >-
-          No model artifacts are loaded locally; model_provider can point at a local server
-          (ollama, lmstudio), which brings the organisation's own scanning obligation.
+          No model artifacts are loaded by the product; inference is remote. model_provider can point
+          at a local server (ollama, lmstudio) — that server, not Codex, loads the weights, and
+          scanning them is the obligation of whoever runs it.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://learn.chatgpt.com/docs
         verified: "2026-09-10"
     advisories:
       - title: "CVE-2025-59532 (GHSA-w5fx-fh39-j5rw): sandbox bypass via model-supplied cwd, Codex CLI 0.2.0–0.38.0, fixed 0.39.0"
@@ -662,6 +713,10 @@ tools:
               - Secrets get an additional layer of encryption, are only available to setup
                 scripts and are removed before the agent phase; environment variables persist.
             url: https://learn.chatgpt.com/docs/environments/cloud-environment
+        note: >-
+          Environment secrets are readable by the setup script only and are not present when the agent
+          runs; environment variables are readable by the agent's commands and so by the model. Stored
+          secrets, not ephemeral issuance.
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
         coverage: partial
@@ -709,10 +764,14 @@ tools:
               - Action control allows read-only, all or a custom set per connection, including
                 how newly added actions are handled.
             url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+        note: >-
+          Internet mode limits network reach per environment and plugin action controls gate connector
+          actions; built-in tools cannot be individually hidden.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
-        coverage: native
+        coverage: partial
         mechanism: Diff / PR review before merge and website approval levels (Always ask, Auto approve, Always allow)
+        note: The human gate is the diff or PR before merge; commands, network access and tool calls taken while the task runs are not individually approved.
         steps:
           - title: Keep the merge with a human
             body:
@@ -775,7 +834,9 @@ tools:
       - capability: capabilityModelGuardrails
         coverage: partial
         mechanism: Vendor safety review pauses a task
-        note: Tasks may pause for safety review with findings to read; no admin-defined topic or term filters.
+        note: >-
+          Vendor-operated safeguard, not an organisation-configured policy: tasks may pause for safety
+          review with findings to read; no admin-defined topic or term filters.
         steps:
           - title: Expect safety pauses
             body:
@@ -797,11 +858,17 @@ tools:
         coverage: none
         mechanism: Not offered
         note: No customer-run evaluation harness for the hosted agent; run your own against the PR output.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://learn.chatgpt.com/docs/cloud
         verified: "2026-09-10"
       - capability: capabilityAiGovernancePlatform
         coverage: external
         mechanism: Workspace analytics and the Analytics API feed an external governance system
         note: The Codex analytics dashboard at admin.openai.com/analytics/codex is adoption reporting, not a system of record.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs/cloud
         verified: "2026-09-10"
       - capability: capabilityRateLimiting
         coverage: partial
@@ -812,6 +879,10 @@ tools:
               - Enterprise and Edu manage usage limits and overage; Business manages credits;
                 user-level guardrails and notifications are plan-dependent.
             url: https://learn.chatgpt.com/docs/enterprise/usage-limits
+        note: >-
+          Sub-limits: plan rate limits and workspace usage limits (hard at the account); spend
+          controls (hard at the workspace). No per-task runtime, iteration or tool-call cap is
+          documented.
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
         coverage: native
@@ -826,12 +897,127 @@ tools:
               - Disable "Allow Codex Slack app to post answers on task completion" and Codex for
                 Linear in connector settings.
             url: https://learn.chatgpt.com/docs/third-party/slack
+        note: >-
+          The role toggle blocks new tasks; the docs do not say whether a task already running in the
+          cloud sandbox is terminated, so treat that task's remaining runtime as the cessation delay.
         verified: "2026-09-10"
       - capability: capabilityVendorAssurance
         coverage: external
         mechanism: Compliance, Analytics and Admin APIs consumed by an SSPM product
         note: The vendor exposes the streams; posture checking against your policy is a third-party product.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs/cloud
         verified: "2026-09-10"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: >-
+          Container per task from the universal image, behind an HTTP/HTTPS network proxy; the
+          Work Cloud security page describes VM-backed sandboxes and states that tasks do not
+          receive a new container per execution
+        steps:
+          - title: Treat the environment as shared state
+            body:
+              - >-
+                Codex creates a container, checks out the branch or commit and runs your setup
+                script for each prompt; caches and the workspace are shared across users of the
+                environment, so setup-script writes and cache invalidation are your controls.
+            url: https://learn.chatgpt.com/docs/environments/cloud-environment
+          - title: Read the isolation statement the vendor makes
+            body:
+              - >-
+                Work Cloud runs tasks in VM-backed sandboxes on shared hosted infrastructure the
+                customer does not manage; the page states tasks do not receive a new container per
+                execution.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
+        note: >-
+          The two vendor pages differ on per-task freshness (a fresh container per prompt on the
+          environment page, no new container per execution on the security page); both are
+          recorded and the safer reading — shared state within an environment — is the one to
+          plan for. Inside the boundary: setup script and the agent's commands. Outside: the model
+          and connector actions, which run at OpenAI.
+        verified: "2026-09-15"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: >-
+          Internet access per environment: Off by default during the agent phase, On, or On with
+          controls (domain allowlist presets None, Common dependencies, All; methods limited to
+          GET, HEAD and OPTIONS); setup scripts keep internet; the environment runs behind a
+          proxy; Work Cloud "Allow public internet access" with a managed destination allowlist
+        steps:
+          - title: Leave the agent phase offline or restricted
+            body:
+              - >-
+                Keep internet Off for the agent phase, or use On with controls with the None preset
+                plus named domains and GET-only methods; the page shows how an injected instruction
+                exfiltrates commit history when the agent can reach the web.
+            url: https://learn.chatgpt.com/docs/cloud/internet-access
+          - title: Control the workspace-wide switch
+            body:
+              - >-
+                Allow public internet access for Work Cloud code and shell is a workspace setting;
+                when off, a managed destination allowlist for required endpoints remains and the
+                change applies after current runs complete.
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
+        note: >-
+          Covers the container's traffic. Setup scripts keep internet access to install
+          dependencies, and connector and app actions run at OpenAI outside the environment's
+          policy. The default posture is the safe one; opening it is the deliberate act.
+        verified: "2026-09-15"
+      - capability: capabilityAgentRuntimeEnforcement
+        coverage: partial
+        mechanism: >-
+          Action control per connected app (read-only, all or a custom set, including how newly
+          added actions are treated) and app permissions (Always ask, Any changes, Important
+          actions, Never ask) applied to connector actions; automated risk checks on Auto approve
+        steps:
+          - title: Fix the actions each connection may take
+            body:
+              - >-
+                Set Action control per connection to read-only or a named set so a task cannot take
+                an action the set excludes, whatever the model decides.
+            url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+        note: >-
+          Rated partial: connector actions are governed deterministically, but no rule engine
+          evaluates the commands the agent runs inside the cloud container — managed [rules] and
+          hooks are documented for the local clients, and the cloud's risk checks on Auto approve
+          are a classifier. Internet mode and the merge gate carry the rest.
+        verified: "2026-09-15"
+      - capability: capabilityCredentialIsolation
+        coverage: native
+        mechanism: >-
+          Environment secrets available only to setup scripts and removed before the agent phase
+          starts, stored with an additional layer of encryption; environment variables persist
+          for the whole task; connector tokens held at OpenAI
+        steps:
+          - title: Put credentials in secrets, not variables
+            body:
+              - >-
+                Store anything sensitive as an environment secret so it exists only while the setup
+                script runs and is gone before the agent acts; environment variables remain readable
+                for the full task.
+            url: https://learn.chatgpt.com/docs/environments/cloud-environment
+        note: >-
+          The designated secret path keeps values out of the agent's execution by design, which is
+          the isolation this control asks for; anything placed in an environment variable is
+          inside the boundary. No on-behalf-of exchange — a task acts as the workspace's
+          connections.
+        verified: "2026-09-15"
+      - capability: capabilityMcpToolSecurity
+        coverage: notApplicable
+        mechanism: >-
+          No MCP path into cloud tasks: MCP configuration is shared by the desktop app, CLI and IDE
+          extension only, and plugins that declare MCP servers are marked Desktop only
+        note: >-
+          The tool path for cloud tasks is connected apps, governed by action control and app
+          permissions (see tool permission scoping); there is nothing to admit or verify here.
+          Re-rate if the vendor ships MCP for cloud environments.
+        evidence:
+          - title: Plugin management — plugins declaring MCP servers are Desktop only (2026-09-15)
+            url: https://learn.chatgpt.com/docs/enterprise/plugin-management
+          - title: Model Context Protocol — configuration shared by the desktop app, CLI and IDE extension (2026-09-15)
+            url: https://learn.chatgpt.com/docs/extend/mcp
+        verified: "2026-09-15"
     advisories:
       - title: "CVE-2025-59532 (GHSA-w5fx-fh39-j5rw): sandbox bypass in the Codex runtime, fixed 0.39.0 — the seed's 'cloud branch-name injection' label did not match the advisory text"
         url: https://github.com/advisories/GHSA-w5fx-fh39-j5rw
@@ -922,11 +1108,17 @@ tools:
             body:
               - Set [history] persistence = "none" if threads must not survive the process.
             url: https://learn.chatgpt.com/docs/config-file/config-advanced
+        note: >-
+          Retention only: thread persistence and history settings decide what is kept on the host.
+          Nothing validates or restores it.
         verified: "2026-09-10"
       - capability: capabilityModelEvals
         coverage: none
         mechanism: Not offered
         note: No vendor evaluation harness for SDK agents; structured output and streaming events let you build one.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://learn.chatgpt.com/docs/codex-sdk
         verified: "2026-09-10"
       - capability: capabilityAgentObservability
         coverage: partial
@@ -936,6 +1128,9 @@ tools:
             body:
               - Set [otel] exporter to otlp-http or otlp-grpc; events carry model and sandbox metadata, with prompts redacted unless log_user_prompt = true.
             url: https://learn.chatgpt.com/docs/config-file/config-advanced
+        note: >-
+          Streaming turn events and OTel export give tool and model events per thread; there is no
+          persisted trace store and no detection — the host application keeps and analyses them.
         verified: "2026-09-10"
       - capability: capabilityIga
         coverage: partial
@@ -946,6 +1141,10 @@ tools:
               - Exchange an OIDC or SPIFFE JWT-SVID through a federation rule for a short-lived
                 workspace token (never longer than one hour).
             url: https://learn.chatgpt.com/docs/enterprise/workload-identity
+        note: >-
+          Sign-in, service accounts and workload identity federation authenticate the host process to
+          OpenAI; who may use the deployed application, with what roles, is the application's own
+          identity layer.
         verified: "2026-09-10"
       - capability: capabilityNhiManagement
         coverage: native
@@ -961,6 +1160,10 @@ tools:
               - Provider and rule creation, updates and archival generate audit events; disabling a
                 rule revokes tokens already issued through it.
             url: https://learn.chatgpt.com/docs/enterprise/workload-identity
+        note: >-
+          A service account or federated identity is the principal for the host process; every thread
+          and tool call in it shares that principal, so a per-agent identity is the host application's
+          to mint.
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: partial
@@ -971,6 +1174,10 @@ tools:
               - Set cli_auth_credentials_store = "ephemeral" so nothing is written to auth.json;
                 supply CODEX_API_KEY or CODEX_ACCESS_TOKEN from your secret manager.
             url: https://learn.chatgpt.com/docs/config-file/environment-variables
+        note: >-
+          The environment variable is the host's storage choice; ephemeral mode keeps the credential
+          out of the on-disk store, not out of the process. Commands the agent runs read the host
+          environment unless the sandbox policy strips it.
         verified: "2026-09-10"
       - capability: capabilityAgentRuntimeEnforcement
         coverage: native
@@ -981,6 +1188,9 @@ tools:
               - A PreToolUse hook returning permissionDecision "deny" blocks the call for every
                 SDK thread; managed hooks in requirements.toml cannot be bypassed.
             url: https://learn.chatgpt.com/docs/hooks
+        note: >-
+          Hooks and [rules] on the host apply to every thread the SDK opens; the hook logic is the
+          host application's to write and fail closed.
         verified: "2026-09-10"
       - capability: capabilityToolPermissionScoping
         coverage: native
@@ -995,6 +1205,9 @@ tools:
             body:
               - enabled_tools / disabled_tools per [mcp_servers.<name>] in the host config.
             url: https://learn.chatgpt.com/docs/extend/mcp
+        note: >-
+          Application integration required: the host chooses the sandbox preset per thread and which
+          MCP tools are enabled; requirements.toml on the host is the only fleet-level constraint.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
         coverage: partial
@@ -1018,6 +1231,10 @@ tools:
             body:
               - Plan-dependent usage limits and spend controls cover eligible Codex activity; API billing is separate.
             url: https://learn.chatgpt.com/docs/enterprise/usage-limits
+        note: >-
+          Sub-limits: concurrency (max_concurrent_threads_per_session, hard) and workspace usage
+          limits (hard at the account). No turn, runtime or spend cap per thread — the host
+          application supplies those.
         verified: "2026-09-10"
       - capability: capabilityPromptInjectionDefense
         coverage: partial
@@ -1037,6 +1254,9 @@ tools:
             body:
               - "[permissions.filesystem] deny_read in requirements.toml applies to SDK threads too."
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+        note: >-
+          deny_read and shell_environment_policy restrict what the agent can read; nothing inspects
+          prompt, upload or output content — that is the host application's proxy or endpoint DLP.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: partial
@@ -1049,9 +1269,15 @@ tools:
             url: https://learn.chatgpt.com/docs/sandboxing
         verified: "2026-09-10"
       - capability: capabilityDataAccessGovernance
-        coverage: none
+        coverage: external
         mechanism: Not offered
-        note: The agent reads whatever the host user can read; scope the host account and working directory.
+        note: >-
+          Rated external on the same rule as the Claude Agent SDK: the SDK retrieves nothing itself;
+          the host account and working directory decide what its tools can read, and per-user scoping
+          is the host application's.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs/codex-sdk
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
@@ -1061,6 +1287,10 @@ tools:
             body:
               - Sandbox.full_access runs without filesystem restrictions; pin allowed_sandbox_modes on the host to exclude it.
             url: https://learn.chatgpt.com/docs/codex-sdk
+        note: >-
+          Inside the boundary: commands the local runtime executes, under the preset the host sets per
+          thread. Outside: MCP servers and the host application's own code. The preset is a host
+          decision, so the boundary exists only where the application requests it.
         verified: "2026-09-10"
       - capability: capabilityAgentRegistry
         coverage: partial
@@ -1070,6 +1300,9 @@ tools:
             body:
               - Only servers whose name and identity match an approved [mcp_servers] entry are enabled.
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+        note: >-
+          The host's approved identities are configuration, not an inventory of the agents built on
+          the SDK; record those in the organisation's inventory.
         verified: "2026-09-10"
       - capability: capabilityAuditLogging
         coverage: partial
@@ -1081,18 +1314,25 @@ tools:
             url: https://learn.chatgpt.com/docs/enterprise/service-accounts
         verified: "2026-09-10"
       - capability: capabilityKillSwitch
-        coverage: native
+        coverage: partial
         mechanism: Token revocation, service-account disable, federation rule disable
         steps:
           - title: Revoke at the identity
             body:
               - Disabling or deleting the service account revokes all of its tokens; disabling a federation provider or rule revokes tokens issued through it.
             url: https://learn.chatgpt.com/docs/enterprise/workload-identity
+        note: >-
+          Revocation stops the next request; the host process the SDK runs in, and any command it has
+          already started, continue until the application stops them. The application owns the stop
+          path and its delay.
         verified: "2026-09-10"
       - capability: capabilityAiDetectionResponse
         coverage: external
         mechanism: OTel stream into the organisation's SIEM
         note: Detection content is yours; the vendor emits events with model and sandbox metadata.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs/codex-sdk
         verified: "2026-09-10"
       - capability: capabilityEncryptionKeyManagement
         coverage: partial
@@ -1102,11 +1342,20 @@ tools:
             body:
               - Set CODEX_CA_CERTIFICATE (or SSL_CERT_FILE) to the PEM bundle in TLS-interception environments.
             url: https://learn.chatgpt.com/docs/config-file/environment-variables
+        note: >-
+          Assets and key owners: traffic to OpenAI (TLS, interceptable with CODEX_CA_CERTIFICATE);
+          stored credentials (OS keyring, the host's); session data at OpenAI (OpenAI keys); local
+          thread state on the host (host disk, the deployer's).
         verified: "2026-09-10"
       - capability: capabilityRagSecurity
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable
-        note: The SDK ships no retrieval store; any RAG the host adds is the host's control.
+        note: >-
+          Conditional: the SDK ships no retrieval store; any RAG the host adds is the host's control
+          to record on the host application.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://learn.chatgpt.com/docs/codex-sdk
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: native
@@ -1116,11 +1365,18 @@ tools:
             body:
               - An empty [mcp_servers] table disables all servers; restrict_to_allowed_sources rejects unmatched marketplaces.
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+        note: >-
+          Admission by identity through the host's requirements.toml; the SDK adds nothing of its own.
+          Admission is not integrity — nothing pins the tool descriptions a server returns.
         verified: "2026-09-10"
       - capability: capabilityAiBom
-        coverage: partial
+        coverage: none
         mechanism: Pinned runtime (Python SDK) and codex_bin path
-        note: The Python SDK uses its pinned runtime and CodexConfig(codex_bin=...) fixes the binary; nothing is signed or manifested.
+        note: >-
+          Rated like the Claude Agent SDK: a pinned runtime and codex_bin path fix the binary version,
+          which is supporting evidence for an inventory, not an AI BOM — nothing is signed or
+          manifested, and the plugins, MCP servers and models a session composes are not recorded.
+          Keep the pin and generate the BOM from your lockfile and configuration.
         steps:
           - title: Pin the runtime
             body:
@@ -1138,9 +1394,12 @@ tools:
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable
         note: No model artifacts are loaded by the SDK.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://learn.chatgpt.com/docs/codex-sdk
         verified: "2026-09-10"
     sources:
       - title: Codex SDK

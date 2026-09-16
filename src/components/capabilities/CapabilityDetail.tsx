@@ -102,7 +102,7 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
       </div>
 
       <div className="mt-6">
-        <p className="eyebrow">Implements CoSAI controls</p>
+        <p className="eyebrow">Contributes to CoSAI controls</p>
         <div className="mt-2 space-y-2">
           {controlCategories
             .filter((cat) => controls.some((c) => c.category === cat.id))

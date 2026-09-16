@@ -150,6 +150,10 @@ tools:
                 smart mode's auxiliary-LLM auto-approval, and leave approvals.timeout at 300 so an
                 unanswered prompt is denied."
             url: https://hermes-agent.nousresearch.com/docs/guides/secure-hermes-on-a-work-machine
+        note: >-
+          Deny globs and the hardline blocklist are deterministic; pre_tool_call hooks are an
+          integration point that must be set fail_closed. Delegated subagents inherit approvals; MCP
+          tool calls pass the hooks, a server's own actions do not.
         verified: "2026-09-10"
       - capability: capabilityTransportSecurity
         coverage: partial
@@ -211,6 +215,10 @@ tools:
                 MEMORY.md entries; the system prompt takes a frozen snapshot at session start, so a
                 fix lands on the next session.
             url: https://hermes-agent.nousresearch.com/docs/user-guide/which-file-does-what
+        note: >-
+          Write approval and injection scanning are genuine integrity gates; what can still write is
+          an approved agent turn and the user's own edits. Recovery is the checkpoint store, not a
+          versioned memory; per-profile isolation is the tenant boundary.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
         coverage: native
@@ -278,6 +286,10 @@ tools:
                 toolsets and leaf subagents cannot delegate; raise delegation.max_spawn_depth
                 above the default 1 only deliberately.
             url: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
+        note: >-
+          Toolsets hide tools per platform and session; approvals gate; argument limits come from
+          approvals.deny globs and the write-safe root. --yolo pre-approves everything except the
+          hardline blocklist.
         verified: "2026-09-10"
       - capability: capabilityCredentialIsolation
         coverage: native
@@ -313,6 +325,10 @@ tools:
                 into the container for task credentials and can be read and exfiltrated by code
                 running there."
             url: https://hermes-agent.nousresearch.com/docs/guides/secure-hermes-on-a-work-machine
+        note: >-
+          Covers credential-shaped environment variables and provider keys for child processes, MCP
+          subprocesses and Docker; a local (unsandboxed) terminal backend and the gateway process
+          itself hold the real values. Single-user product, so on-behalf-of exchange does not arise.
         verified: "2026-09-10"
       - capability: capabilitySecretsManagement
         coverage: native
@@ -346,6 +362,10 @@ tools:
                 leak mint fresh proxy tokens with hermes egress setup --rotate-tokens and restart
                 running sandboxes.
             url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+        note: >-
+          Vault pull at startup keeps only the bootstrap token on disk; the pulled keys live in the
+          gateway process for its lifetime, and the egress proxy hands sandboxes opaque tokens
+          instead. Ephemeral issuance covers proxy tokens only, not the provider keys themselves.
         verified: "2026-09-10"
       - capability: capabilityModelGuardrails
         coverage: none
@@ -356,6 +376,9 @@ tools:
           The only content policies are security.redact_secrets on tool output and the
           website_blocklist on URLs. To add a guardrail, register a pre_llm_call / post_llm_call
           hook that calls your own classifier, or rely on moderation at the model provider.
+        evidence:
+          - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
         verified: "2026-09-10"
       - capability: capabilityMcpToolSecurity
         coverage: partial
@@ -391,8 +414,10 @@ tools:
             url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
         note: >-
           Tool definitions served by an MCP server are not hash-pinned or re-verified between
-          sessions, and unpinned npx -y servers are outside the OSV scan; cataloged means
-          reviewed, not audited.
+          sessions, and unpinned npx -y servers are outside the OSV scan; cataloged means reviewed,
+          not audited. Rated partial rather than native because MCP servers themselves have no
+          allowlist in the product's config; plugins are opt-in and pinnable, but any MCP server the
+          user configures is admitted.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -533,12 +558,15 @@ tools:
           the other agents.
         verified: "2026-09-10"
       - capability: capabilityShadowAiDiscovery
-        coverage: none
+        coverage: external
         mechanism: Nothing in the product looks for agents or tool servers outside its own install
         note: >-
           hermes gateway list and hermes profile only enumerate this installation's profiles.
           Discover Hermes installs from endpoint inventory (the ~/.hermes directory, the
           hermes-gateway-<profile> systemd or launchd units, ports 9119/8642/9900).
+        evidence:
+          - title: Hermes Agent — official site, reviewed for the integration point (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
         verified: "2026-09-10"
       - capability: capabilityEdr
         coverage: external
@@ -549,6 +577,9 @@ tools:
           Keep your EDR on the host and, if it exposes a CLI, wire it into a hooks.pre_tool_call
           entry with fail_closed true so it can veto commands. hermes doctor surfaces the built-in
           supply-chain advisory catalog for the Python venv but is not endpoint detection.
+        evidence:
+          - title: Hermes Agent — official site, reviewed for the integration point (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
         verified: "2026-09-10"
       - capability: capabilityBehavioralDriftDetection
         coverage: none
@@ -557,6 +588,9 @@ tools:
           tool_loop_guardrails and agent.stall_guards catch replays and no-progress loops, and
           hermes insights summarises usage, but nothing flags an agent whose actions diverge from
           its stated task; review session exports or a post_tool_call hook feed externally.
+        evidence:
+          - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
         verified: "2026-09-10"
       - capability: capabilityAiDlp
         coverage: partial
@@ -653,10 +687,15 @@ tools:
           The CLI loads no weights — inference is an API or a local llama.cpp / Ollama server;
           the desktop managed runtime downloads GGUF files with a byte-size check only
         note: >-
-          The local-models page states that only the runtime engine zips are SHA-256 verified,
-          not model downloads, and community Hugging Face models carry no validation badge. Scan
-          any .gguf you add with your own tooling before "Add model file", and keep
-          local_runtime.tag on the release Hermes validated.
+          The local-models page states that only the runtime engine zips are SHA-256 verified, not
+          model downloads, and community Hugging Face models carry no validation badge. Scan any .gguf
+          you add with your own tooling before "Add model file", and keep local_runtime.tag on the
+          release Hermes validated. Rated none rather than not applicable because the desktop runtime
+          itself downloads model files and checks only their size; that is a real artifact-scanning
+          obligation the product does not meet.
+        evidence:
+          - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
         verified: "2026-09-10"
     advisories:
       - title: "CVE-2026-53869 (GHSA-4pqm-j46f-795x) — DNS rebinding on dashboard WebSocket endpoints, fixed in 0.16.0"

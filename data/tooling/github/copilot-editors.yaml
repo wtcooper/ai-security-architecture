@@ -181,6 +181,12 @@ tools:
             body:
               - "VS Code runs .github/hooks/*.json and ~/.copilot/hooks; a PreToolUse hook returns permissionDecision allow / deny / ask. Set ChatAllowManagedHooksOnly so only enterprise-managed hooks and policy-enabled plugins can register."
             url: https://code.visualstudio.com/docs/agent-customization/hooks
+        note: >-
+          Component-specific: managed permissions and PreToolUse hooks apply to VS Code Agent Host
+          sessions (enterprise-managed settings page); the VS Code enterprise AI settings page governs
+          editor policies and auto-approval, a different scope. JetBrains, Visual Studio and the other
+          plugins have no runtime rule engine. Where the two pages appear to conflict, the
+          enterprise-managed settings reference is the narrower and authoritative one.
         verified: "2026-09-10"
       - capability: capabilityAiTprm
         coverage: external
@@ -229,14 +235,22 @@ tools:
             body:
               - Visual Studio 17.14.16+ honours Computer Configuration > Administrative Templates > Visual Studio > Copilot Settings > Disable Agent Mode.
             url: https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin
+        note: >-
+          VS Code policies hide tool classes and control auto-approval; managed permissions limit
+          arguments for Agent Host sessions; Visual Studio can only disable agent mode. Other editors
+          have no tool-level policy.
         verified: "2026-09-10"
       - capability: capabilityAgentSandboxing
-        coverage: native
+        coverage: partial
         mechanism: VS Code ChatAgentSandboxEnabled / AllowNetwork / AllowAutoApprove / AllowUnsandboxedCommands (macOS, Linux, WSL2; preview); JetBrains enterprise-managed sandbox (preview 2026-09-08); per-server MCP sandbox
         note: >-
-          Visual Studio and the Xcode / Eclipse / Vim plugins have no sandbox. The VS Code setting
-          chat.agent.sandbox.retryWithAllowNetworkRequests has no policy, so a sandboxed command
-          can be retried with network unless allowNetwork is also false.
+          Rated partial because the entity spans editors with different support: VS Code (macOS,
+          Linux, WSL2; preview) and JetBrains (preview 2026-09-08) can be required to sandbox, while
+          Visual Studio and the Xcode, Eclipse and Vim plugins have no sandbox at all. Inside the
+          boundary: terminal commands and per-server local MCP; outside: remote MCP servers, the
+          editor's own tools and the model endpoint. The VS Code setting
+          chat.agent.sandbox.retryWithAllowNetworkRequests has no policy, so a sandboxed command can
+          be retried with network unless allowNetwork is also false.
         steps:
           - title: Force the VS Code sandbox on and close its exits
             body:
@@ -326,6 +340,10 @@ tools:
             body:
               - Registry-only enforcement matches on server name/ID and "can be bypassed by editing configuration files"; the cloud agent ignores it. Use it for discovery, not control.
             url: https://docs.github.com/en/copilot/reference/enterprise-administrators/mcp-private-registry-enforcement
+        note: >-
+          Admission by identity: allowedMcpServers and deniedMcpServers with
+          ChatAllowManagedMcpServersOnly. Admission is not integrity — nothing pins the tool
+          descriptions a server returns or detects a changed implementation.
         verified: "2026-09-10"
       - capability: capabilityHitlControls
         coverage: native
@@ -403,6 +421,10 @@ tools:
             body:
               - ChatAgentMode=false disables agent mode and side-effect tools in VS Code regardless of account; the Visual Studio ADMX policy disables Copilot outright.
             url: https://code.visualstudio.com/docs/enterprise/policies
+        note: >-
+          Enterprise policy applies at the next request to GitHub, so an agent loop stops at its next
+          model call; managed settings on the device refresh within about an hour or on restart. A
+          command the agent has already started in the terminal runs to completion.
         verified: "2026-09-10"
       - capability: capabilityEdr
         coverage: external
@@ -410,6 +432,9 @@ tools:
         note: >-
           Endpoint agents that instrument coding agents by name are the answer; the vendor exposes
           PreToolUse hooks and an OTLP export an EDR integration can consume.
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://docs.github.com/en/copilot
         verified: "2026-09-10"
       - capability: capabilitySystemPromptManagement
         coverage: partial
@@ -435,6 +460,9 @@ tools:
         note: >-
           Plugins install from marketplaces by name; strictKnownMarketplaces limits sources but
           nothing verifies content. Record extension and plugin versions yourself.
+        evidence:
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.github.com/en/copilot
         verified: "2026-09-10"
       - capability: capabilityEgressControl
         coverage: native
@@ -452,13 +480,21 @@ tools:
             body:
               - Permit *.githubcopilot.com plus the plan-specific *.business or *.enterprise.githubcopilot.com, the github.com login and copilot_internal endpoints and copilot-proxy.githubusercontent.com; pull the current set from gh api meta.
             url: https://docs.github.com/en/copilot/reference/copilot-allowlist-reference
+        note: >-
+          VS Code only: the network filter and sandbox allowNetwork bound agent fetches and sandboxed
+          commands there; other editors are bounded by host network policy. Remote MCP servers connect
+          outside the filter.
         verified: "2026-09-10"
       - capability: capabilityModelScanning
-        coverage: none
+        coverage: notApplicable
         mechanism: Not applicable to vendor-hosted models; local BYOK models (Ollama etc.) are the organisation's own artefacts
         note: >-
-          Disable local BYOK through the "Configure custom models" policy if unscanned local
-          models are a concern.
+          The product loads no weights; vendor-hosted models are the vendor's. Local BYOK models
+          (Ollama etc.) are a separate server the organisation runs and scans; disable it through the
+          "Configure custom models" policy if that obligation is unwanted.
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://docs.github.com/en/copilot
         verified: "2026-09-10"
     advisories:
       - title: "CVE-2025-53773 — GitHub Copilot and Visual Studio command injection via prompt injection (settings rewrite to enable YOLO mode); GitHub advisory GHSA-3m2x-p87c-pwv6"
