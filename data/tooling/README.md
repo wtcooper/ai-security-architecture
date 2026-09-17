@@ -96,7 +96,9 @@ Applied by the `tooling-onboard` skill under `.claude/skills/`:
 2. Fetch each page; record only settings whose names appear on a page that resolved. A step
    that cannot be verified is `coverage: unknown`, never a guess.
 3. Choose the architecture by surface class (coding shells → third-party coding agent;
-   hosted agents → managed agent runtime; chat and add-ins → enterprise AI chat; autonomous
+   vendor-hosted coding sessions started from a local harness, the vendor's web or chat surfaces,
+   a repository event or a schedule → hosted agent sessions; programmatic API/SDK runtimes →
+   managed agent runtime; chat and add-ins → enterprise AI chat; autonomous
    personal agents → personal agent), and write `controls[]` only for its pins.
 4. Record `asOf`, a `verified` date per control, advisories from 2025–26, and the docs index.
 
@@ -116,7 +118,6 @@ Recorded here when a surface is deliberately left out, with the reason.
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.
 - OpenAI ChatGPT Atlas — winding down; browser features moved into the ChatGPT app's built-in browser (recorded as a variant of toolChatgptDesktop). The Help Center article "Evolving Atlas into ChatGPT" returned 403 to automated fetch on 2026-09-10.
 - OpenAI Agent Builder — scheduled shutdown 2026-11-30 per developers.openai.com/api/docs/guides/agent-builder; ChatKit and the Agents SDK are the replacement.
-- OpenAI Managed Agents — DevDay is 2026-09-29 and nothing has shipped; nothing to verify.
 - ChatGPT Workspace Agents (research preview) — no official page resolved on 2026-09-10 (openai.com/business/workspace-agents and openai.com/index 403, learn.chatgpt.com guesses 404, help.openai.com 403); only a "Workspace Agents" access-token scope on learn.chatgpt.com/docs/enterprise/access-tokens confirms it exists, so no control row could be verified.
 - GitHub Copilot Extensions (GitHub Apps) — retired 2025-11-10; superseded by MCP servers.
 - GitHub `gh copilot` CLI extension — retired 2025-10-25; Copilot CLI (toolCopilotCli) replaces it.

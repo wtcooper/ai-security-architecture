@@ -1,0 +1,173 @@
+# Controls guidance for the vendor-hosted coding & desktop agent sessions archetype. Audience:
+# admins, architects and security teams. This is a use-mode pattern: the vendor runs the loop,
+# the model and the sandbox; the organisation configures the tenant, owns the repository host
+# and the gateway, and holds the merge gate. The build's derivation check fails this document
+# if its cited capabilities stop being pinned on the architecture.
+archetype: archHostedAgentSessions
+mode: use
+status: draft
+attribution: >-
+  Authored in this repository. Pattern-level by design; products are named only in cited
+  sources and in the tooling registry, not in the items.
+
+overview:
+  - >-
+    Every vendor's hosted coding agent is the same product: the endpoint engine run in a
+    per-session sandbox on the vendor's compute, started from the local harness, the vendor's
+    web and chat surfaces, a repository event or a schedule, and finished with a draft pull
+    request. The controls that matter are the ones the vendors' own documentation converges
+    on — a verified human trigger, an ephemeral sandbox, an egress allowlist an administrator
+    locks, a repository credential the sandbox never holds, a token that reaches one branch
+    and cannot merge, a reviewer who is not the initiator, and workflows that wait for a
+    person — plus the two things no vendor supplies: an inventory of the sessions, automations
+    and channels somebody enabled, and a stop with a known delay.
+  - >-
+    What differs from the local twin is custody and attention. The loop runs unattended, so
+    an injected instruction runs to completion; the vendor holds the repository grant, so
+    revocation is a vendor action; egress is the vendor's policy, so the corporate proxy, DLP
+    and IP allowlists never see the traffic; and the human's approval moves from each tool
+    call to the merge. Treat the merge gate as approving the output, never the actions taken
+    to produce it, and put the containment on the sandbox and the egress where those actions
+    happen.
+
+items:
+  - title: Decide hosted mode per group, and know who a session runs as
+    capabilities: [capabilityIga, capabilityNhiManagement, capabilityAgentRegistry]
+    body:
+      - >-
+        Hosted mode is an organisation decision, not a user one: enable it per role or group
+        behind federated login and trusted-device enrolment, and keep the switches that
+        widen it — quick web setup with a personal token, self-hosted runners, remote control
+        — off until a named owner asks. Before any other control is assessed, establish which
+        principal a product's sessions act as: the user (their commits and replies carry their
+        identity), an App with the user as co-author, or a shared service identity for
+        channels and automations. Inventory every App installation, service identity,
+        routine, automation and shared environment with an owner and an expiry, because the
+        vendor keeps no such list and "revoke this agent" is a different operation for each
+        kind. Assessment probe: for one session, name the principal it acted as and the single
+        operation that would have stopped it.
+
+  - title: Only a verified human with write access starts a session
+    capabilities: [capabilityIga, capabilityPromptInjectionDefense]
+    body:
+      - >-
+        The repository host is the ingress. Require that a session can be started or steered
+        only by a human with write access — never by an App, a bot or a comment from someone
+        the repository merely admits — and confirm the product enforces it rather than
+        documenting it. Treat issue text, comments, review threads and instruction files as
+        untrusted input: hidden characters and HTML comments are filtered, the agent's own
+        configuration directories are under CODEOWNERS and required review, and content from
+        non-collaborators never becomes a standing instruction. Every 2026 incident in this
+        class began with text someone without commit access was allowed to write.
+
+  - title: Lock the egress allowlist, and restrict what the permitted hosts may receive
+    capabilities: [capabilityEgressControl, capabilityAgentSandboxing, capabilityToolPermissionScoping]
+    body:
+      - >-
+        Defaults diverge across products — off in the agent phase on some, allow-all on others
+        — so set the environment's network policy deliberately and lock it at the organisation
+        so a user cannot widen it. Separate the setup phase, which needs registries, from the
+        agent phase, which usually needs nothing. Then remember the two facts the allowlist
+        does not fix: some traffic bypasses it in every product (the vendor's connector
+        service, the git proxy, the inference API), and the hosts every list must permit —
+        the repository host, the package registries — are write-capable, so restrict methods
+        where the product allows and watch those destinations for writes. Confirm the sandbox
+        is one microVM or container per session with no shared filesystem, reclaimed at the
+        end, and that snapshots have a retention you chose.
+
+  - title: The repository credential never enters the sandbox
+    capabilities: [capabilityCredentialIsolation, capabilitySecretsManagement, capabilityEncryptionKeyManagement]
+    body:
+      - >-
+        Prefer the products whose proxy substitutes a scoped credential so the sandbox holds a
+        placeholder; where a product does not, record that the token is in the sandbox and
+        scope it accordingly. Put secrets where the model cannot read them — setup-phase
+        secrets removed before the agent runs, runtime secrets redacted from transcripts and
+        commits — and treat environment variables as visible to the model and to everyone
+        who shares the environment. Verify the plan-gated gaps per product: proxied API
+        credentials exist on some plans and not others, and customer-managed keys cover some
+        of the vendor's storage and not all of it.
+
+  - title: One branch, no merge, a reviewer who is not the initiator
+    capabilities: [capabilityToolPermissionScoping, capabilityHitlControls, capabilityAgentRuntimeEnforcement]
+    body:
+      - >-
+        The session's token reaches one repository and one branch; it cannot push the default
+        branch, mark a pull request ready, approve it or merge it. A human reviews the draft,
+        the initiator's approval does not count toward the required number, and any workflow
+        the pull request would fire waits for "approve and run". Disable automations that
+        approve pull requests on the agent's behalf, and do not let an agent's replies fire
+        comment-triggered automation. Inside the session, pick the permission mode the tenant
+        allows — unattended runs have no prompt to answer, so remove bypass modes in managed
+        settings and let the environment's allowlists do the work the prompt would have done.
+
+  - title: The gate approves the output; contain the actions
+    capabilities: [capabilityHitlControls, capabilityModelGuardrails, capabilityRateLimiting]
+    body:
+      - >-
+        By the time a reviewer sees the draft, every tool call, fetch and push the session
+        made has already happened. Write the assessment that way: the merge gate is an output
+        control, and the sandbox, the egress allowlist and the credential proxy are the
+        action controls. Leave the vendor's own classifiers on — hidden-character filtering,
+        auto-mode reviewers, browser safety checks — as a second layer, never the only one,
+        and set session budgets and automation caps so a loop that re-triggers itself on its
+        own replies has a ceiling.
+
+  - title: Admit the definition like code, and evaluate before it ships
+    capabilities: [capabilityStagedRollout, capabilityModelEvals, capabilityMcpToolSecurity, capabilityAiTprm]
+    body:
+      - >-
+        The session's definition is repository content — instruction files, setup scripts,
+        hooks, MCP configuration — plus the environment an owner defined. Version both through
+        review, roll back by revert, and run behavioural checks before a change to either
+        reaches the environment the team uses. Connector and MCP allowlists live in the
+        control plane, where the session cannot widen them; the runtime verifies nothing
+        about what a declared server serves, so admission is the whole control. Assess the
+        platform's isolation, retention and tenancy claims like any critical vendor dependency,
+        because none of them can be tested from your side.
+
+  - title: The gateway is on the tool path only; re-obtain inference controls from the tenant
+    capabilities: [capabilityToolPermissionScoping, capabilityPromptInjectionDefense, capabilityVendorAssurance]
+    body:
+      - >-
+        No product in this class routes the hosted loop's inference through a customer
+        gateway, including the variants that execute on your own runners. Admit the vendor's
+        connector service to your MCP servers at your gateway, on grants you issue, and
+        classify what returns before it goes back to a loop you cannot see. Everything the
+        gateway does for inference elsewhere — model allowlist, prompt inspection, spend
+        ceilings, the prompt-level record — has to be re-obtained as tenant configuration and
+        exported audit, and re-verified on a clock because the defaults move: egress on or off,
+        self-approving automations, which plan gets proxied credentials, whether the
+        compliance export covers this surface at all.
+
+  - title: Fuse the exports, and define the stop with its delay
+    capabilities: [capabilityAgentObservability, capabilityAuditLogging, capabilityAiGovernancePlatform, capabilityKillSwitch, capabilityMemoryProtection]
+    body:
+      - >-
+        Export the vendor's session logs and agentic audit events and fuse them with the
+        repository host's record and your gateway's, so one session has one trail from trigger
+        to merge; confirm per product which surfaces the export actually covers, because at
+        least one vendor's compliance export is documented for local and remote sessions but
+        not the hosted coding surface. Decide what persists — agent-written memory merged into
+        later sessions, transcripts shareable outside the organisation, snapshots kept for
+        months — and set each deliberately. Then write down the stop: disabling hosted mode,
+        uninstalling the App or revoking the seat prevents the next session and does not stop
+        the running one, so name the vendor's cancel and how long it takes.
+
+sources:
+  - title: "Anthropic — Claude Code in the cloud: isolated VMs, git proxy, network access levels and what bypasses them"
+    url: https://code.claude.com/docs/en/claude-code-on-the-web
+  - title: "Cursor — Cloud Agents security and network: allow-all default, allowlist modes, enterprise lock, runtime secrets"
+    url: https://cursor.com/docs/cloud-agent/security-network
+  - title: "OpenAI — Codex cloud internet access: agent phase offline by default, domain presets, method restriction"
+    url: https://learn.chatgpt.com/docs/cloud/internet-access
+  - title: "GitHub — Copilot cloud agent risks and mitigations: one branch, no merge, human review, workflow approval"
+    url: https://docs.github.com/en/copilot/concepts/agents/cloud-agent/risks-and-mitigations
+  - title: "GitHub — build guardrails for the cloud agent: CODEOWNERS on agent configuration, branch protection"
+    url: https://docs.github.com/en/copilot/tutorials/cloud-agent/build-guardrails
+  - title: "Cloud Security Alliance — Comment and Control: prompt injection through GitHub comments into hosted CI agents"
+    url: https://labs.cloudsecurityalliance.org/research/csa-research-note-comment-control-github-prompt-injection-20/
+  - title: "Microsoft Security — securing CI/CD in an agentic world: the claude-code-action case and the rule of two"
+    url: https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/
+  - title: "CISA and partners — careful adoption of agentic AI services"
+    url: https://www.cisa.gov/resources-tools/resources/careful-adoption-agentic-ai-services

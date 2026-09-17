@@ -1,7 +1,7 @@
 # Reviewing the reference architectures
 
 A briefing for an independent reviewer — human or AI — who is being asked to judge whether the
-thirteen reference architectures are **right**, not whether the code that renders them is good.
+sixteen reference architectures are **right**, not whether the code that renders them is good.
 
 The question you are answering is: *does this drawing describe a system somebody could actually
 build, with the components that really exist, the paths data really takes, and the risks and
@@ -19,13 +19,13 @@ Each one is a **target state**, not a survey of what any particular organisation
 *if you are doing this kind of thing, this is the shape it should have, these are the paths data
 takes through it, this is where the controls sit, and these are the risks that surface where.*
 
-Thirteen of them, across three surfaces:
+Sixteen of them, across three surfaces:
 
 | Surface | Count | Members |
 | --- | --- | --- |
-| Endpoint | 4 | Third-party coding & desktop agents, First-party coding & desktop agents, Personal autonomous agent, Local model runtime |
-| Cloud & hosted | 6 | Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
-| Third-party SaaS | 3 | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
+| Endpoint | 5 | Third-party coding & desktop agents, First-party coding & desktop agents, Personal autonomous agent, Local model runtime, Browser AI agents & extensions |
+| Cloud & hosted | 7 | Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline, Agent-to-agent federation |
+| Third-party SaaS | 4 | Enterprise AI chat with connectors, UI/low-code managed agent runtime, Vendor-hosted coding & desktop agent sessions, API/SDK managed agent runtime |
 
 They are deliberately **not** all distinct in shape. The three cloud agent architectures are one
 drawing three times, differing only in their trigger and fan-out; the two coding-agent drawings
@@ -57,7 +57,7 @@ These are stated in full in [`data/ONTOLOGY.md`](../../data/ONTOLOGY.md). The sh
    [`data/reference/vocabulary.yaml`](../../data/reference/vocabulary.yaml), or be registered in
    the same change with a reason. Every build prints a census of distinct names; the registry
    is meant only to shrink. Currently 60 block titles and 101 item labels are in use across
-   thirteen drawings (the 2026-09 remediation revived several registered names the drawings
+   sixteen drawings (the 2026-09 remediation revived several registered names the drawings
    had wrongly dropped).
 
 5. **The three-zone responsibility rule.** What a vendor runs inside their own boundary is never
@@ -87,7 +87,7 @@ data/
     vocabulary.yaml               the registry: canonical names, icons, item packs,
                                   edge patterns, control denylists, capability
                                   embodiment map
-    architectures/*.yaml          the thirteen drawings — one file each
+    architectures/*.yaml          the sixteen drawings — one file each
     guidance/*.yaml               the controls-guidance doc paired to each drawing,
                                   plus tools.yaml — the dated product entries those docs cite
     archive/                      retired drawings, kept intact, excluded from the build

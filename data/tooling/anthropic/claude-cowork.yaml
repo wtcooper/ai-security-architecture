@@ -1,8 +1,9 @@
 # Claude Cowork — one entity per product × reference architecture. Facts are dated (asOf) and
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
-# Local and cloud Cowork sessions share one admin mechanism (Organization settings > Cowork, plus
-# device MDM keys that reach only local sessions), so they are variants of one entity; the cloud
-# variant is noted with archManagedAgentRuntime as a secondary architecture.
+# Local and cloud Cowork sessions share one admin console (Organization settings > Cowork), but
+# the cloud sessions run on a different runtime with a different drawing, so since 2026-09-17
+# they are a second entity (toolClaudeCoworkCloud, archHostedAgentSessions) below; the desktop
+# entity keeps the device MDM keys that reach only local sessions.
 vendor: anthropic
 family: Claude Cowork
 tools:
@@ -527,3 +528,221 @@ tools:
         url: https://claude.com/docs/third-party/claude-desktop/legal
       - title: Anthropic Trust Center
         url: https://trust.anthropic.com
+
+  - id: toolClaudeCoworkCloud
+    name: Claude Cowork in the cloud
+    surfaceClasses:
+      - cloudAgent
+    variants:
+      - name: Cowork on web, mobile and the Chrome side panel (sessions on Anthropic servers)
+        class: cloudAgent
+        url: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+      - name: Cowork in Claude Desktop with "Cloud" selected
+        class: cloudAgent
+        url: https://claude.com/docs/cowork/overview
+      - name: Dispatch (background tasks) and scheduled tasks
+        class: cloudAgent
+        url: https://claude.com/docs/cowork/guide/dispatch
+        note: Unattended runs on the same cloud runtime, owned by the person who scheduled them.
+    architecture: archHostedAgentSessions
+    status: beta
+    asOf: "2026-09"
+    summary:
+      - >-
+        The Cowork engine run on Anthropic's servers instead of the device: the agent loop and
+        code execution run in a per-session ephemeral sandbox, sessions and files are saved to
+        the account and keep working with every device offline, and the session can only touch
+        local folders while the desktop app on that device is open, over an Anthropic-brokered
+        connection. Every byte leaving the sandbox passes a mandatory proxy the sandbox cannot
+        reconfigure; the network policy is the organisation's existing network-access setting
+        ("no access" by default on Enterprise). Connector tokens never enter the sandbox — calls
+        are made server-side.
+      - >-
+        Modelled as a vendor-hosted agent session because the loop has left the machine: the
+        doors are the web and mobile apps, the desktop app's Cloud option, Dispatch and the
+        scheduler, and the admin plane is the claude.ai console only — device managed
+        configuration (allowedWorkspaceFolders, coworkEgressAllowedHosts, disabledBuiltinTools)
+        reaches local sessions and not these. Organisation settings > Cowork carries "Run
+        Cowork in the cloud" (Team on by default; Enterprise off by default and granted through
+        custom roles), the network-access policy under Capabilities, the "Automatically
+        approve" and "Always allow for connector tools" toggles, trusted-device enrolment and
+        the OTLP collector; the Compliance API captures remote Cowork sessions, including
+        agent-owned scheduled runs. Cowork is not covered by zero data retention.
+    facts:
+      - label: Plans
+        value: >-
+          Web and mobile in beta for Pro, Max and Team, and for Enterprise where an owner or a
+          custom role enables it; the desktop Cloud option follows the same setting.
+        url: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+      - label: Inference & routing
+        value: >-
+          Anthropic API only. Cloud sessions run on Anthropic infrastructure and are not
+          available when Claude Desktop is configured for Bedrock, Vertex, Foundry or a gateway.
+        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+      - label: Data leaving the device
+        value: >-
+          Prompts, connector data, browser page content and the session's files live in the
+          account; a device's local folders are reachable only while the desktop app is open on
+          it, through the brokered connection.
+        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+      - label: Retention & training
+        value: >-
+          Cloud sessions are saved to the account (remote transcripts 6 years unless deleted)
+          and captured by the Compliance API; Cowork is not covered by ZDR. Commercial terms: no
+          training.
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+      - label: Docs index
+        value: claude.com/docs/cowork plus the Help Center architecture overview and Team/Enterprise admin article
+        url: https://claude.com/docs/cowork/overview
+    items:
+      - title: Enable cloud sessions per role, not per organisation
+        body:
+          - Organization settings > Cowork > "Run Cowork in the cloud" is off by default on
+            Enterprise; grant it through custom roles to the groups that need unattended or
+            device-independent sessions, and leave "Enable for your organization" scoped the
+            same way.
+        links:
+          - title: Use Claude Cowork on Team and Enterprise plans
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+      - title: Set the network-access policy before the first session
+        body:
+          - Cloud sandboxes inherit the organisation's network-access setting under
+            Organization settings > Capabilities; the Enterprise default is no access. Device
+            keys such as coworkEgressAllowedHosts do not reach cloud sessions.
+        links:
+          - title: Claude Cowork architecture overview
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          Documents, connector results and browser pages enter an unattended session as
+          instruction; the network-access policy and the connector approval toggles are the
+          containment, and "Automatically approve" removes the per-tool prompt.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Dispatch and scheduled tasks run with no device and no person present; the Compliance
+          API's list of remote sessions, including agent-owned scheduled runs, is the inventory.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Sessions and their files are saved to the account and retained for years unless
+          deleted; the session can reach a device's folders whenever the desktop app is open
+          there.
+    controls:
+      - capability: capabilityIga
+        coverage: native
+        mechanism: '"Run Cowork in the cloud" per custom role; trusted-device enrolment; SSO at the account layer'
+        steps:
+          - title: Gate cloud sessions by role
+            body:
+              - On Enterprise the cloud toggle is off by default and granted through custom
+                roles; Team turns it on by default, so turn it off there deliberately.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+        verified: "2026-09-17"
+      - capability: capabilityAgentSandboxing
+        coverage: native
+        mechanism: Per-session ephemeral sandbox on Anthropic servers; always on, no toggle
+        note: Vendor-internal isolation with no administrator setting; the architecture overview is the claim, assurance is the evidence.
+        steps:
+          - title: Read the architecture overview
+            body:
+              - Each cloud session runs in its own ephemeral sandbox with no access to the
+                organisation's network by default; local folders are reachable only through the
+                desktop app's brokered connection.
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+        verified: "2026-09-17"
+      - capability: capabilityEgressControl
+        coverage: native
+        mechanism: Organisation network-access policy enforced by a mandatory sandbox proxy
+        note: The policy is set at Organization settings > Capabilities and applies to every cloud session; device egress keys do not apply.
+        steps:
+          - title: Choose the network-access level
+            body:
+              - Enterprise defaults to no access; widen to an allowlist only for the groups
+                whose sessions need the web.
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+        verified: "2026-09-17"
+      - capability: capabilityCredentialIsolation
+        coverage: native
+        mechanism: Connector tokens held server-side; never present in the sandbox
+        steps:
+          - title: Confirm connector calls are server-side
+            body:
+              - The architecture overview states connector tokens never enter sandboxes and calls
+                are made server-side; no per-session credential is exposed to the model.
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+        verified: "2026-09-17"
+      - capability: capabilityHitlControls
+        coverage: partial
+        mechanism: '"Automatically approve" and "Always allow for connector tools" toggles'
+        note: The toggles govern per-tool prompts in attended sessions; Dispatch and scheduled runs have no prompt to answer, and there is no merge-style gate on their output.
+        steps:
+          - title: Keep connector approvals in the loop
+            body:
+              - Leave "Allow 'Always allow' for connector tools" off and consider turning off
+                "Allow 'Automatically approve' mode" for sensitive groups.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+        verified: "2026-09-17"
+      - capability: capabilityToolPermissionScoping
+        coverage: native
+        mechanism: Connector enablement per organisation; curated plugin marketplaces; built-in browser toggle
+        steps:
+          - title: Curate what a cloud session may call
+            body:
+              - Connectors and plugin marketplaces are admitted at Organization settings >
+                Cowork; the built-in browser can be disabled for the organisation.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+        verified: "2026-09-17"
+      - capability: capabilityAgentRegistry
+        coverage: partial
+        mechanism: Compliance API listing of remote Cowork sessions, including scheduled runs
+        note: A list of sessions, not a registry with owners and approval; scheduled tasks are owned by whoever created them.
+        steps:
+          - title: Export the session list
+            body:
+              - Remote Cowork sessions, including agent-owned scheduled runs, are available
+                through the Compliance API sessions endpoint.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-09-17"
+      - capability: capabilityAuditLogging
+        coverage: native
+        mechanism: Compliance API capture of cloud sessions; OTLP session events to the organisation's collector
+        steps:
+          - title: Stream session events
+            body:
+              - Configure the OTLP collector under Organization settings > Cowork; metadata by
+                default, content capture opt-in.
+            url: https://claude.com/docs/cowork/monitoring
+        verified: "2026-09-17"
+      - capability: capabilityMemoryProtection
+        coverage: partial
+        mechanism: Account-level session and file retention; deletion by the user or through the Compliance API
+        note: Retention is administered, not scoped; what a later session may read from an earlier one is not a setting.
+        steps:
+          - title: Set the retention decision
+            body:
+              - Remote transcripts are retained for 6 years unless deleted; decide the deletion
+                policy before enabling cloud sessions.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-09-17"
+      - capability: capabilityKillSwitch
+        coverage: partial
+        mechanism: Turning off "Run Cowork in the cloud" or the organisation toggle
+        note: Prevents new cloud sessions; the delay before a running Dispatch or scheduled task stops is not documented.
+        steps:
+          - title: Disable cloud sessions
+            body:
+              - Organization settings > Cowork > "Run Cowork in the cloud" off, or "Enable for
+                your organization" off for the whole product.
+            url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+        verified: "2026-09-17"
+    sources:
+      - title: Use Claude Cowork on web, desktop and mobile
+        url: https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
+      - title: Claude Cowork architecture overview
+        url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+      - title: Use Claude Cowork on Team and Enterprise plans
+        url: https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+      - title: Cowork monitoring (OTLP)
+        url: https://claude.com/docs/cowork/monitoring
+      - title: Compliance API — sessions
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions

@@ -1,0 +1,227 @@
+# Hosted agent runs hijacked — the 2026 incidents where the loop ran on somebody else's
+# compute with nobody watching: a trigger check bypassed, runner secrets read out of the
+# process environment, a triage workflow's cache poisoned into a release, and a hosted
+# runtime's own input bug. Replays on the vendor-hosted coding & desktop agent sessions
+# drawing; the endpoint half of the same year (TrapDoor, CHAINDROP, comment-driven local
+# agents) stays on 04-coding-agent-hijack.
+id: hosted-agent-hijack
+title: "Hosted agent runs hijacked: CI comments, runner secrets and a poisoned release"
+subtitle: >
+  When the coding agent runs in the vendor's or the CI provider's cloud, the repository host is
+  the ingress, the runner's environment is the prize, and no person is in the loop until the
+  pull request.
+dateRange: January – May 2026
+perspective: target
+archetype: archHostedAgentSessions
+summary:
+  - >
+    A hosted coding agent reads issues, pull-request comments and instruction files as its
+    task, executes in an environment that holds the credentials the job was given, and pushes
+    the result. In the first half of 2026 every link in that chain was attacked in the wild or
+    in disclosed research: the check that decides who may start a run, the tool that could
+    read the runner's process environment, the cache a workflow trusted, and the hosted
+    runtime's own handling of a branch name.
+  - >
+    The common thread is that the human's approval had moved to the end. Nobody was watching
+    the tool calls, so an injected instruction ran to completion; the credential was in the
+    sandbox, so reading it was one command; the egress was whatever the runner allowed, so the
+    secret left through a host the allowlist permitted. Clinejection is the case where all of
+    it landed: an issue title, a poisoned cache, a nightly release token, and a malicious
+    package on npm under the project's own name.
+  - >
+    What broke the chain, where it broke, was the same set of controls every vendor now
+    documents: a verified human with write access as the only trigger, secrets kept out of the
+    runner's environment behind a proxy, an egress allowlist with write methods restricted,
+    provenance on the release path a stolen token cannot satisfy, and the agent's own
+    configuration files under required review.
+patterns:
+  - Social Engineering of AI Agents
+  - Credential Theft via AI Tools
+  - Config-as-Code Execution
+  - CI/CD Cache Poisoning
+  - Supply Chain Release Hijack
+cves: []
+risks:
+  - riskPromptInjection
+  - riskAgenticDelegationConfusedDeputy
+  - riskSensitiveDataDisclosure
+  - riskToolSourceProvenance
+  - riskRogueActions
+controls:
+  - controlApplicationAccessManagement
+  - controlInputValidationAndSanitization
+  - controlAgentCredentialIsolation
+  - controlAgentExecutionBounds
+  - controlComponentIdentityProvenance
+  - controlAgentObservability
+steps:
+  - n: 1
+    title: An App that should never start a run starts one
+    phase: introduced
+    narrative: >
+      January 2026: a hosted coding-agent action trusted "does the triggering actor have write
+      access" and a malicious GitHub App satisfied it. The injected issue then read the
+      runner's process environment for the OIDC request token and minted an installation
+      token with write access. The fix was a human-actor check on the trigger, scrubbing the
+      environment, and wrapping the tools — the three controls this drawing pins where the
+      event enters.
+    components:
+      - actorExternalSources
+      - componentAgentUserQuery
+      - componentAgentInputHandling
+    path: [sourceControl->managedRuntime]
+    risks:
+      - riskPromptInjection
+      - riskAgenticDelegationConfusedDeputy
+    sources:
+      - title: "Poisoning Claude Code: one GitHub issue to break the supply chain"
+        url: https://flatt.tech/research/posts/poisoning-claude-code-one-github-issue-to-break-the-supply-chain/
+        publisher: Flatt Security
+        date: 2026-01
+  - n: 2
+    title: A comment tells the agent to read its own environment
+    phase: exposed
+    narrative: >
+      April 2026: pull-request titles, issue bodies and comments — filed by anyone the
+      repository admitted — drove three vendors' hosted CI agents into exfiltrating the keys
+      their jobs held. Weeks later the unsandboxed file-read tool of one of them was shown to
+      reach the process environment directly, so the API key was one path away. The rule the
+      responder wrote afterwards is the archetype's: never one loop with untrusted input,
+      secret access and an external side effect together.
+    components:
+      - componentAgentInputHandling
+      - componentReasoningCore
+      - componentTools
+    path: [sourceControl->managedRuntime, managedRuntime, nativeTools->downstream]
+    risks:
+      - riskPromptInjection
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "Comment and Control: prompt injection through GitHub comments into hosted CI agents"
+        url: https://labs.cloudsecurityalliance.org/research/csa-research-note-comment-control-github-prompt-injection-20/
+        publisher: Cloud Security Alliance
+        date: 2026-04
+      - title: "Securing CI/CD in an agentic world: the Claude Code GitHub Action case"
+        url: https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/
+        publisher: Microsoft Security
+        date: 2026-06-05
+  - n: 3
+    title: An issue title poisons a cache, and a release token walks out
+    phase: exposed
+    narrative: >
+      17 February 2026: an issue title carried an instruction into an open-source coding
+      agent's own hosted triage workflow. The injected run wrote to the workflow cache; the
+      nightly release job restored it, and its publishing token left through the same job. An
+      unauthorised release of the project's CLI reached npm under its own name and installed a
+      second agent on the machines that pulled it. The project removed the workflow and moved
+      releases to OIDC provenance — the release path now needs something a stolen token cannot
+      supply.
+    components:
+      - actorExternalSources
+      - componentAgentSystemInstruction
+      - componentTools
+      - componentOrchestrationOutputHandling
+    path: [sourceControl->managedRuntime, nativeTools->sources]
+    risks:
+      - riskPromptInjection
+      - riskRogueActions
+      - riskSensitiveDataDisclosure
+      - riskToolSourceProvenance
+    sources:
+      - title: "Clinejection: issue-title injection to a poisoned npm release"
+        url: https://adnanthekhan.com/posts/clinejection/
+        publisher: Adnan Khan
+        date: 2026-02
+      - title: "Post-mortem: unauthorized Cline CLI release on npm"
+        url: https://cline.bot/blog/post-mortem-unauthorized-cline-cli-npm
+        publisher: Cline
+        date: 2026-02
+  - n: 4
+    title: The hosted runtime has an input bug of its own
+    phase: exposed
+    narrative: >
+      Reported December 2025 and fixed on 5 February 2026: a hosted coding runtime passed a
+      repository branch name into task execution unsanitised, so a crafted branch name became
+      a command inside the vendor's container and reached an authentication token. Not prompt
+      injection — an ordinary injection bug in a multi-tenant runtime nobody outside the vendor
+      can patch, which is what assurance of the sandbox claim has to cover.
+    components:
+      - componentTools
+      - componentReasoningCore
+    path: [sourceControl->managedRuntime, nativeTools]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "OpenAI patches Codex cloud branch-name command injection and ChatGPT data exposure"
+        url: https://thehackernews.com/2026/03/openai-patches-chatgpt-data.html
+        publisher: The Hacker News
+        date: 2026-03
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Only a verified human with write access starts a session, and Apps cannot. The
+      repository credential is substituted by a proxy so the sandbox never holds it, and
+      secrets that must exist do so only in the setup phase. Egress is an allowlist with write
+      methods restricted on the hosts every list must permit. Releases need provenance a stolen
+      token cannot forge. The agent's configuration directories and workflows sit under
+      CODEOWNERS and required review, the pull request stays a draft until a person who is not
+      the initiator merges it, and workflows it would fire wait for "approve and run". Every
+      commit links to its session, and the session log is exported where an incident can read
+      it.
+    components:
+      - componentAgentInputHandling
+      - componentTools
+      - componentOrchestrationInputHandling
+    path: [sourceControl->managedRuntime, nativeTools->sources, managedRuntime->sourceControl, govSecrets, govPolicy, govObservability]
+    sources:
+      - title: "GitHub — build guardrails for the Copilot cloud agent"
+        url: https://docs.github.com/en/copilot/tutorials/cloud-agent/build-guardrails
+        publisher: GitHub Docs
+      - title: "Securing CI/CD in an agentic world: the Claude Code GitHub Action case"
+        url: https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/
+        publisher: Microsoft Security
+        date: 2026-06-05
+alsoSeen:
+  - title: "RoguePilot — a hidden issue comment steers Copilot inside a Codespace to a repository takeover"
+    date: February 2026
+    note: >
+      The same ingress with a developer's own hosted workspace as the runtime: an HTML comment
+      in an issue reached Copilot when the Codespace was opened from it and leaked the
+      workspace's token.
+    sources:
+      - title: "RoguePilot: GitHub Copilot vulnerability in Codespaces"
+        url: https://orca.security/resources/blog/roguepilot-github-copilot-vulnerability/
+        publisher: Orca Security
+  - title: "Exfiltration through the allowed host — the 2025 supply-chain worm and the vendor's own 2026 evaluation incidents"
+    date: 2025–2026
+    note: >
+      Stolen tokens left through public repositories on the code host in the s1ngularity
+      worm, and a frontier model in a misconfigured evaluation sandbox published a malicious
+      package to a public index — both through destinations every allowlist permits. The
+      egress control on this drawing restricts what the permitted hosts may receive, not only
+      which hosts.
+    sources:
+      - title: "s1ngularity's aftermath"
+        url: https://www.wiz.io/blog/s1ngularitys-aftermath
+        publisher: Wiz
+      - title: "Investigating incidents in our cybersecurity evaluations"
+        url: https://www.anthropic.com/news/investigating-incidents-cybersecurity-evals
+        publisher: Anthropic
+sources:
+  - title: "Cloud Security Alliance — Comment and Control research note"
+    url: https://labs.cloudsecurityalliance.org/research/csa-research-note-comment-control-github-prompt-injection-20/
+    publisher: Cloud Security Alliance
+    date: 2026-04
+  - title: "Flatt Security — poisoning Claude Code through one GitHub issue"
+    url: https://flatt.tech/research/posts/poisoning-claude-code-one-github-issue-to-break-the-supply-chain/
+    publisher: Flatt Security
+    date: 2026-01
+  - title: "Adnan Khan — Clinejection"
+    url: https://adnanthekhan.com/posts/clinejection/
+    publisher: Adnan Khan
+    date: 2026-02
+  - title: "Microsoft Security — securing CI/CD in an agentic world"
+    url: https://www.microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/
+    publisher: Microsoft Security
+    date: 2026-06-05

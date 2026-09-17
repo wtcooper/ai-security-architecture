@@ -10,7 +10,7 @@ re-run `npm run data`).
 Most of the parked entries fell to one test: *is this a distinct architecture, or an agent
 workflow with a different tool set, a single node, or a control drawn as a place?*
 
-## Active — 15
+## Active — 16
 
 ### Endpoint (5)
 
@@ -98,18 +98,37 @@ workflow with a different tool set, a single node, or a control drawn as a place
   pipeline draws external on the left because it is an ingest pipeline, and self-hosted
   inference is the local model runtime with an AI gateway in front of it.
 
-### Third-party SaaS (3)
+### Third-party SaaS (4)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
 | 1 | Enterprise AI chat with connectors | `archEnterpriseAiChat` | `saas-enterprise-ai-chat.yaml` |
 | 2 | UI/low-code managed agent runtime | `archLowCodeAgentBuilder` | `saas-low-code-agent-builder.yaml` |
-| 3 | API/SDK managed agent runtime | `archManagedAgentRuntime` | `saas-managed-agent-runtime.yaml` |
+| 3 | Vendor-hosted coding & desktop agent sessions | `archHostedAgentSessions` | `saas-hosted-agent-sessions.yaml` |
+| 4 | API/SDK managed agent runtime | `archManagedAgentRuntime` | `saas-managed-agent-runtime.yaml` |
 
 - The managed agent runtime moved from Cloud & hosted to SaaS — it is a vendor-operated
   runtime the customer configures — and split by author surface: **UI/low-code** (builder UIs:
-  Copilot Studio / Foundry class) vs **API/SDK** (Anthropic managed agents, hosted background
-  coding agents, hyperscaler SDK runtimes).
+  Copilot Studio / Foundry class) vs **API/SDK** (Anthropic managed agents, the OpenAI Agents
+  API, hyperscaler SDK runtimes).
+
+- **Vendor-hosted coding & desktop agent sessions** (added 2026-09-17) is where the hosted
+  coding products went. They had been mapped onto the API/SDK runtime, whose entry path — a
+  customer-owned application front end with identity binding, an engineer-authored definition,
+  custom tools executed in our code — none of them has. The 2026-09-01 review's MR-01 verdict
+  had already recorded the class as "vendor-direct"; the market survey of 2026-09-17
+  (`docs/refarch-review/HOSTED-AGENT-SESSIONS-RECOMMENDATION-2026-09-17.md`) found every
+  vendor had built one hosted harness with several doors — the local harness's hand-off, the
+  web and mobile apps, chat channels, repository events, schedules, an API — finishing in a
+  branch and a draft pull request. The doors are concurrent, so one drawing; the blocks that
+  differ from the API/SDK runtime are graph-level, so a second drawing rather than a
+  conditional edge. It registers **Source control** — the one tier that is ingress (issues,
+  comments, instruction files), egress (branch, draft PR), definition (CLAUDE.md, setup
+  scripts, environment config) and gate (review, merge, "approve and run workflows") — drawn
+  in our band whether hosted or rented, with the deviation recorded. Claude Code on the web,
+  Cowork in the cloud, Cursor Cloud Agents, Codex cloud and the Copilot cloud agent are its
+  registry entities; the Managed runtime and Native tools blocks are byte-identical to the
+  API/SDK sibling so a reader sees only the doors and the return paths differ.
 
 - **This is where the vendor band earns its keep**, and where ONTOLOGY §3's three-zone rule
   stops being prose and becomes geometry: zone 1 is inside the vendor block and never drawn,

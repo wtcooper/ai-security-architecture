@@ -66,7 +66,14 @@ architectures with their surface).
      not change that: Codex CLI and Gemini CLI are third-party here. `archCodingAgentFirstParty`
      is only for harnesses with no vendor control plane at all — the developer supplies the
      model key and nothing an administrator can switch on ships with the tool.
-   - vendor-hosted agent, CI reviewer, hosted sandbox → `archManagedAgentRuntime`
+   - the vendor's coding or desktop agent run on the vendor's compute — cloud sessions started
+     from the local harness, the vendor's web, mobile or chat surfaces, a repository event or a
+     schedule, CI reviewers and PR bots, finishing in a branch and a draft pull request →
+     `archHostedAgentSessions` (Claude Code on the web, Cowork in the cloud, Cursor Cloud
+     Agents, Codex cloud, Copilot cloud agent)
+   - a programmatic managed runtime driven from the customer's own application over an API or
+     SDK — agent, environment, session, vault objects; custom tools executed by customer code →
+     `archManagedAgentRuntime` (Claude Managed Agents, the OpenAI Agents API, AgentCore harness)
    - SDK / runtime the customer hosts → `archAgentWorkflow`
    - vendor chat, Office add-in, chat/connector integration → `archEnterpriseAiChat`
    - browser extension or agentic browser acting in the user's logged-in sessions →

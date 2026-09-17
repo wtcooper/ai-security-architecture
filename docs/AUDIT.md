@@ -672,13 +672,13 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-15 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+16 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
 | Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
-| Third-party SaaS | 3 — Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime |
+| Third-party SaaS | 4 — Enterprise AI chat with connectors, Vendor-hosted coding & desktop agent sessions, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
 ### 4a. Risks no architecture pins — 2 of 36
 
@@ -909,6 +909,23 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
 | Enterprise AI chat with connectors | Supply-chain assurance | governance | (none) |
 | Enterprise AI chat with connectors | Observability & response | governance | (none) |
+| Vendor-hosted coding & desktop agent sessions | Remote device | service | `componentAgentUserQuery` |
+| Vendor-hosted coding & desktop agent sessions | Local applications | service | `componentApplication` |
+| Vendor-hosted coding & desktop agent sessions | Source control | service | `componentDataSources` |
+| Vendor-hosted coding & desktop agent sessions | Managed runtime | provider | `componentReasoningCore` |
+| Vendor-hosted coding & desktop agent sessions | Native tools | provider | `componentTools` |
+| Vendor-hosted coding & desktop agent sessions | Vendor service | provider | `componentApplication` |
+| Vendor-hosted coding & desktop agent sessions | AI gateway | service | (none) |
+| Vendor-hosted coding & desktop agent sessions | Tool services | service | `componentTools` |
+| Vendor-hosted coding & desktop agent sessions | Enterprise data | external | `componentDataSources` |
+| Vendor-hosted coding & desktop agent sessions | Public package sources | external | (none) |
+| Vendor-hosted coding & desktop agent sessions | Downstream services | external | `componentDataSources` |
+| Vendor-hosted coding & desktop agent sessions | Tool services | service | `componentTools` |
+| Vendor-hosted coding & desktop agent sessions | Identity services | governance | (none) |
+| Vendor-hosted coding & desktop agent sessions | Secrets & key management | governance | (none) |
+| Vendor-hosted coding & desktop agent sessions | Policy & authorization | governance | (none) |
+| Vendor-hosted coding & desktop agent sessions | Supply-chain assurance | governance | (none) |
+| Vendor-hosted coding & desktop agent sessions | Observability & response | governance | (none) |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
@@ -939,13 +956,13 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-14 of 15 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+15 of 16 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | Browser AI agents & extensions |
 | Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
-| Third-party SaaS | Enterprise AI chat with connectors, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
+| Third-party SaaS | Enterprise AI chat with connectors, Vendor-hosted coding & desktop agent sessions, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
 ### 5a. Documents
 
@@ -963,6 +980,7 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 7 | Model artifact scanning & safe deserialization |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
+| Vendor-hosted coding & desktop agent sessions | use | draft | 9 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
 | API/SDK managed agent runtime | hybrid | draft | 9 | Agent execution sandboxing, Network segmentation & egress control, Runtime action authorization, Agent credential isolation & delegation control, Tool & MCP supply-chain security |
 
@@ -975,25 +993,27 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 18/18 | _none_ |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
+| Claude Code on the web (cloud sessions) | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
+| Claude Cowork in the cloud | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 10/24 | Non-human & agent identity management, Secrets management & ephemeral credentials, Encryption & key management for AI assets, Prompt injection & jailbreak detection, Third-party risk management platform for AI vendors, SaaS security posture management for AI features, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Runtime action authorization, Tool & MCP supply-chain security, Staged rollout, versioning & rollback, Model & agent evaluation harnesses, Agent observability & tracing, AI governance platform |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Cursor Cloud Agents | cursor | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
+| Cursor Cloud Agents | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Grok Bot | cursor | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
+| Grok Bot | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| GitHub Copilot cloud agent | github | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
+| GitHub Copilot cloud agent | github | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 13/24 | Identity & access management for AI applications, Agent & tool registry, Staged rollout, versioning & rollback, Prompt injection & jailbreak detection, Third-party risk management platform for AI vendors, Runtime content & policy guardrails, Agent memory & context protection, Model & agent evaluation harnesses, AI governance platform, Rate limiting, quotas & spend controls, Runtime action authorization |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Codex cloud | openai | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
+| Codex cloud | openai | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
