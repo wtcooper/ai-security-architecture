@@ -1,16 +1,15 @@
 "use client";
 
 /**
- * The Tools tab on a reference architecture: this drawing's pinned mitigations as rows, the
- * products that instantiate it as columns, and, when a product name is clicked (or the page is
- * opened with `?tool=`), that product's full record beneath the grid. This is the only place
- * the registry renders; the drawing, its reference controls and its products are one read.
+ * The Tools tab keeps CoSAI controls, MITRE methods and technology categories visible.
+ * Show org data adds product columns and records alongside in-cell organization mappings.
  */
 import { useEffect, useRef } from "react";
 
 import type { Archetype, Tool } from "@/lib/types";
 import { ArchitectureViews } from "./ArchitectureViews";
 import { ToolDetail } from "./ToolDetail";
+import { useOrgOverlay } from "./overlay";
 
 export function ToolsForArchitecture({
   archetype,
@@ -23,7 +22,8 @@ export function ToolsForArchitecture({
   toolId: string | null;
   onTool: (id: string | null) => void;
 }) {
-  const tool = tools.find((t) => t.id === toolId) ?? null;
+  const overlay = useOrgOverlay();
+  const tool = overlay ? tools.find((t) => t.id === toolId) ?? null : null;
   const recordRef = useRef<HTMLDivElement>(null);
   // A record opened from the grid sits below a tall table: bring it into view.
   useEffect(() => {
@@ -33,9 +33,7 @@ export function ToolsForArchitecture({
   return (
     <div>
       <p className="mb-3 text-[12px] leading-snug text-ink-3">
-        The products that instantiate this drawing, each rated against its {archetype.mitigations.length} pinned mitigations — the
-        mitigations every product of this kind needs. Each says whether an administrator can switch the control on in that product;
-        ↗ is the vendor&rsquo;s page for doing so.
+        Follow each CoSAI control through its MITRE mitigations to the technology categories that can implement them.
       </p>
       <ArchitectureViews archetypeId={archetype.id} tools={tools} onPickTool={onTool} />
       {tool && (

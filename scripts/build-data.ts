@@ -228,6 +228,7 @@ interface OrgFrameworkDoc {
     url?: string;
     controls?: string[];
     mitigations?: string[];
+    capabilities?: string[];
     risks?: string[];
   }[];
 }
@@ -354,6 +355,7 @@ async function main() {
     riskIds,
     controlIds,
     mitigationIds,
+    capabilityIds: new Set(technology.capabilities.map((c) => c.id)),
     takenIds: new Set(allFrameworks.map((f) => f.id)),
   });
   allFrameworks.push(...orgFrameworks.frameworks);
@@ -1632,6 +1634,7 @@ function checkOrgFrameworks(
     riskIds: Set<string>;
     controlIds: Set<string>;
     mitigationIds: Set<string>;
+    capabilityIds: Set<string>;
     takenIds: Set<string>;
   },
 ): {
@@ -1642,7 +1645,7 @@ function checkOrgFrameworks(
   const frameworks: Framework[] = [];
   const mappings: Record<string, AuthoredMappings> = {};
   const entries: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }> = {};
-  const known = { risks: ctx.riskIds, controls: ctx.controlIds, mitigations: ctx.mitigationIds };
+  const known = { risks: ctx.riskIds, controls: ctx.controlIds, mitigations: ctx.mitigationIds, capabilities: ctx.capabilityIds };
   const seen = new Set<string>();
 
   for (const doc of org.frameworks) {
@@ -1668,7 +1671,7 @@ function checkOrgFrameworks(
         ...(entry.url ? { url: entry.url } : {}),
         ...(entry.group ? { group: entry.group } : {}),
       };
-      for (const kind of ["risks", "controls", "mitigations"] as const) {
+      for (const kind of ["risks", "controls", "mitigations", "capabilities"] as const) {
         for (const target of entry[kind] ?? []) {
           if (!known[kind].has(target)) {
             fail(`${at}: unknown ${kind.slice(0, -1)} ${target}`);

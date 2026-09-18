@@ -16,8 +16,8 @@ export function OverlayToggle({ className = "" }: { className?: string }) {
       className={`inline-flex cursor-pointer select-none items-center gap-2 text-[11.5px] text-ink-2 ${className}`}
       title={
         org.example
-          ? "Shows the example organisation's status (Enabled / In progress or partial / Gap) on every mitigation, tool and control, from data/org/example. Replace it with data/org/local for your own."
-          : `Shows ${org.name}'s status (Enabled / In progress or partial / Gap) on every mitigation, tool and control, from data/org/local. Tools the organisation does not run are greyed out.`
+          ? "Adds example organization mappings, tools and recorded status while keeping the reference taxonomy visible. Replace data/org/example with data/org/local for your own."
+          : `Adds ${org.name}'s mappings, tools and recorded status while keeping the reference taxonomy visible. Tools the organization does not run are greyed out.`
       }
     >
       <span

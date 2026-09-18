@@ -26,6 +26,7 @@ frameworks:                       # any number of catalogues
         url: https://...          # optional per-entry deep link ("Read the source")
         controls: [controlAgentPluginPermissions]      # CoSAI control ids (data/cosai/controls.yaml)
         mitigations: [AML.M0028] # mitigation ids (data/overlay/mitigations.yaml)
+        capabilities: [tech-agentic-security] # sourced technology keys (optional; mapped explicitly)
         risks: [riskRogueActions] # CoSAI risk ids (data/cosai/risks.yaml)
       - id: AIS-7.1
         label: AI use-case approval board
@@ -49,8 +50,8 @@ mitigations:
 
 Build rules: the mitigation and surface ids exist; status in enum. This is the only source of
 status on the Mitigations matrix and in the "Your status" line on a drawing's Controls tab, and
-it tints the enterprise-mitigation tag beside every control on the Tools tab: the product's own setting is one half of a control, the enterprise
-technology that delivers or surrounds it is the other. A mitigation × surface not listed reads
+it is shown inside the Mitigations column on the Tools tab. Product columns separately show
+their recorded status. Neither status is an assessment of complete CoSAI control fulfillment. A mitigation × surface not listed reads
 as a gap once status is shown.
 
 ## tooling-status.yaml
@@ -84,7 +85,7 @@ an available tool reads as a gap.
 | Availability + control statuses | The Tools tab: the product header pill (Available / Not available), the tint on every cell, and the product record |
 | Organisation name | Footer (`org: <name>`), pill labels; the example profile is labelled "example" everywhere |
 
-Everything in this table is behind the **Show status** switch beside the Mitigations and
+Everything in this table is behind the **Show org data** switch beside the Mitigations and
 Reference architectures titles; it defaults on when `data/org/local/` exists.
 
 Use the native MITRE IDs selected in `data/overlay/mitigations.yaml`; canonical names and

@@ -76,7 +76,7 @@ Read `references/schema.md` first. It is short and it is the contract.
    `org tooling-status …` and name the file, framework and entry; fix the id, never the CoSAI
    file. A failing line that does not start with `org` is upstream data, not the profile. Then
    `npm run audit` (it should still pass; it does not yet report on the org layer).
-7. **Show them where it landed.** `npm run dev`, then switch **Show status** on — the toggle
+7. **Show them where it landed.** `npm run dev`, then switch **Show org data** on — the toggle
    beside the Mitigations and Reference architectures titles, one state shared by both pages.
    Nothing from `data/org` renders until it is on. Then: `/frameworks?fw=<framework id>` (their
    catalogue with coverage and the unmapped list), `/controls?control=<id>` and
@@ -95,5 +95,5 @@ Read `references/schema.md` first. It is short and it is the contract.
 - Keep the example profile untouched so upstream diffs stay clean; all edits go in `local/`.
 - `mitigations.yaml` records status per **surface** (the enterprise layer); `tooling-status.yaml`
   records it per **tool**. They answer different questions; do not derive one from the other.
-  Both show under the **Show status** switch beside the Mitigations and Reference architectures
+  Both show under the **Show org data** switch beside the Mitigations and Reference architectures
   titles.

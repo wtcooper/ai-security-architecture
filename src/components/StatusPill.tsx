@@ -3,7 +3,7 @@ import { ORG_STATUSES, type OrgStatus } from "@/lib/types";
 /**
  * The organisation's status vocabulary, one set of words and tints everywhere it renders:
  * a mitigation on a surface, a tool the organisation runs, and a control inside that tool.
- * Nothing carries a status until the viewer switches "Show status" on; then everything has
+ * Nothing carries a status until the viewer switches "Show org data" on; then everything has
  * one, and anything the organisation has not recorded is a gap.
  */
 export const STATUS_META: Record<OrgStatus, { label: string; blurb: string }> = {

@@ -1,29 +1,15 @@
-/**
- * The view model both perspectives share. The organising unit is the reference architecture:
- * its pinned mitigations are the controls every product of that category needs, and a product
- * only records how its vendor implements each one. So rows always come from ONE architecture,
- * columns are the products that instantiate it, and a cell is one product × one control.
- *
- * Rows can be relabelled with the organisation's own control entries; those aggregate several
- * mitigations, so a cell there carries the worst of them — a gap anywhere is a gap.
- */
-import { archetypeById, authoredMappings, mitigationById, frameworkEntries, orgStatusFor, orgToolAvailableFor, vendors } from "@/lib/data";
-import { orgEntriesFor, orgFrameworks } from "@/lib/frameworks";
+/** CoSAI controls group mitigation rows; products are assessed against each method. */
+import { archetypeById, controls, mitigationById, orgStatusFor, orgToolAvailableFor, vendors, controlCategories } from "@/lib/data";
 import type { OrgStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
-import { controlCategories } from "@/lib/data";
-
-export type LabelMode = "cosai" | "org";
 
 export interface Row {
   id: string;
+  controlId: string;
   label: string;
-  short: string;
-  /** Supporting label: org mappings in the CoSAI lens, mitigation count in the org lens. */
-  aside?: string;
+  /** Only the first mitigation row renders the shared CoSAI control cell. */
+  controlSpan: number;
   mitigations: string[];
   title?: string;
-  /** Where the drawing enforces this control — the enterprise layer around the products. */
-  enforcement: Enforcement[];
 }
 
 /** One place the architecture pins a control: a block (or both ends of a flow) and who operates it. */
@@ -109,71 +95,25 @@ export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
     .map((v) => ({ vendorId: v.id, vendorName: v.name, tools: tools.filter((t) => t.vendor === v.id) }))
     .filter((g) => g.tools.length);
 
-const orgIdsByMitigation = (() => {
-  const out = new Map<string, string[]>();
-  for (const fw of orgFrameworks) {
-    for (const [mitigationId, entryIds] of Object.entries(authoredMappings[fw.id]?.mitigations ?? {})) {
-      out.set(mitigationId, [...(out.get(mitigationId) ?? []), ...entryIds]);
-    }
-  }
-  return out;
-})();
-export const hasOrgMappings = orgIdsByMitigation.size > 0;
-
-/** The architecture's pinned mitigations as rows, grouped by CoSAI control category. */
-export function cosaiRows(archetypeId: string): RowGroup[] {
-  const pinned = archetypeById.get(archetypeId)?.mitigations ?? [];
-  return controlCategories
-    .map((cat) => ({
-      id: cat.id,
-      title: cat.title,
-      rows: pinned
-        .map((id) => mitigationById.get(id))
-        .filter((c): c is NonNullable<typeof c> => Boolean(c) && c!.category === cat.id)
-        .map((c) => ({
-          id: c.id,
-          label: c.title,
-          short: c.title,
-          aside: orgEntriesFor("mitigations", c.id).map((entry) => `${entry.label} (${entry.id})`).join(" · ") || undefined,
-          mitigations: [c.id],
-          enforcement: enforcementFor(archetypeId, [c.id]),
-        })),
-    }))
-    .filter((g) => g.rows.length);
+/** Each row keeps one pinned MITRE method aligned with its technologies and product evidence. */
+export function rowsFor(archetypeId: string): RowGroup[] {
+  const pinned = (archetypeById.get(archetypeId)?.mitigations ?? []).map((id) => mitigationById.get(id)!);
+  return controlCategories.map((category) => ({
+    id: category.id,
+    title: category.title,
+    rows: controls.filter((c) => c.category === category.id).flatMap((control) => {
+      const methods = pinned.filter((m) => m.controls.includes(control.id));
+      return methods.map((method, i) => ({
+        id: control.id + ":" + method.id,
+        controlId: control.id,
+        label: control.title,
+        controlSpan: i === 0 ? methods.length : 0,
+        mitigations: [method.id],
+        title: control.title + " · " + method.title,
+      }));
+    }),
+  })).filter((group) => group.rows.length);
 }
-
-/** The same set, relabelled as the organisation's entries that reach it, grouped by its catalogue. */
-export function orgRows(archetypeId: string): RowGroup[] {
-  const pinned = new Set(archetypeById.get(archetypeId)?.mitigations ?? []);
-  const groups = new Map<string, RowGroup>();
-  for (const fw of orgFrameworks) {
-    const byEntry = new Map<string, string[]>();
-    for (const [mitigationId, entryIds] of Object.entries(authoredMappings[fw.id]?.mitigations ?? {})) {
-      if (!pinned.has(mitigationId)) continue;
-      for (const e of entryIds) byEntry.set(e, [...(byEntry.get(e) ?? []), mitigationId]);
-    }
-    const reference = frameworkEntries[fw.id] ?? {};
-    for (const entryId of Object.keys(reference)) {
-      const caps = byEntry.get(entryId);
-      if (!caps?.length) continue;
-      const ref = reference[entryId];
-      const groupId = `${fw.id}:${ref.group ?? ""}`;
-      if (!groups.has(groupId)) groups.set(groupId, { id: groupId, title: ref.group ? `${fw.name} · ${ref.group}` : fw.name, rows: [] });
-      groups.get(groupId)!.rows.push({
-        id: `${fw.id}:${entryId}`,
-        label: `${ref.label} (${entryId})`,
-        short: ref.label,
-        aside: `${caps.length} mitigation${caps.length === 1 ? "" : "s"}`,
-        mitigations: caps,
-        title: ref.label,
-        enforcement: enforcementFor(archetypeId, caps),
-      });
-    }
-  }
-  return [...groups.values()];
-}
-
-export const rowsFor = (archetypeId: string, mode: LabelMode) => (mode === "org" ? orgRows(archetypeId) : cosaiRows(archetypeId));
 
 export function cellFor(tool: Tool, row: Row): Cell {
   const own = new Map(tool.controls.map((c) => [c.mitigation, c]));

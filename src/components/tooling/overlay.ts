@@ -2,10 +2,9 @@
 
 /**
  * The organisation overlay: one switch that decides whether anything from data/org is drawn —
- * status pills, greyed-out tools it does not run, its control ids beside CoSAI names. Off, every page is
- * the general-purpose reference: the controls a category needs, the vendors' variants, what
- * each vendor lets an administrator switch on, and the official page for each. On, the same
- * pages gain the organisation's answers. Defaults on when an adopter's data/org/local exists
+ * status pills, greyed-out tools it does not run, and its mappings beside taxonomy names.
+ * The Tools grid keeps its three taxonomy columns; enabling the overlay adds product columns
+ * and organization answers in place. Defaults on when an adopter's data/org/local exists
  * and off on the shipped example, and remembers the viewer's choice in this browser.
  */
 import { useSyncExternalStore } from "react";
@@ -49,4 +48,4 @@ export function setOrgOverlay(value: boolean) {
 }
 
 /** One name everywhere; the example profile is badged so nobody reads it as a posture. */
-export const overlayLabel = () => "Show status";
+export const overlayLabel = () => "Show org data";

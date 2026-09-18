@@ -13,6 +13,14 @@ export function renameMitigationKeys(source: string): string {
     if (isSeq(node)) node.items.forEach((item) => walk(item as Node | null));
     if (isMap(node)) for (const pair of node.items) {
       if (!isScalar(pair.key) || pair.key.value === "migration") continue;
+      // New org crosswalks use capabilities for tech-* categories, not MITRE methods.
+      if (pair.key.value === "capabilities" && isSeq(pair.value)) {
+        const technology = pair.value.items.filter((item) => isScalar(item) && String(item.value).startsWith("tech-"));
+        if (technology.length && technology.length !== pair.value.items.length) {
+          throw new Error("Mixed technology and legacy capability references: separate tech-* capabilities from MITRE mitigations before migration");
+        }
+        if (technology.length || (!pair.value.items.length && node.has("mitigations"))) continue;
+      }
       const replacement = keys[String(pair.key.value)];
       if (replacement && pair.key.range) edits.push([pair.key.range[0], pair.key.range[1], replacement]);
       walk(pair.value as Node | null);

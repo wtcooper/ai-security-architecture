@@ -111,11 +111,11 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
-| **Mitigations** | MITRE D3FEND and ATLAS functions mapped to CoSAI control groups × three deployment surfaces. Search by ID/name and filter by source, risk or stack layer. Definitions retain upstream provenance; CoSAI gaps and deployment responsibility are explicit. **Show status** reads organization posture from `data/org`. |
+| **Mitigations** | MITRE D3FEND and ATLAS functions mapped to CoSAI control groups × three deployment surfaces. Search by ID/name and filter by source, risk or stack layer. Definitions retain upstream provenance; CoSAI gaps and deployment responsibility are explicit. **Show org data** reads organization posture from `data/org`. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
-| **Reference Architectures › Tools** | A category of tool is a reference architecture, and its drawing pins the controls every product of that kind needs. Each drawing's Tools tab rates the named products that instantiate it — every Anthropic, OpenAI, Cursor, GitHub Copilot and Google surface, plus the open-source personal agents — against that reference set: the drawing's controls as rows, the enterprise mitigation modules beside them, every product as an admin-control column, and how the vendor lets an administrator switch each control on, linked to the vendor's page. Click a product name for its full record. Rows switch between CoSAI names and your own control ids. Information first: nothing here is a posture until an organisation records one in `data/org` and switches the overlay on, which adds status pills and its own control ids. |
+| **Reference Architectures › Tools** | Three permanent columns: CoSAI controls, MITRE mitigations, and sourced technology capabilities. Controls span their mapped mitigation rows, keeping product evidence attached to a specific method. **Show org data** adds explicit org mappings inside each taxonomy cell, plus product columns, availability and status. The taxonomy names and row structure stay unchanged. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
 Every diagram supports pan and zoom.
@@ -240,7 +240,7 @@ For a fork still using original capability IDs, run `npm run migrate:capabilitie
 to apply. Then run `npm run migrate:mitigations -- --write` to rename live schema fields and organization files. Run `npm run data` and inspect split pin placements; geometry and boundary
 validation may require manual adjustments. The migration is idempotent.
 
-Status remains opt-in through **Show status** and comes from `data/org`. Missing posture
+Status remains opt-in through **Show org data** and comes from `data/org`. Missing posture
 records read as gaps. The shipped organization is an example, not an assessed deployment.
 
 ## The reference architectures: the drawing layer
@@ -421,7 +421,7 @@ Everything is text. Clone the repository, and:
    control (`enabled | inProgress | gap`). Availability is a boolean because a product is
    provided or blocked; the control statuses say how well it is locked down. Anything not
    recorded is a gap, and a product not listed is not available. Switch
-   **Show status** on (beside the Mitigations and Reference architectures titles) and the
+   **Show org data** on (beside the Mitigations and Reference architectures titles) and the
    matrix, the Tools grid and every product record show it; products you do not run are greyed
    out so the gaps are the picture.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the

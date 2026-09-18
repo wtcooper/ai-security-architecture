@@ -1,73 +1,34 @@
 "use client";
 
-/**
- * One reference architecture's products against its reference mitigations, as a grid: controls
- * as rows, enterprise mitigation modules beside them, one admin-control column per product.
- * The header states the inheritance and, with status shown, carries the row-label switch. Rendered by the Tools tab on the drawing.
- */
-import { useState } from "react";
-
-import { archetypeById, org } from "@/lib/data";
+import { archetypeById } from "@/lib/data";
 import type { Tool } from "@/lib/types";
 import { GridView } from "./GridView";
-import { hasOrgMappings, rowsFor, type LabelMode } from "./model";
+import { rowsFor } from "./model";
 import { useOrgOverlay } from "./overlay";
 import { Legend } from "./shared";
 
-export function ArchitectureViews({
-  archetypeId,
-  tools,
-  onPickTool,
-}: {
+/** The taxonomy is fixed; the organization overlay adds mappings, products and status. */
+export function ArchitectureViews({ archetypeId, tools, onPickTool }: {
   archetypeId: string;
   tools: Tool[];
   onPickTool: (toolId: string) => void;
 }) {
   const archetype = archetypeById.get(archetypeId);
   const overlay = useOrgOverlay();
-  const [labels, setLabels] = useState<LabelMode>("cosai");
   if (!archetype) return null;
-  const groups = rowsFor(archetypeId, overlay ? labels : "cosai");
+  const groups = rowsFor(archetypeId);
+  const controlCount = groups.flatMap((g) => g.rows).filter((r) => r.controlSpan > 0).length;
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-2">
-        <span>
-          <span className="font-semibold text-ink">{archetype.mitigations.length} reference mitigations</span> every product of this kind
-          needs, from the drawing; {tools.length} product{tools.length === 1 ? "" : "s"} rated against them. Click a product name for
-          its full record.
-        </span>
-        <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          {overlay && hasOrgMappings && (
-            <span className="flex items-center gap-1.5">
-              <span className="eyebrow">Rows</span>
-              {(["cosai", "org"] as LabelMode[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={labels === m}
-                  onClick={() => setLabels(m)}
-                  className={`rounded-full border px-2.5 py-[3px] text-[11.5px] font-medium transition-colors ${
-                    labels === m ? "border-transparent bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-line-strong"
-                  }`}
-                >
-                  {m === "cosai" ? "MITRE mitigation names" : org.example ? "Example org's control names" : `${org.shortName ?? org.name} control names`}
-                </button>
-              ))}
-            </span>
-          )}
-        </span>
-      </div>
-
-      <Legend overlay={overlay} />
-
-      {tools.length === 0 ? (
-        <p className="rounded-xl border border-line bg-paper px-4 py-6 text-[13px] text-ink-3">
-          No product in the registry instantiates this architecture yet. The reference set above is still what one would need.
-        </p>
-      ) : (
-        <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} onPickTool={onPickTool} />
-      )}
+      <p className="text-[12px] text-ink-2">
+        {controlCount} CoSAI controls linked to {archetype.mitigations.length} pinned MITRE mitigations.
+        Technology categories are possible implementations; a mapping does not establish control fulfillment.
+        {overlay ? " Product status applies to the mitigation in its row." : " Show org data to add organization mappings, tools and status."}
+      </p>
+      {overlay && <Legend overlay />}
+      <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} onPickTool={onPickTool} />
+      {overlay && tools.length === 0 && <p className="text-xs text-ink-3">No products are recorded for this architecture yet.</p>}
     </div>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
-import Link from "next/link";
 import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
 import type { Tool, ToolControl, ToolCoverage } from "@/lib/types";
-import { archetypeById, mitigationById, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, vendorById } from "@/lib/data";
+import { mitigationById, org, orgStatusFor, orgToolAvailableFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, COVERAGE_ORDER } from "./labels";
-import { OWNER_META, type Cell, type Row } from "./model";
+import { type Cell, type Row } from "./model";
 
 /** The vendor's own documentation index for a product, for the attributable link beside its name. */
 export const docsUrlFor = (tool: Tool) =>
@@ -159,12 +158,6 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
       <span className="eyebrow" title="Admin control: set by an administrator in the product itself.">Admin control</span>
       <span>{COVERAGE_ORDER.map((c) => COVERAGE_META[c].label).join(" · ")}</span>
       <span className="ml-1">the word ↗ links to the vendor&rsquo;s page for configuring it; click a cell for the steps</span>
-      <span className="eyebrow ml-2" title="Enterprise mitigation: a defensive method the organisation implements around the products, at the place the drawing pins it.">Enterprise mitigation</span>
-      <span className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-paper px-1.5 py-[2px] text-[10.5px] leading-none text-ink" style={{ borderStyle: "dashed" }}>
-        <span className="font-semibold">defensive method</span>
-        <span className="text-ink-3">· where it sits</span>
-      </span>
-      <span>layers stack: one, the other, or both</span>
       {overlay && (
         <>
           <span className="eyebrow ml-2">Your status</span>
@@ -178,58 +171,6 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
         </>
       )}
     </div>
-  );
-}
-
-/**
- * The enterprise mitigation of one control on one architecture, as one tag: the mitigation
- * class, then every block the drawing pins it on ("where it sits", with the zone owner's dot).
- * With status shown the tag is tinted by the organisation's status on this surface, the same
- * colours as everywhere else; the technology it runs and its note live in the tooltip.
- */
-export function EnterpriseModules({ row, archetypeId, overlay, className = "" }: { row: Row; archetypeId: string; overlay: boolean; className?: string }) {
-  const arch = archetypeById.get(archetypeId);
-  // A composite row (an organisation entry over several mitigations) is described by all of
-  // them: every name in the label, the worst status across them, each posture note attributed.
-  const mitigations = row.mitigations.map((id) => mitigationById.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
-  if (!row.enforcement.length) return null;
-  const statuses = overlay && arch ? row.mitigations.map((c) => orgSurfaceStatusFor(c, arch.surface)) : [];
-  const status = (["gap", "inProgress", "enabled"] as const).find((s) => statuses.includes(s));
-  const postures = overlay && arch ? mitigations.map((c) => ({ c, p: orgSurfacePostureFor(c.id, arch.surface) })).filter((x) => x.p) : [];
-  const tint = status ? STATUS_STYLE[status] : null;
-  const label = mitigations.map((c) => c.title).join(" + ") || "Mitigation";
-  const examples = [...new Set(mitigations.flatMap((c) => c.examples ?? []))];
-  const title = [
-    `Enterprise mitigation${mitigations.length === 1 ? "" : "s"}: ${mitigations.map((c) => c.title).join("; ") || row.label}`,
-    `Where it sits: ${row.enforcement.map((e) => `${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})`).join(", ")}`,
-    examples.length ? `Bought as: ${examples.join(", ")}` : "",
-    status ? `Your status (worst across ${mitigations.length}): ${STATUS_META[status].label}` : "",
-    ...postures.map(({ c, p }) => `${c.title}: ${p!.technology ?? ""}${p!.note ? ` — ${p!.note}` : ""}`.trim()),
-    ...row.enforcement.flatMap((e) => e.notes),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  return (
-    <span className={`flex flex-wrap items-center gap-1.5 ${className}`}>
-      <Link
-        href={`/mitigations?mitigation=${row.mitigations[0]}`}
-        className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md border px-1.5 py-[3px] text-[11px] leading-none hover:border-ink"
-        style={
-          tint
-            ? { background: tint.bg, borderColor: tint.border, color: tint.text, borderStyle: tint.dashed ? "dashed" : "solid" }
-            : { background: "var(--paper)", borderColor: "var(--line-strong)", color: "var(--ink)", borderStyle: "dashed" }
-        }
-        title={title}
-      >
-        <span className="font-semibold">{label}</span>
-        {row.enforcement.map((e) => (
-          <span key={e.blockId} className={tint ? "opacity-80" : "text-ink-3"}>
-            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: OWNER_META[e.owner]?.color ?? "var(--ink-3)" }} />
-            {e.title}
-          </span>
-        ))}
-      </Link>
-    </span>
   );
 }
 

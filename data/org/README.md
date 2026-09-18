@@ -28,15 +28,19 @@ data/org/
 Frameworks tab, grouped under *Your organisation*, and its entry ids appear as badges on the
 risk, control and mitigation cards and in the rails and hover cards of every reference
 architecture. Entries are authored your way round: your id, your label, and the CoSAI
-`controls`, `mitigations` and `risks` it corresponds to. Ids must exist in `data/cosai/` and
-`data/overlay/mitigations.yaml`.
+`controls`, `mitigations`, technology `capabilities` and `risks` it corresponds to. IDs must
+exist in `data/cosai/`, `data/overlay/mitigations.yaml` or
+`data/overlay/technology-capabilities.yaml`, respectively. Technology references use `tech-*`
+repository keys. These are explicit mappings: an org mapping to a broad MITRE mitigation is
+not automatically a mapping to every technology category that can implement it.
 
 **`mitigations.yaml`** is the enterprise layer: per mitigation and per surface, the technology
 you deploy around the AI tools (an endpoint DLP agent, an SSE, an MDM, a gateway guardrail) and
 whether it is in place. This is where "we push managed settings with our MDM" lives: the
 managed setting is the product's control, the MDM is the enterprise mitigation that delivers
-it. It renders as the enterprise-mitigation modules beside every control on each architecture's
-Tools tab and as the surface status on the Mitigations tab.
+it. It renders inside the Mitigations column on each architecture's Tools tab and as the surface
+status on the Mitigations tab. Technology categories and CoSAI controls do not inherit a
+fulfillment status from those associations.
 
 **`tooling-status.yaml`** records, per tool in `data/tooling/`, `available: true|false` — whether
 people may install and use it at all — and a status per mitigation — the product's own settings —
@@ -53,8 +57,11 @@ Nothing is "unassessed": once status is shown, anything not recorded is a gap. A
 well an available product is secured is what its control statuses say. A tool not listed is not
 available and renders greyed out.
 
-Nothing from this directory renders until the **Show status** switch (beside the Mitigations and
-Reference architectures titles) is on; it defaults on when `local/` exists.
+Nothing from this directory renders until the **Show org data** switch (beside the Mitigations and
+Reference architectures titles) is on; it defaults on when `local/` exists. The Tools grid
+always keeps CoSAI controls, MITRE mitigations and technology capabilities in its first three
+columns. Enabling the overlay adds org mappings below each standard name and appends product
+columns with availability and status. There is no separate selector for org row names.
 
 ## Mitigation identifier migration
 
