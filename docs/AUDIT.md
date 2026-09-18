@@ -685,11 +685,9 @@ Highlights below are Google's original mapping, not ours.
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 
-### 4b. Capabilities no architecture pins — 3 of 56
+### 4b. Capabilities no architecture pins — 0 of 59
 
-- Sensitive-data detection & redaction in AI I/O (`capabilityPromptRedaction`)
-- Content provenance & watermarking (`capabilityContentProvenance`)
-- Threat modelling tooling for AI systems (`capabilityThreatModeling`)
+_None. Every capability in the taxonomy is pinned somewhere._
 
 ### 4c. CoSAI components no architecture anchors — 8 of 23
 
@@ -968,21 +966,21 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 7 | Model artifact scanning & safe deserialization |
+| Single agent workflow | build | draft | 7 | File Analysis, Restrict Library Loading |
 | Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
-| Multi-agent workflow | build | draft | 8 | Model artifact scanning & safe deserialization |
-| Chat agent with tools | build | draft | 7 | Model artifact scanning & safe deserialization |
+| Multi-agent workflow | build | draft | 8 | File Analysis, Restrict Library Loading |
+| Chat agent with tools | build | draft | 7 | File Analysis, Restrict Library Loading |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 7 | _none_ |
-| First-party coding & desktop agents | hybrid | draft | 6 | Model artifact scanning & safe deserialization |
-| Third-party coding & desktop agents | use | draft | 9 | Kill switch, quarantine & decommissioning, Model artifact scanning & safe deserialization |
+| First-party coding & desktop agents | hybrid | draft | 6 | File Analysis, Restrict Library Loading |
+| Third-party coding & desktop agents | use | draft | 9 | Credential Revocation, File Analysis, Restrict Library Loading |
 | Local model runtime | use | draft | 4 | _none_ |
-| Personal autonomous agent | use | draft | 7 | Model artifact scanning & safe deserialization |
+| Personal autonomous agent | use | draft | 7 | File Analysis, Restrict Library Loading |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | Vendor-hosted coding & desktop agent sessions | use | draft | 9 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 9 | Agent execution sandboxing, Network segmentation & egress control, Runtime action authorization, Agent credential isolation & delegation control, Tool & MCP supply-chain security |
+| API/SDK managed agent runtime | hybrid | draft | 9 | Execution Isolation, Outbound Traffic Filtering, Network Isolation, Access Mediation, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components, Credential Transmission Scoping, Token Binding, Verify AI Artifacts, File Integrity Monitoring |
 
 ### 5b. AI tooling registry
 
@@ -990,30 +988,55 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 
 | Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |
 | --- | --- | --- | --- | --- | --- | --- |
-| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
-| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 18/18 | _none_ |  |
-| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
-| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Claude Cowork in the cloud | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 10/24 | Non-human & agent identity management, Secrets management & ephemeral credentials, Encryption & key management for AI assets, Runtime action authorization, Prompt injection & jailbreak detection, Third-party risk management platform for AI vendors, SaaS security posture management for AI features, Runtime content & policy guardrails, Rate limiting, quotas & spend controls, Tool & MCP supply-chain security, Staged rollout, versioning & rollback, Model & agent evaluation harnesses, Agent observability & tracing, AI governance platform |  |
-| Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 24/24 | _none_ |  |
-| Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Cursor Cloud Agents | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
-| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Grok Bot | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
-| GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| GitHub Copilot cloud agent | github | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
-| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
-| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 13/24 | Identity & access management for AI applications, Agent & tool registry, Staged rollout, versioning & rollback, Prompt injection & jailbreak detection, Third-party risk management platform for AI vendors, Runtime content & policy guardrails, Agent memory & context protection, Model & agent evaluation harnesses, AI governance platform, Rate limiting, quotas & spend controls, Runtime action authorization |  |
-| ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| Codex | openai | Third-party coding & desktop agents | 2026-09 | 21/21 | _none_ |  |
-| Codex cloud | openai | Vendor-hosted coding & desktop agent sessions | 2026-09 | 24/24 | _none_ |  |
-| Codex SDK | openai | Multi-agent workflow | 2026-09 | 25/25 | _none_ |  |
-| Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 20/20 | _none_ |  |
-| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 22/22 | _none_ |  |
+| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 34/34 | _none_ |  |
+| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 24/24 | _none_ |  |
+| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| Claude Code on the web (cloud sessions) | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 34/34 | _none_ |  |
+| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| Claude Cowork in the cloud | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 15/34 | Agent Authentication, Credential Hardening, Credential Rotation, Encrypt Sensitive Information, Access Mediation, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components, Generative AI Guardrails, Operational Risk Assessment, Configuration Inventory, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Verify AI Artifacts, File Integrity Monitoring, Validate AI Model, Restore Configuration, Restore Software, Restore Database |  |
+| Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
+| Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
+| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 34/34 | _none_ |  |
+| Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
+| Cursor Cloud Agents | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 34/34 | _none_ |  |
+| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| Grok Bot | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 34/34 | _none_ |  |
+| GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
+| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| GitHub Copilot cloud agent | github | Vendor-hosted coding & desktop agent sessions | 2026-09 | 34/34 | _none_ |  |
+| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 34/34 | _none_ |  |
+| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 32/32 | _none_ |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 18/34 | Multi-factor Authentication, Access Policy Administration, Asset Inventory, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Generative AI Guardrails, Operational Risk Assessment, Memory Hardening, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Access Mediation, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components |  |
+| ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
+| Codex | openai | Third-party coding & desktop agents | 2026-09 | 32/32 | _none_ |  |
+| Codex cloud | openai | Vendor-hosted coding & desktop agent sessions | 2026-09 | 34/34 | _none_ |  |
+| Codex SDK | openai | Multi-agent workflow | 2026-09 | 34/34 | _none_ |  |
+| Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
+| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 32/32 | _none_ |  |
+
+## 6. MITRE capability provenance and CoSAI gaps
+
+- MITRE D3FEND 1.6.0: 35 canonical entries.
+- MITRE ATLAS 2026.09: 24 canonical entries.
+- 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
+- 777 tool-capability rows require reassessment after migration.
+
+| CoSAI control | Mapping | Remaining requirement |
+| --- | --- | --- |
+| Privacy Enhancing Technologies for Model Training | unmapped | No sufficiently explicit capability for differential privacy, secure aggregation, privacy-preserving federated training, or evaluated anonymization/synthetic-data privacy. Ordinary encryption and access control do not establish these guarantees. |
+| Privacy Enhancing Technologies for Inference | partial | Guardrails cover sensitive-data detection and redaction. Secure multiparty inference, homomorphic computation and privacy-preserving query mechanisms are not explicitly represented. Message/file encryption does not imply encrypted computation. |
+| Isolated and Confidential Computing | partial | Hardware process isolation is represented. Confidential-memory guarantees, workload attestation, measurement-bound key release and side-channel protections require explicit implementation evidence beyond that technique. |
+| User Data Management | partial | Guardrails, inventory, access mediation and memory hardening cover constituent functions. End-to-end consent and purpose enforcement, user-data retention/deletion across all stores and provider copies, and proving those commitments remain outside these mappings. ATLAS Memory Hardening does include retention/deletion for agent memory. |
+| Training Data Management | partial | Dataset provenance and sanitization contribute, but provenance does not establish legal authorization, consent or permitted purpose for training/evaluation data. Data-use approval and provenance interpretation remain explicit implementation and governance requirements. |
+| User Transparency and Controls | unmapped | User-facing AI disclosures, consent choices and data-use controls have no sufficiently matching capability in this technical profile. Content filtering, authentication and human approval of agent actions are not substitutes for those experiences. |
+| User Policies and Education | unmapped | Policy publication and user education remain people/process obligations. ATLAS AML.M0018 User Training is available as a nontechnical mitigation, but is deliberately excluded from the technology-capability catalogue. |
+| Internal Policies and Education | unmapped | Internal policy authoring, publication and employee education remain people/process obligations. ATLAS AML.M0018 User Training is related but is not a technical capability. |
+| Product Governance | partial | Model validation and operational risk assessment support governance. Ownership, policy approvals, supplier assurance, release authorization and accountable decisions are not implemented merely by deploying those capabilities. |
+| Risk Governance | partial | Operational Risk Assessment provides a standardized concept. Residual-risk acceptance, supplier evidence evaluation and ongoing governance workflows still need organizational processes and evidence; a tool does not fulfill them automatically. |
+| Agent Observability | partial | AI telemetry and system-file tampering analysis are represented. Immutable retention, non-repudiation and complete audit-chain guarantees need separate implementation evidence. Observable execution events do not reveal complete internal model reasoning. |
+| Model and Data Integrity Management | partial | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these capabilities. Authenticity is not truth. |
+| Orchestrator and Route Integrity | partial | Configuration permissions and integrity monitoring support route protection. Signed route manifests, binding responses to the chosen model, and end-to-end route/provenance checks must be verified as application-specific implementations. |
+
+See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom capability identifiers are introduced.

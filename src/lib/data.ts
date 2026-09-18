@@ -36,6 +36,8 @@ export const {
   incidents,
   surfaces,
   capabilities,
+  capabilityAliases,
+  capabilityGaps,
   archetypes,
   guidance,
   vendors,

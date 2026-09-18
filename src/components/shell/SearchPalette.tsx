@@ -52,7 +52,7 @@ function buildIndex(): Entry[] {
     ...capabilitiesInOrder.map((c) => ({
       kind: "Capability",
       title: c.title,
-      hint: c.abbrev,
+      hint: c.id,
       href: `/capabilities?capability=${c.id}`,
       text: norm(c.title, c.abbrev, c.id),
     })),

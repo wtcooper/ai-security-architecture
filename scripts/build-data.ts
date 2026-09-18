@@ -12,6 +12,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
+import { loadCapabilities } from "./lib/capabilities";
 
 import type {
   Archetype,
@@ -272,11 +273,8 @@ async function main() {
     notes: Record<string, FrameworkNote>;
   }>(join(ROOT, "data", "overlay", "frameworks-authored.yaml"));
 
-  const capabilitiesDoc = await loadYaml<{
-    attribution?: string;
-    surfaces: Surface[];
-    capabilities: Capability[];
-  }>(join(ROOT, "data", "overlay", "capabilities.yaml"));
+  const capabilitiesDoc = await loadCapabilities(ROOT);
+  const capabilityGaps = (await loadYaml<{ gaps: Dataset["capabilityGaps"] }>(join(ROOT, "data/overlay/capability-gaps.yaml"))).gaps;
 
   const components = componentsDoc.components;
   const risks = risksDoc.risks;
@@ -328,6 +326,14 @@ async function main() {
     ...authoredDoc.frameworks.map(stripMappings),
   ]);
   const capabilityIds = new Set(capabilitiesDoc.capabilities.map((c) => c.id));
+  for (const gap of capabilityGaps) {
+    if (!controlIds.has(gap.control) || !gap.missing?.trim() || !["unmapped", "partial"].includes(gap.assessment)) fail(`Invalid capability gap: ${gap.control}`);
+    for (const id of gap.related) if (!capabilityIds.has(id)) fail(`Capability gap ${gap.control}: unknown ${id}`);
+    if (gap.assessment === "unmapped" && capabilitiesDoc.capabilities.some((c) => c.controls.includes(gap.control))) fail(`Capability gap ${gap.control}: marked unmapped but has a mapping`);
+  }
+  for (const control of controls) {
+    if (!capabilitiesDoc.capabilities.some((c) => c.controls.includes(control.id)) && !capabilityGaps.some((g) => g.control === control.id && g.assessment === "unmapped")) fail(`Control ${control.id}: unmapped capability requirement needs an explicit gap record`);
+  }
   const authoredMappings = checkAuthoredFrameworks(authoredDoc, {
     riskIds,
     controlIds,
@@ -502,6 +508,8 @@ async function main() {
     surfaces: capabilitiesDoc.surfaces,
     capabilities: capabilitiesDoc.capabilities,
     capabilitiesAttribution: capabilitiesDoc.attribution ?? "",
+    capabilityAliases: capabilitiesDoc.aliases,
+    capabilityGaps,
     archetypes,
     guidance,
     vendors: toolingLoaded.vendors,
@@ -552,7 +560,7 @@ function checkCapabilities(
 
   for (const cap of doc.capabilities ?? []) {
     const where = `capability ${cap.id}`;
-    if (!/^capability[A-Z]/.test(cap.id)) fail(`${where}: id must match ^capability[A-Z]`);
+    if (!/^(D3-[A-Z]+|AML\.M\d{4})$/.test(cap.id)) fail(`${where}: needs a MITRE source-native identifier`);
     if (seen.has(cap.id)) fail(`${where}: duplicate id`);
     seen.add(cap.id);
 
@@ -560,6 +568,15 @@ function checkCapabilities(
     if (!cap.examples?.length) fail(`${where}: needs example technology classes`);
     if (!cap.controls?.length) fail(`${where}: needs at least one control`);
     if (!cap.components?.length) fail(`${where}: needs at least one component`);
+    if (!cap.implementation?.trim()) fail(`${where}: needs an authored implementation scope`);
+    if (!["function", "support"].includes(cap.kind)) fail(`${where}: needs a function/support kind`);
+    const mapped = cap.controlMappings?.map((m) => m.control) ?? [];
+    if (new Set(mapped).size !== mapped.length || mapped.length !== cap.controls.length || cap.controls.some((id) => !mapped.includes(id))) {
+      fail(`${where}: control contribution metadata must match controls`);
+    }
+    for (const m of cap.controlMappings ?? []) {
+      if (m.relationship !== "supports" || !m.rationale?.trim()) fail(`${where}: invalid control contribution`);
+    }
 
     if (!categoryIds.has(cap.category)) fail(`${where}: unknown category ${cap.category}`);
     for (const id of cap.controls ?? []) {
@@ -590,6 +607,12 @@ function checkCapabilities(
       if (!surfaceIds.includes(key)) fail(`${where}: unknown surface ${key}`);
       const info = cap.surfaces[key];
       if (typeof info?.applies !== "boolean") fail(`${where}: surface ${key} needs applies`);
+      if (!["customer-operated", "customer-configurable", "provider-inherited", "not-applicable", "unknown"].includes(info?.responsibility)) {
+        fail(`${where}: surface ${key} needs a responsibility disposition`);
+      }
+      if (info.applies !== ["customer-operated", "customer-configurable"].includes(info.responsibility)) {
+        fail(`${where}: surface ${key} applicability contradicts responsibility`);
+      }
     }
     if (!keys.some((k) => cap.surfaces[k]?.applies)) {
       fail(`${where}: must apply to at least one surface`);
@@ -1483,6 +1506,7 @@ function checkTooling(
       if (!COVERAGES.has(c.coverage)) {
         fail(`${at}: coverage must be one of ${[...COVERAGES].join(", ")}`);
       }
+      if (c.migration?.reviewRequired && c.coverage !== "unknown") fail(`${at}: reassess migration evidence before claiming coverage`);
       for (const step of c.steps ?? []) {
         if (!step.title?.trim()) fail(`${at}: a step needs a title`);
         if (!step.body?.length) fail(`${at} step "${step.title}": needs a body`);
@@ -1549,6 +1573,7 @@ function checkToolingStatus(
     }
     const pinned = new Set(archetypeById.get(tool.architecture)?.capabilities ?? []);
     for (const [capabilityId, entry] of Object.entries(p.controls ?? {})) {
+      if (entry.migration?.reviewRequired && entry.status === "enabled") fail(`${where} ${capabilityId}: clear migration review after reassessment before marking enabled`);
       if (!pinned.has(capabilityId)) {
         fail(`${where}: ${capabilityId} is not pinned on ${tool.architecture}, so it has no status here`);
       }
@@ -1575,6 +1600,7 @@ function checkOrgCapabilities(
       continue;
     }
     for (const [surfaceId, entry] of Object.entries(bySurface ?? {})) {
+      if (entry.migration?.reviewRequired && entry.status === "enabled") fail(`${where} ${surfaceId}: clear migration review after reassessment before marking enabled`);
       if (!ctx.surfaceIds.has(surfaceId)) fail(`${where}: unknown surface ${surfaceId}`);
       if (!STATUSES.has(entry?.status)) {
         fail(`${where} ${surfaceId}: status must be one of ${[...STATUSES].join(", ")}`);

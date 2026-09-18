@@ -44,9 +44,9 @@ function OrgRefs({ kind, id }: { kind: EntityKind; id: string }) {
           key={`${o.frameworkId}:${o.id}`}
           href={frameworkHref(o.frameworkId, o.id)}
           title={o.label}
-          className="ident rounded bg-mist px-1.5 py-[1px] text-ink-2 hover:underline"
+          className="rounded bg-mist px-1.5 py-[1px] text-ink-2 hover:underline"
         >
-          {o.id}
+          {o.label} <span className="text-[10px] text-ink-3">({o.id})</span>
         </Link>
       ))}
     </p>

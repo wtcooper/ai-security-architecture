@@ -197,14 +197,14 @@ export function EnterpriseModules({ row, archetypeId, overlay, className = "" }:
   const status = (["gap", "inProgress", "enabled"] as const).find((s) => statuses.includes(s));
   const postures = overlay && arch ? capabilities.map((c) => ({ c, p: orgSurfacePostureFor(c.id, arch.surface) })).filter((x) => x.p) : [];
   const tint = status ? STATUS_STYLE[status] : null;
-  const label = capabilities.map((c) => c.abbrev ?? c.title).join(" + ") || "Capability";
+  const label = capabilities.map((c) => c.title).join(" + ") || "Capability";
   const examples = [...new Set(capabilities.flatMap((c) => c.examples ?? []))];
   const title = [
     `Enterprise capabilit${capabilities.length === 1 ? "y" : "ies"}: ${capabilities.map((c) => c.title).join("; ") || row.label}`,
     `Where it sits: ${row.enforcement.map((e) => `${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})`).join(", ")}`,
     examples.length ? `Bought as: ${examples.join(", ")}` : "",
     status ? `Your status (worst across ${capabilities.length}): ${STATUS_META[status].label}` : "",
-    ...postures.map(({ c, p }) => `${c.abbrev ?? c.title}: ${p!.technology ?? ""}${p!.note ? ` — ${p!.note}` : ""}`.trim()),
+    ...postures.map(({ c, p }) => `${c.title}: ${p!.technology ?? ""}${p!.note ? ` — ${p!.note}` : ""}`.trim()),
     ...row.enforcement.flatMap((e) => e.notes),
   ]
     .filter(Boolean)
@@ -265,4 +265,3 @@ export function CellDetail({ tool, row, onClose }: { tool: Tool; row: Row; onClo
     </div>
   );
 }
-

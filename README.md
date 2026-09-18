@@ -111,7 +111,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
-| **Capabilities** | The layer neither framework has: 56 vendor-neutral technology classes, as a matrix of CoSAI control groups × three deployment surfaces. Filter by risk category or stack layer, click any capability for its controls, risks, components and sources. Switch **Show status** on to see what your organisation has enabled, in progress or as a gap, from `data/org`. |
+| **Capabilities** | MITRE D3FEND and ATLAS functions mapped to CoSAI control groups × three deployment surfaces. Search by ID/name and filter by source, risk or stack layer. Definitions retain upstream provenance; CoSAI gaps and deployment responsibility are explicit. **Show status** reads organization posture from `data/org`. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the capability-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
@@ -192,60 +192,48 @@ Every mapping badge elsewhere in the app links into this view.
 
 ## The capability layer: what you actually deploy
 
-Both frameworks stop at the control *strategy*. CoSAI names "User Data Management"; leadership
-asks which tool does that, and on what — the laptop, the cloud service we run, or the vendor AI
-we merely subscribe to. The answer differs on all three, and neither framework models the
-difference.
+CoSAI remains the source for components, risks, controls and personas. Capabilities use
+**MITRE D3FEND 1.6.0 defensive techniques, supplemented by MITRE ATLAS 2026.09 mitigations**:
+35 D3FEND techniques and 24 ATLAS mitigations. There are **no custom capability IDs**.
 
-So the Capabilities tab adds a fourth taxonomy layer:
-**CoSAI control group → CoSAI control → technology capability → deployment surface.**
-Rows are the six CoSAI control groups, columns are **Endpoint**, **Cloud / hosted** and
-**Third-party SaaS**, and every cell holds the tooling classes that work there. A blank cell is
-a finding in itself: model weight protection has nothing under Third-party SaaS because the
-vendor holds the weights.
+Canonical identifiers, names and definitions come directly from checksum-pinned snapshots in
+`data/mitre/`. The selection, implementation guidance, product-category examples, deployment
+responsibility and CoSAI crosswalk remain authored in `data/overlay/capabilities.yaml`.
+Build validation rejects invented IDs and overrides of upstream names or definitions.
 
-The 56 classes are not a list of products, and the count was not chosen. Each had to pass three
-tests:
+The matrix retains CoSAI control groups and endpoint/cloud/SaaS surfaces. Search by native ID,
+name or implementation category, and filter by MITRE source, risk category or stack layer.
+A surface is a customer-deployment profile, not a universal claim about technical availability.
+Provider-internal implementations require supplier evidence.
 
-1. **Named by at least two independent source families** — the threat and mitigation catalogues
-   (MITRE ATLAS v5.6.0, OWASP LLM and Agentic Top 10s, LLMSVS, the Securing Agentic Applications
-   Guide), government and standards controls (NIST SP 800-218A / AI RMF / AI 600-1, the CISA-NSA
-   and 2026 Five Eyes joint guidance, UK NCSC, CSA AICM, ISO/IEC 42001, EU AI Act Article 15),
-   procurable market categories (Gartner AI TRiSM, CSA's agentic market map, the cloud providers'
-   own catalogues), and lifecycle tooling maps (OWASP's AI Security Solutions Landscape).
-2. **A technology exists that implements it.** Entries are named for the tool, not the practice —
-   *model registry & documentation generation*, not *documentation*. If the honest answer to
-   "what would we deploy?" is "nothing, we would write something down or train someone", it is
-   excluded. That rule removed user-transparency safeguards and acceptable-use policy from an
-   earlier draft.
-3. **It differs across at least one surface boundary**, or it is a control restatement.
+`AML.M0020` is the canonical Generative AI Guardrails mitigation. Injection screening,
+content-policy screening, sensitive-data blocking/redaction, grounding and retrieval checks
+are implementation features beneath it, not separate capabilities. Verify each feature and
+boundary; one feature is only partial evidence for the broad mitigation. Other MITRE entries
+also overlap, so catalogue counts are not a coverage score.
 
-Granularity follows the sources rather than taste. Gartner's information-governance layer
-separates DSPM, DLP and data access governance, and puts runtime redaction in a different layer,
-so those are four entries — the market buys them separately. Conversely non-human identity and
-agent identity are **one** entry, because CSA's own non-human identity taxonomy makes agent
-identity a class of NHI and every vendor ships them as one platform.
+**31 of 35 CoSAI controls have a supporting mapping; this does not mean they are fulfilled.**
+The four unmapped controls and important partial matches are documented in
+[the gap assessment](docs/MITRE-CAPABILITY-GAPS.md) and rendered in the app. In particular,
+privacy-preserving computation is not equivalent to ordinary encryption. Education and
+user-facing transparency remain explicit CoSAI requirements.
 
-Two findings worth stating plainly, because they change what a control mapping can claim:
-**ISO/IEC 42001's Annex A names no security control at all** — no red-teaming, no weight
-protection, no injection defence; it is a governance catalogue. And **no major cloud provider
-ships model signing**; AI-BOM and artifact signing are standards-mandated with no product behind
-them, which makes them a predictable real-world gap.
+All 56 former IDs have migration dispositions in `data/migrations/capabilities-v1.yaml`.
+Legacy deep links show every replacement, or explain retirement. Architecture pins, guidance,
+tool mappings and organization records use native IDs. Changed tool claims become `unknown`;
+formerly enabled organization records become `inProgress` pending reassessment. Original
+claims/evidence are retained under `migration.original`; retired references are archived.
 
-**Nothing ships assessed.** The matrix carries no status until you switch *Show status* on,
-because this repository maps what the taxonomy covers and must never imply a posture anyone
-holds. Status comes from text files under `data/org` (see "Adopt this in your organisation"):
-per capability and surface, *enabled / in progress or partial / gap*, and anything not recorded is a gap.
-Vendor names are deliberately absent from the taxonomy for the same reason: a fork adds its own.
+For an existing fork, run `npm run migrate:capabilities` to preview and add `-- --write`
+to apply. Then run `npm run data` and inspect split pin placements; geometry and boundary
+validation may require manual adjustments. The migration is idempotent.
 
-Deliberate exclusions are recorded with reasons in the file header — bias and fairness testing
-and standalone hallucination detection (safety, not security: CoSAI carries no matching risk),
-deepfake detection (single-source, no CoSAI risk), and Zero Trust (an architecture stance, not a
-purchasable capability — it lives inside the segmentation and identity entries).
+Status remains opt-in through **Show status** and comes from `data/org`. Missing posture
+records read as gaps. The shipped organization is an example, not an assessed deployment.
 
 ## The reference architectures: the drawing layer
 
-The taxonomy answers *what to worry about* and the capabilities answer *what class of tool to
+The taxonomy answers *what to worry about* and the capabilities answer *what defensive function to
 deploy*. The architectures answer the question that comes next in every review: **"so what does
 a sound deployment actually look like?"** — one drawing per class of AI application, 28 in all,
 across the same three surfaces as the capability matrix.
@@ -266,7 +254,7 @@ The drawing grammar is the one practitioners already read from vendor reference 
 (F5's AI reference architecture is the closest published relative): **capability blocks** with
 icon internals and a coloured title tab, **typed data paths** (data / external content &
 actions / dotted governance), **numbered capability chips** seated on the drawing where each of
-the 56 capabilities must be deployed, **coded risk tags** (`R01`–`R36`, stable across every
+the selected capabilities must be deployed, **coded risk tags** (`R01`–`R36`, stable across every
 architecture) pinned where each CoSAI risk surfaces, and **scenario walks** that replay a
 use case over the same canvas with everything else faded — *a stranger messages the agent*,
 *a step replays after a crash*, *a skill is installed*.
@@ -316,7 +304,7 @@ data/
 │   ├── frameworks.yaml           the 6 frameworks CoSAI maps onto
 │   └── …                         actor-access, impact-type, lifecycle-stage vocabularies
 ├── overlay/                      AUTHORED HERE — everything CoSAI does not publish
-│   ├── capabilities.yaml         ★ the capability taxonomy: 56 classes + 3 surfaces,
+│   ├── capabilities.yaml         ★ MITRE selection, CoSAI mappings + 3 surfaces,
 │   │                               each mapped to CoSAI controls/risks/components,
 │   │                               with per-surface applicability and sources
 │   ├── risk-components.yaml      which components light up per risk × phase

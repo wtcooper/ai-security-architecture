@@ -50,653 +50,1588 @@ tools:
           - title: NousResearch/hermes-agent README (seven terminal backends, isolated subagents, migration)
             url: https://github.com/NousResearch/hermes-agent
     controls:
-      - capability: capabilityPromptInjectionDefense
-        coverage: partial
-        mechanism: >-
-          Heuristic scanners on project context files, memory writes and inbound A2A text, plus
-          tirith content scanning of shell commands before execution (security.tirith_*);
-          nothing classifies fetched web or tool content
+      - capability: AML.M0020
+        coverage: unknown
+        mechanism: Heuristic scanners on project context files, memory writes and inbound A2A text, plus tirith
+          content scanning of shell commands before execution (security.tirith_*); nothing classifies fetched
+          web or tool content; No harm-category, denied-topic or blocked-term filtering of prompts or
+          responses ships with the product; security.redact_secrets scrubs key-shaped strings from tool output
+          and logs, security.website_blocklist blocks destinations for web and browser tools, A2A replies are
+          credential-redacted and session exports take --redact; no classifier on prompts or uploads
         steps:
-          - title: Keep context-file scanning on
+          - &a1
+            title: Keep context-file scanning on
             body:
-              - "AGENTS.md, .cursorrules and SOUL.md are scanned for ignore-prior-instructions text, hidden HTML comments, secret reads, curl exfiltration and invisible Unicode before entering the system prompt; a hit is dropped with a \"[BLOCKED: ... potential prompt injection]\" warning, so treat that banner as a finding, not noise."
+              - 'AGENTS.md, .cursorrules and SOUL.md are scanned for ignore-prior-instructions text, hidden HTML comments,
+                secret reads, curl exfiltration and invisible Unicode before entering the system prompt; a hit
+                is dropped with a "[BLOCKED: ... potential prompt injection]" warning, so treat that banner as
+                a finding, not noise.'
             url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Make tirith fail closed
+          - &a2
+            title: Make tirith fail closed
             body:
-              - "In ~/.hermes/config.yaml set security.tirith_enabled: true and
-                security.tirith_fail_open: false so homograph URLs, pipe-to-interpreter and
-                terminal-injection patterns block a command when the scanner is unavailable
-                instead of letting it through (the default fails open)."
+              - "In ~/.hermes/config.yaml set security.tirith_enabled: true and security.tirith_fail_open: false so
+                homograph URLs, pipe-to-interpreter and terminal-injection patterns block a command when the
+                scanner is unavailable instead of letting it through (the default fails open)."
             url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Gate memory writes as well as scanning them
+          - &a3
+            title: Gate memory writes as well as scanning them
             body:
-              - "Memory entries are scanned for injection and exfiltration patterns before they are
-                accepted; add memory.write_approval: true so an unprompted background save still
-                needs your approval before it can reach the next session's system prompt."
+              - "Memory entries are scanned for injection and exfiltration patterns before they are accepted; add
+                memory.write_approval: true so an unprompted background save still needs your approval before
+                it can reach the next session's system prompt."
             url: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
-        note: >-
-          The scanners are pattern heuristics on files, memory and commands — web_extract,
-          browser and MCP results are not classified. Rely on approvals.mode manual, an isolated
-          terminal backend and the egress proxy for anything a poisoned page could trigger.
-        verified: "2026-09-10"
-      - capability: capabilityIga
-        coverage: partial
-        mechanism: >-
-          Gateway user allowlists and DM pairing in ~/.hermes/.env and config.yaml (default deny),
-          username/password auth on a non-loopback dashboard, API_SERVER_KEY bearer on the API
-          server; no MFA or IdP integration
-        steps:
-          - title: Keep the gateway on explicit allowlists
+          - &a5
+            title: Keep secret redaction on
             body:
-              - Set GATEWAY_ALLOWED_USERS and per-platform lists such as TELEGRAM_ALLOWED_USERS or
-                DISCORD_ALLOWED_USERS in ~/.hermes/.env; with no allowlist configured every user is
-                denied, and the docs say never to set GATEWAY_ALLOW_ALL_USERS=true on a machine
-                you care about.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Approve new senders through DM pairing
-            body:
-              - "Leave unauthorized_dm_behavior: pair in config.yaml (or ignore to drop unknown DMs
-                silently), approve codes with hermes pairing approve <platform> <code> and remove
-                access with hermes pairing revoke <platform> <user-id>; codes expire after one hour
-                and five failed approvals lock the platform for an hour."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Protect a remotely reachable dashboard
-            body:
-              - A dashboard bound off loopback fails closed unless HERMES_DASHBOARD_BASIC_AUTH_USERNAME,
-                HERMES_DASHBOARD_BASIC_AUTH_PASSWORD and HERMES_DASHBOARD_BASIC_AUTH_SECRET are set
-                in .env; --insecure no longer bypasses the gate.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard
-          - title: Key the OpenAI-compatible API server
-            body:
-              - Enable it only with API_SERVER_ENABLED=true and a strong API_SERVER_KEY in
-                ~/.hermes/.env; every request must carry it as a bearer token and the server binds
-                127.0.0.1 by default.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server
-        note: >-
-          Identity is platform user IDs plus static shared secrets; there is no phishing-resistant
-          MFA, so put any exposed dashboard or API port behind your own identity-aware proxy.
-        verified: "2026-09-10"
-      - capability: capabilityAgentRuntimeEnforcement
-        coverage: native
-        mechanism: >-
-          approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
-          approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and
-          plugin hooks can block or escalate any tool call and fail closed
-        steps:
-          - title: Declare commands that must never run
-            body:
-              - "Add quoted fnmatch globs under approvals.deny in ~/.hermes/config.yaml (for
-                example \"git push --force*\", \"dd if=* of=/dev/*\"); they are matched against
-                normalised command variants on every backend, return a BLOCKED error to the model
-                and take effect without a restart."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#user-defined-deny-rules-approvalsdeny
-          - title: Fence file writes to a safe root
-            body:
-              - "Set HERMES_WRITE_SAFE_ROOT=/path/to/project:/home/you/.hermes in ~/.hermes/.env;
-                write_file and patch outside those prefixes are hard-blocked with no approval
-                prompt, and credential paths such as ~/.ssh and .env stay blocked even inside the
-                root."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#file-write-safety
-          - title: Add a pre_tool_call policy hook
-            body:
-              - "Declare hooks.pre_tool_call entries in config.yaml with a matcher regex, a command
-                and fail_closed: true; the script reads the tool call as JSON on stdin and blocks
-                it by returning {\"action\": \"block\", \"message\": ...} or exiting 2, and a
-                timeout blocks rather than proceeds."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks#shell-hooks
-          - title: Keep the approval mode manual on a work machine
-            body:
-              - "Set approvals.mode: manual so every flagged command prompts you instead of the
-                smart mode's auxiliary-LLM auto-approval, and leave approvals.timeout at 300 so an
-                unanswered prompt is denied."
-            url: https://hermes-agent.nousresearch.com/docs/guides/secure-hermes-on-a-work-machine
-        note: >-
-          Deny globs and the hardline blocklist are deterministic; pre_tool_call hooks are an
-          integration point that must be set fail_closed. Delegated subagents inherit approvals; MCP
-          tool calls pass the hooks, a server's own actions do not.
-        verified: "2026-09-10"
-      - capability: capabilityTransportSecurity
-        coverage: partial
-        mechanism: >-
-          HTTPS MCP servers with OAuth 2.1 (auth: oauth) or mutual TLS (client_cert/client_key)
-          per server in mcp_servers; A2A binds loopback until a bearer or per-peer token is set;
-          no protocol-version pinning
-        steps:
-          - title: Use client certificates for internal MCP servers
-            body:
-              - "Set mcp_servers.<name>.client_cert (combined PEM or [cert, key] list) and
-                client_key on remote HTTP servers that require mTLS; a missing file raises a
-                server-scoped error rather than an opaque handshake failure."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
-          - title: Prefer OAuth over static bearer headers
-            body:
-              - "Write auth: oauth on hosted MCP servers so Hermes performs discovery, PKCE and
-                refresh; tokens are cached at ~/.hermes/mcp-tokens/<server>.json with 0600
-                permissions and hermes mcp login <server> forces re-authentication."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
-          - title: Authenticate every A2A peer
-            body:
-              - "Give each peer its own credential with A2A_PEER_TOKENS=\"alice:tok1,bob:tok2\",
-                restrict callers with A2A_TRUSTED_PEERS, and only then widen A2A_HOST from
-                127.0.0.1; inbound text is framed as untrusted and cannot invoke slash commands."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/a2a
-        note: >-
-          Stdio MCP servers have no transport authentication at all, and nothing pins MCP or A2A
-          protocol versions or server certificates; typed message contracts are the server's job.
-        verified: "2026-09-10"
-      - capability: capabilityMemoryProtection
-        coverage: native
-        mechanism: >-
-          memory.write_approval and skills.write_approval gate agent writes, memory entries are
-          injection-scanned and size-capped, and each profile has its own memories, sessions,
-          skills and .env; hermes journey edits entries
-        steps:
-          - title: Require approval for memory writes
-            body:
-              - "Set memory.write_approval: true in ~/.hermes/config.yaml so every save to
-                MEMORY.md or USER.md — including the unprompted background review — is staged for
-                your approval; memory_char_limit and user_char_limit keep the stores bounded."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
-          - title: Gate the agent's self-written skills the same way
-            body:
-              - "Set skills.write_approval: true so create, edit, patch and write_file operations on
-                skills need approval, since skills are the other persistent store the agent feeds
-                back into its own prompt."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills#gating-agent-skill-writes-skillswrite_approval
-          - title: Give every agent its own profile
-            body:
-              - Run hermes profile create <name> for each purpose; a profile is a separate Hermes
-                home with its own config.yaml, .env, SOUL.md, memories, sessions, skills, cron jobs
-                and state database, so one agent's memory never reaches another.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/profiles
-          - title: Review and edit what the agent remembered
-            body:
-              - Use hermes journey list and hermes journey edit to inspect and correct USER.md and
-                MEMORY.md entries; the system prompt takes a frozen snapshot at session start, so a
-                fix lands on the next session.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/which-file-does-what
-        note: >-
-          Write approval and injection scanning are genuine integrity gates; what can still write is
-          an approved agent turn and the user's own edits. Recovery is the checkpoint store, not a
-          versioned memory; per-profile isolation is the tenant boundary.
-        verified: "2026-09-10"
-      - capability: capabilityAgentSandboxing
-        coverage: native
-        mechanism: >-
-          terminal.backend docker / ssh / singularity / modal / daytona / vercel_sandbox in
-          config.yaml; Docker containers run --cap-drop ALL, no-new-privileges, pids-limit 256
-          and size-limited tmpfs with optional --network=none and ephemeral workspaces
-        steps:
-          - title: Move command execution into a container
-            body:
-              - "Set terminal.backend: docker with docker_forward_env: [] in ~/.hermes/config.yaml;
-                every container is started with all capabilities dropped (DAC_OVERRIDE, CHOWN and
-                FOWNER added back), no-new-privileges, a 256-process limit and nosuid tmpfs mounts."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Bound and discard the sandbox
-            body:
-              - "Set terminal.container_cpu, container_memory and container_disk, and
-                container_persistent: false to keep the workspace on tmpfs so it is lost on
-                cleanup instead of persisting under ~/.hermes/sandboxes/docker/."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Air-gap the sandbox when the task allows
-            body:
-              - "Set terminal.docker_network: false (env TERMINAL_DOCKER_NETWORK) to run the
-                execution container with --network=none; an existing networked container is
-                replaced by a fresh air-gapped one."
+              - "security.redact_secrets: true (the default) redacts API-key, token and password patterns in
+                tool output before they enter the conversation context or logs; set it to false only for
+                debugging."
             url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
-          - title: Or keep execution off the host entirely
+          - &a6
+            title: Block sensitive destinations
             body:
-              - "Set terminal.backend: ssh and put TERMINAL_SSH_HOST, TERMINAL_SSH_USER and
-                TERMINAL_SSH_KEY in ~/.hermes/.env so commands run on a separate machine while the
-                messaging connections stay on the gateway host."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#network-isolation
-        note: >-
-          The default backend is local with no isolation, and dangerous-command checks are
-          skipped inside container backends because the container is treated as the boundary.
-        verified: "2026-09-10"
-      - capability: capabilityToolPermissionScoping
-        coverage: native
-        mechanism: >-
-          hermes tools per-platform enable/disable persisted to config.yaml, toolsets: presets
-          per platform and --toolsets per session, mcp_servers.<name>.tools.include/exclude,
-          subagents inherit only the parent's toolsets
-        steps:
-          - title: Trim the tool surface per platform
-            body:
-              - Run hermes tools to toggle individual tools on or off for cli, telegram, discord
-                and the other platforms; disabled tools are filtered out even when their toolset is
-                enabled, and the result persists to config.yaml.
-            url: https://hermes-agent.nousresearch.com/docs/reference/toolsets-reference
-          - title: Pin toolsets in config or per session
-            body:
-              - "Set toolsets: per platform in ~/.hermes/config.yaml, or start a narrow session with
-                hermes chat --toolsets \"web,terminal\"; opt-in sets such as a2a and x_search stay
-                off until you enable them."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/tools
-          - title: Whitelist the tools each MCP server may contribute
-            body:
-              - "Set mcp_servers.<name>.tools.include (or exclude) with names or globs, or
-                disabled: true on a server; the catalog installer writes the same filter from its
-                tool-selection checklist."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
-          - title: Keep subagents at or below the parent's rights
-            body:
-              - delegate_task has no toolsets parameter — children inherit the parent's enabled
-                toolsets and leaf subagents cannot delegate; raise delegation.max_spawn_depth
-                above the default 1 only deliberately.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
-        note: >-
-          Toolsets hide tools per platform and session; approvals gate; argument limits come from
-          approvals.deny globs and the write-safe root. --yolo pre-approves everything except the
-          hardline blocklist.
-        verified: "2026-09-10"
-      - capability: capabilityCredentialIsolation
-        coverage: native
-        mechanism: >-
-          execute_code and terminal strip credential-shaped env vars from child processes, MCP
-          subprocesses get a filtered environment plus only their own env: block, Docker forwards
-          nothing unless listed, and the iron-proxy egress proxy replaces real keys with opaque
-          proxy tokens inside sandboxes
-        steps:
-          - title: Leave the sandbox env filters at their defaults
-            body:
-              - Only variables a loaded skill declares in required_environment_variables or that
-                you list under terminal.env_passthrough reach execute_code, terminal and remote
-                backends; the docs say never to add provider keys or gateway tokens to
-                env_passthrough.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#environment-variable-passthrough
-          - title: Scope MCP credentials to the one server that needs them
-            body:
-              - "Stdio MCP servers receive only PATH, HOME, USER, LANG, LC_ALL, TERM, SHELL, TMPDIR
-                and XDG_* plus whatever you put in mcp_servers.<name>.env; error messages are
-                redacted for PATs, sk- keys and bearer tokens before the model sees them."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Keep real keys out of the Docker sandbox with the egress proxy
-            body:
-              - Run hermes egress setup then hermes egress start; the sandbox is given
-                HTTPS_PROXY plus proxy tokens in the usual env names and iron-proxy swaps them for
-                the real credential on the host, so a printenv inside the sandbox yields nothing
-                usable elsewhere.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
-          - title: Forward nothing into containers by default
-            body:
-              - "Keep terminal.docker_forward_env: [] — anything you add is deliberately injected
-                into the container for task credentials and can be read and exfiltrated by code
-                running there."
-            url: https://hermes-agent.nousresearch.com/docs/guides/secure-hermes-on-a-work-machine
-        note: >-
-          Covers credential-shaped environment variables and provider keys for child processes, MCP
-          subprocesses and Docker; a local (unsandboxed) terminal backend and the gateway process
-          itself hold the real values. Single-user product, so on-behalf-of exchange does not arise.
-        verified: "2026-09-10"
-      - capability: capabilitySecretsManagement
-        coverage: native
-        mechanism: >-
-          secrets.bitwarden, secrets.onepassword and a command helper pull provider keys from a
-          vault at startup so only the bootstrap token lives in ~/.hermes/.env; hermes egress
-          setup --rotate-tokens re-mints sandbox proxy tokens
-        steps:
-          - title: Pull keys from Bitwarden Secrets Manager
-            body:
-              - "Run hermes secrets bitwarden setup (installs the pinned bws binary, stores the
-                access token, picks a project) and set secrets.bitwarden.enabled: true with
-                project_id in config.yaml; rotate the bootstrap token with hermes secrets bitwarden
-                token."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/bitwarden
-          - title: Or reference 1Password items
-            body:
-              - "Set secrets.onepassword.enabled: true and map env var names to op:// references
-                under secrets.onepassword.env, authenticating with the op CLI via a service
-                account token named by service_account_token_env."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/onepassword
-          - title: Or wrap any CLI vault with the command helper
-            body:
-              - Point the command source at a helper (keepassxc-cli, secret-tool, pass or a
-                script) that prints KEY=VALUE lines; sources compose with a fixed precedence and
-                secrets.preserve_existing pins per-profile values.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/command
-          - title: Lock the file that remains and rotate sandbox tokens
-            body:
-              - Run chmod 600 ~/.hermes/.env as the security page instructs, and after a suspected
-                leak mint fresh proxy tokens with hermes egress setup --rotate-tokens and restart
-                running sandboxes.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-        note: >-
-          Vault pull at startup keeps only the bootstrap token on disk; the pulled keys live in the
-          gateway process for its lifetime, and the egress proxy hands sandboxes opaque tokens
-          instead. Ephemeral issuance covers proxy tokens only, not the provider keys themselves.
-        verified: "2026-09-10"
-      - capability: capabilityModelGuardrails
-        coverage: none
-        mechanism: >-
-          No harm-category, denied-topic or blocked-term filtering of prompts or responses ships
-          with the product
-        note: >-
-          The only content policies are security.redact_secrets on tool output and the
-          website_blocklist on URLs. To add a guardrail, register a pre_llm_call / post_llm_call
-          hook that calls your own classifier, or rely on moderation at the model provider.
-        evidence:
-          - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
-            url: https://hermes-agent.nousresearch.com/
-        verified: "2026-09-10"
-      - capability: capabilityMcpToolSecurity
-        coverage: partial
-        mechanism: >-
-          hermes security audit (OSV) scans the venv, plugin dependencies and pinned npx/uvx MCP
-          servers; plugins are opt-in via plugins.enabled and pinnable to a commit SHA; hub skills
-          are quarantined, content-hashed and scanned before install; MCP catalog entries are
-          Nous-reviewed manifests
-        steps:
-          - title: Run the supply-chain audit and fail on findings
-            body:
-              - hermes security audit --fail-on high checks installed PyPI distributions, plugin
-                requirements under ~/.hermes/plugins/ and pinned npx/uvx MCP servers in config.yaml
-                against OSV.dev; add it to a cron job or CI.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Keep third-party plugins opt-in and pinned
-            body:
-              - Nothing under ~/.hermes/plugins/ loads until its name is in plugins.enabled;
-                install with hermes plugins install owner/repo --ref <40-char SHA> so updates
-                cannot move it silently, and leave HERMES_ENABLE_PROJECT_PLUGINS unset.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins
-          - title: Trust the skill scanner's verdict
-            body:
-              - Hub and URL installs are quarantined, scanned and recorded with a content hash in
-                skills/.hub/lock.json; --force cannot override a dangerous verdict, and hermes
-                skills audit re-scans installed hub skills.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
-          - title: Install MCP servers from the reviewed catalog
-            body:
-              - Prefer hermes mcp install <name> from the Nous-approved catalog, whose manifests
-                link the upstream repo and arrive disabled by default, over hand-written
-                mcp_servers entries.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
-        note: >-
-          Tool definitions served by an MCP server are not hash-pinned or re-verified between
-          sessions, and unpinned npx -y servers are outside the OSV scan; cataloged means reviewed,
-          not audited. Rated partial rather than native because MCP servers themselves have no
-          allowlist in the product's config; plugins are opt-in and pinnable, but any MCP server the
-          user configures is admitted.
-        verified: "2026-09-10"
-      - capability: capabilityHitlControls
-        coverage: native
-        mechanism: >-
-          approvals.mode manual/smart with a fail-closed timeout, once/session/always/deny
-          choices, headless contexts defaulting to deny (cron_mode, single_query_mode,
-          unattended_mode), hermes approvals suggest never auto-applies
-        steps:
-          - title: Prompt on every flagged command
-            body:
-              - "Set approvals.mode: manual and approvals.timeout: 300 in ~/.hermes/config.yaml;
-                no reply within the timeout denies the command, and the hardline blocklist refuses
-                rm -rf /, fork bombs and disk writes regardless of mode or --yolo."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Deny where nobody can answer
-            body:
-              - "Leave approvals.cron_mode, single_query_mode and unattended_mode at deny so cron
-                jobs, hermes chat -q runs and webhook or api_server sessions block a dangerous
-                command instead of waiting or auto-approving."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Answer approvals from chat, not the model
-            body:
-              - On messaging platforms the dangerous command is sent to the chat and executes only
-                on a yes/approve reply; HERMES_EXEC_ASK=1 is set automatically by the gateway.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-          - title: Audit what has been allowed permanently
-            body:
-              - Review command_allowlist with hermes config edit; hermes approvals suggest only
-                proposes patterns from your own history and never proposes destructive classes or
-                writes without --apply.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-        verified: "2026-09-10"
-      - capability: capabilityRateLimiting
-        coverage: native
-        mechanism: >-
-          agent.max_turns and agent.run_budget_seconds cap a turn; tool_loop_guardrails hard
-          stops and loop_caps block runaway loops; delegation.max_iterations,
-          max_concurrent_children and max_spawn_depth bound subagents; loops.max_ticks,
-          cron.max_parallel_jobs and A2A_RATE_LIMIT bound unattended surfaces
-        steps:
-          - title: Cap iterations and wall-clock per turn
-            body:
-              - "Set agent.max_turns to a positive integer (unlimited by default) and
-                agent.run_budget_seconds, or pass hermes chat --run-budget 850, so a single turn
-                cannot run without bound."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
-          - title: Turn loop warnings into hard stops
-            body:
-              - "Set tool_loop_guardrails.hard_stop_enabled: true and lower loop_caps.max_web_searches
-                and loop_caps.max_subagents; unattended gateway and cron sessions already hard-stop
-                by default via non_interactive_hard_stop_enabled."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
-          - title: Bound delegation depth and fan-out
-            body:
-              - Set delegation.max_iterations (default 250), delegation.max_concurrent_children
-                (default 10) and keep delegation.max_spawn_depth at 1 so children cannot spawn
-                grandchildren.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
-          - title: Backstop timers and peers
-            body:
-              - "loops.max_ticks (default 100) pauses a /loop; cron.max_parallel_jobs limits cron
-                concurrency; A2A_RATE_LIMIT (60/min per identity) and A2A_MAX_PINGPONG_TURNS stop
-                two agents ping-ponging."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/loops
-        note: >-
-          There is no token or currency spend cap; cost is only reported after the fact in the
-          dashboard analytics and hermes sessions --max-cost filters.
-        verified: "2026-09-10"
-      - capability: capabilityAuditLogging
-        coverage: partial
-        mechanism: >-
-          Rotating agent.log / gateway.log / errors.log under ~/.hermes/logs (secrets redacted),
-          full message history in state.db exportable with hermes sessions export, per-request
-          iron-proxy and A2A audit files, and post_tool_call hooks for an external trail; local
-          files, not tamper-evident
-        steps:
-          - title: Read and tail the activity logs
-            body:
-              - hermes logs agent --since 1h --session <id> shows API calls, tool dispatch and
-                session lifecycle; hermes logs gateway covers platform connections and message
-                dispatch; files rotate under ~/.hermes/logs/.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Export session history for retention
-            body:
-              - hermes sessions export backup.jsonl --redact dumps message history from
-                ~/.hermes/state.db with secrets scrubbed; filter by --source, --older-than or
-                --session-id for a scoped extract.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/sessions
-          - title: Ship a tool-call trail off the box
-            body:
-              - "Register a post_tool_call shell hook under hooks: in config.yaml (or a Python
-                plugin) that forwards tool_name, args, status and duration_ms to your log store; the
-                docs list logging and audit trails as its use case."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
-          - title: Keep the network and peer logs
-            body:
-              - ~/.hermes/proxy/iron-proxy.log records every CONNECT, secret swap and allowlist
-                denial with the source sandbox, and every A2A exchange appends to
-                ~/.hermes/a2a_audit.jsonl; rotate both with logrotate.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
-        note: >-
-          All records are plain files owned by the same OS user the agent runs as — nothing is
-          append-only or signed — so forward them to a remote store if attribution must survive a
-          compromise.
-        verified: "2026-09-10"
-      - capability: capabilityKillSwitch
-        coverage: partial
-        mechanism: >-
-          hermes gateway stop (--all), hermes cron pause, /loop stop, hermes pairing revoke,
-          hermes egress setup --rotate-tokens and /rollback undo pieces of a deployment; there is
-          no single revoke-everything and provider keys are rotated at the provider
-        steps:
-          - title: Stop the agent and its schedules
-            body:
-              - hermes gateway stop --all halts every profile's gateway service; hermes cron pause
-                <job> and /loop stop or /heartbeat pause halt the unattended triggers; the
-                terminal tool is guarded from stopping its own supervised gateway.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Cut off a sender
-            body:
-              - hermes pairing revoke <platform> <user-id> removes a paired user; hermes pairing
-                clear-pending drops outstanding codes.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Invalidate sandbox credentials
-            body:
-              - hermes egress setup --rotate-tokens mints fresh proxy tokens and hermes egress
-                stop kills the daemon so old tokens stop working; restart running sandboxes too.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Undo file damage
-            body:
-              - "With checkpoints.enabled: true Hermes snapshots the project before destructive
-                operations into ~/.hermes/checkpoints/store/; /rollback diff <N> previews and
-                /rollback <N> restores."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/checkpoints-and-rollback
-        note: >-
-          Decommissioning means deleting the profile directory yourself and rotating every
-          provider and platform token it held; quarantine from peers is only A2A_TRUSTED_PEERS on
-          the other agents.
-        verified: "2026-09-10"
-      - capability: capabilityShadowAiDiscovery
-        coverage: external
-        mechanism: Nothing in the product looks for agents or tool servers outside its own install
-        note: >-
-          hermes gateway list and hermes profile only enumerate this installation's profiles.
-          Discover Hermes installs from endpoint inventory (the ~/.hermes directory, the
-          hermes-gateway-<profile> systemd or launchd units, ports 9119/8642/9900).
-        evidence:
-          - title: Hermes Agent — official site, reviewed for the integration point (2026-09-10)
-            url: https://hermes-agent.nousresearch.com/
-        verified: "2026-09-10"
-      - capability: capabilityEdr
-        coverage: external
-        mechanism: >-
-          The docs defer containment to OS permissions and an isolated backend; pre_tool_call
-          shell hooks and tirith are the pre-execution hook points an endpoint agent could use
-        note: >-
-          Keep your EDR on the host and, if it exposes a CLI, wire it into a hooks.pre_tool_call
-          entry with fail_closed true so it can veto commands. hermes doctor surfaces the built-in
-          supply-chain advisory catalog for the Python venv but is not endpoint detection.
-        evidence:
-          - title: Hermes Agent — official site, reviewed for the integration point (2026-09-10)
-            url: https://hermes-agent.nousresearch.com/
-        verified: "2026-09-10"
-      - capability: capabilityBehavioralDriftDetection
-        coverage: none
-        mechanism: No baseline of goals or tool-use patterns and no intent-versus-action comparison
-        note: >-
-          tool_loop_guardrails and agent.stall_guards catch replays and no-progress loops, and
-          hermes insights summarises usage, but nothing flags an agent whose actions diverge from
-          its stated task; review session exports or a post_tool_call hook feed externally.
-        evidence:
-          - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
-            url: https://hermes-agent.nousresearch.com/
-        verified: "2026-09-10"
-      - capability: capabilityAiDlp
-        coverage: partial
-        mechanism: >-
-          security.redact_secrets scrubs key-shaped strings from tool output and logs,
-          security.website_blocklist blocks destinations for web and browser tools, A2A replies
-          are credential-redacted and session exports take --redact; no classifier on prompts
-          or uploads
-        steps:
-          - title: Keep secret redaction on
-            body:
-              - "security.redact_secrets: true (the default) redacts API-key, token and password
-                patterns in tool output before they enter the conversation context or logs; set it
-                to false only for debugging."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
-          - title: Block sensitive destinations
-            body:
-              - "Set security.website_blocklist.enabled: true with domains such as
-                \"*.internal.company.com\" or a shared_files rule list; web_search, web_extract,
-                browser_navigate and every URL-capable tool refuse a match."
+              - 'Set security.website_blocklist.enabled: true with domains such as
+                "*.internal.company.com" or a shared_files rule list; web_search, web_extract,
+                browser_navigate and every URL-capable tool refuse a match.'
             url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration#website-blocklist
-          - title: Redact before sharing history
+          - &a7
+            title: Redact before sharing history
             body:
               - Use hermes sessions export --redact for anything you hand to others; outbound A2A
                 replies are scrubbed of credential-shaped strings automatically.
             url: https://hermes-agent.nousresearch.com/docs/user-guide/sessions
-        note: >-
-          Detection is pattern-based and aimed at credentials; personal or business data in
-          prompts to the model provider is not inspected — enforce that at the provider or a proxy
-          in front of it.
-        verified: "2026-09-10"
-      - capability: capabilityAgentRegistry
-        coverage: partial
-        mechanism: >-
-          hermes mcp list, hermes plugins list, hermes skills list and hermes gateway list
-          inventory this install's tool servers, plugins, skills and profiles; plugin packs export
-          a SHA-pinned manifest; no ownership or approval state
-        steps:
-          - title: Inventory the tool servers and extensions
-            body:
-              - hermes mcp list, hermes plugins list (enabled / disabled / not enabled) and hermes
-                skills list show what this profile can reach; hermes mcp test <name> checks a
-                server is what config says.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Inventory the agents
-            body:
-              - hermes gateway list shows every profile and whether its gateway is running with
-                its PID; each profile is a separate agent with its own credentials.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-          - title: Record the approved plugin set as a pack
-            body:
-              - hermes plugins pack export --enabled-only emits a hermes-pack.yaml of repo plus
-                exact commit SHA per plugin that hermes plugins pack install reproduces after a
-                mandatory review screen.
-            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
-        note: >-
-          These are local listings, not a registry: record each profile, its owner and its MCP
-          servers in your organisation's agent register yourself.
-        verified: "2026-09-10"
-      - capability: capabilityEgressControl
-        coverage: native
-        mechanism: >-
-          terminal.docker_network false air-gaps the sandbox; the iron-proxy egress proxy is
-          default-deny with proxy.extra_allowed_hosts and upstream_deny_cidrs; SSRF protection
-          and security.website_blocklist bound URL-capable tools; the host process's own LLM
-          calls are not proxied
-        steps:
-          - title: Route sandbox traffic through the allowlisting proxy
-            body:
-              - Run hermes egress install, hermes egress setup and hermes egress start; a request
-                from the Docker sandbox to a host not on the bundled list or
-                proxy.extra_allowed_hosts gets HTTP 403 before any bytes leave the host, and
-                private, link-local and metadata ranges are refused via proxy.upstream_deny_cidrs.
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
-          - title: Or remove sandbox network access entirely
-            body:
-              - "Set terminal.docker_network: false to start the execution container with
-                --network=none for terminal, execute_code and the file tools."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
-          - title: Keep the URL tools off the local network
-            body:
-              - "Leave security.allow_private_urls at false so web, browser, vision and gateway
-                media fetches reject RFC 1918, loopback, link-local, CGNAT and cloud-metadata
-                destinations, and enable security.website_blocklist for named hosts."
-            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
-        note: >-
-          The local backend and the host process itself have no egress control from Hermes; an
-          allowlisted host such as api.openai.com can still carry exfiltrated data in a request
-          body, which the proxy logs but does not prevent.
-        verified: "2026-09-10"
-      - capability: capabilityModelScanning
-        coverage: none
-        mechanism: >-
-          The CLI loads no weights — inference is an API or a local llama.cpp / Ollama server;
-          the desktop managed runtime downloads GGUF files with a byte-size check only
-        note: >-
-          The local-models page states that only the runtime engine zips are SHA-256 verified, not
-          model downloads, and community Hugging Face models carry no validation badge. Scan any .gguf
-          you add with your own tooling before "Add model file", and keep local_runtime.tag on the
-          release Hermes validated. Rated none rather than not applicable because the desktop runtime
-          itself downloads model files and checks only their size; that is a real artifact-scanning
-          obligation the product does not meet.
         evidence:
-          - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
+          - &a4
+            title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
             url: https://hermes-agent.nousresearch.com/
-        verified: "2026-09-10"
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityPromptInjectionDefense] The scanners are pattern heuristics on files, memory and commands
+          — web_extract, browser and MCP results are not classified. Rely on approvals.mode manual, an
+          isolated terminal backend and the egress proxy for anything a poisoned page could trigger.
+
+
+          [capabilityModelGuardrails] The only content policies are security.redact_secrets on tool output and
+          the website_blocklist on URLs. To add a guardrail, register a pre_llm_call / post_llm_call hook that
+          calls your own classifier, or rely on moderation at the model provider.
+
+
+          [capabilityAiDlp] Detection is pattern-based and aimed at credentials; personal or business data in
+          prompts to the model provider is not inspected — enforce that at the provider or a proxy in front of
+          it.
+        migration:
+          from:
+            - capabilityPromptInjectionDefense
+            - capabilityModelGuardrails
+            - capabilityAiDlp
+          reviewRequired: true
+          original:
+            - capability: capabilityPromptInjectionDefense
+              coverage: partial
+              mechanism: Heuristic scanners on project context files, memory writes and inbound A2A text, plus tirith
+                content scanning of shell commands before execution (security.tirith_*); nothing classifies
+                fetched web or tool content
+              steps:
+                - *a1
+                - *a2
+                - *a3
+              note: The scanners are pattern heuristics on files, memory and commands — web_extract, browser and MCP results
+                are not classified. Rely on approvals.mode manual, an isolated terminal backend and the egress
+                proxy for anything a poisoned page could trigger.
+              verified: 2026-09-10
+            - capability: capabilityModelGuardrails
+              coverage: none
+              mechanism: No harm-category, denied-topic or blocked-term filtering of prompts or responses ships with the
+                product
+              note: The only content policies are security.redact_secrets on tool output and the website_blocklist on URLs.
+                To add a guardrail, register a pre_llm_call / post_llm_call hook that calls your own
+                classifier, or rely on moderation at the model provider.
+              evidence:
+                - *a4
+              verified: 2026-09-10
+            - capability: capabilityAiDlp
+              coverage: partial
+              mechanism: security.redact_secrets scrubs key-shaped strings from tool output and logs,
+                security.website_blocklist blocks destinations for web and browser tools, A2A replies are
+                credential-redacted and session exports take --redact; no classifier on prompts or uploads
+              steps:
+                - *a5
+                - *a6
+                - *a7
+              note: Detection is pattern-based and aimed at credentials; personal or business data in prompts to the model
+                provider is not inspected — enforce that at the provider or a proxy in front of it.
+              verified: 2026-09-10
+      - capability: D3-MFA
+        coverage: unknown
+        mechanism: Gateway user allowlists and DM pairing in ~/.hermes/.env and config.yaml (default deny),
+          username/password auth on a non-loopback dashboard, API_SERVER_KEY bearer on the API server; no MFA
+          or IdP integration
+        steps:
+          - &a8
+            title: Keep the gateway on explicit allowlists
+            body:
+              - Set GATEWAY_ALLOWED_USERS and per-platform lists such as TELEGRAM_ALLOWED_USERS or DISCORD_ALLOWED_USERS
+                in ~/.hermes/.env; with no allowlist configured every user is denied, and the docs say never
+                to set GATEWAY_ALLOW_ALL_USERS=true on a machine you care about.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a9
+            title: Approve new senders through DM pairing
+            body:
+              - "Leave unauthorized_dm_behavior: pair in config.yaml (or ignore to drop unknown DMs silently), approve
+                codes with hermes pairing approve <platform> <code> and remove access with hermes pairing
+                revoke <platform> <user-id>; codes expire after one hour and five failed approvals lock the
+                platform for an hour."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a10
+            title: Protect a remotely reachable dashboard
+            body:
+              - A dashboard bound off loopback fails closed unless HERMES_DASHBOARD_BASIC_AUTH_USERNAME,
+                HERMES_DASHBOARD_BASIC_AUTH_PASSWORD and HERMES_DASHBOARD_BASIC_AUTH_SECRET are set in .env;
+                --insecure no longer bypasses the gate.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard
+          - &a11
+            title: Key the OpenAI-compatible API server
+            body:
+              - Enable it only with API_SERVER_ENABLED=true and a strong API_SERVER_KEY in ~/.hermes/.env;
+                every request must carry it as a bearer token and the server binds 127.0.0.1 by default.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityIga] Identity is platform user IDs plus static shared secrets; there is no
+          phishing-resistant MFA, so put any exposed dashboard or API port behind your own identity-aware
+          proxy.
+        migration:
+          from:
+            - capabilityIga
+          reviewRequired: true
+          original:
+            - capability: capabilityIga
+              coverage: partial
+              mechanism: Gateway user allowlists and DM pairing in ~/.hermes/.env and config.yaml (default deny),
+                username/password auth on a non-loopback dashboard, API_SERVER_KEY bearer on the API server;
+                no MFA or IdP integration
+              steps: &a12
+                - *a8
+                - *a9
+                - *a10
+                - *a11
+              note: Identity is platform user IDs plus static shared secrets; there is no phishing-resistant MFA, so put any
+                exposed dashboard or API port behind your own identity-aware proxy.
+              verified: 2026-09-10
+      - capability: D3-APA
+        coverage: unknown
+        mechanism: Gateway user allowlists and DM pairing in ~/.hermes/.env and config.yaml (default deny),
+          username/password auth on a non-loopback dashboard, API_SERVER_KEY bearer on the API server; no MFA
+          or IdP integration
+        steps:
+          - *a8
+          - *a9
+          - *a10
+          - *a11
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityIga] Identity is platform user IDs plus static shared secrets; there is no
+          phishing-resistant MFA, so put any exposed dashboard or API port behind your own identity-aware
+          proxy.
+        migration:
+          from:
+            - capabilityIga
+          reviewRequired: true
+          original:
+            - capability: capabilityIga
+              coverage: partial
+              mechanism: Gateway user allowlists and DM pairing in ~/.hermes/.env and config.yaml (default deny),
+                username/password auth on a non-loopback dashboard, API_SERVER_KEY bearer on the API server;
+                no MFA or IdP integration
+              steps: *a12
+              note: Identity is platform user IDs plus static shared secrets; there is no phishing-resistant MFA, so put any
+                exposed dashboard or API port behind your own identity-aware proxy.
+              verified: 2026-09-10
+      - capability: D3-AMED
+        coverage: unknown
+        mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+          approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin hooks
+          can block or escalate any tool call and fail closed
+        steps:
+          - &a13
+            title: Declare commands that must never run
+            body:
+              - Add quoted fnmatch globs under approvals.deny in ~/.hermes/config.yaml (for example "git push --force*",
+                "dd if=* of=/dev/*"); they are matched against normalised command variants on every backend,
+                return a BLOCKED error to the model and take effect without a restart.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#user-defined-deny-rules-approvalsdeny
+          - &a14
+            title: Fence file writes to a safe root
+            body:
+              - Set HERMES_WRITE_SAFE_ROOT=/path/to/project:/home/you/.hermes in ~/.hermes/.env; write_file and
+                patch outside those prefixes are hard-blocked with no approval prompt, and credential paths
+                such as ~/.ssh and .env stay blocked even inside the root.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#file-write-safety
+          - &a15
+            title: Add a pre_tool_call policy hook
+            body:
+              - 'Declare hooks.pre_tool_call entries in config.yaml with a matcher regex, a command and
+                fail_closed: true; the script reads the tool call as JSON on stdin and blocks it by returning
+                {"action": "block", "message": ...} or exiting 2, and a timeout blocks rather than proceeds.'
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks#shell-hooks
+          - &a16
+            title: Keep the approval mode manual on a work machine
+            body:
+              - "Set approvals.mode: manual so every flagged command prompts you instead of the smart
+                mode's auxiliary-LLM auto-approval, and leave approvals.timeout at 300 so an unanswered prompt
+                is denied."
+            url: https://hermes-agent.nousresearch.com/docs/guides/secure-hermes-on-a-work-machine
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] Deny globs and the hardline blocklist are deterministic;
+          pre_tool_call hooks are an integration point that must be set fail_closed. Delegated subagents
+          inherit approvals; MCP tool calls pass the hooks, a server's own actions do not.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+                approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin
+                hooks can block or escalate any tool call and fail closed
+              steps: &a17
+                - *a13
+                - *a14
+                - *a15
+                - *a16
+              note: Deny globs and the hardline blocklist are deterministic; pre_tool_call hooks are an integration point
+                that must be set fail_closed. Delegated subagents inherit approvals; MCP tool calls pass the
+                hooks, a server's own actions do not.
+              verified: 2026-09-10
+      - capability: AML.M0037
+        coverage: unknown
+        mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+          approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin hooks
+          can block or escalate any tool call and fail closed
+        steps:
+          - *a13
+          - *a14
+          - *a15
+          - *a16
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] Deny globs and the hardline blocklist are deterministic;
+          pre_tool_call hooks are an integration point that must be set fail_closed. Delegated subagents
+          inherit approvals; MCP tool calls pass the hooks, a server's own actions do not.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+                approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin
+                hooks can block or escalate any tool call and fail closed
+              steps: *a17
+              note: Deny globs and the hardline blocklist are deterministic; pre_tool_call hooks are an integration point
+                that must be set fail_closed. Delegated subagents inherit approvals; MCP tool calls pass the
+                hooks, a server's own actions do not.
+              verified: 2026-09-10
+      - capability: AML.M0030
+        coverage: unknown
+        mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+          approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin hooks
+          can block or escalate any tool call and fail closed
+        steps:
+          - *a13
+          - *a14
+          - *a15
+          - *a16
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] Deny globs and the hardline blocklist are deterministic;
+          pre_tool_call hooks are an integration point that must be set fail_closed. Delegated subagents
+          inherit approvals; MCP tool calls pass the hooks, a server's own actions do not.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+                approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin
+                hooks can block or escalate any tool call and fail closed
+              steps: *a17
+              note: Deny globs and the hardline blocklist are deterministic; pre_tool_call hooks are an integration point
+                that must be set fail_closed. Delegated subagents inherit approvals; MCP tool calls pass the
+                hooks, a server's own actions do not.
+              verified: 2026-09-10
+      - capability: AML.M0033
+        coverage: unknown
+        mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+          approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin hooks
+          can block or escalate any tool call and fail closed
+        steps:
+          - *a13
+          - *a14
+          - *a15
+          - *a16
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] Deny globs and the hardline blocklist are deterministic;
+          pre_tool_call hooks are an integration point that must be set fail_closed. Delegated subagents
+          inherit approvals; MCP tool calls pass the hooks, a server's own actions do not.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: approvals.deny glob rules and the code-shipped hardline blocklist run before --yolo or
+                approvals.mode off; HERMES_WRITE_SAFE_ROOT hard-blocks writes; pre_tool_call shell and plugin
+                hooks can block or escalate any tool call and fail closed
+              steps: *a17
+              note: Deny globs and the hardline blocklist are deterministic; pre_tool_call hooks are an integration point
+                that must be set fail_closed. Delegated subagents inherit approvals; MCP tool calls pass the
+                hooks, a server's own actions do not.
+              verified: 2026-09-10
+      - capability: D3-MAN
+        coverage: unknown
+        mechanism: "HTTPS MCP servers with OAuth 2.1 (auth: oauth) or mutual TLS (client_cert/client_key) per server
+          in mcp_servers; A2A binds loopback until a bearer or per-peer token is set; no protocol-version
+          pinning"
+        steps:
+          - &a18
+            title: Use client certificates for internal MCP servers
+            body:
+              - Set mcp_servers.<name>.client_cert (combined PEM or [cert, key] list) and client_key on remote HTTP
+                servers that require mTLS; a missing file raises a server-scoped error rather than an opaque
+                handshake failure.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+          - &a19
+            title: Prefer OAuth over static bearer headers
+            body:
+              - "Write auth: oauth on hosted MCP servers so Hermes performs discovery, PKCE and refresh; tokens are
+                cached at ~/.hermes/mcp-tokens/<server>.json with 0600 permissions and hermes mcp login
+                <server> forces re-authentication."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+          - &a20
+            title: Authenticate every A2A peer
+            body:
+              - Give each peer its own credential with A2A_PEER_TOKENS="alice:tok1,bob:tok2", restrict callers
+                with A2A_TRUSTED_PEERS, and only then widen A2A_HOST from 127.0.0.1; inbound text is framed as
+                untrusted and cannot invoke slash commands.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/a2a
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityTransportSecurity] Stdio MCP servers have no transport authentication at all, and nothing
+          pins MCP or A2A protocol versions or server certificates; typed message contracts are the server's
+          job.
+        migration:
+          from:
+            - capabilityTransportSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityTransportSecurity
+              coverage: partial
+              mechanism: "HTTPS MCP servers with OAuth 2.1 (auth: oauth) or mutual TLS (client_cert/client_key) per server
+                in mcp_servers; A2A binds loopback until a bearer or per-peer token is set; no
+                protocol-version pinning"
+              steps: &a21
+                - *a18
+                - *a19
+                - *a20
+              note: Stdio MCP servers have no transport authentication at all, and nothing pins MCP or A2A protocol versions
+                or server certificates; typed message contracts are the server's job.
+              verified: 2026-09-10
+      - capability: D3-MENCR
+        coverage: unknown
+        mechanism: "HTTPS MCP servers with OAuth 2.1 (auth: oauth) or mutual TLS (client_cert/client_key) per server
+          in mcp_servers; A2A binds loopback until a bearer or per-peer token is set; no protocol-version
+          pinning"
+        steps:
+          - *a18
+          - *a19
+          - *a20
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityTransportSecurity] Stdio MCP servers have no transport authentication at all, and nothing
+          pins MCP or A2A protocol versions or server certificates; typed message contracts are the server's
+          job.
+        migration:
+          from:
+            - capabilityTransportSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityTransportSecurity
+              coverage: partial
+              mechanism: "HTTPS MCP servers with OAuth 2.1 (auth: oauth) or mutual TLS (client_cert/client_key) per server
+                in mcp_servers; A2A binds loopback until a bearer or per-peer token is set; no
+                protocol-version pinning"
+              steps: *a21
+              note: Stdio MCP servers have no transport authentication at all, and nothing pins MCP or A2A protocol versions
+                or server certificates; typed message contracts are the server's job.
+              verified: 2026-09-10
+      - capability: AML.M0031
+        coverage: unknown
+        mechanism: memory.write_approval and skills.write_approval gate agent writes, memory entries are
+          injection-scanned and size-capped, and each profile has its own memories, sessions, skills and .env;
+          hermes journey edits entries
+        steps:
+          - &a22
+            title: Require approval for memory writes
+            body:
+              - "Set memory.write_approval: true in ~/.hermes/config.yaml so every save to MEMORY.md or USER.md —
+                including the unprompted background review — is staged for your approval; memory_char_limit
+                and user_char_limit keep the stores bounded."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
+          - &a23
+            title: Gate the agent's self-written skills the same way
+            body:
+              - "Set skills.write_approval: true so create, edit, patch and write_file operations on skills need
+                approval, since skills are the other persistent store the agent feeds back into its own
+                prompt."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills#gating-agent-skill-writes-skillswrite_approval
+          - &a24
+            title: Give every agent its own profile
+            body:
+              - Run hermes profile create <name> for each purpose; a profile is a separate Hermes home with its
+                own config.yaml, .env, SOUL.md, memories, sessions, skills, cron jobs and state database, so
+                one agent's memory never reaches another.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/profiles
+          - &a25
+            title: Review and edit what the agent remembered
+            body:
+              - Use hermes journey list and hermes journey edit to inspect and correct USER.md and
+                MEMORY.md entries; the system prompt takes a frozen snapshot at session start, so a fix lands
+                on the next session.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/which-file-does-what
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityMemoryProtection] Write approval and injection scanning are genuine integrity gates; what
+          can still write is an approved agent turn and the user's own edits. Recovery is the checkpoint
+          store, not a versioned memory; per-profile isolation is the tenant boundary.
+        migration:
+          from:
+            - capabilityMemoryProtection
+          reviewRequired: true
+          original:
+            - capability: capabilityMemoryProtection
+              coverage: native
+              mechanism: memory.write_approval and skills.write_approval gate agent writes, memory entries are
+                injection-scanned and size-capped, and each profile has its own memories, sessions, skills and
+                .env; hermes journey edits entries
+              steps:
+                - *a22
+                - *a23
+                - *a24
+                - *a25
+              note: Write approval and injection scanning are genuine integrity gates; what can still write is an approved
+                agent turn and the user's own edits. Recovery is the checkpoint store, not a versioned memory;
+                per-profile isolation is the tenant boundary.
+              verified: 2026-09-10
+      - capability: D3-EI
+        coverage: unknown
+        mechanism: terminal.backend docker / ssh / singularity / modal / daytona / vercel_sandbox in config.yaml;
+          Docker containers run --cap-drop ALL, no-new-privileges, pids-limit 256 and size-limited tmpfs with
+          optional --network=none and ephemeral workspaces
+        steps:
+          - &a26
+            title: Move command execution into a container
+            body:
+              - "Set terminal.backend: docker with docker_forward_env: [] in ~/.hermes/config.yaml; every container is
+                started with all capabilities dropped (DAC_OVERRIDE, CHOWN and FOWNER added back),
+                no-new-privileges, a 256-process limit and nosuid tmpfs mounts."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a27
+            title: Bound and discard the sandbox
+            body:
+              - "Set terminal.container_cpu, container_memory and container_disk, and container_persistent: false to
+                keep the workspace on tmpfs so it is lost on cleanup instead of persisting under
+                ~/.hermes/sandboxes/docker/."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a28
+            title: Air-gap the sandbox when the task allows
+            body:
+              - "Set terminal.docker_network: false (env TERMINAL_DOCKER_NETWORK) to run the execution
+                container with --network=none; an existing networked container is replaced by a fresh
+                air-gapped one."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+          - &a29
+            title: Or keep execution off the host entirely
+            body:
+              - "Set terminal.backend: ssh and put TERMINAL_SSH_HOST, TERMINAL_SSH_USER and
+                TERMINAL_SSH_KEY in ~/.hermes/.env so commands run on a separate machine while the messaging
+                connections stay on the gateway host."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#network-isolation
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentSandboxing] The default backend is local with no isolation, and dangerous-command
+          checks are skipped inside container backends because the container is treated as the boundary.
+        migration:
+          from:
+            - capabilityAgentSandboxing
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentSandboxing
+              coverage: native
+              mechanism: terminal.backend docker / ssh / singularity / modal / daytona / vercel_sandbox in config.yaml;
+                Docker containers run --cap-drop ALL, no-new-privileges, pids-limit 256 and size-limited tmpfs
+                with optional --network=none and ephemeral workspaces
+              steps:
+                - *a26
+                - *a27
+                - *a28
+                - *a29
+              note: The default backend is local with no isolation, and dangerous-command checks are skipped inside
+                container backends because the container is treated as the boundary.
+              verified: 2026-09-10
+      - capability: AML.M0028
+        coverage: unknown
+        mechanism: "hermes tools per-platform enable/disable persisted to config.yaml, toolsets: presets per platform
+          and --toolsets per session, mcp_servers.<name>.tools.include/exclude, subagents inherit only the
+          parent's toolsets"
+        steps:
+          - &a30
+            title: Trim the tool surface per platform
+            body:
+              - Run hermes tools to toggle individual tools on or off for cli, telegram, discord and the other platforms;
+                disabled tools are filtered out even when their toolset is enabled, and the result persists to
+                config.yaml.
+            url: https://hermes-agent.nousresearch.com/docs/reference/toolsets-reference
+          - &a31
+            title: Pin toolsets in config or per session
+            body:
+              - 'Set toolsets: per platform in ~/.hermes/config.yaml, or start a narrow session with hermes chat
+                --toolsets "web,terminal"; opt-in sets such as a2a and x_search stay off until you enable
+                them.'
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/tools
+          - &a32
+            title: Whitelist the tools each MCP server may contribute
+            body:
+              - "Set mcp_servers.<name>.tools.include (or exclude) with names or globs, or disabled: true on a
+                server; the catalog installer writes the same filter from its tool-selection checklist."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+          - &a33
+            title: Keep subagents at or below the parent's rights
+            body:
+              - delegate_task has no toolsets parameter — children inherit the parent's enabled toolsets
+                and leaf subagents cannot delegate; raise delegation.max_spawn_depth above the default 1 only
+                deliberately.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityToolPermissionScoping] Toolsets hide tools per platform and session; approvals gate;
+          argument limits come from approvals.deny globs and the write-safe root. --yolo pre-approves
+          everything except the hardline blocklist.
+        migration:
+          from:
+            - capabilityToolPermissionScoping
+          reviewRequired: true
+          original:
+            - capability: capabilityToolPermissionScoping
+              coverage: native
+              mechanism: "hermes tools per-platform enable/disable persisted to config.yaml, toolsets: presets per platform
+                and --toolsets per session, mcp_servers.<name>.tools.include/exclude, subagents inherit only
+                the parent's toolsets"
+              steps:
+                - *a30
+                - *a31
+                - *a32
+                - *a33
+              note: Toolsets hide tools per platform and session; approvals gate; argument limits come from approvals.deny
+                globs and the write-safe root. --yolo pre-approves everything except the hardline blocklist.
+              verified: 2026-09-10
+      - capability: D3-CTS
+        coverage: unknown
+        mechanism: "execute_code and terminal strip credential-shaped env vars from child processes, MCP subprocesses
+          get a filtered environment plus only their own env: block, Docker forwards nothing unless listed,
+          and the iron-proxy egress proxy replaces real keys with opaque proxy tokens inside sandboxes"
+        steps:
+          - &a34
+            title: Leave the sandbox env filters at their defaults
+            body:
+              - Only variables a loaded skill declares in required_environment_variables or that you list under
+                terminal.env_passthrough reach execute_code, terminal and remote backends; the docs say never
+                to add provider keys or gateway tokens to env_passthrough.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security#environment-variable-passthrough
+          - &a35
+            title: Scope MCP credentials to the one server that needs them
+            body:
+              - Stdio MCP servers receive only PATH, HOME, USER, LANG, LC_ALL, TERM, SHELL, TMPDIR and XDG_* plus
+                whatever you put in mcp_servers.<name>.env; error messages are redacted for PATs, sk- keys and
+                bearer tokens before the model sees them.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a36
+            title: Keep real keys out of the Docker sandbox with the egress proxy
+            body:
+              - Run hermes egress setup then hermes egress start; the sandbox is given HTTPS_PROXY plus proxy
+                tokens in the usual env names and iron-proxy swaps them for the real credential on the host,
+                so a printenv inside the sandbox yields nothing usable elsewhere.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
+          - &a37
+            title: Forward nothing into containers by default
+            body:
+              - "Keep terminal.docker_forward_env: [] — anything you add is deliberately injected into the
+                container for task credentials and can be read and exfiltrated by code running there."
+            url: https://hermes-agent.nousresearch.com/docs/guides/secure-hermes-on-a-work-machine
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityCredentialIsolation] Covers credential-shaped environment variables and provider keys for
+          child processes, MCP subprocesses and Docker; a local (unsandboxed) terminal backend and the gateway
+          process itself hold the real values. Single-user product, so on-behalf-of exchange does not arise.
+        migration:
+          from:
+            - capabilityCredentialIsolation
+          reviewRequired: true
+          original:
+            - capability: capabilityCredentialIsolation
+              coverage: native
+              mechanism: "execute_code and terminal strip credential-shaped env vars from child processes, MCP subprocesses
+                get a filtered environment plus only their own env: block, Docker forwards nothing unless
+                listed, and the iron-proxy egress proxy replaces real keys with opaque proxy tokens inside
+                sandboxes"
+              steps: &a38
+                - *a34
+                - *a35
+                - *a36
+                - *a37
+              note: Covers credential-shaped environment variables and provider keys for child processes, MCP subprocesses
+                and Docker; a local (unsandboxed) terminal backend and the gateway process itself hold the
+                real values. Single-user product, so on-behalf-of exchange does not arise.
+              verified: 2026-09-10
+      - capability: D3-TB
+        coverage: unknown
+        mechanism: "execute_code and terminal strip credential-shaped env vars from child processes, MCP subprocesses
+          get a filtered environment plus only their own env: block, Docker forwards nothing unless listed,
+          and the iron-proxy egress proxy replaces real keys with opaque proxy tokens inside sandboxes"
+        steps:
+          - *a34
+          - *a35
+          - *a36
+          - *a37
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityCredentialIsolation] Covers credential-shaped environment variables and provider keys for
+          child processes, MCP subprocesses and Docker; a local (unsandboxed) terminal backend and the gateway
+          process itself hold the real values. Single-user product, so on-behalf-of exchange does not arise.
+        migration:
+          from:
+            - capabilityCredentialIsolation
+          reviewRequired: true
+          original:
+            - capability: capabilityCredentialIsolation
+              coverage: native
+              mechanism: "execute_code and terminal strip credential-shaped env vars from child processes, MCP subprocesses
+                get a filtered environment plus only their own env: block, Docker forwards nothing unless
+                listed, and the iron-proxy egress proxy replaces real keys with opaque proxy tokens inside
+                sandboxes"
+              steps: *a38
+              note: Covers credential-shaped environment variables and provider keys for child processes, MCP subprocesses
+                and Docker; a local (unsandboxed) terminal backend and the gateway process itself hold the
+                real values. Single-user product, so on-behalf-of exchange does not arise.
+              verified: 2026-09-10
+      - capability: D3-CH
+        coverage: unknown
+        mechanism: secrets.bitwarden, secrets.onepassword and a command helper pull provider keys from a vault at
+          startup so only the bootstrap token lives in ~/.hermes/.env; hermes egress setup --rotate-tokens
+          re-mints sandbox proxy tokens
+        steps:
+          - &a39
+            title: Pull keys from Bitwarden Secrets Manager
+            body:
+              - "Run hermes secrets bitwarden setup (installs the pinned bws binary, stores the access token, picks a
+                project) and set secrets.bitwarden.enabled: true with project_id in config.yaml; rotate the
+                bootstrap token with hermes secrets bitwarden token."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/bitwarden
+          - &a40
+            title: Or reference 1Password items
+            body:
+              - "Set secrets.onepassword.enabled: true and map env var names to op:// references under
+                secrets.onepassword.env, authenticating with the op CLI via a service account token named by
+                service_account_token_env."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/onepassword
+          - &a41
+            title: Or wrap any CLI vault with the command helper
+            body:
+              - Point the command source at a helper (keepassxc-cli, secret-tool, pass or a script) that prints
+                KEY=VALUE lines; sources compose with a fixed precedence and secrets.preserve_existing pins
+                per-profile values.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/command
+          - &a42
+            title: Lock the file that remains and rotate sandbox tokens
+            body:
+              - Run chmod 600 ~/.hermes/.env as the security page instructs, and after a suspected leak
+                mint fresh proxy tokens with hermes egress setup --rotate-tokens and restart running
+                sandboxes.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySecretsManagement] Vault pull at startup keeps only the bootstrap token on disk; the
+          pulled keys live in the gateway process for its lifetime, and the egress proxy hands sandboxes
+          opaque tokens instead. Ephemeral issuance covers proxy tokens only, not the provider keys
+          themselves.
+        migration:
+          from:
+            - capabilitySecretsManagement
+          reviewRequired: true
+          original:
+            - capability: capabilitySecretsManagement
+              coverage: native
+              mechanism: secrets.bitwarden, secrets.onepassword and a command helper pull provider keys from a vault at
+                startup so only the bootstrap token lives in ~/.hermes/.env; hermes egress setup
+                --rotate-tokens re-mints sandbox proxy tokens
+              steps: &a43
+                - *a39
+                - *a40
+                - *a41
+                - *a42
+              note: Vault pull at startup keeps only the bootstrap token on disk; the pulled keys live in the gateway
+                process for its lifetime, and the egress proxy hands sandboxes opaque tokens instead.
+                Ephemeral issuance covers proxy tokens only, not the provider keys themselves.
+              verified: 2026-09-10
+      - capability: D3-CRO
+        coverage: unknown
+        mechanism: secrets.bitwarden, secrets.onepassword and a command helper pull provider keys from a vault at
+          startup so only the bootstrap token lives in ~/.hermes/.env; hermes egress setup --rotate-tokens
+          re-mints sandbox proxy tokens
+        steps:
+          - *a39
+          - *a40
+          - *a41
+          - *a42
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySecretsManagement] Vault pull at startup keeps only the bootstrap token on disk; the
+          pulled keys live in the gateway process for its lifetime, and the egress proxy hands sandboxes
+          opaque tokens instead. Ephemeral issuance covers proxy tokens only, not the provider keys
+          themselves.
+        migration:
+          from:
+            - capabilitySecretsManagement
+          reviewRequired: true
+          original:
+            - capability: capabilitySecretsManagement
+              coverage: native
+              mechanism: secrets.bitwarden, secrets.onepassword and a command helper pull provider keys from a vault at
+                startup so only the bootstrap token lives in ~/.hermes/.env; hermes egress setup
+                --rotate-tokens re-mints sandbox proxy tokens
+              steps: *a43
+              note: Vault pull at startup keeps only the bootstrap token on disk; the pulled keys live in the gateway
+                process for its lifetime, and the egress proxy hands sandboxes opaque tokens instead.
+                Ephemeral issuance covers proxy tokens only, not the provider keys themselves.
+              verified: 2026-09-10
+      - capability: AML.M0014
+        coverage: unknown
+        mechanism: hermes security audit (OSV) scans the venv, plugin dependencies and pinned npx/uvx MCP servers;
+          plugins are opt-in via plugins.enabled and pinnable to a commit SHA; hub skills are quarantined,
+          content-hashed and scanned before install; MCP catalog entries are Nous-reviewed manifests
+        steps:
+          - &a44
+            title: Run the supply-chain audit and fail on findings
+            body:
+              - hermes security audit --fail-on high checks installed PyPI distributions, plugin requirements under
+                ~/.hermes/plugins/ and pinned npx/uvx MCP servers in config.yaml against OSV.dev; add it to a
+                cron job or CI.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a45
+            title: Keep third-party plugins opt-in and pinned
+            body:
+              - Nothing under ~/.hermes/plugins/ loads until its name is in plugins.enabled; install with hermes
+                plugins install owner/repo --ref <40-char SHA> so updates cannot move it silently, and leave
+                HERMES_ENABLE_PROJECT_PLUGINS unset.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins
+          - &a46
+            title: Trust the skill scanner's verdict
+            body:
+              - Hub and URL installs are quarantined, scanned and recorded with a content hash in
+                skills/.hub/lock.json; --force cannot override a dangerous verdict, and hermes skills audit
+                re-scans installed hub skills.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
+          - &a47
+            title: Install MCP servers from the reviewed catalog
+            body:
+              - Prefer hermes mcp install <name> from the Nous-approved catalog, whose manifests link the
+                upstream repo and arrive disabled by default, over hand-written mcp_servers entries.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityMcpToolSecurity] Tool definitions served by an MCP server are not hash-pinned or
+          re-verified between sessions, and unpinned npx -y servers are outside the OSV scan; cataloged means
+          reviewed, not audited. Rated partial rather than native because MCP servers themselves have no
+          allowlist in the product's config; plugins are opt-in and pinnable, but any MCP server the user
+          configures is admitted.
+        migration:
+          from:
+            - capabilityMcpToolSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityMcpToolSecurity
+              coverage: partial
+              mechanism: hermes security audit (OSV) scans the venv, plugin dependencies and pinned npx/uvx MCP servers;
+                plugins are opt-in via plugins.enabled and pinnable to a commit SHA; hub skills are
+                quarantined, content-hashed and scanned before install; MCP catalog entries are Nous-reviewed
+                manifests
+              steps: &a48
+                - *a44
+                - *a45
+                - *a46
+                - *a47
+              note: Tool definitions served by an MCP server are not hash-pinned or re-verified between sessions, and
+                unpinned npx -y servers are outside the OSV scan; cataloged means reviewed, not audited. Rated
+                partial rather than native because MCP servers themselves have no allowlist in the product's
+                config; plugins are opt-in and pinnable, but any MCP server the user configures is admitted.
+              verified: 2026-09-10
+      - capability: D3-FIM
+        coverage: unknown
+        mechanism: hermes security audit (OSV) scans the venv, plugin dependencies and pinned npx/uvx MCP servers;
+          plugins are opt-in via plugins.enabled and pinnable to a commit SHA; hub skills are quarantined,
+          content-hashed and scanned before install; MCP catalog entries are Nous-reviewed manifests
+        steps:
+          - *a44
+          - *a45
+          - *a46
+          - *a47
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityMcpToolSecurity] Tool definitions served by an MCP server are not hash-pinned or
+          re-verified between sessions, and unpinned npx -y servers are outside the OSV scan; cataloged means
+          reviewed, not audited. Rated partial rather than native because MCP servers themselves have no
+          allowlist in the product's config; plugins are opt-in and pinnable, but any MCP server the user
+          configures is admitted.
+        migration:
+          from:
+            - capabilityMcpToolSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityMcpToolSecurity
+              coverage: partial
+              mechanism: hermes security audit (OSV) scans the venv, plugin dependencies and pinned npx/uvx MCP servers;
+                plugins are opt-in via plugins.enabled and pinnable to a commit SHA; hub skills are
+                quarantined, content-hashed and scanned before install; MCP catalog entries are Nous-reviewed
+                manifests
+              steps: *a48
+              note: Tool definitions served by an MCP server are not hash-pinned or re-verified between sessions, and
+                unpinned npx -y servers are outside the OSV scan; cataloged means reviewed, not audited. Rated
+                partial rather than native because MCP servers themselves have no allowlist in the product's
+                config; plugins are opt-in and pinnable, but any MCP server the user configures is admitted.
+              verified: 2026-09-10
+      - capability: AML.M0029
+        coverage: unknown
+        mechanism: approvals.mode manual/smart with a fail-closed timeout, once/session/always/deny choices, headless
+          contexts defaulting to deny (cron_mode, single_query_mode, unattended_mode), hermes approvals
+          suggest never auto-applies
+        steps:
+          - &a49
+            title: Prompt on every flagged command
+            body:
+              - "Set approvals.mode: manual and approvals.timeout: 300 in ~/.hermes/config.yaml; no reply within the
+                timeout denies the command, and the hardline blocklist refuses rm -rf /, fork bombs and disk
+                writes regardless of mode or --yolo."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a50
+            title: Deny where nobody can answer
+            body:
+              - Leave approvals.cron_mode, single_query_mode and unattended_mode at deny so cron jobs, hermes chat
+                -q runs and webhook or api_server sessions block a dangerous command instead of waiting or
+                auto-approving.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a51
+            title: Answer approvals from chat, not the model
+            body:
+              - On messaging platforms the dangerous command is sent to the chat and executes only on a
+                yes/approve reply; HERMES_EXEC_ASK=1 is set automatically by the gateway.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+          - &a52
+            title: Audit what has been allowed permanently
+            body:
+              - Review command_allowlist with hermes config edit; hermes approvals suggest only proposes
+                patterns from your own history and never proposes destructive classes or writes without
+                --apply.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityHitlControls]
+        migration:
+          from:
+            - capabilityHitlControls
+          reviewRequired: true
+          original:
+            - capability: capabilityHitlControls
+              coverage: native
+              mechanism: approvals.mode manual/smart with a fail-closed timeout, once/session/always/deny choices, headless
+                contexts defaulting to deny (cron_mode, single_query_mode, unattended_mode), hermes approvals
+                suggest never auto-applies
+              steps:
+                - *a49
+                - *a50
+                - *a51
+                - *a52
+              verified: 2026-09-10
+      - capability: AML.M0004
+        coverage: unknown
+        mechanism: agent.max_turns and agent.run_budget_seconds cap a turn; tool_loop_guardrails hard stops and
+          loop_caps block runaway loops; delegation.max_iterations, max_concurrent_children and
+          max_spawn_depth bound subagents; loops.max_ticks, cron.max_parallel_jobs and A2A_RATE_LIMIT bound
+          unattended surfaces
+        steps:
+          - &a53
+            title: Cap iterations and wall-clock per turn
+            body:
+              - Set agent.max_turns to a positive integer (unlimited by default) and agent.run_budget_seconds, or pass
+                hermes chat --run-budget 850, so a single turn cannot run without bound.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+          - &a54
+            title: Turn loop warnings into hard stops
+            body:
+              - "Set tool_loop_guardrails.hard_stop_enabled: true and lower loop_caps.max_web_searches and
+                loop_caps.max_subagents; unattended gateway and cron sessions already hard-stop by default via
+                non_interactive_hard_stop_enabled."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+          - &a55
+            title: Bound delegation depth and fan-out
+            body:
+              - Set delegation.max_iterations (default 250), delegation.max_concurrent_children (default 10)
+                and keep delegation.max_spawn_depth at 1 so children cannot spawn grandchildren.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
+          - &a56
+            title: Backstop timers and peers
+            body:
+              - loops.max_ticks (default 100) pauses a /loop; cron.max_parallel_jobs limits cron
+                concurrency; A2A_RATE_LIMIT (60/min per identity) and A2A_MAX_PINGPONG_TURNS stop two agents
+                ping-ponging.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/loops
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityRateLimiting] There is no token or currency spend cap; cost is only reported after the
+          fact in the dashboard analytics and hermes sessions --max-cost filters.
+        migration:
+          from:
+            - capabilityRateLimiting
+          reviewRequired: true
+          original:
+            - capability: capabilityRateLimiting
+              coverage: native
+              mechanism: agent.max_turns and agent.run_budget_seconds cap a turn; tool_loop_guardrails hard stops and
+                loop_caps block runaway loops; delegation.max_iterations, max_concurrent_children and
+                max_spawn_depth bound subagents; loops.max_ticks, cron.max_parallel_jobs and A2A_RATE_LIMIT
+                bound unattended surfaces
+              steps: &a57
+                - *a53
+                - *a54
+                - *a55
+                - *a56
+              note: There is no token or currency spend cap; cost is only reported after the fact in the dashboard analytics
+                and hermes sessions --max-cost filters.
+              verified: 2026-09-10
+      - capability: AML.M0036
+        coverage: unknown
+        mechanism: agent.max_turns and agent.run_budget_seconds cap a turn; tool_loop_guardrails hard stops and
+          loop_caps block runaway loops; delegation.max_iterations, max_concurrent_children and
+          max_spawn_depth bound subagents; loops.max_ticks, cron.max_parallel_jobs and A2A_RATE_LIMIT bound
+          unattended surfaces
+        steps:
+          - *a53
+          - *a54
+          - *a55
+          - *a56
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityRateLimiting] There is no token or currency spend cap; cost is only reported after the
+          fact in the dashboard analytics and hermes sessions --max-cost filters.
+        migration:
+          from:
+            - capabilityRateLimiting
+          reviewRequired: true
+          original:
+            - capability: capabilityRateLimiting
+              coverage: native
+              mechanism: agent.max_turns and agent.run_budget_seconds cap a turn; tool_loop_guardrails hard stops and
+                loop_caps block runaway loops; delegation.max_iterations, max_concurrent_children and
+                max_spawn_depth bound subagents; loops.max_ticks, cron.max_parallel_jobs and A2A_RATE_LIMIT
+                bound unattended surfaces
+              steps: *a57
+              note: There is no token or currency spend cap; cost is only reported after the fact in the dashboard analytics
+                and hermes sessions --max-cost filters.
+              verified: 2026-09-10
+      - capability: AML.M0024
+        coverage: unknown
+        mechanism: Rotating agent.log / gateway.log / errors.log under ~/.hermes/logs (secrets redacted), full message
+          history in state.db exportable with hermes sessions export, per-request iron-proxy and A2A audit
+          files, and post_tool_call hooks for an external trail; local files, not tamper-evident
+        steps:
+          - &a58
+            title: Read and tail the activity logs
+            body:
+              - hermes logs agent --since 1h --session <id> shows API calls, tool dispatch and session lifecycle; hermes
+                logs gateway covers platform connections and message dispatch; files rotate under
+                ~/.hermes/logs/.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a59
+            title: Export session history for retention
+            body:
+              - hermes sessions export backup.jsonl --redact dumps message history from ~/.hermes/state.db with
+                secrets scrubbed; filter by --source, --older-than or --session-id for a scoped extract.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/sessions
+          - &a60
+            title: Ship a tool-call trail off the box
+            body:
+              - "Register a post_tool_call shell hook under hooks: in config.yaml (or a Python plugin) that
+                forwards tool_name, args, status and duration_ms to your log store; the docs list logging and
+                audit trails as its use case."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
+          - &a61
+            title: Keep the network and peer logs
+            body:
+              - ~/.hermes/proxy/iron-proxy.log records every CONNECT, secret swap and allowlist denial
+                with the source sandbox, and every A2A exchange appends to ~/.hermes/a2a_audit.jsonl; rotate
+                both with logrotate.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAuditLogging] All records are plain files owned by the same OS user the agent runs as —
+          nothing is append-only or signed — so forward them to a remote store if attribution must survive a
+          compromise.
+        migration:
+          from:
+            - capabilityAuditLogging
+          reviewRequired: true
+          original:
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: Rotating agent.log / gateway.log / errors.log under ~/.hermes/logs (secrets redacted), full message
+                history in state.db exportable with hermes sessions export, per-request iron-proxy and A2A
+                audit files, and post_tool_call hooks for an external trail; local files, not tamper-evident
+              steps: &a62
+                - *a58
+                - *a59
+                - *a60
+                - *a61
+              note: All records are plain files owned by the same OS user the agent runs as — nothing is append-only or
+                signed — so forward them to a remote store if attribution must survive a compromise.
+              verified: 2026-09-10
+      - capability: D3-SFA
+        coverage: unknown
+        mechanism: Rotating agent.log / gateway.log / errors.log under ~/.hermes/logs (secrets redacted), full message
+          history in state.db exportable with hermes sessions export, per-request iron-proxy and A2A audit
+          files, and post_tool_call hooks for an external trail; local files, not tamper-evident
+        steps:
+          - *a58
+          - *a59
+          - *a60
+          - *a61
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAuditLogging] All records are plain files owned by the same OS user the agent runs as —
+          nothing is append-only or signed — so forward them to a remote store if attribution must survive a
+          compromise.
+        migration:
+          from:
+            - capabilityAuditLogging
+          reviewRequired: true
+          original:
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: Rotating agent.log / gateway.log / errors.log under ~/.hermes/logs (secrets redacted), full message
+                history in state.db exportable with hermes sessions export, per-request iron-proxy and A2A
+                audit files, and post_tool_call hooks for an external trail; local files, not tamper-evident
+              steps: *a62
+              note: All records are plain files owned by the same OS user the agent runs as — nothing is append-only or
+                signed — so forward them to a remote store if attribution must survive a compromise.
+              verified: 2026-09-10
+      - capability: D3-PT
+        coverage: unknown
+        mechanism: hermes gateway stop (--all), hermes cron pause, /loop stop, hermes pairing revoke, hermes egress
+          setup --rotate-tokens and /rollback undo pieces of a deployment; there is no single
+          revoke-everything and provider keys are rotated at the provider; The docs defer containment to OS
+          permissions and an isolated backend; pre_tool_call shell hooks and tirith are the pre-execution hook
+          points an endpoint agent could use
+        steps:
+          - &a63
+            title: Stop the agent and its schedules
+            body:
+              - hermes gateway stop --all halts every profile's gateway service; hermes cron pause <job> and /loop stop
+                or /heartbeat pause halt the unattended triggers; the terminal tool is guarded from stopping
+                its own supervised gateway.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a64
+            title: Cut off a sender
+            body:
+              - hermes pairing revoke <platform> <user-id> removes a paired user; hermes pairing clear-pending drops
+                outstanding codes.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a65
+            title: Invalidate sandbox credentials
+            body:
+              - hermes egress setup --rotate-tokens mints fresh proxy tokens and hermes egress stop kills the
+                daemon so old tokens stop working; restart running sandboxes too.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a66
+            title: Undo file damage
+            body:
+              - "With checkpoints.enabled: true Hermes snapshots the project before destructive operations
+                into ~/.hermes/checkpoints/store/; /rollback diff <N> previews and /rollback <N> restores."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/checkpoints-and-rollback
+        evidence:
+          - &a67
+            title: Hermes Agent — official site, reviewed for the integration point (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityKillSwitch] Decommissioning means deleting the profile directory yourself and rotating
+          every provider and platform token it held; quarantine from peers is only A2A_TRUSTED_PEERS on the
+          other agents.
+
+
+          [capabilityEdr] Keep your EDR on the host and, if it exposes a CLI, wire it into a
+          hooks.pre_tool_call entry with fail_closed true so it can veto commands. hermes doctor surfaces the
+          built-in supply-chain advisory catalog for the Python venv but is not endpoint detection.
+        migration:
+          from:
+            - capabilityKillSwitch
+            - capabilityEdr
+          reviewRequired: true
+          original:
+            - capability: capabilityKillSwitch
+              coverage: partial
+              mechanism: hermes gateway stop (--all), hermes cron pause, /loop stop, hermes pairing revoke, hermes egress
+                setup --rotate-tokens and /rollback undo pieces of a deployment; there is no single
+                revoke-everything and provider keys are rotated at the provider
+              steps: &a68
+                - *a63
+                - *a64
+                - *a65
+                - *a66
+              note: Decommissioning means deleting the profile directory yourself and rotating every provider and platform
+                token it held; quarantine from peers is only A2A_TRUSTED_PEERS on the other agents.
+              verified: 2026-09-10
+            - capability: capabilityEdr
+              coverage: external
+              mechanism: The docs defer containment to OS permissions and an isolated backend; pre_tool_call shell hooks and
+                tirith are the pre-execution hook points an endpoint agent could use
+              note: Keep your EDR on the host and, if it exposes a CLI, wire it into a hooks.pre_tool_call entry with
+                fail_closed true so it can veto commands. hermes doctor surfaces the built-in supply-chain
+                advisory catalog for the Python venv but is not endpoint detection.
+              evidence: &a73
+                - *a67
+              verified: 2026-09-10
+      - capability: D3-CR
+        coverage: unknown
+        mechanism: hermes gateway stop (--all), hermes cron pause, /loop stop, hermes pairing revoke, hermes egress
+          setup --rotate-tokens and /rollback undo pieces of a deployment; there is no single
+          revoke-everything and provider keys are rotated at the provider
+        steps:
+          - *a63
+          - *a64
+          - *a65
+          - *a66
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityKillSwitch] Decommissioning means deleting the profile directory yourself and rotating
+          every provider and platform token it held; quarantine from peers is only A2A_TRUSTED_PEERS on the
+          other agents.
+        migration:
+          from:
+            - capabilityKillSwitch
+          reviewRequired: true
+          original:
+            - capability: capabilityKillSwitch
+              coverage: partial
+              mechanism: hermes gateway stop (--all), hermes cron pause, /loop stop, hermes pairing revoke, hermes egress
+                setup --rotate-tokens and /rollback undo pieces of a deployment; there is no single
+                revoke-everything and provider keys are rotated at the provider
+              steps: *a68
+              note: Decommissioning means deleting the profile directory yourself and rotating every provider and platform
+                token it held; quarantine from peers is only A2A_TRUSTED_PEERS on the other agents.
+              verified: 2026-09-10
+      - capability: D3-AI
+        coverage: unknown
+        mechanism: Nothing in the product looks for agents or tool servers outside its own install; hermes mcp list,
+          hermes plugins list, hermes skills list and hermes gateway list inventory this install's tool
+          servers, plugins, skills and profiles; plugin packs export a SHA-pinned manifest; no ownership or
+          approval state
+        steps:
+          - &a70
+            title: Inventory the tool servers and extensions
+            body:
+              - hermes mcp list, hermes plugins list (enabled / disabled / not enabled) and hermes skills list show what
+                this profile can reach; hermes mcp test <name> checks a server is what config says.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a71
+            title: Inventory the agents
+            body:
+              - hermes gateway list shows every profile and whether its gateway is running with its PID; each
+                profile is a separate agent with its own credentials.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+          - &a72
+            title: Record the approved plugin set as a pack
+            body:
+              - hermes plugins pack export --enabled-only emits a hermes-pack.yaml of repo plus exact commit
+                SHA per plugin that hermes plugins pack install reproduces after a mandatory review screen.
+            url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+        evidence:
+          - &a69
+            title: Hermes Agent — official site, reviewed for the integration point (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityShadowAiDiscovery] hermes gateway list and hermes profile only enumerate this
+          installation's profiles. Discover Hermes installs from endpoint inventory (the ~/.hermes directory,
+          the hermes-gateway-<profile> systemd or launchd units, ports 9119/8642/9900).
+
+
+          [capabilityAgentRegistry] These are local listings, not a registry: record each profile, its owner
+          and its MCP servers in your organisation's agent register yourself.
+        migration:
+          from:
+            - capabilityShadowAiDiscovery
+            - capabilityAgentRegistry
+          reviewRequired: true
+          original:
+            - capability: capabilityShadowAiDiscovery
+              coverage: external
+              mechanism: Nothing in the product looks for agents or tool servers outside its own install
+              note: hermes gateway list and hermes profile only enumerate this installation's profiles. Discover Hermes
+                installs from endpoint inventory (the ~/.hermes directory, the hermes-gateway-<profile>
+                systemd or launchd units, ports 9119/8642/9900).
+              evidence:
+                - *a69
+              verified: 2026-09-10
+            - capability: capabilityAgentRegistry
+              coverage: partial
+              mechanism: hermes mcp list, hermes plugins list, hermes skills list and hermes gateway list inventory this
+                install's tool servers, plugins, skills and profiles; plugin packs export a SHA-pinned
+                manifest; no ownership or approval state
+              steps:
+                - *a70
+                - *a71
+                - *a72
+              note: "These are local listings, not a registry: record each profile, its owner and its MCP servers in your
+                organisation's agent register yourself."
+              verified: 2026-09-10
+      - capability: D3-PA
+        coverage: unknown
+        mechanism: The docs defer containment to OS permissions and an isolated backend; pre_tool_call shell hooks and
+          tirith are the pre-execution hook points an endpoint agent could use
+        steps: []
+        evidence:
+          - *a67
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEdr] Keep your EDR on the host and, if it exposes a CLI, wire it into a
+          hooks.pre_tool_call entry with fail_closed true so it can veto commands. hermes doctor surfaces the
+          built-in supply-chain advisory catalog for the Python venv but is not endpoint detection.
+        migration:
+          from:
+            - capabilityEdr
+          reviewRequired: true
+          original:
+            - capability: capabilityEdr
+              coverage: external
+              mechanism: The docs defer containment to OS permissions and an isolated backend; pre_tool_call shell hooks and
+                tirith are the pre-execution hook points an endpoint agent could use
+              note: Keep your EDR on the host and, if it exposes a CLI, wire it into a hooks.pre_tool_call entry with
+                fail_closed true so it can veto commands. hermes doctor surfaces the built-in supply-chain
+                advisory catalog for the Python venv but is not endpoint detection.
+              evidence: *a73
+              verified: 2026-09-10
+      - capability: AML.M0038
+        coverage: unknown
+        mechanism: No baseline of goals or tool-use patterns and no intent-versus-action comparison
+        steps: []
+        evidence:
+          - &a74
+            title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityBehavioralDriftDetection] tool_loop_guardrails and agent.stall_guards catch replays and
+          no-progress loops, and hermes insights summarises usage, but nothing flags an agent whose actions
+          diverge from its stated task; review session exports or a post_tool_call hook feed externally.
+        migration:
+          from:
+            - capabilityBehavioralDriftDetection
+          reviewRequired: true
+          original:
+            - capability: capabilityBehavioralDriftDetection
+              coverage: none
+              mechanism: No baseline of goals or tool-use patterns and no intent-versus-action comparison
+              note: tool_loop_guardrails and agent.stall_guards catch replays and no-progress loops, and hermes insights
+                summarises usage, but nothing flags an agent whose actions diverge from its stated task;
+                review session exports or a post_tool_call hook feed externally.
+              evidence:
+                - *a74
+              verified: 2026-09-10
+      - capability: D3-OTF
+        coverage: unknown
+        mechanism: terminal.docker_network false air-gaps the sandbox; the iron-proxy egress proxy is default-deny
+          with proxy.extra_allowed_hosts and upstream_deny_cidrs; SSRF protection and
+          security.website_blocklist bound URL-capable tools; the host process's own LLM calls are not proxied
+        steps:
+          - &a75
+            title: Route sandbox traffic through the allowlisting proxy
+            body:
+              - Run hermes egress install, hermes egress setup and hermes egress start; a request from the Docker sandbox
+                to a host not on the bundled list or proxy.extra_allowed_hosts gets HTTP 403 before any bytes
+                leave the host, and private, link-local and metadata ranges are refused via
+                proxy.upstream_deny_cidrs.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
+          - &a76
+            title: Or remove sandbox network access entirely
+            body:
+              - "Set terminal.docker_network: false to start the execution container with --network=none for
+                terminal, execute_code and the file tools."
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+          - &a77
+            title: Keep the URL tools off the local network
+            body:
+              - Leave security.allow_private_urls at false so web, browser, vision and gateway media fetches
+                reject RFC 1918, loopback, link-local, CGNAT and cloud-metadata destinations, and enable
+                security.website_blocklist for named hosts.
+            url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEgressControl] The local backend and the host process itself have no egress control from
+          Hermes; an allowlisted host such as api.openai.com can still carry exfiltrated data in a request
+          body, which the proxy logs but does not prevent.
+        migration:
+          from:
+            - capabilityEgressControl
+          reviewRequired: true
+          original:
+            - capability: capabilityEgressControl
+              coverage: native
+              mechanism: terminal.docker_network false air-gaps the sandbox; the iron-proxy egress proxy is default-deny
+                with proxy.extra_allowed_hosts and upstream_deny_cidrs; SSRF protection and
+                security.website_blocklist bound URL-capable tools; the host process's own LLM calls are not
+                proxied
+              steps: &a78
+                - *a75
+                - *a76
+                - *a77
+              note: The local backend and the host process itself have no egress control from Hermes; an allowlisted host
+                such as api.openai.com can still carry exfiltrated data in a request body, which the proxy
+                logs but does not prevent.
+              verified: 2026-09-10
+      - capability: D3-NI
+        coverage: unknown
+        mechanism: terminal.docker_network false air-gaps the sandbox; the iron-proxy egress proxy is default-deny
+          with proxy.extra_allowed_hosts and upstream_deny_cidrs; SSRF protection and
+          security.website_blocklist bound URL-capable tools; the host process's own LLM calls are not proxied
+        steps:
+          - *a75
+          - *a76
+          - *a77
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEgressControl] The local backend and the host process itself have no egress control from
+          Hermes; an allowlisted host such as api.openai.com can still carry exfiltrated data in a request
+          body, which the proxy logs but does not prevent.
+        migration:
+          from:
+            - capabilityEgressControl
+          reviewRequired: true
+          original:
+            - capability: capabilityEgressControl
+              coverage: native
+              mechanism: terminal.docker_network false air-gaps the sandbox; the iron-proxy egress proxy is default-deny
+                with proxy.extra_allowed_hosts and upstream_deny_cidrs; SSRF protection and
+                security.website_blocklist bound URL-capable tools; the host process's own LLM calls are not
+                proxied
+              steps: *a78
+              note: The local backend and the host process itself have no egress control from Hermes; an allowlisted host
+                such as api.openai.com can still carry exfiltrated data in a request body, which the proxy
+                logs but does not prevent.
+              verified: 2026-09-10
+      - capability: D3-FA
+        coverage: unknown
+        mechanism: The CLI loads no weights — inference is an API or a local llama.cpp / Ollama server; the desktop
+          managed runtime downloads GGUF files with a byte-size check only
+        steps: []
+        evidence:
+          - &a79
+            title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
+            url: https://hermes-agent.nousresearch.com/
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityModelScanning] The local-models page states that only the runtime engine zips are SHA-256
+          verified, not model downloads, and community Hugging Face models carry no validation badge. Scan any
+          .gguf you add with your own tooling before "Add model file", and keep local_runtime.tag on the
+          release Hermes validated. Rated none rather than not applicable because the desktop runtime itself
+          downloads model files and checks only their size; that is a real artifact-scanning obligation the
+          product does not meet.
+        migration:
+          from:
+            - capabilityModelScanning
+          reviewRequired: true
+          original:
+            - capability: capabilityModelScanning
+              coverage: none
+              mechanism: The CLI loads no weights — inference is an API or a local llama.cpp / Ollama server; the desktop
+                managed runtime downloads GGUF files with a byte-size check only
+              note: The local-models page states that only the runtime engine zips are SHA-256 verified, not model
+                downloads, and community Hugging Face models carry no validation badge. Scan any .gguf you add
+                with your own tooling before "Add model file", and keep local_runtime.tag on the release
+                Hermes validated. Rated none rather than not applicable because the desktop runtime itself
+                downloads model files and checks only their size; that is a real artifact-scanning obligation
+                the product does not meet.
+              evidence: &a80
+                - *a79
+              verified: 2026-09-10
+      - capability: AML.M0011
+        coverage: unknown
+        mechanism: The CLI loads no weights — inference is an API or a local llama.cpp / Ollama server; the desktop
+          managed runtime downloads GGUF files with a byte-size check only
+        steps: []
+        evidence:
+          - *a79
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityModelScanning] The local-models page states that only the runtime engine zips are SHA-256
+          verified, not model downloads, and community Hugging Face models carry no validation badge. Scan any
+          .gguf you add with your own tooling before "Add model file", and keep local_runtime.tag on the
+          release Hermes validated. Rated none rather than not applicable because the desktop runtime itself
+          downloads model files and checks only their size; that is a real artifact-scanning obligation the
+          product does not meet.
+        migration:
+          from:
+            - capabilityModelScanning
+          reviewRequired: true
+          original:
+            - capability: capabilityModelScanning
+              coverage: none
+              mechanism: The CLI loads no weights — inference is an API or a local llama.cpp / Ollama server; the desktop
+                managed runtime downloads GGUF files with a byte-size check only
+              note: The local-models page states that only the runtime engine zips are SHA-256 verified, not model
+                downloads, and community Hugging Face models carry no validation badge. Scan any .gguf you add
+                with your own tooling before "Add model file", and keep local_runtime.tag on the release
+                Hermes validated. Rated none rather than not applicable because the desktop runtime itself
+                downloads model files and checks only their size; that is a real artifact-scanning obligation
+                the product does not meet.
+              evidence: *a80
+              verified: 2026-09-10
     advisories:
       - title: "CVE-2026-53869 (GHSA-4pqm-j46f-795x) — DNS rebinding on dashboard WebSocket endpoints, fixed in 0.16.0"
         url: https://github.com/advisories/GHSA-4pqm-j46f-795x

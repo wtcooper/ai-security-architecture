@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { frameworkById, org } from "@/lib/data";
+import { frameworkById, frameworkEntries, org } from "@/lib/data";
 import { FRAMEWORK_ORDER, frameworkHref } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Mappings } from "@/lib/types";
@@ -32,7 +32,7 @@ export function Chip({
 }
 
 /**
- * Renders framework mappings as compact, linked identifier badges.
+ * Renders framework mappings with human-readable names first and identifiers second.
  *
  * `extra` carries mappings authored in this repository for a framework CoSAI does not
  * publish. They are marked, because every other badge here is CoSAI's own assertion.
@@ -99,14 +99,17 @@ export function MappingBadges({
             ) : null}
             {values.map((v) => {
               const bare = v.split("@")[0];
+              const label = frameworkEntries[id]?.[bare]?.label ?? bare;
               return (
                 <Link
                   key={v}
                   href={frameworkHref(id, bare)}
-                  title={`See everything mapped to ${bare}`}
+                  title={`See everything mapped to ${label}${label !== bare ? ` (${bare})` : ""}`}
                   className="transition-opacity hover:opacity-70"
                 >
-                  <span className="ident rounded bg-mist px-1.5 py-[2px] text-ink-2">{bare}</span>
+                  <span className="rounded bg-mist px-1.5 py-[2px] text-[12px] text-ink-2">
+                    {label}{label !== bare && <span className="ml-1 text-[10.5px] text-ink-3">({bare})</span>}
+                  </span>
                 </Link>
               );
             })}

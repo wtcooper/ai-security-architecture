@@ -133,3 +133,13 @@ Recorded here when a surface is deliberately left out, with the reason.
 - Anthropic — Computer use, Skills, the connector directory and the Developer Console — features and planes, recorded as facts and steps on the entities that expose them.
 - Google Antigravity CLI — the consumer replacement for Gemini CLI since 2026-06-18 (unpaid tier and Google One users); not onboarded, its docs were not fetched on 2026-09-10. Gemini CLI remains the Code Assist Standard/Enterprise, API-key and Vertex AI product and is recorded as `toolGeminiCli`.
 - Google run-gemini-cli GitHub Action — a CI runtime for the same engine; its advisory GHSA-wpqr-6v78-jr5g is recorded on `toolGeminiCli` because it patched the CLI itself.
+
+## MITRE capability scope
+
+`controls[].capability` uses a selected native `D3-*` or `AML.M*` identifier. Canonical
+definitions come from `data/mitre`; the overlay supplies authored implementation scope.
+A migrated row with `migration.reviewRequired: true` has `coverage: unknown`; its steps and
+`migration.original` preserve prior evidence, not verified coverage of the new function.
+Re-verify each required feature and boundary, set the appropriate coverage and verification
+date, and clear the review flag. Do not mark all of `AML.M0020` native merely because a
+product implements prompt-injection screening.

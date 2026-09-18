@@ -12,6 +12,9 @@ import {
   bandsForCapability,
   capabilitiesInOrder,
   capabilityById,
+  capabilityAliases,
+  capabilityGaps,
+  controlById,
   controlCategories,
   orgSurfaceStatusFor,
   riskById,
@@ -30,10 +33,13 @@ export function CapabilitiesBrowser() {
 
   const [riskCategory, setRiskCategory] = useState<string | null>(null);
   const [band, setBand] = useState<BandId | null>(null);
-  const [clicked, setClicked] = useState<string | null>(null);
+  const [clicked, setClicked] = useState<string | null | undefined>(undefined);
+  const [source, setSource] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const overlay = useOrgOverlay();
 
-  const selectedId = clicked ?? (linked && capabilityById.has(linked) ? linked : null);
+  const replacements = linked ? capabilityAliases[linked] : undefined;
+  const selectedId = clicked === undefined ? (replacements?.[0] ?? (linked && capabilityById.has(linked) ? linked : null)) : clicked;
   const selected = selectedId ? capabilityById.get(selectedId) : undefined;
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -44,21 +50,23 @@ export function CapabilitiesBrowser() {
   const matchesRisk = (cap: Capability) =>
     !riskCategory || cap.risks.some((id) => riskById.get(id)?.category === riskCategory);
   const matchesBand = (cap: Capability) => !band || bandsForCapability(cap.id).has(band);
-  const shown = capabilitiesInOrder.filter((c) => matchesRisk(c) && matchesBand(c));
+  const matchesSourceAndQuery = (cap: Capability) => (!source || cap.origin.framework === source) &&
+    `${cap.id} ${cap.title} ${cap.implementation} ${cap.examples.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase());
+  const shown = capabilitiesInOrder.filter((c) => matchesRisk(c) && matchesBand(c) && matchesSourceAndQuery(c));
 
   // Stack-filter counts respond to the risk filter, so the two selectors read as one system.
   const bandCounts = Object.fromEntries(BAND_IDS.map((b) => [b, 0])) as Record<BandId, number>;
   for (const cap of capabilitiesInOrder) {
-    if (!matchesRisk(cap)) continue;
+    if (!matchesRisk(cap) || !matchesSourceAndQuery(cap)) continue;
     for (const b of bandsForCapability(cap.id)) bandCounts[b] += 1;
   }
 
   return (
     <>
       <PageHeader
-        eyebrow={`${capabilitiesInOrder.length} technology capabilities · authored taxonomy`}
+        eyebrow={`${capabilitiesInOrder.length} capabilities · MITRE D3FEND + ATLAS`}
         title="Capabilities"
-        lead="CoSAI names the control strategies; this taxonomy names the tooling classes that deliver them. Every surface — endpoint, cloud, third-party SaaS — runs its own instance of the same component stack, but the capabilities that work there differ. Rows are CoSAI control groups; columns are surfaces."
+        lead="CoSAI supplies the controls. MITRE D3FEND and ATLAS supply the capability identifiers, names and definitions. Rows and deployment scope are this repository’s mappings; a mapped function contributes to a control without proving it is fulfilled."
         aside={<OverlayToggle />}
       >
         <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -90,14 +98,30 @@ export function CapabilitiesBrowser() {
       </PageHeader>
 
       <div className="mx-auto w-full max-w-[1400px] px-6 py-8">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <input aria-label="Search capabilities" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, identifier or implementation…" className="min-w-[280px] rounded-md border border-line bg-paper px-3 py-2 text-sm" />
+          {[null, "MITRE D3FEND", "MITRE ATLAS"].map((name) => (
+            <FilterPill key={name ?? "all"} active={source === name} onClick={() => setSource(name)}>{name ?? "All sources"}</FilterPill>
+          ))}
+        </div>
+        {replacements && (
+          <div className="mb-4 rounded-lg border border-line bg-paper p-4 text-sm text-ink-2">
+            <p>{replacements.length ? "This older capability link now points to the following functions. Review each function separately." : "This capability was retired because no sufficiently matching MITRE capability was selected. Its requirements remain in the CoSAI gap assessment below."}</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {replacements.map((id) => <button key={id} onClick={() => setClicked(id)} className="text-introduced hover:underline">{capabilityById.get(id)?.title} <span className="text-xs text-ink-3">({id})</span></button>)}
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3 pb-3">
           <p className="text-[13px] text-ink-3">
             {shown.length} of {capabilitiesInOrder.length} capabilities
-            {(riskCategory || band) && (
+            {(riskCategory || band || source || query) && (
               <button
                 onClick={() => {
                   setRiskCategory(null);
                   setBand(null);
+                  setSource(null);
+                  setQuery("");
                 }}
                 className="ml-2 font-semibold text-introduced hover:underline"
               >
@@ -170,7 +194,7 @@ export function CapabilitiesBrowser() {
                                   key={cap.id}
                                   onClick={() => setClicked(active ? null : cap.id)}
                                   aria-pressed={active}
-                                  title={status ? `${cap.title} — ${STATUS_META[status].label}` : cap.title}
+                                  title={`${cap.title} (${cap.id})${status ? ` — ${STATUS_META[status].label}` : ""}`}
                                   className="inline-flex items-center rounded-full border px-2.5 py-[5px] text-[12px] font-medium transition-shadow"
                                   style={{
                                     background: tint.bg,
@@ -180,7 +204,7 @@ export function CapabilitiesBrowser() {
                                     boxShadow: active ? "0 0 0 1px var(--ink)" : undefined,
                                   }}
                                 >
-                                  {cap.abbrev ?? cap.title}
+                                  {cap.title}
                                 </button>
                               );
                             })}
@@ -199,9 +223,18 @@ export function CapabilitiesBrowser() {
 
         <p className="mt-2 text-[12px] text-ink-3">
           A capability sits in its primary control group; its full control mapping is in the
-          detail. A blank cell means the capability cannot reach that surface at all — the
-          reason is on the capability.
+          detail. Blank cells are outside this customer-deployment profile. Provider-inherited
+          functions require supplier evidence. Counts describe catalogue entries, not independent
+          defenses or a coverage score; some upstream concepts overlap.
         </p>
+
+        <details className="mt-5 rounded-lg border border-line bg-paper p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-ink">CoSAI requirements beyond the capability mappings</summary>
+          <p className="mt-2 text-xs text-ink-3">Authored assessment of the pinned MITRE releases. These are gaps and implementation requirements against existing CoSAI controls, not additional capabilities.</p>
+          <ul className="mt-3 space-y-3">
+            {capabilityGaps.map((gap) => <li key={gap.control} className="text-sm text-ink-2"><a href={`/controls?control=${gap.control}`} className="font-semibold text-introduced hover:underline">{controlById.get(gap.control)?.title}</a> · {gap.assessment}<p className="mt-1">{gap.missing}</p></li>)}
+          </ul>
+        </details>
 
         <div ref={detailRef} className="mt-6 scroll-mt-20">
           {selected && (

@@ -27,6 +27,7 @@ import type {
   Capability,
   Component,
   Control,
+  Dataset,
   Guidance,
   Tool,
   Paragraph,
@@ -305,6 +306,7 @@ async function main() {
     surfaces: Surface[];
     guidance: Guidance[];
     tools: Tool[];
+    capabilityGaps: Dataset["capabilityGaps"];
   };
   const archetypes = dataset.archetypes ?? [];
 
@@ -459,6 +461,23 @@ async function main() {
         `${stale ? "**stale — re-verify**" : ""} |`,
     );
   }
+  p();
+
+  p("## 6. MITRE capability provenance and CoSAI gaps");
+  p();
+  for (const framework of ["MITRE D3FEND", "MITRE ATLAS"]) {
+    const selected = dataset.capabilities.filter((c) => c.origin.framework === framework);
+    p(`- ${framework} ${selected[0]?.origin.version ?? ""}: ${selected.length} canonical entries.`);
+  }
+  const mappedControls = controls.filter((c) => dataset.capabilities.some((cap) => cap.controls.includes(c.id)));
+  p(`- ${mappedControls.length}/${controls.length} CoSAI controls have supporting mappings; this is not fulfillment.`);
+  p(`- ${tools.reduce((n, t) => n + t.controls.filter((c) => c.migration?.reviewRequired).length, 0)} tool-capability rows require reassessment after migration.`);
+  p();
+  p("| CoSAI control | Mapping | Remaining requirement |");
+  p("| --- | --- | --- |");
+  for (const gap of dataset.capabilityGaps) p(`| ${controlById.get(gap.control)?.title ?? gap.control} | ${gap.assessment} | ${gap.missing.replace(/\s+/g, " ")} |`);
+  p();
+  p("See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom capability identifiers are introduced.");
   p();
 
   await mkdir(join(ROOT, "docs"), { recursive: true });

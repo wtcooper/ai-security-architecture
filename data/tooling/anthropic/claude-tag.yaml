@@ -98,325 +98,876 @@ tools:
           Routines and channel watches run unattended with the channel's credentials and are
           created by any channel member; the Audit page's Scheduled work tab is the inventory.
     controls:
-      - capability: capabilityIga
-        coverage: native
-        mechanism: >-
-          Owner-only setup and configuration; "Restrict to roles with Claude Tag access"
-          (Enterprise custom roles with the Claude Tag in Slack capability) or "Restrict to your
-          organization" (Team); "Restrict to your verified domains" for account linking; channel
-          managers via custom roles
+      - capability: D3-MFA
+        coverage: unknown
+        mechanism: Owner-only setup and configuration; "Restrict to roles with Claude Tag access" (Enterprise custom
+          roles with the Claude Tag in Slack capability) or "Restrict to your organization" (Team); "Restrict
+          to your verified domains" for account linking; channel managers via custom roles
         steps:
-          - title: Restrict who can invoke Claude
+          - &a1
+            title: Restrict who can invoke Claude
             body:
-              - At claude.ai/admin-settings/claude-tag > Where Claude Tag works > Member access,
-                turn on "Restrict to roles with Claude Tag access" (Enterprise) or "Restrict to your
-                organization" (Team); the toggle covers channels and DMs.
+              - At claude.ai/admin-settings/claude-tag > Where Claude Tag works > Member access, turn on "Restrict to
+                roles with Claude Tag access" (Enterprise) or "Restrict to your organization" (Team); the
+                toggle covers channels and DMs.
             url: https://claude.com/docs/claude-tag/admins/restrict-access
-          - title: Gate by custom role
+          - &a2
+            title: Gate by custom role
             body:
-              - Create groups at claude.ai/admin-settings/groups and a custom role at
-                claude.ai/admin-settings/roles with the "Claude Tag in Slack" capability; built-in
-                roles always grant it.
+              - Create groups at claude.ai/admin-settings/groups and a custom role at claude.ai/admin-settings/roles
+                with the "Claude Tag in Slack" capability; built-in roles always grant it.
             url: https://claude.com/docs/claude-tag/admins/restrict-access
-        verified: "2026-09-10"
-      - capability: capabilitySse
-        coverage: external
-        mechanism: Corporate proxy tenant-restriction header for claude.ai; Slack-side app approval and Enterprise Grid distribution controls
+        evidence: []
         note: >-
-          Claude Tag runs server-side, so the only network-layer levers are the Slack admin's app
-          approval and the anthropic-allowed-org-ids header on claude.ai traffic for the account
-          linking flow.
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityIga]
+        migration:
+          from:
+            - capabilityIga
+          reviewRequired: true
+          original:
+            - capability: capabilityIga
+              coverage: native
+              mechanism: Owner-only setup and configuration; "Restrict to roles with Claude Tag access" (Enterprise custom
+                roles with the Claude Tag in Slack capability) or "Restrict to your organization" (Team);
+                "Restrict to your verified domains" for account linking; channel managers via custom roles
+              steps: &a3
+                - *a1
+                - *a2
+              verified: 2026-09-10
+      - capability: D3-APA
+        coverage: unknown
+        mechanism: Owner-only setup and configuration; "Restrict to roles with Claude Tag access" (Enterprise custom
+          roles with the Claude Tag in Slack capability) or "Restrict to your organization" (Team); "Restrict
+          to your verified domains" for account linking; channel managers via custom roles; Reach inside a
+          tool equals what the service account can access; account-level scoping is the control; DMs run as
+          the user
         steps:
-          - title: Control the Slack side
+          - *a1
+          - *a2
+          - &a4
+            title: Scope the service account, not just the connection
             body:
-              - Slack workspace admins decide whether the Claude app is installed; on Enterprise
-                Grid, org admins choose which workspaces get it; removing the app revokes access
-                immediately.
+              - Share only the folders, spaces or projects Claude should see with its dedicated account; host and path
+                rules limit endpoints, not records.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityIga]
+
+
+          [capabilityDataAccessGovernance] Service-owned in channels: retrieval carries the service account's
+          access, so every member of a scope reaches what that account can, regardless of their own
+          entitlements. Delegated in DMs, which run as the member.
+        migration:
+          from:
+            - capabilityIga
+            - capabilityDataAccessGovernance
+          reviewRequired: true
+          original:
+            - capability: capabilityIga
+              coverage: native
+              mechanism: Owner-only setup and configuration; "Restrict to roles with Claude Tag access" (Enterprise custom
+                roles with the Claude Tag in Slack capability) or "Restrict to your organization" (Team);
+                "Restrict to your verified domains" for account linking; channel managers via custom roles
+              steps: *a3
+              verified: 2026-09-10
+            - capability: capabilityDataAccessGovernance
+              coverage: partial
+              mechanism: Reach inside a tool equals what the service account can access; account-level scoping is the
+                control; DMs run as the user
+              steps: &a28
+                - *a4
+              note: "Service-owned in channels: retrieval carries the service account's access, so every member of a scope
+                reaches what that account can, regardless of their own entitlements. Delegated in DMs, which
+                run as the member."
+              verified: 2026-09-10
+      - capability: D3-OTF
+        coverage: unknown
+        mechanism: "Corporate proxy tenant-restriction header for claude.ai; Slack-side app approval and Enterprise
+          Grid distribution controls; Agent Proxy allow layers: connection allowed websites (credentialed),
+          bundle Domains tab (uncredentialed, wildcard leftmost label, ports), and the scope's environment
+          network access level (Trusted default, Custom, Full, No access); private ranges and cloud metadata
+          always blocked; HTTP/HTTPS only"
+        steps:
+          - &a5
+            title: Control the Slack side
+            body:
+              - Slack workspace admins decide whether the Claude app is installed; on Enterprise Grid, org admins choose
+                which workspaces get it; removing the app revokes access immediately.
             url: https://code.claude.com/docs/en/slack
-        verified: "2026-09-10"
-      - capability: capabilityAiDlp
-        coverage: partial
-        mechanism: >-
-          Default-deny egress through Agent Proxy (data leaves only to allowed hosts); credentials
-          never enter the sandbox; Enterprise Inference hooks are not documented for Claude Tag
-        steps:
-          - title: Keep egress default-deny
+          - &a6
+            title: Allow hosts per bundle
             body:
-              - Leave the environment at Trusted or pin a No access environment on the scope, list
-                only needed hosts on the bundle's Domains tab, and do not request allow-all egress
-                unless required.
+              - On the bundle's Domains tab add each hostname (and non-443 ports); requests to unlisted hosts are
+                blocked and Claude names the blocked host in the thread.
             url: https://claude.com/docs/claude-tag/admins/add-connections
-        note: No content inspection of prompts or outputs is offered; artifact publishing and Slack posting are the visible egress paths.
-        verified: "2026-09-10"
-      - capability: capabilityBrowserDetectionResponse
-        coverage: notApplicable
+          - &a7
+            title: Pin a stricter environment on the scope
+            body:
+              - Create an organisation-shared cloud environment with No access or a Custom list and choose it
+                under the scope's Advanced > Environment.
+            url: https://claude.com/docs/claude-tag/admins/customize
+        evidence: []
         note: >-
-          Not applicable: the surface is Slack and a server-side sandbox, not a browser session the organisation instruments.
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySse] Claude Tag runs server-side, so the only network-layer levers are the Slack admin's
+          app approval and the anthropic-allowed-org-ids header on claude.ai traffic for the account linking
+          flow.
+
+
+          [capabilityEgressControl] Enforced server-side by the Agent Proxy for the sandbox; artifact
+          publishing and Slack posting are separate egress paths governed by scope settings, not the domain
+          lists.
+        migration:
+          from:
+            - capabilitySse
+            - capabilityEgressControl
+          reviewRequired: true
+          original:
+            - capability: capabilitySse
+              coverage: external
+              mechanism: Corporate proxy tenant-restriction header for claude.ai; Slack-side app approval and Enterprise
+                Grid distribution controls
+              note: Claude Tag runs server-side, so the only network-layer levers are the Slack admin's app approval and the
+                anthropic-allowed-org-ids header on claude.ai traffic for the account linking flow.
+              steps:
+                - *a5
+              verified: 2026-09-10
+            - capability: capabilityEgressControl
+              coverage: native
+              mechanism: "Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
+                (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access
+                level (Trusted default, Custom, Full, No access); private ranges and cloud metadata always
+                blocked; HTTP/HTTPS only"
+              steps: &a11
+                - *a6
+                - *a7
+              note: Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack posting are
+                separate egress paths governed by scope settings, not the domain lists.
+              verified: 2026-09-10
+      - capability: AML.M0020
+        coverage: unknown
+        mechanism: Default-deny egress through Agent Proxy (data leaves only to allowed hosts); credentials never
+          enter the sandbox; Enterprise Inference hooks are not documented for Claude Tag; Auto-mode
+          classifier plus structural containment (credential-free sandbox, default-deny egress,
+          service-account scoping)
+        steps:
+          - &a8
+            title: Keep egress default-deny
+            body:
+              - Leave the environment at Trusted or pin a No access environment on the scope, list only needed hosts on
+                the bundle's Domains tab, and do not request allow-all egress unless required.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+          - &a9
+            title: Contain rather than detect
+            body:
+              - Attach bundles holding sensitive credentials only to private channels, keep guest channels Restricted,
+                and rely on Agent Proxy blocking unlisted hosts.
+            url: https://claude.com/docs/claude-tag/concepts/security-and-data
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAiDlp] No content inspection of prompts or outputs is offered; artifact publishing and
+          Slack posting are the visible egress paths.
+
+
+          [capabilityPromptInjectionDefense] The auto-mode classifier screens proposed actions; the sandbox
+          and default-deny egress contain. Slack messages and connector results are not classified for
+          injected instructions.
+        migration:
+          from:
+            - capabilityAiDlp
+            - capabilityPromptInjectionDefense
+          reviewRequired: true
+          original:
+            - capability: capabilityAiDlp
+              coverage: partial
+              mechanism: Default-deny egress through Agent Proxy (data leaves only to allowed hosts); credentials never
+                enter the sandbox; Enterprise Inference hooks are not documented for Claude Tag
+              steps:
+                - *a8
+              note: No content inspection of prompts or outputs is offered; artifact publishing and Slack posting are the
+                visible egress paths.
+              verified: 2026-09-10
+            - capability: capabilityPromptInjectionDefense
+              coverage: partial
+              mechanism: Auto-mode classifier plus structural containment (credential-free sandbox, default-deny egress,
+                service-account scoping)
+              steps:
+                - *a9
+              note: The auto-mode classifier screens proposed actions; the sandbox and default-deny egress contain. Slack
+                messages and connector results are not classified for injected instructions.
+              verified: 2026-09-10
+      - capability: D3-WSAA
+        coverage: unknown
+        steps: []
         evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+          - &a10
+            title: Vendor docs index, reviewed for applicability (2026-09-10)
             url: https://claude.com/docs/claude-tag/overview
-        verified: "2026-09-10"
-      - capability: capabilityEgressControl
-        coverage: native
-        mechanism: >-
-          Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
-          (uncredentialed, wildcard leftmost label, ports), and the scope's environment network
-          access level (Trusted default, Custom, Full, No access); private ranges and cloud
-          metadata always blocked; HTTP/HTTPS only
-        steps:
-          - title: Allow hosts per bundle
-            body:
-              - On the bundle's Domains tab add each hostname (and non-443 ports); requests to
-                unlisted hosts are blocked and Claude names the blocked host in the thread.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-          - title: Pin a stricter environment on the scope
-            body:
-              - Create an organisation-shared cloud environment with No access or a Custom list and
-                choose it under the scope's Advanced > Environment.
-            url: https://claude.com/docs/claude-tag/admins/customize
         note: >-
-          Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack
-          posting are separate egress paths governed by scope settings, not the domain lists.
-        verified: "2026-09-10"
-      - capability: capabilityAiGovernancePlatform
-        coverage: external
-        mechanism: Audit page (Scheduled work, Memory, Network events export), Access bundles page with per-connection status, analytics at claude.ai/analytics/claude-tag
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityBrowserDetectionResponse] Not applicable: the surface is Slack and a server-side sandbox,
+          not a browser session the organisation instruments.
+        migration:
+          from:
+            - capabilityBrowserDetectionResponse
+          reviewRequired: true
+          original:
+            - capability: capabilityBrowserDetectionResponse
+              coverage: notApplicable
+              note: "Not applicable: the surface is Slack and a server-side sandbox, not a browser session the organisation
+                instruments."
+              evidence:
+                - *a10
+              verified: 2026-09-10
+      - capability: D3-NI
+        coverage: unknown
+        mechanism: "Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
+          (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access level
+          (Trusted default, Custom, Full, No access); private ranges and cloud metadata always blocked;
+          HTTP/HTTPS only"
         steps:
-          - title: Inventory what Claude can do and does
+          - *a6
+          - *a7
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEgressControl] Enforced server-side by the Agent Proxy for the sandbox; artifact
+          publishing and Slack posting are separate egress paths governed by scope settings, not the domain
+          lists.
+        migration:
+          from:
+            - capabilityEgressControl
+          reviewRequired: true
+          original:
+            - capability: capabilityEgressControl
+              coverage: native
+              mechanism: "Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
+                (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access
+                level (Trusted default, Custom, Full, No access); private ranges and cloud metadata always
+                blocked; HTTP/HTTPS only"
+              steps: *a11
+              note: Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack posting are
+                separate egress paths governed by scope settings, not the domain lists.
+              verified: 2026-09-10
+      - capability: D3-ORA
+        coverage: unknown
+        mechanism: Audit page (Scheduled work, Memory, Network events export), Access bundles page with per-connection
+          status, analytics at claude.ai/analytics/claude-tag; Anthropic Trust Center artifacts plus the
+          security-and-data and data-lifecycle pages feed the buyer's vendor assessment
+        steps:
+          - &a12
+            title: Inventory what Claude can do and does
             body:
-              - Review the Access bundles page (Active / Never used per credential), the Audit page
-                tabs at claude.ai/admin-settings/claude-tag/audit, and the per-channel Access summary.
+              - Review the Access bundles page (Active / Never used per credential), the Audit page tabs at
+                claude.ai/admin-settings/claude-tag/audit, and the per-channel Access summary.
             url: https://claude.com/docs/claude-tag/admins/audit
+          - &a13
+            title: Record beta-specific gaps
+            body:
+              - Note in the vendor record that transcripts and memory have no retention period, are excluded from
+                data exports and Compliance API sessions during the beta, and that ZDR organisations are
+                excluded.
+            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+        evidence: []
         note: >-
-          The Audit page, Access bundles and analytics are inputs to governance; there is no intake,
-          risk decision, ownership or lifecycle workflow in the product. Rated external on the same
-          rule as every other vendor.
-        verified: "2026-09-10"
-      - capability: capabilityHitlControls
-        coverage: partial
-        mechanism: >-
-          Sessions run in auto mode (classifier); Owners add narrow auto-mode allow rules per scope;
-          pull requests are drafts for humans to merge; "Respond automatically" per channel
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAiGovernancePlatform] The Audit page, Access bundles and analytics are inputs to
+          governance; there is no intake, risk decision, ownership or lifecycle workflow in the product. Rated
+          external on the same rule as every other vendor.
+
+
+          [capabilityAiTprm]
+        migration:
+          from:
+            - capabilityAiGovernancePlatform
+            - capabilityAiTprm
+          reviewRequired: true
+          original:
+            - capability: capabilityAiGovernancePlatform
+              coverage: external
+              mechanism: Audit page (Scheduled work, Memory, Network events export), Access bundles page with per-connection
+                status, analytics at claude.ai/analytics/claude-tag
+              steps:
+                - *a12
+              note: The Audit page, Access bundles and analytics are inputs to governance; there is no intake, risk
+                decision, ownership or lifecycle workflow in the product. Rated external on the same rule as
+                every other vendor.
+              verified: 2026-09-10
+            - capability: capabilityAiTprm
+              coverage: external
+              mechanism: Anthropic Trust Center artifacts plus the security-and-data and data-lifecycle pages feed the
+                buyer's vendor assessment
+              steps:
+                - *a13
+              verified: 2026-09-10
+      - capability: AML.M0029
+        coverage: unknown
+        mechanism: Sessions run in auto mode (classifier); Owners add narrow auto-mode allow rules per scope; pull
+          requests are drafts for humans to merge; "Respond automatically" per channel
         steps:
-          - title: Keep allow rules narrow
+          - &a14
+            title: Keep allow rules narrow
             body:
-              - Add auto-mode allow rules only on the narrowest scope (up to 50 per scope, 1,024
-                characters each) and name the tool, action and environment; everything else stays
-                under the classifier.
+              - Add auto-mode allow rules only on the narrowest scope (up to 50 per scope, 1,024 characters each) and
+                name the tool, action and environment; everything else stays under the classifier.
             url: https://claude.com/docs/claude-tag/admins/customize
-          - title: Stop proactive work where it is not wanted
+          - &a15
+            title: Stop proactive work where it is not wanted
             body:
-              - Turn off a channel's Respond automatically setting so Claude only works when tagged;
-                proactive sessions bill under Proactive.
+              - Turn off a channel's Respond automatically setting so Claude only works when tagged; proactive
+                sessions bill under Proactive.
             url: https://claude.com/docs/claude-tag/admins/set-spend-limit
-        note: There is no per-action approval prompt in a channel; the classifier and deny-by-egress are the gates.
-        verified: "2026-09-10"
-      - capability: capabilityPromptInjectionDefense
-        coverage: partial
-        mechanism: Auto-mode classifier plus structural containment (credential-free sandbox, default-deny egress, service-account scoping)
-        steps:
-          - title: Contain rather than detect
-            body:
-              - Attach bundles holding sensitive credentials only to private channels, keep guest
-                channels Restricted, and rely on Agent Proxy blocking unlisted hosts.
-            url: https://claude.com/docs/claude-tag/concepts/security-and-data
+        evidence: []
         note: >-
-          The auto-mode classifier screens proposed actions; the sandbox and default-deny egress
-          contain. Slack messages and connector results are not classified for injected instructions.
-        verified: "2026-09-10"
-      - capability: capabilityNhiManagement
-        coverage: native
-        mechanism: >-
-          Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one
-          dedicated account per connected tool) so actions are attributable in each tool's audit
-          log; DMs use the member's identity
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityHitlControls] There is no per-action approval prompt in a channel; the classifier and
+          deny-by-egress are the gates.
+        migration:
+          from:
+            - capabilityHitlControls
+          reviewRequired: true
+          original:
+            - capability: capabilityHitlControls
+              coverage: partial
+              mechanism: Sessions run in auto mode (classifier); Owners add narrow auto-mode allow rules per scope; pull
+                requests are drafts for humans to merge; "Respond automatically" per channel
+              steps:
+                - *a14
+                - *a15
+              note: There is no per-action approval prompt in a channel; the classifier and deny-by-egress are the gates.
+              verified: 2026-09-10
+      - capability: D3-AA
+        coverage: unknown
+        mechanism: Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated account
+          per connected tool) so actions are attributable in each tool's audit log; DMs use the member's
+          identity
         steps:
-          - title: Provision a dedicated identity per tool
+          - &a16
+            title: Provision a dedicated identity per tool
             body:
-              - Create a mailbox such as claude@yourcompany, add it to each tool with the narrowest
-                role, and paste that account's API key on the setup page; rotate or delete from the
-                bundle's Credentials tab.
+              - Create a mailbox such as claude@yourcompany, add it to each tool with the narrowest role, and paste that
+                account's API key on the setup page; rotate or delete from the bundle's Credentials tab.
             url: https://claude.com/docs/claude-tag/admins/setup-overview
+        evidence: []
         note: >-
-          Compared with Copilot cloud: the service accounts are provisioned in the organisation's own
-          tools, so the organisation owns their scopes and can revoke them there — which is why this
-          is native while a vendor-owned app identity is partial. Actions in connected tools carry the
-          service account's authority; DMs carry the member's.
-        verified: "2026-09-10"
-      - capability: capabilityVendorAssurance
-        coverage: external
-        mechanism: Admin console readback (Access bundles, scopes, Access summary), audit log entries for channel-manager and deletion actions via the Compliance API Activity Feed
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityNhiManagement] Compared with Copilot cloud: the service accounts are provisioned in the
+          organisation's own tools, so the organisation owns their scopes and can revoke them there — which is
+          why this is native while a vendor-owned app identity is partial. Actions in connected tools carry
+          the service account's authority; DMs carry the member's.
+        migration:
+          from:
+            - capabilityNhiManagement
+          reviewRequired: true
+          original:
+            - capability: capabilityNhiManagement
+              coverage: native
+              mechanism: Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated account
+                per connected tool) so actions are attributable in each tool's audit log; DMs use the member's
+                identity
+              steps: &a17
+                - *a16
+              note: "Compared with Copilot cloud: the service accounts are provisioned in the organisation's own tools, so
+                the organisation owns their scopes and can revoke them there — which is why this is native
+                while a vendor-owned app identity is partial. Actions in connected tools carry the service
+                account's authority; DMs carry the member's."
+              verified: 2026-09-10
+      - capability: D3-CR
+        coverage: unknown
+        mechanism: Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated account
+          per connected tool) so actions are attributable in each tool's audit log; DMs use the member's
+          identity; Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow
+          direct messages off, /remove @Claude, bundle deletion (revokes credentials everywhere), workspace
+          disconnect, app uninstall, spend limit reached
         steps:
-          - title: Evidence the configuration
+          - *a16
+          - &a18
+            title: Stop responding and revoke credentials
             body:
-              - Export the channel Access summary and bundle listings, and read channel-manager
-                credential changes and scope removals from the organisation audit log through the
-                Compliance API.
+              - Set the scope's version to Off (or the org toggle), then delete the bundle to revoke its credentials;
+                running sessions may hold a revoked credential briefly.
             url: https://claude.com/docs/claude-tag/admins/restrict-access
-        note: >-
-          Console readback and audit entries are the inputs an SSPM product consumes; nothing in the
-          product compares configuration to policy or detects drift.
-        verified: "2026-09-10"
-      - capability: capabilityDspm
-        coverage: partial
-        mechanism: Memory files viewable, editable and deletable per scope by Owners; data lifecycle table for every deletion action; no retention window during beta
-        steps:
-          - title: Review and prune memory
+          - &a19
+            title: Decommission the data
             body:
-              - Open a scope's View memory files (or the Audit page Memory tab) to read, edit or
-                delete what Claude saved; workspace memory from public channels is shared workspace-wide.
+              - Disconnect the workspace at claude.ai/admin-settings/claude-tag to delete its sessions, memory,
+                routines, artifacts and account links.
+            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityNhiManagement] Compared with Copilot cloud: the service accounts are provisioned in the
+          organisation's own tools, so the organisation owns their scopes and can revoke them there — which is
+          why this is native while a vendor-owned app identity is partial. Actions in connected tools carry
+          the service account's authority; DMs carry the member's.
+
+
+          [capabilityKillSwitch] Setting a scope Off stops new sessions; a running session may hold a revoked
+          credential briefly, and the docs give no bound for that window — measure it.
+        migration:
+          from:
+            - capabilityNhiManagement
+            - capabilityKillSwitch
+          reviewRequired: true
+          original:
+            - capability: capabilityNhiManagement
+              coverage: native
+              mechanism: Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated account
+                per connected tool) so actions are attributable in each tool's audit log; DMs use the member's
+                identity
+              steps: *a17
+              note: "Compared with Copilot cloud: the service accounts are provisioned in the organisation's own tools, so
+                the organisation owns their scopes and can revoke them there — which is why this is native
+                while a vendor-owned app identity is partial. Actions in connected tools carry the service
+                account's authority; DMs carry the member's."
+              verified: 2026-09-10
+            - capability: capabilityKillSwitch
+              coverage: native
+              mechanism: Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow direct
+                messages off, /remove @Claude, bundle deletion (revokes credentials everywhere), workspace
+                disconnect, app uninstall, spend limit reached
+              steps: &a33
+                - *a18
+                - *a19
+              note: Setting a scope Off stops new sessions; a running session may hold a revoked credential briefly, and the
+                docs give no bound for that window — measure it.
+              verified: 2026-09-10
+      - capability: D3-CI
+        coverage: unknown
+        mechanism: Admin console readback (Access bundles, scopes, Access summary), audit log entries for
+          channel-manager and deletion actions via the Compliance API Activity Feed
+        steps:
+          - &a20
+            title: Evidence the configuration
+            body:
+              - Export the channel Access summary and bundle listings, and read channel-manager credential changes and
+                scope removals from the organisation audit log through the Compliance API.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityVendorAssurance] Console readback and audit entries are the inputs an SSPM product
+          consumes; nothing in the product compares configuration to policy or detects drift.
+        migration:
+          from:
+            - capabilityVendorAssurance
+          reviewRequired: true
+          original:
+            - capability: capabilityVendorAssurance
+              coverage: external
+              mechanism: Admin console readback (Access bundles, scopes, Access summary), audit log entries for
+                channel-manager and deletion actions via the Compliance API Activity Feed
+              steps:
+                - *a20
+              note: Console readback and audit entries are the inputs an SSPM product consumes; nothing in the product
+                compares configuration to policy or detects drift.
+              verified: 2026-09-10
+      - capability: D3-DI
+        coverage: unknown
+        mechanism: Memory files viewable, editable and deletable per scope by Owners; data lifecycle table for every
+          deletion action; no retention window during beta
+        steps:
+          - &a21
+            title: Review and prune memory
+            body:
+              - Open a scope's View memory files (or the Audit page Memory tab) to read, edit or delete what Claude
+                saved; workspace memory from public channels is shared workspace-wide.
             url: https://claude.com/docs/claude-tag/users/memory
-          - title: Delete data deliberately
+          - &a22
+            title: Delete data deliberately
             body:
-              - Removing a channel scope deletes its sessions, memory, routines and artifacts;
-                disconnecting the workspace deletes everything for that workspace; version Off
-                deletes nothing.
+              - Removing a channel scope deletes its sessions, memory, routines and artifacts; disconnecting the
+                workspace deletes everything for that workspace; version Off deletes nothing.
             url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+        evidence: []
         note: >-
-          Memory review and deletion are lifecycle controls; nothing classifies what was saved or
-          assesses who can read it beyond the scope model, so discovery and posture assessment remain
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityDspm] Memory review and deletion are lifecycle controls; nothing classifies what was
+          saved or assesses who can read it beyond the scope model, so discovery and posture assessment remain
           the customer's DSPM.
-        verified: "2026-09-10"
-      - capability: capabilityAiTprm
-        coverage: external
-        mechanism: Anthropic Trust Center artifacts plus the security-and-data and data-lifecycle pages feed the buyer's vendor assessment
+        migration:
+          from:
+            - capabilityDspm
+          reviewRequired: true
+          original:
+            - capability: capabilityDspm
+              coverage: partial
+              mechanism: Memory files viewable, editable and deletable per scope by Owners; data lifecycle table for every
+                deletion action; no retention window during beta
+              steps:
+                - *a21
+                - *a22
+              note: Memory review and deletion are lifecycle controls; nothing classifies what was saved or assesses who can
+                read it beyond the scope model, so discovery and posture assessment remain the customer's
+                DSPM.
+              verified: 2026-09-10
+      - capability: AML.M0012
+        coverage: unknown
+        mechanism: Credentials kept in a separate write-only credential store and injected at the proxy; Anthropic
+          infrastructure encryption; no CMEK documented for Claude Tag data
         steps:
-          - title: Record beta-specific gaps
+          - &a23
+            title: Understand where credentials live
             body:
-              - Note in the vendor record that transcripts and memory have no retention period, are
-                excluded from data exports and Compliance API sessions during the beta, and that
-                ZDR organisations are excluded.
-            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
-        verified: "2026-09-10"
-      - capability: capabilityEncryptionKeyManagement
-        coverage: partial
-        mechanism: Credentials kept in a separate write-only credential store and injected at the proxy; Anthropic infrastructure encryption; no CMEK documented for Claude Tag data
-        steps:
-          - title: Understand where credentials live
-            body:
-              - Saved credentials are never displayed again and travel only to the hosts named on
-                the connection; narrow to host, path prefix or read-only methods.
+              - Saved credentials are never displayed again and travel only to the hosts named on the connection; narrow
+                to host, path prefix or read-only methods.
             url: https://claude.com/docs/claude-tag/concepts/security-and-data
+        evidence: []
         note: >-
-          Assets and key owners: sessions, memory and artifacts at Anthropic (Anthropic keys, no CMEK
-          documented); connection credentials in the write-only store (Anthropic keys, never exposed
-          to the sandbox); traffic (TLS).
-        verified: "2026-09-10"
-      - capability: capabilitySecretsManagement
-        coverage: native
-        mechanism: >-
-          Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client
-          credentials, MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links
-          for another admin to submit a secret
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEncryptionKeyManagement] Assets and key owners: sessions, memory and artifacts at
+          Anthropic (Anthropic keys, no CMEK documented); connection credentials in the write-only store
+          (Anthropic keys, never exposed to the sandbox); traffic (TLS).
+        migration:
+          from:
+            - capabilityEncryptionKeyManagement
+          reviewRequired: true
+          original:
+            - capability: capabilityEncryptionKeyManagement
+              coverage: partial
+              mechanism: Credentials kept in a separate write-only credential store and injected at the proxy; Anthropic
+                infrastructure encryption; no CMEK documented for Claude Tag data
+              steps:
+                - *a23
+              note: "Assets and key owners: sessions, memory and artifacts at Anthropic (Anthropic keys, no CMEK
+                documented); connection credentials in the write-only store (Anthropic keys, never exposed to
+                the sandbox); traffic (TLS)."
+              verified: 2026-09-10
+      - capability: D3-CH
+        coverage: unknown
+        mechanism: Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client credentials,
+          MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links for another admin to
+          submit a secret
         steps:
-          - title: Add and rotate credentials in bundles
+          - &a24
+            title: Add and rotate credentials in bundles
             body:
-              - On the bundle's Credentials tab connect each service, set Allowed hosts, restrict by
-                HTTP method or path, and use Rotate secret; use "Copy link for another admin" so
-                the secret owner submits it directly.
+              - On the bundle's Credentials tab connect each service, set Allowed hosts, restrict by HTTP method or path,
+                and use Rotate secret; use "Copy link for another admin" so the secret owner submits it
+                directly.
             url: https://claude.com/docs/claude-tag/admins/add-connections
+        evidence: []
         note: >-
-          Bundle credentials are injected at the proxy and never reach the sandbox or the model. They
-          are the bundle's shared credentials, presented for every session in the scope, not
-          per-requester; rotation is manual through the rotate flow.
-        verified: "2026-09-10"
-      - capability: capabilityToolPermissionScoping
-        coverage: native
-        mechanism: >-
-          Per-scope Access bundles (credentials, repositories, plugins, instructions) with
-          inheritance from Default Slack to workspace to channel; connection host/path/method
-          restrictions; plugin enable toggles per bundle
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySecretsManagement] Bundle credentials are injected at the proxy and never reach the
+          sandbox or the model. They are the bundle's shared credentials, presented for every session in the
+          scope, not per-requester; rotation is manual through the rotate flow.
+        migration:
+          from:
+            - capabilitySecretsManagement
+          reviewRequired: true
+          original:
+            - capability: capabilitySecretsManagement
+              coverage: native
+              mechanism: Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client credentials,
+                MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links for another
+                admin to submit a secret
+              steps: &a25
+                - *a24
+              note: Bundle credentials are injected at the proxy and never reach the sandbox or the model. They are the
+                bundle's shared credentials, presented for every session in the scope, not per-requester;
+                rotation is manual through the rotate flow.
+              verified: 2026-09-10
+      - capability: D3-CRO
+        coverage: unknown
+        mechanism: Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client credentials,
+          MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links for another admin to
+          submit a secret
         steps:
-          - title: Compose access by capability and channel
-            body:
-              - Create bundles such as data-readonly, github-write and monitoring, attach only what a
-                channel needs, and keep sensitive bundles on private channels.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-          - title: Narrow each connection
-            body:
-              - Edit a connection to restrict it to specific hosts, a path prefix and read-only
-                methods, and scope the underlying service account to the projects it needs.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
+          - *a24
+        evidence: []
         note: >-
-          Bundles decide which credentials, repositories and plugins a scope has (hiding); host, path
-          and method restrictions on connections limit arguments; auto-mode allow rules pre-approve.
-          Inheritance means a broad Default Slack bundle reaches every channel unless overridden.
-        verified: "2026-09-10"
-      - capability: capabilityDataAccessGovernance
-        coverage: partial
-        mechanism: Reach inside a tool equals what the service account can access; account-level scoping is the control; DMs run as the user
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySecretsManagement] Bundle credentials are injected at the proxy and never reach the
+          sandbox or the model. They are the bundle's shared credentials, presented for every session in the
+          scope, not per-requester; rotation is manual through the rotate flow.
+        migration:
+          from:
+            - capabilitySecretsManagement
+          reviewRequired: true
+          original:
+            - capability: capabilitySecretsManagement
+              coverage: native
+              mechanism: Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client credentials,
+                MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links for another
+                admin to submit a secret
+              steps: *a25
+              note: Bundle credentials are injected at the proxy and never reach the sandbox or the model. They are the
+                bundle's shared credentials, presented for every session in the scope, not per-requester;
+                rotation is manual through the rotate flow.
+              verified: 2026-09-10
+      - capability: AML.M0028
+        coverage: unknown
+        mechanism: Per-scope Access bundles (credentials, repositories, plugins, instructions) with inheritance from
+          Default Slack to workspace to channel; connection host/path/method restrictions; plugin enable
+          toggles per bundle
         steps:
-          - title: Scope the service account, not just the connection
+          - &a26
+            title: Compose access by capability and channel
             body:
-              - Share only the folders, spaces or projects Claude should see with its dedicated
-                account; host and path rules limit endpoints, not records.
+              - Create bundles such as data-readonly, github-write and monitoring, attach only what a channel needs, and
+                keep sensitive bundles on private channels.
             url: https://claude.com/docs/claude-tag/admins/add-connections
-        note: >-
-          Service-owned in channels: retrieval carries the service account's access, so every member
-          of a scope reaches what that account can, regardless of their own entitlements. Delegated in
-          DMs, which run as the member.
-        verified: "2026-09-10"
-      - capability: capabilityAgentRegistry
-        coverage: partial
-        mechanism: Scopes and bundles are the registry of where Claude runs and with what; Scheduled work tab lists every routine with Created by
-        steps:
-          - title: List where Claude operates and what is scheduled
+          - &a27
+            title: Narrow each connection
             body:
-              - The Slack tab under Claude Tag's access lists workspaces and channels with their
-                bundles; the Audit page Scheduled work tab lists routines with pause and delete.
+              - Edit a connection to restrict it to specific hosts, a path prefix and read-only methods, and scope
+                the underlying service account to the projects it needs.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityToolPermissionScoping] Bundles decide which credentials, repositories and plugins a scope
+          has (hiding); host, path and method restrictions on connections limit arguments; auto-mode allow
+          rules pre-approve. Inheritance means a broad Default Slack bundle reaches every channel unless
+          overridden.
+        migration:
+          from:
+            - capabilityToolPermissionScoping
+          reviewRequired: true
+          original:
+            - capability: capabilityToolPermissionScoping
+              coverage: native
+              mechanism: Per-scope Access bundles (credentials, repositories, plugins, instructions) with inheritance from
+                Default Slack to workspace to channel; connection host/path/method restrictions; plugin enable
+                toggles per bundle
+              steps:
+                - *a26
+                - *a27
+              note: Bundles decide which credentials, repositories and plugins a scope has (hiding); host, path and method
+                restrictions on connections limit arguments; auto-mode allow rules pre-approve. Inheritance
+                means a broad Default Slack bundle reaches every channel unless overridden.
+              verified: 2026-09-10
+      - capability: D3-AMED
+        coverage: unknown
+        mechanism: Reach inside a tool equals what the service account can access; account-level scoping is the
+          control; DMs run as the user
+        steps:
+          - *a4
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityDataAccessGovernance] Service-owned in channels: retrieval carries the service account's
+          access, so every member of a scope reaches what that account can, regardless of their own
+          entitlements. Delegated in DMs, which run as the member.
+        migration:
+          from:
+            - capabilityDataAccessGovernance
+          reviewRequired: true
+          original:
+            - capability: capabilityDataAccessGovernance
+              coverage: partial
+              mechanism: Reach inside a tool equals what the service account can access; account-level scoping is the
+                control; DMs run as the user
+              steps: *a28
+              note: "Service-owned in channels: retrieval carries the service account's access, so every member of a scope
+                reaches what that account can, regardless of their own entitlements. Delegated in DMs, which
+                run as the member."
+              verified: 2026-09-10
+      - capability: D3-AI
+        coverage: unknown
+        mechanism: Scopes and bundles are the registry of where Claude runs and with what; Scheduled work tab lists
+          every routine with Created by; Blocked and auto-join channel name patterns; Claude responds only
+          where added; per-scope version Off; Slack app inventory
+        steps:
+          - &a29
+            title: List where Claude operates and what is scheduled
+            body:
+              - The Slack tab under Claude Tag's access lists workspaces and channels with their bundles; the Audit page
+                Scheduled work tab lists routines with pause and delete.
             url: https://claude.com/docs/claude-tag/admins/audit
-        note: >-
-          Scopes, bundles and the routine list are approved configuration and use within Slack; there
-          is no owner or approval record per routine beyond Created by.
-        verified: "2026-09-10"
-      - capability: capabilityAuditLogging
-        coverage: partial
-        mechanism: >-
-          Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls,
-          excluding git and MCP), attribution under service accounts in each tool's logs,
-          organisation audit log via Compliance API for channel-manager and deletion events
-        steps:
-          - title: Download network events and read tool-side logs
+          - &a30
+            title: Fence channels by name
             body:
-              - Export hourly Network events from claude.ai/admin-settings/claude-tag/audit and
-                correlate with the service account's entries in GitHub, Datadog and other tools.
+              - Add Blocked channel patterns (for example *-confidential-*) under Default Slack access > Advanced so
+                Claude stays silent even if invited.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRegistry] Scopes, bundles and the routine list are approved configuration and use
+          within Slack; there is no owner or approval record per routine beyond Created by.
+
+
+          [capabilityShadowAiDiscovery] Channel patterns and version Off are prevention; the Slack app
+          inventory that would reveal an unsanctioned Claude install belongs to Slack administration, not this
+          product.
+        migration:
+          from:
+            - capabilityAgentRegistry
+            - capabilityShadowAiDiscovery
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRegistry
+              coverage: partial
+              mechanism: Scopes and bundles are the registry of where Claude runs and with what; Scheduled work tab lists
+                every routine with Created by
+              steps:
+                - *a29
+              note: Scopes, bundles and the routine list are approved configuration and use within Slack; there is no owner
+                or approval record per routine beyond Created by.
+              verified: 2026-09-10
+            - capability: capabilityShadowAiDiscovery
+              coverage: external
+              mechanism: Blocked and auto-join channel name patterns; Claude responds only where added; per-scope version
+                Off; Slack app inventory
+              steps:
+                - *a30
+              note: Channel patterns and version Off are prevention; the Slack app inventory that would reveal an
+                unsanctioned Claude install belongs to Slack administration, not this product.
+              verified: 2026-09-10
+      - capability: AML.M0024
+        coverage: unknown
+        mechanism: Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls, excluding git
+          and MCP), attribution under service accounts in each tool's logs, organisation audit log via
+          Compliance API for channel-manager and deletion events
+        steps:
+          - &a31
+            title: Download network events and read tool-side logs
+            body:
+              - Export hourly Network events from claude.ai/admin-settings/claude-tag/audit and correlate with the
+                service account's entries in GitHub, Datadog and other tools.
             url: https://claude.com/docs/claude-tag/admins/audit
-        note: Session transcripts are not exportable and the Compliance API does not list Claude Tag sessions during the beta.
-        verified: "2026-09-10"
-      - capability: capabilityShadowAiDiscovery
-        coverage: external
-        mechanism: Blocked and auto-join channel name patterns; Claude responds only where added; per-scope version Off; Slack app inventory
-        steps:
-          - title: Fence channels by name
-            body:
-              - Add Blocked channel patterns (for example *-confidential-*) under Default Slack
-                access > Advanced so Claude stays silent even if invited.
-            url: https://claude.com/docs/claude-tag/admins/restrict-access
+        evidence: []
         note: >-
-          Channel patterns and version Off are prevention; the Slack app inventory that would reveal
-          an unsanctioned Claude install belongs to Slack administration, not this product.
-        verified: "2026-09-10"
-      - capability: capabilityKillSwitch
-        coverage: native
-        mechanism: >-
-          Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow
-          direct messages off, /remove @Claude, bundle deletion (revokes credentials everywhere),
-          workspace disconnect, app uninstall, spend limit reached
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAuditLogging] Session transcripts are not exportable and the Compliance API does not list
+          Claude Tag sessions during the beta.
+        migration:
+          from:
+            - capabilityAuditLogging
+          reviewRequired: true
+          original:
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls, excluding git
+                and MCP), attribution under service accounts in each tool's logs, organisation audit log via
+                Compliance API for channel-manager and deletion events
+              steps: &a32
+                - *a31
+              note: Session transcripts are not exportable and the Compliance API does not list Claude Tag sessions during
+                the beta.
+              verified: 2026-09-10
+      - capability: D3-SFA
+        coverage: unknown
+        mechanism: Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls, excluding git
+          and MCP), attribution under service accounts in each tool's logs, organisation audit log via
+          Compliance API for channel-manager and deletion events
         steps:
-          - title: Stop responding and revoke credentials
-            body:
-              - Set the scope's version to Off (or the org toggle), then delete the bundle to revoke
-                its credentials; running sessions may hold a revoked credential briefly.
-            url: https://claude.com/docs/claude-tag/admins/restrict-access
-          - title: Decommission the data
-            body:
-              - Disconnect the workspace at claude.ai/admin-settings/claude-tag to delete its
-                sessions, memory, routines, artifacts and account links.
-            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+          - *a31
+        evidence: []
         note: >-
-          Setting a scope Off stops new sessions; a running session may hold a revoked credential
-          briefly, and the docs give no bound for that window — measure it.
-        verified: "2026-09-10"
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAuditLogging] Session transcripts are not exportable and the Compliance API does not list
+          Claude Tag sessions during the beta.
+        migration:
+          from:
+            - capabilityAuditLogging
+          reviewRequired: true
+          original:
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls, excluding git
+                and MCP), attribution under service accounts in each tool's logs, organisation audit log via
+                Compliance API for channel-manager and deletion events
+              steps: *a32
+              note: Session transcripts are not exportable and the Compliance API does not list Claude Tag sessions during
+                the beta.
+              verified: 2026-09-10
+      - capability: D3-PT
+        coverage: unknown
+        mechanism: Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow direct
+          messages off, /remove @Claude, bundle deletion (revokes credentials everywhere), workspace
+          disconnect, app uninstall, spend limit reached
+        steps:
+          - *a18
+          - *a19
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityKillSwitch] Setting a scope Off stops new sessions; a running session may hold a revoked
+          credential briefly, and the docs give no bound for that window — measure it.
+        migration:
+          from:
+            - capabilityKillSwitch
+          reviewRequired: true
+          original:
+            - capability: capabilityKillSwitch
+              coverage: native
+              mechanism: Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow direct
+                messages off, /remove @Claude, bundle deletion (revokes credentials everywhere), workspace
+                disconnect, app uninstall, spend limit reached
+              steps: *a33
+              note: Setting a scope Off stops new sessions; a running session may hold a revoked credential briefly, and the
+                docs give no bound for that window — measure it.
+              verified: 2026-09-10
     sources:
       - title: Claude Tag overview
         url: https://claude.com/docs/claude-tag/overview

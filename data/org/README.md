@@ -55,3 +55,12 @@ available and renders greyed out.
 
 Nothing from this directory renders until the **Show status** switch (beside the Capabilities and
 Reference architectures titles) is on; it defaults on when `local/` exists.
+
+## Capability identifier migration
+
+Use native MITRE identifiers such as `D3-EI`, `AML.M0020` and `AML.M0031`. The prior
+`capability…` identifiers are retired. Run `npm run migrate:capabilities -- data/org/local`
+for a preview, then append `--write` to migrate. Split/merged scope never inherits an
+`enabled` assertion automatically: it becomes `inProgress` with the original record retained.
+Reassess each function and update its status, note and evidence; clear `migration.reviewRequired`
+only after review. Broad mitigations such as guardrails need feature and boundary evidence.

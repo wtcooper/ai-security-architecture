@@ -170,9 +170,9 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
         {tab === "capabilities" && (
           <div>
             <p className="text-[12px] leading-snug text-ink-3">
-              The numbered chips on the drawing: the control technologies every product of this kind needs, each implementing one or
-              more CoSAI controls. Select one to see where it must sit, why, what the guidance says about it, and which products can
-              switch it on.
+              The numbered chips on the drawing are MITRE D3FEND techniques and ATLAS mitigations mapped as contributions to
+              CoSAI controls. Select one to see its required placement, implementation guidance and product evidence.
+              A mapping does not establish complete control coverage.
             </p>
             {guidance && (
               <div className="mt-3 rounded-xl border border-line bg-paper">

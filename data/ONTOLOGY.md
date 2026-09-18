@@ -16,7 +16,7 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Subcomponent (item) | block `items:` | canonical label+icon from vocabulary where the concept recurs |
 | Flow (edge) | architecture `edges:` | `from->to`, one of three path classes |
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
-| Capability (control) | data/overlay/capabilities.yaml | 56 catalogue-wide, stable ids; per-diagram chip numbers |
+| Capability (control) | data/overlay/capabilities.yaml | MITRE-native IDs from pinned D3FEND/ATLAS; per-diagram chip numbers |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
 | Guidance document | data/reference/guidance/*.yaml | one per architecture; `mode: build | use | hybrid` |
@@ -75,9 +75,9 @@ one zone:
 
 - **Zone 1 — vendor-internal.** What the vendor implements inside their environment. Never
   drawn, never pinned — not even as chips. The single permitted representation is
-  `capabilityAiTprm` on the vendor block: assure it, don't draw it.
+  `D3-ORA` (supplier operational-risk assessment contribution) on the vendor block: assure it, don't draw it.
 - **Zone 2 — customer-configurable vendor surface.** Tenant policy, admin toggles,
-  retention, BYOK/CMEK (`capabilityEncryptionKeyManagement`). Pinned on the vendor block or
+  retention, BYOK/CMEK (`AML.M0012`). Pinned on the vendor block or
   the governance→vendor configuration edge.
 - **Zone 3 — boundary crossings between their environment and ours.** Full control
   treatment, including the inline rule — because the components there are customer-owned.
@@ -384,7 +384,7 @@ to any architecture can be checked against them without reading the whole docume
    where, the item pack says what. *(Failed as: "Internal MCP & APIs" and "Remote tool
    services".)*
 8. **Vendor internals are assured, not drawn.** What a vendor implements inside their
-   environment gets `capabilityAiTprm` on the vendor block and nothing else.
+   environment gets `D3-ORA` (supplier operational-risk assessment contribution) on the vendor block and nothing else.
 9. **A shared pattern is drawn identically everywhere it appears, and a change to it
    propagates in the same commit.** Two architectures of the same family should differ only
    where they genuinely differ; everything else — component names, the order of the chain,

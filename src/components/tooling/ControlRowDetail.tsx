@@ -38,6 +38,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
         )}
         {control ? (
           <>
+            {control.migration?.reviewRequired && <p className="mb-2 rounded-md border border-line bg-mist p-2 text-xs text-ink-2">Reassessment required for {capability?.title ?? "this capability"} ({capabilityId}). Configuration below is retained legacy evidence.</p>}
             {!showTitle && <p className="eyebrow mb-1.5">Admin control · in {tool.name}</p>}
             {control.mechanism && (
               <p className="text-[12.5px] text-ink-2">
@@ -49,7 +50,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
             {control.steps?.length ? (
               <ol className="mt-2.5 space-y-2">
                 {control.steps.map((step, si) => (
-                  <li key={step.title} className="flex gap-2.5">
+                  <li key={`${step.title}-${si}`} className="flex gap-2.5">
                     <span className="ident mt-[2px] shrink-0 text-ink-3">{si + 1}</span>
                     <div className="min-w-0">
                       <p className="text-[12.5px] font-semibold text-ink">
@@ -132,7 +133,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
               </Link>
             ))}
             <Link href={`/capabilities?capability=${capabilityId}`}>
-              <Chip tone="introduced">{capability?.abbrev ?? capability?.title ?? capabilityId}</Chip>
+              <Chip tone="introduced">{capability?.title ?? capabilityId}</Chip>
             </Link>
           </div>
         </div>
@@ -143,8 +144,8 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
               {orgIds.map((o) => (
                 <li key={`${o.frameworkId}:${o.id}`} className="text-[12.5px] leading-snug">
                   <Link href={frameworkHref(o.frameworkId, o.id)} className="hover:underline">
-                    <span className="ident mr-1.5 rounded bg-mist px-1.5 py-[2px] text-ink-2">{o.id}</span>
                     <span className="text-ink-2">{o.label}</span>
+                    <span className="ml-1.5 text-[10.5px] text-ink-3">({o.id})</span>
                   </Link>
                 </li>
               ))}

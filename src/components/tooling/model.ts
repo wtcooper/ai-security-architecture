@@ -8,7 +8,7 @@
  * capabilities, so a cell there carries the worst of them — a gap anywhere is a gap.
  */
 import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, orgToolAvailableFor, vendors } from "@/lib/data";
-import { orgFrameworks } from "@/lib/frameworks";
+import { orgEntriesFor, orgFrameworks } from "@/lib/frameworks";
 import type { OrgStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 import { controlCategories } from "@/lib/data";
 
@@ -18,7 +18,7 @@ export interface Row {
   id: string;
   label: string;
   short: string;
-  /** Identifiers shown beside the label: org ids in the CoSAI lens, capability count in the org lens. */
+  /** Supporting label: org mappings in the CoSAI lens, capability count in the org lens. */
   aside?: string;
   capabilities: string[];
   title?: string;
@@ -118,7 +118,6 @@ const orgIdsByCapability = (() => {
   }
   return out;
 })();
-export const orgIdsFor = (capabilityId: string) => orgIdsByCapability.get(capabilityId) ?? [];
 export const hasOrgMappings = orgIdsByCapability.size > 0;
 
 /** The architecture's pinned capabilities as rows, grouped by CoSAI control category. */
@@ -134,8 +133,8 @@ export function cosaiRows(archetypeId: string): RowGroup[] {
         .map((c) => ({
           id: c.id,
           label: c.title,
-          short: c.abbrev ?? c.title,
-          aside: orgIdsFor(c.id).join(" · ") || undefined,
+          short: c.title,
+          aside: orgEntriesFor("capabilities", c.id).map((entry) => `${entry.label} (${entry.id})`).join(" · ") || undefined,
           capabilities: [c.id],
           enforcement: enforcementFor(archetypeId, [c.id]),
         })),
@@ -162,8 +161,8 @@ export function orgRows(archetypeId: string): RowGroup[] {
       if (!groups.has(groupId)) groups.set(groupId, { id: groupId, title: ref.group ? `${fw.name} · ${ref.group}` : fw.name, rows: [] });
       groups.get(groupId)!.rows.push({
         id: `${fw.id}:${entryId}`,
-        label: `${entryId} ${ref.label}`,
-        short: entryId,
+        label: `${ref.label} (${entryId})`,
+        short: ref.label,
         aside: `${caps.length} capabilit${caps.length === 1 ? "y" : "ies"}`,
         capabilities: caps,
         title: ref.label,

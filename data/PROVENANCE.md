@@ -112,31 +112,28 @@ prose, `lifecycleStage`, and mapped controls).
 
 ## Capabilities
 
-`data/overlay/capabilities.yaml` is original work: a taxonomy of vendor-neutral technology
-capability classes (EDR, model API guardrails, AI-SPM, …), each mapped onto CoSAI controls,
-risks and components, with per-surface applicability across endpoint, cloud/hosted and
-third-party SaaS. The capability classes were derived by convergence across four independent
-source families read from the primary documents — threat and mitigation catalogues (MITRE
-ATLAS, the OWASP LLM and Agentic Top 10s, LLMSVS, the Securing Agentic Applications Guide),
-government and standards controls (NIST SP 800-218A, AI RMF, AI 600-1, the CISA/NSA and Five
-Eyes joint guidance, UK NCSC, CSA AICM, ISO/IEC 42001, EU AI Act Article 15), procurable
-market categories (Gartner AI TRiSM, CSA's agentic market map, the cloud providers' own
-published AI security catalogues), and lifecycle tooling maps (OWASP's AI Security Solutions
-Landscape). A class is included only where at least two independent families name it, **a class
-of tooling exists that implements it** — every entry is named for the technology, not the
-practice it supports, and activities, policies, artifacts and interface conventions are
-excluded — and it differs across at least one surface boundary; the count follows from that
-test rather than being targeted. The full method,
-including granularity rules and deliberate exclusions, is in the header of
-`data/overlay/capabilities.yaml`. Each entry carries a `sources` list, and where a class rests
-on market rather than standards evidence its sources say so; the CoSAI mappings are judgements
-made here. Product names are deliberately absent: a fork records its own
-tooling and posture (`status` per surface) via the Capabilities tab's export flow, and the
-shipped dataset never sets `status` — everything reads as `needsAssessment`, because this
-repository maps what the taxonomy covers and must never imply a posture anyone holds.
-`npm run data` fails on any dangling id, a primary
-`category` no mapped control belongs to, or a capability missing a decision for a declared
-surface.
+Canonical identifiers, names and definitions are vendored from MITRE D3FEND 1.6.0 and
+MITRE ATLAS 2026.09. See [the source manifest](mitre/sources.yaml) for release URLs, retrieval
+dates, SHA-256 checksums and license notices. The build verifies snapshot checksums and resolves
+only selected D3FEND defensive-technique descendants and ATLAS mitigation records.
+Upstream definitions are imported unmodified; their own reference syntax is retained.
+CoSAI's existing historical ATLAS mappings are unchanged.
+
+`data/overlay/capabilities.yaml` is an authored selection and crosswalk, not a new taxonomy.
+It supplies CoSAI supporting relationships with rationale, implementation guidance, examples
+and deployment responsibility. It cannot override canonical titles/definitions or introduce
+non-MITRE IDs. A product category or a feature under a broad mitigation is not another
+capability. These mappings are repository judgments, not MITRE or CoSAI endorsements.
+
+`data/overlay/capability-gaps.yaml` records missing/partial requirements against existing
+CoSAI control IDs. It introduces no capability identifiers. The scope and limitations are in
+[the gap assessment](../docs/MITRE-CAPABILITY-GAPS.md).
+
+`data/migrations/capabilities-v1.yaml` accounts for all 56 former authored IDs. Tool coverage
+and organization posture are conservatively reassessed where scope changes; original evidence
+is retained. Retired references are preserved in `data/migrations/capabilities-v1-retired.yaml`.
+The org example is explicitly illustrative, and no migrated evidence receives a fresh
+verification date merely because the identifier changed.
 
 ## Reference architectures
 
@@ -215,7 +212,7 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   registries, File storage, and Sandboxed tools where a remote execution service is the
   destination; architecture-specific destinations (e.g. Paired devices) may extend the list
   but never rename its members. **The permission gate is standard**: every architecture with
-  an agent harness and a tool surface pins `capabilityToolPermissionScoping` on the crossing
+  an agent harness and a tool surface pins `AML.M0028` (AI Agent Tools Permissions Configuration) on the crossing
   between them — the OS permission layer, per-tool grants and action-catalogue validation are
   all this one control in surface-specific dress. Sandboxing is drawn as containment (a
   labelled frame in the React Flow view, a Sandboxed tools item where it lives inside an

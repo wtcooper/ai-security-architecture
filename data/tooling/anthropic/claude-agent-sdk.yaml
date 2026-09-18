@@ -94,428 +94,1297 @@ tools:
           loaded when the project setting source is on. Managed host policy (allowedMcpServers,
           strictPluginOnlyCustomization) still applies to SDK sessions.
     controls:
-      - capability: capabilityMemoryProtection
-        coverage: partial
-        mechanism: >-
-          settingSources [] plus CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 and per-tenant CLAUDE_CONFIG_DIR
-          and cwd; SessionStore adapter for transcripts; no memory validation or rollback
+      - capability: AML.M0031
+        coverage: unknown
+        mechanism: settingSources [] plus CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 and per-tenant CLAUDE_CONFIG_DIR and cwd;
+          SessionStore adapter for transcripts; no memory validation or rollback
         steps:
-          - title: Isolate tenants' memory and settings
+          - &a1
+            title: Isolate tenants' memory and settings
             body:
-              - Pass settingSources [] (Python setting_sources=[]), set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
-                and a per-tenant CLAUDE_CONFIG_DIR in env, and a per-tenant cwd on every query().
+              - Pass settingSources [] (Python setting_sources=[]), set CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 and a per-tenant
+                CLAUDE_CONFIG_DIR in env, and a per-tenant cwd on every query().
             url: https://code.claude.com/docs/en/agent-sdk/hosting
-          - title: Control where transcripts persist
+          - &a2
+            title: Control where transcripts persist
             body:
-              - Configure a SessionStore adapter (S3, Redis, Postgres) and alert on mirror_error
-                messages; do not share a store across tenants.
+              - Configure a SessionStore adapter (S3, Redis, Postgres) and alert on mirror_error messages; do not
+                share a store across tenants.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
+        evidence: []
         note: >-
-          Isolation only: per-tenant directories and disabled auto-memory bound where memory lives.
-          Nothing validates what is written, detects poisoning or restores a known-good state —
-          recovery is the SessionStore's backups.
-        verified: "2026-09-10"
-      - capability: capabilityModelEvals
-        coverage: none
-        note: >-
-          The SDK ships no evaluation harness or release gate; build evals in your CI around
-          query() and the result message subtypes yourself.
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityMemoryProtection] Isolation only: per-tenant directories and disabled auto-memory bound
+          where memory lives. Nothing validates what is written, detects poisoning or restores a known-good
+          state — recovery is the SessionStore's backups.
+        migration:
+          from:
+            - capabilityMemoryProtection
+          reviewRequired: true
+          original:
+            - capability: capabilityMemoryProtection
+              coverage: partial
+              mechanism: settingSources [] plus CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 and per-tenant CLAUDE_CONFIG_DIR and cwd;
+                SessionStore adapter for transcripts; no memory validation or rollback
+              steps:
+                - *a1
+                - *a2
+              note: "Isolation only: per-tenant directories and disabled auto-memory bound where memory lives. Nothing
+                validates what is written, detects poisoning or restores a known-good state — recovery is the
+                SessionStore's backups."
+              verified: 2026-09-10
+      - capability: AML.M0008
+        coverage: unknown
+        steps: []
         evidence:
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+          - &a3
+            title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
             url: https://code.claude.com/docs/en/agent-sdk/overview
-        verified: "2026-09-10"
-      - capability: capabilityAgentObservability
-        coverage: native
-        mechanism: >-
-          OpenTelemetry traces (claude_code.interaction / llm_request / tool / hook spans),
-          metrics and log events exported by the CLI subprocess; W3C trace context propagated from
-          the host application; OTEL_RESOURCE_ATTRIBUTES for enduser.id / tenant.id
-        steps:
-          - title: Turn on OTLP export
-            body:
-              - Set CLAUDE_CODE_ENABLE_TELEMETRY=1, OTEL_METRICS_EXPORTER / OTEL_LOGS_EXPORTER /
-                OTEL_TRACES_EXPORTER=otlp and OTEL_EXPORTER_OTLP_ENDPOINT in the container
-                environment; add CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1 for traces.
-            url: https://code.claude.com/docs/en/agent-sdk/observability
-          - title: Attribute actions to end users
-            body:
-              - Inject enduser.id and tenant.id through OTEL_RESOURCE_ATTRIBUTES per query() so
-                tool_decision, tool_result and mcp_server_connection events form a per-user audit
-                trail for the SIEM.
-            url: https://code.claude.com/docs/en/agent-sdk/observability
         note: >-
-          Traces cover interactions, model requests, tool calls and hooks with W3C correlation;
-          content is off unless enabled. Emitting traces is not detection or an audit record — the
-          collector's rules and retention supply those.
-        verified: "2026-09-10"
-      - capability: capabilityIga
-        coverage: partial
-        mechanism: >-
-          Authentication of end users happens at your gateway; the agent receives pre-authenticated
-          requests. Claude Console roles and SSO govern who can mint API keys
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityModelEvals] The SDK ships no evaluation harness or release gate; build evals in your CI
+          around query() and the result message subtypes yourself.
+        migration:
+          from:
+            - capabilityModelEvals
+          reviewRequired: true
+          original:
+            - capability: capabilityModelEvals
+              coverage: none
+              note: The SDK ships no evaluation harness or release gate; build evals in your CI around query() and the
+                result message subtypes yourself.
+              evidence:
+                - *a3
+              verified: 2026-09-10
+      - capability: AML.M0024
+        coverage: unknown
+        mechanism: OpenTelemetry traces (claude_code.interaction / llm_request / tool / hook spans), metrics and log
+          events exported by the CLI subprocess; W3C trace context propagated from the host application;
+          OTEL_RESOURCE_ATTRIBUTES for enduser.id / tenant.id; OTLP log events (tool_decision, tool_result,
+          mcp_server_connection, permission_mode_changed) to your collector; transcripts on disk or in a
+          SessionStore; the Console Usage and Cost API
         steps:
-          - title: Put user authentication in front of the agent
+          - &a4
+            title: Turn on OTLP export
             body:
-              - The hosting guide says the agent should not be the component that validates user
-                tokens; terminate auth at a gateway and pass identity as resource attributes.
+              - Set CLAUDE_CODE_ENABLE_TELEMETRY=1, OTEL_METRICS_EXPORTER / OTEL_LOGS_EXPORTER / OTEL_TRACES_EXPORTER=otlp
+                and OTEL_EXPORTER_OTLP_ENDPOINT in the container environment; add
+                CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1 for traces.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+          - &a5
+            title: Attribute actions to end users
+            body:
+              - Inject enduser.id and tenant.id through OTEL_RESOURCE_ATTRIBUTES per query() so tool_decision,
+                tool_result and mcp_server_connection events form a per-user audit trail for the SIEM.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+          - &a6
+            title: Ship security events to the SIEM
+            body:
+              - Export OTEL_LOGS_EXPORTER=otlp with enduser.id attributes; the events are named with a
+                claude_code. prefix and carry the decision source.
+            url: https://code.claude.com/docs/en/agent-sdk/observability
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentObservability] Traces cover interactions, model requests, tool calls and hooks with
+          W3C correlation; content is off unless enabled. Emitting traces is not detection or an audit record
+          — the collector's rules and retention supply those.
+
+
+          [capabilityAuditLogging] Records live in your infrastructure; tamper evidence is what your collector
+          provides.
+        migration:
+          from:
+            - capabilityAgentObservability
+            - capabilityAuditLogging
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentObservability
+              coverage: native
+              mechanism: OpenTelemetry traces (claude_code.interaction / llm_request / tool / hook spans), metrics and log
+                events exported by the CLI subprocess; W3C trace context propagated from the host application;
+                OTEL_RESOURCE_ATTRIBUTES for enduser.id / tenant.id
+              steps:
+                - *a4
+                - *a5
+              note: Traces cover interactions, model requests, tool calls and hooks with W3C correlation; content is off
+                unless enabled. Emitting traces is not detection or an audit record — the collector's rules
+                and retention supply those.
+              verified: 2026-09-10
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: OTLP log events (tool_decision, tool_result, mcp_server_connection, permission_mode_changed) to
+                your collector; transcripts on disk or in a SessionStore; the Console Usage and Cost API
+              steps: &a36
+                - *a6
+              note: Records live in your infrastructure; tamper evidence is what your collector provides.
+              verified: 2026-09-10
+      - capability: D3-MFA
+        coverage: unknown
+        mechanism: Authentication of end users happens at your gateway; the agent receives pre-authenticated requests.
+          Claude Console roles and SSO govern who can mint API keys
+        steps:
+          - &a7
+            title: Put user authentication in front of the agent
+            body:
+              - The hosting guide says the agent should not be the component that validates user tokens; terminate auth at
+                a gateway and pass identity as resource attributes.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
-          - title: Control who can create API keys
+          - &a8
+            title: Control who can create API keys
             body:
-              - Use Console roles (Claude Code role can only create Claude Code keys) and Console
-                SSO for the humans who provision credentials.
+              - Use Console roles (Claude Code role can only create Claude Code keys) and Console SSO for the humans
+                who provision credentials.
             url: https://code.claude.com/docs/en/authentication
+        evidence: []
         note: >-
-          Rated partial on the same rule as the Copilot SDK and Codex SDK: Console roles, SSO and
-          workload identity federation govern who can mint the credentials the agent uses;
-          authentication and authorisation of the application's end users happen at the deployer's
-          gateway, which the SDK does not provide.
-        verified: "2026-09-10"
-      - capability: capabilityNhiManagement
-        coverage: partial
-        mechanism: >-
-          Console service accounts with workload identity federation (OIDC exchange, no static
-          keys) identify the workload to Anthropic; no per-agent identity beyond the API key or
-          service account
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityIga] Rated partial on the same rule as the Copilot SDK and Codex SDK: Console roles, SSO
+          and workload identity federation govern who can mint the credentials the agent uses; authentication
+          and authorisation of the application's end users happen at the deployer's gateway, which the SDK
+          does not provide.
+        migration:
+          from:
+            - capabilityIga
+          reviewRequired: true
+          original:
+            - capability: capabilityIga
+              coverage: partial
+              mechanism: Authentication of end users happens at your gateway; the agent receives pre-authenticated requests.
+                Claude Console roles and SSO govern who can mint API keys
+              steps: &a9
+                - *a7
+                - *a8
+              note: "Rated partial on the same rule as the Copilot SDK and Codex SDK: Console roles, SSO and workload
+                identity federation govern who can mint the credentials the agent uses; authentication and
+                authorisation of the application's end users happen at the deployer's gateway, which the SDK
+                does not provide."
+              verified: 2026-09-10
+      - capability: D3-APA
+        coverage: unknown
+        mechanism: Authentication of end users happens at your gateway; the agent receives pre-authenticated requests.
+          Claude Console roles and SSO govern who can mint API keys; Retrieval runs with whatever filesystem
+          mounts and MCP credentials the deployer grants
         steps:
-          - title: Give the workload a federated identity
+          - *a7
+          - *a8
+          - &a10
+            title: Mount only what the task needs
             body:
-              - Exchange the runtime's OIDC token (GitHub Actions, AWS, GCP, Kubernetes, Entra,
-                Okta, SPIFFE) for Claude API access through a Console service account instead of
-                shipping ANTHROPIC_API_KEY; Claude Code reads ANTHROPIC_FEDERATION_RULE_ID and
-                ANTHROPIC_ORGANIZATION_ID.
-            url: https://code.claude.com/docs/en/authentication
+              - Mount code read-only, give each session its own cwd, and use per-tenant MCP credentials so retrieval runs
+                as the requesting user.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        evidence: []
         note: >-
-          The workload identity authenticates the deployment to Anthropic; every agent and subagent in
-          it shares that identity, and tool calls to other systems carry whatever credential the
-          application supplies. A per-agent principal is the application's to mint.
-        verified: "2026-09-10"
-      - capability: capabilitySecretsManagement
-        coverage: partial
-        mechanism: >-
-          ANTHROPIC_API_KEY from your secret manager, ANTHROPIC_BASE_URL to a key-injecting proxy,
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityIga] Rated partial on the same rule as the Copilot SDK and Codex SDK: Console roles, SSO
+          and workload identity federation govern who can mint the credentials the agent uses; authentication
+          and authorisation of the application's end users happen at the deployer's gateway, which the SDK
+          does not provide.
+
+
+          [capabilityDataAccessGovernance] The SDK reads whatever the working directory and MCP servers
+          expose; least-privilege mounts and per-user MCP credentials are your responsibility.
+        migration:
+          from:
+            - capabilityIga
+            - capabilityDataAccessGovernance
+          reviewRequired: true
+          original:
+            - capability: capabilityIga
+              coverage: partial
+              mechanism: Authentication of end users happens at your gateway; the agent receives pre-authenticated requests.
+                Claude Console roles and SSO govern who can mint API keys
+              steps: *a9
+              note: "Rated partial on the same rule as the Copilot SDK and Codex SDK: Console roles, SSO and workload
+                identity federation govern who can mint the credentials the agent uses; authentication and
+                authorisation of the application's end users happen at the deployer's gateway, which the SDK
+                does not provide."
+              verified: 2026-09-10
+            - capability: capabilityDataAccessGovernance
+              coverage: external
+              mechanism: Retrieval runs with whatever filesystem mounts and MCP credentials the deployer grants
+              note: The SDK reads whatever the working directory and MCP servers expose; least-privilege mounts and per-user
+                MCP credentials are your responsibility.
+              steps: &a19
+                - *a10
+              verified: 2026-09-10
+      - capability: D3-AA
+        coverage: unknown
+        mechanism: Console service accounts with workload identity federation (OIDC exchange, no static keys) identify
+          the workload to Anthropic; no per-agent identity beyond the API key or service account
+        steps:
+          - &a11
+            title: Give the workload a federated identity
+            body:
+              - Exchange the runtime's OIDC token (GitHub Actions, AWS, GCP, Kubernetes, Entra, Okta, SPIFFE) for Claude
+                API access through a Console service account instead of shipping ANTHROPIC_API_KEY; Claude
+                Code reads ANTHROPIC_FEDERATION_RULE_ID and ANTHROPIC_ORGANIZATION_ID.
+            url: https://code.claude.com/docs/en/authentication
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityNhiManagement] The workload identity authenticates the deployment to Anthropic; every
+          agent and subagent in it shares that identity, and tool calls to other systems carry whatever
+          credential the application supplies. A per-agent principal is the application's to mint.
+        migration:
+          from:
+            - capabilityNhiManagement
+          reviewRequired: true
+          original:
+            - capability: capabilityNhiManagement
+              coverage: partial
+              mechanism: Console service accounts with workload identity federation (OIDC exchange, no static keys) identify
+                the workload to Anthropic; no per-agent identity beyond the API key or service account
+              steps: &a12
+                - *a11
+              note: The workload identity authenticates the deployment to Anthropic; every agent and subagent in it shares
+                that identity, and tool calls to other systems carry whatever credential the application
+                supplies. A per-agent principal is the application's to mint.
+              verified: 2026-09-10
+      - capability: D3-CR
+        coverage: unknown
+        mechanism: Console service accounts with workload identity federation (OIDC exchange, no static keys) identify
+          the workload to Anthropic; no per-agent identity beyond the API key or service account; Revoke the
+          Console API key or federation rule; kill the subprocess or container; maxTurns; hooks can deny all
+          calls
+        steps:
+          - *a11
+          - &a13
+            title: Revoke and stop
+            body:
+              - Delete the API key in the Console (or the WIF rule), stop the container, and delete session transcripts
+                and working directories the container held.
+            url: https://code.claude.com/docs/en/agent-sdk/hosting
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityNhiManagement] The workload identity authenticates the deployment to Anthropic; every
+          agent and subagent in it shares that identity, and tool calls to other systems carry whatever
+          credential the application supplies. A per-agent principal is the application's to mint.
+
+
+          [capabilityKillSwitch]
+        migration:
+          from:
+            - capabilityNhiManagement
+            - capabilityKillSwitch
+          reviewRequired: true
+          original:
+            - capability: capabilityNhiManagement
+              coverage: partial
+              mechanism: Console service accounts with workload identity federation (OIDC exchange, no static keys) identify
+                the workload to Anthropic; no per-agent identity beyond the API key or service account
+              steps: *a12
+              note: The workload identity authenticates the deployment to Anthropic; every agent and subagent in it shares
+                that identity, and tool calls to other systems carry whatever credential the application
+                supplies. A per-agent principal is the application's to mint.
+              verified: 2026-09-10
+            - capability: capabilityKillSwitch
+              coverage: partial
+              mechanism: Revoke the Console API key or federation rule; kill the subprocess or container; maxTurns; hooks
+                can deny all calls
+              steps: &a37
+                - *a13
+              verified: 2026-09-10
+      - capability: D3-CH
+        coverage: unknown
+        mechanism: ANTHROPIC_API_KEY from your secret manager, ANTHROPIC_BASE_URL to a key-injecting proxy,
           apiKeyHelper, workload identity federation; tool credentials via proxy injection
         steps:
-          - title: Keep credentials outside the agent container
+          - &a14
+            title: Keep credentials outside the agent container
             body:
-              - Route model calls through a proxy that injects the key (ANTHROPIC_BASE_URL) and
-                outbound tool calls through a TLS-terminating or custom-tool proxy so the agent never
-                holds the secret.
+              - Route model calls through a proxy that injects the key (ANTHROPIC_BASE_URL) and outbound tool calls
+                through a TLS-terminating or custom-tool proxy so the agent never holds the secret.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
-          - title: Strip secrets from mounted directories
+          - &a15
+            title: Strip secrets from mounted directories
             body:
-              - Exclude .env, ~/.aws, ~/.ssh, .npmrc, *.pem and similar files before mounting code
-                even read-only.
+              - Exclude .env, ~/.aws, ~/.ssh, .npmrc, *.pem and similar files before mounting code even read-only.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        evidence: []
         note: >-
-          Storage is the deployer's secret manager; ephemeral issuance exists only where apiKeyHelper
-          or workload identity federation is used. Readers: the SDK process holds the provider key;
-          shell commands and MCP servers read whatever environment the application passes them; the
-          model sees a secret only if a tool returns it.
-        verified: "2026-09-10"
-      - capability: capabilityAgentRuntimeEnforcement
-        coverage: native
-        mechanism: >-
-          Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run
-          before every permission mode, including bypassPermissions; filesystem hooks from settings
-          also apply
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySecretsManagement] Storage is the deployer's secret manager; ephemeral issuance exists
+          only where apiKeyHelper or workload identity federation is used. Readers: the SDK process holds the
+          provider key; shell commands and MCP servers read whatever environment the application passes them;
+          the model sees a secret only if a tool returns it.
+        migration:
+          from:
+            - capabilitySecretsManagement
+          reviewRequired: true
+          original:
+            - capability: capabilitySecretsManagement
+              coverage: partial
+              mechanism: ANTHROPIC_API_KEY from your secret manager, ANTHROPIC_BASE_URL to a key-injecting proxy,
+                apiKeyHelper, workload identity federation; tool credentials via proxy injection
+              steps: &a16
+                - *a14
+                - *a15
+              note: "Storage is the deployer's secret manager; ephemeral issuance exists only where apiKeyHelper or workload
+                identity federation is used. Readers: the SDK process holds the provider key; shell commands
+                and MCP servers read whatever environment the application passes them; the model sees a secret
+                only if a tool returns it."
+              verified: 2026-09-10
+      - capability: D3-CRO
+        coverage: unknown
+        mechanism: ANTHROPIC_API_KEY from your secret manager, ANTHROPIC_BASE_URL to a key-injecting proxy,
+          apiKeyHelper, workload identity federation; tool credentials via proxy injection
         steps:
-          - title: Gate every tool call in a hook
+          - *a14
+          - *a15
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilitySecretsManagement] Storage is the deployer's secret manager; ephemeral issuance exists
+          only where apiKeyHelper or workload identity federation is used. Readers: the SDK process holds the
+          provider key; shell commands and MCP servers read whatever environment the application passes them;
+          the model sees a secret only if a tool returns it.
+        migration:
+          from:
+            - capabilitySecretsManagement
+          reviewRequired: true
+          original:
+            - capability: capabilitySecretsManagement
+              coverage: partial
+              mechanism: ANTHROPIC_API_KEY from your secret manager, ANTHROPIC_BASE_URL to a key-injecting proxy,
+                apiKeyHelper, workload identity federation; tool credentials via proxy injection
+              steps: *a16
+              note: "Storage is the deployer's secret manager; ephemeral issuance exists only where apiKeyHelper or workload
+                identity federation is used. Readers: the SDK process holds the provider key; shell commands
+                and MCP servers read whatever environment the application passes them; the model sees a secret
+                only if a tool returns it."
+              verified: 2026-09-10
+      - capability: D3-AMED
+        coverage: unknown
+        mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+          every permission mode, including bypassPermissions; filesystem hooks from settings also apply;
+          Retrieval runs with whatever filesystem mounts and MCP credentials the deployer grants
+        steps:
+          - &a17
+            title: Gate every tool call in a hook
             body:
-              - Register hooks.PreToolUse callbacks (with matcher patterns) that return
-                permissionDecision "deny" or "ask"; hooks run first in the evaluation order and a
-                deny holds even in bypassPermissions.
+              - Register hooks.PreToolUse callbacks (with matcher patterns) that return permissionDecision "deny" or
+                "ask"; hooks run first in the evaluation order and a deny holds even in bypassPermissions.
             url: https://code.claude.com/docs/en/agent-sdk/hooks
-          - title: Add declarative deny rules
+          - &a18
+            title: Add declarative deny rules
             body:
-              - Pass disallowedTools (bare names remove the tool; Bash(rm *) scopes it) and, when
-                the project source is enabled, permissions.deny in .claude/settings.json.
+              - Pass disallowedTools (bare names remove the tool; Bash(rm *) scopes it) and, when the project source
+                is enabled, permissions.deny in .claude/settings.json.
             url: https://code.claude.com/docs/en/agent-sdk/permissions
+          - *a10
+        evidence: []
         note: >-
-          The hook API is the enforcement point; the policy is code the application writes. Deny rules
-          are deterministic; a canUseTool decision is whatever the application implements. Subagents
-          inherit hooks; custom tools the application registers are covered only if the hook logic
-          addresses them.
-        verified: "2026-09-10"
-      - capability: capabilityToolPermissionScoping
-        coverage: native
-        mechanism: >-
-          allowedTools / disallowedTools, permissionMode (default, dontAsk, acceptEdits, plan, auto,
-          bypassPermissions), mcp__server__tool allow patterns, skills option, per-subagent
-          permissionMode
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] The hook API is the enforcement point; the policy is code the
+          application writes. Deny rules are deterministic; a canUseTool decision is whatever the application
+          implements. Subagents inherit hooks; custom tools the application registers are covered only if the
+          hook logic addresses them.
+
+
+          [capabilityDataAccessGovernance] The SDK reads whatever the working directory and MCP servers
+          expose; least-privilege mounts and per-user MCP credentials are your responsibility.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+            - capabilityDataAccessGovernance
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+                every permission mode, including bypassPermissions; filesystem hooks from settings also apply
+              steps: &a20
+                - *a17
+                - *a18
+              note: The hook API is the enforcement point; the policy is code the application writes. Deny rules are
+                deterministic; a canUseTool decision is whatever the application implements. Subagents inherit
+                hooks; custom tools the application registers are covered only if the hook logic addresses
+                them.
+              verified: 2026-09-10
+            - capability: capabilityDataAccessGovernance
+              coverage: external
+              mechanism: Retrieval runs with whatever filesystem mounts and MCP credentials the deployer grants
+              note: The SDK reads whatever the working directory and MCP servers expose; least-privilege mounts and per-user
+                MCP credentials are your responsibility.
+              steps: *a19
+              verified: 2026-09-10
+      - capability: AML.M0037
+        coverage: unknown
+        mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+          every permission mode, including bypassPermissions; filesystem hooks from settings also apply
         steps:
-          - title: Fix an explicit tool surface
+          - *a17
+          - *a18
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] The hook API is the enforcement point; the policy is code the
+          application writes. Deny rules are deterministic; a canUseTool decision is whatever the application
+          implements. Subagents inherit hooks; custom tools the application registers are covered only if the
+          hook logic addresses them.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+                every permission mode, including bypassPermissions; filesystem hooks from settings also apply
+              steps: *a20
+              note: The hook API is the enforcement point; the policy is code the application writes. Deny rules are
+                deterministic; a canUseTool decision is whatever the application implements. Subagents inherit
+                hooks; custom tools the application registers are covered only if the hook logic addresses
+                them.
+              verified: 2026-09-10
+      - capability: AML.M0030
+        coverage: unknown
+        mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+          every permission mode, including bypassPermissions; filesystem hooks from settings also apply
+        steps:
+          - *a17
+          - *a18
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] The hook API is the enforcement point; the policy is code the
+          application writes. Deny rules are deterministic; a canUseTool decision is whatever the application
+          implements. Subagents inherit hooks; custom tools the application registers are covered only if the
+          hook logic addresses them.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+                every permission mode, including bypassPermissions; filesystem hooks from settings also apply
+              steps: *a20
+              note: The hook API is the enforcement point; the policy is code the application writes. Deny rules are
+                deterministic; a canUseTool decision is whatever the application implements. Subagents inherit
+                hooks; custom tools the application registers are covered only if the hook logic addresses
+                them.
+              verified: 2026-09-10
+      - capability: AML.M0033
+        coverage: unknown
+        mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+          every permission mode, including bypassPermissions; filesystem hooks from settings also apply
+        steps:
+          - *a17
+          - *a18
+        evidence:
+          - &a21
+            title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://code.claude.com/docs/en/agent-sdk/overview
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRuntimeEnforcement] The hook API is the enforcement point; the policy is code the
+          application writes. Deny rules are deterministic; a canUseTool decision is whatever the application
+          implements. Subagents inherit hooks; custom tools the application registers are covered only if the
+          hook logic addresses them.
+
+
+          [capabilityRagSecurity] Conditional: the SDK ships no retrieval or vector store, so there is nothing
+          for it to secure. An application built on it that attaches a store through MCP or files owns
+          provenance, trust tiering and access scoping for that store — record it on the application, not the
+          SDK.
+        migration:
+          from:
+            - capabilityAgentRuntimeEnforcement
+            - capabilityRagSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRuntimeEnforcement
+              coverage: native
+              mechanism: Programmatic PreToolUse hooks (permissionDecision allow/deny/ask/defer) and deny rules run before
+                every permission mode, including bypassPermissions; filesystem hooks from settings also apply
+              steps: *a20
+              note: The hook API is the enforcement point; the policy is code the application writes. Deny rules are
+                deterministic; a canUseTool decision is whatever the application implements. Subagents inherit
+                hooks; custom tools the application registers are covered only if the hook logic addresses
+                them.
+              verified: 2026-09-10
+            - capability: capabilityRagSecurity
+              coverage: notApplicable
+              note: "Conditional: the SDK ships no retrieval or vector store, so there is nothing for it to secure. An
+                application built on it that attaches a store through MCP or files owns provenance, trust
+                tiering and access scoping for that store — record it on the application, not the SDK."
+              evidence: &a30
+                - *a21
+              verified: 2026-09-10
+      - capability: AML.M0028
+        coverage: unknown
+        mechanism: allowedTools / disallowedTools, permissionMode (default, dontAsk, acceptEdits, plan, auto,
+          bypassPermissions), mcp__server__tool allow patterns, skills option, per-subagent permissionMode
+        steps:
+          - &a22
+            title: Fix an explicit tool surface
             body:
-              - Pair allowedTools with permissionMode "dontAsk" so listed tools run and everything
-                else is denied; note allowedTools does not constrain bypassPermissions.
+              - Pair allowedTools with permissionMode "dontAsk" so listed tools run and everything else is denied; note
+                allowedTools does not constrain bypassPermissions.
             url: https://code.claude.com/docs/en/agent-sdk/permissions
-          - title: Allow MCP tools narrowly
+          - &a23
+            title: Allow MCP tools narrowly
             body:
-              - Use mcp__<server>__<tool> or mcp__<server>__* entries rather than a broad
-                permission mode; acceptEdits never auto-approves MCP tools.
+              - Use mcp__<server>__<tool> or mcp__<server>__* entries rather than a broad permission mode;
+                acceptEdits never auto-approves MCP tools.
             url: https://code.claude.com/docs/en/agent-sdk/mcp
+        evidence: []
         note: >-
-          Options the application passes, not fleet policy: allowedTools hides tools, permissionMode
-          pre-approves classes of action, and argument limits come only from deny patterns or a
-          canUseTool implementation. bypassPermissions is available to the application unless the
-          host's managed settings disable it; MCP tools follow the same patterns, custom tools are
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityToolPermissionScoping] Options the application passes, not fleet policy: allowedTools
+          hides tools, permissionMode pre-approves classes of action, and argument limits come only from deny
+          patterns or a canUseTool implementation. bypassPermissions is available to the application unless
+          the host's managed settings disable it; MCP tools follow the same patterns, custom tools are
           whatever the application registers.
-        verified: "2026-09-10"
-      - capability: capabilityCredentialIsolation
-        coverage: partial
-        mechanism: >-
-          Proxy-injected credentials and custom tools that call authenticated services outside the
-          boundary; per-tenant egress rules at the proxy; no on-behalf-of exchange in the SDK
+        migration:
+          from:
+            - capabilityToolPermissionScoping
+          reviewRequired: true
+          original:
+            - capability: capabilityToolPermissionScoping
+              coverage: native
+              mechanism: allowedTools / disallowedTools, permissionMode (default, dontAsk, acceptEdits, plan, auto,
+                bypassPermissions), mcp__server__tool allow patterns, skills option, per-subagent
+                permissionMode
+              steps:
+                - *a22
+                - *a23
+              note: "Options the application passes, not fleet policy: allowedTools hides tools, permissionMode pre-approves
+                classes of action, and argument limits come only from deny patterns or a canUseTool
+                implementation. bypassPermissions is available to the application unless the host's managed
+                settings disable it; MCP tools follow the same patterns, custom tools are whatever the
+                application registers."
+              verified: 2026-09-10
+      - capability: D3-CTS
+        coverage: unknown
+        mechanism: Proxy-injected credentials and custom tools that call authenticated services outside the boundary;
+          per-tenant egress rules at the proxy; no on-behalf-of exchange in the SDK
         steps:
-          - title: Use the proxy pattern for every service credential
+          - &a24
+            title: Use the proxy pattern for every service credential
             body:
-              - Run a credential-injecting proxy (Envoy credential_injector, mitmproxy, LiteLLM)
-                outside the container; give the agent no direct credentials and route git and API
-                calls through it.
+              - Run a credential-injecting proxy (Envoy credential_injector, mitmproxy, LiteLLM) outside the container;
+                give the agent no direct credentials and route git and API calls through it.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        evidence: []
         note: >-
-          Deployer-built: proxy-injected credentials and per-tenant egress rules exist only where the
-          application's proxy implements them; the SDK itself hands the process whatever environment
-          it starts with. No on-behalf-of exchange, so an agent serving several requesting users needs
-          the application to scope each call.
-        verified: "2026-09-10"
-      - capability: capabilityRateLimiting
-        coverage: partial
-        mechanism: >-
-          maxTurns per query and per subagent AgentDefinition; API organisation spend limits and
-          usage-tier rate limits; per-session cost tracking in the result stream
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityCredentialIsolation] Deployer-built: proxy-injected credentials and per-tenant egress
+          rules exist only where the application's proxy implements them; the SDK itself hands the process
+          whatever environment it starts with. No on-behalf-of exchange, so an agent serving several
+          requesting users needs the application to scope each call.
+        migration:
+          from:
+            - capabilityCredentialIsolation
+          reviewRequired: true
+          original:
+            - capability: capabilityCredentialIsolation
+              coverage: partial
+              mechanism: Proxy-injected credentials and custom tools that call authenticated services outside the boundary;
+                per-tenant egress rules at the proxy; no on-behalf-of exchange in the SDK
+              steps: &a25
+                - *a24
+              note: "Deployer-built: proxy-injected credentials and per-tenant egress rules exist only where the
+                application's proxy implements them; the SDK itself hands the process whatever environment it
+                starts with. No on-behalf-of exchange, so an agent serving several requesting users needs the
+                application to scope each call."
+              verified: 2026-09-10
+      - capability: D3-TB
+        coverage: unknown
+        mechanism: Proxy-injected credentials and custom tools that call authenticated services outside the boundary;
+          per-tenant egress rules at the proxy; no on-behalf-of exchange in the SDK
         steps:
-          - title: Bound turns and cost
+          - *a24
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityCredentialIsolation] Deployer-built: proxy-injected credentials and per-tenant egress
+          rules exist only where the application's proxy implements them; the SDK itself hands the process
+          whatever environment it starts with. No on-behalf-of exchange, so an agent serving several
+          requesting users needs the application to scope each call.
+        migration:
+          from:
+            - capabilityCredentialIsolation
+          reviewRequired: true
+          original:
+            - capability: capabilityCredentialIsolation
+              coverage: partial
+              mechanism: Proxy-injected credentials and custom tools that call authenticated services outside the boundary;
+                per-tenant egress rules at the proxy; no on-behalf-of exchange in the SDK
+              steps: *a25
+              note: "Deployer-built: proxy-injected credentials and per-tenant egress rules exist only where the
+                application's proxy implements them; the SDK itself hands the process whatever environment it
+                starts with. No on-behalf-of exchange, so an agent serving several requesting users needs the
+                application to scope each call."
+              verified: 2026-09-10
+      - capability: AML.M0004
+        coverage: unknown
+        mechanism: maxTurns per query and per subagent AgentDefinition; API organisation spend limits and usage-tier
+          rate limits; per-session cost tracking in the result stream
+        steps:
+          - &a26
+            title: Bound turns and cost
             body:
-              - Set maxTurns on query() and on each subagent definition (there is no wall-clock
-                deadline); read total_cost_usd from the result message for per-session accounting.
+              - Set maxTurns on query() and on each subagent definition (there is no wall-clock deadline); read
+                total_cost_usd from the result message for per-session accounting.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
+        evidence: []
         note: >-
-          Sub-limits: iterations (maxTurns per query and per subagent, hard), spend (organisation
-          limits and usage-tier rate limits, hard at the account). No wall-clock or per-session spend
-          cap — cost is reported per session, not enforced, so the application supplies that.
-        verified: "2026-09-10"
-      - capability: capabilityPromptInjectionDefense
-        coverage: partial
-        mechanism: >-
-          Claude Code's built-in command parsing, web-search summarisation and sandbox mode;
-          defence in depth recommended via containers and egress proxy
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityRateLimiting] Sub-limits: iterations (maxTurns per query and per subagent, hard), spend
+          (organisation limits and usage-tier rate limits, hard at the account). No wall-clock or per-session
+          spend cap — cost is reported per session, not enforced, so the application supplies that.
+        migration:
+          from:
+            - capabilityRateLimiting
+          reviewRequired: true
+          original:
+            - capability: capabilityRateLimiting
+              coverage: partial
+              mechanism: maxTurns per query and per subagent AgentDefinition; API organisation spend limits and usage-tier
+                rate limits; per-session cost tracking in the result stream
+              steps: &a27
+                - *a26
+              note: "Sub-limits: iterations (maxTurns per query and per subagent, hard), spend (organisation limits and
+                usage-tier rate limits, hard at the account). No wall-clock or per-session spend cap — cost is
+                reported per session, not enforced, so the application supplies that."
+              verified: 2026-09-10
+      - capability: AML.M0036
+        coverage: unknown
+        mechanism: maxTurns per query and per subagent AgentDefinition; API organisation spend limits and usage-tier
+          rate limits; per-session cost tracking in the result stream
         steps:
-          - title: Layer the recommended controls
+          - *a26
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityRateLimiting] Sub-limits: iterations (maxTurns per query and per subagent, hard), spend
+          (organisation limits and usage-tier rate limits, hard at the account). No wall-clock or per-session
+          spend cap — cost is reported per session, not enforced, so the application supplies that.
+        migration:
+          from:
+            - capabilityRateLimiting
+          reviewRequired: true
+          original:
+            - capability: capabilityRateLimiting
+              coverage: partial
+              mechanism: maxTurns per query and per subagent AgentDefinition; API organisation spend limits and usage-tier
+                rate limits; per-session cost tracking in the result stream
+              steps: *a27
+              note: "Sub-limits: iterations (maxTurns per query and per subagent, hard), spend (organisation limits and
+                usage-tier rate limits, hard at the account). No wall-clock or per-session spend cap — cost is
+                reported per session, not enforced, so the application supplies that."
+              verified: 2026-09-10
+      - capability: AML.M0020
+        coverage: unknown
+        mechanism: Claude Code's built-in command parsing, web-search summarisation and sandbox mode; defence in depth
+          recommended via containers and egress proxy; Read/Edit deny rules keep named files out; inspection
+          of prompts and outputs is the deployer's proxy or hook
+        steps:
+          - &a28
+            title: Layer the recommended controls
             body:
-              - >-
-                Follow the secure-deployment guide: PreToolUse hooks, deny rules, read-only mounts,
-                --network none with a Unix-socket proxy, and gVisor or Firecracker for untrusted
-                content.
+              - "Follow the secure-deployment guide: PreToolUse hooks, deny rules, read-only mounts, --network none with
+                a Unix-socket proxy, and gVisor or Firecracker for untrusted content."
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
-        note: No admin-configurable injection classifier is exposed; auto mode's classifier is available as a permission mode.
-        verified: "2026-09-10"
-      - capability: capabilityAiDlp
-        coverage: partial
-        mechanism: Read/Edit deny rules keep named files out; inspection of prompts and outputs is the deployer's proxy or hook
-        steps:
-          - title: Inspect at the proxy or in a hook
+          - &a29
+            title: Inspect at the proxy or in a hook
             body:
-              - Use a TLS-terminating proxy or a PreToolUse / UserPromptSubmit hook to scan content;
-                the SDK itself ships no DLP classifier.
+              - Use a TLS-terminating proxy or a PreToolUse / UserPromptSubmit hook to scan content; the SDK itself
+                ships no DLP classifier.
             url: https://code.claude.com/docs/en/agent-sdk/hooks
+        evidence:
+          - *a21
         note: >-
-          Rated like Claude Code, Gemini CLI and the Copilot SDK: deny rules restrict paths and the
-          hooks are the attach point for a scanner. No scanner ships — until the deployer attaches
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityPromptInjectionDefense] No admin-configurable injection classifier is exposed; auto
+          mode's classifier is available as a permission mode.
+
+
+          [capabilityAiDlp] Rated like Claude Code, Gemini CLI and the Copilot SDK: deny rules restrict paths
+          and the hooks are the attach point for a scanner. No scanner ships — until the deployer attaches
           one, no prompt, upload or output content is inspected.
-        verified: "2026-09-10"
-      - capability: capabilityHitlControls
-        coverage: native
-        mechanism: >-
-          canUseTool callback for unresolved calls, ask rules, plan mode, PreToolUse "ask" or
-          "defer" (ends the query for later resumption), AskUserQuestion
+
+
+          [capabilityRagSecurity] Conditional: the SDK ships no retrieval or vector store, so there is nothing
+          for it to secure. An application built on it that attaches a store through MCP or files owns
+          provenance, trust tiering and access scoping for that store — record it on the application, not the
+          SDK.
+        migration:
+          from:
+            - capabilityPromptInjectionDefense
+            - capabilityAiDlp
+            - capabilityRagSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityPromptInjectionDefense
+              coverage: partial
+              mechanism: Claude Code's built-in command parsing, web-search summarisation and sandbox mode; defence in depth
+                recommended via containers and egress proxy
+              steps:
+                - *a28
+              note: No admin-configurable injection classifier is exposed; auto mode's classifier is available as a
+                permission mode.
+              verified: 2026-09-10
+            - capability: capabilityAiDlp
+              coverage: partial
+              mechanism: Read/Edit deny rules keep named files out; inspection of prompts and outputs is the deployer's
+                proxy or hook
+              steps:
+                - *a29
+              note: "Rated like Claude Code, Gemini CLI and the Copilot SDK: deny rules restrict paths and the hooks are the
+                attach point for a scanner. No scanner ships — until the deployer attaches one, no prompt,
+                upload or output content is inspected."
+              verified: 2026-09-10
+            - capability: capabilityRagSecurity
+              coverage: notApplicable
+              note: "Conditional: the SDK ships no retrieval or vector store, so there is nothing for it to secure. An
+                application built on it that attaches a store through MCP or files owns provenance, trust
+                tiering and access scoping for that store — record it on the application, not the SDK."
+              evidence: *a30
+              verified: 2026-09-10
+      - capability: AML.M0029
+        coverage: unknown
+        mechanism: canUseTool callback for unresolved calls, ask rules, plan mode, PreToolUse "ask" or "defer" (ends
+          the query for later resumption), AskUserQuestion
         steps:
-          - title: Route sensitive calls to a human
+          - &a31
+            title: Route sensitive calls to a human
             body:
               - Implement canUseTool (Python can_use_tool) and add ask rules; tools marked
-                anthropic/requiresUserInteraction and org connector tools set to ask always reach
-                the callback.
+                anthropic/requiresUserInteraction and org connector tools set to ask always reach the
+                callback.
             url: https://code.claude.com/docs/en/agent-sdk/permissions
-          - title: Pause for asynchronous approval
+          - &a32
+            title: Pause for asynchronous approval
             body:
-              - Return permissionDecision "defer" from a PreToolUse hook to end the query and resume
-                it after an out-of-band approval.
+              - Return permissionDecision "defer" from a PreToolUse hook to end the query and resume it after an
+                out-of-band approval.
             url: https://code.claude.com/docs/en/agent-sdk/hooks
+        evidence: []
         note: >-
-          The SDK routes the decision to the application; the application must implement an
-          authenticated human approver and fail closed on timeout. Nothing in the SDK ships an
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityHitlControls] The SDK routes the decision to the application; the application must
+          implement an authenticated human approver and fail closed on timeout. Nothing in the SDK ships an
           approval UI, so the control is complete only in the deployed application.
-        verified: "2026-09-10"
-      - capability: capabilityDataAccessGovernance
-        coverage: external
-        mechanism: Retrieval runs with whatever filesystem mounts and MCP credentials the deployer grants
-        note: >-
-          The SDK reads whatever the working directory and MCP servers expose; least-privilege
-          mounts and per-user MCP credentials are your responsibility.
+        migration:
+          from:
+            - capabilityHitlControls
+          reviewRequired: true
+          original:
+            - capability: capabilityHitlControls
+              coverage: native
+              mechanism: canUseTool callback for unresolved calls, ask rules, plan mode, PreToolUse "ask" or "defer" (ends
+                the query for later resumption), AskUserQuestion
+              steps:
+                - *a31
+                - *a32
+              note: The SDK routes the decision to the application; the application must implement an authenticated human
+                approver and fail closed on timeout. Nothing in the SDK ships an approval UI, so the control
+                is complete only in the deployed application.
+              verified: 2026-09-10
+      - capability: D3-EI
+        coverage: unknown
+        mechanism: Claude Code's sandbox settings (Seatbelt / bubblewrap) apply when configured; Anthropic's
+          sandbox-runtime package; documented Docker, gVisor and Firecracker patterns
         steps:
-          - title: Mount only what the task needs
+          - &a33
+            title: Choose the isolation tier
             body:
-              - Mount code read-only, give each session its own cwd, and use per-tenant MCP
-                credentials so retrieval runs as the requesting user.
+              - Use sandbox-runtime for lightweight OS-level isolation, hardened Docker (--cap-drop ALL, --read-only,
+                --network none), gVisor for syscall interception or Firecracker microVMs per the isolation
+                table.
             url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
-        verified: "2026-09-10"
-      - capability: capabilityAgentSandboxing
-        coverage: partial
-        mechanism: >-
-          Claude Code's sandbox settings (Seatbelt / bubblewrap) apply when configured;
-          Anthropic's sandbox-runtime package; documented Docker, gVisor and Firecracker patterns
-        steps:
-          - title: Choose the isolation tier
+          - &a34
+            title: Size and recycle containers
             body:
-              - Use sandbox-runtime for lightweight OS-level isolation, hardened Docker (--cap-drop
-                ALL, --read-only, --network none), gVisor for syscall interception or Firecracker
-                microVMs per the isolation table.
-            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
-          - title: Size and recycle containers
-            body:
-              - One subprocess per session; start at 1 GiB RAM / 1 CPU, recycle long sessions, and
-                use ephemeral containers for one-off tasks.
+              - One subprocess per session; start at 1 GiB RAM / 1 CPU, recycle long sessions, and use ephemeral
+                containers for one-off tasks.
             url: https://code.claude.com/docs/en/agent-sdk/hosting
+        evidence: []
         note: >-
-          Optional and deployer-built: Claude Code's sandbox applies only when the application
-          configures it, and container, gVisor or Firecracker isolation is the deployer's
-          infrastructure. Inside the boundary: shell commands; outside: MCP servers, WebFetch and the
-          SDK host process.
-        verified: "2026-09-10"
-      - capability: capabilityAgentRegistry
-        coverage: none
-        note: >-
-          No registry of SDK-built agents exists on the vendor side; OTEL_SERVICE_NAME and
-          resource attributes are the only identifiers, so maintain the inventory in your own
-          governance platform.
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentSandboxing] Optional and deployer-built: Claude Code's sandbox applies only when the
+          application configures it, and container, gVisor or Firecracker isolation is the deployer's
+          infrastructure. Inside the boundary: shell commands; outside: MCP servers, WebFetch and the SDK host
+          process.
+        migration:
+          from:
+            - capabilityAgentSandboxing
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentSandboxing
+              coverage: partial
+              mechanism: Claude Code's sandbox settings (Seatbelt / bubblewrap) apply when configured; Anthropic's
+                sandbox-runtime package; documented Docker, gVisor and Firecracker patterns
+              steps:
+                - *a33
+                - *a34
+              note: "Optional and deployer-built: Claude Code's sandbox applies only when the application configures it, and
+                container, gVisor or Firecracker isolation is the deployer's infrastructure. Inside the
+                boundary: shell commands; outside: MCP servers, WebFetch and the SDK host process."
+              verified: 2026-09-10
+      - capability: D3-AI
+        coverage: unknown
+        steps: []
         evidence:
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+          - &a35
+            title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
             url: https://code.claude.com/docs/en/agent-sdk/overview
-        verified: "2026-09-10"
-      - capability: capabilityAuditLogging
-        coverage: partial
-        mechanism: >-
-          OTLP log events (tool_decision, tool_result, mcp_server_connection, permission_mode_changed)
-          to your collector; transcripts on disk or in a SessionStore; the Console Usage and Cost API
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAgentRegistry] No registry of SDK-built agents exists on the vendor side;
+          OTEL_SERVICE_NAME and resource attributes are the only identifiers, so maintain the inventory in
+          your own governance platform.
+        migration:
+          from:
+            - capabilityAgentRegistry
+          reviewRequired: true
+          original:
+            - capability: capabilityAgentRegistry
+              coverage: none
+              note: No registry of SDK-built agents exists on the vendor side; OTEL_SERVICE_NAME and resource attributes are
+                the only identifiers, so maintain the inventory in your own governance platform.
+              evidence:
+                - *a35
+              verified: 2026-09-10
+      - capability: D3-SFA
+        coverage: unknown
+        mechanism: OTLP log events (tool_decision, tool_result, mcp_server_connection, permission_mode_changed) to
+          your collector; transcripts on disk or in a SessionStore; the Console Usage and Cost API
         steps:
-          - title: Ship security events to the SIEM
-            body:
-              - Export OTEL_LOGS_EXPORTER=otlp with enduser.id attributes; the events are named with
-                a claude_code. prefix and carry the decision source.
-            url: https://code.claude.com/docs/en/agent-sdk/observability
-        note: Records live in your infrastructure; tamper evidence is what your collector provides.
-        verified: "2026-09-10"
-      - capability: capabilityKillSwitch
-        coverage: partial
-        mechanism: >-
-          Revoke the Console API key or federation rule; kill the subprocess or container;
-          maxTurns; hooks can deny all calls
+          - *a6
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAuditLogging] Records live in your infrastructure; tamper evidence is what your collector
+          provides.
+        migration:
+          from:
+            - capabilityAuditLogging
+          reviewRequired: true
+          original:
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: OTLP log events (tool_decision, tool_result, mcp_server_connection, permission_mode_changed) to
+                your collector; transcripts on disk or in a SessionStore; the Console Usage and Cost API
+              steps: *a36
+              note: Records live in your infrastructure; tamper evidence is what your collector provides.
+              verified: 2026-09-10
+      - capability: D3-PT
+        coverage: unknown
+        mechanism: Revoke the Console API key or federation rule; kill the subprocess or container; maxTurns; hooks
+          can deny all calls
         steps:
-          - title: Revoke and stop
-            body:
-              - Delete the API key in the Console (or the WIF rule), stop the container, and delete
-                session transcripts and working directories the container held.
-            url: https://code.claude.com/docs/en/agent-sdk/hosting
-        verified: "2026-09-10"
-      - capability: capabilityAiDetectionResponse
-        coverage: external
+          - *a13
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityKillSwitch]
+        migration:
+          from:
+            - capabilityKillSwitch
+          reviewRequired: true
+          original:
+            - capability: capabilityKillSwitch
+              coverage: partial
+              mechanism: Revoke the Console API key or federation rule; kill the subprocess or container; maxTurns; hooks
+                can deny all calls
+              steps: *a37
+              verified: 2026-09-10
+      - capability: D3-RAPA
+        coverage: unknown
         mechanism: OTLP events and traces correlated in your SIEM; no vendor-side detections for SDK workloads
         steps:
-          - title: Build detections on the exported events
+          - &a38
+            title: Build detections on the exported events
             body:
-              - Correlate tool_decision rejections, permission_mode_changed and mcp_server_connection
-                events with enduser.id in your SIEM.
+              - Correlate tool_decision rejections, permission_mode_changed and mcp_server_connection events with
+                enduser.id in your SIEM.
             url: https://code.claude.com/docs/en/agent-sdk/observability
+        evidence: []
         note: >-
-          The traces and events are the feed; the detections (unexpected tool sequences, egress to new
-          hosts, permission denials spiking) and the response playbook are written in the SIEM.
-          Required fields for that: session id, tool name, decision, host.
-        verified: "2026-09-10"
-      - capability: capabilityEncryptionKeyManagement
-        coverage: partial
-        mechanism: >-
-          TLS to the provider; AES-256 infrastructure encryption at Anthropic; customer-managed
-          keys via Bedrock KMS or Vertex CMEK when routed there; local transcripts rely on host disk
-          encryption
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAiDetectionResponse] The traces and events are the feed; the detections (unexpected tool
+          sequences, egress to new hosts, permission denials spiking) and the response playbook are written in
+          the SIEM. Required fields for that: session id, tool name, decision, host.
+        migration:
+          from:
+            - capabilityAiDetectionResponse
+          reviewRequired: true
+          original:
+            - capability: capabilityAiDetectionResponse
+              coverage: external
+              mechanism: OTLP events and traces correlated in your SIEM; no vendor-side detections for SDK workloads
+              steps:
+                - *a38
+              note: "The traces and events are the feed; the detections (unexpected tool sequences, egress to new hosts,
+                permission denials spiking) and the response playbook are written in the SIEM. Required fields
+                for that: session id, tool name, decision, host."
+              verified: 2026-09-10
+      - capability: AML.M0012
+        coverage: unknown
+        mechanism: TLS to the provider; AES-256 infrastructure encryption at Anthropic; customer-managed keys via
+          Bedrock KMS or Vertex CMEK when routed there; local transcripts rely on host disk encryption
         steps:
-          - title: Pick the provider for key custody
+          - &a39
+            title: Pick the provider for key custody
             body:
-              - Route through Bedrock (AWS KMS CMK) or Google Cloud's Agent Platform (CMEK) when
-                customer-held keys are required; the Anthropic API uses infrastructure encryption.
+              - Route through Bedrock (AWS KMS CMK) or Google Cloud's Agent Platform (CMEK) when customer-held keys are
+                required; the Anthropic API uses infrastructure encryption.
             url: https://code.claude.com/docs/en/data-usage
+        evidence: []
         note: >-
-          Assets and key owners: traffic to the provider (TLS, provider keys); data retained at
-          Anthropic (Anthropic keys, or the customer's KMS/CMEK when routed through Bedrock or
-          Vertex); local transcripts and working directories (host disk, deployer's keys). CMEK covers
-          the provider-side asset only.
-        verified: "2026-09-10"
-      - capability: capabilityRagSecurity
-        coverage: notApplicable
-        note: >-
-          Conditional: the SDK ships no retrieval or vector store, so there is nothing for it to
-          secure. An application built on it that attaches a store through MCP or files owns
-          provenance, trust tiering and access scoping for that store — record it on the application,
-          not the SDK.
-        evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://code.claude.com/docs/en/agent-sdk/overview
-        verified: "2026-09-10"
-      - capability: capabilityMcpToolSecurity
-        coverage: partial
-        mechanism: >-
-          mcpServers configured in code or .mcp.json, mcp__ allow patterns, strictMcpConfig /
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEncryptionKeyManagement] Assets and key owners: traffic to the provider (TLS, provider
+          keys); data retained at Anthropic (Anthropic keys, or the customer's KMS/CMEK when routed through
+          Bedrock or Vertex); local transcripts and working directories (host disk, deployer's keys). CMEK
+          covers the provider-side asset only.
+        migration:
+          from:
+            - capabilityEncryptionKeyManagement
+          reviewRequired: true
+          original:
+            - capability: capabilityEncryptionKeyManagement
+              coverage: partial
+              mechanism: TLS to the provider; AES-256 infrastructure encryption at Anthropic; customer-managed keys via
+                Bedrock KMS or Vertex CMEK when routed there; local transcripts rely on host disk encryption
+              steps:
+                - *a39
+              note: "Assets and key owners: traffic to the provider (TLS, provider keys); data retained at Anthropic
+                (Anthropic keys, or the customer's KMS/CMEK when routed through Bedrock or Vertex); local
+                transcripts and working directories (host disk, deployer's keys). CMEK covers the
+                provider-side asset only."
+              verified: 2026-09-10
+      - capability: AML.M0014
+        coverage: unknown
+        mechanism: mcpServers configured in code or .mcp.json, mcp__ allow patterns, strictMcpConfig /
           disableClaudeAiConnectors, host managed policy (allowedMcpServers, strictPluginOnlyCustomization)
         steps:
-          - title: Declare servers in code, not from the repository
+          - &a40
+            title: Declare servers in code, not from the repository
             body:
-              - Pass mcpServers in options and set settingSources [] so a checked-in .mcp.json cannot
-                add servers; set strictMcpConfig or disableClaudeAiConnectors to suppress claude.ai
-                connectors.
+              - Pass mcpServers in options and set settingSources [] so a checked-in .mcp.json cannot add servers; set
+                strictMcpConfig or disableClaudeAiConnectors to suppress claude.ai connectors.
             url: https://code.claude.com/docs/en/agent-sdk/claude-code-features
-          - title: Allow tools per server
+          - &a41
+            title: Allow tools per server
             body:
-              - Grant mcp__<server>__<tool> entries in allowedTools and treat needs-auth / failed
-                statuses in the init message as blockers.
+              - Grant mcp__<server>__<tool> entries in allowedTools and treat needs-auth / failed statuses in the
+                init message as blockers.
             url: https://code.claude.com/docs/en/agent-sdk/mcp
-        note: >-
-          The application decides which servers a session gets; host managed policy can constrain it
-          where Claude Code's managed settings are deployed. Admission is not integrity — nothing pins
-          the tool descriptions a server returns.
-        verified: "2026-09-10"
-      - capability: capabilityAiBom
-        coverage: none
-        note: >-
-          The SDK pins a bundled CLI binary per package version and follows semver, but publishes
-          no signed manifest of models, tools and plugins; record it from your lockfile and
-          options.
         evidence:
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+          - &a42
+            title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
             url: https://code.claude.com/docs/en/agent-sdk/overview
-        verified: "2026-09-10"
-      - capability: capabilityEgressControl
-        coverage: partial
-        mechanism: >-
-          Claude Code sandbox network allowlist when enabled; container --network none with a
-          Unix-socket or vsock proxy; HTTPS_PROXY / ANTHROPIC_BASE_URL; cloud security groups
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityMcpToolSecurity] The application decides which servers a session gets; host managed
+          policy can constrain it where Claude Code's managed settings are deployed. Admission is not
+          integrity — nothing pins the tool descriptions a server returns.
+
+
+          [capabilityAiBom] The SDK pins a bundled CLI binary per package version and follows semver, but
+          publishes no signed manifest of models, tools and plugins; record it from your lockfile and options.
+        migration:
+          from:
+            - capabilityMcpToolSecurity
+            - capabilityAiBom
+          reviewRequired: true
+          original:
+            - capability: capabilityMcpToolSecurity
+              coverage: partial
+              mechanism: mcpServers configured in code or .mcp.json, mcp__ allow patterns, strictMcpConfig /
+                disableClaudeAiConnectors, host managed policy (allowedMcpServers,
+                strictPluginOnlyCustomization)
+              steps: &a43
+                - *a40
+                - *a41
+              note: The application decides which servers a session gets; host managed policy can constrain it where Claude
+                Code's managed settings are deployed. Admission is not integrity — nothing pins the tool
+                descriptions a server returns.
+              verified: 2026-09-10
+            - capability: capabilityAiBom
+              coverage: none
+              note: The SDK pins a bundled CLI binary per package version and follows semver, but publishes no signed
+                manifest of models, tools and plugins; record it from your lockfile and options.
+              evidence: &a44
+                - *a42
+              verified: 2026-09-10
+      - capability: D3-FIM
+        coverage: unknown
+        mechanism: mcpServers configured in code or .mcp.json, mcp__ allow patterns, strictMcpConfig /
+          disableClaudeAiConnectors, host managed policy (allowedMcpServers, strictPluginOnlyCustomization)
         steps:
-          - title: Remove the network interface and proxy everything
-            body:
-              - Run with --network none and mount a proxy socket, or in a private subnet with
-                firewall rules that allow only the proxy; enforce domain allowlists and log at the
-                proxy.
-            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+          - *a40
+          - *a41
+        evidence: []
         note: >-
-          The sandbox allowlist bounds commands only when enabled; every other path (MCP servers,
-          WebFetch, the host process) is bounded by the container network and proxy the deployer
-          builds. Proxy variables are routing until direct egress is blocked.
-        verified: "2026-09-10"
-      - capability: capabilityModelScanning
-        coverage: notApplicable
-        note: >-
-          Not applicable: no model artifacts are loaded locally; inference is remote.
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityMcpToolSecurity] The application decides which servers a session gets; host managed
+          policy can constrain it where Claude Code's managed settings are deployed. Admission is not
+          integrity — nothing pins the tool descriptions a server returns.
+        migration:
+          from:
+            - capabilityMcpToolSecurity
+          reviewRequired: true
+          original:
+            - capability: capabilityMcpToolSecurity
+              coverage: partial
+              mechanism: mcpServers configured in code or .mcp.json, mcp__ allow patterns, strictMcpConfig /
+                disableClaudeAiConnectors, host managed policy (allowedMcpServers,
+                strictPluginOnlyCustomization)
+              steps: *a43
+              note: The application decides which servers a session gets; host managed policy can constrain it where Claude
+                Code's managed settings are deployed. Admission is not integrity — nothing pins the tool
+                descriptions a server returns.
+              verified: 2026-09-10
+      - capability: AML.M0023
+        coverage: unknown
+        steps: []
         evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+          - *a42
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAiBom] The SDK pins a bundled CLI binary per package version and follows semver, but
+          publishes no signed manifest of models, tools and plugins; record it from your lockfile and options.
+        migration:
+          from:
+            - capabilityAiBom
+          reviewRequired: true
+          original:
+            - capability: capabilityAiBom
+              coverage: none
+              note: The SDK pins a bundled CLI binary per package version and follows semver, but publishes no signed
+                manifest of models, tools and plugins; record it from your lockfile and options.
+              evidence: *a44
+              verified: 2026-09-10
+      - capability: AML.M0013
+        coverage: unknown
+        steps: []
+        evidence:
+          - *a42
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityAiBom] The SDK pins a bundled CLI binary per package version and follows semver, but
+          publishes no signed manifest of models, tools and plugins; record it from your lockfile and options.
+        migration:
+          from:
+            - capabilityAiBom
+          reviewRequired: true
+          original:
+            - capability: capabilityAiBom
+              coverage: none
+              note: The SDK pins a bundled CLI binary per package version and follows semver, but publishes no signed
+                manifest of models, tools and plugins; record it from your lockfile and options.
+              evidence: *a44
+              verified: 2026-09-10
+      - capability: D3-OTF
+        coverage: unknown
+        mechanism: Claude Code sandbox network allowlist when enabled; container --network none with a Unix-socket or
+          vsock proxy; HTTPS_PROXY / ANTHROPIC_BASE_URL; cloud security groups
+        steps:
+          - &a45
+            title: Remove the network interface and proxy everything
+            body:
+              - Run with --network none and mount a proxy socket, or in a private subnet with firewall rules that allow
+                only the proxy; enforce domain allowlists and log at the proxy.
+            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEgressControl] The sandbox allowlist bounds commands only when enabled; every other path
+          (MCP servers, WebFetch, the host process) is bounded by the container network and proxy the deployer
+          builds. Proxy variables are routing until direct egress is blocked.
+        migration:
+          from:
+            - capabilityEgressControl
+          reviewRequired: true
+          original:
+            - capability: capabilityEgressControl
+              coverage: partial
+              mechanism: Claude Code sandbox network allowlist when enabled; container --network none with a Unix-socket or
+                vsock proxy; HTTPS_PROXY / ANTHROPIC_BASE_URL; cloud security groups
+              steps: &a46
+                - *a45
+              note: The sandbox allowlist bounds commands only when enabled; every other path (MCP servers, WebFetch, the
+                host process) is bounded by the container network and proxy the deployer builds. Proxy
+                variables are routing until direct egress is blocked.
+              verified: 2026-09-10
+      - capability: D3-NI
+        coverage: unknown
+        mechanism: Claude Code sandbox network allowlist when enabled; container --network none with a Unix-socket or
+          vsock proxy; HTTPS_PROXY / ANTHROPIC_BASE_URL; cloud security groups
+        steps:
+          - *a45
+        evidence: []
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityEgressControl] The sandbox allowlist bounds commands only when enabled; every other path
+          (MCP servers, WebFetch, the host process) is bounded by the container network and proxy the deployer
+          builds. Proxy variables are routing until direct egress is blocked.
+        migration:
+          from:
+            - capabilityEgressControl
+          reviewRequired: true
+          original:
+            - capability: capabilityEgressControl
+              coverage: partial
+              mechanism: Claude Code sandbox network allowlist when enabled; container --network none with a Unix-socket or
+                vsock proxy; HTTPS_PROXY / ANTHROPIC_BASE_URL; cloud security groups
+              steps: *a46
+              note: The sandbox allowlist bounds commands only when enabled; every other path (MCP servers, WebFetch, the
+                host process) is bounded by the container network and proxy the deployer builds. Proxy
+                variables are routing until direct egress is blocked.
+              verified: 2026-09-10
+      - capability: D3-FA
+        coverage: unknown
+        steps: []
+        evidence:
+          - &a47
+            title: Vendor docs index, reviewed for applicability (2026-09-10)
             url: https://code.claude.com/docs/en/agent-sdk/overview
-        verified: "2026-09-10"
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityModelScanning] Not applicable: no model artifacts are loaded locally; inference is
+          remote.
+        migration:
+          from:
+            - capabilityModelScanning
+          reviewRequired: true
+          original:
+            - capability: capabilityModelScanning
+              coverage: notApplicable
+              note: "Not applicable: no model artifacts are loaded locally; inference is remote."
+              evidence: &a48
+                - *a47
+              verified: 2026-09-10
+      - capability: AML.M0011
+        coverage: unknown
+        steps: []
+        evidence:
+          - *a47
+        note: >-
+          Capability scope changed: reassess this function. Retained configuration and evidence describe the
+          former capability, not verified coverage of every replacement.
+
+
+          [capabilityModelScanning] Not applicable: no model artifacts are loaded locally; inference is
+          remote.
+        migration:
+          from:
+            - capabilityModelScanning
+          reviewRequired: true
+          original:
+            - capability: capabilityModelScanning
+              coverage: notApplicable
+              note: "Not applicable: no model artifacts are loaded locally; inference is remote."
+              evidence: *a48
+              verified: 2026-09-10
     advisories:
       - title: "CVE-2026-39861 — Claude Code sandbox symlink escape (the SDK bundles the same CLI; fixed 2.1.64)"
         url: https://advisories.gitlab.com/npm/@anthropic-ai/claude-code/CVE-2026-39861/

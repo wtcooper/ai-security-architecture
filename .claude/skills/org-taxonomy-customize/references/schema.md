@@ -25,7 +25,7 @@ frameworks:                       # any number of catalogues
         group: Agent runtime      # optional heading shown beside the id
         url: https://...          # optional per-entry deep link ("Read the source")
         controls: [controlAgentPluginPermissions]      # CoSAI control ids (data/cosai/controls.yaml)
-        capabilities: [capabilityToolPermissionScoping] # capability ids (data/overlay/capabilities.yaml)
+        capabilities: [AML.M0028] # capability ids (data/overlay/capabilities.yaml)
         risks: [riskRogueActions] # CoSAI risk ids (data/cosai/risks.yaml)
       - id: AIS-7.1
         label: AI use-case approval board
@@ -39,11 +39,11 @@ An entry with no targets is allowed. Framework ids are checked against every oth
 
 ```yaml
 capabilities:
-  capabilityAiDlp:                # data/overlay/capabilities.yaml id
+  AML.M0020:                # data/overlay/capabilities.yaml id
     surfaceEndpoint:              # surfaceEndpoint | surfaceCloud | surfaceSaas
-      status: enabled             # enabled | inProgress | gap
+      status: inProgress          # enabled | inProgress | gap; one guardrail feature is partial
       technology: Netskope endpoint DLP    # optional; the named product you run
-      note: ...                   # optional
+      note: DLP inspection deployed; other required guardrail features await assessment.
     surfaceSaas: { status: inProgress, technology: Netskope CASB }
 ```
 
@@ -61,11 +61,11 @@ tools:
     available: true               # may people install and use it? omit the tool, or say false, if not
     note: ...                     # optional
     controls:                     # keyed by capability id pinned on the tool's architecture
-      capabilityToolPermissionScoping:
+      AML.M0028:
         status: enabled           # enabled | inProgress | gap
         note: permissions.deny via managed-settings.json   # the justification: what you set up; shown on hover in the grid
         evidence: CHG-1042        # optional ticket / document reference; shown with the note
-      capabilityAgentSandboxing: { status: gap, note: sandbox.enabled pending bubblewrap packaging }   # a gap still says why
+      D3-EI: { status: gap, note: sandbox.enabled pending bubblewrap packaging }   # a gap still says why
 ```
 
 Build rules: the tool exists; each capability key is pinned on that tool's architecture
@@ -86,3 +86,8 @@ an available tool reads as a gap.
 
 Everything in this table is behind the **Show status** switch beside the Capabilities and
 Reference architectures titles; it defaults on when `data/org/local/` exists.
+
+Use the native MITRE IDs selected in `data/overlay/capabilities.yaml`; canonical names and
+definitions come from the compiled dataset. For migrated records, `migration.original` retains
+the previous evidence. Keep `migration.reviewRequired: true` until reassessment; tool coverage
+stays `unknown` and organization posture cannot be `enabled` while that flag is set.

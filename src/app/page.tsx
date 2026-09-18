@@ -279,14 +279,14 @@ export default function LandingPage() {
         </div>
         <div className="rounded-xl border border-line bg-paper p-5 sm:col-span-2">
           <p className="display text-[15px] font-semibold text-ink">
-            Authored here <span className="ident ml-1.5 align-middle">two layers</span>
+            MITRE capabilities and authored integration
           </p>
           <p className="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">
-            The {capabilities.length} capabilities — tooling classes named by at least two
-            independent source families and backed by real products, mapped onto CoSAI by
-            judgement — and the {archetypes.length} reference architectures across{" "}
+            The {capabilities.length} capabilities use MITRE D3FEND and ATLAS identifiers and
+            definitions. Their CoSAI mappings and deployment
+            scope are authored here, alongside {archetypes.length} reference architectures across{" "}
             {surfaces.length} surfaces, each block anchored to the CoSAI component it
-            instantiates. Both are under review; every entry carries its sources.
+            instantiates. Mappings and implementation evidence remain subject to review.
           </p>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
             <Link href="/capabilities" className="text-[13.5px] font-semibold text-introduced hover:underline">

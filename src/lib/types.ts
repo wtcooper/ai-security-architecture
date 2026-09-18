@@ -210,16 +210,16 @@ export interface Surface {
 }
 
 export interface CapabilitySurfaceInfo {
-  /** Whether the capability is structurally available on this surface at all. */
+  /** Selected for customer deployment in this profile, not universal availability. */
   applies: boolean;
+  responsibility: "customer-operated" | "customer-configurable" | "provider-inherited" | "not-applicable" | "unknown";
   /** How it shows up (or why it cannot) on this surface. */
   note?: string;
 }
 
 /**
- * A technology capability: a vendor-neutral class of security tooling that implements
- * CoSAI controls on one or more surfaces. Authored in this repository (data/overlay/
- * capabilities.yaml), not CoSAI's.
+ * A selected MITRE defensive technique or AI mitigation. No custom capability identifiers.
+ * Upstream definitions are vendored; CoSAI mappings and deployment scope are authored here.
  */
 export interface Capability {
   id: string;
@@ -229,6 +229,18 @@ export interface Capability {
   /** Primary CoSAI control category — the matrix row this capability lives in. */
   category: string;
   description: Paragraph[];
+  kind: "function" | "support";
+  origin: {
+    framework: "MITRE D3FEND" | "MITRE ATLAS";
+    version: string;
+    entityType: "defensive-technique" | "mitigation";
+    url?: string;
+  };
+  /** Authored implementation scope, separate from the upstream definition. */
+  implementation: string;
+  /** Implementation checks within the upstream function; never additional capability IDs. */
+  features?: string[];
+  controlMappings: { control: string; relationship: "supports"; rationale: string }[];
   /** Vendor-neutral example technology classes. */
   examples: string[];
   controls: string[];
@@ -629,6 +641,14 @@ export interface ToolControl {
    * control does not apply. Not a configuration page — the coverage word never links here.
    */
   evidence?: { title: string; url: string }[];
+  migration?: CapabilityMigrationEvidence;
+}
+
+/** Retained pre-migration evidence is not a new coverage attestation. */
+export interface CapabilityMigrationEvidence {
+  from: string[];
+  reviewRequired: boolean;
+  original: Record<string, unknown>[];
 }
 
 export interface ToolVendor {
@@ -783,6 +803,7 @@ export interface OrgToolControlStatus {
   note?: string;
   /** A ticket, document or evidence reference. */
   evidence?: string;
+  migration?: CapabilityMigrationEvidence;
 }
 
 /**
@@ -795,6 +816,7 @@ export interface OrgOrgStatus {
   /** The named technology, e.g. "Netskope endpoint DLP", "Jamf Pro". */
   technology?: string;
   note?: string;
+  migration?: CapabilityMigrationEvidence;
 }
 /** capability id -> surface id -> posture. */
 export type OrgCapabilityPosture = Record<string, Record<string, OrgOrgStatus>>;
@@ -848,6 +870,9 @@ export interface Dataset {
   capabilities: Capability[];
   /** Provenance statement for the capabilities overlay, carried for YAML round-tripping. */
   capabilitiesAttribution: string;
+  /** Retired local IDs resolve to all replacement functions, never just the first child. */
+  capabilityAliases: Record<string, string[]>;
+  capabilityGaps: { control: string; assessment: "unmapped" | "partial"; missing: string; related: string[] }[];
   archetypes: Archetype[];
   guidance: Guidance[];
   vendors: ToolVendor[];

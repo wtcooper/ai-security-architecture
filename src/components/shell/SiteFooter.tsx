@@ -44,7 +44,7 @@ export function SiteFooter() {
         <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"
           style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}
-          title="The capability taxonomy, the reference architectures and their controls guidance are authored here and under active review — treat drawings, pins and mappings as draft."
+          title="Capability definitions come from pinned MITRE D3FEND and ATLAS releases. CoSAI mappings, deployment scope, architecture pins and guidance are authored here and under review."
         >
           Authored layers under review
         </span>

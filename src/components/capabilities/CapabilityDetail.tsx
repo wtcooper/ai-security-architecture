@@ -34,10 +34,10 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
     <div className="rounded-xl border border-line bg-paper p-7">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="eyebrow">Capability · {categoryTitle}</p>
-          <h2 className="display mt-1.5 text-[24px] font-bold leading-tight text-ink">
+          <h2 className="display text-[24px] font-bold leading-tight text-ink">
             {capability.title}
           </h2>
+          <p className="mt-2 text-xs text-ink-3">{capability.origin.framework} · {capability.id} · {capability.origin.version}</p>
         </div>
         <button
           onClick={onClose}
@@ -55,7 +55,17 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
         </button>
       </div>
 
-      <Prose blocks={capability.description} className="mt-4" />
+      <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {capability.kind === "support" ? "Governance support" : "Defensive function"} · {capability.origin.entityType}</p>
+      {capability.origin.url && <a href={capability.origin.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-introduced hover:underline">Read the official {capability.title} definition ↗</a>}
+      <div className="mt-4">
+        <p className="eyebrow">Upstream definition · unmodified</p>
+        <Prose blocks={capability.description} className="mt-2 whitespace-pre-line" />
+      </div>
+      <div className="mt-4 rounded-lg bg-mist p-4">
+        <p className="eyebrow">Implementation scope · authored here</p>
+        <p className="mt-2 text-sm leading-relaxed text-ink-2">{capability.implementation}</p>
+        {capability.features && <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-ink-2">{capability.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>}
+      </div>
 
       {orgMappings.length > 0 && (
         <div className="mt-4">
@@ -64,7 +74,7 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
       )}
 
       <div className="mt-5">
-        <p className="eyebrow">Example technology classes</p>
+        <p className="eyebrow">Implementation categories · verify the specific function</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {capability.examples.map((e) => (
             <Chip key={e}>{e}</Chip>
@@ -86,9 +96,10 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
                 {info?.applies ? (
                   status && <StatusPill status={status} />
                 ) : (
-                  <span className="text-[11px] font-medium text-ink-3">not available</span>
+                  <span className="text-[11px] font-medium text-ink-3">outside profile</span>
                 )}
               </p>
+              <p className="mt-1.5 text-xs font-medium text-ink-2">{info?.responsibility.replaceAll("-", " ")}</p>
               {info?.note && <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">{info.note}</p>}
               {overlay && orgSurfacePostureFor(capability.id, s.id)?.technology && (
                 <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
@@ -96,6 +107,7 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
                   {orgSurfacePostureFor(capability.id, s.id)!.technology}
                 </p>
               )}
+              {overlay && orgSurfacePostureFor(capability.id, s.id)?.note && <p className="mt-2 text-xs text-ink-3">{orgSurfacePostureFor(capability.id, s.id)!.note}</p>}
             </div>
           );
         })}
@@ -103,6 +115,7 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
 
       <div className="mt-6">
         <p className="eyebrow">Contributes to CoSAI controls</p>
+        <p className="mt-1 text-xs text-ink-3">Authored supporting relationships, scoped above. These do not establish control fulfillment.</p>
         <div className="mt-2 space-y-2">
           {controlCategories
             .filter((cat) => controls.some((c) => c.category === cat.id))
@@ -123,7 +136,7 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
 
       <div className="mt-6 grid gap-6 sm:grid-cols-2">
         <div>
-          <p className="eyebrow">Addresses risks</p>
+          <p className="eyebrow">Related risks · authored mapping</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {risks.map((r) => (
               <Link key={r.id} href={`/risks?risk=${r.id}`}>

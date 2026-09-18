@@ -75,8 +75,8 @@ export function ToolControlsTable({ tool, openCapability }: { tool: Tool; openCa
                       {orgIds.length ? (
                         <span className="flex flex-wrap gap-1">
                           {orgIds.map((o) => (
-                            <span key={`${o.frameworkId}:${o.id}`} className="ident rounded bg-mist px-1.5 py-[2px] text-ink-2" title={o.label}>
-                              {o.id}
+                            <span key={`${o.frameworkId}:${o.id}`} className="rounded bg-mist px-1.5 py-[2px] text-ink-2">
+                              {o.label} <span className="text-[10.5px] text-ink-3">({o.id})</span>
                             </span>
                           ))}
                         </span>
