@@ -193,7 +193,14 @@ Every mapping badge elsewhere in the app links into this view.
 ## The mitigation layer: defensive techniques and methods
 
 Controls (CoSAI), mitigations (MITRE), and technology capabilities are separate concepts.
-The MITRE catalogue lives at `/mitigations`; `/capabilities` now presents 26 sourced technology
+Both `/mitigations` and `/capabilities` have matrices with CoSAI control-group rows and
+deployment-surface columns. The page switch preserves control-group and surface filters;
+selected items retain their own deep links. Capability placement follows the existing mitigation
+mappings and does not establish technology deployment. **Show org data** adds recorded
+mitigation assessments and explicit organization mappings; missing surface assessments display
+as **Not assessed**, and technology deployment is not inferred from related method status.
+
+The MITRE catalogue lives at `/mitigations`; `/capabilities` presents 26 sourced technology
 categories, with old MITRE deep links preserved. OWASP supplies AI categories, ENISA ECSMAF 3.0
 and ECSO supply conventional technology categories, and CISA TIC and NIST CSF 2.0 add
 supplementary mappings. See [the source and mapping contract](data/frameworks/README.md).

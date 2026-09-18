@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
-import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
+import { ORG_STATUSES, STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
 import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { FilterPill, RISK_CATEGORY_ACCENT } from "@/components/browse/RisksBrowser";
@@ -15,12 +15,13 @@ import {
   mitigationAliases,
   mitigationGaps,
   controlById,
-  controlCategories,
   orgSurfaceStatusFor,
   riskById,
   riskCategories,
-  surfaces,
 } from "@/lib/data";
+import { DefenseMatrix } from "@/components/defenses/DefenseMatrix";
+import { DefenseNavigation, useDefenseSelection, useMatrixFilters } from "@/components/defenses/DefenseNavigation";
+import { mitigationMatrixItem, matchesMatrixFilters } from "@/components/defenses/model";
 import type { Mitigation } from "@/lib/types";
 import { MitigationDetail } from "./MitigationDetail";
 import { StackFilter } from "./StackFilter";
@@ -29,17 +30,20 @@ const BAND_IDS: BandId[] = ["application", "model", "modelInfrastructure", "data
 
 export function MitigationsBrowser() {
   const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const linked = params.get("mitigation") ?? params.get("capability");
 
   const [riskCategory, setRiskCategory] = useState<string | null>(null);
   const [band, setBand] = useState<BandId | null>(null);
-  const [clicked, setClicked] = useState<string | null | undefined>(undefined);
+  const [, setClicked] = useDefenseSelection("mitigation");
   const [source, setSource] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const overlay = useOrgOverlay();
+  const filters = useMatrixFilters();
 
   const replacements = linked ? mitigationAliases[linked] : undefined;
-  const selectedId = clicked === undefined ? (replacements?.[0] ?? (linked && mitigationById.has(linked) ? linked : null)) : clicked;
+  const selectedId = replacements?.[0] ?? (linked && mitigationById.has(linked) ? linked : null);
   const selected = selectedId ? mitigationById.get(selectedId) : undefined;
   const detailRef = useRef<HTMLDivElement>(null);
 
@@ -52,12 +56,12 @@ export function MitigationsBrowser() {
   const matchesBand = (cap: Mitigation) => !band || bandsForMitigation(cap.id).has(band);
   const matchesSourceAndQuery = (cap: Mitigation) => (!source || cap.origin.framework === source) &&
     `${cap.id} ${cap.title} ${cap.implementation} ${cap.examples.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase());
-  const shown = mitigationsInOrder.filter((c) => matchesRisk(c) && matchesBand(c) && matchesSourceAndQuery(c));
+  const shown = mitigationsInOrder.filter((c) => matchesRisk(c) && matchesBand(c) && matchesSourceAndQuery(c) && matchesMatrixFilters(mitigationMatrixItem(c), filters));
 
   // Stack-filter counts respond to the risk filter, so the two selectors read as one system.
   const bandCounts = Object.fromEntries(BAND_IDS.map((b) => [b, 0])) as Record<BandId, number>;
   for (const cap of mitigationsInOrder) {
-    if (!matchesRisk(cap) || !matchesSourceAndQuery(cap)) continue;
+    if (!matchesRisk(cap) || !matchesSourceAndQuery(cap) || !matchesMatrixFilters(mitigationMatrixItem(cap), filters)) continue;
     for (const b of bandsForMitigation(cap.id)) bandCounts[b] += 1;
   }
 
@@ -69,6 +73,7 @@ export function MitigationsBrowser() {
         lead="Defensive techniques from MITRE D3FEND and AI mitigations from MITRE ATLAS describe how to reduce risk. They support CoSAI controls. Technology capabilities describe the tools and platforms that can implement them; they are a separate layer."
         aside={<OverlayToggle />}
       >
+        <DefenseNavigation current="mitigations" />
         <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="eyebrow">Filter by risk category</p>
@@ -115,13 +120,17 @@ export function MitigationsBrowser() {
         <div className="flex items-center justify-between gap-3 pb-3">
           <p className="text-[13px] text-ink-3">
             {shown.length} of {mitigationsInOrder.length} mitigations
-            {(riskCategory || band || source || query) && (
+            {(riskCategory || band || source || query || filters.category || filters.surface) && (
               <button
                 onClick={() => {
                   setRiskCategory(null);
                   setBand(null);
                   setSource(null);
                   setQuery("");
+                  const next = new URLSearchParams(params.toString());
+                  next.delete("group");
+                  next.delete("surface");
+                  router.replace(`${pathname}${next.size ? `?${next}` : ""}`, { scroll: false });
                 }}
                 className="ml-2 font-semibold text-introduced hover:underline"
               >
@@ -134,7 +143,7 @@ export function MitigationsBrowser() {
         {overlay && (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-paper px-4 py-2.5">
           <span className="eyebrow">Your status</span>
-          {ORG_STATUSES.map((s) => {
+          {([...ORG_STATUSES, "notAssessed"] as DisplayStatus[]).map((s) => {
             const tint = STATUS_STYLE[s];
             return (
               <span key={s} className="flex items-center gap-1.5 text-[12.5px] text-ink-2">
@@ -151,76 +160,16 @@ export function MitigationsBrowser() {
             );
           })}
           <span className="text-[12.5px] text-ink-3">
-            From data/org: what the organisation has deployed per mitigation and surface. Anything
-            not recorded is a gap.
+            Implementation status per mitigation and surface. Missing records are not assessed; gaps are identified shortfalls.
           </span>
         </div>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-line bg-paper">
-          <div className="grid min-w-[860px] grid-cols-[180px_repeat(3,minmax(0,1fr))]">
-            <div className="bg-ink px-4 py-3.5">
-              <p className="text-[13.5px] font-bold text-white">CoSAI control group</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-white/60">what the tooling contributes to</p>
-            </div>
-            {surfaces.map((s) => (
-              <div key={s.id} className="border-l border-white/10 bg-ink px-4 py-3.5">
-                <p className="text-[13.5px] font-bold text-white">{s.title}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-white/60">
-                  {SURFACE_TAGLINE[s.id]}
-                </p>
-              </div>
-            ))}
+        <DefenseMatrix items={shown.map(mitigationMatrixItem)} selectedId={selectedId}
+          onSelect={(id) => setClicked(id === selectedId ? null : id)} {...filters}
+          statusFor={overlay ? orgSurfaceStatusFor : undefined} label="Mitigations by control group and deployment surface" />
 
-            {controlCategories.map((cat) => {
-              const rowCaps = shown.filter((c) => c.category === cat.id);
-              return (
-                <div key={cat.id} className="col-span-4 grid grid-cols-subgrid border-t border-line">
-                  <div className="bg-[#fbfcfe] px-4 py-3.5">
-                    <p className="text-[12.5px] font-bold leading-snug text-ink">{cat.title}</p>
-                  </div>
-                  {surfaces.map((s) => {
-                    const cellCaps = rowCaps.filter((c) => c.surfaces[s.id]?.applies);
-                    return (
-                      <div key={s.id} className="border-l border-line px-3 py-3">
-                        {cellCaps.length ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {cellCaps.map((cap) => {
-                              const active = selectedId === cap.id;
-                              const status = overlay ? orgSurfaceStatusFor(cap.id, s.id) : null;
-                              const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
-                              return (
-                                <button
-                                  key={cap.id}
-                                  onClick={() => setClicked(active ? null : cap.id)}
-                                  aria-pressed={active}
-                                  title={`${cap.title} (${cap.id})${status ? ` — ${STATUS_META[status].label}` : ""}`}
-                                  className="inline-flex items-center rounded-full border px-2.5 py-[5px] text-[12px] font-medium transition-shadow"
-                                  style={{
-                                    background: tint.bg,
-                                    borderColor: active ? "var(--ink)" : tint.border,
-                                    borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid",
-                                    color: tint.text,
-                                    boxShadow: active ? "0 0 0 1px var(--ink)" : undefined,
-                                  }}
-                                >
-                                  {cap.title}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span className="text-[13px] text-ink-3">—</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
+        {!shown.length && <p className="mt-3 text-sm text-ink-2">No mitigations match these filters.</p>}
         <p className="mt-2 text-[12px] text-ink-3">
           A mitigation sits in its primary control group; its full control mapping is in the
           detail. Blank cells are outside this customer-deployment profile. Provider-inherited
@@ -246,9 +195,3 @@ export function MitigationsBrowser() {
     </>
   );
 }
-
-const SURFACE_TAGLINE: Record<string, string> = {
-  surfaceEndpoint: "agents on managed devices",
-  surfaceCloud: "production AI you operate",
-  surfaceSaas: "vendor AI you consume",
-};

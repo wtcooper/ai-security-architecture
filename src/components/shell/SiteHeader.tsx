@@ -22,12 +22,12 @@ const NAV: NavItem[] = [
       { href: "/components", label: "Components" },
       { href: "/risks", label: "Risks" },
       { href: "/controls", label: "Controls" },
-      { href: "/mitigations", label: "Mitigations" },
-      { href: "/capabilities", label: "Technology capabilities" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },
     ],
   },
+  { href: "/mitigations", label: "Mitigations" },
+  { href: "/capabilities", label: "Capabilities" },
   { href: "/reference", label: "Architectures" },
   { href: "/examples", label: "Incidents" },
 ];
@@ -88,14 +88,14 @@ export function SiteHeader() {
     <>
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
         <div className="px-5 sm:px-7 h-14 flex items-center gap-3 sm:gap-6">
-          {/* Leftmost, like every mobile app's menu button. Only exists below `lg`. */}
+          {/* Leftmost, like every mobile app's menu button. Only exists below `xl`. */}
           <button
             type="button"
             onClick={() => setOpen(!open)}
             aria-expanded={open}
             aria-controls="section-menu"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink lg:hidden"
+            className="-ml-2 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-2 transition-colors hover:bg-mist hover:text-ink xl:hidden"
           >
             <HamburgerGlyph open={open} />
           </button>
@@ -111,7 +111,7 @@ export function SiteHeader() {
           <nav
             ref={navRef}
             aria-label="Sections"
-            className="ml-auto hidden lg:flex items-center gap-1"
+            className="ml-auto hidden xl:flex items-center gap-1"
           >
             {NAV.map((item) =>
               "children" in item ? (
@@ -147,7 +147,7 @@ export function SiteHeader() {
             onClick={() => setSearch(true)}
             aria-label="Search (⌘K)"
             title="Search (⌘K)"
-            className="flex shrink-0 items-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink max-lg:ml-auto"
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-line px-2 py-1.5 text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink max-xl:ml-auto"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden>
               <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -172,7 +172,7 @@ export function SiteHeader() {
           <nav
             id="section-menu"
             aria-label="Sections"
-            className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg lg:hidden"
+            className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg xl:hidden"
           >
             {ALL_LINKS.map((tab) => {
               const active = pathname.startsWith(tab.href);
@@ -205,7 +205,7 @@ export function SiteHeader() {
           aria-label="Close menu"
           tabIndex={-1}
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-20 cursor-default bg-ink/20 lg:hidden"
+          className="fixed inset-0 z-20 cursor-default bg-ink/20 xl:hidden"
         />
       )}
     </>

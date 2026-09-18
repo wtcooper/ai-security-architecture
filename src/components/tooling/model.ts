@@ -1,6 +1,6 @@
 /** CoSAI controls group mitigation rows; products are assessed against each method. */
 import { archetypeById, controls, mitigationById, orgStatusFor, orgToolAvailableFor, vendors, controlCategories } from "@/lib/data";
-import type { OrgStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
+import type { DisplayStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 
 export interface Row {
   id: string;
@@ -69,15 +69,15 @@ export interface ColumnGroup {
 
 export interface Cell {
   coverage?: ToolCoverage;
-  status?: OrgStatus;
-  parts: { mitigation: string; control?: ToolControl; status?: OrgStatus }[];
+  status?: DisplayStatus;
+  parts: { mitigation: string; control?: ToolControl; status?: DisplayStatus }[];
   /** The component whose coverage the cell shows, so its link and its word refer to the same thing. */
   decisive?: ToolControl;
   /** Components with no vendor record at all: a composite that hides one is not a faithful summary. */
   missing: string[];
 }
 
-const STATUS_RANK: OrgStatus[] = ["gap", "inProgress", "enabled"];
+const STATUS_RANK: DisplayStatus[] = ["gap", "notAssessed", "inProgress", "enabled"];
 // A not-applicable component neither helps nor hurts a composite; it only shows when every part is.
 const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native", "notApplicable"];
 const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {
@@ -117,14 +117,14 @@ export function rowsFor(archetypeId: string): RowGroup[] {
 
 export function cellFor(tool: Tool, row: Row): Cell {
   const own = new Map(tool.controls.map((c) => [c.mitigation, c]));
-  // An available product has a status on every control (unrecorded = gap); one the organisation
+  // An available product has a status on every control (unrecorded = not assessed); one the organisation
   // does not provide has none, and the grid greys its column instead.
   const onboarded = orgToolAvailableFor(tool.id);
-  const parts = row.mitigations.map((mitigation) => ({
+  const parts: Cell["parts"] = row.mitigations.map((mitigation) => ({
     mitigation,
     control: own.get(mitigation),
     // A control that does not apply to the product has no status to record: it is neither a gap nor enabled.
-    status: onboarded && own.get(mitigation)?.coverage !== "notApplicable" ? orgStatusFor(tool.id, mitigation)?.status ?? "gap" : undefined,
+    status: onboarded && own.get(mitigation)?.coverage !== "notApplicable" ? orgStatusFor(tool.id, mitigation)?.status ?? "notAssessed" : undefined,
   }));
   const coverage = worstCoverage(parts.map((p) => p.control?.coverage));
   return {

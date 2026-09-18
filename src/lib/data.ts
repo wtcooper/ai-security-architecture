@@ -317,6 +317,6 @@ export const orgStatusFor = (toolId: string, mitigationId: string) =>
 /** The enterprise layer: the organisation's technology and status for a mitigation on a surface. */
 export const orgSurfacePostureFor = (mitigationId: string, surfaceId: string) =>
   orgMitigationPosture[mitigationId]?.[surfaceId];
-/** The same, as a status: nothing recorded is a gap. */
-export const orgSurfaceStatusFor = (mitigationId: string, surfaceId: string): OrgStatus =>
-  orgMitigationPosture[mitigationId]?.[surfaceId]?.status ?? "gap";
+/** Missing surface assessments are unknown, rather than confirmed gaps. */
+export const orgSurfaceStatusFor = (mitigationId: string, surfaceId: string): OrgStatus | "notAssessed" =>
+  orgMitigationPosture[mitigationId]?.[surfaceId]?.status ?? "notAssessed";

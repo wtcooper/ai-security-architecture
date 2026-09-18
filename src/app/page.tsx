@@ -41,6 +41,12 @@ const LADDER = [
     count: `${mitigations.length} mitigations`,
   },
   {
+    href: "/capabilities",
+    label: "Capabilities",
+    blurb: "Technology categories that implement defensive methods, organized by control group and deployment surface.",
+    count: `${capabilities.length} categories`,
+  },
+  {
     href: "/reference",
     label: "Architectures",
     blurb: "The target-state drawing for each class of AI application, built to be copied.",
@@ -187,10 +193,10 @@ export default function LandingPage() {
         </Link>
       </div>
 
-      {/* The ladder, drawn: four rungs a reader descends, each a link with what waits on it. */}
+      {/* Equal entry points into the security model. */}
       <div className="mt-10 rounded-xl border border-line bg-paper p-6">
-        <p className="eyebrow">The ladder</p>
-        <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <p className="eyebrow">Explore the security model</p>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {LADDER.map((rung, i) => (
             <li key={rung.href} className="relative">
               <Link
@@ -198,9 +204,6 @@ export default function LandingPage() {
                 className="group flex h-full flex-col rounded-lg border border-line bg-mist/50 p-4 transition-colors hover:border-ink"
               >
                 <span className="flex items-center gap-2">
-                  <span className="ident flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[11px] font-bold text-white">
-                    {i + 1}
-                  </span>
                   <span className="display text-[15px] font-semibold text-ink group-hover:text-introduced">
                     {rung.label}
                   </span>
@@ -218,7 +221,7 @@ export default function LandingPage() {
               )}
             </li>
           ))}
-        </ol>
+        </ul>
         <PhaseLegend className="mt-5" />
       </div>
 

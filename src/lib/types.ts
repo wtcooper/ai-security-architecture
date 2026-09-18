@@ -216,10 +216,11 @@ export interface Vocabulary {
 
 /**
  * The organisation's status vocabulary, shared by mitigations on a surface, the tools it runs
- * and the controls inside them (data/org). Anything not recorded reads as a gap once status is
- * shown, so there is no "unassessed" value.
+ * and the controls inside them (data/org). Missing assessments display as Not assessed once status is
+ * shown; Not assessed is a display state rather than an authored posture value.
  */
 export type OrgStatus = "enabled" | "inProgress" | "gap";
+export type DisplayStatus = OrgStatus | "notAssessed";
 export const ORG_STATUSES: OrgStatus[] = ["enabled", "inProgress", "gap"];
 
 /** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */

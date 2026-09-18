@@ -6,7 +6,7 @@ import { overlayLabel, setOrgOverlay, useOrgOverlay } from "./overlay";
 /**
  * The one switch for everything from data/org: status pills on mitigations, tools and their
  * controls, greyed-out tools the organisation does not run, and its control ids beside CoSAI
- * names. Lives beside the Mitigations and Reference architectures titles; remembered per
+ * names. Lives beside the matrix and Reference architectures titles; remembered per
  * browser, so flipping it on one page flips it on the other.
  */
 export function OverlayToggle({ className = "" }: { className?: string }) {

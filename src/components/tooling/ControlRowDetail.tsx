@@ -34,7 +34,7 @@ export function ControlRowDetail({ tool, mitigationId, showTitle = false }: { to
           <p className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">
             {mitigation?.title ?? mitigationId}
             <CoverageBadge coverage={control?.coverage} long />
-            {overlay && onboarded && control?.coverage !== "notApplicable" && <StatusPill status={status?.status ?? "gap"} compact />}
+            {overlay && onboarded && control?.coverage !== "notApplicable" && <StatusPill status={status?.status ?? "notAssessed"} compact />}
           </p>
         )}
         {control ? (

@@ -90,7 +90,7 @@ export function ToolControlsTable({ tool, openMitigation }: { tool: Tool; openMi
                     </td>
                     {overlay && (
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {available ? <StatusPill status={status?.status ?? "gap"} title={status?.note} /> : <span className="text-ink-3">not available</span>}
+                        {available ? <StatusPill status={status?.status ?? "notAssessed"} title={status?.note} /> : <span className="text-ink-3">not available</span>}
                       </td>
                     )}
                   </tr>

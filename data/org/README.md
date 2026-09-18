@@ -52,12 +52,12 @@ carry a status, because that pinned set *is* the reference control set the Tools
 against.
 
 One status vocabulary serves every control in both files: `enabled`, `inProgress`, `gap`.
-Nothing is "unassessed": once status is shown, anything not recorded is a gap. A product's own
+Missing mitigation/surface and product-control assessment records display as **Not assessed**; an explicit `gap` records an identified shortfall. Technology capability deployment is not inferred from mitigation assessments. A product's own
 `available` is deliberately not on that scale — either you provide it or you block it, and how
 well an available product is secured is what its control statuses say. A tool not listed is not
 available and renders greyed out.
 
-Nothing from this directory renders until the **Show org data** switch (beside the Mitigations and
+Nothing from this directory renders until the **Show org data** switch (beside the Mitigations, Technology capabilities and
 Reference architectures titles) is on; it defaults on when `local/` exists. The Tools grid
 always keeps CoSAI controls, MITRE mitigations and technology capabilities in its first three
 columns. Enabling the overlay adds org mappings below each standard name and appends product

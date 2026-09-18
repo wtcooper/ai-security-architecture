@@ -1,7 +1,7 @@
 "use client";
 
 /** Encodings the three lenses share: the cell tile, the legend, and the detail panel. */
-import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
+import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
 import type { Tool, ToolControl, ToolCoverage } from "@/lib/types";
 import { mitigationById, org, orgStatusFor, orgToolAvailableFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
@@ -65,8 +65,8 @@ export function CellHoverCard({ tool, row, cell, overlay, rect }: { tool: Tool; 
                   </>
                 ) : (
                   <span>
-                    <span className="font-semibold" style={{ color: STATUS_STYLE[status?.status ?? "gap"].text }}>
-                      {STATUS_META[status?.status ?? "gap"].label}
+                    <span className="font-semibold" style={{ color: STATUS_STYLE[status?.status ?? "notAssessed"].text }}>
+                      {STATUS_META[status?.status ?? "notAssessed"].label}
                     </span>
                     {" — "}nothing recorded yet. Add <span className="ident">note</span> and <span className="ident">evidence</span> under this
                     control in <span className="ident">{profile}/tooling-status.yaml</span>.
@@ -161,7 +161,7 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
       {overlay && (
         <>
           <span className="eyebrow ml-2">Your status</span>
-          {ORG_STATUSES.map((s) => (
+          {([...ORG_STATUSES, "notAssessed"] as DisplayStatus[]).map((s) => (
             <span key={s} className="flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded-[2px] border" style={{ background: STATUS_STYLE[s].bg, borderColor: STATUS_STYLE[s].border }} />
               {STATUS_META[s].label}

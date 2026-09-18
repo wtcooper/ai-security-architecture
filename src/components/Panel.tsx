@@ -17,6 +17,7 @@ const LADDER = [
     matches: ["/components", "/risks", "/controls", "/personas", "/frameworks"],
   },
   { label: "Mitigations", href: "/mitigations", matches: ["/mitigations"] },
+  { label: "Capabilities", href: "/capabilities", matches: ["/capabilities"] },
   { label: "Architectures", href: "/reference", matches: ["/reference"] },
 ];
 
@@ -39,7 +40,6 @@ export function Ladder({ className = "" }: { className?: string }) {
                   : "border-line text-ink-3 hover:border-line-strong hover:text-ink"
               }`}
             >
-              <span className="mr-1 opacity-60">{i + 1}</span>
               {rung.label}
             </Link>
           </span>
@@ -47,7 +47,7 @@ export function Ladder({ className = "" }: { className?: string }) {
       })}
       {onIncidents && (
         <span className="ml-1 rounded-full border border-ink bg-ink px-2 py-[2px] text-[10.5px] font-semibold uppercase tracking-[0.06em] text-white">
-          Incidents · replayed on 1 and 4
+          Incidents · map and architectures
         </span>
       )}
     </nav>
