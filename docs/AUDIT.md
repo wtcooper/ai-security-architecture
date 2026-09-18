@@ -685,9 +685,9 @@ Highlights below are Google's original mapping, not ours.
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 
-### 4b. Capabilities no architecture pins — 0 of 59
+### 4b. Mitigations no architecture pins — 0 of 59
 
-_None. Every capability in the taxonomy is pinned somewhere._
+_None. Every mitigation in the taxonomy is pinned somewhere._
 
 ### 4c. CoSAI components no architecture anchors — 8 of 23
 
@@ -954,7 +954,7 @@ _None. Every capability in the taxonomy is pinned somewhere._
 
 ## 5. Controls-guidance coverage
 
-15 of 16 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a capability pinned on its architecture.
+15 of 16 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
@@ -964,7 +964,7 @@ _None. Every capability in the taxonomy is pinned somewhere._
 
 ### 5a. Documents
 
-| Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |
+| Architecture | Mode | Status | Items | Pinned mitigations not yet addressed |
 | --- | --- | --- | --- | --- |
 | Single agent workflow | build | draft | 7 | File Analysis, Restrict Library Loading |
 | Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
@@ -984,7 +984,7 @@ _None. Every capability in the taxonomy is pinned somewhere._
 
 ### 5b. AI tooling registry
 
-Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the capabilities pinned on the tool's architecture that the entry does not yet describe — the research work list.
+Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture that the entry does not yet describe — the research work list.
 
 | Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1016,12 +1016,12 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 21/21 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 32/32 | _none_ |  |
 
-## 6. MITRE capability provenance and CoSAI gaps
+## 6. MITRE mitigation provenance and CoSAI gaps
 
 - MITRE D3FEND 1.6.0: 35 canonical entries.
 - MITRE ATLAS 2026.09: 24 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
-- 777 tool-capability rows require reassessment after migration.
+- 777 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
@@ -1039,4 +1039,50 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Model and Data Integrity Management | partial | Code/artifact signing, verification and integrity monitoring are represented. Signed-media provenance interoperability (for example C2PA), watermark semantics and authenticity of generated media are not fully specified by these capabilities. Authenticity is not truth. |
 | Orchestrator and Route Integrity | partial | Configuration permissions and integrity monitoring support route protection. Signed route manifests, binding responses to the chosen model, and end-to-end route/provenance checks must be verified as application-specific implementations. |
 
-See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom capability identifiers are introduced.
+See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom mitigation identifiers are introduced.
+
+## 7. Technology categories and supplementary mappings
+
+26 sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.
+
+| Framework | Technology categories mapped | CoSAI controls mapped here |
+| --- | --- | --- |
+| OWASP AI Solutions | 5 | 0 |
+| ENISA ECSMAF | 20 | 0 |
+| ECSO Market Taxonomy | 15 | 0 |
+| CISA TIC Capabilities | 12 | 0 |
+| NIST CSF | 26 | 34 |
+
+### MITRE methods without a selected technology category — 25
+
+These methods remain available. Some describe engineering or governance practices rather than technology categories; others need a further sourced implementation mapping.
+
+- Data Inventory (D3-DI)
+- Maintain AI Dataset Provenance (AML.M0025)
+- Sanitize Training Data (AML.M0007)
+- AI Bill of Materials (AML.M0023)
+- Code Signing (AML.M0013)
+- Verify AI Artifacts (AML.M0014)
+- Restrict Library Loading (AML.M0011)
+- Message Authentication (D3-MAN)
+- Application Configuration Hardening (D3-ACH)
+- Restore Configuration (D3-RC)
+- Restore Software (D3-RS)
+- Restore Database (D3-RD)
+- Predictive AI Model Hardening (AML.M0003)
+- Generative AI Model Alignment (AML.M0022)
+- System Configuration Permissions (D3-SCP)
+- Generative AI Guidelines (AML.M0021)
+- Restrict AI Agent Tool Invocation on Untrusted Data (AML.M0030)
+- Memory Hardening (AML.M0031)
+- Limit AI Service Query Volume and Rate (AML.M0004)
+- Limit AI Workload Resource Consumption (AML.M0036)
+- Credential Transmission Scoping (D3-CTS)
+- Token Binding (D3-TB)
+- File Integrity Monitoring (D3-FIM)
+- System File Analysis (D3-SFA)
+- Software Update (D3-SU)
+
+CoSAI controls without a selected NIST CSF category mapping: User Transparency and Controls.
+
+See [the source and relationship contract](../data/frameworks/README.md) for versions, scopes and identifier conventions.

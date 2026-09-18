@@ -83,7 +83,7 @@ export interface Framework {
 export type AuthoredMappings = {
   risks?: Record<string, string[]>;
   controls?: Record<string, string[]>;
-  /** Only organisation catalogues map onto capabilities; external frameworks stop at controls. */
+  mitigations?: Record<string, string[]>;
   capabilities?: Record<string, string[]>;
 };
 
@@ -118,6 +118,26 @@ export interface FrameworkEntryInfo {
   url?: string;
   /** A heading the entry sits under in its own catalogue, e.g. a control domain. */
   group?: string;
+  /** Category names sometimes have no official identifier. Never present our key as one. */
+  identifierKind?: "official" | "repository-key";
+  sourceLocation?: string;
+  mappingNotes?: { kind: "controls" | "capabilities"; entity: string; relationship: string; rationale: string }[];
+}
+
+/** Sourced technology categories, separate from CoSAI requirements and MITRE methods. */
+export interface TechnologyCapability {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  primarySource: { framework: string; entry: string };
+  frameworkMappings: {
+    framework: string;
+    entry: string;
+    relationship: "same-category" | "narrower" | "supports";
+    rationale: string;
+  }[];
+  mitigationMappings: { mitigation: string; rationale: string }[];
 }
 
 export interface ComponentCategory {
@@ -195,7 +215,7 @@ export interface Vocabulary {
 }
 
 /**
- * The organisation's status vocabulary, shared by capabilities on a surface, the tools it runs
+ * The organisation's status vocabulary, shared by mitigations on a surface, the tools it runs
  * and the controls inside them (data/org). Anything not recorded reads as a gap once status is
  * shown, so there is no "unassessed" value.
  */
@@ -209,7 +229,7 @@ export interface Surface {
   description?: Paragraph[];
 }
 
-export interface CapabilitySurfaceInfo {
+export interface MitigationSurfaceInfo {
   /** Selected for customer deployment in this profile, not universal availability. */
   applies: boolean;
   responsibility: "customer-operated" | "customer-configurable" | "provider-inherited" | "not-applicable" | "unknown";
@@ -218,15 +238,15 @@ export interface CapabilitySurfaceInfo {
 }
 
 /**
- * A selected MITRE defensive technique or AI mitigation. No custom capability identifiers.
+ * A selected MITRE defensive technique or AI mitigation. No custom mitigation identifiers.
  * Upstream definitions are vendored; CoSAI mappings and deployment scope are authored here.
  */
-export interface Capability {
+export interface Mitigation {
   id: string;
   title: string;
   /** Short label for dense UI (matrix chips); falls back to title. */
   abbrev?: string;
-  /** Primary CoSAI control category — the matrix row this capability lives in. */
+  /** Primary CoSAI control category — the matrix row this mitigation lives in. */
   category: string;
   description: Paragraph[];
   kind: "function" | "support";
@@ -238,7 +258,7 @@ export interface Capability {
   };
   /** Authored implementation scope, separate from the upstream definition. */
   implementation: string;
-  /** Implementation checks within the upstream function; never additional capability IDs. */
+  /** Implementation checks within the upstream function; never additional mitigation IDs. */
   features?: string[];
   controlMappings: { control: string; relationship: "supports"; rationale: string }[];
   /** Vendor-neutral example technology classes. */
@@ -247,7 +267,7 @@ export interface Capability {
   risks: string[];
   components: string[];
   /** Keyed by surface id; the build requires every declared surface to be present. */
-  surfaces: Record<string, CapabilitySurfaceInfo>;
+  surfaces: Record<string, MitigationSurfaceInfo>;
   sources?: { title: string; url: string }[];
 }
 
@@ -255,13 +275,13 @@ export interface Capability {
  * ------------------------------------------------------------------ Reference architectures
  *
  * An architecture is a class of AI application drawn in the F5 reference-architecture grammar:
- * capability blocks connected by typed data paths, with risks and capabilities pinned onto
+ * mitigation blocks connected by typed data paths, with risks and mitigations pinned onto
  * specific blocks and flows and keyed to a side rail. Geometry is computed by the build from an
  * authored coarse grid — see ArchLayout.
  */
 
 /**
- * How a block is drawn and read. `service` is a capability block the operator runs; `provider`
+ * How a block is drawn and read. `service` is a mitigation block the operator runs; `provider`
  * is vendor-operated, with only the published interface drawn; `external` is data or services
  * outside the system that the agent reads or acts on; `governance` is the management plane;
  * `actor` is a person or peer system, drawn unboxed.
@@ -287,12 +307,12 @@ export interface ArchBlockItem {
   /** Risk-map anchor for this specific internal. */
   cosaiComponent?: string;
   /**
-   * Capabilities this item implements, each of which must also be pinned on the architecture.
+   * Mitigations this item implements, each of which must also be pinned on the architecture.
    * Their chip numbers render beside the item, so a reader can map a numbered control to the
    * technology that delivers it without hovering — most useful on the governance band, where
    * the items ARE the control technologies.
    */
-  capabilities?: string[];
+  mitigations?: string[];
 }
 
 /**
@@ -340,7 +360,7 @@ export interface ArchBlock {
    * Containment. A block naming a `parent` is drawn inside it, on a grid local to that parent,
    * and nests to any depth — a sandbox holding a harness that itself holds a supervisor and its
    * subagents is three levels through one mechanism. Nested blocks stay ordinary blocks: they
-   * keep their edges, pins, items and capability chips, which is what makes containment
+   * keep their edges, pins, items and mitigation chips, which is what makes containment
    * expressible without breaking the flows.
    */
   parent?: string;
@@ -354,13 +374,13 @@ export interface ArchBlock {
   cosaiComponent?: string;
   items?: ArchBlockItem[];
   /**
-   * Capabilities this block delivers, each of which must also be pinned somewhere on the
+   * Mitigations this block delivers, each of which must also be pinned somewhere on the
    * architecture. Their chip numbers render on the block. Used by the governance band, whose
    * services are call-outs naming where a numbered control is implemented — they are
    * deliberately unconnected, because governance is a set of services and processes that
    * apply across every band, not another hop in the data path.
    */
-  capabilities?: string[];
+  mitigations?: string[];
 }
 
 /**
@@ -396,11 +416,11 @@ export interface RiskPin {
 }
 
 /**
- * A capability pinned where it must be deployed — the numbered chips, F5's design-requirements
+ * A mitigation pinned where it must be deployed — the numbered chips, F5's design-requirements
  * treatment. Numbering is the authored order, per architecture.
  */
-export interface CapabilityPin {
-  capability: string;
+export interface MitigationPin {
+  mitigation: string;
   /** A block id, or an edge as "from->to". */
   at: string;
   note?: string;
@@ -433,7 +453,7 @@ export interface ScenarioStep {
  * This replaced a second, parallel mechanism. `flows:` named every route, carried its own
  * threat list and control list, and stamped its own badges — and it turned out that scenarios
  * visited no edge flows did not, and that every one of the 171 flow controls was already drawn
- * as a capability chip because the build required it. Two presentations of the same walk, one
+ * as a mitigation chip because the build required it. Two presentations of the same walk, one
  * of which carried almost no data of its own.
  */
 export interface Scenario {
@@ -444,7 +464,7 @@ export interface Scenario {
 }
 
 /**
- * A named real-world instance. The architecture itself stays vendor-neutral like the capability
+ * A named real-world instance. The architecture itself stays vendor-neutral like the mitigation
  * taxonomy; product names are confined here, dated, and rendered as illustration. See
  * data/PROVENANCE.md.
  */
@@ -520,7 +540,7 @@ export interface Archetype {
   edges: ArchEdge[];
   /** Spike grammar only: ownership zones drawn as background bands. */
   zones?: ArchZone[];
-  pins: { risks: RiskPin[]; capabilities: CapabilityPin[] };
+  pins: { risks: RiskPin[]; mitigations: MitigationPin[] };
   /** The complete walk through the architecture; listed first among the sequence data flows. */
   walkthrough?: Scenario;
   /** Variations on it — the ways it goes wrong. Identical in behaviour to the walkthrough. */
@@ -530,8 +550,8 @@ export interface Archetype {
    * cross-tab back-links read these, so they cannot drift from the drawing.
    */
   risks: string[];
-  /** Derived from the capability pins the same way. */
-  capabilities: string[];
+  /** Derived from the mitigation pins the same way. */
+  mitigations: string[];
   deviations?: ArchetypeDeviation[];
   sources: { title: string; url: string }[];
   layout: ArchLayout;
@@ -605,7 +625,7 @@ export const TOOL_SURFACE_CLASSES: ToolSurfaceClass[] = [
 export type ToolStatus = "ga" | "beta" | "preview" | "announced";
 
 /**
- * Whether the vendor implements a pinned capability on this tool: natively, partially, not at
+ * Whether the vendor implements a pinned mitigation on this tool: natively, partially, not at
  * all, only through a third-party product (`external`), or nobody could verify (`unknown`).
  */
 export type ToolCoverage = "native" | "partial" | "none" | "external" | "notApplicable" | "unknown";
@@ -625,9 +645,9 @@ export interface ToolStep {
   url?: string;
 }
 
-/** The vendor's implementation of one capability pinned on the tool's architecture. */
+/** The vendor's implementation of one mitigation pinned on the tool's architecture. */
 export interface ToolControl {
-  capability: string;
+  mitigation: string;
   coverage: ToolCoverage;
   /** Where the control is set: a managed file, an MDM key, an admin-console path. */
   mechanism?: string;
@@ -641,11 +661,11 @@ export interface ToolControl {
    * control does not apply. Not a configuration page — the coverage word never links here.
    */
   evidence?: { title: string; url: string }[];
-  migration?: CapabilityMigrationEvidence;
+  migration?: MitigationMigrationEvidence;
 }
 
 /** Retained pre-migration evidence is not a new coverage attestation. */
-export interface CapabilityMigrationEvidence {
+export interface MitigationMigrationEvidence {
   from: string[];
   reviewRequired: boolean;
   original: Record<string, unknown>[];
@@ -669,7 +689,7 @@ export interface Tool {
   variants?: ToolVariant[];
   /**
    * The one reference architecture this product instantiates. It fixes the reference control
-   * set — the drawing's pinned capabilities — so a product inherits "what controls this category
+   * set — the drawing's pinned mitigations — so a product inherits "what controls this category
    * of tool needs" from the architecture and only records how the vendor implements each one.
    * A product with two runtimes (a local and a cloud form) is two entities.
    */
@@ -692,11 +712,11 @@ export interface Tool {
 export interface GuidanceItem {
   title: string;
   /**
-   * The capabilities this guidance directs the organisation to deploy. Each must be pinned on
+   * The mitigations this guidance directs the organisation to deploy. Each must be pinned on
    * the architecture — guidance cannot recommend something the drawing does not show, the same
    * discipline controlsForArchetype() applies to controls.
    */
-  capabilities: string[];
+  mitigations: string[];
   body: Paragraph[];
   /** Refs into the tool registry, where product specifics exist. */
   tools?: string[];
@@ -803,11 +823,11 @@ export interface OrgToolControlStatus {
   note?: string;
   /** A ticket, document or evidence reference. */
   evidence?: string;
-  migration?: CapabilityMigrationEvidence;
+  migration?: MitigationMigrationEvidence;
 }
 
 /**
- * The organisation's posture on one capability on one surface — the enterprise layer: the
+ * The organisation's posture on one mitigation on one surface — the enterprise layer: the
  * technology it deploys around the tools (an endpoint DLP agent, a gateway, an MDM) and whether
  * it is in place. Sits beside the per-tool posture, which is about the product's own settings.
  */
@@ -816,10 +836,10 @@ export interface OrgOrgStatus {
   /** The named technology, e.g. "Netskope endpoint DLP", "Jamf Pro". */
   technology?: string;
   note?: string;
-  migration?: CapabilityMigrationEvidence;
+  migration?: MitigationMigrationEvidence;
 }
-/** capability id -> surface id -> posture. */
-export type OrgCapabilityPosture = Record<string, Record<string, OrgOrgStatus>>;
+/** mitigation id -> surface id -> posture. */
+export type OrgMitigationPosture = Record<string, Record<string, OrgOrgStatus>>;
 
 /**
  * The organisation's posture on one tool: whether people can install and use it at all, plus
@@ -831,7 +851,7 @@ export interface OrgToolPosture {
   tool: string;
   available?: boolean;
   note?: string;
-  /** Keyed by capability id; every key must be pinned on the tool's architecture. */
+  /** Keyed by mitigation id; every key must be pinned on the tool's architecture. */
   controls: Record<string, OrgToolControlStatus>;
 }
 
@@ -867,12 +887,14 @@ export interface Dataset {
   overlays: RiskOverlay[];
   incidents: Incident[];
   surfaces: Surface[];
-  capabilities: Capability[];
-  /** Provenance statement for the capabilities overlay, carried for YAML round-tripping. */
+  capabilities: TechnologyCapability[];
   capabilitiesAttribution: string;
+  mitigations: Mitigation[];
+  /** Provenance statement for the mitigations overlay, carried for YAML round-tripping. */
+  mitigationsAttribution: string;
   /** Retired local IDs resolve to all replacement functions, never just the first child. */
-  capabilityAliases: Record<string, string[]>;
-  capabilityGaps: { control: string; assessment: "unmapped" | "partial"; missing: string; related: string[] }[];
+  mitigationAliases: Record<string, string[]>;
+  mitigationGaps: { control: string; assessment: "unmapped" | "partial"; missing: string; related: string[] }[];
   archetypes: Archetype[];
   guidance: Guidance[];
   vendors: ToolVendor[];
@@ -880,5 +902,5 @@ export interface Dataset {
   /** Provenance statement for the tool registry; each guidance document carries its own. */
   toolingAttribution: string;
   orgToolPosture: OrgToolPosture[];
-  orgCapabilityPosture: OrgCapabilityPosture;
+  orgMitigationPosture: OrgMitigationPosture;
 }

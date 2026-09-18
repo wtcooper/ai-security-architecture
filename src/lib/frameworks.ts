@@ -8,8 +8,9 @@
  */
 import {
   activePersonas,
-  authoredMappings,
   capabilities,
+  authoredMappings,
+  mitigations,
   controls,
   frameworkEntries,
   frameworkNotes,
@@ -18,17 +19,19 @@ import {
 } from "./data";
 import { FULL_LIST_FRAMEWORKS } from "./types";
 import type {
-  Capability,
+  Mitigation,
   Control,
   Framework,
   FrameworkCrosswalkRow,
   FrameworkNote,
   Persona,
   Risk,
+  TechnologyCapability,
+  FrameworkEntryInfo,
 } from "./types";
 
-export type EntityKind = "risks" | "controls" | "capabilities" | "personas";
-type Entity = Risk | Control | Capability | Persona;
+export type EntityKind = "risks" | "controls" | "mitigations" | "capabilities" | "personas";
+type Entity = Risk | Control | Mitigation | TechnologyCapability | Persona;
 
 export interface FrameworkEntry {
   /** Bare identifier, with CoSAI's `@version` suffix stripped. */
@@ -45,7 +48,11 @@ export interface FrameworkEntry {
   group?: string;
   risks: Risk[];
   controls: Control[];
-  capabilities: Capability[];
+  mitigations: Mitigation[];
+  capabilities: TechnologyCapability[];
+  identifierKind?: FrameworkEntryInfo["identifierKind"];
+  sourceLocation?: string;
+  mappingNotes?: FrameworkEntryInfo["mappingNotes"];
   personas: Persona[];
   total: number;
 }
@@ -81,6 +88,7 @@ const KNOWN_ENTRIES: Record<string, string[]> = Object.fromEntries(
 const ENTITIES: Record<EntityKind, Entity[]> = {
   risks,
   controls,
+  mitigations,
   capabilities,
   personas: activePersonas,
 };
@@ -132,7 +140,11 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
         group: reference[id]?.group,
         risks: [],
         controls: [],
+        mitigations: [],
         capabilities: [],
+        identifierKind: reference[id]?.identifierKind,
+        sourceLocation: reference[id]?.sourceLocation,
+        mappingNotes: reference[id]?.mappingNotes,
         personas: [],
         total: 0,
       };
@@ -152,13 +164,13 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   // can mistake one for the other.
   const authored = authoredMappings[frameworkId];
   const mappingsFor = (kind: EntityKind, item: Entity): string[] => {
-    // Capabilities carry no upstream mappings; only authored (org) catalogues reach them.
+    // MITRE and technology entities use explicitly authored crosswalks.
     if (!authored) return "mappings" in item ? (item.mappings?.[frameworkId] ?? []) : [];
     if (kind === "personas") return [];
     return authored[kind]?.[item.id] ?? [];
   };
 
-  for (const kind of ["risks", "controls", "capabilities", "personas"] as EntityKind[]) {
+  for (const kind of ["risks", "controls", "mitigations", "capabilities", "personas"] as EntityKind[]) {
     const items = ENTITIES[kind];
     const mapped = items.filter((item) => mappingsFor(kind, item).length);
     if (!mapped.length) continue;
@@ -178,7 +190,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   const entries = [...byEntry.values()]
     .map((e) => ({
       ...e,
-      total: e.risks.length + e.controls.length + e.capabilities.length + e.personas.length,
+      total: e.risks.length + e.controls.length + e.mitigations.length + e.capabilities.length + e.personas.length,
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
@@ -218,13 +230,13 @@ export function mappingsForControl(
   return out;
 }
 
-/** The same, for a capability — only organisation catalogues map onto capabilities. */
-export function mappingsForCapability(
-  capability: Capability,
+/** The same, for a mitigation — only organisation catalogues map onto mitigations. */
+export function mappingsForMitigation(
+  mitigation: Mitigation,
 ): { frameworkId: string; values: string[]; authored: boolean }[] {
   const out: { frameworkId: string; values: string[]; authored: boolean }[] = [];
   for (const [frameworkId, mapped] of Object.entries(authoredMappings)) {
-    const values = mapped.capabilities?.[capability.id];
+    const values = mapped.mitigations?.[mitigation.id];
     if (values?.length) out.push({ frameworkId, values, authored: true });
   }
   return out;
@@ -282,6 +294,11 @@ export const FRAMEWORK_ORDER = [
   "mitre-atlas",
   "stride",
   "nist-ai-rmf",
+  "nist-csf",
+  "owasp-solutions",
+  "enisa-ecsmaf",
+  "ecso-market",
+  "cisa-tic",
   "iso-22989",
 ];
 const orderOf = (id: string) => {
@@ -329,7 +346,8 @@ export function resolveFrameworkLink(frameworkId: string, entryId?: string) {
 export const KIND_LABEL: Record<EntityKind, string> = {
   risks: "risks",
   controls: "controls",
-  capabilities: "capabilities",
+  mitigations: "mitigations",
+  capabilities: "technology capabilities",
   personas: "personas",
 };
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Lists CoSAI controls, capabilities and risks (or tools with their reference sets) from the
+// Lists CoSAI controls, mitigations and risks (or tools with their reference sets) from the
 // compiled dataset, so a mapping session works from live ids rather than memory.
 //   node cosai-index.mjs            -> everything
 //   node cosai-index.mjs mcp        -> entries whose id/title/description mention "mcp"
-//   node cosai-index.mjs tools      -> tools with the capabilities that may carry a status
+//   node cosai-index.mjs tools      -> tools with the mitigations that may carry a status
 //   node cosai-index.mjs tools toolClaudeCode -> one tool's reference set
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -25,7 +25,7 @@ if (q === "tools") {
     if (only && t.id !== only) continue;
     const a = arch.get(t.architecture);
     console.log(`\n${t.id} — ${t.name} (${t.vendor}) on ${t.architecture}`);
-    for (const c of a?.capabilities ?? []) console.log(`  ${c}`);
+    for (const c of a?.mitigations ?? []) console.log(`  ${d.mitigations.find((m) => m.id === c)?.title} (${c})`);
   }
   process.exit(0);
 }
@@ -34,8 +34,9 @@ const section = (title, items, desc) => {
   const rows = items.filter((i) => hit(i.id, i.title, one(desc(i))));
   if (!rows.length) return;
   console.log(`\n## ${title} (${rows.length})`);
-  for (const i of rows) console.log(`${i.id} — ${i.title}: ${one(desc(i))}`);
+  for (const i of rows) console.log(`${i.title} (${i.id}): ${one(desc(i))}`);
 };
 section("Controls", d.controls, (c) => c.description);
-section("Capabilities", d.capabilities, (c) => c.description);
+section("Mitigations", d.mitigations, (c) => c.description);
+section("Technology capabilities", d.capabilities, (c) => c.description);
 section("Risks", d.risks, (r) => r.shortDescription);

@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isMap, isScalar, isSeq, parse, parseDocument, stringify, type Node } from "yaml";
 import { migrateKeyed, migrateToolControls, type MigrationRules } from "./lib/capability-migration";
-import type { ToolControl } from "../src/lib/types";
+import type { LegacyToolControl as ToolControl } from "./lib/capability-migration";
 
 async function main() {
   const root = process.cwd();

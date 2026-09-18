@@ -5,7 +5,7 @@
  * Reference tab and the Incidents tab alike. Geometry is the build's: node positions are the
  * build-time rects and edges render the build-computed path strings verbatim. Nothing is
  * draggable — a moved block broke the routed arrows and the pins seated on them, and the
- * drawing is an argument, not a whiteboard. Pan and zoom remain. Capability chips and risk
+ * drawing is an argument, not a whiteboard. Pan and zoom remain. Mitigation chips and risk
  * tags sit at the chipSpots/tagSpots the build checked. Hover cards replace persistent edge
  * labels, which also keeps text off the drawing. An incident step overlays the same drawing:
  * its blocks and arrows take the step's phase colour and everything else fades.
@@ -27,7 +27,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { capabilityById, riskById, riskCode } from "@/lib/data";
+import { mitigationById, riskById, riskCode } from "@/lib/data";
 import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { chipSpots, flowBadgeSpots, itemCells, placeTags, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
@@ -61,14 +61,14 @@ type BlockNodeData = {
   w: number;
   h: number;
   dim: boolean;
-  /** Capability id -> chip number, so an item can show what it implements. */
+  /** Mitigation id -> chip number, so an item can show what it implements. */
   capNumber?: Map<string, number>;
   /**
-   * Capabilities pinned directly on a governance call-out. They join the call-out's own chip
+   * Mitigations pinned directly on a governance call-out. They join the call-out's own chip
    * row instead of hanging off a border the call-out no longer draws.
    */
   pinnedCaps?: string[];
-  /** The selected capability or risk, so a call-out's chip numbers fade like the pins do. */
+  /** The selected mitigation or risk, so a call-out's chip numbers fade like the pins do. */
   highlight?: Highlight | null;
   /** The incident step number touching this block, and the phase colouring it. */
   mark?: number;
@@ -237,14 +237,14 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
           <svg width="26" height="26" viewBox="0 0 26 26">
             <FlowIcon name={block.icon} x={13} y={13} size={24} />
           </svg>
-          {(block.capabilities?.length ?? 0) + (data.pinnedCaps?.length ?? 0) > 0 && (
+          {(block.mitigations?.length ?? 0) + (data.pinnedCaps?.length ?? 0) > 0 && (
             <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
-              {[...new Set([...(block.capabilities ?? []), ...(data.pinnedCaps ?? [])])].map((id) => (
+              {[...new Set([...(block.mitigations ?? []), ...(data.pinnedCaps ?? [])])].map((id) => (
                 <span
                   key={id}
                   style={{
                     opacity:
-                      data.highlight && !(data.highlight.kind === "capability" && data.highlight.id === id)
+                      data.highlight && !(data.highlight.kind === "mitigation" && data.highlight.id === id)
                         ? 0.2
                         : 1,
                     width: 16,
@@ -292,9 +292,9 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                 <FlowIcon name={item.icon} x={11} y={11} size={20} />
               </svg>
               <span>{item.label}</span>
-              {(item.capabilities?.length ?? 0) > 0 && (
+              {(item.mitigations?.length ?? 0) > 0 && (
                 <span style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
-                  {item.capabilities!.map((id) => (
+                  {item.mitigations!.map((id) => (
                     <span
                       key={id}
                       style={{
@@ -409,7 +409,7 @@ function TagNode({ data }: NodeProps<Node<{ code: string; w: number; dim: boolea
 
 interface EdgePin {
   kind: "chip" | "tag" | "flow";
-  /** The capability or risk id behind a chip or tag, so a list selection can find it. */
+  /** The mitigation or risk id behind a chip or tag, so a list selection can find it. */
   ref?: string;
   dx: number;
   dy: number;
@@ -432,7 +432,7 @@ interface BuildPathData {
 }
 
 /**
- * Renders the build-computed path verbatim. The edge's capability chips, risk tags and step
+ * Renders the build-computed path verbatim. The edge's mitigation chips, risk tags and step
  * badges render here too, offset from the build midpoint.
  */
 function BuildPathEdge(props: EdgeProps) {
@@ -443,7 +443,7 @@ function BuildPathEdge(props: EdgeProps) {
     const h = data.highlight;
     if (!h) return 1;
     const match =
-      pin.kind === "chip" ? h.kind === "capability" && h.id === pin.ref : h.kind === "risk" && h.id === pin.ref;
+      pin.kind === "chip" ? h.kind === "mitigation" && h.id === pin.ref : h.kind === "risk" && h.id === pin.ref;
     return match ? 1 : 0.2;
   };
   const path = data?.d ?? "";
@@ -542,7 +542,7 @@ export function FlowDiagramRF({
   archetype: Archetype;
   /** The selected sequence data flow, or null — the resting drawing carries no step numbers. */
   walk?: Scenario | null;
-  /** A capability or risk picked from a list: its chips or tags stay, the rest go faint. */
+  /** A mitigation or risk picked from a list: its chips or tags stay, the rest go faint. */
   highlight?: Highlight | null;
   /** An incident step replayed on the drawing; hides pins and walks while it is set. */
   overlay?: StepOverlay | null;
@@ -591,7 +591,7 @@ export function FlowDiagramRF({
       kidsOf.get(b.parent)!.push(b.id);
     }
     const rects = layout.blocks;
-    const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
+    const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
 
     const nodes: Node[] = [];
 
@@ -668,7 +668,7 @@ export function FlowDiagramRF({
           capNumber,
           pinnedCaps:
             block.kind === "governance"
-              ? archetype.pins.capabilities.filter((p) => p.at === id).map((p) => p.capability)
+              ? archetype.pins.mitigations.filter((p) => p.at === id).map((p) => p.mitigation)
               : undefined,
         },
         draggable: false,
@@ -684,8 +684,8 @@ export function FlowDiagramRF({
     // Pins sit at the spots the build checks use. Block-anchored pins are children of their
     // block, so they sit in the block's own coordinate space.
 
-    const chipGroups = new Map<string, { capability: string; note?: string }[]>();
-    for (const pin of archetype.pins.capabilities) {
+    const chipGroups = new Map<string, { mitigation: string; note?: string }[]>();
+    for (const pin of archetype.pins.mitigations) {
       if (!chipGroups.has(pin.at)) chipGroups.set(pin.at, []);
       chipGroups.get(pin.at)!.push(pin);
     }
@@ -698,18 +698,18 @@ export function FlowDiagramRF({
       pins.forEach((pin, i) => {
         const spot = spots[i];
         if (!spot) return;
-        const n = capNumber.get(pin.capability) ?? 0;
-        const cap = capabilityById.get(pin.capability);
+        const n = capNumber.get(pin.mitigation) ?? 0;
+        const cap = mitigationById.get(pin.mitigation);
         nodes.push({
-          id: `chip:${at}:${pin.capability}`,
+          id: `chip:${at}:${pin.mitigation}`,
           type: "chip",
           position: { x: spot.x - 9 - blockRect.x, y: spot.y - 9 - blockRect.y },
           parentId: at,
           data: {
             n,
             dim: false,
-            title: `${n} · ${cap?.title ?? pin.capability}`,
-            body: pinBody(pin.note, "capabilities", pin.capability, orgOverlay),
+            title: `${n} · ${cap?.title ?? pin.mitigation}`,
+            body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay),
           },
           draggable: false,
           selectable: false,
@@ -787,7 +787,7 @@ export function FlowDiagramRF({
           };
         }
         if (n.type === "chip" || n.type === "tag") {
-          const wants = n.type === "chip" ? "capability" : "risk";
+          const wants = n.type === "chip" ? "mitigation" : "risk";
           const faint =
             highlight !== null && !(highlight.kind === wants && n.id.endsWith(`:${highlight.id}`));
           return { ...n, data: { ...n.data, dim: inScenario, faint } };
@@ -808,10 +808,10 @@ export function FlowDiagramRF({
     const edgeGeo = new Map(layout.edges.map((g) => [`${g.from}->${g.to}`, g]));
 
     // Edge-anchored pins, as offsets from the build midpoint.
-    const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
+    const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
     const pinsByEdge = new Map<string, EdgePin[]>();
-    const chipGroups = new Map<string, { capability: string; note?: string }[]>();
-    for (const pin of archetype.pins.capabilities) {
+    const chipGroups = new Map<string, { mitigation: string; note?: string }[]>();
+    for (const pin of archetype.pins.mitigations) {
       if (!pin.at.includes("->")) continue;
       if (!chipGroups.has(pin.at)) chipGroups.set(pin.at, []);
       chipGroups.get(pin.at)!.push(pin);
@@ -824,16 +824,16 @@ export function FlowDiagramRF({
       pins.forEach((pin, i) => {
         const spot = spots[i];
         if (!spot) return;
-        const n = capNumber.get(pin.capability) ?? 0;
-        const cap = capabilityById.get(pin.capability);
+        const n = capNumber.get(pin.mitigation) ?? 0;
+        const cap = mitigationById.get(pin.mitigation);
         list.push({
           kind: "chip",
-          ref: pin.capability,
+          ref: pin.mitigation,
           dx: spot.x - geo.midX,
           dy: spot.y - geo.midY,
           n,
-          title: `${n} · ${cap?.title ?? pin.capability}`,
-          body: pinBody(pin.note, "capabilities", pin.capability, orgOverlay),
+          title: `${n} · ${cap?.title ?? pin.mitigation}`,
+          body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay),
         });
       });
       pinsByEdge.set(at, list);

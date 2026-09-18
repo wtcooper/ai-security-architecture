@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * One reference architecture's products against its reference controls, as a grid: controls
- * as rows, enterprise capability modules beside them, one admin-control column per product.
+ * One reference architecture's products against its reference mitigations, as a grid: controls
+ * as rows, enterprise mitigation modules beside them, one admin-control column per product.
  * The header states the inheritance and, with status shown, carries the row-label switch. Rendered by the Tools tab on the drawing.
  */
 import { useState } from "react";
@@ -33,7 +33,7 @@ export function ArchitectureViews({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-2">
         <span>
-          <span className="font-semibold text-ink">{archetype.capabilities.length} reference controls</span> every product of this kind
+          <span className="font-semibold text-ink">{archetype.mitigations.length} reference mitigations</span> every product of this kind
           needs, from the drawing; {tools.length} product{tools.length === 1 ? "" : "s"} rated against them. Click a product name for
           its full record.
         </span>
@@ -51,7 +51,7 @@ export function ArchitectureViews({
                     labels === m ? "border-transparent bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-line-strong"
                   }`}
                 >
-                  {m === "cosai" ? "CoSAI names" : org.example ? "Example org's control ids" : `${org.shortName ?? org.name} control ids`}
+                  {m === "cosai" ? "MITRE mitigation names" : org.example ? "Example org's control names" : `${org.shortName ?? org.name} control names`}
                 </button>
               ))}
             </span>

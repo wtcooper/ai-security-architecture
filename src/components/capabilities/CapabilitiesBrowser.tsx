@@ -1,254 +1,100 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
-import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
-import { OverlayToggle } from "@/components/tooling/OverlayToggle";
-import { useOrgOverlay } from "@/components/tooling/overlay";
-import { FilterPill, RISK_CATEGORY_ACCENT } from "@/components/browse/RisksBrowser";
-import type { BandId } from "@/lib/bands";
-import {
-  bandsForCapability,
-  capabilitiesInOrder,
-  capabilityById,
-  capabilityAliases,
-  capabilityGaps,
-  controlById,
-  controlCategories,
-  orgSurfaceStatusFor,
-  riskById,
-  riskCategories,
-  surfaces,
-} from "@/lib/data";
-import type { Capability } from "@/lib/types";
-import { CapabilityDetail } from "./CapabilityDetail";
-import { StackFilter } from "./StackFilter";
+import { Chip, MappingBadges } from "@/components/Chips";
+import { MasterDetail, useMasterSelection } from "@/components/browse/MasterDetail";
+import { FilterPill } from "@/components/browse/RisksBrowser";
+import { MitigationsBrowser } from "@/components/mitigations/MitigationsBrowser";
+import { capabilities, capabilityById, frameworkById, frameworkEntries, mitigationById, mitigationAliases, controlById, archetypes, incidents } from "@/lib/data";
+import { frameworkHref, mappingsForControl } from "@/lib/frameworks";
 
-const BAND_IDS: BandId[] = ["application", "model", "modelInfrastructure", "dataInfrastructure"];
-
-export function CapabilitiesBrowser() {
+// Links published when capabilities meant MITRE methods still open their original subject.
+export function CapabilitiesRoute() {
   const params = useSearchParams();
-  const linked = params.get("capability");
+  const id = params.get("capability") ?? "";
+  if (params.get("mitigation") || mitigationById.has(id) || mitigationAliases[id]) return <MitigationsBrowser />;
+  return <CapabilitiesBrowser />;
+}
 
-  const [riskCategory, setRiskCategory] = useState<string | null>(null);
-  const [band, setBand] = useState<BandId | null>(null);
-  const [clicked, setClicked] = useState<string | null | undefined>(undefined);
+function CapabilitiesBrowser() {
+  const params = useSearchParams();
+  const [clicked, setClicked] = useState<string | null>(null);
   const [source, setSource] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const overlay = useOrgOverlay();
-
-  const replacements = linked ? capabilityAliases[linked] : undefined;
-  const selectedId = clicked === undefined ? (replacements?.[0] ?? (linked && capabilityById.has(linked) ? linked : null)) : clicked;
-  const selected = selectedId ? capabilityById.get(selectedId) : undefined;
-  const detailRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (selectedId) detailRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [selectedId]);
-
-  const matchesRisk = (cap: Capability) =>
-    !riskCategory || cap.risks.some((id) => riskById.get(id)?.category === riskCategory);
-  const matchesBand = (cap: Capability) => !band || bandsForCapability(cap.id).has(band);
-  const matchesSourceAndQuery = (cap: Capability) => (!source || cap.origin.framework === source) &&
-    `${cap.id} ${cap.title} ${cap.implementation} ${cap.examples.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase());
-  const shown = capabilitiesInOrder.filter((c) => matchesRisk(c) && matchesBand(c) && matchesSourceAndQuery(c));
-
-  // Stack-filter counts respond to the risk filter, so the two selectors read as one system.
-  const bandCounts = Object.fromEntries(BAND_IDS.map((b) => [b, 0])) as Record<BandId, number>;
-  for (const cap of capabilitiesInOrder) {
-    if (!matchesRisk(cap) || !matchesSourceAndQuery(cap)) continue;
-    for (const b of bandsForCapability(cap.id)) bandCounts[b] += 1;
-  }
-
+  const shown = capabilities.filter((c) => (!source || c.frameworkMappings.some((m) => m.framework === source)) && `${c.title} ${c.description}`.toLowerCase().includes(query.toLowerCase()));
+  const selected = useMasterSelection("capability", params.get("capability"), shown.map((c) => c.id), shown.some((c) => c.id === clicked) ? clicked : null);
+  const capability = capabilityById.get(selected);
+  const categories = [...new Set(shown.map((c) => c.category))];
+  const sourceIds = [...new Set(capabilities.flatMap((c) => c.frameworkMappings.map((m) => m.framework)))];
+  const mitigationIds = capability?.mitigationMappings.map((m) => m.mitigation) ?? [];
+  const controlIds = [...new Set(mitigationIds.flatMap((id) => mitigationById.get(id)?.controls ?? []))];
+  const relatedArchitectures = archetypes.filter((a) => a.mitigations.some((id) => mitigationIds.includes(id)));
+  const relatedIncidents = incidents.filter((i) => i.controls.some((id) => controlIds.includes(id)));
   return (
     <>
-      <PageHeader
-        eyebrow={`${capabilitiesInOrder.length} capabilities · MITRE D3FEND + ATLAS`}
-        title="Capabilities"
-        lead="CoSAI supplies the controls. MITRE D3FEND and ATLAS supply the capability identifiers, names and definitions. Rows and deployment scope are this repository’s mappings; a mapped function contributes to a control without proving it is fulfilled."
-        aside={<OverlayToggle />}
-      >
-        <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <p className="eyebrow">Filter by risk category</p>
-            <div className="mt-2 flex max-w-xl flex-wrap gap-1.5">
-              <FilterPill active={!riskCategory} onClick={() => setRiskCategory(null)}>
-                All
-              </FilterPill>
-              {riskCategories.map((c) => (
-                <FilterPill
-                  key={c.id}
-                  active={riskCategory === c.id}
-                  accent={RISK_CATEGORY_ACCENT[c.id]}
-                  onClick={() => setRiskCategory(riskCategory === c.id ? null : c.id)}
-                >
-                  {c.title}
-                </FilterPill>
-              ))}
-            </div>
-          </div>
-          <div className="w-full shrink-0 lg:w-[300px]">
-            <p className="eyebrow">Filter by stack layer</p>
-            <div className="mt-2">
-              <StackFilter value={band} counts={bandCounts} onChange={setBand} />
-            </div>
-          </div>
+      <PageHeader eyebrow={`${capabilities.length} sourced categories`} title="Technology capabilities" lead="Technology categories implement defensive methods that support CoSAI controls. OWASP supplies the AI categories; ENISA and ECSO supply additional technology terminology. Explore CISA functions and NIST outcomes as supplementary mappings.">
+        <div className="mt-5 flex flex-wrap gap-1.5">
+          <FilterPill active={!source} onClick={() => { setSource(null); setClicked(null); }}>All sources</FilterPill>
+          {sourceIds.map((id) => <FilterPill key={id} active={source === id} onClick={() => { setSource(id); setClicked(null); }}>{frameworkById.get(id)?.name}</FilterPill>)}
         </div>
+        <input aria-label="Search technology capabilities" placeholder="Search capabilities, e.g. DLP or CASB" value={query} onChange={(e) => { setQuery(e.target.value); setClicked(null); }} className="mt-4 w-full max-w-lg rounded-lg border border-line bg-paper px-3 py-2 text-sm" />
       </PageHeader>
-
-      <div className="mx-auto w-full max-w-[1400px] px-6 py-8">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <input aria-label="Search capabilities" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, identifier or implementation…" className="min-w-[280px] rounded-md border border-line bg-paper px-3 py-2 text-sm" />
-          {[null, "MITRE D3FEND", "MITRE ATLAS"].map((name) => (
-            <FilterPill key={name ?? "all"} active={source === name} onClick={() => setSource(name)}>{name ?? "All sources"}</FilterPill>
-          ))}
-        </div>
-        {replacements && (
-          <div className="mb-4 rounded-lg border border-line bg-paper p-4 text-sm text-ink-2">
-            <p>{replacements.length ? "This older capability link now points to the following functions. Review each function separately." : "This capability was retired because no sufficiently matching MITRE capability was selected. Its requirements remain in the CoSAI gap assessment below."}</p>
-            <div className="mt-2 flex flex-wrap gap-3">
-              {replacements.map((id) => <button key={id} onClick={() => setClicked(id)} className="text-introduced hover:underline">{capabilityById.get(id)?.title} <span className="text-xs text-ink-3">({id})</span></button>)}
-            </div>
+      {!capability ? <p className="mx-auto max-w-[1400px] px-6 py-8 text-ink-2">No capabilities match these filters.</p> : (
+        <MasterDetail groups={categories.map((category) => ({ id: category, title: category, accent: "var(--introduced)", items: shown.filter((c) => c.category === category) }))} selectedId={capability.id} onSelect={setClicked} meta={(c) => frameworkById.get(c.primarySource.framework)?.name}>
+          <p className="eyebrow">{capability.category}</p>
+          <h2 className="display mt-1 text-[27px] font-bold text-ink">{capability.title}</h2>
+          <p className="mt-2 text-xs text-ink-3">Repository key: {capability.id} · not an official standard identifier</p>
+          <p className="mt-4 text-sm leading-relaxed text-ink-2">{capability.description}</p>
+          <div className="mt-6">
+            <p className="eyebrow">Source categories and framework mappings</p>
+            <p className="mt-1 text-xs text-ink-3">Crosswalks authored here. “Supports” means a contribution to a function or outcome; “narrower” means the source category is broader.</p>
+            <ul className="mt-3 space-y-3">
+              {capability.frameworkMappings.map((m) => {
+                const fw = frameworkById.get(m.framework)!;
+                const entry = frameworkEntries[m.framework][m.entry];
+                const primary = m.framework === capability.primarySource.framework && m.entry === capability.primarySource.entry;
+                return <li key={`${m.framework}/${m.entry}`} className="rounded-lg border border-line p-3">
+                  <Link href={frameworkHref(m.framework, m.entry)} className="text-sm font-semibold text-introduced hover:underline">{entry.label}{entry.group ? ` · ${entry.group}` : ""}</Link>
+                  <p className="mt-1 text-xs text-ink-3">{fw.name} · {fw.version} · {primary ? "naming source" : m.relationship.replaceAll("-", " ")} · {entry.identifierKind === "repository-key" ? "repository key" : "ID"}: {m.entry}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-ink-2">{m.rationale}</p>
+                  <a href={entry.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-introduced hover:underline">{entry.sourceLocation} ↗</a>
+                </li>;
+              })}
+            </ul>
           </div>
-        )}
-        <div className="flex items-center justify-between gap-3 pb-3">
-          <p className="text-[13px] text-ink-3">
-            {shown.length} of {capabilitiesInOrder.length} capabilities
-            {(riskCategory || band || source || query) && (
-              <button
-                onClick={() => {
-                  setRiskCategory(null);
-                  setBand(null);
-                  setSource(null);
-                  setQuery("");
-                }}
-                className="ml-2 font-semibold text-introduced hover:underline"
-              >
-                Clear filters
-              </button>
-            )}
-          </p>
-        </div>
-
-        {overlay && (
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-paper px-4 py-2.5">
-          <span className="eyebrow">Your status</span>
-          {ORG_STATUSES.map((s) => {
-            const tint = STATUS_STYLE[s];
-            return (
-              <span key={s} className="flex items-center gap-1.5 text-[12.5px] text-ink-2">
-                <span
-                  className="h-3.5 w-6 rounded-full border"
-                  style={{
-                    background: tint.bg,
-                    borderColor: tint.border,
-                    borderStyle: tint.dashed ? "dashed" : "solid",
-                  }}
-                />
-                {STATUS_META[s].label}
-              </span>
-            );
-          })}
-          <span className="text-[12.5px] text-ink-3">
-            From data/org: what the organisation has deployed per capability and surface. Anything
-            not recorded is a gap.
-          </span>
-        </div>
-        )}
-
-        <div className="overflow-x-auto rounded-xl border border-line bg-paper">
-          <div className="grid min-w-[860px] grid-cols-[180px_repeat(3,minmax(0,1fr))]">
-            <div className="bg-ink px-4 py-3.5">
-              <p className="text-[13.5px] font-bold text-white">CoSAI control group</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-white/60">what the tooling contributes to</p>
-            </div>
-            {surfaces.map((s) => (
-              <div key={s.id} className="border-l border-white/10 bg-ink px-4 py-3.5">
-                <p className="text-[13.5px] font-bold text-white">{s.title}</p>
-                <p className="mt-0.5 text-[11px] leading-snug text-white/60">
-                  {SURFACE_TAGLINE[s.id]}
-                </p>
-              </div>
-            ))}
-
-            {controlCategories.map((cat) => {
-              const rowCaps = shown.filter((c) => c.category === cat.id);
-              return (
-                <div key={cat.id} className="col-span-4 grid grid-cols-subgrid border-t border-line">
-                  <div className="bg-[#fbfcfe] px-4 py-3.5">
-                    <p className="text-[12.5px] font-bold leading-snug text-ink">{cat.title}</p>
-                  </div>
-                  {surfaces.map((s) => {
-                    const cellCaps = rowCaps.filter((c) => c.surfaces[s.id]?.applies);
-                    return (
-                      <div key={s.id} className="border-l border-line px-3 py-3">
-                        {cellCaps.length ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {cellCaps.map((cap) => {
-                              const active = selectedId === cap.id;
-                              const status = overlay ? orgSurfaceStatusFor(cap.id, s.id) : null;
-                              const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
-                              return (
-                                <button
-                                  key={cap.id}
-                                  onClick={() => setClicked(active ? null : cap.id)}
-                                  aria-pressed={active}
-                                  title={`${cap.title} (${cap.id})${status ? ` — ${STATUS_META[status].label}` : ""}`}
-                                  className="inline-flex items-center rounded-full border px-2.5 py-[5px] text-[12px] font-medium transition-shadow"
-                                  style={{
-                                    background: tint.bg,
-                                    borderColor: active ? "var(--ink)" : tint.border,
-                                    borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid",
-                                    color: tint.text,
-                                    boxShadow: active ? "0 0 0 1px var(--ink)" : undefined,
-                                  }}
-                                >
-                                  {cap.title}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span className="text-[13px] text-ink-3">—</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+          <div className="mt-6">
+            <p className="eyebrow">Implementation paths to CoSAI controls</p>
+            <p className="mt-1 text-xs text-ink-3">Possible implementations, not product guarantees. A broad mitigation can support controls outside this technology’s scope; review both mapping rationales.</p>
+            <ul className="mt-3 space-y-3">
+              {capability.mitigationMappings.map((m) => {
+                const mitigation = mitigationById.get(m.mitigation)!;
+                return <li key={m.mitigation} className="rounded-lg border border-line p-3">
+                  <Link href={`/mitigations?mitigation=${m.mitigation}`} className="text-sm font-semibold text-introduced hover:underline">{mitigation.title} <span className="text-xs font-normal text-ink-3">({mitigation.id})</span></Link>
+                  <p className="mt-2 text-sm text-ink-2">{m.rationale}</p>
+                  <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-ink-2">Related CoSAI controls and their framework mappings</summary>
+                    {mitigation.controlMappings.map((cm) => {
+                      const control = controlById.get(cm.control)!;
+                      return <div key={cm.control} className="mt-3 border-t border-line pt-3">
+                        <Link href={`/controls?control=${control.id}`} className="text-sm font-semibold hover:underline">{control.title}</Link>
+                        <p className="my-2 text-xs text-ink-3">{cm.rationale}</p>
+                        <MappingBadges extra={mappingsForControl(control)} mappings={control.mappings} />
+                      </div>;
+                    })}
+                  </details>
+                </li>;
+              })}
+            </ul>
           </div>
-        </div>
-
-        <p className="mt-2 text-[12px] text-ink-3">
-          A capability sits in its primary control group; its full control mapping is in the
-          detail. Blank cells are outside this customer-deployment profile. Provider-inherited
-          functions require supplier evidence. Counts describe catalogue entries, not independent
-          defenses or a coverage score; some upstream concepts overlap.
-        </p>
-
-        <details className="mt-5 rounded-lg border border-line bg-paper p-4">
-          <summary className="cursor-pointer text-sm font-semibold text-ink">CoSAI requirements beyond the capability mappings</summary>
-          <p className="mt-2 text-xs text-ink-3">Authored assessment of the pinned MITRE releases. These are gaps and implementation requirements against existing CoSAI controls, not additional capabilities.</p>
-          <ul className="mt-3 space-y-3">
-            {capabilityGaps.map((gap) => <li key={gap.control} className="text-sm text-ink-2"><a href={`/controls?control=${gap.control}`} className="font-semibold text-introduced hover:underline">{controlById.get(gap.control)?.title}</a> · {gap.assessment}<p className="mt-1">{gap.missing}</p></li>)}
-          </ul>
-        </details>
-
-        <div ref={detailRef} className="mt-6 scroll-mt-20">
-          {selected && (
-            <CapabilityDetail capability={selected} onClose={() => setClicked(null)} />
-          )}
-        </div>
-      </div>
-
+          <details className="mt-6"><summary className="cursor-pointer text-sm font-semibold">Related architectures and incidents</summary>
+            <p className="mt-2 text-xs text-ink-3">Architectures share a mapped mitigation; incidents share a related CoSAI control. These links do not assert that this technology was deployed or would have prevented an incident.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">{relatedArchitectures.map((a) => <Link key={a.id} href={`/reference?archetype=${a.id}`}><Chip>{a.title}</Chip></Link>)}</div>
+            <div className="mt-3 flex flex-wrap gap-1.5">{relatedIncidents.map((i) => <Link key={i.id} href={`/examples?incident=${i.id}`}><Chip tone="exposed">{i.title}</Chip></Link>)}</div>
+          </details>
+        </MasterDetail>
+      )}
     </>
   );
 }
-
-const SURFACE_TAGLINE: Record<string, string> = {
-  surfaceEndpoint: "agents on managed devices",
-  surfaceCloud: "production AI you operate",
-  surfaceSaas: "vendor AI you consume",
-};

@@ -8,7 +8,7 @@ import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { componentTitle, org, overlayFor } from "@/lib/data";
+import { capabilityById, controlById, componentTitle, org, overlayFor } from "@/lib/data";
 import {
   frameworkView,
   isVisibleFramework,
@@ -42,7 +42,7 @@ export function FrameworksBrowser() {
           ...(phase === "mitigated"
             ? [
                 ...entry.controls.flatMap((c) => (Array.isArray(c.components) ? c.components : [])),
-                ...entry.capabilities.flatMap((c) => c.components),
+                ...entry.mitigations.flatMap((c) => c.components),
               ]
             : []),
         ]),
@@ -58,7 +58,7 @@ export function FrameworksBrowser() {
       <PageHeader
         eyebrow="Cross-reference"
         title="Frameworks"
-        lead="CoSAI maps its risks, controls and personas onto external frameworks, and three more are added here where CoSAI has not caught up. Read the mapping the other way round: pick what you are being measured against, and see where it lands on this map. Your organisation's own standard and risk register sit alongside, from data/org."
+        lead="CoSAI remains the core taxonomy. Explore its published cross-references alongside repository-authored mappings for technology categories, defensive functions and cybersecurity outcomes. NIST AI RMF and NIST CSF are complementary views of the CoSAI controls."
       >
         {(["external", "org"] as const).map((group) => {
           const items = visibleFrameworks.filter((f) => Boolean(f.org) === (group === "org"));
@@ -169,7 +169,7 @@ export function FrameworksBrowser() {
 
             {view.coverage.length > 0 && (
               <div className="mt-4 border-t border-line pt-3">
-                <p className="eyebrow">How much of CoSAI it reaches</p>
+                <p className="eyebrow">Mapping coverage in this catalogue</p>
                 <ul className="mt-2 space-y-1.5">
                   {view.coverage.map((c) => (
                     <li key={c.kind} className="text-[13px] text-ink-2">
@@ -206,13 +206,14 @@ export function FrameworksBrowser() {
               <div className="rounded-xl border border-line bg-paper p-6">
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                   <div>
-                    <p className="ident">
-                      {entry.id}
-                      {entry.group && <span className="ml-2 text-ink-3">· {entry.group}</span>}
-                    </p>
                     <h2 className="display mt-1 text-[24px] font-bold leading-tight text-ink">
                       {entry.label}
                     </h2>
+                    <p className="mt-2 text-xs text-ink-3">
+                      {entry.identifierKind === "repository-key" ? "Repository key: " : ""}{entry.id}
+                      {entry.group && <span className="ml-2">· {entry.group}</span>}
+                    </p>
+                    {entry.sourceLocation && <p className="mt-1 text-xs text-ink-3">{entry.sourceLocation}</p>}
                   </div>
                   {entry.url && (
                     <a
@@ -250,7 +251,7 @@ export function FrameworksBrowser() {
                     {view.framework.org
                       ? "This entry maps to nothing in CoSAI. Either it is a process requirement with no technology behind it, or the cross-map in data/org has not reached it yet — worth deciding which."
                       : view.framework.authored
-                        ? "Nothing maps to this entry. CoSAI has no risk that describes it, so there was nothing to map — a real gap in the taxonomy rather than a missing judgement."
+                        ? "No mapping has been selected for this entry. This is a gap in this repository’s crosswalk, not a claim that CoSAI cannot address the outcome."
                         : "Nothing in CoSAI maps to this entry. That is a gap in the cross-reference worth knowing about if this framework is what you are measured against."}
                   </p>
                 ) : (
@@ -279,15 +280,23 @@ export function FrameworksBrowser() {
                         </div>
                       </div>
                     )}
-                    {entry.capabilities.length > 0 && (
+                    {entry.mitigations.length > 0 && (
                       <div>
-                        <p className="eyebrow">{entry.capabilities.length} capabilities</p>
+                        <p className="eyebrow">{entry.mitigations.length} mitigations</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
-                          {entry.capabilities.map((c) => (
-                            <Link key={c.id} href={`/capabilities?capability=${c.id}`}>
+                          {entry.mitigations.map((c) => (
+                            <Link key={c.id} href={`/mitigations?mitigation=${c.id}`}>
                               <Chip tone="introduced">{c.title}</Chip>
                             </Link>
                           ))}
+                        </div>
+                      </div>
+                    )}
+                    {entry.capabilities.length > 0 && (
+                      <div>
+                        <p className="eyebrow">{entry.capabilities.length} technology capabilities</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {entry.capabilities.map((c) => <Link key={c.id} href={`/capabilities?capability=${c.id}`}><Chip tone="introduced">{c.title}</Chip></Link>)}
                         </div>
                       </div>
                     )}
@@ -305,9 +314,21 @@ export function FrameworksBrowser() {
                     )}
                   </div>
                 )}
+                {!!entry.mappingNotes?.length && (
+                  <details className="mt-5 border-t border-line pt-3">
+                    <summary className="cursor-pointer text-sm font-semibold">Mapping relationships and rationale · authored here</summary>
+                    <ul className="mt-3 space-y-3">
+                      {entry.mappingNotes.map((m) => <li key={`${m.kind}/${m.entity}`} className="text-sm text-ink-2">
+                        <span className="font-semibold">{(m.kind === "controls" ? controlById : capabilityById).get(m.entity)?.title}</span>
+                        <span className="ml-2 text-xs text-ink-3">{m.relationship.replaceAll("-", " ")}</span>
+                        <p className="mt-1 text-xs leading-relaxed">{m.rationale}</p>
+                      </li>)}
+                    </ul>
+                  </details>
+                )}
               </div>
 
-              {entry.risks.length > 0 || entry.controls.length > 0 || entry.capabilities.length > 0 ? (
+              {entry.risks.length > 0 || entry.controls.length > 0 || entry.mitigations.length > 0 ? (
                 <div className="mt-4 rounded-xl border border-line bg-paper p-6">
                   <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
@@ -342,9 +363,8 @@ export function FrameworksBrowser() {
                 <div className="mt-4 rounded-xl border border-line bg-paper p-6">
                   <p className="eyebrow">Not an architectural mapping</p>
                   <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-ink-2">
-                    This framework maps onto roles rather than onto system components, so there
-                    is nothing to highlight on the map. Use the personas above to see who carries
-                    which risks and controls.
+                    This entry has no direct risk, control or mitigation mapping to highlight.
+                    Follow the linked technology categories or personas to explore their relationships.
                   </p>
                 </div>
               )}
@@ -406,7 +426,7 @@ function EntryRow({
       }`}
     >
       <span className="flex items-baseline justify-between gap-3">
-        <span className="ident">{entry.id}</span>
+        <span className="text-sm font-semibold text-ink">{entry.label}</span>
         <span className={`ident ${empty ? "text-exposed" : ""}`}>
           {empty ? "not mapped" : `${entry.total}`}
         </span>
@@ -416,7 +436,7 @@ function EntryRow({
           empty ? "text-ink-3" : "text-ink"
         }`}
       >
-        {entry.label}
+        <span className="text-xs font-normal text-ink-3">{entry.identifierKind === "repository-key" ? "Repository key: " : ""}{entry.id}{entry.group ? ` · ${entry.group}` : ""}</span>
       </span>
     </button>
   );

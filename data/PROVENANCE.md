@@ -110,7 +110,7 @@ prose, `lifecycleStage`, and mapped controls).
 `data/incidents/*.yaml` is original work. Every incident and every flow step carries its own
 `sources` list of public reporting; those links are rendered in the UI.
 
-## Capabilities
+## Mitigations
 
 Canonical identifiers, names and definitions are vendored from MITRE D3FEND 1.6.0 and
 MITRE ATLAS 2026.09. See [the source manifest](mitre/sources.yaml) for release URLs, retrieval
@@ -119,14 +119,14 @@ only selected D3FEND defensive-technique descendants and ATLAS mitigation record
 Upstream definitions are imported unmodified; their own reference syntax is retained.
 CoSAI's existing historical ATLAS mappings are unchanged.
 
-`data/overlay/capabilities.yaml` is an authored selection and crosswalk, not a new taxonomy.
+`data/overlay/mitigations.yaml` is an authored selection and crosswalk, not a new taxonomy.
 It supplies CoSAI supporting relationships with rationale, implementation guidance, examples
 and deployment responsibility. It cannot override canonical titles/definitions or introduce
 non-MITRE IDs. A product category or a feature under a broad mitigation is not another
-capability. These mappings are repository judgments, not MITRE or CoSAI endorsements.
+mitigation. These mappings are repository judgments, not MITRE or CoSAI endorsements.
 
-`data/overlay/capability-gaps.yaml` records missing/partial requirements against existing
-CoSAI control IDs. It introduces no capability identifiers. The scope and limitations are in
+`data/overlay/mitigation-gaps.yaml` records missing/partial requirements against existing
+CoSAI control IDs. It introduces no mitigation identifiers. The scope and limitations are in
 [the gap assessment](../docs/MITRE-CAPABILITY-GAPS.md).
 
 `data/migrations/capabilities-v1.yaml` accounts for all 56 former authored IDs. Tool coverage
@@ -150,7 +150,7 @@ vocabulary — is archived intact under `data/reference/archive/` and remains th
 its derivation, exemplar and target-state disciplines carry forward. The rebuild redraws the
 catalogue one architecture at a time in the grammar of the F5 AI reference architecture
 (f5.com/resources/reference-architectures/ai-overview), which is the form practitioners and
-security leadership actually read: vendor-neutral capability blocks connected by typed data
+security leadership actually read: vendor-neutral mitigation blocks connected by typed data
 paths, with the risk and requirement mapping pinned onto the drawing rather than kept beside it.
 
 An architecture is authored as a graph — blocks on a coarse grid, edges with a path class — and
@@ -196,7 +196,7 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   content is carries the threat model. Where a block deliberately differs from a standard
   concept, it gets a different name — sameness of name is a claim of sameness of role. Block
   items name things that exist — transports, artifacts, stores, runtimes, published surfaces,
-  functions of the block. Control and policy statements are not items: the pinned capability
+  functions of the block. Control and policy statements are not items: the pinned mitigation
   chip is the statement. The one exception is a block whose role *is* a control surface — the
   AI gateway, the governance plane, an egress gate, the OS permission layer, an output
   validation stage, a secure service edge, a tool broker — whose items describe its function.
@@ -220,16 +220,16 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
 - **Typed paths** follow F5's legend, simplified to two classes: one data path for flows
   inside the system, and external content and actions. F5's dotted governance relationship
   was dropped: the control plane is call-outs, not hops.
-- **Numbered capability chips** are F5's design-requirements treatment carried by this
-  framework's capability taxonomy: each chip marks where a capability must be deployed, and the
-  rail links it to the Capabilities tab. A pinned capability must apply on the architecture's
-  surface per `capabilities.yaml` — enforced by `npm run data`.
+- **Numbered mitigation chips** are F5's design-requirements treatment carried by this
+  framework's mitigation taxonomy: each chip marks where a mitigation must be deployed, and the
+  rail links it to the Mitigations tab. A pinned mitigation must apply on the architecture's
+  surface per `mitigations.yaml` — enforced by `npm run data`.
 - **Risk tags** are F5's OWASP tags carried by CoSAI risks, with catalogue-stable codes (R01…)
   assigned from the risks' display order.
 - **Scenario walks** replay numbered use-case paths over the same canvas, F5's
   building-block-highlight move applied to flows.
 
-Two rules replace the zone-era build enforcement: every risk and capability on the page must be
+Two rules replace the zone-era build enforcement: every risk and mitigation on the page must be
 pinned to a specific block or flow (the architecture-level lists are derived from the pins, so
 the rail cannot claim what the drawing does not show), and scenario steps must follow real edges.
 The target-state discipline is unchanged — these are architectures as they should be built, and
@@ -247,11 +247,11 @@ reactivate it.
 
 Named products appear only in each architecture's `exemplars`, each carrying a source and an
 `asOf` date, and are rendered as dated illustration. This is a deliberate departure from the
-vendor-neutral discipline of `capabilities.yaml`: a reference architecture is not usable without
+vendor-neutral discipline of `mitigations.yaml`: a reference architecture is not usable without
 knowing what it is a reference to, and this is a domain where names moved fast enough during 2026
 that an undated one becomes a wrong claim. The architectures themselves name no products.
 
-`docs/AUDIT.md` section 4 reports the coverage gaps: risks and capabilities not yet pinned by any
+`docs/AUDIT.md` section 4 reports the coverage gaps: risks and mitigations not yet pinned by any
 flow-style architecture, and CoSAI components none anchors. Until the rebuild covers all three
 surfaces those gaps are the work list, not a regression.
 
@@ -266,7 +266,7 @@ companion `ai-security-sdlc` project, not here.
 
 Two disciplines carry over from the layers above:
 
-- **Derivation.** Every guidance item cites at least one capability, and each must be pinned on
+- **Derivation.** Every guidance item cites at least one mitigation, and each must be pinned on
   its architecture — guidance cannot recommend deploying something the drawing does not show.
   `npm run data` fails otherwise; the fix is a pin, not an exception.
 - **Dated vendor facts.** The tool registry is the one place this layer names products, because
@@ -275,7 +275,7 @@ Two disciplines carry over from the layers above:
   vendor's own documentation, verified by fetching those pages on that date — never recalled
   from model memory. `npm run audit` flags entries older than six months for re-verification,
   and section 5 of `docs/AUDIT.md` tracks which architectures carry guidance and which pinned
-  capabilities each document has not yet addressed.
+  mitigations each document has not yet addressed.
 
 ## AI tooling registry
 
@@ -284,8 +284,8 @@ Two disciplines carry over from the layers above:
 variants. Every entity is dated (`asOf`) and sourced from the vendor's own documentation, every
 control row carries a `verified` date, and every operator step links to the page that documents
 it; nothing is recalled from model memory. A tool may only describe its implementation of
-capabilities pinned on its architecture — the drawing is the reference control set — and the
-build fails otherwise. `npm run audit` lists the pinned capabilities each entity has not yet
+mitigations pinned on its architecture — the drawing is the reference control set — and the
+build fails otherwise. `npm run audit` lists the pinned mitigations each entity has not yet
 addressed and flags entries older than six months. The `tooling-onboard` skill under
 `.claude/skills/` carries the research protocol.
 
@@ -296,5 +296,19 @@ such everywhere it renders); an adopter creates `local/`, which the build prefer
 upstream never ships. Its catalogues become authored frameworks with `org: true`, inverted from
 the entry-keyed authoring into the same cross-reference shape as the OWASP lenses, so the
 Frameworks tab, the card badges, the architecture rails and hover cards and the AI Tooling tab
-all read them without special cases. Tool posture lives beside it, per tool × pinned capability,
-reusing the capability posture enum. The `org-taxonomy-customize` skill walks through it.
+all read them without special cases. Tool posture lives beside it, per tool × pinned mitigation,
+reusing the mitigation posture enum. The `org-taxonomy-customize` skill walks through it.
+
+## Technology capabilities and supplementary framework lenses
+
+`data/overlay/technology-capabilities.yaml` defines sourced technology categories using local
+`tech-*` keys. `data/frameworks/technology-sources.yaml` records exact category names, source
+versions/locations, official-vs-local identifier kinds, and the additive NIST CSF control
+crosswalk. OWASP is the primary AI naming source; ENISA ECSMAF 3.0 and ECSO supply additional
+technology categories; CISA TIC v3.3 functions and NIST CSF 2.0 outcomes provide supplementary
+views. Descriptions and all category/implementation crosswalks are authored here. Each mapping
+has an explicit relationship and rationale. See [the source contract](frameworks/README.md).
+
+CoSAI controls and their NIST AI RMF mappings are unchanged. Technology associations never
+change architecture pins, vendor evidence, incident evidence, or organization posture. Names
+are shown before IDs, and repository keys are never labeled as publisher identifiers.

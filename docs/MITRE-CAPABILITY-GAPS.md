@@ -1,5 +1,7 @@
 # MITRE capability profile and CoSAI gaps
 
+> The MITRE catalogue is now the **Mitigations** layer (`data/overlay/mitigations.yaml`, `/mitigations`). This assessment retains its historical filename. Technology-capability source selection is tracked in [the options assessment](TECHNOLOGY-CAPABILITY-TAXONOMIES.md).
+
 Implemented 2026-09-18. **59 canonical MITRE capabilities; no custom capability IDs.**
 35 D3FEND defensive techniques from 1.6.0 and 24 ATLAS mitigations from 2026.09.
 CoSAI components, risks, controls, personas and existing framework mappings are unchanged.

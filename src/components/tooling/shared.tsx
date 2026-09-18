@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { NEUTRAL_STYLE, ORG_STATUSES, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
 import type { Tool, ToolControl, ToolCoverage } from "@/lib/types";
-import { archetypeById, capabilityById, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, vendorById } from "@/lib/data";
+import { archetypeById, mitigationById, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, vendorById } from "@/lib/data";
 import { ControlRowDetail } from "./ControlRowDetail";
 import { COVERAGE_META, COVERAGE_ORDER } from "./labels";
 import { OWNER_META, type Cell, type Row } from "./model";
@@ -39,12 +39,12 @@ export function CellHoverCard({ tool, row, cell, overlay, rect }: { tool: Tool; 
         {tool.name} <span className="font-normal text-ink-3">· {row.title ?? row.label}</span>
       </p>
       {cell.parts.map((p) => {
-        const capability = capabilityById.get(p.capability);
+        const mitigation = mitigationById.get(p.mitigation);
         const cov = p.control ? COVERAGE_META[p.control.coverage] : null;
-        const status = overlay ? orgStatusFor(tool.id, p.capability) : undefined;
+        const status = overlay ? orgStatusFor(tool.id, p.mitigation) : undefined;
         return (
-          <div key={p.capability} className="mt-2 border-t border-line pt-2 first:mt-1.5">
-            {cell.parts.length > 1 && <p className="font-semibold text-ink">{capability?.title ?? p.capability}</p>}
+          <div key={p.mitigation} className="mt-2 border-t border-line pt-2 first:mt-1.5">
+            {cell.parts.length > 1 && <p className="font-semibold text-ink">{mitigation?.title ?? p.mitigation}</p>}
             <p>
               <span className="eyebrow mr-1">Vendor</span>
               <span className="font-semibold text-ink">{cov ? cov.long : "Not assessed"}</span>
@@ -109,7 +109,7 @@ export function CoverageBadge({ coverage, long = false, url, className = "" }: {
 }
 
 /**
- * A grid cell: tinted by the organisation's status when shown (the Capabilities matrix's
+ * A grid cell: tinted by the organisation's status when shown (the Mitigations matrix's
  * colours), neutral otherwise; the coverage word inside is the link to the vendor's page.
  * Clicking the cell itself opens the steps beneath the grid.
  */
@@ -128,7 +128,7 @@ export function CellTile({
   const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
   // The word and its link refer to the same component: the one whose coverage the cell shows.
   const url = configureUrl(cell.decisive);
-  const missing = cell.missing.map((id) => capabilityById.get(id)?.title ?? id);
+  const missing = cell.missing.map((id) => mitigationById.get(id)?.title ?? id);
   return (
     <div
       role="button"
@@ -159,9 +159,9 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
       <span className="eyebrow" title="Admin control: set by an administrator in the product itself.">Admin control</span>
       <span>{COVERAGE_ORDER.map((c) => COVERAGE_META[c].label).join(" · ")}</span>
       <span className="ml-1">the word ↗ links to the vendor&rsquo;s page for configuring it; click a cell for the steps</span>
-      <span className="eyebrow ml-2" title="Enterprise capability: a control class the organisation deploys around the products, at the place the drawing pins it.">Enterprise capability</span>
+      <span className="eyebrow ml-2" title="Enterprise mitigation: a defensive method the organisation implements around the products, at the place the drawing pins it.">Enterprise mitigation</span>
       <span className="inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-paper px-1.5 py-[2px] text-[10.5px] leading-none text-ink" style={{ borderStyle: "dashed" }}>
-        <span className="font-semibold">control class</span>
+        <span className="font-semibold">defensive method</span>
         <span className="text-ink-3">· where it sits</span>
       </span>
       <span>layers stack: one, the other, or both</span>
@@ -182,28 +182,28 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
 }
 
 /**
- * The enterprise capability of one control on one architecture, as one tag: the capability
+ * The enterprise mitigation of one control on one architecture, as one tag: the mitigation
  * class, then every block the drawing pins it on ("where it sits", with the zone owner's dot).
  * With status shown the tag is tinted by the organisation's status on this surface, the same
  * colours as everywhere else; the technology it runs and its note live in the tooltip.
  */
 export function EnterpriseModules({ row, archetypeId, overlay, className = "" }: { row: Row; archetypeId: string; overlay: boolean; className?: string }) {
   const arch = archetypeById.get(archetypeId);
-  // A composite row (an organisation entry over several capabilities) is described by all of
+  // A composite row (an organisation entry over several mitigations) is described by all of
   // them: every name in the label, the worst status across them, each posture note attributed.
-  const capabilities = row.capabilities.map((id) => capabilityById.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
+  const mitigations = row.mitigations.map((id) => mitigationById.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
   if (!row.enforcement.length) return null;
-  const statuses = overlay && arch ? row.capabilities.map((c) => orgSurfaceStatusFor(c, arch.surface)) : [];
+  const statuses = overlay && arch ? row.mitigations.map((c) => orgSurfaceStatusFor(c, arch.surface)) : [];
   const status = (["gap", "inProgress", "enabled"] as const).find((s) => statuses.includes(s));
-  const postures = overlay && arch ? capabilities.map((c) => ({ c, p: orgSurfacePostureFor(c.id, arch.surface) })).filter((x) => x.p) : [];
+  const postures = overlay && arch ? mitigations.map((c) => ({ c, p: orgSurfacePostureFor(c.id, arch.surface) })).filter((x) => x.p) : [];
   const tint = status ? STATUS_STYLE[status] : null;
-  const label = capabilities.map((c) => c.title).join(" + ") || "Capability";
-  const examples = [...new Set(capabilities.flatMap((c) => c.examples ?? []))];
+  const label = mitigations.map((c) => c.title).join(" + ") || "Mitigation";
+  const examples = [...new Set(mitigations.flatMap((c) => c.examples ?? []))];
   const title = [
-    `Enterprise capabilit${capabilities.length === 1 ? "y" : "ies"}: ${capabilities.map((c) => c.title).join("; ") || row.label}`,
+    `Enterprise mitigation${mitigations.length === 1 ? "" : "s"}: ${mitigations.map((c) => c.title).join("; ") || row.label}`,
     `Where it sits: ${row.enforcement.map((e) => `${e.title} (${OWNER_META[e.owner]?.label ?? e.owner})`).join(", ")}`,
     examples.length ? `Bought as: ${examples.join(", ")}` : "",
-    status ? `Your status (worst across ${capabilities.length}): ${STATUS_META[status].label}` : "",
+    status ? `Your status (worst across ${mitigations.length}): ${STATUS_META[status].label}` : "",
     ...postures.map(({ c, p }) => `${c.title}: ${p!.technology ?? ""}${p!.note ? ` — ${p!.note}` : ""}`.trim()),
     ...row.enforcement.flatMap((e) => e.notes),
   ]
@@ -212,7 +212,7 @@ export function EnterpriseModules({ row, archetypeId, overlay, className = "" }:
   return (
     <span className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       <Link
-        href={`/capabilities?capability=${row.capabilities[0]}`}
+        href={`/mitigations?mitigation=${row.mitigations[0]}`}
         className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md border px-1.5 py-[3px] text-[11px] leading-none hover:border-ink"
         style={
           tint
@@ -233,11 +233,11 @@ export function EnterpriseModules({ row, archetypeId, overlay, className = "" }:
   );
 }
 
-/** The technology classes a capability is bought as — the vendor-neutral names for the enterprise layer. */
-export const technologyClasses = (capabilityIds: string[]) =>
-  [...new Set(capabilityIds.flatMap((c) => capabilityById.get(c)?.examples ?? []))];
+/** The technology classes a mitigation is bought as — the vendor-neutral names for the enterprise layer. */
+export const technologyClasses = (mitigationIds: string[]) =>
+  [...new Set(mitigationIds.flatMap((c) => mitigationById.get(c)?.examples ?? []))];
 
-/** What a click on any tile opens: every capability behind the cell, in full. */
+/** What a click on any tile opens: every mitigation behind the cell, in full. */
 export function CellDetail({ tool, row, onClose }: { tool: Tool; row: Row; onClose: () => void }) {
   return (
     <div className="rounded-xl border border-ink/40 bg-paper">
@@ -256,9 +256,9 @@ export function CellDetail({ tool, row, onClose }: { tool: Tool; row: Row; onClo
         </button>
       </div>
       <div className="divide-y divide-line px-4">
-        {row.capabilities.map((capabilityId) => (
-          <div key={capabilityId} className="py-4">
-            <ControlRowDetail tool={tool} capabilityId={capabilityId} showTitle={row.capabilities.length > 1 || row.title !== undefined} />
+        {row.mitigations.map((mitigationId) => (
+          <div key={mitigationId} className="py-4">
+            <ControlRowDetail tool={tool} mitigationId={mitigationId} showTitle={row.mitigations.length > 1 || row.title !== undefined} />
           </div>
         ))}
       </div>

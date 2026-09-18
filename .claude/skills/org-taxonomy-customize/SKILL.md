@@ -1,6 +1,6 @@
 ---
 name: org-taxonomy-customize
-description: Cross-map an organisation's own control standard, policy catalogue or risk register onto this repository's CoSAI taxonomy (risks, controls, capabilities) by editing text files under data/org/, and record the organisation's status per AI tool. Use this whenever someone wants to see their own control IDs, standards, requirements, "top risks" or posture on the Frameworks tab, the risk/control/capability cards, the Capabilities matrix or a reference architecture's Controls and Tools tabs — including phrases like "map our controls", "add our standard", "our risk register", "cross-walk to CoSAI", "customise this for my company", "mark what we have enabled", "org profile", or "data/org". Also use it when an adopter has cloned the repo and asks how to make it theirs without touching the UI.
+description: Cross-map an organisation's own control standard, policy catalogue or risk register onto this repository's CoSAI taxonomy (risks, controls, mitigations) by editing text files under data/org/, and record the organisation's status per AI tool. Use this whenever someone wants to see their own control IDs, standards, requirements, "top risks" or posture on the Frameworks tab, the risk/control/mitigation cards, the Mitigations matrix or a reference architecture's Controls and Tools tabs — including phrases like "map our controls", "add our standard", "our risk register", "cross-walk to CoSAI", "customise this for my company", "mark what we have enabled", "org profile", or "data/org". Also use it when an adopter has cloned the repo and asks how to make it theirs without touching the UI.
 ---
 
 # Customise the taxonomy for an organisation
@@ -14,7 +14,7 @@ Read `references/schema.md` first. It is short and it is the contract.
 ## Why the shape is what it is
 
 - The organisation authors **its way round**: its id, its label, and the CoSAI controls,
-  capabilities and risks each entry corresponds to. The build inverts that into the same
+  mitigations and risks each entry corresponds to. The build inverts that into the same
   framework-side cross-reference the OWASP and ATLAS lenses use, so every badge, coverage count
   and "what this does not reach" list works for the org catalogue without new code.
 - `data/org/local/` is the adopter's directory. Upstream ships only `example/`, and `local/` is
@@ -37,13 +37,13 @@ Read `references/schema.md` first. It is short and it is the contract.
    first says the file *is* the example — drop it; the second explains the format — keep it.
    Delete the example entries.
 3. **Map each entry to CoSAI ids.** Run `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs`
-   to list controls, capabilities and risks with titles and one-line descriptions. It takes one
+   to list controls, mitigations and risks with titles and one-line descriptions. It takes one
    optional argument, a single substring matched against id, title and description
    (`... permission`, `... sandbox`, `... disclosure` are productive; `tool` matches nearly
    everything). `references/mapping-cheatsheet.md` gives the usual targets for the requirements
    every standard has. For each org entry pick:
    - `controls`: the CoSAI control(s) the requirement satisfies (the "what");
-   - `capabilities`: the technology class(es) that implement it (the "with what") — this is
+   - `mitigations`: the technology class(es) that implement it (the "with what") — this is
      what puts the org id next to the numbered chips on the architecture drawings;
    - `risks`: for a risk register, every entry; for a control standard, only when the
      requirement names the threat it exists to prevent. "Prompts are inspected for customer
@@ -55,32 +55,32 @@ Read `references/schema.md` first. It is short and it is the contract.
    `data/tooling/` (`node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools`
    lists them; `... tools toolClaudeCode` prints one tool's reference set), with
    `available: true` when people may install it and an optional `controls` map keyed by
-   capability id. Availability is deliberately a boolean: the organisation either provides the
+   mitigation id. Availability is deliberately a boolean: the organisation either provides the
    product or blocks it, and how well an available product is locked down is what the control
    statuses say. A tool not listed, or `false`, is not available and its column renders greyed
-   out. Only capabilities pinned on the tool's architecture may carry a status, and one
+   out. Only mitigations pinned on the tool's architecture may carry a status, and one
    vocabulary serves every control: `enabled`, `inProgress`, `gap`. Each row's `note` is what the
    Tools grid shows when someone hovers that cell — the justification: the setting or change
-   that backs the status, or for a gap why it is not in place — so give every pinned capability
+   that backs the status, or for a gap why it is not in place — so give every pinned mitigation
    a row with a note rather than leaving gaps implicit (an implicit gap hovers as "nothing
    recorded yet"). The shipped `data/org/example/tooling-status.yaml` already has a note on every
    control of the products it runs; treat it as the template — keep the block for each product
    the organisation runs, drop the rest, and rewrite each note to say what was actually set up.
-5. **Record the enterprise layer if they want it.** In `capabilities.yaml`, per capability and
+5. **Record the enterprise layer if they want it.** In `mitigations.yaml`, per mitigation and
    surface, the technology the organisation runs (MDM, endpoint DLP, SSE, gateway guardrails,
    SIEM) and its status, in the same three words. This is the other half of every control: a
    product's managed setting is delivered by an MDM; a DLP requirement is met by an endpoint
-   agent around the product. It is the only source of status on the Capabilities matrix — there
-   is no UI editor, and `data/overlay/capabilities.yaml` carries no posture.
+   agent around the product. It is the only source of status on the Mitigations matrix — there
+   is no UI editor, and `data/overlay/mitigations.yaml` carries no posture.
 6. **Build and fix.** `npm run data`. Errors from this layer start with `org/…` or
    `org tooling-status …` and name the file, framework and entry; fix the id, never the CoSAI
    file. A failing line that does not start with `org` is upstream data, not the profile. Then
    `npm run audit` (it should still pass; it does not yet report on the org layer).
 7. **Show them where it landed.** `npm run dev`, then switch **Show status** on — the toggle
-   beside the Capabilities and Reference architectures titles, one state shared by both pages.
+   beside the Mitigations and Reference architectures titles, one state shared by both pages.
    Nothing from `data/org` renders until it is on. Then: `/frameworks?fw=<framework id>` (their
    catalogue with coverage and the unmapped list), `/controls?control=<id>` and
-   `/capabilities?capability=<id>` (their ids as badges), `/capabilities` (every pill tinted by
+   `/mitigations?mitigation=<id>` (their ids as badges), `/mitigations` (every pill tinted by
    their surface status), `/reference?archetype=<id>` → Controls tab, expand a row (their status
    and ids under the chip) → Tools tab (status per control per product, unavailable products
    greyed, and each product's record beneath the grid).
@@ -93,7 +93,7 @@ Read `references/schema.md` first. It is short and it is the contract.
   authored ones (`owasp-*`, `mitre-atlas`, `stride`, `nist-ai-rmf`, `iso-22989`, `eu-ai-act`).
   Prefix with `org-`.
 - Keep the example profile untouched so upstream diffs stay clean; all edits go in `local/`.
-- `capabilities.yaml` records status per **surface** (the enterprise layer); `tooling-status.yaml`
+- `mitigations.yaml` records status per **surface** (the enterprise layer); `tooling-status.yaml`
   records it per **tool**. They answer different questions; do not derive one from the other.
-  Both show under the **Show status** switch beside the Capabilities and Reference architectures
+  Both show under the **Show status** switch beside the Mitigations and Reference architectures
   titles.

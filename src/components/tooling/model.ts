@@ -1,13 +1,13 @@
 /**
  * The view model both perspectives share. The organising unit is the reference architecture:
- * its pinned capabilities are the controls every product of that category needs, and a product
+ * its pinned mitigations are the controls every product of that category needs, and a product
  * only records how its vendor implements each one. So rows always come from ONE architecture,
  * columns are the products that instantiate it, and a cell is one product × one control.
  *
  * Rows can be relabelled with the organisation's own control entries; those aggregate several
- * capabilities, so a cell there carries the worst of them — a gap anywhere is a gap.
+ * mitigations, so a cell there carries the worst of them — a gap anywhere is a gap.
  */
-import { archetypeById, authoredMappings, capabilityById, frameworkEntries, orgStatusFor, orgToolAvailableFor, vendors } from "@/lib/data";
+import { archetypeById, authoredMappings, mitigationById, frameworkEntries, orgStatusFor, orgToolAvailableFor, vendors } from "@/lib/data";
 import { orgEntriesFor, orgFrameworks } from "@/lib/frameworks";
 import type { OrgStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 import { controlCategories } from "@/lib/data";
@@ -18,9 +18,9 @@ export interface Row {
   id: string;
   label: string;
   short: string;
-  /** Supporting label: org mappings in the CoSAI lens, capability count in the org lens. */
+  /** Supporting label: org mappings in the CoSAI lens, mitigation count in the org lens. */
   aside?: string;
-  capabilities: string[];
+  mitigations: string[];
   title?: string;
   /** Where the drawing enforces this control — the enterprise layer around the products. */
   enforcement: Enforcement[];
@@ -35,19 +35,19 @@ export interface Enforcement {
 }
 
 /**
- * Where an architecture places a capability: every block it is pinned on, and both ends of
+ * Where an architecture places a mitigation: every block it is pinned on, and both ends of
  * every flow it is pinned on, with who operates that block. This is the enterprise side of
  * a control — the gateway, the managed endpoint, the governance plane — as distinct from what
  * the product's own admin settings offer.
  */
-export function enforcementFor(archetypeId: string, capabilityIds: string[]): Enforcement[] {
+export function enforcementFor(archetypeId: string, mitigationIds: string[]): Enforcement[] {
   const arch = archetypeById.get(archetypeId);
   if (!arch) return [];
   const blocks = new Map(arch.blocks.map((b) => [b.id, b]));
   const zoneOwner = new Map((arch.zones ?? []).map((z) => [z.id, z.owner]));
   const out = new Map<string, Enforcement>();
-  for (const pin of arch.pins.capabilities) {
-    if (!capabilityIds.includes(pin.capability)) continue;
+  for (const pin of arch.pins.mitigations) {
+    if (!mitigationIds.includes(pin.mitigation)) continue;
     const ids = pin.at.includes("->") ? pin.at.split("->") : [pin.at];
     for (const id of ids) {
       const b = blocks.get(id);
@@ -84,7 +84,7 @@ export interface ColumnGroup {
 export interface Cell {
   coverage?: ToolCoverage;
   status?: OrgStatus;
-  parts: { capability: string; control?: ToolControl; status?: OrgStatus }[];
+  parts: { mitigation: string; control?: ToolControl; status?: OrgStatus }[];
   /** The component whose coverage the cell shows, so its link and its word refer to the same thing. */
   decisive?: ToolControl;
   /** Components with no vendor record at all: a composite that hides one is not a faithful summary. */
@@ -109,33 +109,33 @@ export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
     .map((v) => ({ vendorId: v.id, vendorName: v.name, tools: tools.filter((t) => t.vendor === v.id) }))
     .filter((g) => g.tools.length);
 
-const orgIdsByCapability = (() => {
+const orgIdsByMitigation = (() => {
   const out = new Map<string, string[]>();
   for (const fw of orgFrameworks) {
-    for (const [capabilityId, entryIds] of Object.entries(authoredMappings[fw.id]?.capabilities ?? {})) {
-      out.set(capabilityId, [...(out.get(capabilityId) ?? []), ...entryIds]);
+    for (const [mitigationId, entryIds] of Object.entries(authoredMappings[fw.id]?.mitigations ?? {})) {
+      out.set(mitigationId, [...(out.get(mitigationId) ?? []), ...entryIds]);
     }
   }
   return out;
 })();
-export const hasOrgMappings = orgIdsByCapability.size > 0;
+export const hasOrgMappings = orgIdsByMitigation.size > 0;
 
-/** The architecture's pinned capabilities as rows, grouped by CoSAI control category. */
+/** The architecture's pinned mitigations as rows, grouped by CoSAI control category. */
 export function cosaiRows(archetypeId: string): RowGroup[] {
-  const pinned = archetypeById.get(archetypeId)?.capabilities ?? [];
+  const pinned = archetypeById.get(archetypeId)?.mitigations ?? [];
   return controlCategories
     .map((cat) => ({
       id: cat.id,
       title: cat.title,
       rows: pinned
-        .map((id) => capabilityById.get(id))
+        .map((id) => mitigationById.get(id))
         .filter((c): c is NonNullable<typeof c> => Boolean(c) && c!.category === cat.id)
         .map((c) => ({
           id: c.id,
           label: c.title,
           short: c.title,
-          aside: orgEntriesFor("capabilities", c.id).map((entry) => `${entry.label} (${entry.id})`).join(" · ") || undefined,
-          capabilities: [c.id],
+          aside: orgEntriesFor("mitigations", c.id).map((entry) => `${entry.label} (${entry.id})`).join(" · ") || undefined,
+          mitigations: [c.id],
           enforcement: enforcementFor(archetypeId, [c.id]),
         })),
     }))
@@ -144,13 +144,13 @@ export function cosaiRows(archetypeId: string): RowGroup[] {
 
 /** The same set, relabelled as the organisation's entries that reach it, grouped by its catalogue. */
 export function orgRows(archetypeId: string): RowGroup[] {
-  const pinned = new Set(archetypeById.get(archetypeId)?.capabilities ?? []);
+  const pinned = new Set(archetypeById.get(archetypeId)?.mitigations ?? []);
   const groups = new Map<string, RowGroup>();
   for (const fw of orgFrameworks) {
     const byEntry = new Map<string, string[]>();
-    for (const [capabilityId, entryIds] of Object.entries(authoredMappings[fw.id]?.capabilities ?? {})) {
-      if (!pinned.has(capabilityId)) continue;
-      for (const e of entryIds) byEntry.set(e, [...(byEntry.get(e) ?? []), capabilityId]);
+    for (const [mitigationId, entryIds] of Object.entries(authoredMappings[fw.id]?.mitigations ?? {})) {
+      if (!pinned.has(mitigationId)) continue;
+      for (const e of entryIds) byEntry.set(e, [...(byEntry.get(e) ?? []), mitigationId]);
     }
     const reference = frameworkEntries[fw.id] ?? {};
     for (const entryId of Object.keys(reference)) {
@@ -163,8 +163,8 @@ export function orgRows(archetypeId: string): RowGroup[] {
         id: `${fw.id}:${entryId}`,
         label: `${ref.label} (${entryId})`,
         short: ref.label,
-        aside: `${caps.length} capabilit${caps.length === 1 ? "y" : "ies"}`,
-        capabilities: caps,
+        aside: `${caps.length} mitigation${caps.length === 1 ? "" : "s"}`,
+        mitigations: caps,
         title: ref.label,
         enforcement: enforcementFor(archetypeId, caps),
       });
@@ -176,15 +176,15 @@ export function orgRows(archetypeId: string): RowGroup[] {
 export const rowsFor = (archetypeId: string, mode: LabelMode) => (mode === "org" ? orgRows(archetypeId) : cosaiRows(archetypeId));
 
 export function cellFor(tool: Tool, row: Row): Cell {
-  const own = new Map(tool.controls.map((c) => [c.capability, c]));
+  const own = new Map(tool.controls.map((c) => [c.mitigation, c]));
   // An available product has a status on every control (unrecorded = gap); one the organisation
   // does not provide has none, and the grid greys its column instead.
   const onboarded = orgToolAvailableFor(tool.id);
-  const parts = row.capabilities.map((capability) => ({
-    capability,
-    control: own.get(capability),
+  const parts = row.mitigations.map((mitigation) => ({
+    mitigation,
+    control: own.get(mitigation),
     // A control that does not apply to the product has no status to record: it is neither a gap nor enabled.
-    status: onboarded && own.get(capability)?.coverage !== "notApplicable" ? orgStatusFor(tool.id, capability)?.status ?? "gap" : undefined,
+    status: onboarded && own.get(mitigation)?.coverage !== "notApplicable" ? orgStatusFor(tool.id, mitigation)?.status ?? "gap" : undefined,
   }));
   const coverage = worstCoverage(parts.map((p) => p.control?.coverage));
   return {
@@ -192,6 +192,6 @@ export function cellFor(tool: Tool, row: Row): Cell {
     status: worst(STATUS_RANK, parts.map((p) => p.status)),
     parts,
     decisive: parts.find((p) => p.control?.coverage === coverage)?.control,
-    missing: parts.filter((p) => !p.control).map((p) => p.capability),
+    missing: parts.filter((p) => !p.control).map((p) => p.mitigation),
   };
 }

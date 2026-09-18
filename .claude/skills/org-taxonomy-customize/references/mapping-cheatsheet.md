@@ -2,12 +2,12 @@
 
 The requirements nearly every AI security standard contains, and where they usually land. Use
 as a starting point, then confirm against the descriptions the index script prints — the
-adopter's wording decides. Capability IDs are native MITRE D3FEND/ATLAS identifiers.
+adopter's wording decides. Mitigation IDs are native MITRE D3FEND/ATLAS identifiers.
 These are candidate supporting functions, not equivalent bundles: verify each definition
 and implementation boundary. In particular, AML.M0020 is broad guardrails; a DLP or
 injection-screening feature alone provides partial evidence. See docs/MITRE-CAPABILITY-GAPS.md.
 
-| Requirement says… | controls | capabilities | risks (control standard: usually none) |
+| Requirement says… | controls | mitigations | risks (control standard: usually none) |
 | --- | --- | --- | --- |
 | Approved-tooling inventory / register | controlAgentInventoryManagement | D3-AI | riskShadowAndUnknownAgents |
 | Vendor / third-party AI assessment | controlProductGovernance | D3-ORA, D3-CI | riskInsecureIntegratedComponent |

@@ -2,7 +2,7 @@
 
 This document is the authority on what the reference architectures are made of and how each
 kind of thing is represented. `data/reference/vocabulary.yaml` is its machine half: the
-canonical component registry, icon semantics, and capability enforcement classification the
+canonical component registry, icon semantics, and mitigation enforcement classification the
 build checks against. `data/PROVENANCE.md` records where content comes from; this document
 records what content is allowed to look like. When the two disagree, this one wins.
 
@@ -10,20 +10,29 @@ records what content is allowed to look like. When the two disagree, this one wi
 
 | Entity | Where it lives | Identity |
 | --- | --- | --- |
-| Surface | capabilities.yaml | `surfaceEndpoint` / `surfaceCloud` / `surfaceSaas` |
+| Surface | mitigations.yaml | `surfaceEndpoint` / `surfaceCloud` / `surfaceSaas` |
 | Architecture | data/reference/architectures/*.yaml | `arch[A-Z]…`, ranked within a surface |
 | Component (block) | architecture `blocks:` | canonical title from vocabulary, or a recorded custom |
 | Subcomponent (item) | block `items:` | canonical label+icon from vocabulary where the concept recurs |
 | Flow (edge) | architecture `edges:` | `from->to`, one of three path classes |
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
-| Capability (control) | data/overlay/capabilities.yaml | MITRE-native IDs from pinned D3FEND/ATLAS; per-diagram chip numbers |
+| Control | data/cosai/ | CoSAI control identifiers; required protections |
+| Technology capability | data/overlay/technology-capabilities.yaml | Local `tech-*` keys for published OWASP/ENISA/ECSO categories; never mitigation IDs |
+| Mitigation | data/overlay/mitigations.yaml | MITRE-native IDs from pinned D3FEND/ATLAS; per-diagram chip numbers |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
 | Guidance document | data/reference/guidance/*.yaml | one per architecture; `mode: build | use | hybrid` |
 
-Components are the things data flows between. Some controls ARE components — a WAF, a
-gateway, a curation stage — and some controls are properties of components or flows. The
-enforcement classification below decides which, once, catalogue-wide.
+Components are the things data flows between. Technology implementations such as a WAF or
+gateway can be drawn as components. Their defensive methods are mitigations pinned to those
+components or flows, and those mitigations support CoSAI controls. The enforcement
+classification below determines where each mitigation must be implemented.
+
+Technology categories map many-to-many to MITRE mitigations and external source entries.
+`same-category` aligns terminology; `narrower` means the source category is broader; `supports`
+indicates a contribution to a function or outcome. Related controls, architectures, and incidents
+are navigational paths, not inherited coverage or posture. CoSAI remains canonical; NIST AI RMF
+is retained verbatim and NIST CSF is an additional repository-authored crosswalk.
 
 **A dimension states the axis it measures.** Naming rules only help if the concept being
 named is coherent: a set of bands that mixes "where it runs" with "what it does" produces
@@ -41,10 +50,10 @@ adds a registry entry, never a local choice. Architecture-specific meaning belon
 
 ## 2. The enforcement classification
 
-Every capability carries `enforcement` in vocabulary.yaml:
+Every mitigation carries `enforcement` in vocabulary.yaml:
 
 - **inline** — enforced by a separately operated service that data flows THROUGH. An inline
-  capability pinned on an architecture requires its embodying component (a block, or an item
+  mitigation pinned on an architecture requires its embodying component (a block, or an item
   on a standard control block) to exist in that drawing, and the chip pins onto it.
   *Absorption* is permitted (option B): a simple diagram may let a functional block absorb the
   duty — the chip pins to the absorbing block and a `deviations:` entry records the
@@ -56,7 +65,7 @@ Every capability carries `enforcement` in vocabulary.yaml:
   kill switch, policy authoring, assurance). Governance-plane call-out plus chip pinned to
   that call-out.
 
-The same capability may legitimately sit at a different locus in one architecture when the
+The same mitigation may legitimately sit at a different locus in one architecture when the
 data path differs — the canonical example is evaluation: a block in the training pipeline
 (candidates flow through the gate) and a governance item in the agent architectures (it
 gates change, not data). Such departures are recorded in `deviations:`, which is the single
@@ -99,9 +108,9 @@ customer-owned component on it is an audit finding.
   skills catalogue), not the checks it runs (destination registry, audit tap, credential
   broker) — and never the network egress of local tools, which is the sandbox's own policy.
   The build warns on the known control labels listed in `vocabulary.yaml`.
-- **Controls** are numbered capability chips: the number is per-diagram (position in the
-  architecture's derived capability list); the catalogue-stable code (C-number, the
-  capability's position in capabilities.yaml) appears in the legend and hover so a reader
+- **Mitigations** are numbered chips: the number is per-diagram (position in the
+  architecture's derived mitigation list); the catalogue-stable code (C-number, the
+  mitigation's position in mitigations.yaml) appears in the legend and hover so a reader
   can relate controls across architectures the way `R##` codes already relate risks.
 - **Risks** are coded tags pinned to the block or flow where the risk materializes;
   architecture-level lists are derived from pins, never authored.
@@ -205,7 +214,7 @@ Two consequences worth stating. A band holding one component that holds the real
 nesting for its own sake — the services are blocks, not items of a block. And the *controls*
 still pin where they are enforced, which is the crossing, not the call-out: the call-out names
 the implementing technology and cites the number. There is no "Control plane" component;
-management capabilities never become boxes in the data path, which is the rule that stops a
+management mitigations never become boxes in the data path, which is the rule that stops a
 reference architecture becoming a tool inventory.
 
 ### Containment nests, to any depth
@@ -219,7 +228,7 @@ process*. Different questions, and a drawing carries both.
 Containment is a block property: `parent: <blockId>`. It nests without limit — a sandbox
 holding a harness that itself holds a supervisor and its subagents is three levels through one
 mechanism. **Nested blocks stay ordinary blocks**, keeping their edges, pins, items and
-capability chips, which is the property that makes containment expressible without breaking the
+mitigation chips, which is the property that makes containment expressible without breaking the
 flows.
 
 Two container flavours:
@@ -305,7 +314,7 @@ walks already had one.
 
 The measurements that settled it:
 
-- **Every one of the 171 flow `controls` was already drawn as a capability chip**, because the
+- **Every one of the 171 flow `controls` was already drawn as a mitigation chip**, because the
   build required each to be pinned. The field could not carry anything new.
 - **Scenarios visited no edge that flows did not**, on all thirteen drawings. One was a strict
   subset of the other.
@@ -396,22 +405,22 @@ to any architecture can be checked against them without reading the whole docume
    wrong. *(Failed as: the coding agent reaching Enterprise data straight from the gateway
    while the personal agent went through Tool services, and as an Egress control component
    existing in one drawing and not the other.)*
-10. **Every claim is checkable.** An item or block that claims a capability must reference one
+10. **Every claim is checkable.** An item or block that claims a mitigation must reference one
    actually pinned; a flow step must follow a real edge; guidance must cite pinned
-   capabilities. If a claim cannot be checked by the build, say why in a deviation.
+   mitigations. If a claim cannot be checked by the build, say why in a deviation.
 11. **Zone completeness and naming.** If an architecture declares zones, every block declares
    one and it must exist; every band carries the fixed title for its owner. Omit the title and
    the build fills it in; give it a different one and the build fails. Columns are assigned in
    band order, or two bands draw on top of each other.
 12. **A component is a thing somebody runs, not the name of a control.** The test is
    provenance, not wording: an AI gateway is a real tier (LiteLLM-class) and is a component;
-   "Egress control" is the name of a capability in our own catalogue and belongs as a pin. If
+   "Egress control" is the name of a mitigation in our own catalogue and belongs as a pin. If
    you cannot name the product class that sits there, it is not a component. *(Failed as: four
    Egress control blocks invented across four architectures to satisfy the crossing rule this
    rule replaced.)*
 13. **Flow integrity.** Flow ids match `^F\d+$` and are unique; every path step follows a real
    edge (reverse legal on bidirectional edges); every `moves` statement is present; every
-   capability a flow claims is pinned on the drawing.
+   mitigation a flow claims is pinned on the drawing.
 
 ### Families that must stay in step
 
@@ -434,7 +443,7 @@ the same drawing twice, and a difference is a defect in one of them until proven
 1. Block titles, item labels and zone bands from vocabulary.yaml — the build warns on an
    unregistered component name and fails on a non-standard zone title. A genuinely new
    component is registered in the vocabulary in the same change, never named locally.
-2. Inline capabilities embodied or their absorption recorded; zone rules respected for the
+2. Inline mitigations embodied or their absorption recorded; zone rules respected for the
    architecture's mode.
 3. Risks pinned where they materialize; standard pin patterns applied (untrusted-content
    ingress → R23 + injection defense; downstream write → HITL and/or egress control;

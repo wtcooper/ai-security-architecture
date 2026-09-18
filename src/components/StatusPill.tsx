@@ -2,7 +2,7 @@ import { ORG_STATUSES, type OrgStatus } from "@/lib/types";
 
 /**
  * The organisation's status vocabulary, one set of words and tints everywhere it renders:
- * a capability on a surface, a tool the organisation runs, and a control inside that tool.
+ * a mitigation on a surface, a tool the organisation runs, and a control inside that tool.
  * Nothing carries a status until the viewer switches "Show status" on; then everything has
  * one, and anything the organisation has not recorded is a gap.
  */
@@ -39,7 +39,7 @@ export function AvailabilityPill({ available, title, compact = false }: { availa
   );
 }
 
-/** How a capability pill looks with status off: unanswered, neutral. */
+/** How a mitigation pill looks with status off: unanswered, neutral. */
 export const NEUTRAL_STYLE = { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675" };
 
 export { ORG_STATUSES };

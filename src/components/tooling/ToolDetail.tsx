@@ -15,7 +15,7 @@ import { ToolControlsTable } from "./ToolControlsTable";
 
 const STATUS_LABEL = { ga: "GA", beta: "Beta", preview: "Preview", announced: "Announced" } as const;
 
-export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapability?: string | null }) {
+export function ToolDetail({ tool, openMitigation }: { tool: Tool; openMitigation?: string | null }) {
   const overlay = useOrgOverlay();
   const vendor = vendorById.get(tool.vendor);
   const arch = archetypeById.get(tool.architecture);
@@ -79,7 +79,7 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
           </div>
           {arch && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-3">
-              The drawing fixes the reference control set: {arch.capabilities.length} capabilities and{" "}
+              The drawing fixes the reference mitigation set: {arch.mitigations.length} mitigations and{" "}
               {arch.risks.length} risks pinned on it.
             </p>
           )}
@@ -105,7 +105,7 @@ export function ToolDetail({ tool, openCapability }: { tool: Tool; openCapabilit
       ) : null}
 
       <div className="mt-6">
-        <ToolControlsTable tool={tool} openCapability={openCapability} />
+        <ToolControlsTable tool={tool} openMitigation={openMitigation} />
       </div>
 
       {tool.riskNotes?.length ? (

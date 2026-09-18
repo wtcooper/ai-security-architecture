@@ -28,8 +28,8 @@ export function SiteFooter() {
           </a>
         </span>
         <span>
-          {meta.counts.risks} risks · {meta.counts.controls} controls · {meta.counts.capabilities}{" "}
-          capabilities · {meta.counts.archetypes} architectures · {meta.counts.tools} tools ·{" "}
+          {meta.counts.risks} risks · {meta.counts.controls} controls · {meta.counts.mitigations}{" "}
+          mitigations · {meta.counts.capabilities} technology categories · {meta.counts.archetypes} architectures · {meta.counts.tools} tools ·{" "}
           {meta.counts.incidents} incidents
         </span>
         <span
@@ -44,7 +44,7 @@ export function SiteFooter() {
         <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"
           style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}
-          title="Capability definitions come from pinned MITRE D3FEND and ATLAS releases. CoSAI mappings, deployment scope, architecture pins and guidance are authored here and under review."
+          title="Mitigation definitions come from pinned MITRE D3FEND and ATLAS releases. CoSAI mappings, deployment scope, architecture pins and guidance are authored here and under review."
         >
           Authored layers under review
         </span>

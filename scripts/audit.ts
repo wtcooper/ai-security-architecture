@@ -7,10 +7,10 @@
  *   2. Edge fidelity     — the full CoSAI edge list, and any prose/data tensions found.
  *   3. Overlay decisions — for each risk, the highlights and where they came from, with
  *                          CoSAI's own tour prose alongside so a reviewer can check them.
- *   4. Archetype coverage — which risks, capabilities and components no reference architecture
+ *   4. Archetype coverage — which risks, mitigations and components no reference architecture
  *                          reaches, and which classes of control the catalogue requires.
  *   5. Controls-guidance coverage — which architectures carry a guidance document, which pinned
- *                          capabilities each document has not yet addressed, and which dated
+ *                          mitigations each document has not yet addressed, and which dated
  *                          tool entries are due re-verification.
  *
  *   npm run audit
@@ -24,7 +24,7 @@ import { ACTORS, CONTAINMENT_EDGES, EDGE_DEVIATIONS, EDGES, UNDRAWN_EDGES } from
 import { DISPLAY_NAME, NAME_REASON } from "../src/lib/naming";
 import type {
   Archetype,
-  Capability,
+  Mitigation,
   Component,
   Control,
   Dataset,
@@ -302,11 +302,14 @@ async function main() {
     await readFile(join(ROOT, "src/data/generated/dataset.json"), "utf8"),
   ) as {
     archetypes: Archetype[];
-    capabilities: Capability[];
+    mitigations: Mitigation[];
     surfaces: Surface[];
     guidance: Guidance[];
     tools: Tool[];
-    capabilityGaps: Dataset["capabilityGaps"];
+    mitigationGaps: Dataset["mitigationGaps"];
+    capabilities: Dataset["capabilities"];
+    frameworks: Dataset["frameworks"];
+    authoredMappings: Dataset["authoredMappings"];
   };
   const archetypes = dataset.archetypes ?? [];
 
@@ -338,14 +341,14 @@ async function main() {
   );
   p();
 
-  const namedCaps = new Set(archetypes.flatMap((a) => a.capabilities));
-  const unusedCaps = dataset.capabilities.filter((c) => !namedCaps.has(c.id));
-  p(`### 4b. Capabilities no architecture pins — ${unusedCaps.length} of ${dataset.capabilities.length}`);
+  const namedCaps = new Set(archetypes.flatMap((a) => a.mitigations));
+  const unusedCaps = dataset.mitigations.filter((c) => !namedCaps.has(c.id));
+  p(`### 4b. Mitigations no architecture pins — ${unusedCaps.length} of ${dataset.mitigations.length}`);
   p();
   p(
     unusedCaps.length
       ? unusedCaps.map((c) => `- ${c.title} (\`${c.id}\`)`).join("\n")
-      : "_None. Every capability in the taxonomy is pinned somewhere._",
+      : "_None. Every mitigation in the taxonomy is pinned somewhere._",
   );
   p();
 
@@ -398,7 +401,7 @@ async function main() {
   p(
     `${guidance.length} of ${archetypes.length} architectures carry a controls-guidance ` +
       "document (data/reference/guidance/), each validated against the drawing: every item " +
-      "must cite a capability pinned on its architecture.",
+      "must cite a mitigation pinned on its architecture.",
   );
   p();
 
@@ -417,14 +420,14 @@ async function main() {
 
   p("### 5a. Documents");
   p();
-  p("| Architecture | Mode | Status | Items | Pinned capabilities not yet addressed |");
+  p("| Architecture | Mode | Status | Items | Pinned mitigations not yet addressed |");
   p("| --- | --- | --- | --- | --- |");
-  const capTitle = new Map(dataset.capabilities.map((c) => [c.id, c.title]));
+  const capTitle = new Map(dataset.mitigations.map((c) => [c.id, c.title]));
   for (const a of archetypes) {
     const g = guidanceByArchetype.get(a.id);
     if (!g) continue;
-    const addressed = new Set(g.items.flatMap((i) => i.capabilities));
-    const missing = a.capabilities.filter((id) => !addressed.has(id));
+    const addressed = new Set(g.items.flatMap((i) => i.mitigations));
+    const missing = a.mitigations.filter((id) => !addressed.has(id));
     p(
       `| ${a.title} | ${g.mode} | ${g.status} | ${g.items.length} | ` +
         `${missing.map((id) => capTitle.get(id) ?? id).join(", ") || "_none_"} |`,
@@ -437,7 +440,7 @@ async function main() {
   p(
     "Named products (data/tooling/), one entity per product × architecture, each dated. An " +
       "entry older than six months is due a re-verification pass against the vendor's current " +
-      "documentation. *Unaddressed* lists the capabilities pinned on the tool's architecture " +
+      "documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture " +
       "that the entry does not yet describe — the research work list.",
   );
   p();
@@ -451,8 +454,8 @@ async function main() {
   p("| --- | --- | --- | --- | --- | --- | --- |");
   for (const tool of tools) {
     const stale = tool.asOf < staleBefore;
-    const pinned = archetypes.find((a) => a.id === tool.architecture)?.capabilities ?? [];
-    const addressed = new Set(tool.controls.map((c) => c.capability));
+    const pinned = archetypes.find((a) => a.id === tool.architecture)?.mitigations ?? [];
+    const addressed = new Set(tool.controls.map((c) => c.mitigation));
     const missing = pinned.filter((id) => !addressed.has(id));
     p(
       `| ${tool.name} | ${tool.vendor} | ${archTitle(tool.architecture)} | ${tool.asOf} | ` +
@@ -463,21 +466,46 @@ async function main() {
   }
   p();
 
-  p("## 6. MITRE capability provenance and CoSAI gaps");
+  p("## 6. MITRE mitigation provenance and CoSAI gaps");
   p();
   for (const framework of ["MITRE D3FEND", "MITRE ATLAS"]) {
-    const selected = dataset.capabilities.filter((c) => c.origin.framework === framework);
+    const selected = dataset.mitigations.filter((c) => c.origin.framework === framework);
     p(`- ${framework} ${selected[0]?.origin.version ?? ""}: ${selected.length} canonical entries.`);
   }
-  const mappedControls = controls.filter((c) => dataset.capabilities.some((cap) => cap.controls.includes(c.id)));
+  const mappedControls = controls.filter((c) => dataset.mitigations.some((cap) => cap.controls.includes(c.id)));
   p(`- ${mappedControls.length}/${controls.length} CoSAI controls have supporting mappings; this is not fulfillment.`);
-  p(`- ${tools.reduce((n, t) => n + t.controls.filter((c) => c.migration?.reviewRequired).length, 0)} tool-capability rows require reassessment after migration.`);
+  p(`- ${tools.reduce((n, t) => n + t.controls.filter((c) => c.migration?.reviewRequired).length, 0)} tool-mitigation rows require reassessment after migration.`);
   p();
   p("| CoSAI control | Mapping | Remaining requirement |");
   p("| --- | --- | --- |");
-  for (const gap of dataset.capabilityGaps) p(`| ${controlById.get(gap.control)?.title ?? gap.control} | ${gap.assessment} | ${gap.missing.replace(/\s+/g, " ")} |`);
+  for (const gap of dataset.mitigationGaps) p(`| ${controlById.get(gap.control)?.title ?? gap.control} | ${gap.assessment} | ${gap.missing.replace(/\s+/g, " ")} |`);
   p();
-  p("See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom capability identifiers are introduced.");
+  p("See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom mitigation identifiers are introduced.");
+  p();
+
+  p("## 7. Technology categories and supplementary mappings");
+  p();
+  p(`${dataset.capabilities.length} sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.`);
+  p();
+  p("| Framework | Technology categories mapped | CoSAI controls mapped here |");
+  p("| --- | --- | --- |");
+  for (const id of ["owasp-solutions", "enisa-ecsmaf", "ecso-market", "cisa-tic", "nist-csf"]) {
+    const mapping = dataset.authoredMappings[id];
+    p(`| ${dataset.frameworks.find((f) => f.id === id)?.name} | ${Object.keys(mapping?.capabilities ?? {}).length} | ${Object.keys(mapping?.controls ?? {}).length} |`);
+  }
+  p();
+  const namedMethods = new Set(dataset.capabilities.flatMap((c) => c.mitigationMappings.map((m) => m.mitigation)));
+  const methodsWithoutTechnology = dataset.mitigations.filter((m) => !namedMethods.has(m.id));
+  p(`### MITRE methods without a selected technology category — ${methodsWithoutTechnology.length}`);
+  p();
+  p("These methods remain available. Some describe engineering or governance practices rather than technology categories; others need a further sourced implementation mapping.");
+  p();
+  for (const m of methodsWithoutTechnology) p(`- ${m.title} (${m.id})`);
+  p();
+  const noCsf = controls.filter((c) => !dataset.authoredMappings["nist-csf"].controls?.[c.id]);
+  p(`CoSAI controls without a selected NIST CSF category mapping: ${noCsf.map((c) => c.title).join(", ")}.`);
+  p();
+  p("See [the source and relationship contract](../data/frameworks/README.md) for versions, scopes and identifier conventions.");
   p();
 
   await mkdir(join(ROOT, "docs"), { recursive: true });
@@ -486,7 +514,7 @@ async function main() {
     `docs/AUDIT.md: ${components.length} components, ${EDGES.length} edges, ` +
       `${authored.length} authored + ${seeded.length} seeded overlays, ` +
       `${archetypes.length} flow-style architectures (${unreachedRisks.length} risks and ` +
-      `${unusedCaps.length} capabilities not yet pinned), ` +
+      `${unusedCaps.length} mitigations not yet pinned), ` +
       `${guidance.length} guidance docs, ${tools.length} tools`,
   );
 }

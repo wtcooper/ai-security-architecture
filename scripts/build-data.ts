@@ -12,12 +12,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
-import { loadCapabilities } from "./lib/capabilities";
+import { loadMitigations } from "./lib/mitigations";
+import { loadTechnologyCatalogue } from "./lib/technology-capabilities";
 
 import type {
   Archetype,
   AuthoredMappings,
-  Capability,
+  Mitigation,
   Component,
   ComponentCategory,
   Control,
@@ -27,7 +28,7 @@ import type {
   FrameworkNote,
   Guidance,
   Incident,
-  OrgCapabilityPosture,
+  OrgMitigationPosture,
   OrgMeta,
   OrgToolPosture,
   Persona,
@@ -176,7 +177,7 @@ async function loadOrg(): Promise<{
   meta: OrgMeta;
   frameworks: OrgFrameworkDoc[];
   posture: OrgToolPosture[];
-  capabilityPosture: OrgCapabilityPosture;
+  mitigationPosture: OrgMitigationPosture;
 }> {
   const base = join(ROOT, "data", "org");
   const profile: OrgMeta["profile"] = existsSync(join(base, "local")) ? "local" : "example";
@@ -195,7 +196,8 @@ async function loadOrg(): Promise<{
     frameworks?: OrgFrameworkDoc[];
   }>("frameworks.yaml");
   const status = await read<{ tools?: OrgToolPosture[] }>("tooling-status.yaml");
-  const caps = await read<{ capabilities?: OrgCapabilityPosture }>("capabilities.yaml");
+  if (existsSync(join(dir, "capabilities.yaml"))) throw new Error(`org/${profile}: run npm run migrate:mitigations -- --write to rename the MITRE capability schema before building`);
+  const caps = await read<{ mitigations?: OrgMitigationPosture }>("mitigations.yaml");
   const name = fw?.organisation?.name?.trim() || (profile === "example" ? "Example organisation" : "Your organisation");
   return {
     meta: {
@@ -206,7 +208,7 @@ async function loadOrg(): Promise<{
     },
     frameworks: fw?.frameworks ?? [],
     posture: status?.tools ?? [],
-    capabilityPosture: caps?.capabilities ?? {},
+    mitigationPosture: caps?.mitigations ?? {},
   };
 }
 
@@ -225,16 +227,16 @@ interface OrgFrameworkDoc {
     group?: string;
     url?: string;
     controls?: string[];
-    capabilities?: string[];
+    mitigations?: string[];
     risks?: string[];
   }[];
 }
 
 /**
  * An architecture as authored: the build computes the geometry and derives the risk and
- * capability lists from the pins.
+ * mitigation lists from the pins.
  */
-type AuthoredArchetype = Omit<Archetype, "layout" | "risks" | "capabilities">;
+type AuthoredArchetype = Omit<Archetype, "layout" | "risks" | "mitigations">;
 
 async function main() {
   const [
@@ -273,8 +275,8 @@ async function main() {
     notes: Record<string, FrameworkNote>;
   }>(join(ROOT, "data", "overlay", "frameworks-authored.yaml"));
 
-  const capabilitiesDoc = await loadCapabilities(ROOT);
-  const capabilityGaps = (await loadYaml<{ gaps: Dataset["capabilityGaps"] }>(join(ROOT, "data/overlay/capability-gaps.yaml"))).gaps;
+  const mitigationsDoc = await loadMitigations(ROOT);
+  const mitigationGaps = (await loadYaml<{ gaps: Dataset["mitigationGaps"] }>(join(ROOT, "data/overlay/mitigation-gaps.yaml"))).gaps;
 
   const components = componentsDoc.components;
   const risks = risksDoc.risks;
@@ -319,25 +321,28 @@ async function main() {
   checkMapFidelity(components);
 
   // --- Authored frameworks and notes -------------------------------------------------
+  const mitigationIds = new Set(mitigationsDoc.mitigations.map((c) => c.id));
+  const technology = await loadTechnologyCatalogue(ROOT, mitigationIds, controlIds);
+  authoredDoc.frameworks.push(...technology.frameworks);
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
   const allFrameworks = markSuperseded([
     ...frameworksDoc.frameworks,
     ...authoredDoc.frameworks.map(stripMappings),
   ]);
-  const capabilityIds = new Set(capabilitiesDoc.capabilities.map((c) => c.id));
-  for (const gap of capabilityGaps) {
-    if (!controlIds.has(gap.control) || !gap.missing?.trim() || !["unmapped", "partial"].includes(gap.assessment)) fail(`Invalid capability gap: ${gap.control}`);
-    for (const id of gap.related) if (!capabilityIds.has(id)) fail(`Capability gap ${gap.control}: unknown ${id}`);
-    if (gap.assessment === "unmapped" && capabilitiesDoc.capabilities.some((c) => c.controls.includes(gap.control))) fail(`Capability gap ${gap.control}: marked unmapped but has a mapping`);
+  for (const gap of mitigationGaps) {
+    if (!controlIds.has(gap.control) || !gap.missing?.trim() || !["unmapped", "partial"].includes(gap.assessment)) fail(`Invalid mitigation gap: ${gap.control}`);
+    for (const id of gap.related) if (!mitigationIds.has(id)) fail(`Mitigation gap ${gap.control}: unknown ${id}`);
+    if (gap.assessment === "unmapped" && mitigationsDoc.mitigations.some((c) => c.controls.includes(gap.control))) fail(`Mitigation gap ${gap.control}: marked unmapped but has a mapping`);
   }
   for (const control of controls) {
-    if (!capabilitiesDoc.capabilities.some((c) => c.controls.includes(control.id)) && !capabilityGaps.some((g) => g.control === control.id && g.assessment === "unmapped")) fail(`Control ${control.id}: unmapped capability requirement needs an explicit gap record`);
+    if (!mitigationsDoc.mitigations.some((c) => c.controls.includes(control.id)) && !mitigationGaps.some((g) => g.control === control.id && g.assessment === "unmapped")) fail(`Control ${control.id}: unmapped mitigation requirement needs an explicit gap record`);
   }
   const authoredMappings = checkAuthoredFrameworks(authoredDoc, {
     riskIds,
     controlIds,
-    capabilityIds,
+    mitigationIds,
+    capabilityIds: new Set(technology.capabilities.map((c) => c.id)),
     frameworksDoc,
   });
 
@@ -348,12 +353,12 @@ async function main() {
   const orgFrameworks = checkOrgFrameworks(org, {
     riskIds,
     controlIds,
-    capabilityIds,
+    mitigationIds,
     takenIds: new Set(allFrameworks.map((f) => f.id)),
   });
   allFrameworks.push(...orgFrameworks.frameworks);
   Object.assign(authoredMappings, orgFrameworks.mappings);
-  const declaredEntries = { ...entriesDoc.frameworks, ...orgFrameworks.entries };
+  const declaredEntries = { ...entriesDoc.frameworks, ...technology.entries, ...orgFrameworks.entries };
 
   // --- Framework entry reference text ----------------------------------------------
   const frameworkEntries = checkFrameworkEntries(declaredEntries, {
@@ -364,8 +369,8 @@ async function main() {
     authoredMappings,
   });
 
-  // --- Capabilities ------------------------------------------------------------
-  checkCapabilities(capabilitiesDoc, {
+  // --- Mitigations ------------------------------------------------------------
+  checkMitigations(mitigationsDoc, {
     controlCategories: controlsDoc.categories,
     controls,
     riskIds,
@@ -374,8 +379,8 @@ async function main() {
 
   // --- Reference architectures ---------------------------------------------------
   const archetypes = checkArchetypes(authoredArchetypes, {
-    surfaces: capabilitiesDoc.surfaces,
-    capabilities: capabilitiesDoc.capabilities,
+    surfaces: mitigationsDoc.surfaces,
+    mitigations: mitigationsDoc.mitigations,
     riskIds,
     mapTargets,
   });
@@ -394,9 +399,9 @@ async function main() {
 
   // --- Organisation tool posture -------------------------------------------------
   const orgToolPosture = checkToolingStatus(org.posture, { tools, archetypes });
-  const orgCapabilityPosture = checkOrgCapabilities(org.capabilityPosture, {
-    capabilityIds,
-    surfaceIds: new Set(capabilitiesDoc.surfaces.map((s) => s.id)),
+  const orgMitigationPosture = checkOrgMitigations(org.mitigationPosture, {
+    mitigationIds,
+    surfaceIds: new Set(mitigationsDoc.surfaces.map((s) => s.id)),
   });
 
   // --- Overlay -----------------------------------------------------------------
@@ -479,7 +484,8 @@ async function main() {
         controls: controls.length,
         personas: personasDoc.personas.length,
         incidents: incidents.length,
-        capabilities: capabilitiesDoc.capabilities.length,
+        mitigations: mitigationsDoc.mitigations.length,
+        capabilities: technology.capabilities.length,
         archetypes: archetypes.length,
         guidance: guidance.length,
         tools: tools.length,
@@ -505,18 +511,20 @@ async function main() {
     actorAccessLevels: actorDoc.actorAccessLevels,
     overlays,
     incidents,
-    surfaces: capabilitiesDoc.surfaces,
-    capabilities: capabilitiesDoc.capabilities,
-    capabilitiesAttribution: capabilitiesDoc.attribution ?? "",
-    capabilityAliases: capabilitiesDoc.aliases,
-    capabilityGaps,
+    surfaces: mitigationsDoc.surfaces,
+    capabilities: technology.capabilities,
+    capabilitiesAttribution: technology.attribution,
+    mitigations: mitigationsDoc.mitigations,
+    mitigationsAttribution: mitigationsDoc.attribution ?? "",
+    mitigationAliases: mitigationsDoc.aliases,
+    mitigationGaps,
     archetypes,
     guidance,
     vendors: toolingLoaded.vendors,
     tools,
     toolingAttribution: toolingLoaded.attribution,
     orgToolPosture,
-    orgCapabilityPosture,
+    orgMitigationPosture,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -526,7 +534,7 @@ async function main() {
   console.log(
     `dataset.json: ${risks.length} risks (${overlays.length - authored} SAIF-seeded, ` +
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
-      `${incidents.length} incidents, ${capabilitiesDoc.capabilities.length} capabilities, ` +
+      `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} mitigations, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
       `${tools.length} tools, org profile "${org.meta.profile}" ` +
       `(${orgFrameworks.frameworks.length} catalogues, ${orgToolPosture.length} tool postures)`,
@@ -534,13 +542,13 @@ async function main() {
 }
 
 /**
- * The technology-capability overlay: vendor-neutral tooling classes mapped onto CoSAI
+ * The MITRE mitigation overlay: defensive techniques and mitigations mapped onto CoSAI
  * controls, risks and components, with per-surface applicability. Same contract as the
  * other overlays — a dangling id fails the build, and the shipped dataset carries no
  * posture statuses (those belong to forks).
  */
-function checkCapabilities(
-  doc: { attribution?: string; surfaces: Surface[]; capabilities: Capability[] },
+function checkMitigations(
+  doc: { attribution?: string; surfaces: Surface[]; mitigations: Mitigation[] },
   ctx: {
     controlCategories: { id: string; title: string }[];
     controls: Control[];
@@ -548,18 +556,18 @@ function checkCapabilities(
     componentIds: Set<string>;
   },
 ) {
-  if (!doc.attribution?.trim()) fail("capabilities: attribution is required");
+  if (!doc.attribution?.trim()) fail("mitigations: attribution is required");
 
   const surfaceIds = doc.surfaces?.map((s) => s.id) ?? [];
-  if (surfaceIds.length < 3) fail("capabilities: expected at least three surfaces");
-  if (new Set(surfaceIds).size !== surfaceIds.length) fail("capabilities: duplicate surface ids");
+  if (surfaceIds.length < 3) fail("mitigations: expected at least three surfaces");
+  if (new Set(surfaceIds).size !== surfaceIds.length) fail("mitigations: duplicate surface ids");
 
   const categoryIds = new Set(ctx.controlCategories.map((c) => c.id));
   const controlById = new Map(ctx.controls.map((c) => [c.id, c]));
   const seen = new Set<string>();
 
-  for (const cap of doc.capabilities ?? []) {
-    const where = `capability ${cap.id}`;
+  for (const cap of doc.mitigations ?? []) {
+    const where = `mitigation ${cap.id}`;
     if (!/^(D3-[A-Z]+|AML\.M\d{4})$/.test(cap.id)) fail(`${where}: needs a MITRE source-native identifier`);
     if (seen.has(cap.id)) fail(`${where}: duplicate id`);
     seen.add(cap.id);
@@ -582,7 +590,7 @@ function checkCapabilities(
     for (const id of cap.controls ?? []) {
       if (!controlById.has(id)) fail(`${where}: unknown control ${id}`);
     }
-    // The primary category places the capability in exactly one matrix row; requiring a
+    // The primary category places the mitigation in exactly one matrix row; requiring a
     // mapped control of that category keeps the placement honest rather than cosmetic.
     if (
       categoryIds.has(cap.category) &&
@@ -624,11 +632,11 @@ function checkCapabilities(
  * The flow-style reference architectures. Same contract as everything else here: a dangling id
  * fails the build. The rules specific to this dataset encode its editorial discipline:
  *
- *   - Every risk and capability on the page is pinned to a specific block or flow. The
+ *   - Every risk and mitigation on the page is pinned to a specific block or flow. The
  *     architecture-level lists are derived from the pins, so the side rail can never claim
  *     something the drawing does not show.
- *   - A pinned capability must apply on the architecture's surface per capabilities.yaml, which
- *     is what stops this tab and the Capabilities tab drifting into contradiction.
+ *   - A pinned mitigation must apply on the architecture's surface per mitigations.yaml, which
+ *     is what stops this tab and the Mitigations tab drifting into contradiction.
  *   - Scenario steps walk real edges. A step may follow a bidirectional edge in reverse; a
  *     one-way edge walked backwards is a wrong diagram, not a wrong scenario.
  */
@@ -640,13 +648,13 @@ function checkArchetypes(
   authored: AuthoredArchetype[],
   ctx: {
     surfaces: Surface[];
-    capabilities: Capability[];
+    mitigations: Mitigation[];
     riskIds: Set<string>;
     mapTargets: Set<string>;
   },
 ): Archetype[] {
   const surfaceIds = new Set(ctx.surfaces.map((s) => s.id));
-  const capabilityById = new Map(ctx.capabilities.map((c) => [c.id, c]));
+  const mitigationById = new Map(ctx.mitigations.map((c) => [c.id, c]));
   const seen = new Set<string>();
   const bySurface = new Map<string, number>();
   const rankSeen = new Set<string>();
@@ -791,22 +799,22 @@ function checkArchetypes(
       resolvePin(at, pin.at);
       if (!risks.includes(pin.risk)) risks.push(pin.risk);
     }
-    const capabilities: string[] = [];
-    for (const pin of arch.pins?.capabilities ?? []) {
-      const at = `${where} capability pin ${pin.capability} @ ${pin.at}`;
-      const capability = capabilityById.get(pin.capability);
-      if (!capability) fail(`${at}: unknown capability`);
-      else if (capability.surfaces?.[arch.surface]?.applies === false) {
+    const mitigations: string[] = [];
+    for (const pin of arch.pins?.mitigations ?? []) {
+      const at = `${where} mitigation pin ${pin.mitigation} @ ${pin.at}`;
+      const mitigation = mitigationById.get(pin.mitigation);
+      if (!mitigation) fail(`${at}: unknown mitigation`);
+      else if (mitigation.surfaces?.[arch.surface]?.applies === false) {
         fail(
-          `${at}: capability does not apply on ${arch.surface} per capabilities.yaml — ` +
+          `${at}: mitigation does not apply on ${arch.surface} per mitigations.yaml — ` +
             "fix one of the two, they cannot both be right",
         );
       }
       resolvePin(at, pin.at);
-      if (!capabilities.includes(pin.capability)) capabilities.push(pin.capability);
+      if (!mitigations.includes(pin.mitigation)) mitigations.push(pin.mitigation);
     }
     if (!risks.length) fail(`${where}: needs at least one pinned risk`);
-    if (!capabilities.length) fail(`${where}: needs at least one pinned capability`);
+    if (!mitigations.length) fail(`${where}: needs at least one pinned mitigation`);
 
     // --- Walks: one walkthrough, plus the adversarial scenarios ---------------
     // Same shape, validated the same way. The walkthrough is what the canvas numbers at rest;
@@ -860,20 +868,20 @@ function checkArchetypes(
       });
     }
 
-    // Items may claim the capabilities they implement; the claim must match a real pin.
+    // Items may claim the mitigations they implement; the claim must match a real pin.
     for (const b of arch.blocks) {
-      for (const id of b.capabilities ?? []) {
-        if (!capabilityById.has(id)) fail(`${where}: block ${b.id} claims unknown capability ${id}`);
-        else if (!capabilities.includes(id))
-          fail(`${where}: block ${b.id} claims capability ${id}, which is not pinned on this architecture`);
+      for (const id of b.mitigations ?? []) {
+        if (!mitigationById.has(id)) fail(`${where}: block ${b.id} claims unknown mitigation ${id}`);
+        else if (!mitigations.includes(id))
+          fail(`${where}: block ${b.id} claims mitigation ${id}, which is not pinned on this architecture`);
       }
       for (const it of b.items ?? []) {
-        for (const id of it.capabilities ?? []) {
-          if (!capabilityById.has(id))
-            fail(`${where}: item ${b.id}.${it.id} claims unknown capability ${id}`);
-          else if (!capabilities.includes(id))
+        for (const id of it.mitigations ?? []) {
+          if (!mitigationById.has(id))
+            fail(`${where}: item ${b.id}.${it.id} claims unknown mitigation ${id}`);
+          else if (!mitigations.includes(id))
             fail(
-              `${where}: item ${b.id}.${it.id} claims capability ${id}, which is not pinned on this architecture`,
+              `${where}: item ${b.id}.${it.id} claims mitigation ${id}, which is not pinned on this architecture`,
             );
         }
       }
@@ -944,12 +952,12 @@ function checkArchetypes(
       // architectures. A rule that makes a drawing dishonest to satisfy itself is a broken rule.
       //
       // What survives is the observation, reported and never blocking: an edge leaving a band
-      // we operate without passing through a component that carries an inline capability pin.
+      // we operate without passing through a component that carries an inline mitigation pin.
       const ownerOf = new Map(arch.blocks.map((b) => [b.id, zoneOwner.get(b.zone ?? "")]));
       const OURS = new Set(["endpoint", "cloud"]);
       const inlinePinned = new Set(
-        (arch.pins?.capabilities ?? [])
-          .filter((p) => INLINE_CAPABILITIES.has(p.capability))
+        (arch.pins?.mitigations ?? [])
+          .filter((p) => INLINE_MITIGATIONS.has(p.mitigation))
           .flatMap((p) => p.at.split("->")),
       );
       for (const e of arch.edges) {
@@ -989,7 +997,7 @@ function checkArchetypes(
         );
     }
 
-    const resolved = { ...arch, risks, capabilities };
+    const resolved = { ...arch, risks, mitigations };
     const layout = layoutArchetype(resolved);
     checkDiagramCollisions(where, resolved, layout);
     return { ...resolved, layout } satisfies Archetype;
@@ -1007,7 +1015,7 @@ function checkArchetypes(
       ])
       .filter(Boolean),
   );
-  const pinCount = out.reduce((s, a) => s + a.pins.risks.length + a.pins.capabilities.length, 0);
+  const pinCount = out.reduce((s, a) => s + a.pins.risks.length + a.pins.mitigations.length, 0);
   console.log(
     `architectures: ${out.length} flow-style architectures, ${pinCount} pins, ` +
       `${anchored.size} risk-map components anchored` +
@@ -1021,7 +1029,7 @@ function checkArchetypes(
  * Vocabulary conformance (data/ONTOLOGY.md via data/reference/vocabulary.yaml), reported as
  * warnings rather than failures while the catalogue is remediated: canonical item labels
  * must carry the canonical icon, canonical block titles the canonical kind, and inline
- * capabilities need an embodying component or a deviation recording the absorption.
+ * mitigations need an embodying component or a deviation recording the absorption.
  */
 /**
  * Canonical band titles, the components that may terminate a band crossing, the control
@@ -1035,7 +1043,7 @@ const {
   ZONE_TITLES,
   CONTROL_ITEM_LABELS,
   CONTROL_BLOCK_TITLES,
-  INLINE_CAPABILITIES,
+  INLINE_MITIGATIONS,
   ITEM_PACKS,
   DEPRECATED_TITLES,
   KNOWN_LABELS,
@@ -1055,7 +1063,7 @@ const {
         }[];
         controlItemLabels?: string[];
         controlBlockTitles?: string[];
-        capabilityEnforcement?: { inline?: Record<string, string[]> };
+        mitigationEnforcement?: { inline?: Record<string, string[]> };
         itemPacks?: Record<string, { items?: { label: string; icon: string }[] }>;
       };
       const packs = new Map(
@@ -1072,7 +1080,7 @@ const {
         ) as Record<string, string>,
         CONTROL_ITEM_LABELS: new Set(v.controlItemLabels ?? []),
         CONTROL_BLOCK_TITLES: new Set(v.controlBlockTitles ?? []),
-        INLINE_CAPABILITIES: new Set(Object.keys(v.capabilityEnforcement?.inline ?? {})),
+        INLINE_MITIGATIONS: new Set(Object.keys(v.mitigationEnforcement?.inline ?? {})),
         ITEM_PACKS: packs,
         DEPRECATED_TITLES: new Map(
           (v.components ?? [])
@@ -1086,7 +1094,7 @@ const {
         ZONE_TITLES: {} as Record<string, string>,
         CONTROL_ITEM_LABELS: new Set<string>(),
         CONTROL_BLOCK_TITLES: new Set<string>(),
-        INLINE_CAPABILITIES: new Set<string>(),
+        INLINE_MITIGATIONS: new Set<string>(),
         ITEM_PACKS: new Map<string, { label: string; icon: string }[]>(),
         DEPRECATED_TITLES: new Map<string, string>(),
         KNOWN_LABELS: new Set<string>(),
@@ -1207,7 +1215,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
     }[];
     itemPacks?: Record<string, { items?: { label: string; icon: string }[] }>;
     patterns?: Record<string, PatternSpec>;
-    capabilityEnforcement?: { inline?: Record<string, string[]> };
+    mitigationEnforcement?: { inline?: Record<string, string[]> };
   };
   try {
     vocab = parseYaml(
@@ -1255,7 +1263,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
         );
       // A block title naming a control rather than a thing. The distinction that matters is
       // provenance, not wording: "AI gateway" is a tier somebody runs (LiteLLM), so it stays;
-      // "Egress control" is the name of a capability in our own catalogue and was only ever
+      // "Egress control" is the name of a mitigation in our own catalogue and was only ever
       // drawn because a rule demanded a component. If you cannot name the product class, it is
       // a pin. Report-only while the catalogue is rebuilt; an error in Wave F.
       if (CONTROL_BLOCK_TITLES.has(block.title))
@@ -1292,7 +1300,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
       }
     }
     warnings.push(...checkPatterns(arch, vocab.patterns ?? {}));
-    const inline = vocab.capabilityEnforcement?.inline ?? {};
+    const inline = vocab.mitigationEnforcement?.inline ?? {};
     const names = new Set<string>();
     for (const b of arch.blocks) {
       names.add(b.title);
@@ -1303,15 +1311,15 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
     // provider-kind block are customer configuration of a vendor surface — the inline
     // embodiment rule applies only to customer-owned components.
     const providerBlocks = new Set(arch.blocks.filter((b) => b.kind === "provider").map((b) => b.id));
-    for (const pin of arch.pins.capabilities) {
-      const embodiments = inline[pin.capability];
+    for (const pin of arch.pins.mitigations) {
+      const embodiments = inline[pin.mitigation];
       if (!embodiments) continue;
       if (pin.at.split("->").some((ref) => providerBlocks.has(ref))) continue;
       const embodied = embodiments.some((e) => names.has(e));
       const absorbed = deviationText.length > 0 && /absor|drawn as|folded|control on the/i.test(deviationText);
       if (!embodied && !absorbed)
         warnings.push(
-          `${arch.id}: inline capability ${pin.capability} pinned at ${pin.at} with no embodying component (${embodiments.join(", ")}) and no recorded absorption`,
+          `${arch.id}: inline mitigation ${pin.mitigation} pinned at ${pin.at} with no embodying component (${embodiments.join(", ")}) and no recorded absorption`,
         );
     }
   }
@@ -1364,7 +1372,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
  * admins, architects and security teams. Same contract as everything else here — a dangling
  * id fails the build — plus the rule that encodes this layer's editorial discipline:
  *
- *   - Every guidance item cites at least one capability, and each must be pinned on its
+ *   - Every guidance item cites at least one mitigation, and each must be pinned on its
  *     architecture. Guidance cannot recommend deploying something the drawing does not show;
  *     when it needs to, the fix is a pin, exactly as controlsForArchetype() treats controls.
  *
@@ -1419,9 +1427,9 @@ function checkGuidance(
       const at = `${where} item "${item.title}"`;
       if (!item.title?.trim()) fail(`${where}: an item needs a title`);
       if (!item.body?.length) fail(`${at}: needs a body`);
-      if (!item.capabilities?.length) fail(`${at}: needs at least one capability`);
-      for (const id of item.capabilities ?? []) {
-        if (!archetype.capabilities.includes(id)) {
+      if (!item.mitigations?.length) fail(`${at}: needs at least one mitigation`);
+      for (const id of item.mitigations ?? []) {
+        if (!archetype.mitigations.includes(id)) {
           fail(`${at}: ${id} is not pinned on ${archetype.id} — add a pin or drop the claim`);
         }
       }
@@ -1440,7 +1448,7 @@ function checkGuidance(
 /**
  * The AI tooling registry. A tool is a named product mapped onto one reference architecture,
  * and the architecture fixes its reference control set: a tool may only describe how it
- * implements capabilities pinned on that drawing. Every entry is dated and sourced from the
+ * implements mitigations pinned on that drawing. Every entry is dated and sourced from the
  * vendor's own documentation, and every operator step links to the page that documents it.
  */
 const TOOL_STATUSES = new Set(["ga", "beta", "preview", "announced"]);
@@ -1494,15 +1502,15 @@ function checkTooling(
 
     // The reference control set is the architecture's own pins. A tool cannot claim to
     // implement — or lack — a control the drawing does not show; the fix is a pin.
-    const pinned = new Set(arch?.capabilities ?? []);
+    const pinned = new Set(arch?.mitigations ?? []);
     const covered = new Set<string>();
     for (const c of tool.controls ?? []) {
-      const at = `${where} control ${c.capability}`;
-      if (!pinned.has(c.capability) && arch) {
+      const at = `${where} control ${c.mitigation}`;
+      if (!pinned.has(c.mitigation) && arch) {
         fail(`${at}: not pinned on ${arch.id} — add a pin or drop the claim`);
       }
-      if (covered.has(c.capability)) fail(`${at}: listed twice`);
-      covered.add(c.capability);
+      if (covered.has(c.mitigation)) fail(`${at}: listed twice`);
+      covered.add(c.mitigation);
       if (!COVERAGES.has(c.coverage)) {
         fail(`${at}: coverage must be one of ${[...COVERAGES].join(", ")}`);
       }
@@ -1546,8 +1554,8 @@ function checkTooling(
 
 /**
  * The organisation's tool posture: which tools people may install (available, a boolean) and,
- * per pinned capability, whether the control is switched on. One status enum serves tools, their controls and the enterprise
- * layer so the same pills render everywhere; a capability not pinned on the tool's
+ * per pinned mitigation, whether the control is switched on. One status enum serves tools, their controls and the enterprise
+ * layer so the same pills render everywhere; a mitigation not pinned on the tool's
  * architecture cannot carry a status, because the reference set is the drawing.
  */
 const STATUSES = new Set<string>(ORG_STATUSES);
@@ -1571,14 +1579,14 @@ function checkToolingStatus(
     if (p.available !== undefined && typeof p.available !== "boolean") {
       fail(`${where}: available must be true or false — a product is provided or it is blocked`);
     }
-    const pinned = new Set(archetypeById.get(tool.architecture)?.capabilities ?? []);
-    for (const [capabilityId, entry] of Object.entries(p.controls ?? {})) {
-      if (entry.migration?.reviewRequired && entry.status === "enabled") fail(`${where} ${capabilityId}: clear migration review after reassessment before marking enabled`);
-      if (!pinned.has(capabilityId)) {
-        fail(`${where}: ${capabilityId} is not pinned on ${tool.architecture}, so it has no status here`);
+    const pinned = new Set(archetypeById.get(tool.architecture)?.mitigations ?? []);
+    for (const [mitigationId, entry] of Object.entries(p.controls ?? {})) {
+      if (entry.migration?.reviewRequired && entry.status === "enabled") fail(`${where} ${mitigationId}: clear migration review after reassessment before marking enabled`);
+      if (!pinned.has(mitigationId)) {
+        fail(`${where}: ${mitigationId} is not pinned on ${tool.architecture}, so it has no status here`);
       }
       if (!STATUSES.has(entry?.status)) {
-        fail(`${where} ${capabilityId}: status must be one of ${[...STATUSES].join(", ")}`);
+        fail(`${where} ${mitigationId}: status must be one of ${[...STATUSES].join(", ")}`);
       }
     }
   }
@@ -1586,17 +1594,17 @@ function checkToolingStatus(
 }
 
 /**
- * The organisation's enterprise layer: per capability, per surface, the technology it deploys
- * and whether it is in place. This is the only source of the Capabilities tab's status.
+ * The organisation's enterprise layer: per mitigation, per surface, the technology it deploys
+ * and whether it is in place. This is the only source of the Mitigations tab's status.
  */
-function checkOrgCapabilities(
-  posture: OrgCapabilityPosture,
-  ctx: { capabilityIds: Set<string>; surfaceIds: Set<string> },
-): OrgCapabilityPosture {
-  for (const [capabilityId, bySurface] of Object.entries(posture)) {
-    const where = `org capabilities ${capabilityId}`;
-    if (!ctx.capabilityIds.has(capabilityId)) {
-      fail(`${where}: unknown capability — ids live in data/overlay/capabilities.yaml`);
+function checkOrgMitigations(
+  posture: OrgMitigationPosture,
+  ctx: { mitigationIds: Set<string>; surfaceIds: Set<string> },
+): OrgMitigationPosture {
+  for (const [mitigationId, bySurface] of Object.entries(posture)) {
+    const where = `org mitigations ${mitigationId}`;
+    if (!ctx.mitigationIds.has(mitigationId)) {
+      fail(`${where}: unknown mitigation — ids live in data/overlay/mitigations.yaml`);
       continue;
     }
     for (const [surfaceId, entry] of Object.entries(bySurface ?? {})) {
@@ -1623,7 +1631,7 @@ function checkOrgFrameworks(
   ctx: {
     riskIds: Set<string>;
     controlIds: Set<string>;
-    capabilityIds: Set<string>;
+    mitigationIds: Set<string>;
     takenIds: Set<string>;
   },
 ): {
@@ -1634,7 +1642,7 @@ function checkOrgFrameworks(
   const frameworks: Framework[] = [];
   const mappings: Record<string, AuthoredMappings> = {};
   const entries: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }> = {};
-  const known = { risks: ctx.riskIds, controls: ctx.controlIds, capabilities: ctx.capabilityIds };
+  const known = { risks: ctx.riskIds, controls: ctx.controlIds, mitigations: ctx.mitigationIds };
   const seen = new Set<string>();
 
   for (const doc of org.frameworks) {
@@ -1660,7 +1668,7 @@ function checkOrgFrameworks(
         ...(entry.url ? { url: entry.url } : {}),
         ...(entry.group ? { group: entry.group } : {}),
       };
-      for (const kind of ["risks", "controls", "capabilities"] as const) {
+      for (const kind of ["risks", "controls", "mitigations"] as const) {
         for (const target of entry[kind] ?? []) {
           if (!known[kind].has(target)) {
             fail(`${at}: unknown ${kind.slice(0, -1)} ${target}`);
@@ -1773,13 +1781,13 @@ function checkDiagramCollisions(
   };
 
   const chipGroups = new Map<string, number>();
-  for (const pin of arch.pins.capabilities) {
+  for (const pin of arch.pins.mitigations) {
     chipGroups.set(pin.at, (chipGroups.get(pin.at) ?? 0) + 1);
   }
   for (const [at, n] of chipGroups) {
     const spots = chipSpots(n, layout.blocks[at], edgeGeoOf(at));
     checkSpots(
-      "capability chip",
+      "mitigation chip",
       at,
       spots.map((s) => ({ x: s.x - 9, y: s.y - 9, w: 18, h: 18 })),
       layout.blocks[at] ? at : undefined,
@@ -1806,7 +1814,7 @@ function checkDiagramCollisions(
   if (spanOfZone.size) {
     const zoneOfBlock = new Map(arch.blocks.map((b) => [b.id, b.zone ?? ""]));
     const pinnedEdges = new Set(
-      [...arch.pins.capabilities, ...arch.pins.risks].map((p) => p.at).filter((at) => at.includes("->")),
+      [...arch.pins.mitigations, ...arch.pins.risks].map((p) => p.at).filter((at) => at.includes("->")),
     );
     for (const e of layout.edges) {
       const ref = `${e.from}->${e.to}`;
@@ -2121,6 +2129,7 @@ const FULL_LIST = new Set(FULL_LIST_FRAMEWORKS);
 function markSuperseded(frameworks: Framework[]): Framework[] {
   const replaced = new Set(frameworks.map((f) => f.supersedes).filter(Boolean) as string[]);
   const ids = new Set(frameworks.map((f) => f.id));
+  if (ids.size !== frameworks.length) fail("framework ids must be unique");
   for (const id of replaced) {
     if (!ids.has(id)) fail(`framework supersedes unknown framework "${id}"`);
   }
@@ -2148,6 +2157,7 @@ function checkAuthoredFrameworks(
   ctx: {
     riskIds: Set<string>;
     controlIds: Set<string>;
+    mitigationIds: Set<string>;
     capabilityIds: Set<string>;
     frameworksDoc: { frameworks: Framework[] };
   },
@@ -2171,10 +2181,11 @@ function checkAuthoredFrameworks(
     const known: Record<keyof AuthoredMappings, Set<string>> = {
       risks: ctx.riskIds,
       controls: ctx.controlIds,
+      mitigations: ctx.mitigationIds,
       capabilities: ctx.capabilityIds,
     };
     const mapped: AuthoredMappings = {};
-    for (const kind of ["risks", "controls", "capabilities"] as (keyof AuthoredMappings)[]) {
+    for (const kind of ["risks", "controls", "mitigations", "capabilities"] as (keyof AuthoredMappings)[]) {
       const byId = framework.mappings?.[kind];
       if (!byId) continue;
       for (const [id, entries] of Object.entries(byId)) {
@@ -2183,7 +2194,7 @@ function checkAuthoredFrameworks(
       }
       mapped[kind] = byId;
     }
-    if (!mapped.risks && !mapped.controls && !mapped.capabilities) {
+    if (!mapped.risks && !mapped.controls && !mapped.mitigations && !mapped.capabilities) {
       fail(`${where}: declares no mappings at all`);
     }
     out[framework.id] = mapped;

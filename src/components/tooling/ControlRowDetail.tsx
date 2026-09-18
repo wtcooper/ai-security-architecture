@@ -1,11 +1,12 @@
 "use client";
+import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 
-/** One tool × one capability, in full: mechanism, operator steps, the organisation's note. */
+/** One tool × one mitigation, in full: mechanism, operator steps, the organisation's note. */
 import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { archetypeById, capabilityById, controlsForCapability, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, surfaceById } from "@/lib/data";
+import { archetypeById, mitigationById, controlsForMitigation, org, orgStatusFor, orgSurfacePostureFor, orgSurfaceStatusFor, orgToolAvailableFor, surfaceById } from "@/lib/data";
 import { frameworkHref, orgEntriesFor } from "@/lib/frameworks";
 import type { Tool } from "@/lib/types";
 import { StatusPill } from "@/components/StatusPill";
@@ -13,32 +14,32 @@ import { useOrgOverlay } from "./overlay";
 import { enforcementFor, OWNER_META } from "./model";
 import { CoverageBadge } from "./shared";
 
-export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { tool: Tool; capabilityId: string; showTitle?: boolean }) {
+export function ControlRowDetail({ tool, mitigationId, showTitle = false }: { tool: Tool; mitigationId: string; showTitle?: boolean }) {
   const overlay = useOrgOverlay();
-  const capability = capabilityById.get(capabilityId);
-  const control = tool.controls.find((c) => c.capability === capabilityId);
-  const status = orgStatusFor(tool.id, capabilityId);
+  const mitigation = mitigationById.get(mitigationId);
+  const control = tool.controls.find((c) => c.mitigation === mitigationId);
+  const status = orgStatusFor(tool.id, mitigationId);
   const onboarded = orgToolAvailableFor(tool.id);
-  const orgIds = orgEntriesFor("capabilities", capabilityId);
-  const cosai = controlsForCapability(capabilityId);
+  const orgIds = orgEntriesFor("mitigations", mitigationId);
+  const cosai = controlsForMitigation(mitigationId);
   const arch = archetypeById.get(tool.architecture);
-  const enforcement = enforcementFor(tool.architecture, [capabilityId]);
-  const surfacePosture = overlay && arch ? orgSurfacePostureFor(capabilityId, arch.surface) : undefined;
-  const surfaceStatus = overlay && arch ? orgSurfaceStatusFor(capabilityId, arch.surface) : undefined;
+  const enforcement = enforcementFor(tool.architecture, [mitigationId]);
+  const surfacePosture = overlay && arch ? orgSurfacePostureFor(mitigationId, arch.surface) : undefined;
+  const surfaceStatus = overlay && arch ? orgSurfaceStatusFor(mitigationId, arch.surface) : undefined;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div>
         {showTitle && (
           <p className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold text-ink">
-            {capability?.title ?? capabilityId}
+            {mitigation?.title ?? mitigationId}
             <CoverageBadge coverage={control?.coverage} long />
             {overlay && onboarded && control?.coverage !== "notApplicable" && <StatusPill status={status?.status ?? "gap"} compact />}
           </p>
         )}
         {control ? (
           <>
-            {control.migration?.reviewRequired && <p className="mb-2 rounded-md border border-line bg-mist p-2 text-xs text-ink-2">Reassessment required for {capability?.title ?? "this capability"} ({capabilityId}). Configuration below is retained legacy evidence.</p>}
+            {control.migration?.reviewRequired && <p className="mb-2 rounded-md border border-line bg-mist p-2 text-xs text-ink-2">Reassessment required for {mitigation?.title ?? "this mitigation"} ({mitigationId}). Configuration below is retained legacy evidence.</p>}
             {!showTitle && <p className="eyebrow mb-1.5">Admin control · in {tool.name}</p>}
             {control.mechanism && (
               <p className="text-[12.5px] text-ink-2">
@@ -85,7 +86,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
           </>
         ) : (
           <p className="text-[12.5px] leading-snug text-ink-3">
-            The registry has no vendor record for this capability on {tool.name} yet. It is pinned on{" "}
+            The registry has no vendor record for this mitigation on {tool.name} yet. It is pinned on{" "}
             <Link href={`/reference?archetype=${tool.architecture}`} className="font-semibold text-introduced hover:underline">
               the architecture
             </Link>{" "}
@@ -95,7 +96,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
       </div>
       <div className="space-y-3">
         <div>
-          <p className="eyebrow">Enterprise capability layers · deployed by the organisation</p>
+          <p className="eyebrow">Enterprise mitigation layers · deployed by the organisation</p>
           <ul className="mt-1.5 space-y-1.5">
             {enforcement.map((e) => (
               <li key={e.blockId} className="text-[12px] leading-snug text-ink-2">
@@ -110,16 +111,16 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
               </li>
             ))}
           </ul>
-          {capability?.examples?.length ? (
+          {mitigation?.examples?.length ? (
             <p className="mt-1.5 text-[11.5px] leading-snug text-ink-3">
               <span className="eyebrow mr-1">Bought as</span>
-              {capability.examples.join(" · ")}
+              {mitigation.examples.join(" · ")}
             </p>
           ) : null}
           {surfaceStatus && arch && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
               <StatusPill status={surfaceStatus} compact />{" "}
-              {surfacePosture?.technology ?? "Enterprise capability"} on {surfaceById.get(arch.surface)?.title.toLowerCase()}
+              {surfacePosture?.technology ?? "Enterprise mitigation"} on {surfaceById.get(arch.surface)?.title.toLowerCase()}
               {surfacePosture?.note && <span className="block text-[11.5px] text-ink-3">{surfacePosture.note}</span>}
             </p>
           )}
@@ -132,8 +133,8 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
                 <Chip tone="mitigated">{c.title}</Chip>
               </Link>
             ))}
-            <Link href={`/capabilities?capability=${capabilityId}`}>
-              <Chip tone="introduced">{capability?.title ?? capabilityId}</Chip>
+            <Link href={`/mitigations?mitigation=${mitigationId}`}>
+              <Chip tone="introduced">{mitigation?.title ?? mitigationId}</Chip>
             </Link>
           </div>
         </div>
@@ -152,6 +153,7 @@ export function ControlRowDetail({ tool, capabilityId, showTitle = false }: { to
             </ul>
           </div>
         )}
+        <CapabilityLinks mitigations={[mitigationId]} />
         {overlay && status && (status.note || status.evidence) && (
           <div>
             <p className="eyebrow">Status note</p>

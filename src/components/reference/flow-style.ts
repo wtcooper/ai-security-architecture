@@ -1,7 +1,7 @@
 /**
  * Visual language for the flow-style architecture diagrams, translated from the F5 reference
  * architecture grammar into this app's tokens: white blocks with a title tab, typed data paths
- * with a small legend, light-blue numbered capability chips, and grey risk tags.
+ * with a small legend, light-blue numbered mitigation chips, and grey risk tags.
  */
 import { bandFor, type BandId } from "@/lib/bands";
 import { componentById } from "@/lib/data";
@@ -72,7 +72,7 @@ export function blockTab(block: ArchBlock): string {
   return LAYER_COLOR[bandFor(component.id, component.category, component.subcategory)];
 }
 
-/** The capability chips — F5's light-blue numbered design-requirement circles. */
+/** The mitigation chips — F5's light-blue numbered design-requirement circles. */
 export const CHIP = {
   r: 9,
   fill: "var(--introduced-soft)",

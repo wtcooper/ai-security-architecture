@@ -7,7 +7,7 @@ actually run, which of the reference controls does the vendor let us switch on, 
 This is the only layer of the repository that names vendors, so the exemplar rule applies to
 every entry: dated (`asOf`), sourced from the vendor's own documentation, and every operator step
 linking to the page that documents it. Nothing is recalled from memory. `npm run audit` flags
-entries older than six months and lists the pinned capabilities each tool does not yet address.
+entries older than six months and lists the pinned mitigations each tool does not yet address.
 
 ## Inclusion rule
 
@@ -42,8 +42,8 @@ tools:
       - { title: ..., body: [...], links: [{ title, url }] }
     riskNotes:                          # tool-specific emphasis; risk must be pinned on the architecture
       - { risk: riskPromptInjection, note: ... }
-    controls:                           # one row per pinned capability the vendor addresses
-      - capability: capabilityToolPermissionScoping
+    controls:                           # one row per pinned mitigation the vendor addresses
+      - mitigation: capabilityToolPermissionScoping
         coverage: native                # native | partial | none | external | notApplicable | unknown
         mechanism: managed-settings.json (MDM/GPO) or server-managed settings
         steps:
@@ -54,7 +54,7 @@ tools:
     sources: [{ title, url }]
 ```
 
-Build rules: the vendor exists; the architecture exists; every `controls[].capability` and
+Build rules: the vendor exists; the architecture exists; every `controls[].mitigation` and
 `riskNotes[].risk` is pinned on the primary architecture; every step, advisory and source has a
 title and a url; `asOf` is present; every control row has either a step with a url or an
 `evidence` entry saying where the claim was checked. A tool cannot claim, or disclaim, a control
@@ -62,7 +62,7 @@ its drawing does not show — the fix is a pin on the architecture.
 
 ## Coverage: what each word claims
 
-One rule per capability, applied to every vendor the same way; the rule is written in the
+One rule per mitigation, applied to every vendor the same way; the rule is written in the
 `note` of the rows it decided, so a reader can see why two products with the same mechanism
 carry the same word.
 
@@ -105,7 +105,7 @@ Applied by the `tooling-onboard` skill under `.claude/skills/`:
 ## Coverage status
 
 Verified 2026-09-10 for Anthropic, OpenAI, Cursor and GitHub: every entity addresses every
-capability pinned on its architecture. A second pass the same day re-opened every URL against the
+mitigation pinned on its architecture. A second pass the same day re-opened every URL against the
 vendor pages and corrected about 90 links, keys and claims; the findings and the unverifiable
 remainder are in `docs/VALIDATION-2026-09-10-TOOLING.md`. `toolOpenclaw` and `toolHermes` (personal agents) gained their control rows the same day; for a
 personal agent the "admin" is the user who runs it, so `native` means the user can set it in the
@@ -134,9 +134,9 @@ Recorded here when a surface is deliberately left out, with the reason.
 - Google Antigravity CLI — the consumer replacement for Gemini CLI since 2026-06-18 (unpaid tier and Google One users); not onboarded, its docs were not fetched on 2026-09-10. Gemini CLI remains the Code Assist Standard/Enterprise, API-key and Vertex AI product and is recorded as `toolGeminiCli`.
 - Google run-gemini-cli GitHub Action — a CI runtime for the same engine; its advisory GHSA-wpqr-6v78-jr5g is recorded on `toolGeminiCli` because it patched the CLI itself.
 
-## MITRE capability scope
+## MITRE mitigation scope
 
-`controls[].capability` uses a selected native `D3-*` or `AML.M*` identifier. Canonical
+`controls[].mitigation` uses a selected native `D3-*` or `AML.M*` identifier. Canonical
 definitions come from `data/mitre`; the overlay supplies authored implementation scope.
 A migrated row with `migration.reviewRequired: true` has `coverage: unknown`; its steps and
 `migration.original` preserve prior evidence, not verified coverage of the new function.

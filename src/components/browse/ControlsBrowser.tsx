@@ -8,9 +8,11 @@ import { PageHeader } from "@/components/Panel";
 import { firstLine, Prose } from "@/components/Prose";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
+import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 import {
   archetypesForControl,
-  capabilityGaps,
+  mitigationGaps,
+  mitigationsForControl,
   componentsForControl,
   componentTitle,
   controlById,
@@ -46,14 +48,14 @@ export function ControlsBrowser() {
   const control = controlById.get(selectedId) ?? shown[0];
   const risks = risksForControl(control.id);
   const comps = componentsForControl(control.id);
-  const capabilityGap = capabilityGaps.find((gap) => gap.control === control.id);
+  const mitigationGap = mitigationGaps.find((gap) => gap.control === control.id);
 
   return (
     <>
       <PageHeader
         eyebrow={`${controls.length} controls · CoSAI taxonomy`}
         title="Controls"
-        lead="Each control is a countermeasure, mapped to the components it protects and the risks it addresses. Assurance and governance controls apply across every risk."
+        lead="CoSAI controls describe the required protections, the components they protect and the risks they address. Supporting MITRE mitigations describe defensive methods; a mapping does not establish that a control is fulfilled."
       >
         <div className="mt-6 flex flex-wrap gap-1.5">
           <FilterPill active={!category} onClick={() => setCategory(null)}>
@@ -92,13 +94,25 @@ export function ControlsBrowser() {
         <h2 className="display mt-1.5 text-[27px] font-bold leading-tight text-ink">{control.title}</h2>
 
         <Prose blocks={control.description} refs={control.externalReferences} className="mt-4" />
-        {capabilityGap && (
+        <div className="mt-6">
+          <p className="eyebrow">Supporting mitigations · MITRE D3FEND + ATLAS</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {mitigationsForControl(control.id).map((m) => (
+              <Link key={m.id} href={`/mitigations?mitigation=${m.id}`}>
+                <Chip tone="introduced">{m.title} <span className="text-ink-3">({m.id})</span></Chip>
+              </Link>
+            ))}
+          </div>
+          {!mitigationsForControl(control.id).length && <p className="mt-2 text-sm text-ink-3">No supporting mitigation selected in the current profile.</p>}
+        </div>
+        {mitigationGap && (
           <div className="mt-4 rounded-lg border border-line bg-mist p-4">
-            <p className="eyebrow">MITRE capability mapping · {capabilityGap.assessment}</p>
-            <p className="mt-2 text-sm text-ink-2">{capabilityGap.missing}</p>
-            <Link href="/capabilities" className="mt-2 inline-block text-xs text-introduced hover:underline">View capability profile and gap assessment →</Link>
+            <p className="eyebrow">MITRE mitigation mapping · {mitigationGap.assessment}</p>
+            <p className="mt-2 text-sm text-ink-2">{mitigationGap.missing}</p>
+            <Link href="/mitigations" className="mt-2 inline-block text-xs text-introduced hover:underline">View mitigation profile and gap assessment →</Link>
           </div>
         )}
+        <CapabilityLinks mitigations={mitigationsForControl(control.id).map((m) => m.id)} />
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <div>
@@ -145,7 +159,7 @@ export function ControlsBrowser() {
         <div className="mt-6">
           <ArchetypeLinks
             archetypes={archetypesForControl(control.id)}
-            empty="No reference architecture reaches this control through its capability set — a gap worth reading as a finding about the architectures, not about the control."
+            empty="No reference architecture reaches this control through its mitigation set — a gap worth reading as a finding about the architectures, not about the control."
           />
         </div>
 

@@ -16,7 +16,7 @@ const LADDER = [
     href: "/risks",
     matches: ["/components", "/risks", "/controls", "/personas", "/frameworks"],
   },
-  { label: "Capabilities", href: "/capabilities", matches: ["/capabilities"] },
+  { label: "Mitigations", href: "/mitigations", matches: ["/mitigations"] },
   { label: "Architectures", href: "/reference", matches: ["/reference"] },
 ];
 

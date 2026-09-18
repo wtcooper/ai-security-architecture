@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ⌘K over everything with a name: risks (with their R-codes), controls, capabilities (with
+ * ⌘K over everything with a name: risks (with their R-codes), controls, mitigations (with
  * their abbreviations), components, personas, architectures, tools and incidents. The dataset is
  * already in the bundle, so the index is built once and matched in the browser; a result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
@@ -13,7 +13,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   activePersonas,
   archetypesInOrder,
-  capabilitiesInOrder,
+  mitigationsInOrder,
+  capabilities,
   componentTitle,
   components,
   controls,
@@ -49,12 +50,19 @@ function buildIndex(): Entry[] {
       href: `/controls?control=${c.id}`,
       text: norm(c.title, c.id),
     })),
-    ...capabilitiesInOrder.map((c) => ({
-      kind: "Capability",
+    ...mitigationsInOrder.map((c) => ({
+      kind: "Mitigation",
       title: c.title,
       hint: c.id,
-      href: `/capabilities?capability=${c.id}`,
+      href: `/mitigations?mitigation=${c.id}`,
       text: norm(c.title, c.abbrev, c.id),
+    })),
+    ...capabilities.map((c) => ({
+      kind: "Technology capability",
+      title: c.title,
+      hint: c.category,
+      href: `/capabilities?capability=${c.id}`,
+      text: norm(c.title, c.id, c.description),
     })),
     ...components.map((c) => ({
       kind: "Component",
@@ -93,7 +101,7 @@ function buildIndex(): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
+const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Mitigation", "Technology capability", "Component", "Incident", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);
@@ -172,7 +180,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Search risks, controls, capabilities, components, architectures, incidents…"
+          placeholder="Search risks, controls, mitigations, components, architectures, incidents…"
           aria-label="Search the site"
           className="w-full border-b border-line bg-paper px-4 py-3.5 text-[15px] text-ink placeholder:text-ink-3 focus:outline-none"
         />

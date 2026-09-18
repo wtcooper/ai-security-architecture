@@ -4,7 +4,7 @@ import { ACTORS, actorById } from "./map-layout";
 import { DISPLAY_NAME } from "./naming";
 import type {
   Archetype,
-  Capability,
+  Mitigation,
   Component,
   Control,
   Dataset,
@@ -36,15 +36,16 @@ export const {
   incidents,
   surfaces,
   capabilities,
-  capabilityAliases,
-  capabilityGaps,
+  mitigations,
+  mitigationAliases,
+  mitigationGaps,
   archetypes,
   guidance,
   vendors,
   tools,
   toolingAttribution,
   orgToolPosture,
-  orgCapabilityPosture,
+  orgMitigationPosture,
   meta,
 } = dataset;
 
@@ -53,6 +54,14 @@ const index = <T extends { id: string }>(items: T[]) => new Map(items.map((i) =>
 export const componentById = index(components);
 export const riskById = index(risks);
 export const controlById = index(controls);
+export const capabilityById = index(capabilities);
+
+/** Candidate technology categories; these links never infer product implementation or posture. */
+export const capabilitiesForMitigations = (ids: string[]) =>
+  capabilities.filter((c) => c.mitigationMappings.some((m) => ids.includes(m.mitigation)));
+
+export const capabilitiesForControl = (id: string) =>
+  capabilitiesForMitigations(mitigations.filter((m) => m.controls.includes(id)).map((m) => m.id));
 export const personaById = index(personas);
 export const frameworkById = index(frameworks);
 export const overlayByRisk = new Map(overlays.map((o) => [o.risk, o]));
@@ -159,33 +168,36 @@ export const personasForRisk = (riskId: string): Persona[] =>
 
 export const overlayFor = (riskId: string): RiskOverlay | undefined => overlayByRisk.get(riskId);
 
-export const capabilityById = index(capabilities);
+export const mitigationById = index(mitigations);
 export const surfaceById = index(surfaces);
 
-export const controlsForCapability = (capabilityId: string): Control[] =>
-  (capabilityById.get(capabilityId)?.controls ?? [])
+export const controlsForMitigation = (mitigationId: string): Control[] =>
+  (mitigationById.get(mitigationId)?.controls ?? [])
     .map((id) => controlById.get(id))
     .filter((c): c is Control => Boolean(c));
 
-export const risksForCapability = (capabilityId: string): Risk[] =>
-  (capabilityById.get(capabilityId)?.risks ?? [])
+export const mitigationsForControl = (controlId: string): Mitigation[] =>
+  mitigations.filter((m) => m.controls.includes(controlId));
+
+export const risksForMitigation = (mitigationId: string): Risk[] =>
+  (mitigationById.get(mitigationId)?.risks ?? [])
     .map((id) => riskById.get(id))
     .filter((r): r is Risk => Boolean(r));
 
-export const componentsForCapability = (capabilityId: string): Component[] =>
-  (capabilityById.get(capabilityId)?.components ?? [])
+export const componentsForMitigation = (mitigationId: string): Component[] =>
+  (mitigationById.get(mitigationId)?.components ?? [])
     .map((id) => componentById.get(id))
     .filter((c): c is Component => Boolean(c));
 
-/** Which stack layers this capability touches, via its anchored components. */
-export const bandsForCapability = (capabilityId: string): Set<BandId> =>
+/** Which stack layers this mitigation touches, via its anchored components. */
+export const bandsForMitigation = (mitigationId: string): Set<BandId> =>
   new Set(
-    componentsForCapability(capabilityId).map((c) => bandFor(c.id, c.category, c.subcategory)),
+    componentsForMitigation(mitigationId).map((c) => bandFor(c.id, c.category, c.subcategory)),
   );
 
-/** Capabilities in display order: grouped by control category, then as authored. */
-export const capabilitiesInOrder: Capability[] = controlCategories.flatMap((cat) =>
-  capabilities.filter((c) => c.category === cat.id),
+/** Mitigations in display order: grouped by control category, then as authored. */
+export const mitigationsInOrder: Mitigation[] = controlCategories.flatMap((cat) =>
+  mitigations.filter((c) => c.category === cat.id),
 );
 
 // --- Reference architectures -----------------------------------------------------
@@ -211,8 +223,8 @@ export const archetypesForSurface = (surfaceId: string): Archetype[] =>
 export const archetypesForRisk = (riskId: string): Archetype[] =>
   archetypes.filter((a) => a.risks.includes(riskId));
 
-export const archetypesForCapability = (capabilityId: string): Archetype[] =>
-  archetypes.filter((a) => a.capabilities.includes(capabilityId));
+export const archetypesForMitigation = (mitigationId: string): Archetype[] =>
+  archetypes.filter((a) => a.mitigations.includes(mitigationId));
 
 /** Every architecture drawing a block or block internal anchored to this risk-map component. */
 export const archetypesForComponent = (componentId: string): Archetype[] =>
@@ -224,16 +236,16 @@ export const archetypesForComponent = (componentId: string): Archetype[] =>
     ),
   );
 
-/** Every architecture whose capability set reaches this control, via capabilities.yaml. */
+/** Every architecture whose mitigation set reaches this control, via mitigations.yaml. */
 export const archetypesForControl = (controlId: string): Archetype[] =>
   archetypes.filter((a) =>
-    a.capabilities.some((id) => capabilityById.get(id)?.controls.includes(controlId)),
+    a.mitigations.some((id) => mitigationById.get(id)?.controls.includes(controlId)),
   );
 
-export const capabilitiesForArchetype = (archetypeId: string): Capability[] =>
-  (archetypeById.get(archetypeId)?.capabilities ?? [])
-    .map((id) => capabilityById.get(id))
-    .filter((c): c is Capability => Boolean(c));
+export const mitigationsForArchetype = (archetypeId: string): Mitigation[] =>
+  (archetypeById.get(archetypeId)?.mitigations ?? [])
+    .map((id) => mitigationById.get(id))
+    .filter((c): c is Mitigation => Boolean(c));
 
 export const risksForArchetype = (archetypeId: string): Risk[] =>
   (archetypeById.get(archetypeId)?.risks ?? [])
@@ -242,11 +254,11 @@ export const risksForArchetype = (archetypeId: string): Risk[] =>
 
 /**
  * The controls an archetype reaches, grouped by CoSAI control category. Derived through the
- * capability layer rather than authored, so the archetype cannot claim a control its own tooling
+ * mitigation layer rather than authored, so the archetype cannot claim a control its own tooling
  * does not implement.
  */
 export function controlsForArchetype(archetypeId: string): Control[] {
-  const ids = new Set(capabilitiesForArchetype(archetypeId).flatMap((c) => c.controls));
+  const ids = new Set(mitigationsForArchetype(archetypeId).flatMap((c) => c.controls));
   return controls.filter((c) => ids.has(c.id));
 }
 
@@ -279,16 +291,16 @@ export const archetypesForVendor = (vendorId: string) =>
   archetypesInOrder.filter((a) => toolsInOrder.some((t) => t.vendor === vendorId && t.architecture === a.id));
 
 /**
- * A tool's reference control set is its architecture's pinned capabilities, in pin order; the
+ * A tool's reference control set is its architecture's pinned mitigations, in pin order; the
  * tool's own record for each is joined on, absent where the vendor has not been assessed.
  */
 export const controlsForTool = (toolId: string) => {
   const tool = toolById.get(toolId);
   if (!tool) return [];
-  const own = new Map(tool.controls.map((c) => [c.capability, c]));
-  return capabilitiesForArchetype(tool.architecture).map((capability) => ({
-    capability,
-    control: own.get(capability.id),
+  const own = new Map(tool.controls.map((c) => [c.mitigation, c]));
+  return mitigationsForArchetype(tool.architecture).map((mitigation) => ({
+    mitigation,
+    control: own.get(mitigation.id),
   }));
 };
 
@@ -300,11 +312,11 @@ const postureByTool = new Map(orgToolPosture.map((p) => [p.tool, p]));
 export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
 /** Whether people in the organisation may install and use this product; not listed means no. */
 export const orgToolAvailableFor = (toolId: string): boolean => postureByTool.get(toolId)?.available === true;
-export const orgStatusFor = (toolId: string, capabilityId: string) =>
-  postureByTool.get(toolId)?.controls[capabilityId];
-/** The enterprise layer: the organisation's technology and status for a capability on a surface. */
-export const orgSurfacePostureFor = (capabilityId: string, surfaceId: string) =>
-  orgCapabilityPosture[capabilityId]?.[surfaceId];
+export const orgStatusFor = (toolId: string, mitigationId: string) =>
+  postureByTool.get(toolId)?.controls[mitigationId];
+/** The enterprise layer: the organisation's technology and status for a mitigation on a surface. */
+export const orgSurfacePostureFor = (mitigationId: string, surfaceId: string) =>
+  orgMitigationPosture[mitigationId]?.[surfaceId];
 /** The same, as a status: nothing recorded is a gap. */
-export const orgSurfaceStatusFor = (capabilityId: string, surfaceId: string): OrgStatus =>
-  orgCapabilityPosture[capabilityId]?.[surfaceId]?.status ?? "gap";
+export const orgSurfaceStatusFor = (mitigationId: string, surfaceId: string): OrgStatus =>
+  orgMitigationPosture[mitigationId]?.[surfaceId]?.status ?? "gap";

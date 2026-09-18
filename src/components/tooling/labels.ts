@@ -17,9 +17,9 @@ export const SURFACE_CLASS_META: Record<ToolSurfaceClass, { label: string; short
 export const SURFACE_CLASS_ORDER = Object.keys(SURFACE_CLASS_META) as ToolSurfaceClass[];
 
 /**
- * How far the vendor goes on a pinned capability, in plain words a reader can act on: can an
+ * How far the vendor goes on a pinned mitigation, in plain words a reader can act on: can an
  * administrator switch it on in this product, or not. The words carry no colour of their own;
- * colour is reserved for the organisation's status, the same tints the Capabilities matrix uses.
+ * colour is reserved for the organisation's status, the same tints the Mitigations matrix uses.
  */
 export const COVERAGE_META: Record<ToolCoverage, { label: string; long: string; blurb: string; linkable: boolean }> = {
   native: { label: "Settable", long: "Admin-settable", blurb: "An administrator can switch this on in the product itself.", linkable: true },

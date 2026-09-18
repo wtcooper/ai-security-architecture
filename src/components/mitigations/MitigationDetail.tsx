@@ -6,28 +6,29 @@ import { Prose } from "@/components/Prose";
 import { bandFor } from "@/lib/bands";
 import { BAND_TOKENS } from "@/lib/map-layout";
 import {
-  archetypesForCapability,
-  componentsForCapability,
+  archetypesForMitigation,
+  componentsForMitigation,
   componentTitle,
   controlCategories,
-  controlsForCapability,
-  risksForCapability,
+  controlsForMitigation,
+  risksForMitigation,
   orgSurfacePostureFor,
   orgSurfaceStatusFor,
   surfaces,
 } from "@/lib/data";
-import { mappingsForCapability } from "@/lib/frameworks";
+import { mappingsForMitigation } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
-import type { Capability } from "@/lib/types";
+import type { Mitigation } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "@/components/StatusPill";
+import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 
-export function CapabilityDetail({ capability, onClose }: { capability: Capability; onClose: () => void }) {
-  const controls = controlsForCapability(capability.id);
-  const risks = risksForCapability(capability.id);
-  const components = componentsForCapability(capability.id);
-  const categoryTitle = controlCategories.find((c) => c.id === capability.category)?.title;
-  const orgMappings = mappingsForCapability(capability);
+export function MitigationDetail({ mitigation, onClose }: { mitigation: Mitigation; onClose: () => void }) {
+  const controls = controlsForMitigation(mitigation.id);
+  const risks = risksForMitigation(mitigation.id);
+  const components = componentsForMitigation(mitigation.id);
+  const categoryTitle = controlCategories.find((c) => c.id === mitigation.category)?.title;
+  const orgMappings = mappingsForMitigation(mitigation);
   const overlay = useOrgOverlay();
 
   return (
@@ -35,9 +36,9 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="display text-[24px] font-bold leading-tight text-ink">
-            {capability.title}
+            {mitigation.title}
           </h2>
-          <p className="mt-2 text-xs text-ink-3">{capability.origin.framework} · {capability.id} · {capability.origin.version}</p>
+          <p className="mt-2 text-xs text-ink-3">{mitigation.origin.framework} · {mitigation.id} · {mitigation.origin.version}</p>
         </div>
         <button
           onClick={onClose}
@@ -55,16 +56,16 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
         </button>
       </div>
 
-      <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {capability.kind === "support" ? "Governance support" : "Defensive function"} · {capability.origin.entityType}</p>
-      {capability.origin.url && <a href={capability.origin.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-introduced hover:underline">Read the official {capability.title} definition ↗</a>}
+      <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {mitigation.kind === "support" ? "Governance support" : "Defensive function"} · {mitigation.origin.entityType}</p>
+      {mitigation.origin.url && <a href={mitigation.origin.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-introduced hover:underline">Read the official {mitigation.title} definition ↗</a>}
       <div className="mt-4">
         <p className="eyebrow">Upstream definition · unmodified</p>
-        <Prose blocks={capability.description} className="mt-2 whitespace-pre-line" />
+        <Prose blocks={mitigation.description} className="mt-2 whitespace-pre-line" />
       </div>
       <div className="mt-4 rounded-lg bg-mist p-4">
         <p className="eyebrow">Implementation scope · authored here</p>
-        <p className="mt-2 text-sm leading-relaxed text-ink-2">{capability.implementation}</p>
-        {capability.features && <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-ink-2">{capability.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>}
+        <p className="mt-2 text-sm leading-relaxed text-ink-2">{mitigation.implementation}</p>
+        {mitigation.features && <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-ink-2">{mitigation.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>}
       </div>
 
       {orgMappings.length > 0 && (
@@ -73,19 +74,20 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
         </div>
       )}
 
-      <div className="mt-5">
-        <p className="eyebrow">Implementation categories · verify the specific function</p>
+      <CapabilityLinks mitigations={[mitigation.id]} />
+      <details className="mt-5">
+        <summary className="cursor-pointer text-xs font-semibold text-ink-2">Implementation examples · authored guidance</summary>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {capability.examples.map((e) => (
+          {mitigation.examples.map((e) => (
             <Chip key={e}>{e}</Chip>
           ))}
         </div>
-      </div>
+      </details>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         {surfaces.map((s) => {
-          const info = capability.surfaces[s.id];
-          const status = overlay ? orgSurfaceStatusFor(capability.id, s.id) : null;
+          const info = mitigation.surfaces[s.id];
+          const status = overlay ? orgSurfaceStatusFor(mitigation.id, s.id) : null;
           return (
             <div
               key={s.id}
@@ -101,13 +103,13 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
               </p>
               <p className="mt-1.5 text-xs font-medium text-ink-2">{info?.responsibility.replaceAll("-", " ")}</p>
               {info?.note && <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">{info.note}</p>}
-              {overlay && orgSurfacePostureFor(capability.id, s.id)?.technology && (
+              {overlay && orgSurfacePostureFor(mitigation.id, s.id)?.technology && (
                 <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
                   <span className="eyebrow mr-1">With</span>
-                  {orgSurfacePostureFor(capability.id, s.id)!.technology}
+                  {orgSurfacePostureFor(mitigation.id, s.id)!.technology}
                 </p>
               )}
-              {overlay && orgSurfacePostureFor(capability.id, s.id)?.note && <p className="mt-2 text-xs text-ink-3">{orgSurfacePostureFor(capability.id, s.id)!.note}</p>}
+              {overlay && orgSurfacePostureFor(mitigation.id, s.id)?.note && <p className="mt-2 text-xs text-ink-3">{orgSurfacePostureFor(mitigation.id, s.id)!.note}</p>}
             </div>
           );
         })}
@@ -165,16 +167,16 @@ export function CapabilityDetail({ capability, onClose }: { capability: Capabili
 
       <div className="mt-6">
         <ArchetypeLinks
-          archetypes={archetypesForCapability(capability.id)}
-          empty="No reference architecture attaches this capability yet. Either the archetype it belongs to is not drawn, or nothing in the catalogue needs it."
+          archetypes={archetypesForMitigation(mitigation.id)}
+          empty="No reference architecture attaches this mitigation yet. Either the archetype it belongs to is not drawn, or nothing in the catalogue needs it."
         />
       </div>
 
-      {capability.sources?.length ? (
+      {mitigation.sources?.length ? (
         <div className="mt-6 border-t border-line pt-4">
           <p className="eyebrow">Sources</p>
           <ul className="mt-1.5 space-y-1">
-            {capability.sources.map((s) => (
+            {mitigation.sources.map((s) => (
               <li key={s.url}>
                 <a
                   href={s.url}

@@ -2,14 +2,14 @@
 
 /**
  * The three lists the architecture view composes into its tabs: the sequence data flows,
- * the numbered capabilities, and the coded risks. Kept apart from the layout so a list can
+ * the numbered mitigations, and the coded risks. Kept apart from the layout so a list can
  * sit in a tab, a rail or a column without being re-implemented.
  */
 import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { capabilityById, controlsForCapability, guidanceByArchetype, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
+import { mitigationById, controlsForMitigation, guidanceByArchetype, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { StatusPill } from "@/components/StatusPill";
@@ -17,15 +17,15 @@ import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
 
 /** The organisation's own identifiers for a pinned entity, linked into the Frameworks tab. */
-/** With status shown, what the organisation has on this surface for the capability. */
-function OrgSurfaceStatus({ capabilityId, surfaceId }: { capabilityId: string; surfaceId: string }) {
+/** With status shown, what the organisation has on this surface for the mitigation. */
+function OrgSurfaceStatus({ mitigationId, surfaceId }: { mitigationId: string; surfaceId: string }) {
   const overlay = useOrgOverlay();
   if (!overlay) return null;
-  const posture = orgSurfacePostureFor(capabilityId, surfaceId);
+  const posture = orgSurfacePostureFor(mitigationId, surfaceId);
   return (
     <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
       <span className="mr-0.5">Your status:</span>
-      <StatusPill status={orgSurfaceStatusFor(capabilityId, surfaceId)} compact />
+      <StatusPill status={orgSurfaceStatusFor(mitigationId, surfaceId)} compact />
       {posture?.technology && <span className="text-ink-2">{posture.technology}</span>}
       {posture?.note && <span>— {posture.note}</span>}
     </p>
@@ -106,9 +106,9 @@ function notesFor(pins: { note?: string }[]) {
  * that cite it, with their prose, links and the products they name. Folded into the control
  * row so guidance is read beside the control it is about rather than on a tab of its own.
  */
-function GuidanceFor({ archetype, capabilityId }: { archetype: Archetype; capabilityId: string }) {
+function GuidanceFor({ archetype, mitigationId }: { archetype: Archetype; mitigationId: string }) {
   const doc = guidanceByArchetype.get(archetype.id);
-  const items = doc?.items.filter((i) => i.capabilities.includes(capabilityId)) ?? [];
+  const items = doc?.items.filter((i) => i.mitigations.includes(mitigationId)) ?? [];
   if (!items.length) return null;
   return (
     <div className="space-y-2.5">
@@ -135,7 +135,7 @@ function GuidanceFor({ archetype, capabilityId }: { archetype: Archetype; capabi
   );
 }
 
-export function CapabilityList({
+export function MitigationList({
   archetype,
   highlight,
   onHighlight,
@@ -148,14 +148,14 @@ export function CapabilityList({
 }) {
   return (
     <div className={columns === 2 ? "space-y-1 sm:columns-2 sm:gap-x-6" : "space-y-1"}>
-      {archetype.capabilities.map((id, i) => {
-        const capability = capabilityById.get(id);
-        const active = highlight?.kind === "capability" && highlight.id === id;
-        const notes = notesFor(archetype.pins.capabilities.filter((p) => p.capability === id));
+      {archetype.mitigations.map((id, i) => {
+        const mitigation = mitigationById.get(id);
+        const active = highlight?.kind === "mitigation" && highlight.id === id;
+        const notes = notesFor(archetype.pins.mitigations.filter((p) => p.mitigation === id));
         return (
           <div key={id} className="break-inside-avoid">
             <button
-              onClick={() => onHighlight(active ? null : { kind: "capability", id })}
+              onClick={() => onHighlight(active ? null : { kind: "mitigation", id })}
               aria-pressed={active}
               className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors ${
                 active ? "border-introduced bg-introduced-soft" : "border-transparent hover:bg-mist"
@@ -164,7 +164,7 @@ export function CapabilityList({
               <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-introduced bg-introduced-soft text-[10.5px] font-bold text-introduced">
                 {i + 1}
               </span>
-              <span className="text-[12.5px] leading-tight text-ink">{capability?.title ?? id}</span>
+              <span className="text-[12.5px] leading-tight text-ink">{mitigation?.title ?? id}</span>
             </button>
             {active && (
               <div className="mb-2 ml-8 mt-1 space-y-2">
@@ -175,17 +175,17 @@ export function CapabilityList({
                 ))}
                 <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-3">
                   <span className="mr-0.5">CoSAI controls:</span>
-                  {controlsForCapability(id).map((c) => (
+                  {controlsForMitigation(id).map((c) => (
                     <Link key={c.id} href={`/controls?control=${c.id}`}>
                       <Chip tone="mitigated">{c.title}</Chip>
                     </Link>
                   ))}
                 </p>
-                <OrgSurfaceStatus capabilityId={id} surfaceId={archetype.surface} />
-                <OrgRefs kind="capabilities" id={id} />
-                <GuidanceFor archetype={archetype} capabilityId={id} />
+                <OrgSurfaceStatus mitigationId={id} surfaceId={archetype.surface} />
+                <OrgRefs kind="mitigations" id={id} />
+                <GuidanceFor archetype={archetype} mitigationId={id} />
                 <Link
-                  href={`/capabilities?capability=${id}`}
+                  href={`/mitigations?mitigation=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
                 >
                   This control class across every surface →

@@ -7,7 +7,7 @@ description: Add, refresh or re-verify a named AI product (an agent, coding assi
 
 The registry (`data/tooling/<vendor>/<family>.yaml`) is the one place this repository names
 products. Each entity is one product on one reference architecture, and the architecture fixes
-the **reference control set**: the capabilities pinned on that drawing. The entry's job is to say,
+the **reference control set**: the mitigations pinned on that drawing. The entry's job is to say,
 for each of those, whether the vendor lets an administrator switch it on and exactly where.
 
 The registry renders in exactly one place: the **Tools** tab of the drawing the product
@@ -17,7 +17,7 @@ being right about that drawing's controls, not by being cross-referenced elsewhe
 
 Read `references/schema.md` first. Then run
 `node .claude/skills/tooling-onboard/scripts/reference-set.mjs <architecture id>` to print the
-pinned capabilities and risks you are allowed to write rows for (no argument lists the
+pinned mitigations and risks you are allowed to write rows for (no argument lists the
 architectures with their surface).
 
 ## Why the rules are strict
@@ -26,14 +26,14 @@ architectures with their surface).
   control row `verified`, and every step a URL you fetched today. `npm run audit` flags entries
   older than six months. A fact recalled from memory is a fact that will be wrong soon; fetch
   the page.
-- **Only pinned capabilities.** A tool cannot claim, or disclaim, a control its drawing does not
+- **Only pinned mitigations.** A tool cannot claim, or disclaim, a control its drawing does not
   show. The build fails otherwise. If a real vendor control has no pin, the fix is a pin on the
   architecture (a separate change), not a row here.
 - **Honest coverage.** `none` and `external` are findings leadership needs; `notApplicable`
   is for a control the product has no surface for (not a gap — say whose objective it is);
   `unknown` is the honest answer when a page would not resolve. Never upgrade a guess to
   `native`.
-- **One rule per capability, every vendor.** Before rating a row, read how the same capability
+- **One rule per mitigation, every vendor.** Before rating a row, read how the same mitigation
   is rated on the other products of that architecture and apply the same rule; write the rule
   into the `note` when it decides the word ("rated partial on the same rule as X because …").
   The 2026-09-15 control audit found the same mechanism rated differently across vendors.
@@ -46,7 +46,7 @@ architectures with their surface).
 - **Every row states its boundary.** Controlled asset or action; enforcing actor (vendor
   server-side, product policy on the device, the deployer's code, a product around it);
   product variant or platform it holds on; bypass and uncovered paths (remote MCP servers,
-  browser tools, unsandboxed commands, the host process); and, for a compound capability,
+  browser tools, unsandboxed commands, the host process); and, for a compound mitigation,
   which sub-objective is claimed (storage versus ephemeral issuance; versioning versus
   progressive rollout; encryption versus key custody; emission versus non-repudiation). For a
   kill switch, the cessation delay and whether active work stops. For human approval, whether
@@ -97,7 +97,7 @@ architectures with their surface).
    both in the row's `note`, prefer the settings reference, and tell the operator to set the key
    explicitly. A vendor without a product trust portal gets its corporate compliance page as
    `trust`. The rules in **Verifying a link** below apply to every URL you are about to write.
-4. **Write the entity.** For every pinned capability, one `controls[]` row: `coverage`,
+4. **Write the entity.** For every pinned mitigation, one `controls[]` row: `coverage`,
    `mechanism`, `verified`, and for `native`/`partial` rows 1–4 `steps` (title, one-sentence
    body naming the exact key or toggle, url). Rows rated `none`, `external`, `notApplicable`
    or `unknown` carry a `note` saying what the organisation should do instead and an
@@ -111,7 +111,7 @@ architectures with their surface).
    cell, the organisation's `note` for that control from `data/org/<profile>/tooling-status.yaml`
    (`example/` upstream, `local/` in an adopter's clone). That file is the template an
    organisation edits, so a product is not finished until it has a block there: `available`,
-   and under `controls` one row per pinned capability with a `status` and a `note` written as
+   and under `controls` one row per pinned mitigation with a `status` and a `note` written as
    the justification an administrator would give — the setting or change that backs the status
    (`permissions.deny and allowManagedPermissionRulesOnly in managed-settings.json`), or for a
    `gap` why it is not in place (`sandbox.enabled pending bubblewrap packaging`; `Vendor offers
@@ -150,7 +150,7 @@ about ninety wrong ones (`docs/VALIDATION-2026-09-10-TOOLING.md`). What it learn
   usually carries one vendor's CVE; the others have the same class of bug and no id. Say so in
   the title rather than implying every vendor has that CVE.
 - To sweep the whole registry, run `npm run links` (`scripts/check-links.ts`): it fetches every
-  URL under `data/tooling/` and in `data/overlay/capabilities.yaml` once and reports non-200s,
+  URL under `data/tooling/` and in `data/overlay/mitigations.yaml` once and reports non-200s,
   hosts known to wall or client-render (listed in the script — atlas.mitre.org answers 404 for
   every route and renders client-side, so its deep links are fine), and redirects whose path
   changed. A 200 is reachability, not relevance: the page must still document the claim.

@@ -17,16 +17,16 @@ const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.
   loading: () => <div style={{ height: "min(640px, 70vh)" }} />,
 });
 
-/** A capability or risk picked from a list: its chips or tags stay lit, the rest go faint. */
+/** A mitigation or risk picked from a list: its chips or tags stay lit, the rest go faint. */
 export interface Highlight {
-  kind: "capability" | "risk";
+  kind: "mitigation" | "risk";
   id: string;
 }
 
 /**
  * An incident step replayed on the drawing: the blocks it lands in and the edges it rides,
  * coloured by the step's phase, with the step number badged on each block. While one is
- * set, the capability chips, risk tags and scenario walks stay hidden — the diagram is a
+ * set, the mitigation chips, risk tags and scenario walks stay hidden — the diagram is a
  * canvas for someone else's story.
  */
 export interface StepOverlay {

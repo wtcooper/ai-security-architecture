@@ -7,7 +7,7 @@ import type { Archetype } from "@/lib/types";
  * "Seen in these architectures" — the link back from the taxonomy into the drawings.
  *
  * The taxonomy pages answer what a thing is; this answers where it actually shows up. Rendered on
- * risks, controls, capabilities, components and personas so every entity in the framework has a
+ * risks, controls, mitigations, components and personas so every entity in the framework has a
  * route down to the architectures that instantiate it, which is the whole point of the tab
  * existing below the others.
  */

@@ -3,7 +3,7 @@
  * the ones that do not resolve. Reachability only: a 200 says the page exists, not that it
  * still documents the claim beside it — that is the onboarding skill's job, page by page.
  *
- *   npm run links            every URL under data/tooling and data/overlay/capabilities.yaml
+ *   npm run links            every URL under data/tooling and data/overlay/mitigations.yaml
  *   npm run links -- <path>  one file
  *
  * Hosts known to answer automated fetches with a wall or a client-rendered shell are listed in
@@ -41,7 +41,8 @@ async function main() {
   if (arg) files.push(arg);
   else {
     for await (const f of yamlFiles(join(ROOT, "data/tooling"))) files.push(f);
-    files.push(join(ROOT, "data/overlay/capabilities.yaml"));
+    files.push(join(ROOT, "data/overlay/mitigations.yaml"));
+    files.push(join(ROOT, "data/frameworks/technology-sources.yaml"));
   }
 
   const where = new Map<string, string[]>();

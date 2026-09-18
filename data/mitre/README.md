@@ -1,4 +1,4 @@
-# Vendored MITRE capability sources
+# Vendored MITRE mitigation sources
 
 - D3FEND 1.6.0: complete upstream JSON-LD distribution, including its ontology metadata.
 - ATLAS 2026.09: complete release YAML. The bytes were also checked against the release tag.
@@ -13,9 +13,9 @@ The build resolves only selected D3FEND descendants of DefensiveTechnique and AT
 records. It checks source hashes and rejects profile overrides of canonical names/definitions.
 The complete snapshots are build inputs; only selected records enter the browser dataset.
 No network request is needed during the data build. Analytical algorithms and offensive
-techniques are not imported as defensive capabilities merely because they have IDs.
+techniques are not imported as defensive mitigations merely because they have IDs.
 
 To update: download a specific release into a new version directory, preserve its notices,
 update the source manifest with its real hash, and review changed definitions and all affected
-mappings/evidence. Run data validation, capability tests, audit and the app build. Never silently
-update CoSAI's historical ATLAS threat mappings along with this capability layer.
+mappings/evidence. Run data validation, mitigation tests, audit and the app build. Never silently
+update CoSAI's historical ATLAS threat mappings along with this mitigation layer.

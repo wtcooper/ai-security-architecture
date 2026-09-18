@@ -4,20 +4,32 @@ import { mkdtemp, mkdir, writeFile, rm, readFile, symlink } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { loadCapabilities, readVerifiedSource, isDefensiveTechnique } from "./lib/capabilities";
-import { migrateKeyed, migrateToolControls, type MigrationRules } from "./lib/capability-migration";
-import type { ToolControl, OrgOrgStatus } from "../src/lib/types";
-import { dataset, archetypeById, capabilityById, controlById, controlsForTool } from "../src/lib/data";
+import { loadMitigations, readVerifiedSource, isDefensiveTechnique } from "./lib/mitigations";
+import { type LegacyToolControl as ToolControl, migrateKeyed, migrateToolControls, type MigrationRules } from "./lib/capability-migration";
+import type { OrgOrgStatus } from "../src/lib/types";
+import { dataset, archetypeById, mitigationById, controlById, controlsForTool } from "../src/lib/data";
 import { buildViewerModel } from "../src/components/reference/export-html";
+import { renameMitigationKeys } from "./rename-mitigations";
 
-test("all live tabs share native capability references, including framework and organization mappings", () => {
-  const retired = new Set(Object.keys(dataset.capabilityAliases));
+test("schema rename preserves evidence, labels and formatting and is idempotent", () => {
+  const before = "# historical evidence stays intact\ncapabilities:\n  - capability: AML.M0020\n    note: capability is historical wording\n    migration:\n      original:\n        - capability: capabilityAiDlp\n";
+  const after = renameMitigationKeys(before);
+  assert.equal(after, before.replace("capabilities:", "mitigations:").replace("capability: AML.M0020", "mitigation: AML.M0020"));
+  assert.equal(renameMitigationKeys(after), after);
+});
+
+test("all live tabs share native mitigation references, including framework and organization mappings", () => {
+  const retired = new Set(Object.keys(dataset.mitigationAliases));
   const walk = (value: unknown, path: string) => {
     if (typeof value === "string") assert.ok(!retired.has(value), `${path}: retired reference ${value}`);
     else if (Array.isArray(value)) value.forEach((v, i) => walk(v, `${path}[${i}]`));
     else if (value && typeof value === "object") for (const [key, v] of Object.entries(value)) {
       // These deliberately preserve historical identifiers, not live entity references.
-      if (key === "migration" || key === "capabilityAliases") continue;
+      if (key === "migration" || key === "mitigationAliases") continue;
+      if (key === "capability") assert.ok(!mitigationById.has(String(v)), `${path}: MITRE references must use mitigation`);
+      if (key === "capabilities" && Array.isArray(v)) for (const item of v) {
+        assert.ok(typeof item !== "string" || !mitigationById.has(item), `${path}: MITRE lists must use mitigations`);
+      }
       assert.ok(!retired.has(key), `${path}: retired key ${key}`);
       walk(v, `${path}.${key}`);
     }
@@ -26,16 +38,16 @@ test("all live tabs share native capability references, including framework and 
   for (const tool of dataset.tools) {
     const rows = controlsForTool(tool.id);
     const arch = archetypeById.get(tool.architecture)!;
-    assert.equal(rows.length, arch.capabilities.length, tool.id);
-    for (const row of rows) assert.ok(capabilityById.has(row.capability.id), tool.id);
+    assert.equal(rows.length, arch.mitigations.length, tool.id);
+    for (const row of rows) assert.ok(mitigationById.has(row.mitigation.id), tool.id);
   }
 });
 
-test("every architecture HTML export resolves canonical names and numbered capability pins", () => {
+test("every architecture HTML export resolves canonical names and numbered mitigation pins", () => {
   for (const arch of dataset.archetypes) {
     const model = buildViewerModel(arch);
-    const expected = arch.capabilities.map((id) => capabilityById.get(id)!.title);
-    assert.deepEqual(model.legend.capabilities.map((c) => c.title), expected, arch.id);
+    const expected = arch.mitigations.map((id) => mitigationById.get(id)!.title);
+    assert.deepEqual(model.legend.mitigations.map((c) => c.title), expected, arch.id);
     for (const block of model.blocks) for (const c of block.caps) {
       assert.ok(c.n > 0, `${arch.id}: unnumbered ${c.title}`);
       assert.equal(c.title, expected[c.n - 1], arch.id);
@@ -51,7 +63,7 @@ test("incident replays use migrated architectures while keeping CoSAI control re
   for (const incident of dataset.incidents) {
     const arch = archetypeById.get(incident.archetype);
     assert.ok(arch, incident.id);
-    for (const id of arch.capabilities) assert.ok(capabilityById.has(id), incident.id);
+    for (const id of arch.mitigations) assert.ok(mitigationById.has(id), incident.id);
     for (const id of incident.controls) assert.ok(controlById.has(id), incident.id);
     const paths = new Set([
       ...arch.blocks.map((b) => b.id),
@@ -61,17 +73,17 @@ test("incident replays use migrated architectures while keeping CoSAI control re
   }
 });
 
-test("selected capabilities resolve to source definitions and every legacy ID has valid destinations", async () => {
-  const profile = await loadCapabilities(process.cwd());
-  const ids = new Set(profile.capabilities.map((c) => c.id));
-  assert.equal(ids.size, profile.capabilities.length);
+test("selected mitigations resolve to source definitions and every legacy ID has valid destinations", async () => {
+  const profile = await loadMitigations(process.cwd());
+  const ids = new Set(profile.mitigations.map((c) => c.id));
+  assert.equal(ids.size, profile.mitigations.length);
   assert.equal(Object.keys(profile.aliases).length, 56);
   for (const targets of Object.values(profile.aliases)) {
     for (const id of targets) assert.ok(ids.has(id), id);
   }
-  assert.equal(profile.capabilities.find((c) => c.id === "D3-EI")?.title, "Execution Isolation");
-  assert.equal(profile.capabilities.find((c) => c.id === "AML.M0031")?.title, "Memory Hardening");
-  for (const c of profile.capabilities) {
+  assert.equal(profile.mitigations.find((c) => c.id === "D3-EI")?.title, "Execution Isolation");
+  assert.equal(profile.mitigations.find((c) => c.id === "AML.M0031")?.title, "Memory Hardening");
+  for (const c of profile.mitigations) {
     assert.match(c.id, /^(D3-[A-Z]+|AML\.M\d{4})$/);
     assert.ok(c.description.length);
     assert.ok(c.origin.version);
@@ -82,7 +94,7 @@ test("selected capabilities resolve to source definitions and every legacy ID ha
 });
 
 test("source corruption fails before catalogue compilation", async () => {
-  const root = await mkdtemp(join(tmpdir(), "capability-source-"));
+  const root = await mkdtemp(join(tmpdir(), "mitigation-source-"));
   try {
     await mkdir(join(root, "data/mitre"), { recursive: true });
     await writeFile(join(root, "data/mitre/source.json"), "original");
@@ -104,23 +116,23 @@ test("offensive and cyclic ontology classes do not qualify as defenses", () => {
   assert.equal(isDefensiveTechnique(cycle, graph), false);
 });
 
-test("the profile rejects invented capability IDs and authored overrides of MITRE definitions", async () => {
-  const root = await mkdtemp(join(tmpdir(), "capability-profile-"));
+test("the profile rejects invented mitigation IDs and authored overrides of MITRE definitions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "mitigation-profile-"));
   try {
     await mkdir(join(root, "data/overlay"), { recursive: true });
     await symlink(join(process.cwd(), "data/mitre"), join(root, "data/mitre"));
     const { parse, stringify } = await import("yaml");
-    const profile = parse(await readFile("data/overlay/capabilities.yaml", "utf8"));
-    const path = join(root, "data/overlay/capabilities.yaml");
-    const first = profile.capabilities[0];
+    const profile = parse(await readFile("data/overlay/mitigations.yaml", "utf8"));
+    const path = join(root, "data/overlay/mitigations.yaml");
+    const first = profile.mitigations[0];
     const originalId = first.id;
-    first.id = "LOCAL-CUSTOM-CAPABILITY";
+    first.id = "LOCAL-CUSTOM-MITIGATION";
     await writeFile(path, stringify(profile));
-    await assert.rejects(loadCapabilities(root), /not a vendored defensive technique or mitigation/);
+    await assert.rejects(loadMitigations(root), /not a vendored defensive technique or mitigation/);
     first.id = originalId;
     first.title = "Our replacement title";
     await writeFile(path, stringify(profile));
-    await assert.rejects(loadCapabilities(root), /upstream definitions must not be overridden/);
+    await assert.rejects(loadMitigations(root), /upstream definitions must not be overridden/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

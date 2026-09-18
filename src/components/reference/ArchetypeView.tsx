@@ -5,12 +5,13 @@
  * strip beneath it — overview, sequence flows, tools, controls (with the guidance folded in), risks. One panel is
  * visible at a time and nothing is expanded by default, so the page never shows two lists
  * and a sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
- * capability or risk tab clears the highlight, so the drawing always matches the panel.
+ * mitigation or risk tab clears the highlight, so the drawing always matches the panel.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
 import { useEffect, useState } from "react";
 
-import { guidanceByArchetype, toolsForArchetype } from "@/lib/data";
+import { capabilitiesForMitigations, guidanceByArchetype, toolsForArchetype } from "@/lib/data";
+import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 import { ToolsForArchitecture } from "@/components/tooling/ToolsForArchitecture";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -19,9 +20,9 @@ import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
 import { Section } from "./ArchetypeDetail";
 import { Prose } from "@/components/Prose";
-import { CapabilityList, RiskList, WalkList } from "./rail-lists";
+import { MitigationList, RiskList, WalkList } from "./rail-lists";
 
-type Tab = "overview" | "flows" | "capabilities" | "risks" | "tools";
+type Tab = "overview" | "flows" | "mitigations" | "capabilities" | "risks" | "tools";
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -43,7 +44,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
   // Opens on the overview with the full drawing: a reader's first sight is the whole
   // architecture, nothing faded. Choosing the flows tab traces the walkthrough.
   const [tab, setTab] = useState<Tab>(toolId ? "tools" : "overview");
-  // Opening a product (from search, a capability page or a rail) lands on the Tools tab.
+  // Opening a product (from search, a mitigation page or a rail) lands on the Tools tab.
   // Adjusted during render, the Panel.tsx idiom, so there is no flash of the previous tab.
   const [prevTool, setPrevTool] = useState(toolId);
   if (prevTool !== toolId) {
@@ -58,7 +59,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     setTab(next);
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
-    if (next !== "capabilities" && next !== "risks") onHighlight(null);
+    if (next !== "mitigations" && next !== "risks") onHighlight(null);
     if (next !== "tools") onTool(null);
   };
 
@@ -79,7 +80,8 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
     { id: "tools", label: "Tools", count: tools.length },
-    { id: "capabilities", label: "Controls", count: archetype.capabilities.length },
+    { id: "mitigations", label: "Mitigations", count: archetype.mitigations.length },
+    { id: "capabilities", label: "Technology", count: capabilitiesForMitigations(archetype.mitigations).length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
   ];
 
@@ -134,6 +136,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
 
       <div className="mt-5">
         {tab === "overview" && <ArchetypeDetail archetype={archetype} />}
+        {tab === "capabilities" && <CapabilityLinks mitigations={archetype.mitigations} />}
 
         {tab === "flows" && (
           <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -167,7 +170,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </div>
         )}
 
-        {tab === "capabilities" && (
+        {tab === "mitigations" && (
           <div>
             <p className="text-[12px] leading-snug text-ink-3">
               The numbered chips on the drawing are MITRE D3FEND techniques and ATLAS mitigations mapped as contributions to
@@ -192,7 +195,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
               </div>
             )}
             <div className="mt-3">
-              <CapabilityList archetype={archetype} highlight={highlight} onHighlight={onHighlight} columns={2} />
+              <MitigationList archetype={archetype} highlight={highlight} onHighlight={onHighlight} columns={2} />
             </div>
           </div>
         )}

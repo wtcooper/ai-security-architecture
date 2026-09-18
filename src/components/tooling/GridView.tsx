@@ -44,10 +44,10 @@ export function GridView({
           <thead className="sticky top-0 z-20">
             <tr>
               <th rowSpan={headerRows} className="min-w-[260px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-                Reference control
+                Reference mitigation
               </th>
               <th rowSpan={headerRows} className="min-w-[300px] border-b border-r border-line bg-mist px-3 py-1.5 text-left align-middle">
-                <span className="block text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">Enterprise capabilities</span>
+                <span className="block text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">Enterprise mitigations</span>
                 <span className="block text-[10.5px] font-normal text-ink-3">deployed by the organisation, where the drawing pins them</span>
               </th>
               <th colSpan={tools.length} className="border-b border-l border-line bg-mist px-2 py-1.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">

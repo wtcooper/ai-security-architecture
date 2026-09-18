@@ -1,4 +1,7 @@
-import type { ToolControl, OrgOrgStatus } from "../../src/lib/types";
+import type { ToolControl as CurrentToolControl, OrgOrgStatus } from "../../src/lib/types";
+
+export type LegacyToolControl = Omit<CurrentToolControl, "mitigation"> & { capability: string };
+type ToolControl = LegacyToolControl;
 
 export interface MigrationRule { targets: string[]; reviewRequired: boolean; reason: string }
 export type MigrationRules = Record<string, MigrationRule>;

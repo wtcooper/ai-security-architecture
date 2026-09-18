@@ -3,12 +3,12 @@
  * the ref-arch-diagram skill renders (public/viewer-template.html is a copy of the skill's
  * template). The app resolves everything the viewer needs into a self-contained "render
  * model": rects and path strings from the build layout, pin titles and codes from the
- * risk/capability registries, containment from each block's own `parent`. Block pins are relative to their
+ * risk/mitigation registries, containment from each block's own `parent`. Block pins are relative to their
  * block, edge pins are offsets from the edge midpoint — the two conventions that let the
  * viewer keep pins riding blocks and arrows when the reader drags them.
  */
 import { bandFor } from "@/lib/bands";
-import { capabilityById, componentById, riskById, riskCode } from "@/lib/data";
+import { mitigationById, componentById, riskById, riskCode } from "@/lib/data";
 import { chipSpots, itemCells, placeTags, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 
@@ -30,7 +30,7 @@ function layerOf(block: ArchBlock): "app" | "model" | "data" | undefined {
 export function buildViewerModel(archetype: Archetype) {
   const { layout } = archetype;
   const rects = layout.blocks;
-  const capNumber = new Map(archetype.capabilities.map((id, i) => [id, i + 1]));
+  const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
 
   const blocks = archetype.blocks.map((b) => {
     const rect = rects[b.id];
@@ -47,14 +47,14 @@ export function buildViewerModel(archetype: Archetype) {
       // implements are its entire content, so without these it exports as an empty box.
       caps: [
         ...new Set([
-          ...(b.capabilities ?? []),
+          ...(b.mitigations ?? []),
           ...(b.kind === "governance"
-            ? archetype.pins.capabilities.filter((p) => p.at === b.id).map((p) => p.capability)
+            ? archetype.pins.mitigations.filter((p) => p.at === b.id).map((p) => p.mitigation)
             : []),
         ]),
       ].map((id) => ({
         n: capNumber.get(id) ?? 0,
-        title: capabilityById.get(id)?.title ?? id,
+        title: mitigationById.get(id)?.title ?? id,
       })),
       ...rect,
       items: (b.items ?? []).map((item, i) => ({
@@ -132,8 +132,8 @@ export function buildViewerModel(archetype: Archetype) {
   const blockPins: Pin[] = [];
   const edgePins: Pin[] = [];
 
-  const chipGroups = new Map<string, { capability: string; note?: string }[]>();
-  for (const pin of archetype.pins.capabilities) {
+  const chipGroups = new Map<string, { mitigation: string; note?: string }[]>();
+  for (const pin of archetype.pins.mitigations) {
     if (!chipGroups.has(pin.at)) chipGroups.set(pin.at, []);
     chipGroups.get(pin.at)!.push(pin);
   }
@@ -148,8 +148,8 @@ export function buildViewerModel(archetype: Archetype) {
       if (!spot) return;
       const base = {
         kind: "chip",
-        n: capNumber.get(pin.capability) ?? 0,
-        title: capabilityById.get(pin.capability)?.title ?? pin.capability,
+        n: capNumber.get(pin.mitigation) ?? 0,
+        title: mitigationById.get(pin.mitigation)?.title ?? pin.mitigation,
         note: pin.note,
       };
       if (blockRect) {
@@ -208,9 +208,9 @@ export function buildViewerModel(archetype: Archetype) {
       steps: s.steps.map((st) => ({ follow: st.follow, note: st.note })),
     })),
     legend: {
-      capabilities: archetype.capabilities.map((id, i) => ({
+      mitigations: archetype.mitigations.map((id, i) => ({
         n: i + 1,
-        title: capabilityById.get(id)?.title ?? id,
+        title: mitigationById.get(id)?.title ?? id,
       })),
       risks: archetype.risks.map((id) => ({
         code: riskCode(id),

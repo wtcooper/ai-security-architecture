@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Chip } from "@/components/Chips";
+import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 import { RiskMap } from "@/components/map/RiskMap";
 import { PHASE_META } from "@/components/PhaseRail";
 import { FlowDiagram, type StepOverlay } from "@/components/reference/FlowDiagram";
@@ -13,6 +14,7 @@ import {
   componentTitle,
   controlTitle,
   incidents,
+  mitigationsForControl,
   riskTitle,
 } from "@/lib/data";
 import type { Archetype, Incident, IncidentSource, IncidentStep, Phase } from "@/lib/types";
@@ -181,6 +183,7 @@ export function IncidentExplorer() {
                   </li>
                 ))}
               </ul>
+              <CapabilityLinks mitigations={[...new Set(incident.controls.flatMap((id) => mitigationsForControl(id).map((m) => m.id)))]} />
             </>
           )}
 

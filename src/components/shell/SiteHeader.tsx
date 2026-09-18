@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
 /**
- * The nav is the site's ladder: the risk map, the taxonomy behind it, the capabilities that
+ * The nav is the site's ladder: the risk map, the taxonomy behind it, the mitigations that
  * implement its controls, and the architectures that place them — plus the incidents that
  * replay on the map and the drawings. Everything sits right, next to the repository link.
  */
@@ -22,11 +22,12 @@ const NAV: NavItem[] = [
       { href: "/components", label: "Components" },
       { href: "/risks", label: "Risks" },
       { href: "/controls", label: "Controls" },
+      { href: "/mitigations", label: "Mitigations" },
+      { href: "/capabilities", label: "Technology capabilities" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },
     ],
   },
-  { href: "/capabilities", label: "Capabilities" },
   { href: "/reference", label: "Architectures" },
   { href: "/examples", label: "Incidents" },
 ];

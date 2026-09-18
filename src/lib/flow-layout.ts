@@ -1,7 +1,7 @@
 /**
  * Build-time geometry for the flow-style reference architectures.
  *
- * The grammar is F5's: capability blocks on a coarse authored grid, connected by orthogonal
+ * The grammar is F5's: mitigation blocks on a coarse authored grid, connected by orthogonal
  * typed paths. Authors place blocks with `col`/`row` and the build turns that into pixels —
  * the same geometry-as-data discipline as map-layout.ts, so the client renders coordinates
  * and never runs a layout algorithm.
@@ -496,7 +496,7 @@ export interface PinEdgeGeo {
 export const TAG_H = 17;
 const TAG_GAP = 20;
 
-/** Numbered capability chips: on a block's bottom border, or seated on the flow itself. */
+/** Numbered mitigation chips: on a block's bottom border, or seated on the flow itself. */
 export function chipSpots(
   n: number,
   block?: Rect,
