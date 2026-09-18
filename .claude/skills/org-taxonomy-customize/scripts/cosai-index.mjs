@@ -3,8 +3,8 @@
 // compiled dataset, so a mapping session works from live ids rather than memory.
 //   node cosai-index.mjs            -> everything
 //   node cosai-index.mjs mcp        -> entries whose id/title/description mention "mcp"
-//   node cosai-index.mjs tools      -> tools with the mitigations that may carry a status
-//   node cosai-index.mjs tools toolClaudeCode -> one tool's reference set
+//   node cosai-index.mjs tools      -> tools with candidate default capabilities
+//   node cosai-index.mjs tools toolClaudeCode -> one tool's candidate capability set
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -25,7 +25,7 @@ if (q === "tools") {
     if (only && t.id !== only) continue;
     const a = arch.get(t.architecture);
     console.log(`\n${t.id} — ${t.name} (${t.vendor}) on ${t.architecture}`);
-    for (const c of a?.mitigations ?? []) console.log(`  ${d.mitigations.find((m) => m.id === c)?.title} (${c})`);
+    for (const c of d.capabilities.filter((c) => c.mitigationMappings.some((m) => a?.mitigations.includes(m.mitigation)))) console.log(`  ${c.title} (${c.id})`);
   }
   process.exit(0);
 }

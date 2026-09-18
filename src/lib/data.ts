@@ -1,3 +1,4 @@
+import { capabilitySupportStatus } from "./org-capabilities";
 import raw from "@/data/generated/dataset.json";
 import { bandFor, type BandId } from "./bands";
 import { ACTORS, actorById } from "./map-layout";
@@ -12,7 +13,8 @@ import type {
   Risk,
   RiskOverlay,
   Tool,
-  OrgStatus,
+  OrgCapabilityStatus,
+  DisplayStatus,
 } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -45,7 +47,7 @@ export const {
   tools,
   toolingAttribution,
   orgToolPosture,
-  orgMitigationPosture,
+  orgCapabilities,
   meta,
 } = dataset;
 
@@ -312,11 +314,52 @@ const postureByTool = new Map(orgToolPosture.map((p) => [p.tool, p]));
 export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
 /** Whether people in the organisation may install and use this product; not listed means no. */
 export const orgToolAvailableFor = (toolId: string): boolean => postureByTool.get(toolId)?.available === true;
-export const orgStatusFor = (toolId: string, mitigationId: string) =>
-  postureByTool.get(toolId)?.controls[mitigationId];
-/** The enterprise layer: the organisation's technology and status for a mitigation on a surface. */
+export const orgCapabilitiesFor = (capabilityId: string) => orgCapabilities.filter((c) => c.capability === capabilityId);
+
+export interface OrgCapabilitySupport {
+  status: DisplayStatus;
+  technology?: string;
+  note: string;
+  evidence?: string;
+  contributions: { id: string; title: string; capability: string; context: string; record?: OrgCapabilityStatus }[];
+}
+
+function capabilitySupport(capabilityIds: string[], surfaceId: string, toolId?: string): OrgCapabilitySupport {
+  if (!capabilityIds.length) return { status: "unmapped", note: "No default technology capability maps to this mitigation.", contributions: [] };
+  const contributions = orgCapabilities.filter((c) => capabilityIds.includes(c.capability)).flatMap((c) => {
+    const base = { id: c.id, title: c.title, capability: c.capability };
+    if (toolId) return [{ ...base, context: toolById.get(toolId)?.name ?? toolId, record: postureByTool.get(toolId)?.capabilities[c.id] }];
+    return [
+      { ...base, context: "Enterprise", record: c.surfaces[surfaceId] },
+      ...orgToolPosture.filter((p) => p.available && archetypeById.get(toolById.get(p.tool)!.architecture)?.surface === surfaceId)
+        .map((p) => ({ ...base, context: toolById.get(p.tool)!.name, record: p.capabilities[c.id] })),
+    ];
+  }).filter((c) => c.record);
+  const status = capabilitySupportStatus(contributions.map((c) => c.record));
+  return {
+    status, contributions,
+    technology: [...new Set(contributions.map((c) => c.title))].join(" · ") || undefined,
+    note: contributions.length
+      ? "Capability support rollup; not a mitigation effectiveness or control-compliance assessment. " + contributions.map((c) => [`${c.title} (${c.context})`, c.record?.note].filter(Boolean).join(": ")).join(" · ")
+      : "No organization capability assessment recorded for this context.",
+    evidence: contributions.map((c) => c.record?.evidence).filter(Boolean).join(" · ") || undefined,
+  };
+}
+
+/** The Capabilities matrix reads actual capability deployment records. */
+export const orgCapabilitySurfacePostureFor = (capabilityId: string, surfaceId: string) => capabilitySupport([capabilityId], surfaceId);
+export const orgCapabilitySurfaceStatusFor = (capabilityId: string, surfaceId: string) => orgCapabilitySurfacePostureFor(capabilityId, surfaceId).status;
+
+/** Per-tool method support is derived only from that tool's capability assessments. */
+export const orgStatusFor = (toolId: string, mitigationId: string) => {
+  const tool = toolById.get(toolId);
+  const arch = tool && archetypeById.get(tool.architecture);
+  return capabilitySupport(capabilitiesForMitigations([mitigationId]).map((c) => c.id), arch?.surface ?? "", toolId);
+};
+
+/** Enterprise method support follows organization → technology → MITRE relationships. */
 export const orgSurfacePostureFor = (mitigationId: string, surfaceId: string) =>
-  orgMitigationPosture[mitigationId]?.[surfaceId];
-/** Missing surface assessments are unknown, rather than confirmed gaps. */
-export const orgSurfaceStatusFor = (mitigationId: string, surfaceId: string): OrgStatus | "notAssessed" =>
-  orgMitigationPosture[mitigationId]?.[surfaceId]?.status ?? "notAssessed";
+  capabilitySupport(capabilitiesForMitigations([mitigationId]).map((c) => c.id), surfaceId);
+export const orgSurfaceStatusFor = (mitigationId: string, surfaceId: string): DisplayStatus => orgSurfacePostureFor(mitigationId, surfaceId).status;
+
+export const mitigationsWithoutCapabilities = mitigations.filter((m) => !capabilitiesForMitigations([m.id]).length);

@@ -69,7 +69,7 @@ export function CellHoverCard({ tool, row, cell, overlay, rect }: { tool: Tool; 
                       {STATUS_META[status?.status ?? "notAssessed"].label}
                     </span>
                     {" — "}nothing recorded yet. Add <span className="ident">note</span> and <span className="ident">evidence</span> under this
-                    control in <span className="ident">{profile}/tooling-status.yaml</span>.
+                    organization capability in <span className="ident">{profile}/tooling-status.yaml</span>.
                   </span>
                 )}
               </p>
@@ -160,8 +160,8 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
       <span className="ml-1">the word ↗ links to the vendor&rsquo;s page for configuring it; click a cell for the steps</span>
       {overlay && (
         <>
-          <span className="eyebrow ml-2">Your status</span>
-          {([...ORG_STATUSES, "notAssessed"] as DisplayStatus[]).map((s) => (
+          <span className="eyebrow ml-2">Capability support</span>
+          {([...ORG_STATUSES, "notAssessed", "unmapped"] as DisplayStatus[]).map((s) => (
             <span key={s} className="flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded-[2px] border" style={{ background: STATUS_STYLE[s].bg, borderColor: STATUS_STYLE[s].border }} />
               {STATUS_META[s].label}

@@ -1,83 +1,94 @@
-# Your organisation's layer
+# Your organization's capabilities
 
-Everything the site says about *your* organisation lives here, in text files, and is compiled
-into the app by `npm run data` like every other dataset. Nothing is edited in the UI.
+Author organization data at one layer:
 
+**Organization capability → default technology capability → MITRE mitigation → CoSAI control.**
+
+`data/org/local/` takes precedence when it exists. Otherwise the app uses the clearly labeled
+`example/` profile. Both compile through `npm run data`; nothing is edited in the UI.
+
+## Files
+
+- `capabilities.yaml`: organization name and capability inventory. Each capability has its own
+  ID and title, one `capability: tech-*` mapping, and optional assessments by deployment surface.
+- `tooling-status.yaml`: tool availability and optional assessments keyed by **organization
+  capability ID**, for the settings and integrations of that particular tool.
+- `archive/`: historical evidence, excluded from the build and migration commands.
+
+```yaml
+# capabilities.yaml
+organisation:
+  name: Your Company
+  shortName: YC
+capabilities:
+  - id: YC-DLP
+    title: Corporate endpoint DLP
+    capability: tech-dlp
+    surfaces:
+      surfaceEndpoint:
+        status: inProgress
+        note: Prompt and file-upload inspection are being verified.
+        evidence: SEC-123
+  - id: YC-SANDBOX
+    title: Agent execution sandbox
+    capability: tech-sandbox
+    surfaces: {} # inventoried, not assessed yet
 ```
-data/org/
-├── example/                shipped upstream; renders with an "example" label
-│   ├── frameworks.yaml     your control standard(s) and risk register, cross-mapped to CoSAI
-│   ├── mitigations.yaml   the enterprise layer: your technology and status per mitigation per surface
-│   └── tooling-status.yaml your posture per tool × mitigation (the product's own settings)
-└── local/                  yours. Preferred by the build when present; never shipped upstream
+
+```yaml
+# tooling-status.yaml
+tools:
+  - tool: toolClaudeCode
+    available: true
+    capabilities:
+      YC-SANDBOX:
+        status: inProgress
+        note: Managed sandbox policy is being rolled out to this tool.
+        evidence: SEC-456
 ```
 
-## Adopting it
+Do not author organization mappings to CoSAI controls, risks, or MITRE mitigations. The build
+validates default technology IDs and computes the MITRE and control associations. External
+framework mappings (including CoSAI's NIST AI RMF mappings) remain unchanged. The generated
+`org-capabilities` framework lets you inspect the organization catalogue and its derived links.
 
-1. Copy `example/` to `local/` and replace the content. `local/` is gitignored in the public
-   repository; in your own clone run `git add -f data/org/local` once and commit it. Upstream
-   pulls never touch that path.
-2. Run `npm run data`. A dangling CoSAI id fails the build with the file and entry named. An
-   entry that maps to nothing is allowed and shows as a gap on the Frameworks tab.
-3. The `org-taxonomy-customize` skill under `.claude/skills/` walks through the mapping work,
-   including how to search for the right CoSAI control, mitigation or risk id.
+## Status and rollups
 
-## What the files mean
+The authored statuses are `enabled`, `inProgress`, and `gap`. No record means **Not assessed**.
+A mitigation with no default technology category is **No capability mapping**, which is a
+catalogue gap rather than a deployment gap. The mapping coverage panel lists these explicitly.
 
-**`frameworks.yaml`** holds any number of catalogues. Each becomes a framework on the
-Frameworks tab, grouped under *Your organisation*, and its entry ids appear as badges on the
-risk, control and mitigation cards and in the rails and hover cards of every reference
-architecture. Entries are authored your way round: your id, your label, and the CoSAI
-`controls`, `mitigations`, technology `capabilities` and `risks` it corresponds to. IDs must
-exist in `data/cosai/`, `data/overlay/mitigations.yaml` or
-`data/overlay/technology-capabilities.yaml`, respectively. Technology references use `tech-*`
-repository keys. These are explicit mappings: an org mapping to a broad MITRE mitigation is
-not automatically a mapping to every technology category that can implement it.
+The capability matrix combines recorded enterprise assessments and assessments of available
+tools on the same surface. Equal statuses retain that status; mixed statuses become partial.
+Missing records do not invent deployments or require every alternative technology category.
+Select a capability to inspect each contributing organization capability and deployment context.
 
-**`mitigations.yaml`** is the enterprise layer: per mitigation and per surface, the technology
-you deploy around the AI tools (an endpoint DLP agent, an SSE, an MDM, a gateway guardrail) and
-whether it is in place. This is where "we push managed settings with our MDM" lives: the
-managed setting is the product's control, the MDM is the enterprise mitigation that delivers
-it. It renders inside the Mitigations column on each architecture's Tools tab and as the surface
-status on the Mitigations tab. Technology categories and CoSAI controls do not inherit a
-fulfillment status from those associations.
+Mitigation status is a **capability support rollup** through the default mappings. Control
+badges are derived associations, not compliance claims. A deployed technology does not by
+itself establish mitigation effectiveness or control fulfillment. Product columns use only
+that product's capability assessments; enterprise posture is not copied into product settings.
+Vendor documentation remains attached to its specific MITRE mitigation.
 
-**`tooling-status.yaml`** records, per tool in `data/tooling/`, `available: true|false` — whether
-people may install and use it at all — and a status per mitigation — the product's own settings —
-with a `note` (the justification: what you configured, or why a gap is a gap) and optional
-`evidence` that appear when someone hovers that cell of the Tools grid. The shipped example has
-a note on every control of every product it runs; it is the template — keep the products you
-run and rewrite the notes. Only mitigations pinned on the tool's reference architecture may
-carry a status, because that pinned set *is* the reference control set the Tools tab compares
-against.
+**Show org data** retains the taxonomy names on both matrices and in the architecture Tools
+table. It adds organization capability names, deployment status, and derived associations.
+The switch is shared across pages. Tools not recorded as available remain unavailable.
 
-One status vocabulary serves every control in both files: `enabled`, `inProgress`, `gap`.
-Missing mitigation/surface and product-control assessment records display as **Not assessed**; an explicit `gap` records an identified shortfall. Technology capability deployment is not inferred from mitigation assessments. A product's own
-`available` is deliberately not on that scale — either you provide it or you block it, and how
-well an available product is secured is what its control statuses say. A tool not listed is not
-available and renders greyed out.
+## Adoption and migration
 
-Nothing from this directory renders until the **Show org data** switch (beside the Mitigations, Technology capabilities and
-Reference architectures titles) is on; it defaults on when `local/` exists. The Tools grid
-always keeps CoSAI controls, MITRE mitigations and technology capabilities in its first three
-columns. Enabling the overlay adds org mappings below each standard name and appends product
-columns with availability and status. There is no separate selector for org row names.
+1. Create `data/org/local/` and copy the two current example YAML files (not `archive/`).
+2. Replace the example records with your organization's capabilities. Use only existing
+   `tech-*` categories from `data/overlay/technology-capabilities.yaml`. If none fits, report
+   the taxonomy gap rather than mapping to an unrelated category or inventing a default.
+3. Record surface assessments and, where useful, per-tool assessments against those org IDs.
+4. Run `npm run data`, then enable **Show org data** and inspect both matrices and Tools.
 
-## Mitigation identifier migration
+For an older profile, preserve `frameworks.yaml`, `mitigations.yaml`, and the old
+`tooling-status.yaml` in `archive/` before creating the current files. Review each deployment
+and its evidence; reverse-mapping a broad mitigation to all candidate technologies would
+invent implementations. Reuse notes only when they describe the actual chosen technology.
+The build rejects legacy active files and direct control/mitigation mappings instead of
+silently discarding them. The shipped example's previous records are preserved in `archive/`.
 
-Use native MITRE identifiers such as `D3-EI`, `AML.M0020` and `AML.M0031`. The prior
-`capability…` identifiers are retired. Run `npm run migrate:capabilities -- data/org/local`
-for a preview, then append `--write` to migrate. Split/merged scope never inherits an
-`enabled` assertion automatically: it becomes `inProgress` with the original record retained.
-Reassess each function and update its status, note and evidence; clear `migration.reviewRequired`
-only after review. Broad mitigations such as guardrails need feature and boundary evidence.
-
-## Separate Mitigations schema
-
-After the legacy-ID migration (if needed), run `npm run migrate:mitigations` to preview
-renaming live `capability`/`capabilities` fields to `mitigation`/`mitigations` and the posture
-file to `mitigations.yaml`. Add `-- --write` to apply. The conversion preserves
-`migration.original` verbatim and is idempotent. Technology capabilities are a separate
-OWASP/ENISA/ECSO category layer with CISA and NIST cross-references. They do not inherit
-organization posture; keep assessment records against the actual MITRE methods and product
-settings. See [the mapping contract](../frameworks/README.md).
+`local/` is gitignored upstream. In a private clone, `git add -f data/org/local` if you want to
+track your profile. The old MITRE schema migration commands leave current capability files
+untouched; they do not convert old organization assessments into technology deployments.

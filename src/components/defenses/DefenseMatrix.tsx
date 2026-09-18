@@ -7,13 +7,14 @@ export interface MatrixItem {
   placements: { category: string; surface: string }[];
 }
 
-export function DefenseMatrix({ items, selectedId, onSelect, category, surface, statusFor, label }: {
+export function DefenseMatrix({ items, selectedId, onSelect, category, surface, statusFor, orgNamesFor, label }: {
   items: MatrixItem[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
   category: string;
   surface: string;
   statusFor?: (id: string, surface: string) => DisplayStatus;
+  orgNamesFor?: (id: string, surface: string) => string | undefined;
   label: string;
 }) {
   const columns = surfaces.filter((s) => !surface || s.id === surface);
@@ -32,12 +33,16 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
               const active = item.id === selectedId;
               const status = statusFor?.(item.id, s.id);
               const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
-              return <button key={item.id} onClick={() => onSelect(item.id)} aria-pressed={active}
+              const orgNames = orgNamesFor?.(item.id, s.id);
+              return <span key={item.id} className="inline-flex max-w-full flex-col items-start gap-1">
+                <button onClick={() => onSelect(item.id)} aria-pressed={active}
                 title={`${item.title} (${item.id})${status ? ` — ${STATUS_META[status].label}` : ""}`}
                 className="inline-flex rounded-full border px-2.5 py-[5px] text-left text-xs font-medium"
                 style={{ background: tint.bg, color: tint.text, borderColor: active ? "var(--ink)" : tint.border, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid", boxShadow: active ? "0 0 0 1px var(--ink)" : undefined }}>
                 {item.title}
-              </button>;
+                </button>
+                {status && <span className="max-w-[240px] px-2 text-[10px] text-ink-3">{orgNames ? `${orgNames} · ` : ""}{STATUS_META[status].label}</span>}
+              </span>;
             })}</div> : <span className="text-sm text-ink-3">—</span>}
           </td>;
         })}

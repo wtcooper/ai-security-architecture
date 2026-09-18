@@ -70,7 +70,7 @@ export interface FrameworkView {
 
 /**
  * Frameworks whose every entry is listed even when nothing maps to it: the upstream full-list
- * frameworks, and every organisation catalogue — an org control nothing reaches is the finding.
+ * frameworks, and every organisation catalogue — organization entries retain their derived associations.
  */
 const KNOWN_ENTRIES: Record<string, string[]> = Object.fromEntries(
   [
@@ -243,7 +243,7 @@ export function mappingsForMitigation(
 }
 
 /**
- * The organisation's own entries that reach one CoSAI entity — what the badges on cards, rails
+ * Organization capability entries that reach a taxonomy entity through default capability mappings — what the badges on cards, rails
  * and hover cards show next to the CoSAI id. Empty when no org catalogue maps here.
  */
 export interface OrgEntryRef {

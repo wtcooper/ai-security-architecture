@@ -215,12 +215,12 @@ export interface Vocabulary {
 }
 
 /**
- * The organisation's status vocabulary, shared by mitigations on a surface, the tools it runs
- * and the controls inside them (data/org). Missing assessments display as Not assessed once status is
+ * The organization capability status vocabulary, also used for derived support rollups.
+ * Missing assessments display as Not assessed once status is
  * shown; Not assessed is a display state rather than an authored posture value.
  */
 export type OrgStatus = "enabled" | "inProgress" | "gap";
-export type DisplayStatus = OrgStatus | "notAssessed";
+export type DisplayStatus = OrgStatus | "notAssessed" | "unmapped";
 export const ORG_STATUSES: OrgStatus[] = ["enabled", "inProgress", "gap"];
 
 /** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */
@@ -819,41 +819,34 @@ export interface OrgMeta {
   example: boolean;
 }
 
-export interface OrgToolControlStatus {
+/** A recorded deployment assessment of an organization capability. */
+export interface OrgCapabilityStatus {
   status: OrgStatus;
   note?: string;
-  /** A ticket, document or evidence reference. */
   evidence?: string;
-  migration?: MitigationMigrationEvidence;
 }
 
-/**
- * The organisation's posture on one mitigation on one surface — the enterprise layer: the
- * technology it deploys around the tools (an endpoint DLP agent, a gateway, an MDM) and whether
- * it is in place. Sits beside the per-tool posture, which is about the product's own settings.
- */
-export interface OrgOrgStatus {
-  status: OrgStatus;
-  /** The named technology, e.g. "Netskope endpoint DLP", "Jamf Pro". */
+/** One organization capability maps to exactly one default technology category. */
+export interface OrgCapability {
+  id: string;
+  title: string;
+  capability: string;
+  description?: string;
+  surfaces: Record<string, OrgCapabilityStatus>;
+}
+
+/** Historical migration evidence, retained only by the legacy conversion tools. */
+export interface OrgOrgStatus extends OrgCapabilityStatus {
   technology?: string;
-  note?: string;
   migration?: MitigationMigrationEvidence;
 }
-/** mitigation id -> surface id -> posture. */
-export type OrgMitigationPosture = Record<string, Record<string, OrgOrgStatus>>;
 
-/**
- * The organisation's posture on one tool: whether people can install and use it at all, plus
- * a status per control. Availability is binary on purpose — either the organisation provides
- * the product or it blocks it; how well it is secured is what the control statuses say. A tool
- * not listed here is not available, and renders greyed.
- */
+/** Tool availability plus capability assessments, keyed by organization capability ID. */
 export interface OrgToolPosture {
   tool: string;
   available?: boolean;
   note?: string;
-  /** Keyed by mitigation id; every key must be pinned on the tool's architecture. */
-  controls: Record<string, OrgToolControlStatus>;
+  capabilities: Record<string, OrgCapabilityStatus>;
 }
 
 /** Everything the app renders, emitted by scripts/build-data.ts. */
@@ -903,5 +896,5 @@ export interface Dataset {
   /** Provenance statement for the tool registry; each guidance document carries its own. */
   toolingAttribution: string;
   orgToolPosture: OrgToolPosture[];
-  orgMitigationPosture: OrgMitigationPosture;
+  orgCapabilities: OrgCapability[];
 }

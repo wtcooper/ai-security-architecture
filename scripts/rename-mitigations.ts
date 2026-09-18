@@ -4,7 +4,15 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isMap, isScalar, isSeq, parseDocument, type Node } from "yaml";
 
+/** The current organization schema uses sourced technology categories, not the old MITRE layer. */
+export function isOrgCapabilityDocument(source: string): boolean {
+  const doc = parseDocument(source);
+  const entries = doc.get("capabilities");
+  return isSeq(entries) && (doc.has("organisation") || entries.items.some((e) => isMap(e) && String(e.get("capability")).startsWith("tech-")));
+}
+
 export function renameMitigationKeys(source: string): string {
+  if (isOrgCapabilityDocument(source)) return source;
   const doc = parseDocument(source);
   if (doc.errors.length) throw new Error(doc.errors.join(", "));
   const edits: [number, number, string][] = [];
@@ -13,6 +21,8 @@ export function renameMitigationKeys(source: string): string {
     if (isSeq(node)) node.items.forEach((item) => walk(item as Node | null));
     if (isMap(node)) for (const pair of node.items) {
       if (!isScalar(pair.key) || pair.key.value === "migration") continue;
+      if (pair.key.value === "capabilities" && node.has("tool")) continue;
+      if (pair.key.value === "capability" && isScalar(pair.value) && String(pair.value.value).startsWith("tech-")) continue;
       // New org crosswalks use capabilities for tech-* categories, not MITRE methods.
       if (pair.key.value === "capabilities" && isSeq(pair.value)) {
         const technology = pair.value.items.filter((item) => isScalar(item) && String(item.value).startsWith("tech-"));
@@ -46,7 +56,7 @@ async function main() {
   for (const dir of ["data/reference", "data/tooling", "data/org"]) for await (const path of files(dir)) {
     const before = await readFile(path, "utf8");
     const after = renameMitigationKeys(before);
-    const target = path.endsWith("/capabilities.yaml") ? path.replace(/capabilities\.yaml$/, "mitigations.yaml") : path;
+    const target = path.endsWith("/capabilities.yaml") && !isOrgCapabilityDocument(before) ? path.replace(/capabilities\.yaml$/, "mitigations.yaml") : path;
     if (before === after && target === path) continue;
     if (target !== path && existsSync(target)) throw new Error(`Both ${path} and ${target} exist; merge explicitly before migration`);
     if (write) {

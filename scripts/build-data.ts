@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
+import { compileOrgCapabilities, checkOrgToolCapabilities } from "./lib/org-capabilities";
 import { loadTechnologyCatalogue } from "./lib/technology-capabilities";
 
 import type {
@@ -28,7 +29,7 @@ import type {
   FrameworkNote,
   Guidance,
   Incident,
-  OrgMitigationPosture,
+  OrgCapability,
   OrgMeta,
   OrgToolPosture,
   Persona,
@@ -41,7 +42,6 @@ import type {
   Vocabulary,
 } from "../src/lib/types";
 import {
-  ORG_STATUSES,
   FULL_LIST_FRAMEWORKS,
   PHASES,
   TOOL_COVERAGES,
@@ -171,66 +171,25 @@ async function loadTooling(): Promise<{
 /**
  * The organisation layer: data/org/local/ when the adopter has created it, else the shipped
  * example. Missing files inside the chosen profile are an empty layer, not an error — an
- * organisation may cross-map its standard long before it records any tool posture.
+ * organization may inventory capabilities before assessing their deployment.
  */
-async function loadOrg(): Promise<{
-  meta: OrgMeta;
-  frameworks: OrgFrameworkDoc[];
-  posture: OrgToolPosture[];
-  mitigationPosture: OrgMitigationPosture;
-}> {
+async function loadOrg(): Promise<{ meta: OrgMeta; capabilities: OrgCapability[]; posture: OrgToolPosture[] }> {
   const base = join(ROOT, "data", "org");
   const profile: OrgMeta["profile"] = existsSync(join(base, "local")) ? "local" : "example";
   const dir = join(base, profile);
-  const read = async <T,>(name: string): Promise<T | undefined> => {
-    const path = join(dir, name);
-    if (!existsSync(path)) return undefined;
-    try {
-      return await loadYaml<T>(path);
-    } catch (e) {
-      throw new Error(`org/${profile}/${name}: ${(e as Error).message}`);
-    }
-  };
-  const fw = await read<{
-    organisation?: { name?: string; shortName?: string };
-    frameworks?: OrgFrameworkDoc[];
-  }>("frameworks.yaml");
-  const status = await read<{ tools?: OrgToolPosture[] }>("tooling-status.yaml");
-  if (existsSync(join(dir, "capabilities.yaml"))) throw new Error(`org/${profile}: run npm run migrate:mitigations -- --write to rename the MITRE capability schema before building`);
-  const caps = await read<{ mitigations?: OrgMitigationPosture }>("mitigations.yaml");
-  const name = fw?.organisation?.name?.trim() || (profile === "example" ? "Example organisation" : "Your organisation");
+  if (["frameworks.yaml", "mitigations.yaml"].some((name) => existsSync(join(dir, name)))) {
+    throw new Error(`org/${profile}: use capabilities.yaml for organization mappings and status; archive legacy frameworks.yaml and mitigations.yaml after reviewing the migration guide in data/org/README.md`);
+  }
+  const path = join(dir, "capabilities.yaml");
+  const doc = existsSync(path) ? await loadYaml<{ organisation?: { name?: string; shortName?: string }; capabilities?: OrgCapability[] }>(path) : undefined;
+  if (doc?.capabilities && !Array.isArray(doc.capabilities)) throw new Error(`org/${profile}/capabilities.yaml: expected a list of organization capabilities, not the legacy MITRE schema`);
+  const statusPath = join(dir, "tooling-status.yaml");
+  const status = existsSync(statusPath) ? await loadYaml<{ tools?: OrgToolPosture[] }>(statusPath) : undefined;
   return {
-    meta: {
-      profile,
-      name,
-      shortName: fw?.organisation?.shortName?.trim() || undefined,
-      example: profile === "example",
-    },
-    frameworks: fw?.frameworks ?? [],
+    meta: { profile, example: profile === "example", name: doc?.organisation?.name?.trim() || "Your organisation", shortName: doc?.organisation?.shortName?.trim() || undefined },
+    capabilities: doc?.capabilities ?? [],
     posture: status?.tools ?? [],
-    mitigationPosture: caps?.mitigations ?? {},
   };
-}
-
-/** An organisation catalogue as authored: entry-keyed, each entry naming its CoSAI targets. */
-interface OrgFrameworkDoc {
-  id: string;
-  name: string;
-  fullName?: string;
-  version?: string;
-  url?: string;
-  description?: string;
-  entries: {
-    id: string;
-    label: string;
-    description?: string;
-    group?: string;
-    url?: string;
-    controls?: string[];
-    mitigations?: string[];
-    capabilities?: string[];
-    risks?: string[];
-  }[];
 }
 
 /**
@@ -347,17 +306,9 @@ async function main() {
     frameworksDoc,
   });
 
-  // --- Organisation catalogues -----------------------------------------------------
-  // The adopter's own standard and risk register, inverted into the same shapes as the
-  // authored frameworks so every badge, coverage count and gap list works unchanged.
+  // Organization relationships roll up exclusively through default technology categories.
   const org = await loadOrg();
-  const orgFrameworks = checkOrgFrameworks(org, {
-    riskIds,
-    controlIds,
-    mitigationIds,
-    capabilityIds: new Set(technology.capabilities.map((c) => c.id)),
-    takenIds: new Set(allFrameworks.map((f) => f.id)),
-  });
+  const orgFrameworks = compileOrgCapabilities(org, technology.capabilities, mitigationsDoc.mitigations, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
   allFrameworks.push(...orgFrameworks.frameworks);
   Object.assign(authoredMappings, orgFrameworks.mappings);
   const declaredEntries = { ...entriesDoc.frameworks, ...technology.entries, ...orgFrameworks.entries };
@@ -400,11 +351,7 @@ async function main() {
   });
 
   // --- Organisation tool posture -------------------------------------------------
-  const orgToolPosture = checkToolingStatus(org.posture, { tools, archetypes });
-  const orgMitigationPosture = checkOrgMitigations(org.mitigationPosture, {
-    mitigationIds,
-    surfaceIds: new Set(mitigationsDoc.surfaces.map((s) => s.id)),
-  });
+  const orgToolPosture = checkOrgToolCapabilities(org.posture, org.capabilities, technology.capabilities, tools, archetypes);
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -526,7 +473,7 @@ async function main() {
     tools,
     toolingAttribution: toolingLoaded.attribution,
     orgToolPosture,
-    orgMitigationPosture,
+    orgCapabilities: org.capabilities,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -1552,158 +1499,6 @@ function checkTooling(
 
   console.log(`tooling: ${loaded.tools.length} tools across ${vendorIds.size} vendors`);
   return loaded.tools.map((e) => ({ ...e.tool, items: e.tool.items ?? [], controls: e.tool.controls ?? [] }));
-}
-
-/**
- * The organisation's tool posture: which tools people may install (available, a boolean) and,
- * per pinned mitigation, whether the control is switched on. One status enum serves tools, their controls and the enterprise
- * layer so the same pills render everywhere; a mitigation not pinned on the tool's
- * architecture cannot carry a status, because the reference set is the drawing.
- */
-const STATUSES = new Set<string>(ORG_STATUSES);
-
-function checkToolingStatus(
-  posture: OrgToolPosture[],
-  ctx: { tools: Tool[]; archetypes: Archetype[] },
-): OrgToolPosture[] {
-  const toolById = new Map(ctx.tools.map((t) => [t.id, t]));
-  const archetypeById = new Map(ctx.archetypes.map((a) => [a.id, a]));
-  const seen = new Set<string>();
-  for (const p of posture) {
-    const where = `org tooling-status ${p.tool}`;
-    const tool = toolById.get(p.tool);
-    if (!tool) {
-      fail(`${where}: unknown tool — ids live in data/tooling/`);
-      continue;
-    }
-    if (seen.has(p.tool)) fail(`${where}: listed twice`);
-    seen.add(p.tool);
-    if (p.available !== undefined && typeof p.available !== "boolean") {
-      fail(`${where}: available must be true or false — a product is provided or it is blocked`);
-    }
-    const pinned = new Set(archetypeById.get(tool.architecture)?.mitigations ?? []);
-    for (const [mitigationId, entry] of Object.entries(p.controls ?? {})) {
-      if (entry.migration?.reviewRequired && entry.status === "enabled") fail(`${where} ${mitigationId}: clear migration review after reassessment before marking enabled`);
-      if (!pinned.has(mitigationId)) {
-        fail(`${where}: ${mitigationId} is not pinned on ${tool.architecture}, so it has no status here`);
-      }
-      if (!STATUSES.has(entry?.status)) {
-        fail(`${where} ${mitigationId}: status must be one of ${[...STATUSES].join(", ")}`);
-      }
-    }
-  }
-  return posture.map((p) => ({ ...p, controls: p.controls ?? {} }));
-}
-
-/**
- * The organisation's enterprise layer: per mitigation, per surface, the technology it deploys
- * and whether it is in place. This is the only source of the Mitigations tab's status.
- */
-function checkOrgMitigations(
-  posture: OrgMitigationPosture,
-  ctx: { mitigationIds: Set<string>; surfaceIds: Set<string> },
-): OrgMitigationPosture {
-  for (const [mitigationId, bySurface] of Object.entries(posture)) {
-    const where = `org mitigations ${mitigationId}`;
-    if (!ctx.mitigationIds.has(mitigationId)) {
-      fail(`${where}: unknown mitigation — ids live in data/overlay/mitigations.yaml`);
-      continue;
-    }
-    for (const [surfaceId, entry] of Object.entries(bySurface ?? {})) {
-      if (entry.migration?.reviewRequired && entry.status === "enabled") fail(`${where} ${surfaceId}: clear migration review after reassessment before marking enabled`);
-      if (!ctx.surfaceIds.has(surfaceId)) fail(`${where}: unknown surface ${surfaceId}`);
-      if (!STATUSES.has(entry?.status)) {
-        fail(`${where} ${surfaceId}: status must be one of ${[...STATUSES].join(", ")}`);
-      }
-    }
-  }
-  return posture;
-}
-
-/**
- * Organisation catalogues become authored frameworks. They are authored by the adopter, not
- * this repository, so the editorial requirements of checkAuthoredFrameworks (a one-line
- * summary, a mapping rationale) do not apply; what does apply is that every CoSAI target
- * exists. The entry-keyed authoring is inverted here into the framework-side shape the rest
- * of the build and the UI already read, and every entry is registered as reference text so
- * an org control nothing maps to shows as a gap rather than vanishing.
- */
-function checkOrgFrameworks(
-  org: { meta: OrgMeta; frameworks: OrgFrameworkDoc[] },
-  ctx: {
-    riskIds: Set<string>;
-    controlIds: Set<string>;
-    mitigationIds: Set<string>;
-    capabilityIds: Set<string>;
-    takenIds: Set<string>;
-  },
-): {
-  frameworks: Framework[];
-  mappings: Record<string, AuthoredMappings>;
-  entries: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }>;
-} {
-  const frameworks: Framework[] = [];
-  const mappings: Record<string, AuthoredMappings> = {};
-  const entries: Record<string, { source: string; entries: Record<string, FrameworkEntryInfo> }> = {};
-  const known = { risks: ctx.riskIds, controls: ctx.controlIds, mitigations: ctx.mitigationIds, capabilities: ctx.capabilityIds };
-  const seen = new Set<string>();
-
-  for (const doc of org.frameworks) {
-    const where = `org/${org.meta.profile} framework ${doc.id}`;
-    if (!doc.id?.trim()) fail(`org/${org.meta.profile}: a framework needs an id`);
-    if (ctx.takenIds.has(doc.id) || seen.has(doc.id)) fail(`${where}: id is already a framework`);
-    seen.add(doc.id);
-    if (!doc.name?.trim()) fail(`${where}: needs a name`);
-    if (!doc.entries?.length) fail(`${where}: needs at least one entry`);
-
-    const mapped: AuthoredMappings = {};
-    const reference: Record<string, FrameworkEntryInfo> = {};
-    const entryIds = new Set<string>();
-    for (const entry of doc.entries ?? []) {
-      const at = `${where} entry ${entry.id}`;
-      if (!entry.id?.trim()) fail(`${where}: an entry needs an id`);
-      if (entryIds.has(entry.id)) fail(`${at}: duplicate id`);
-      entryIds.add(entry.id);
-      if (!entry.label?.trim()) fail(`${at}: needs a label`);
-      reference[entry.id] = {
-        label: entry.label,
-        description: entry.description ?? "",
-        ...(entry.url ? { url: entry.url } : {}),
-        ...(entry.group ? { group: entry.group } : {}),
-      };
-      for (const kind of ["risks", "controls", "mitigations", "capabilities"] as const) {
-        for (const target of entry[kind] ?? []) {
-          if (!known[kind].has(target)) {
-            fail(`${at}: unknown ${kind.slice(0, -1)} ${target}`);
-            continue;
-          }
-          const byId = (mapped[kind] ??= {});
-          (byId[target] ??= []).push(entry.id);
-        }
-      }
-    }
-
-    frameworks.push({
-      id: doc.id,
-      name: doc.name,
-      fullName: doc.fullName ?? doc.name,
-      description: doc.description,
-      version: doc.version ?? null,
-      documentUri: doc.url,
-      baseUri: doc.url,
-      authored: true,
-      org: true,
-      entriesComplete: true,
-      attribution: `Authored by ${org.meta.name}. Mappings onto CoSAI are that organisation's judgement, recorded in data/org/${org.meta.profile}/frameworks.yaml.`,
-    });
-    mappings[doc.id] = mapped;
-    entries[doc.id] = { source: `data/org/${org.meta.profile}/frameworks.yaml`, entries: reference };
-  }
-
-  if (frameworks.length) {
-    console.log(`org: profile "${org.meta.profile}" (${org.meta.name}), ${frameworks.length} catalogue(s)`);
-  }
-  return { frameworks, mappings, entries };
 }
 
 /**

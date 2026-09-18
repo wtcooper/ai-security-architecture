@@ -102,7 +102,7 @@ export function FrameworksBrowser() {
                   title={
                     org.example
                       ? "Example content shipped with the repository. Copy data/org/example to data/org/local and replace it with your own catalogue."
-                      : `Your organisation's catalogue, from data/org/local — mappings onto CoSAI are ${org.name}'s judgement.`
+                      : `Your organisation's catalogue, from data/org/local — technology mappings are authored by ${org.name}; MITRE and CoSAI associations are derived.`
                   }
                 >
                   {org.example ? "example data — replace data/org/example" : "your organisation"}

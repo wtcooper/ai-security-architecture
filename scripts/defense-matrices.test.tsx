@@ -1,3 +1,4 @@
+import React from "react";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -8,7 +9,7 @@ import { matrixHref } from "../src/components/defenses/DefenseNavigation";
 import { capabilityMatrixItem, mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
 import { CapabilitiesRoute } from "../src/components/capabilities/CapabilitiesBrowser";
 import { MitigationsBrowser } from "../src/components/mitigations/MitigationsBrowser";
-import { capabilities, mitigations, mitigationAliases, orgSurfaceStatusFor, orgSurfacePostureFor, surfaces } from "../src/lib/data";
+import { capabilities, mitigations, mitigationAliases, orgSurfaceStatusFor, orgSurfacePostureFor, orgCapabilitySurfaceStatusFor, orgCapabilities, surfaces } from "../src/lib/data";
 
 const all = { category: "", surface: "" };
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -82,12 +83,27 @@ test("org overlays retain matrix entries and distinguish absent assessments from
   for (const method of mitigations) for (const surface of surfaces) {
     const record = orgSurfacePostureFor(method.id, surface.id);
     assert.equal(orgSurfaceStatusFor(method.id, surface.id), record?.status ?? "notAssessed");
-    if (record) recorded++; else missing++;
+    if (record.contributions.length) recorded++; else missing++;
   }
   assert.ok(recorded && missing);
   assert.match(render(true), /Not assessed/);
   assert.doesNotMatch(render(false), /Not assessed/);
-  const html = renderToStaticMarkup(<DefenseMatrix items={capabilities.map(capabilityMatrixItem)} {...all} label="Capabilities" onSelect={() => {}} statusFor={() => "notAssessed"} />);
+  const html = renderToStaticMarkup(<DefenseMatrix items={capabilities.map(capabilityMatrixItem)} {...all} label="Capabilities" onSelect={() => {}} statusFor={orgCapabilitySurfaceStatusFor} />);
   assert.match(html, /Not assessed/);
-  assert.doesNotMatch(html, / — Enabled| — Gap/);
+  assert.match(html, / — In progress| — Gap/);
+});
+
+
+test("Show org data changes the actual capability page and displays capability deployments", (t) => {
+  const off = page("/capabilities", "capability=tech-dlp");
+  t.mock.method(React, "useSyncExternalStore", () => true);
+  const on = page("/capabilities", "capability=tech-dlp");
+  assert.notEqual(off, on);
+  assert.doesNotMatch(off, /Organization capability deployment|Capability deployments/);
+  assert.match(on, /Organization capability deployment|Capability deployments/);
+  assert.ok(on.includes(orgCapabilities.find((c) => c.capability === "tech-dlp")!.title));
+  assert.match(on, /In progress/);
+  const methods = page("/mitigations");
+  assert.match(methods, /Organization capability support/);
+  assert.match(methods, /No capability mapping/);
 });

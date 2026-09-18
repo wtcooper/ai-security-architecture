@@ -165,12 +165,12 @@ function GroupRows({
   );
 }
 
-/** Explicit organization crosswalks augment the reference names; nothing is inferred across layers. */
+/** Organization capability mappings augment the reference names; method/control links are derived. */
 function OrgMappings({ kind, id }: { kind: EntityKind; id: string }) {
   const entries = orgEntriesFor(kind, id);
   if (!entries.length) return null;
   return <div className="mt-2 border-l-2 border-line pl-2">
-    <p className="text-[10px] font-semibold text-ink-3">{org.example ? "Example org" : org.shortName ?? org.name}</p>
+    <p className="text-[10px] font-semibold text-ink-3">{org.example ? "Example org" : org.shortName ?? org.name}{kind !== "capabilities" ? " · via capabilities" : ""}</p>
     <ul className="mt-1 space-y-1">
       {entries.map((entry) => <li key={entry.frameworkId + ":" + entry.id}>
         <Link href={frameworkHref(entry.frameworkId, entry.id)} title={entry.frameworkName} className="text-[11px] leading-snug text-ink-2 hover:text-introduced hover:underline">
@@ -191,7 +191,7 @@ function MitigationCell({ id, archetypeId, overlay }: { id: string; archetypeId:
     {overlay && <>
       <OrgMappings kind="mitigations" id={id} />
       <div className="mt-2"><StatusPill status={orgSurfaceStatusFor(id, arch.surface)} compact title={posture?.note} /></div>
-      {posture?.technology && <p className="mt-1 text-[11px] text-ink-2" title={posture.note}>Deployed: {posture.technology}</p>}
+      {posture?.technology && <p className="mt-1 text-[11px] text-ink-2" title={posture.note}>Org capabilities: {posture.technology}</p>}
     </>}
   </div>;
 }

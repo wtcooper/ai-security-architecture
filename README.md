@@ -115,7 +115,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
-| **Reference Architectures › Tools** | Three permanent columns: CoSAI controls, MITRE mitigations, and sourced technology capabilities. Controls span their mapped mitigation rows, keeping product evidence attached to a specific method. **Show org data** adds explicit org mappings inside each taxonomy cell, plus product columns, availability and status. The taxonomy names and row structure stay unchanged. |
+| **Reference Architectures › Tools** | Three permanent columns: CoSAI controls, MITRE mitigations, and sourced technology capabilities. Controls span their mapped mitigation rows, keeping product evidence attached to a specific method. **Show org data** adds org capability names and derived associations inside each taxonomy cell, plus product columns, availability and status. The taxonomy names and row structure stay unchanged. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
 Every diagram supports pan and zoom.
@@ -197,8 +197,12 @@ Both `/mitigations` and `/capabilities` have matrices with CoSAI control-group r
 deployment-surface columns. The page switch preserves control-group and surface filters;
 selected items retain their own deep links. Capability placement follows the existing mitigation
 mappings and does not establish technology deployment. **Show org data** adds recorded
-mitigation assessments and explicit organization mappings; missing surface assessments display
-as **Not assessed**, and technology deployment is not inferred from related method status.
+capability assessments and their derived mitigation/control associations. Missing assessments display
+as **Not assessed**; a mitigation with no technology category is **No capability mapping**.
+Organization data is authored only against capabilities; mitigation effectiveness and control
+fulfillment are not inferred from deployment status. The current crosswalk covers 34 of 59
+mitigations; [the mapping gap report](docs/CAPABILITY-MAPPING-GAPS.md) lists the remaining
+25 methods and 9 CoSAI controls without a capability path.
 
 The MITRE catalogue lives at `/mitigations`; `/capabilities` presents 26 sourced technology
 categories, with old MITRE deep links preserved. OWASP supplies AI categories, ENISA ECSMAF 3.0
@@ -413,24 +417,18 @@ overlay phase with no components, a map that has drifted from CoSAI.
 
 Everything is text. Clone the repository, and:
 
-1. **Cross-map your own standard.** Copy `data/org/example/` to `data/org/local/` and replace
-   its content with your control standard and risk register, each entry naming the CoSAI
-   controls, mitigations and risks it corresponds to. The build inverts that into the same
-   cross-reference the OWASP lenses use, so your identifiers appear on the Frameworks tab, on
-   every risk, control and mitigation card, in the rails and hover cards of every reference
-   architecture, and in the controls table of every product record. `local/` is gitignored here and never
-   shipped, so pulling upstream never conflicts; in your own clone, `git add -f data/org/local`
-   once.
-2. **Record your posture, in two halves.** `data/org/local/mitigations.yaml` is the enterprise
-   layer: per mitigation and surface, the technology you run around the tools (MDM, endpoint
-   DLP, SSE, gateway guardrails, SIEM) and its status. `tooling-status.yaml` is the product
-   half: per product, `available: true` when people may install it, and a status per reference
-   control (`enabled | inProgress | gap`). Availability is a boolean because a product is
-   provided or blocked; the control statuses say how well it is locked down. Anything not
-   recorded is a gap, and a product not listed is not available. Switch
-   **Show org data** on (beside the Mitigations and Reference architectures titles) and the
-   matrix, the Tools grid and every product record show it; products you do not run are greyed
-   out so the gaps are the picture.
+1. **Map your technology inventory once.** Create `data/org/local/capabilities.yaml` from the
+   active example. Give each organization capability a name and ID, one default `tech-*`
+   category, and deployment assessments by surface. MITRE and CoSAI associations roll up
+   automatically; do not author separate organization mappings to methods or controls.
+   The generated `org-capabilities` framework shows your inventory and its derived links.
+2. **Record product context where useful.** `tooling-status.yaml` records tool availability and
+   optional assessments keyed by organization capability ID. **Show org data** displays these
+   on both matrices and the architecture Tools table. Missing assessments are **Not assessed**;
+   an explicit `gap` is a deployment shortfall. Methods without a default technology category
+   are marked **No capability mapping**. See [the organization guide](data/org/README.md) for
+   examples, rollup semantics, and safe migration of old assessments. The previous shipped
+   records are preserved under `data/org/example/archive/`.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
    `tooling-onboard` skill under `.claude/skills/` carries the research protocol, and
    `org-taxonomy-customize` walks through the mapping work. `npm run data` fails on any

@@ -120,7 +120,7 @@ export function ControlRowDetail({ tool, mitigationId, showTitle = false }: { to
           {surfaceStatus && arch && (
             <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
               <StatusPill status={surfaceStatus} compact />{" "}
-              {surfacePosture?.technology ?? "Enterprise mitigation"} on {surfaceById.get(arch.surface)?.title.toLowerCase()}
+              {surfacePosture?.technology ?? "Capability support"} on {surfaceById.get(arch.surface)?.title.toLowerCase()}
               {surfacePosture?.note && <span className="block text-[11.5px] text-ink-3">{surfacePosture.note}</span>}
             </p>
           )}

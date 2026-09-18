@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { isMap, isScalar, isSeq, parse, parseDocument, stringify, type Node } from "yaml";
 import { migrateKeyed, migrateToolControls, type MigrationRules } from "./lib/capability-migration";
 import type { LegacyToolControl as ToolControl } from "./lib/capability-migration";
+import { isOrgCapabilityDocument } from "./rename-mitigations";
 
 async function main() {
   const root = process.cwd();
@@ -26,6 +27,7 @@ async function main() {
   let archived = false;
   for (const dir of dirs) for await (const path of files(join(root, dir))) {
     const before = await readFile(path, "utf8");
+    if (isOrgCapabilityDocument(before)) continue;
     const doc = parseDocument(before);
     if (doc.errors.length) throw new Error(`${path}: ${doc.errors.join(", ")}`);
     const preserveRetired = (value: unknown, location: (string | number)[] = []) => {
@@ -99,6 +101,7 @@ async function main() {
         for (const pair of node.items) {
           // Original evidence is an immutable migration record, not a live reference.
           if (isScalar(pair.key) && pair.key.value === "migration") continue;
+          if (isScalar(pair.key) && pair.key.value === "capabilities" && node.has("tool")) continue;
           pair.value = walk(pair.value as Node | null);
         }
       }

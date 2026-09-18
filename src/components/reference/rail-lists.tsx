@@ -24,7 +24,7 @@ function OrgSurfaceStatus({ mitigationId, surfaceId }: { mitigationId: string; s
   const posture = orgSurfacePostureFor(mitigationId, surfaceId);
   return (
     <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
-      <span className="mr-0.5">Your status:</span>
+      <span className="mr-0.5">Capability support:</span>
       <StatusPill status={orgSurfaceStatusFor(mitigationId, surfaceId)} compact />
       {posture?.technology && <span className="text-ink-2">{posture.technology}</span>}
       {posture?.note && <span>— {posture.note}</span>}
@@ -38,7 +38,7 @@ function OrgRefs({ kind, id }: { kind: EntityKind; id: string }) {
   if (!overlay || !refs.length) return null;
   return (
     <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-3">
-      <span className="mr-0.5">Your controls:</span>
+      <span className="mr-0.5">Org capabilities:</span>
       {refs.map((o) => (
         <Link
           key={`${o.frameworkId}:${o.id}`}

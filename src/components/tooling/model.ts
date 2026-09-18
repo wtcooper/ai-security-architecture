@@ -77,7 +77,7 @@ export interface Cell {
   missing: string[];
 }
 
-const STATUS_RANK: DisplayStatus[] = ["gap", "notAssessed", "inProgress", "enabled"];
+const STATUS_RANK: DisplayStatus[] = ["gap", "unmapped", "notAssessed", "inProgress", "enabled"];
 // A not-applicable component neither helps nor hurts a composite; it only shows when every part is.
 const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native", "notApplicable"];
 const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
-import { ORG_STATUSES, STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
+import { OrgCapabilityLegend } from "@/components/defenses/OrgCapabilityLegend";
+import { CapabilityMappingGaps } from "@/components/defenses/CapabilityMappingGaps";
 import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { FilterPill, RISK_CATEGORY_ACCENT } from "@/components/browse/RisksBrowser";
@@ -16,6 +17,7 @@ import {
   mitigationGaps,
   controlById,
   orgSurfaceStatusFor,
+  orgSurfacePostureFor,
   riskById,
   riskCategories,
 } from "@/lib/data";
@@ -140,34 +142,12 @@ export function MitigationsBrowser() {
           </p>
         </div>
 
-        {overlay && (
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-paper px-4 py-2.5">
-          <span className="eyebrow">Your status</span>
-          {([...ORG_STATUSES, "notAssessed"] as DisplayStatus[]).map((s) => {
-            const tint = STATUS_STYLE[s];
-            return (
-              <span key={s} className="flex items-center gap-1.5 text-[12.5px] text-ink-2">
-                <span
-                  className="h-3.5 w-6 rounded-full border"
-                  style={{
-                    background: tint.bg,
-                    borderColor: tint.border,
-                    borderStyle: tint.dashed ? "dashed" : "solid",
-                  }}
-                />
-                {STATUS_META[s].label}
-              </span>
-            );
-          })}
-          <span className="text-[12.5px] text-ink-3">
-            Implementation status per mitigation and surface. Missing records are not assessed; gaps are identified shortfalls.
-          </span>
-        </div>
-        )}
+        {overlay && <OrgCapabilityLegend derived />}
 
         <DefenseMatrix items={shown.map(mitigationMatrixItem)} selectedId={selectedId}
           onSelect={(id) => setClicked(id === selectedId ? null : id)} {...filters}
-          statusFor={overlay ? orgSurfaceStatusFor : undefined} label="Mitigations by control group and deployment surface" />
+          statusFor={overlay ? orgSurfaceStatusFor : undefined}
+          orgNamesFor={overlay ? (id, surface) => orgSurfacePostureFor(id, surface).technology : undefined} label="Mitigations by control group and deployment surface" />
 
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No mitigations match these filters.</p>}
         <p className="mt-2 text-[12px] text-ink-3">
@@ -177,6 +157,7 @@ export function MitigationsBrowser() {
           defenses or a coverage score; some upstream concepts overlap.
         </p>
 
+        <CapabilityMappingGaps />
         <details className="mt-5 rounded-lg border border-line bg-paper p-4">
           <summary className="cursor-pointer text-sm font-semibold text-ink">CoSAI requirements beyond the mitigation mappings</summary>
           <p className="mt-2 text-xs text-ink-3">Authored assessment of the pinned MITRE releases. These are gaps and implementation requirements against existing CoSAI controls, not additional mitigations.</p>

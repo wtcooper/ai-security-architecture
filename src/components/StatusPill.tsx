@@ -11,12 +11,14 @@ export type { DisplayStatus } from "@/lib/types";
 export const STATUS_META: Record<DisplayStatus, { label: string; blurb: string }> = {
   enabled: { label: "Enabled", blurb: "In place and switched on." },
   inProgress: { label: "In progress / Partial", blurb: "Partly in place — some of it configured, or still being rolled out." },
+  unmapped: { label: "No capability mapping", blurb: "This mitigation has no technology category mapping to roll up." },
   notAssessed: { label: "Not assessed", blurb: "No assessment recorded for this item and surface." },
   gap: { label: "Gap", blurb: "An identified shortfall." },
 };
 
 /** Pale tints so a wall of pills reads as a matrix; the text colour does the work. */
 export const STATUS_STYLE: Record<DisplayStatus, { bg: string; border: string; text: string; dashed?: boolean }> = {
+  unmapped: { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675", dashed: true },
   notAssessed: { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675" },
   enabled: { bg: "#e8f6ef", border: "#a7dcc4", text: "#06845a" },
   inProgress: { bg: "#fdf3e4", border: "#eecfa3", text: "#b45309" },

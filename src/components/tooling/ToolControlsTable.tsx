@@ -40,9 +40,9 @@ export function ToolControlsTable({ tool, openMitigation }: { tool: Tool; openMi
             <tr className="bg-mist text-left text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
               <th className="px-3 py-2 font-semibold">Mitigation</th>
               <th className="px-3 py-2 font-semibold">CoSAI controls</th>
-              {overlay && <th className="px-3 py-2 font-semibold">Your controls</th>}
+              {overlay && <th className="px-3 py-2 font-semibold">Org capabilities</th>}
               <th className="px-3 py-2 font-semibold">Admin-settable?</th>
-              {overlay && <th className="px-3 py-2 font-semibold">Status</th>}
+              {overlay && <th className="px-3 py-2 font-semibold">Capability support</th>}
             </tr>
           </thead>
           <tbody>

@@ -67,7 +67,7 @@ test("org overlay retains all three taxonomy columns and adds mappings, product 
   if (dataset.meta.org.example) {
     const cells = [...on.matchAll(/<(td|th)\b[^>]*>([\s\S]*?)<\/\1>/g)].map((m) => m[2]);
     for (const path of ["/controls?control=controlUserDataManagement", "/mitigations?mitigation=AML.M0020", "/capabilities?capability=tech-dlp"]) {
-      assert.ok(cells.some((cell) => cell.includes(path) && cell.includes("AIS-3.1")), path);
+      assert.ok(cells.some((cell) => cell.includes(path) && cell.includes("EX-DLP")), path);
     }
   }
 });
@@ -93,8 +93,8 @@ test("each product status and vendor record applies to exactly the displayed mit
 test("technology org mappings are explicit and survive the legacy schema migration", () => {
   if (dataset.meta.org.example) {
     const dlp = orgEntriesFor("capabilities", "tech-dlp").map((e) => e.id);
-    assert.ok(dlp.includes("AIS-3.1"));
-    assert.ok(!dlp.includes("AIS-4.1"), "sharing broad AI guardrails cannot manufacture an injection-defense mapping");
+    assert.ok(dlp.includes("EX-DLP"));
+    assert.ok(!dlp.includes("EX-GUARDRAILS"), "sharing broad AI guardrails cannot manufacture an injection-defense mapping");
   }
   const source = "entries:\n  - mitigations: [AML.M0020]\n    capabilities: [tech-dlp, tech-llm-guardrails]\n";
   assert.equal(renameMitigationKeys(source), source);

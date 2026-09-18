@@ -84,6 +84,7 @@ export function MitigationDetail({ mitigation, onClose }: { mitigation: Mitigati
         </div>
       </details>
 
+      {overlay && <p className="mt-6 text-xs text-ink-3">Organization status below rolls up from capability deployments. It describes supporting technology, not an assessment of this mitigation.</p>}
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         {surfaces.map((s) => {
           const info = mitigation.surfaces[s.id];
@@ -103,9 +104,9 @@ export function MitigationDetail({ mitigation, onClose }: { mitigation: Mitigati
               </p>
               <p className="mt-1.5 text-xs font-medium text-ink-2">{info?.responsibility.replaceAll("-", " ")}</p>
               {info?.note && <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">{info.note}</p>}
-              {overlay && orgSurfacePostureFor(mitigation.id, s.id)?.technology && (
+              {overlay && info?.applies && orgSurfacePostureFor(mitigation.id, s.id)?.technology && (
                 <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
-                  <span className="eyebrow mr-1">With</span>
+                  <span className="eyebrow mr-1">Org capability</span>
                   {orgSurfacePostureFor(mitigation.id, s.id)!.technology}
                 </p>
               )}

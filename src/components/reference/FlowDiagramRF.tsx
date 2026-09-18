@@ -52,7 +52,7 @@ interface HoverCard {
 function pinBody(note: string | undefined, kind: EntityKind, id: string, show: boolean): string | undefined {
   const own = show ? orgEntriesFor(kind, id) : [];
   if (!own.length) return note;
-  const line = `Your controls: ${own.map((o) => o.id).join(" · ")}`;
+  const line = `Org capabilities: ${own.map((o) => `${o.label} (${o.id})`).join(" · ")}`;
   return note ? `${note}\n${line}` : line;
 }
 

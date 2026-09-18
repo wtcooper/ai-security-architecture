@@ -10,10 +10,12 @@ import { DefenseNavigation, matrixHref, useDefenseSelection, useMatrixFilters } 
 import { capabilityMatrixItem, matchesMatrixFilters } from "@/components/defenses/model";
 import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { useOrgOverlay } from "@/components/tooling/overlay";
+import { OrgCapabilityLegend } from "@/components/defenses/OrgCapabilityLegend";
+import { CapabilityMappingGaps } from "@/components/defenses/CapabilityMappingGaps";
 import { StatusPill } from "@/components/StatusPill";
 import { FilterPill } from "@/components/browse/RisksBrowser";
 import { MitigationsBrowser } from "@/components/mitigations/MitigationsBrowser";
-import { capabilities, capabilityById, frameworkById, frameworkEntries, mitigationById, mitigationAliases, controlById, archetypes, incidents, orgSurfacePostureFor, surfaces } from "@/lib/data";
+import { capabilities, capabilityById, frameworkById, frameworkEntries, mitigationById, mitigationAliases, controlById, archetypes, incidents, orgCapabilitySurfacePostureFor, orgCapabilitySurfaceStatusFor, orgCapabilitiesFor, surfaces } from "@/lib/data";
 import { frameworkHref, mappingsForControl, orgEntriesFor } from "@/lib/frameworks";
 
 // Links published when capabilities meant MITRE methods still open their original subject.
@@ -53,14 +55,14 @@ function CapabilitiesBrowser() {
       </PageHeader>
       <div className="mx-auto w-full max-w-[1400px] px-6 py-8">
         <p className="mb-3 text-[13px] text-ink-3">{shown.length} of {capabilities.length} technology capabilities</p>
-        {overlay && <p className="mb-3 rounded-lg border border-line bg-paper p-3 text-xs text-ink-2">
-          Technology deployment: Not assessed. Select a category to see organization mappings and recorded implementations of related mitigations. Those records do not establish deployment of the whole technology category.
-        </p>}
+        {overlay && <OrgCapabilityLegend />}
         <DefenseMatrix items={shown.map(capabilityMatrixItem)} selectedId={selected}
           onSelect={(id) => setClicked(id === selected ? null : id)} {...filters}
-          statusFor={overlay ? () => "notAssessed" : undefined} label="Technology capabilities by control group and deployment surface" />
+          statusFor={overlay ? orgCapabilitySurfaceStatusFor : undefined}
+          orgNamesFor={overlay ? (id, surface) => orgCapabilitySurfacePostureFor(id, surface).technology ?? orgCapabilitiesFor(id).map((c) => c.title).join(" · ") : undefined} label="Technology capabilities by control group and deployment surface" />
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No capabilities match these filters.</p>}
         <p className="mt-2 text-xs text-ink-3">Placement follows mapped mitigations’ primary CoSAI control groups and applicable surfaces. A category may appear in several groups. These are possible implementation paths, not deployment claims; inspect the mapping rationale for scope.</p>
+        <CapabilityMappingGaps />
         <div ref={detailRef} className="mt-6 scroll-mt-20">
         {capability && <div className="rounded-xl border border-line bg-paper p-7">
           <button onClick={() => setClicked(null)} className="float-right text-sm text-ink-3 hover:text-ink" aria-label="Close capability detail">Close ×</button>
@@ -91,20 +93,16 @@ function CapabilitiesBrowser() {
               <Link key={entry.frameworkId + entry.id} href={frameworkHref(entry.frameworkId, entry.id)} className="text-sm text-introduced hover:underline">{entry.label} <span className="text-xs text-ink-3">({entry.id})</span></Link>
             )}</div>
             {!orgEntriesFor("capabilities", capability.id).length && <p className="mt-2 text-xs text-ink-3">No organization mapping recorded.</p>}
-            <p className="eyebrow mt-4">Related mitigation implementations</p>
-            <p className="mt-1 text-xs text-ink-3">Status belongs to each mitigation and surface, not to this technology category.</p>
+            <p className="eyebrow mt-4">Capability deployments</p>
             {surfaces.filter((s) => !filters.surface || filters.surface === s.id).map((surface) => {
-              const records = mitigationIds.flatMap((id) => {
-                const record = orgSurfacePostureFor(id, surface.id);
-                return record ? [{ id, record }] : [];
-              });
+              const rollup = orgCapabilitySurfacePostureFor(capability.id, surface.id);
               return <div key={surface.id} className="mt-3">
-                <p className="text-xs font-semibold">{surface.title}</p>
-                {records.length ? records.map(({ id, record }) => <div key={id} className="mt-2 text-sm text-ink-2">
-                  <Link href={`/mitigations?mitigation=${id}`} className="hover:underline">{mitigationById.get(id)?.title}</Link>{" "}<StatusPill status={record.status} compact />
-                  {record.technology && <p className="mt-1 text-xs">{record.technology}</p>}
-                  {record.note && <p className="mt-1 text-xs text-ink-3">{record.note}</p>}
-                </div>) : <p className="mt-1 text-xs text-ink-3">No related assessment recorded.</p>}
+                <p className="text-xs font-semibold">{surface.title} <StatusPill status={rollup.status} compact /></p>
+                {rollup.contributions.length ? rollup.contributions.map((c) => <div key={c.id + c.context} className="mt-2 text-sm text-ink-2">
+                  <span className="font-semibold">{c.title}</span> · {c.context}{" "}<StatusPill status={c.record!.status} compact />
+                  {c.record?.note && <p className="mt-1 text-xs">{c.record.note}</p>}
+                  {c.record?.evidence && <p className="mt-1 text-xs text-ink-3">Evidence: {c.record.evidence}</p>}
+                </div>) : <p className="mt-1 text-xs text-ink-3">No capability assessment recorded on this surface.</p>}
               </div>;
             })}
           </div>}
