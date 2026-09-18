@@ -46,7 +46,7 @@ import {
   TOOL_SURFACE_CLASSES,
 } from "../src/lib/types";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, tagSpots } from "../src/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, placeTags, TAG_W_EST } from "../src/lib/flow-layout";
 import {
   ACTOR_IDS,
   BANDS,
@@ -1802,9 +1802,14 @@ function checkDiagramCollisions(
   for (const pin of arch.pins.risks) {
     tagGroups.set(pin.at, (tagGroups.get(pin.at) ?? 0) + 1);
   }
-  for (const [at, n] of tagGroups) {
-    // Tag width depends on the code ("R01"), which is constant-width here.
-    const { rects } = tagSpots(Array.from({ length: n }, () => 32), layout.blocks[at], edgeGeoOf(at));
+  // Tag width depends on the code ("R01"), which is constant-width here. Placed in one pass,
+  // exactly as the renderers place them, so the collision check sees the merged stacks.
+  const placedTags = placeTags(
+    [...tagGroups.entries()].map(([at, n]) => ({ at, widths: Array.from({ length: n }, () => TAG_W_EST) })),
+    layout,
+  );
+  for (const [at] of tagGroups) {
+    const rects = placedTags.get(at)?.rects ?? [];
     checkSpots("risk tag", at, rects, layout.blocks[at] ? at : undefined);
   }
 

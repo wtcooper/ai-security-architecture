@@ -9,7 +9,7 @@
  */
 import { bandFor } from "@/lib/bands";
 import { capabilityById, componentById, riskById, riskCode } from "@/lib/data";
-import { chipSpots, itemCells, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, itemCells, placeTags, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype } from "@/lib/types";
 
 import { tagWidth } from "./flow-style";
@@ -165,11 +165,15 @@ export function buildViewerModel(archetype: Archetype) {
     if (!tagGroups.has(pin.at)) tagGroups.set(pin.at, []);
     tagGroups.get(pin.at)!.push(pin);
   }
+  const placedTags = placeTags(
+    [...tagGroups.entries()].map(([at, pins]) => ({ at, widths: pins.map((p) => tagWidth(riskCode(p.risk))) })),
+    archetype.layout,
+  );
   for (const [at, pins] of tagGroups) {
     const blockRect = rects[at];
     const geo = blockRect ? undefined : edgeGeoOf(at);
     const codes = pins.map((p) => riskCode(p.risk));
-    const { rects: tagRects } = tagSpots(codes.map(tagWidth), blockRect, geo);
+    const tagRects = placedTags.get(at)?.rects ?? [];
     pins.forEach((pin, i) => {
       const r = tagRects[i];
       if (!r) return;

@@ -245,9 +245,15 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // is half a block lower. Edge stacks were left out of this sum entirely until the local model
   // runtime lost its top row and three risk tags floated up out of the band — the slack that
   // had been hiding them was the row that got removed.
-  const stackHeight = (n: number) => (n ? TAG_GAP * n + TAB_H / 2 + ZONE_HEAD + 8 : 0);
+  // A block's tags are laid out in rows above its tab, up to TAGS_PER_ROW per row; an edge's
+  // stack is still counted at its full height because its orientation is not known until the
+  // arrows are routed. The estimate only sets the margin — the band top is derived from the
+  // placed tags further down.
+  const stackHeight = (rows: number) => (rows ? TAG_GAP * rows + TAB_H / 2 + ZONE_HEAD + 10 : 0);
   const needed = [
-    ...[...onFirstRow.values()].map((p) => stackHeight(tagsOn.get(p.block.id) ?? 0)),
+    ...[...onFirstRow.values()].map((p) =>
+      stackHeight(Math.ceil((tagsOn.get(p.block.id) ?? 0) / TAGS_PER_ROW)),
+    ),
     ...[...tagsOn.entries()]
       .filter(([at]) => at.includes("->"))
       .map(([at, n]) => {
@@ -305,22 +311,6 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // Column extents let the renderer derive band rects from the grid rather than from member
   // rects, so a band holding only a narrow actor no longer leaves a gutter beside it.
   const columns = top.colX.map((x, i) => ({ x: MARGIN_X + x, w: top.colW[i] }));
-
-  // Where the ownership bands start. Derived here rather than in each renderer because it is
-  // not simply "above the topmost block": a risk-tag stack rises out of its block and must stay
-  // inside the band that owns it, so the band's top is whichever of the two sits higher.
-  const rootTops = roots.map((p) => blocks[p.block.id].y);
-  const tagTops = [...tagsOn.entries()]
-    .map(([at, n]) => {
-      const r = blocks[at];
-      if (!r) return Infinity; // edge-anchored stacks need edge geometry, resolved below
-      return r.y - TAB_H / 2 - TAG_GAP * n;
-    })
-    .filter((y) => Number.isFinite(y));
-  const bandTop = Math.min(
-    Math.min(...rootTops) - ZONE_PAD - ZONE_HEAD,
-    ...tagTops.map((y) => y - ZONE_HEAD - 6),
-  );
 
   // --- Edges ---------------------------------------------------------------------
   // Every arrow gets its own anchor point. Without this, edges attaching to the same side of
@@ -438,41 +428,54 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     const { e, a, b, kind, aSide, bSide } = p;
     const A = anchorAt(e.from, aSide, a, i, "a", exitsThrough(e.from, e.to));
     const B = anchorAt(e.to, bSide, b, i, "b", exitsThrough(e.to, e.from));
-    const base = { from: e.from, to: e.to };
+    let d: string;
     if (kind === "h") {
       // Straight where the anchors line up; a shallow Z where they do not.
-      const d =
+      d =
         Math.abs(A.y - B.y) < 0.5
           ? `M ${A.x} ${A.y} L ${B.x} ${B.y}`
           : `M ${A.x} ${A.y} L ${(A.x + B.x) / 2} ${A.y} L ${(A.x + B.x) / 2} ${B.y} L ${B.x} ${B.y}`;
-      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: true, extent: Math.abs(B.x - A.x) };
-    }
-    if (kind === "v") {
-      const d =
+    } else if (kind === "v") {
+      d =
         Math.abs(A.x - B.x) < 0.5
           ? `M ${A.x} ${A.y} L ${B.x} ${B.y}`
           : `M ${A.x} ${A.y} L ${A.x} ${(A.y + B.y) / 2} L ${B.x} ${(A.y + B.y) / 2} L ${B.x} ${B.y}`;
-      return { ...base, d, midX: (A.x + B.x) / 2, midY: (A.y + B.y) / 2, horizontal: false, extent: Math.abs(B.y - A.y) };
+    } else if (kind === "vh") {
+      d = `M ${A.x} ${A.y} L ${A.x} ${B.y} L ${B.x} ${B.y}`;
+    } else {
+      d = `M ${A.x} ${A.y} L ${B.x} ${A.y} L ${B.x} ${B.y}`;
     }
-    if (kind === "vh") {
-      return {
-        ...base,
-        d: `M ${A.x} ${A.y} L ${A.x} ${B.y} L ${B.x} ${B.y}`,
-        midX: A.x,
-        midY: (A.y + B.y) / 2,
-        horizontal: false,
-        extent: Math.abs(B.y - A.y),
-      };
-    }
-    return {
-      ...base,
-      d: `M ${A.x} ${A.y} L ${B.x} ${A.y} L ${B.x} ${B.y}`,
-      midX: (A.x + B.x) / 2,
-      midY: A.y,
-      horizontal: true,
-      extent: Math.abs(B.x - A.x),
-    };
+    // Containers an endpoint sits inside, minus those holding both ends — an arrow between two
+    // children of one sandbox never leaves it, and the sandbox cannot be said to cover it.
+    const fromA = ancestors(e.from);
+    const toA = ancestors(e.to);
+    const containers = [...new Set([...fromA, ...toA])]
+      .filter((id) => !(fromA.includes(id) && toA.includes(id)))
+      .map((id) => blocks[id]);
+    const seg = pinSegment(d, containers);
+    // A shallow Z between two facing blocks pins on its middle jog, which runs across the
+    // edge's direction. Pins are laid out relative to the edge's direction there — beside the
+    // jog, in the gap between the blocks — not relative to the jog itself, which would put a
+    // badge stack under a horizontal jog and onto the block beneath it.
+    const isZ = (kind === "h" || kind === "v") && segmentsOf(d).length === 3;
+    return { from: e.from, to: e.to, d, ...seg, horizontal: isZ ? kind === "h" : seg.horizontal };
   });
+
+  // Where the ownership bands start. Derived here rather than in each renderer because it is
+  // not simply "above the topmost block": a risk-tag row rises out of its block or its arrow
+  // and must stay inside the band that owns it, so the band's top is whichever sits higher.
+  // Computed from the placed tags themselves — the same placement the renderers draw — rather
+  // than from a formula that has to be kept in step with it.
+  const rootTops = roots.map((p) => blocks[p.block.id].y);
+  const placed = placeTags(
+    [...tagsOn.entries()].map(([at, n]) => ({ at, widths: Array.from({ length: n }, () => TAG_W_EST) })),
+    { blocks, edges, columns },
+  );
+  const tagTops = [...placed.values()].flatMap((p) => p.rects.map((r) => r.y));
+  const bandTop = Math.min(
+    Math.min(...rootTops) - ZONE_PAD - ZONE_HEAD,
+    ...tagTops.map((y) => y - ZONE_HEAD - 6),
+  );
 
   return { width, height, blocks, edges, columns, bandTop, govBand };
 }
@@ -581,40 +584,203 @@ export function flowBadgeSpots(n: number, edge: PinEdgeGeo): Rect[] {
   );
 }
 
+/** Split our own "M x y L x y ..." path data into its axis-aligned segments. */
+function segmentsOf(d: string): { x0: number; y0: number; x1: number; y1: number }[] {
+  const nums = d.match(/-?[\d.]+/g)!.map(Number);
+  const segs: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  for (let i = 0; i + 3 < nums.length; i += 2) {
+    segs.push({ x0: nums[i], y0: nums[i + 1], x1: nums[i + 2], y1: nums[i + 3] });
+  }
+  return segs;
+}
+
 /**
- * Risk-tag pills plus the leader line that ties the stack to what it tags. Blocks carry their
- * stack above the title tab; horizontal flows above the midpoint; vertical flows beside it.
+ * Where an arrow's pins attach. Not the geometric middle of the path: on a bent route that is
+ * the corner or the short leg, and on an arrow leaving a nested block it is inside the
+ * container, on top of the container's items — which is where the hosted-sessions drawing
+ * first put two risk tags. The pin segment is the longest piece of the path that lies outside
+ * every container the arrow starts or ends in; the midpoint of that piece is where chips,
+ * tags and step badges sit, and its length is the room they have.
  */
-export function tagSpots(
-  widths: number[],
-  block?: Rect,
-  edge?: PinEdgeGeo,
-): { rects: Rect[]; leader: string } {
-  const n = widths.length;
-  if (block) {
-    const ax = block.x + 18;
-    const ay = block.y - TAB_H / 2;
-    return {
-      rects: widths.map((w, i) => ({ x: ax - w / 2, y: ay - TAG_GAP * (n - i), w, h: TAG_H })),
-      leader: `M ${ax} ${ay - TAG_GAP * n + TAG_H + 2} L ${ax} ${ay}`,
-    };
+function pinSegment(
+  d: string,
+  containers: Rect[],
+): { midX: number; midY: number; horizontal: boolean; extent: number } {
+  type Piece = { horizontal: boolean; at: number; lo: number; hi: number };
+  const pieces: Piece[] = [];
+  const raw: Piece[] = [];
+  for (const s of segmentsOf(d)) {
+    const horizontal = Math.abs(s.y1 - s.y0) < 0.5;
+    const at = horizontal ? s.y0 : s.x0;
+    const lo = horizontal ? Math.min(s.x0, s.x1) : Math.min(s.y0, s.y1);
+    const hi = horizontal ? Math.max(s.x0, s.x1) : Math.max(s.y0, s.y1);
+    if (hi - lo < 0.5) continue;
+    raw.push({ horizontal, at, lo, hi });
+    // Subtract every container's span along the segment's axis.
+    let spans: [number, number][] = [[lo, hi]];
+    for (const r of containers) {
+      const crosses = horizontal ? r.y <= at && at <= r.y + r.h : r.x <= at && at <= r.x + r.w;
+      if (!crosses) continue;
+      const c0 = horizontal ? r.x : r.y;
+      const c1 = horizontal ? r.x + r.w : r.y + r.h;
+      spans = spans.flatMap(([a, b]) => {
+        if (c1 <= a || c0 >= b) return [[a, b] as [number, number]];
+        const out: [number, number][] = [];
+        if (c0 > a) out.push([a, c0]);
+        if (c1 < b) out.push([c1, b]);
+        return out;
+      });
+    }
+    for (const [a, b] of spans) if (b - a > 8) pieces.push({ horizontal, at, lo: a, hi: b });
   }
-  if (!edge) return { rects: [], leader: "" };
-  if (edge.horizontal) {
-    const ax = edge.midX;
-    const bottom = edge.midY - 14;
-    return {
-      rects: widths.map((w, i) => ({ x: ax - w / 2, y: bottom - TAG_GAP * (n - i), w, h: TAG_H })),
-      leader: `M ${ax} ${bottom - TAG_GAP + TAG_H + 2} L ${ax} ${edge.midY - 5}`,
-    };
-  }
-  // Well clear of the arrow, because the stack sits in the row gap right above the lower
-  // block's title tab: at 16px it overlapped the tab of every block a tagged vertical run
-  // entered. 60px leaves the tag over the block's shoulder, off the tab, with a longer leader.
-  const right = edge.midX - 60;
-  const top = edge.midY - (n * TAG_GAP - (TAG_GAP - TAG_H)) / 2;
-  return {
-    rects: widths.map((w, i) => ({ x: right - w, y: top + i * TAG_GAP, w, h: TAG_H })),
-    leader: `M ${right + 1} ${edge.midY} L ${edge.midX - 5} ${edge.midY}`,
+  const pool = pieces.length ? pieces : raw;
+  const best = pool.reduce((m, p) => (p.hi - p.lo > m.hi - m.lo ? p : m), pool[0]);
+  const mid = (best.lo + best.hi) / 2;
+  return best.horizontal
+    ? { midX: mid, midY: best.at, horizontal: true, extent: best.hi - best.lo }
+    : { midX: best.at, midY: mid, horizontal: false, extent: best.hi - best.lo };
+}
+
+/** Tags per row above a block, and the width the build assumes for a coded tag ("R07"). */
+export const TAGS_PER_ROW = 4;
+export const TAG_W_EST = 32;
+const TAG_X_GAP = 6;
+
+export interface TagPlacement {
+  rects: Rect[];
+  /** A short line tying the tags to what they tag; renderers may draw it or not. */
+  leader: string;
+}
+
+/**
+ * Risk tags for every pinned block and arrow, placed together so they can be aligned with
+ * each other rather than each finding its own spot.
+ *
+ * - A block's tags form a row along its top edge, just above the title tab, left-aligned with
+ *   the block and wrapping upward past TAGS_PER_ROW. A row reads as part of the block; the
+ *   tower the first version stacked off one corner read as something floating beside it.
+ * - A horizontal arrow's tags form a row above its pin segment, centred on it.
+ * - A vertical arrow's tags stack beside it, right-aligned to the left gutter of the column
+ *   the arrow runs in, so every stack in that gutter shares one edge. Stacks that would
+ *   overlap — two arrows into the same block, a few pixels apart in their lanes — are merged
+ *   into one column ordered top to bottom, which is what turned a staircase of tags into a
+ *   list.
+ *
+ * One implementation for both renderers and the build's collision check, so the check can
+ * never drift from the drawing.
+ */
+export function placeTags(
+  groups: { at: string; widths: number[] }[],
+  layout: { blocks: Record<string, Rect>; edges: ArchLayout["edges"]; columns?: { x: number; w: number }[] },
+): Map<string, TagPlacement> {
+  const out = new Map<string, TagPlacement>();
+  const edgeOf = (ref: string) =>
+    layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
+    layout.edges.find((e) => `${e.to}->${e.from}` === ref);
+  const rowsUp = (widths: number[], left: number, right: number, firstRowY: number, align: "left" | "centre", centreX = 0) => {
+    // Pack left to right; wrap upward when the next tag would pass the right limit.
+    const rows: number[][] = [[]];
+    let x = 0;
+    for (const w of widths) {
+      const cur = rows[rows.length - 1];
+      if (cur.length && x + w > right - left) {
+        rows.push([]);
+        x = 0;
+      }
+      rows[rows.length - 1].push(w);
+      x += w + TAG_X_GAP;
+    }
+    const rects: Rect[] = [];
+    rows.forEach((row, ri) => {
+      const rowW = row.reduce((a, w) => a + w, 0) + TAG_X_GAP * (row.length - 1);
+      let rx = align === "left" ? left : centreX - rowW / 2;
+      const y = firstRowY - ri * TAG_GAP;
+      for (const w of row) {
+        rects.push({ x: rx, y, w, h: TAG_H });
+        rx += w + TAG_X_GAP;
+      }
+    });
+    return rects;
   };
+
+  type Stack = { at: string; widths: number[]; side: "l" | "r"; xEdge: number; midX: number; midY: number };
+  const stacks: Stack[] = [];
+  for (const g of groups) {
+    const block = layout.blocks[g.at];
+    if (block) {
+      const rects = rowsUp(g.widths, block.x, block.x + block.w + 2, block.y - TAB_H / 2 - 4 - TAG_H, "left");
+      out.set(g.at, { rects, leader: "" });
+      continue;
+    }
+    const e = edgeOf(g.at);
+    if (!e) {
+      out.set(g.at, { rects: [], leader: "" });
+      continue;
+    }
+    if (e.horizontal) {
+      const half = Math.max(e.extent / 2 - 8, TAG_W_EST);
+      const rects = rowsUp(g.widths, e.midX - half, e.midX + half, e.midY - 8 - TAG_H, "centre", e.midX);
+      const bottom = Math.max(...rects.map((r) => r.y + r.h));
+      out.set(g.at, { rects, leader: `M ${e.midX} ${bottom + 1} L ${e.midX} ${e.midY - 5}` });
+      continue;
+    }
+    // Vertical: snap the stack to the nearer gutter of the arrow's column — right-aligned to
+    // the left gutter or left-aligned to the right one — so every stack in a gutter shares one
+    // edge. An arrow running inside a container (child to child) or far from both gutters
+    // keeps its tags just left of itself instead.
+    const col = (layout.columns ?? []).find((c) => c.w > 0 && e.midX >= c.x - 8 && e.midX <= c.x + c.w + 8);
+    const inside = Object.entries(layout.blocks).some(
+      ([id, r]) => id !== e.from && id !== e.to && r.x < e.midX && e.midX < r.x + r.w && r.y < e.midY && e.midY < r.y + r.h,
+    );
+    let side: "l" | "r" = "l";
+    let xEdge = e.midX - 14;
+    if (col && !inside) {
+      const left = e.midX - (col.x - 6);
+      const right = col.x + col.w + 6 - e.midX;
+      if (left >= 14 && left <= right && left <= 160) xEdge = col.x - 6;
+      else if (right >= 14 && right <= 160) {
+        side = "r";
+        xEdge = col.x + col.w + 6;
+      }
+    }
+    stacks.push({ at: g.at, widths: g.widths, side, xEdge, midX: e.midX, midY: e.midY });
+  }
+
+  // Lay each vertical stack centred on its arrow, then merge the ones that would overlap in
+  // the same gutter into one column, ordered by where their arrows sit.
+  const stackH = (n: number) => n * TAG_GAP - (TAG_GAP - TAG_H);
+  type Laid = { stack: Stack; top: number; h: number };
+  const laid: Laid[] = stacks.map((st) => ({ stack: st, top: st.midY - stackH(st.widths.length) / 2, h: stackH(st.widths.length) }));
+  const clusters: Laid[][] = [];
+  for (const l of laid.sort((a, b) => a.top - b.top)) {
+    const home = clusters.find((c) =>
+      c.some(
+        (m) =>
+          m.stack.side === l.stack.side &&
+          Math.abs(m.stack.xEdge - l.stack.xEdge) <= 4 &&
+          l.top < m.top + m.h + 4 &&
+          m.top < l.top + l.h + 4,
+      ),
+    );
+    if (home) home.push(l);
+    else clusters.push([l]);
+  }
+  for (const c of clusters) {
+    c.sort((a, b) => a.stack.midY - b.stack.midY);
+    const total = c.reduce((a, m) => a + m.stack.widths.length, 0);
+    const centre = c.reduce((a, m) => a + m.stack.midY, 0) / c.length;
+    const { side, xEdge } = c[0].stack;
+    let y = centre - stackH(total) / 2;
+    for (const m of c) {
+      const rects = m.stack.widths.map((w) => {
+        const r = { x: side === "l" ? xEdge - w : xEdge, y, w, h: TAG_H };
+        y += TAG_GAP;
+        return r;
+      });
+      const near = side === "l" ? xEdge + 1 : xEdge - 1;
+      const far = side === "l" ? m.stack.midX - 5 : m.stack.midX + 5;
+      out.set(m.stack.at, { rects, leader: `M ${near} ${m.stack.midY} L ${far} ${m.stack.midY}` });
+    }
+  }
+  return out;
 }

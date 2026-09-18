@@ -46,8 +46,10 @@ description:
   - >
     Inference is the vendor's. No product in this class lets the hosted loop's model calls
     route through a customer gateway, including the variants that execute on workers we run;
-    the AI gateway on this drawing is on the tool path only, where the vendor's connector
-    service is admitted to our MCP servers on grants we issue. Everything the gateway does
+    the AI gateway on this drawing is on the tool path only — and that path is the one place
+    external compute reaches back into our systems, so it carries the drawing's strictest
+    pins: the vendor's connector service meets one aggregate MCP endpoint, on a per-user grant
+    our authorization server issued, evaluated per call and scoped to a named server list. Everything the gateway does
     for inference elsewhere in the catalogue has to be re-obtained as tenant configuration —
     server-managed settings, shared environments, an org-level switch for the hosted mode —
     and as exported audit, whose coverage differs by product and by plan.
@@ -599,11 +601,16 @@ edges:
     route: vh
     label: to the approved vendor
     note: >
-      The reach-back path: the vendor's connector service is admitted to our tool surface here,
-      on grants the gateway issues rather than anything the vendor holds, and the destination is
-      on our allowlist because an assessment cleared it. The outbound-only tunnel form both
-      first-party vendors also ship is recorded as a deviation rather than drawn as a second
-      path into the same gateway.
+      The reach-back path, and the crossing this drawing exists to govern: compute we do not
+      operate calling back into our systems for data connectors. The vendor's connector
+      service is admitted to our MCP endpoint here — the gateway's aggregate MCP surface, never
+      a server or the data directly — on audience-bound tokens and per-user grants our own
+      authorization server issued, with per-call policy evaluated at the gateway, the servers
+      and tools it may reach scoped to a named list, and every call recorded against the grant.
+      The vendor's own identity and IP ranges admit the caller; they authorise nothing. The
+      outbound-only tunnel form both first-party vendors also ship — a client we run that dials
+      out so the endpoint stays private — terminates at this same gateway and is recorded as a
+      deviation rather than drawn as a second path.
   - from: aiGateway
     to: internalTools
     path: primary
@@ -732,11 +739,21 @@ pins:
         shared automation identity outlives every owner it had. Nothing on the vendor's side
         ties any of them to a lifecycle we run.
     - risk: riskCrossTenantCredentialPropagation
-      at: vendorService
+      at: vendorService->aiGateway
       note: >
-        Environment variables visible to everyone who uses a shared environment, a setup
-        cache shared across users for hours, a connector grant attached to an environment
-        rather than a person — the ways one session's credential becomes another's.
+        The grant the vendor's connector service presents to our gateway is the load-bearing
+        secret on the reach-back path, and it is held on the vendor's side: a connector grant
+        attached to an environment rather than a person, an environment variable visible to
+        everyone who shares the environment, a setup cache kept for hours, a tunnel token on a
+        host we run — each a way one session's authority becomes another's, on infrastructure
+        nobody of ours watches.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: vendorService->aiGateway
+      note: >
+        Their infrastructure exercising our authority, steered by whatever the session read.
+        The grant is the only thing bounding it, and the grant is issued at our gateway — which
+        is the entire argument for drawing one and for never letting the vendor's tunnel or
+        allowlisted IP range reach past it.
   capabilities:
     - capability: capabilityIga
       at: vendorService
@@ -783,6 +800,28 @@ pins:
         The connector and MCP allowlist the session cannot widen, the network access level
         an administrator locks, and the built-in tools the environment enables — the settings
         that make "the sandbox reaches only what we named" true.
+    - capability: capabilityToolPermissionScoping
+      at: vendorService->aiGateway
+      note: >
+        The strict half of the crossing: the vendor's connector service reaches one aggregate
+        MCP endpoint, never a server or the data; the endpoint fronts a named list of servers
+        and tools per vendor, per environment where the product supports it; and a grant is
+        scoped to that list and to the session's user. A marketplace that admits every server
+        to every caller is the failure this pin exists to name.
+    - capability: capabilityAgentRuntimeEnforcement
+      at: vendorService->aiGateway
+      note: >
+        Per-call policy evaluated at the gateway, outside the loop being governed: audience,
+        grant scope, destination, rate and the returned content's classification — decided on
+        every call, because the caller is a loop somebody else operates and something it read
+        may be steering it.
+    - capability: capabilityIga
+      at: vendorService->aiGateway
+      note: >
+        Who the call is for: a per-user OAuth grant our authorization server issued to the
+        vendor's connector service, bound to the vendor's audience and the user's session,
+        expiring on its own. The vendor's IP ranges and its own service identity admit the
+        connection; they never stand in for the user.
     - capability: capabilityToolPermissionScoping
       at: aiGateway->internalTools
       note: Which servers, which tools, whose grant — decided at our tier because theirs is not ours to configure.
@@ -953,8 +992,10 @@ walkthrough:
     - follow: vendorService->aiGateway
       label: tool call to our gateway
       note: >
-        The session needs a record our systems hold. The vendor's connector service calls our
-        gateway — admitted because the assessment cleared it, on a grant we issue.
+        The session needs a record our systems hold. The vendor's connector service calls back
+        into us — the one crossing on the drawing where external compute reaches our systems —
+        and meets our gateway's aggregate MCP endpoint: admitted on a per-user grant we issued,
+        evaluated per call, scoped to a named server list, recorded against the grant.
     - follow: aiGateway->internalTools
       label: per-session grant
       note: Admitted to a named server on a short-lived grant scoped to this session.

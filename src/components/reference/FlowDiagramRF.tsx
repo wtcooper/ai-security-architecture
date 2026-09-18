@@ -30,7 +30,7 @@ import "@xyflow/react/dist/style.css";
 import { capabilityById, riskById, riskCode } from "@/lib/data";
 import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
-import { chipSpots, flowBadgeSpots, itemCells, TAG_H, tagSpots, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, itemCells, placeTags, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
 import { blockTab, BLOCK_STYLE, OVERLAY_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
@@ -723,12 +723,17 @@ export function FlowDiagramRF({
       if (!tagGroups.has(pin.at)) tagGroups.set(pin.at, []);
       tagGroups.get(pin.at)!.push(pin);
     }
+    // Every tag on the drawing is placed in one pass so stacks align with each other.
+    const placedTags = placeTags(
+      [...tagGroups.entries()].map(([at, pins]) => ({ at, widths: pins.map((p) => tagWidth(riskCode(p.risk))) })),
+      layout,
+    );
     for (const [at, pins] of tagGroups) {
       if (at.includes("->")) continue; // edge-anchored tags render inside the edge itself
       const blockRect = rects[at];
       if (!blockRect) continue;
       const codes = pins.map((p) => riskCode(p.risk));
-      const { rects: tagRects } = tagSpots(codes.map(tagWidth), blockRect, undefined);
+      const tagRects = placedTags.get(at)?.rects ?? [];
       pins.forEach((pin, i) => {
         const r = tagRects[i];
         if (!r) return;
@@ -835,15 +840,21 @@ export function FlowDiagramRF({
     }
     const tagGroups = new Map<string, { risk: string; note?: string }[]>();
     for (const pin of archetype.pins.risks) {
-      if (!pin.at.includes("->")) continue;
       if (!tagGroups.has(pin.at)) tagGroups.set(pin.at, []);
       tagGroups.get(pin.at)!.push(pin);
     }
+    // Placed together with the block tags (same call, same result) so the stacks beside
+    // neighbouring arrows share one edge instead of interleaving.
+    const placedTags = placeTags(
+      [...tagGroups.entries()].map(([at, pins]) => ({ at, widths: pins.map((p) => tagWidth(riskCode(p.risk))) })),
+      layout,
+    );
     for (const [at, pins] of tagGroups) {
+      if (!at.includes("->")) continue;
       const geo = edgeGeo.get(at);
       if (!geo) continue;
       const codes = pins.map((p) => riskCode(p.risk));
-      const { rects: tagRects } = tagSpots(codes.map(tagWidth), undefined, geo);
+      const tagRects = placedTags.get(at)?.rects ?? [];
       const list = pinsByEdge.get(at) ?? [];
       pins.forEach((pin, i) => {
         const r = tagRects[i];
