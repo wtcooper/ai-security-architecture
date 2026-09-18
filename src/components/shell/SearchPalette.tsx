@@ -54,7 +54,7 @@ function buildIndex(): Entry[] {
       kind: "Mitigation",
       title: c.title,
       hint: c.id,
-      href: `/mitigations?mitigation=${c.id}`,
+      href: `/controls?mitigation=${c.id}`,
       text: norm(c.title, c.abbrev, c.id),
     })),
     ...capabilities.map((c) => ({

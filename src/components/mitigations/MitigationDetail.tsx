@@ -15,6 +15,7 @@ import {
   orgSurfacePostureFor,
   orgSurfaceStatusFor,
   surfaces,
+  frameworkById,
 } from "@/lib/data";
 import { mappingsForMitigation } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
@@ -23,13 +24,14 @@ import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "@/components/StatusPill";
 import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 
-export function MitigationDetail({ mitigation, onClose }: { mitigation: Mitigation; onClose: () => void }) {
+export function MitigationDetail({ mitigation, onClose, showOrg = true }: { mitigation: Mitigation; onClose: () => void; showOrg?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);
   const categoryTitle = controlCategories.find((c) => c.id === mitigation.category)?.title;
-  const orgMappings = mappingsForMitigation(mitigation);
-  const overlay = useOrgOverlay();
+  const orgMappings = mappingsForMitigation(mitigation).filter((m) => showOrg || !frameworkById.get(m.frameworkId)?.org);
+  const orgOverlay = useOrgOverlay();
+  const overlay = showOrg && orgOverlay;
 
   return (
     <div className="rounded-xl border border-line bg-paper p-7">

@@ -17,14 +17,13 @@ export function ArchitectureViews({ archetypeId, tools, onPickTool }: {
   const overlay = useOrgOverlay();
   if (!archetype) return null;
   const groups = rowsFor(archetypeId);
-  const controlCount = groups.flatMap((g) => g.rows).filter((r) => r.controlSpan > 0).length;
+  const controlCount = groups.flatMap((g) => g.rows).length;
 
   return (
     <div className="space-y-3">
       <p className="text-[12px] text-ink-2">
-        {controlCount} CoSAI controls linked to {archetype.mitigations.length} pinned MITRE mitigations.
-        Technology categories are possible implementations; a mapping does not establish control fulfillment.
-        {overlay ? " Product status applies to the mitigation in its row." : " Show org data to add organization mappings, tools and status."}
+        {controlCount} CoSAI controls. Select a capability or product cell for mappings and evidence.
+        {overlay ? " Colors summarize capability support, not control fulfillment." : " Show org data to add tools and status."}
       </p>
       {overlay && <Legend overlay />}
       <GridView tools={tools} groups={groups} overlay={overlay} archetypeId={archetypeId} onPickTool={onPickTool} />

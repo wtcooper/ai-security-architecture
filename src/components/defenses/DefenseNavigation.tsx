@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { controlCategories, surfaces } from "@/lib/data";
 
@@ -29,13 +28,13 @@ export function useDefenseSelection(kind: "capability" | "mitigation") {
     next.delete("capability");
     next.delete("mitigation");
     if (id) next.set(kind, id);
-    const destination = kind === "mitigation" ? "/mitigations" : pathname;
+    const destination = kind === "mitigation" ? "/controls" : pathname;
     router.replace(`${destination}${next.size ? `?${next}` : ""}`, { scroll: false });
   };
   return [params.get(kind), select] as const;
 }
 
-export function DefenseNavigation({ current }: { current: "mitigations" | "capabilities" }) {
+export function CapabilityFilters() {
   const { category, surface } = useMatrixFilters();
   const router = useRouter();
   const pathname = usePathname();
@@ -46,12 +45,6 @@ export function DefenseNavigation({ current }: { current: "mitigations" | "capab
     router.replace(`${pathname}${next.size ? `?${next}` : ""}`, { scroll: false });
   };
   return <div className="mt-5 space-y-4">
-    <nav aria-label="Defense matrices" className="flex flex-wrap gap-2">
-      {(["mitigations", "capabilities"] as const).map((kind) => <Link key={kind} href={matrixHref(`/${kind}`, category, surface)} aria-current={current === kind ? "page" : undefined}
-        className={`rounded-full border px-4 py-2 text-sm font-semibold ${current === kind ? "border-ink bg-ink text-white" : "border-line text-ink-2 hover:border-ink"}`}>
-        {kind === "mitigations" ? "Mitigations" : "Technology capabilities"}
-      </Link>)}
-    </nav>
     <div className="flex flex-wrap gap-4">
       <label className="text-xs text-ink-2">CoSAI control group
         <select value={category} onChange={(e) => update("group", e.target.value)} className="mt-1 block rounded-md border border-line bg-paper px-3 py-2 text-sm">

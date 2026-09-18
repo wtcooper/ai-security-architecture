@@ -60,6 +60,9 @@ export async function loadTechnologyCatalogue(root: string, mitigationIds: Set<s
       check(!mitigations.has(m.mitigation), `${capability.id}: duplicate mitigation ${m.mitigation}`);
       mitigations.add(m.mitigation);
       check(m.rationale?.trim(), `${capability.id}: missing mitigation rationale`);
+      for (const source of m.sources ?? []) {
+        check(source.title?.trim() && source.url?.startsWith("https://"), `${capability.id}/${m.mitigation}: invalid implementation source`);
+      }
     }
   }
   return {

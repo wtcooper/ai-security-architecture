@@ -31,20 +31,8 @@ const LADDER = [
   {
     href: "/risks",
     label: "Taxonomy",
-    blurb: "The components, risks, controls and personas behind the picture, with the framework crosswalks.",
+    blurb: "Components, risks, controls and mitigations, technology capabilities, personas and framework crosswalks.",
     count: `${components.length} components · ${controls.length} controls · ${visibleExternalFrameworks.length} frameworks`,
-  },
-  {
-    href: "/mitigations",
-    label: "Mitigations",
-    blurb: "MITRE defensive techniques and AI mitigations that support CoSAI controls across deployment surfaces.",
-    count: `${mitigations.length} mitigations`,
-  },
-  {
-    href: "/capabilities",
-    label: "Capabilities",
-    blurb: "Technology categories that implement defensive methods, organized by control group and deployment surface.",
-    count: `${capabilities.length} categories`,
   },
   {
     href: "/reference",
@@ -85,17 +73,10 @@ const SECTIONS = [
   },
   {
     href: "/controls",
-    label: "Controls",
-    blurb: "The countermeasures, what they protect, and who is meant to own them.",
-    count: `${controls.length} controls`,
+    label: "Controls & Mitigations",
+    blurb: "CoSAI controls alongside the MITRE methods that support them, with scope, owners and framework mappings.",
+    count: `${controls.length} controls · ${mitigations.length} mitigations`,
     accent: "var(--mitigated)",
-  },
-  {
-    href: "/mitigations",
-    label: "Mitigations",
-    blurb: "Defensive methods mapped to CoSAI controls, with implementation scope and placement.",
-    count: `${mitigations.length} mitigations`,
-    accent: "var(--introduced)",
   },
   {
     href: "/reference",
@@ -161,14 +142,14 @@ export default function LandingPage() {
       </p>
       <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
         From there the site descends one deliberate rung at a time: the taxonomy
-        behind the map — every component, risk, control and persona — then the{" "}
+        behind the map — components, risks, controls, personas and technology capabilities — including the{" "}
         <Link
-          href="/mitigations"
+          href="/controls"
           className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
         >
           {mitigations.length} MITRE mitigations
         </Link>{" "}
-        that actually implement the controls, and finally{" "}
+        that support the controls, and finally{" "}
         <Link
           href="/reference"
           className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
@@ -188,15 +169,15 @@ export default function LandingPage() {
         <Link href="/reference" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
           Browse the architectures →
         </Link>
-        <Link href="/mitigations" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
-          Explore mitigations →
+        <Link href="/controls" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
+          Explore controls & mitigations →
         </Link>
       </div>
 
       {/* Equal entry points into the security model. */}
       <div className="mt-10 rounded-xl border border-line bg-paper p-6">
         <p className="eyebrow">Explore the security model</p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {LADDER.map((rung, i) => (
             <li key={rung.href} className="relative">
               <Link
@@ -300,8 +281,8 @@ export default function LandingPage() {
             instantiates. Mappings and implementation evidence remain subject to review.
           </p>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
-            <Link href="/mitigations" className="text-[13.5px] font-semibold text-introduced hover:underline">
-              Browse the mitigation matrix →
+            <Link href="/controls" className="text-[13.5px] font-semibold text-introduced hover:underline">
+              Browse controls & mitigations →
             </Link>
             <Link href="/reference" className="text-[13.5px] font-semibold text-introduced hover:underline">
               Browse the architectures →

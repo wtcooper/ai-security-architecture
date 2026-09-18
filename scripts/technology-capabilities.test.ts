@@ -81,6 +81,7 @@ test("catalogue rejects dangling references, missing evidence, duplicate identit
     for (const [mutate, pattern] of [
       [(p: typeof profile) => { p.capabilities[0].mitigationMappings[0].mitigation = "D3-INVENTED"; }, /unknown mitigation/],
       [(p: typeof profile) => { p.capabilities[0].frameworkMappings[0].rationale = ""; }, /invalid framework mapping/],
+      [(p: typeof profile) => { p.capabilities[0].mitigationMappings[0].sources = [{ title: "", url: "not-a-source" }]; }, /invalid implementation source/],
       [(p: typeof profile) => { p.capabilities.push(p.capabilities[0]); }, /duplicate capability/],
       [(p: typeof profile) => { p.capabilities[0].frameworkMappings[0].entry = "invented"; p.capabilities[0].primarySource.entry = "invented"; }, /unknown category/],
     ] as const) {
@@ -89,4 +90,21 @@ test("catalogue rejects dangling references, missing evidence, duplicate identit
       await assert.rejects(loadTechnologyCatalogue(temp, mitigationIds, controlIds), pattern);
     }
   } finally { await rm(temp, { recursive: true, force: true }); }
+});
+
+test("expanded implementation paths retain sources, scope limits, and original category identities", () => {
+  assert.equal(dataset.capabilities.length, 26);
+  for (const [capabilityId, methodIds] of [
+    ["tech-ai-spm", ["AML.M0023", "D3-DI"]],
+    ["tech-access", ["D3-SCP"]],
+    ["tech-cwpp", ["D3-FIM"]],
+  ] as const) {
+    const capability = dataset.capabilities.find((c) => c.id === capabilityId)!;
+    for (const id of methodIds) {
+      const mapping = capability.mitigationMappings.find((m) => m.mitigation === id)!;
+      assert.ok(mapping.sources?.length, id);
+      assert.ok(mapping.rationale.length > 120, "retain implementation scope limits");
+      assert.ok(capabilitiesForMitigations([id]).includes(capability));
+    }
+  }
 });

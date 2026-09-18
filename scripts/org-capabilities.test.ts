@@ -71,7 +71,7 @@ test("actual surface and tool support can be traced only to their recorded capab
 });
 
 test("unmapped mitigations stay explicit and cannot acquire org status through unrelated technology", () => {
-  assert.equal(mitigationsWithoutCapabilities.length, 25);
+  assert.equal(mitigationsWithoutCapabilities.length, 21);
   for (const method of mitigationsWithoutCapabilities) for (const surface of dataset.surfaces) {
     assert.equal(orgSurfacePostureFor(method.id, surface.id).status, "unmapped");
     assert.deepEqual(orgSurfacePostureFor(method.id, surface.id).contributions, []);

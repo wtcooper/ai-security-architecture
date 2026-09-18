@@ -110,12 +110,12 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Risk Map Walkthrough** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
-| **Controls** | All 35 by category: what each protects, which risks it addresses, who owns it. |
-| **Mitigations** | MITRE D3FEND and ATLAS functions mapped to CoSAI control groups × three deployment surfaces. Search by ID/name and filter by source, risk or stack layer. Definitions retain upstream provenance; CoSAI gaps and deployment responsibility are explicit. **Show org data** reads organization posture from `data/org`. |
+| **Taxonomy › Controls & Mitigations** | All 35 CoSAI controls in the first column, with supporting MITRE mitigations in the second. Select either for details, sources and mappings. This page is organization-neutral. |
+| **Taxonomy › Technology capabilities** | 26 sourced technology categories in a control-group × deployment-surface matrix. **Show org data** colors capability pills; organization names, mappings and evidence appear in selected-item details. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
-| **Reference Architectures › Tools** | Three permanent columns: CoSAI controls, MITRE mitigations, and sourced technology capabilities. Controls span their mapped mitigation rows, keeping product evidence attached to a specific method. **Show org data** adds org capability names and derived associations inside each taxonomy cell, plus product columns, availability and status. The taxonomy names and row structure stay unchanged. |
+| **Reference Architectures › Tools** | One row per CoSAI control, with technology capability pills in the second column. **Show org data** adds product columns and status without adding organization names to taxonomy cells. Select a capability for organization mappings, or a product cell for the underlying mitigation evidence. Mixed coverage and missing evidence remain explicit. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 
 Every diagram supports pan and zoom.
@@ -193,20 +193,20 @@ Every mapping badge elsewhere in the app links into this view.
 ## The mitigation layer: defensive techniques and methods
 
 Controls (CoSAI), mitigations (MITRE), and technology capabilities are separate concepts.
-Both `/mitigations` and `/capabilities` have matrices with CoSAI control-group rows and
-deployment-surface columns. The page switch preserves control-group and surface filters;
-selected items retain their own deep links. Capability placement follows the existing mitigation
-mappings and does not establish technology deployment. **Show org data** adds recorded
-capability assessments and their derived mitigation/control associations. Missing assessments display
-as **Not assessed**; a mitigation with no technology category is **No capability mapping**.
-Organization data is authored only against capabilities; mitigation effectiveness and control
-fulfillment are not inferred from deployment status. The current crosswalk covers 34 of 59
-mitigations; [the mapping gap report](docs/CAPABILITY-MAPPING-GAPS.md) lists the remaining
-25 methods and 9 CoSAI controls without a capability path.
+Controls and mitigations share a general two-column table at `/controls`; `/mitigations`
+and old MITRE capability deep links still open their subjects there. Technology capabilities
+retain their surface matrix at `/capabilities`. Both pages live under **Taxonomy** in the header.
 
-The MITRE catalogue lives at `/mitigations`; `/capabilities` presents 26 sourced technology
-categories, with old MITRE deep links preserved. OWASP supplies AI categories, ENISA ECSMAF 3.0
-and ECSO supply conventional technology categories, and CISA TIC and NIST CSF 2.0 add
+Organization data is authored only against capabilities. **Show org data** adds capability
+status and product columns where relevant; organization names and evidence belong in selected
+records, not table cells. Missing assessments display as **Not assessed**. Mitigation effectiveness
+and control fulfillment are not inferred from deployment status. The crosswalk now covers
+38 of 59 mitigations; [the mapping review and gap report](docs/CAPABILITY-MAPPING-GAPS.md)
+lists the four newly sourced mappings and the remaining 21 methods and 6 CoSAI controls
+without a capability path.
+
+The 26 technology categories retain their published naming sources: OWASP for AI categories,
+ENISA ECSMAF 3.0 and ECSO for conventional categories, with CISA TIC and NIST CSF 2.0
 supplementary mappings. See [the source and mapping contract](data/frameworks/README.md).
 
 CoSAI controls and their existing NIST AI RMF mappings are unchanged. A separate authored
@@ -259,7 +259,7 @@ records read as gaps. The shipped organization is an example, not an assessed de
 The taxonomy answers *what to worry about* and the mitigations answer *what defensive function to
 deploy*. The architectures answer the question that comes next in every review: **"so what does
 a sound deployment actually look like?"** — one drawing per class of AI application, 28 in all,
-across the same three surfaces as the mitigation matrix.
+across the three deployment surfaces used by the capability matrix.
 
 The catalogue is original work: no published source offers "here are the classes of AI
 application, each with an architecture" — AWS ships worked scenarios, Google ships agent

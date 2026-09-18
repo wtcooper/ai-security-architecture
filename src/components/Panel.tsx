@@ -14,10 +14,8 @@ const LADDER = [
   {
     label: "Taxonomy",
     href: "/risks",
-    matches: ["/components", "/risks", "/controls", "/personas", "/frameworks"],
+    matches: ["/components", "/risks", "/controls", "/personas", "/frameworks", "/mitigations", "/capabilities"],
   },
-  { label: "Mitigations", href: "/mitigations", matches: ["/mitigations"] },
-  { label: "Capabilities", href: "/capabilities", matches: ["/capabilities"] },
   { label: "Architectures", href: "/reference", matches: ["/reference"] },
 ];
 

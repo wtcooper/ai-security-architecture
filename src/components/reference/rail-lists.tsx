@@ -185,7 +185,7 @@ export function MitigationList({
                 <OrgRefs kind="mitigations" id={id} />
                 <GuidanceFor archetype={archetype} mitigationId={id} />
                 <Link
-                  href={`/mitigations?mitigation=${id}`}
+                  href={`/controls?mitigation=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
                 >
                   This control class across every surface →

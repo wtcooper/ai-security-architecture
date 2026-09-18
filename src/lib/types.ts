@@ -137,7 +137,7 @@ export interface TechnologyCapability {
     relationship: "same-category" | "narrower" | "supports";
     rationale: string;
   }[];
-  mitigationMappings: { mitigation: string; rationale: string }[];
+  mitigationMappings: { mitigation: string; rationale: string; sources?: { title: string; url: string }[] }[];
 }
 
 export interface ComponentCategory {

@@ -142,7 +142,7 @@ export function CellTile({
       className={`flex h-full min-h-[36px] cursor-pointer items-center justify-center rounded-[4px] border px-2 py-1 ${selected ? "outline outline-2 outline-ink" : ""}`}
       style={{ background: tint.bg, borderColor: tint.border, color: tint.text, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid" }}
     >
-      {cell.coverage ? <CoverageBadge coverage={cell.coverage} url={url} className="border-transparent" /> : <span className="text-[11.5px] text-ink-3">—</span>}
+      {cell.mixed ? <span className="text-[11.5px] font-semibold" title="Coverage differs across the mapped mitigations; select for details">Mixed</span> : cell.coverage ? <CoverageBadge coverage={cell.coverage} url={url} className="border-transparent" /> : <span className="text-[11.5px] text-ink-3">—</span>}
       {cell.coverage && missing.length > 0 && (
         <span className="ml-0.5 text-[10px] text-ink-3" title={`No vendor record yet for: ${missing.join(", ")}`}>
           †
@@ -157,7 +157,7 @@ export function Legend({ overlay, compact = false }: { overlay: boolean; compact
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink-3 ${compact ? "" : "rounded-lg border border-line bg-paper px-3 py-2"}`}>
       <span className="eyebrow" title="Admin control: set by an administrator in the product itself.">Admin control</span>
       <span>{COVERAGE_ORDER.map((c) => COVERAGE_META[c].label).join(" · ")}</span>
-      <span className="ml-1">the word ↗ links to the vendor&rsquo;s page for configuring it; click a cell for the steps</span>
+      <span className="ml-1">Mixed = differing mitigation coverage · † = missing evidence · select a cell for details</span>
       {overlay && (
         <>
           <span className="eyebrow ml-2">Capability support</span>

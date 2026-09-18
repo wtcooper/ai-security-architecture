@@ -1,16 +1,27 @@
 # Technology capability mapping gaps
 
-Current catalogue: **26 sourced technology categories**, linked to **34 of 59 MITRE mitigations**.
-The 25 mitigations below have no technology category mapping. This is a gap in the repository crosswalk, not a statement that no relevant technology exists. No new categories or forced mappings were added as part of simplifying organization data.
+Current catalogue: **26 sourced technology categories**, linked to **38 of 59 MITRE mitigations**.
+The 21 mitigations below have no technology category mapping. This is a gap in the repository crosswalk, not a statement that no relevant technology exists. No new categories or forced mappings were added.
 
-Organization capability → default technology category → mitigation → CoSAI control is now the only organization mapping path. A mitigation without that path displays **No capability mapping**, and cannot acquire organization status from an unrelated capability. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.
+Organization capability → default technology category → mitigation → CoSAI control is the only organization mapping path. Organization records are authored against capabilities; the combined Controls & Mitigations page stays organization-neutral. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.
+
+## Mapping review — 2026-09-18
+
+Four implementation mappings were added to existing categories. These are authored relationships supported by product documentation, not universal requirements of the source taxonomy or claims about deployed organization products. Each mapping includes scope limits and source links in its capability detail.
+
+| Technology capability | MITRE mitigation | Implementation evidence and limit |
+| --- | --- | --- |
+| AI Security Posture Management (AI-SPM) | AI Bill of Materials (AML.M0023) | [Snyk Labs](https://labs.snyk.io/resources/future-aispm/) describes AI discovery producing a BOM of models, datasets, agents and dependencies. Verify inventory completeness, export fields and refresh. |
+| AI Security Posture Management (AI-SPM) | Data Inventory (D3-DI) | [Cortex Cloud discovery](https://docs.paloaltonetworks.com/ai-runtime-security/administration/agent-discovery/ai-agent-discovery-with-cortex-cloud) inventories AI datasets. Inventory alone does not establish provenance or sanitization. |
+| Access Management | System Configuration Permissions (D3-SCP) | [Azure App Configuration RBAC](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-enable-rbac) restricts configuration reads and writes through resource roles. Files outside that access boundary need separate protection. |
+| Cloud Workload Protection Platforms (CWPP) | File Integrity Monitoring (D3-FIM) | [Prisma Cloud filesystem monitoring](https://docs.prismacloud.io/en/enterprise-edition/rn/prisma-cloud-release-info/features-introduced-in-2025/features-introduced-in-may-2025) supports configured host paths and runtime policies. File change detection does not establish signature validation or recovery. |
+
+## Remaining mitigation gaps
 
 | Mitigation | Identifier | Related CoSAI controls |
 | --- | --- | --- |
-| Data Inventory | D3-DI | Model and Data Inventory Management |
 | Maintain AI Dataset Provenance | AML.M0025 | Training Data Management; Model and Data Inventory Management |
 | Sanitize Training Data | AML.M0007 | Training Data Sanitization; Training Data Management |
-| AI Bill of Materials | AML.M0023 | Model and Data Inventory Management |
 | Code Signing | AML.M0013 | Model and Data Integrity Management; Agent Integrity Management |
 | Verify AI Artifacts | AML.M0014 | Model and Data Integrity Management; Agent Integrity Management |
 | Restrict Library Loading | AML.M0011 | Model and Data Execution Integrity; Secure-by-Default ML Tooling |
@@ -21,7 +32,6 @@ Organization capability → default technology category → mitigation → CoSAI
 | Restore Database | D3-RD | Incident Response Management; Retrieval and Vector System Integrity Management |
 | Predictive AI Model Hardening | AML.M0003 | Adversarial Training and Testing |
 | Generative AI Model Alignment | AML.M0022 | Adversarial Training and Testing |
-| System Configuration Permissions | D3-SCP | Agent Integrity Management; Orchestrator and Route Integrity |
 | Generative AI Guidelines | AML.M0021 | Input Validation and Sanitization; Output Validation and Sanitization |
 | Restrict AI Agent Tool Invocation on Untrusted Data | AML.M0030 | Agent Permissions; Agent Execution Bounds |
 | Memory Hardening | AML.M0031 | Agent Integrity Management; Retrieval and Vector System Integrity Management |
@@ -29,22 +39,18 @@ Organization capability → default technology category → mitigation → CoSAI
 | Limit AI Workload Resource Consumption | AML.M0036 | Agent Execution Bounds |
 | Credential Transmission Scoping | D3-CTS | Agent Credential Isolation |
 | Token Binding | D3-TB | Agent Credential Isolation; Inter-Component Transport Security |
-| File Integrity Monitoring | D3-FIM | Agent Integrity Management; Model and Data Integrity Management; Orchestrator and Route Integrity |
 | System File Analysis | D3-SFA | Threat Detection; Agent Observability |
 | Software Update | D3-SU | Vulnerability Management |
 
 ## Controls with no capability path
 
-9 of 35 CoSAI controls currently have no path from any default technology capability. Some are process or governance requirements; do not force technology mappings to hide those distinctions.
+6 of 35 CoSAI controls currently have no path from any default technology capability. Some are process or governance requirements; do not force technology mappings to hide those distinctions.
 
 - Privacy Enhancing Technologies for Model Training (controlModelPrivacyEnhancingTechnologies)
 - Training Data Management (controlTrainingDataManagement)
 - Training Data Sanitization (controlTrainingDataSanitization)
-- Model and Data Integrity Management (controlModelAndDataIntegrityManagement)
 - User Transparency and Controls (controlUserTransparencyAndControls)
 - User Policies and Education (controlUserPoliciesAndEducation)
 - Internal Policies and Education (controlInternalPoliciesAndEducation)
-- Orchestrator and Route Integrity (controlOrchestratorAndRouteIntegrity)
-- Agent Integrity Management (controlAgentIntegrityManagement)
 
 Mapping presence describes possible support. It is not proof that a capability implements every function of a broad mitigation, or that a control is fulfilled.

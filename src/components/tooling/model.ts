@@ -1,4 +1,4 @@
-/** CoSAI controls group mitigation rows; products are assessed against each method. */
+/** One row per CoSAI control; retain method-level evidence for the detail view. */
 import { archetypeById, controls, mitigationById, orgStatusFor, orgToolAvailableFor, vendors, controlCategories } from "@/lib/data";
 import type { DisplayStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 
@@ -6,8 +6,6 @@ export interface Row {
   id: string;
   controlId: string;
   label: string;
-  /** Only the first mitigation row renders the shared CoSAI control cell. */
-  controlSpan: number;
   mitigations: string[];
   title?: string;
 }
@@ -69,6 +67,7 @@ export interface ColumnGroup {
 
 export interface Cell {
   coverage?: ToolCoverage;
+  mixed: boolean;
   status?: DisplayStatus;
   parts: { mitigation: string; control?: ToolControl; status?: DisplayStatus }[];
   /** The component whose coverage the cell shows, so its link and its word refer to the same thing. */
@@ -86,6 +85,7 @@ const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {
   return rank[Math.min(...present.map((v) => rank.indexOf(v)))];
 };
 const worstCoverage = (values: (ToolCoverage | undefined)[]): ToolCoverage | undefined => {
+  if (values.some((v) => v === undefined)) return "unknown";
   const applicable = values.filter((v) => v !== "notApplicable");
   return worst(COVERAGE_RANK, applicable) ?? (values.some((v) => v === "notApplicable") ? "notApplicable" : undefined);
 };
@@ -95,7 +95,7 @@ export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
     .map((v) => ({ vendorId: v.id, vendorName: v.name, tools: tools.filter((t) => t.vendor === v.id) }))
     .filter((g) => g.tools.length);
 
-/** Each row keeps one pinned MITRE method aligned with its technologies and product evidence. */
+/** Combine the architecture’s pinned methods under their CoSAI controls. */
 export function rowsFor(archetypeId: string): RowGroup[] {
   const pinned = (archetypeById.get(archetypeId)?.mitigations ?? []).map((id) => mitigationById.get(id)!);
   return controlCategories.map((category) => ({
@@ -103,14 +103,12 @@ export function rowsFor(archetypeId: string): RowGroup[] {
     title: category.title,
     rows: controls.filter((c) => c.category === category.id).flatMap((control) => {
       const methods = pinned.filter((m) => m.controls.includes(control.id));
-      return methods.map((method, i) => ({
-        id: control.id + ":" + method.id,
+      return methods.length ? [{
+        id: control.id,
         controlId: control.id,
         label: control.title,
-        controlSpan: i === 0 ? methods.length : 0,
-        mitigations: [method.id],
-        title: control.title + " · " + method.title,
-      }));
+        mitigations: methods.map((method) => method.id),
+      }] : [];
     }),
   })).filter((group) => group.rows.length);
 }
@@ -129,9 +127,10 @@ export function cellFor(tool: Tool, row: Row): Cell {
   const coverage = worstCoverage(parts.map((p) => p.control?.coverage));
   return {
     coverage,
+    mixed: new Set(parts.map((p) => p.control?.coverage ?? "unknown").filter((c) => c !== "notApplicable")).size > 1,
     status: worst(STATUS_RANK, parts.map((p) => p.status)),
     parts,
-    decisive: parts.find((p) => p.control?.coverage === coverage)?.control,
+    decisive: parts.length === 1 ? parts[0].control : undefined,
     missing: parts.filter((p) => !p.control).map((p) => p.mitigation),
   };
 }

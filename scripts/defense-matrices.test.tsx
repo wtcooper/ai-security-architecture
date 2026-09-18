@@ -9,7 +9,7 @@ import { matrixHref } from "../src/components/defenses/DefenseNavigation";
 import { capabilityMatrixItem, mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
 import { CapabilitiesRoute } from "../src/components/capabilities/CapabilitiesBrowser";
 import { MitigationsBrowser } from "../src/components/mitigations/MitigationsBrowser";
-import { capabilities, mitigations, mitigationAliases, orgSurfaceStatusFor, orgSurfacePostureFor, orgCapabilitySurfaceStatusFor, orgCapabilities, surfaces } from "../src/lib/data";
+import { controls, capabilities, mitigations, mitigationAliases, orgSurfaceStatusFor, orgSurfacePostureFor, orgCapabilitySurfaceStatusFor, orgCapabilities, surfaces } from "../src/lib/data";
 
 const all = { category: "", surface: "" };
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -45,19 +45,20 @@ test("shared filters require category and surface to match the same placement", 
   assert.equal(matrixHref("/mitigations", "", ""), "/mitigations");
 });
 
-test("both pages render a matrix and equal navigation, and preserve shared filters in switch links", () => {
-  const category = mitigations[0].category;
-  for (const path of ["/capabilities", "/mitigations"]) {
-    const html = page(path, `group=${category}&surface=surfaceCloud`);
-    assert.match(html, /<table /);
-    assert.match(html, /CoSAI control group/);
-    assert.match(html, /aria-label="Defense matrices"/);
-    const destination = path === "/capabilities" ? "/mitigations" : "/capabilities";
-    assert.ok(html.includes(`href="${destination}?group=${category}&amp;surface=surfaceCloud"`));
-    assert.match(html, /href="\/capabilities"/);
-    assert.match(html, /href="\/mitigations"/);
-    assert.doesNotMatch(html, /Your status|Technology deployment: Not assessed/);
-  }
+test("controls and mitigations share a general table; capabilities keep their surface matrix", () => {
+  const html = page("/controls");
+  assert.match(html, /CoSAI controls and supporting MITRE mitigations/);
+  assert.match(html, /MITRE mitigations/);
+  const rows = [...html.matchAll(/<th scope="row"/g)];
+  assert.equal(rows.length, controls.length);
+  for (const control of controls) assert.ok(html.includes(control.title.replaceAll("&", "&amp;")), control.id);
+  for (const method of mitigations) assert.ok(html.includes(method.title.replaceAll("&", "&amp;")), method.id);
+  assert.doesNotMatch(html, /Show org data|Your status|Organization capability deployment|Defense matrices/);
+  const technology = page("/capabilities");
+  assert.match(technology, /CoSAI control group/);
+  assert.doesNotMatch(technology, /Defense matrices/);
+  assert.match(technology, /Show org data/);
+  assert.equal(page("/mitigations"), html, "old route retains the combined page");
 });
 
 test("capability details and native and legacy mitigation deep links retain their subjects", () => {
@@ -103,7 +104,8 @@ test("Show org data changes the actual capability page and displays capability d
   assert.match(on, /Organization capability deployment|Capability deployments/);
   assert.ok(on.includes(orgCapabilities.find((c) => c.capability === "tech-dlp")!.title));
   assert.match(on, /In progress/);
-  const methods = page("/mitigations");
-  assert.match(methods, /Organization capability support/);
-  assert.match(methods, /No capability mapping/);
+  const table = (html: string) => html.match(/<table[\s\S]*?<\/table>/)![0].replaceAll(/style="[^\"]*"|title="[^\"]*"/g, "");
+  assert.equal(table(off), table(on), "org toggle changes colors, never adds org names to matrix cells");
+  const methods = page("/mitigations", "mitigation=AML.M0020");
+  assert.doesNotMatch(methods, /Organization capability support|Show org data|Org capability<\/span>/);
 });

@@ -1,9 +1,6 @@
 "use client";
 
-/**
- * The Tools tab keeps CoSAI controls, MITRE methods and technology categories visible.
- * Show org data adds product columns and records alongside in-cell organization mappings.
- */
+/** Organization details live in selected records, keeping the taxonomy table compact. */
 import { useEffect, useRef } from "react";
 
 import type { Archetype, Tool } from "@/lib/types";
@@ -32,9 +29,6 @@ export function ToolsForArchitecture({
 
   return (
     <div>
-      <p className="mb-3 text-[12px] leading-snug text-ink-3">
-        Follow each CoSAI control through its MITRE mitigations to the technology categories that can implement them.
-      </p>
       <ArchitectureViews archetypeId={archetype.id} tools={tools} onPickTool={onTool} />
       {tool && (
         <div ref={recordRef} className="mt-6 scroll-mt-4 rounded-xl border border-line bg-paper px-5 py-5">
