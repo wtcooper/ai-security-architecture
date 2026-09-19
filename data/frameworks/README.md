@@ -7,7 +7,7 @@ NIST AI RMF crosswalk.
 ## Technology profile
 
 `technology-sources.yaml` contains selected source entries; `../overlay/technology-capabilities.yaml`
-contains 26 technology categories and their explicit many-to-many mappings to source entries
+contains 25 technology categories and their explicit many-to-many mappings to source entries
 and MITRE mitigations. `scripts/lib/technology-capabilities.ts` compiles these into the existing
 framework index. The five additional lenses are:
 

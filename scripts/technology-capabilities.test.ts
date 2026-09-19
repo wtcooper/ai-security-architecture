@@ -94,7 +94,9 @@ test("catalogue rejects dangling references, missing evidence, duplicate identit
 });
 
 test("expanded implementation paths retain sources, scope limits, and original category identities", () => {
-  assert.equal(dataset.capabilities.length, 26);
+  assert.equal(dataset.capabilities.length, 25);
+  assert.ok(!dataset.capabilities.some((c) => c.id === "tech-llm-firewall"), "firewall folded into guardrails");
+  assert.ok(dataset.capabilities.find((c) => c.id === "tech-llm-guardrails")!.frameworkMappings.some((m) => m.entry === "llm-firewall"));
   for (const [capabilityId, methodIds] of [
     ["tech-ai-spm", ["AML.M0023", "D3-DI"]],
     ["tech-access", ["D3-SCP"]],

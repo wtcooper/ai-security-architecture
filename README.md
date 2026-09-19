@@ -111,7 +111,7 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Taxonomy › Controls & Mitigations** | Two tabs, one layout: the 35 CoSAI controls or the 59 MITRE mitigations as a grouped list beside one full entry. A control's detail lists the mitigations that support it and the technology that implements them; a mitigation's detail lists the controls it contributes to, its per-surface responsibility and the architectures that pin it. Filter by control group, search by name or MITRE id. This page is organization-neutral. |
-| **Taxonomy › Technology capabilities** | 26 sourced technology categories in a control-group × deployment-surface matrix, each placed by its own authored per-surface decision; under every cell's capabilities sit the MITRE mitigations they implement there. Click a capability for its three surface cards, source mappings and implementation paths. **Show org data** colors capability pills; organization names, mappings and evidence appear in selected-item details. |
+| **Taxonomy › Technology capabilities** | 25 sourced technology categories in a control-group × deployment-surface matrix, each placed by its own authored per-surface decision; under every cell's capabilities sit the MITRE mitigations they implement there. Click a capability for its three surface cards, source mappings and implementation paths. **Show org data** colors capability pills; organization names, mappings and evidence appear in selected-item details. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
@@ -207,7 +207,7 @@ and control fulfillment are not inferred from deployment status. The crosswalk n
 lists the four newly sourced mappings and the remaining 21 methods and 6 CoSAI controls
 without a capability path.
 
-The 26 technology categories retain their published naming sources: OWASP for AI categories,
+The 25 technology categories retain their published naming sources: OWASP for AI categories,
 ENISA ECSMAF 3.0 and ECSO for conventional categories, with CISA TIC and NIST CSF 2.0
 supplementary mappings. See [the source and mapping contract](data/frameworks/README.md).
 
@@ -265,7 +265,7 @@ records its own per-surface decision rather than inheriting one.
 The earlier home-grown taxonomy had 56 classes, each admitted only if it was named by at least
 two independent source families, implemented by a technology rather than a practice, and
 different across at least one surface boundary. Those tests still hold; what changed is that
-the 26 current categories take their *names* from published sources (OWASP, ENISA, ECSO) so
+the 25 current categories take their *names* from published sources (OWASP, ENISA, ECSO) so
 the repository stops minting its own vocabulary. Two findings from that earlier survey are
 worth keeping in view because they change what a control mapping can claim:
 **ISO/IEC 42001's Annex A names no security control at all** — no red-teaming, no weight

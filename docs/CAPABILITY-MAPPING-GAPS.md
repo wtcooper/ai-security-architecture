@@ -1,6 +1,6 @@
 # Technology capability mapping gaps
 
-Current catalogue: **26 sourced technology categories**, linked to **38 of 59 MITRE mitigations**.
+Current catalogue: **25 sourced technology categories**, linked to **38 of 59 MITRE mitigations**.
 The 21 mitigations below have no technology category mapping. This is a gap in the repository crosswalk, not a statement that no relevant technology exists. No new categories or forced mappings were added.
 
 Organization capability → default technology category → mitigation → CoSAI control is the only organization mapping path. Organization records are authored against capabilities; the combined Controls & Mitigations page stays organization-neutral. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.

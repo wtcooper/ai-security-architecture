@@ -1043,15 +1043,15 @@ See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope a
 
 ## 7. Technology categories and supplementary mappings
 
-26 sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.
+25 sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.
 
 | Framework | Technology categories mapped | CoSAI controls mapped here |
 | --- | --- | --- |
-| OWASP AI Solutions | 5 | 0 |
+| OWASP AI Solutions | 4 | 0 |
 | ENISA ECSMAF | 20 | 0 |
 | ECSO Market Taxonomy | 15 | 0 |
 | CISA TIC Capabilities | 12 | 0 |
-| NIST CSF | 26 | 34 |
+| NIST CSF | 25 | 34 |
 
 ### MITRE methods without a selected technology category — 21
 
