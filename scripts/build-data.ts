@@ -14,7 +14,8 @@ import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
 import { compileOrgCapabilities, checkOrgToolCapabilities } from "./lib/org-capabilities";
-import { loadTechnologyCatalogue } from "./lib/technology-capabilities";
+import { loadTechnologyCategories } from "./lib/technology-categories";
+import { loadCapabilities } from "./lib/capabilities";
 
 import type {
   Archetype,
@@ -282,8 +283,14 @@ async function main() {
 
   // --- Authored frameworks and notes -------------------------------------------------
   const mitigationIds = new Set(mitigationsDoc.mitigations.map((c) => c.id));
-  const technology = await loadTechnologyCatalogue(ROOT, mitigationIds, controlIds, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
+  const technology = await loadTechnologyCategories(ROOT, mitigationIds, controlIds);
   authoredDoc.frameworks.push(...technology.frameworks);
+  const catalogue = await loadCapabilities(ROOT, {
+    controls: controlIds,
+    categories: new Set(technology.categories.map((c) => c.id)),
+    personas: new Set(personasDoc.personas.map((p) => p.id)),
+    surfaces: new Set(mitigationsDoc.surfaces.map((s) => s.id)),
+  });
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
   const allFrameworks = markSuperseded([
@@ -302,13 +309,14 @@ async function main() {
     riskIds,
     controlIds,
     mitigationIds,
-    capabilityIds: new Set(technology.capabilities.map((c) => c.id)),
+    categoryIds: new Set(technology.categories.map((c) => c.id)),
+    capabilityIds: new Set(catalogue.capabilities.map((c) => c.id)),
     frameworksDoc,
   });
 
-  // Organization relationships roll up exclusively through default technology categories.
+  // Organization relationships roll up exclusively through the capability catalogue.
   const org = await loadOrg();
-  const orgFrameworks = compileOrgCapabilities(org, technology.capabilities, mitigationsDoc.mitigations, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
+  const orgFrameworks = compileOrgCapabilities(org, catalogue.capabilities, mitigationsDoc.mitigations, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
   allFrameworks.push(...orgFrameworks.frameworks);
   Object.assign(authoredMappings, orgFrameworks.mappings);
   const declaredEntries = { ...entriesDoc.frameworks, ...technology.entries, ...orgFrameworks.entries };
@@ -351,7 +359,7 @@ async function main() {
   });
 
   // --- Organisation tool posture -------------------------------------------------
-  const orgToolPosture = checkOrgToolCapabilities(org.posture, org.capabilities, technology.capabilities, tools, archetypes);
+  const orgToolPosture = checkOrgToolCapabilities(org.posture, org.capabilities, catalogue.capabilities, mitigationsDoc.mitigations, tools, archetypes);
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -434,7 +442,8 @@ async function main() {
         personas: personasDoc.personas.length,
         incidents: incidents.length,
         mitigations: mitigationsDoc.mitigations.length,
-        capabilities: technology.capabilities.length,
+        capabilities: catalogue.capabilities.length,
+        technologyCategories: technology.categories.length,
         archetypes: archetypes.length,
         guidance: guidance.length,
         tools: tools.length,
@@ -461,8 +470,10 @@ async function main() {
     overlays,
     incidents,
     surfaces: mitigationsDoc.surfaces,
-    capabilities: technology.capabilities,
-    capabilitiesAttribution: technology.attribution,
+    capabilities: catalogue.capabilities,
+    capabilitiesAttribution: catalogue.attribution,
+    technologyCategories: technology.categories,
+    technologyCategoriesAttribution: technology.attribution,
     mitigations: mitigationsDoc.mitigations,
     mitigationsAttribution: mitigationsDoc.attribution ?? "",
     mitigationAliases: mitigationsDoc.aliases,
@@ -1956,6 +1967,7 @@ function checkAuthoredFrameworks(
     riskIds: Set<string>;
     controlIds: Set<string>;
     mitigationIds: Set<string>;
+    categoryIds: Set<string>;
     capabilityIds: Set<string>;
     frameworksDoc: { frameworks: Framework[] };
   },
@@ -1980,10 +1992,11 @@ function checkAuthoredFrameworks(
       risks: ctx.riskIds,
       controls: ctx.controlIds,
       mitigations: ctx.mitigationIds,
+      categories: ctx.categoryIds,
       capabilities: ctx.capabilityIds,
     };
     const mapped: AuthoredMappings = {};
-    for (const kind of ["risks", "controls", "mitigations", "capabilities"] as (keyof AuthoredMappings)[]) {
+    for (const kind of ["risks", "controls", "mitigations", "categories", "capabilities"] as (keyof AuthoredMappings)[]) {
       const byId = framework.mappings?.[kind];
       if (!byId) continue;
       for (const [id, entries] of Object.entries(byId)) {
@@ -1992,7 +2005,7 @@ function checkAuthoredFrameworks(
       }
       mapped[kind] = byId;
     }
-    if (!mapped.risks && !mapped.controls && !mapped.mitigations && !mapped.capabilities) {
+    if (!mapped.risks && !mapped.controls && !mapped.mitigations && !mapped.categories && !mapped.capabilities) {
       fail(`${where}: declares no mappings at all`);
     }
     out[framework.id] = mapped;

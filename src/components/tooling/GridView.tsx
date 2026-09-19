@@ -1,12 +1,11 @@
 "use client";
 
-/** Controls and capabilities stay fixed; org data adds status and product columns. */
+/** Capabilities and their technology categories stay fixed; org data adds status and product columns. */
 import { useEffect, useRef, useState } from "react";
-import { ControlDetail } from "@/components/browse/ControlDetail";
 import { CapabilityDetail } from "@/components/capabilities/CapabilityDetail";
 
-import { AvailabilityPill, NEUTRAL_STYLE, STATUS_META, STATUS_STYLE } from "@/components/StatusPill";
-import { archetypeById, capabilitiesForMitigations, orgCapabilitySurfaceStatusFor, orgToolAvailableFor } from "@/lib/data";
+import { AvailabilityPill } from "@/components/StatusPill";
+import { archetypeById, categoryById, orgToolAvailableFor } from "@/lib/data";
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Cell, type Row, type RowGroup } from "./model";
 import { CellDetail, CellHoverCard, CellTile, docsUrlFor } from "./shared";
@@ -29,7 +28,7 @@ export function GridView({
   const [picked, setPicked] = useState<{ tool: Tool; row: Row } | null>(null);
   // The hovered cell, with its rectangle, for the justification card.
   const [hover, setHover] = useState<{ tool: Tool; row: Row; cell: Cell; rect: DOMRect } | null>(null);
-  const [taxonomy, setTaxonomy] = useState<{ kind: "control" | "capability"; id: string } | null>(null);
+  const [taxonomy, setTaxonomy] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (taxonomy || (overlay && picked)) detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -43,10 +42,10 @@ export function GridView({
     <div className="space-y-3">
       <div className="max-h-[75vh] overflow-auto rounded-xl border border-line bg-paper">
         <table className="w-full border-separate border-spacing-0 text-[12px]">
-          <caption className="sr-only">CoSAI controls and technology capabilities{overlay ? ", with tools and status" : ""}</caption>
+          <caption className="sr-only">Capabilities and technology categories{overlay ? ", with tools and status" : ""}</caption>
           <thead className="sticky top-0 z-20">
             <tr>
-              {["CoSAI controls", "Technology capabilities"].map((label) => (
+              {["Capabilities", "Technology categories"].map((label) => (
                 <th key={label} scope="col" rowSpan={headerRows} className="min-w-[240px] border-b border-r border-line bg-mist px-3 py-3 text-left align-middle text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">{label}</th>
               ))}
               {!!cols.length && <th colSpan={tools.length} className="border-b border-l border-line bg-mist px-2 py-1.5 text-center text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-2">
@@ -91,15 +90,14 @@ export function GridView({
           </thead>
           <tbody>
             {groups.map((group) => (
-              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={(p) => { setPicked(p); setTaxonomy(null); setHover(null); }} onTaxonomy={(kind, id) => { setTaxonomy({ kind, id }); setPicked(null); setHover(null); }} overlay={overlay} archetypeId={archetypeId} dim={dim} onHover={setHover} />
+              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={(p) => { setPicked(p); setTaxonomy(null); setHover(null); }} onTaxonomy={(id) => { setTaxonomy(id); setPicked(null); setHover(null); }} overlay={overlay} archetypeId={archetypeId} dim={dim} onHover={setHover} />
             ))}
           </tbody>
         </table>
       </div>
       {overlay && hover && <CellHoverCard tool={hover.tool} row={hover.row} cell={hover.cell} overlay={overlay} rect={hover.rect} />}
       <div ref={detailRef} className="scroll-mt-20">
-        {taxonomy?.kind === "control" && <ControlDetail controlId={taxonomy.id} onClose={() => setTaxonomy(null)} />}
-        {taxonomy?.kind === "capability" && <CapabilityDetail capabilityId={taxonomy.id} overlay={overlay} surface={archetypeById.get(archetypeId)?.surface} onClose={() => setTaxonomy(null)} />}
+        {taxonomy && <CapabilityDetail capabilityId={taxonomy} overlay={overlay} surface={archetypeById.get(archetypeId)?.surface} onClose={() => setTaxonomy(null)} />}
         {overlay && picked && <CellDetail tool={picked.tool} row={picked.row} onClose={() => setPicked(null)} />}
       </div>
     </div>
@@ -123,7 +121,7 @@ function GroupRows({
   span: number;
   picked: { tool: Tool; row: Row } | null;
   onPick: (p: { tool: Tool; row: Row }) => void;
-  onTaxonomy: (kind: "control" | "capability", id: string) => void;
+  onTaxonomy: (id: string) => void;
   overlay: boolean;
   archetypeId: string;
   dim: (t: Tool) => boolean;
@@ -139,10 +137,10 @@ function GroupRows({
       {group.rows.map((row) => (
         <tr key={row.id}>
           <th scope="row" className="border-b border-r border-line bg-paper px-3 py-2 text-left align-top font-normal">
-            <button onClick={() => onTaxonomy("control", row.controlId)} className="text-left text-[12px] font-semibold leading-snug text-ink hover:text-introduced hover:underline">{row.label}</button>
+            <button onClick={() => onTaxonomy(row.capabilityId)} className="text-left text-[12px] font-semibold leading-snug text-ink hover:text-introduced hover:underline">{row.label}</button>
           </th>
           <td className="border-b border-r border-line px-3 py-2 align-top">
-            <TechnologyCell mitigations={row.mitigations} overlay={overlay} surface={archetypeById.get(archetypeId)!.surface} onSelect={(id) => onTaxonomy("capability", id)} />
+            <CategoryCell categories={row.categories} onSelect={() => onTaxonomy(row.capabilityId)} />
           </td>
           {cols.flatMap((g) =>
             g.tools.map((t) => {
@@ -168,19 +166,12 @@ function GroupRows({
   );
 }
 
-function TechnologyCell({ mitigations, overlay, surface, onSelect }: { mitigations: string[]; overlay: boolean; surface: string; onSelect: (id: string) => void }) {
-  const capabilities = capabilitiesForMitigations(mitigations);
-  if (!capabilities.length) return <span className="text-[11px] text-ink-3">No technology category mapped</span>;
+function CategoryCell({ categories, onSelect }: { categories: string[]; onSelect: () => void }) {
+  if (!categories.length) return <span className="text-[11px] text-ink-3">Process and people; no technology category</span>;
   return <div className="flex flex-wrap gap-1.5">
-    {capabilities.map((capability) => {
-      const status = overlay ? orgCapabilitySurfaceStatusFor(capability.id, surface) : undefined;
-      const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
-      return <button key={capability.id} onClick={() => onSelect(capability.id)}
-        title={capability.title + (status ? " — " + STATUS_META[status].label : "")}
-        className="rounded-full border px-2 py-1 text-left text-[11px] font-medium leading-snug"
-        style={{ background: tint.bg, color: tint.text, borderColor: tint.border, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid" }}>
-        {capability.title}
-      </button>;
-    })}
+    {categories.map((id) => <button key={id} onClick={onSelect} title={categoryById.get(id)?.description}
+      className="rounded-full border border-line bg-mist px-2 py-1 text-left text-[11px] font-medium leading-snug text-ink-2 hover:border-ink">
+      {categoryById.get(id)?.title ?? id}
+    </button>)}
   </div>;
 }

@@ -84,6 +84,9 @@ export type AuthoredMappings = {
   risks?: Record<string, string[]>;
   controls?: Record<string, string[]>;
   mitigations?: Record<string, string[]>;
+  /** Technology categories (tech-*) an external source names. */
+  categories?: Record<string, string[]>;
+  /** Capabilities (cap-*) an organisation's own catalogue maps onto. */
   capabilities?: Record<string, string[]>;
 };
 
@@ -121,17 +124,34 @@ export interface FrameworkEntryInfo {
   /** Category names sometimes have no official identifier. Never present our key as one. */
   identifierKind?: "official" | "repository-key";
   sourceLocation?: string;
-  mappingNotes?: { kind: "controls" | "capabilities"; entity: string; relationship: string; rationale: string }[];
+  mappingNotes?: { kind: "controls" | "categories"; entity: string; relationship: string; rationale: string }[];
 }
 
-/** Sourced technology categories, separate from CoSAI requirements and MITRE methods. */
-export interface TechnologyCapability {
+/**
+ * A durable, technology-agnostic operational outcome the organisation must possess. It delivers
+ * CoSAI controls and is realised by technology categories, process items and the personas who
+ * run it. The only layer an organisation records status against.
+ */
+export interface Capability {
+  id: string;
+  title: string;
+  description: string;
+  controls: string[];
+  /** Authored per surface: whether the capability can exist there, and why or why not. */
+  surfaces: Record<string, { applies: boolean; note: string }>;
+  realization: {
+    technology: string[];
+    process: { title: string; note: string }[];
+    people: string[];
+  };
+}
+
+/** Sourced technology categories: the technology dimension of a capability, keyed to MITRE methods. */
+export interface TechnologyCategory {
   id: string;
   title: string;
   category: string;
   description: string;
-  /** Authored per surface: whether the category can be deployed there, and why or why not. */
-  surfaces: Record<string, { applies: boolean; note: string }>;
   primarySource: { framework: string; entry: string };
   frameworkMappings: {
     framework: string;
@@ -828,7 +848,7 @@ export interface OrgCapabilityStatus {
   evidence?: string;
 }
 
-/** One organization capability maps to exactly one default technology category. */
+/** One organization capability maps to exactly one catalogue capability (cap-*). */
 export interface OrgCapability {
   id: string;
   title: string;
@@ -883,8 +903,10 @@ export interface Dataset {
   overlays: RiskOverlay[];
   incidents: Incident[];
   surfaces: Surface[];
-  capabilities: TechnologyCapability[];
+  capabilities: Capability[];
   capabilitiesAttribution: string;
+  technologyCategories: TechnologyCategory[];
+  technologyCategoriesAttribution: string;
   mitigations: Mitigation[];
   /** Provenance statement for the mitigations overlay, carried for YAML round-tripping. */
   mitigationsAttribution: string;

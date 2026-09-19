@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { GridView } from "../src/components/tooling/GridView";
 import { rowsFor, cellFor } from "../src/components/tooling/model";
-import { dataset, controlById, mitigationById, toolsForArchetype, orgCapabilities } from "../src/lib/data";
+import { dataset, capabilityById, controlById, mitigationById, toolsForArchetype, orgCapabilities } from "../src/lib/data";
 import { orgEntriesFor } from "../src/lib/frameworks";
 import { renameMitigationKeys } from "./rename-mitigations";
 
@@ -16,7 +16,7 @@ const render = (overlay: boolean, products = tools) => renderToStaticMarkup(
 
 const taxonomyButtons = (html: string) => [...html.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
 
-test("all architecture rows start from CoSAI controls and preserve every pinned mitigation", () => {
+test("all architecture rows are capabilities the drawing calls for and preserve every pinned mitigation", () => {
   for (const arch of dataset.archetypes) {
     const groups = rowsFor(arch.id);
     const allRows = groups.flatMap((g) => g.rows);
@@ -24,13 +24,14 @@ test("all architecture rows start from CoSAI controls and preserve every pinned 
     assert.equal(new Set(allRows.map((r) => r.id)).size, allRows.length);
     for (const group of groups) {
       for (const row of group.rows) {
-        const control = controlById.get(row.controlId)!;
-        assert.ok(control);
-        assert.equal(control.category, group.id);
-        assert.equal(row.label, control.title);
-        assert.equal(row.id, control.id, "one row per CoSAI control");
+        const capability = capabilityById.get(row.capabilityId)!;
+        assert.ok(capability);
+        assert.equal(controlById.get(capability.controls[0])!.category, group.id);
+        assert.equal(row.label, capability.title);
+        assert.equal(row.id, capability.id, "one row per capability");
+        assert.deepEqual(row.categories, capability.realization.technology);
         assert.ok(row.mitigations.length);
-        for (const id of row.mitigations) assert.ok(mitigationById.get(id)!.controls.includes(control.id));
+        for (const id of row.mitigations) assert.ok(mitigationById.get(id)!.controls.some((c) => capability.controls.includes(c)));
       }
     }
   }
@@ -42,7 +43,7 @@ test("org overlay retains two compact taxonomy columns and adds only product col
   for (const html of [off, on]) {
     const header = html.match(/<thead[\s\S]*?<\/thead>/)![0];
     const labels = [...header.matchAll(/<th\b[^>]*>([^<]+)<\/th>/g)].map((m) => m[1]);
-    assert.deepEqual(labels.slice(0, 2), ["CoSAI controls", "Technology capabilities"]);
+    assert.deepEqual(labels.slice(0, 2), ["Capabilities", "Technology categories"]);
     assert.ok(!html.includes("Reference mitigation"));
     assert.ok(!html.includes("Enterprise mitigations"));
     assert.ok(!html.includes("MITRE mitigation names"));
@@ -79,11 +80,11 @@ test("product details preserve the evidence for every underlying mitigation", ()
   }
 });
 
-test("technology org mappings are explicit and survive the legacy schema migration", () => {
+test("org capability mappings are explicit and survive the legacy schema migration", () => {
   if (dataset.meta.org.example) {
-    const dlp = orgEntriesFor("capabilities", "tech-dlp").map((e) => e.id);
+    const dlp = orgEntriesFor("capabilities", "cap-ai-data-protection").map((e) => e.id);
     assert.ok(dlp.includes("EX-DLP"));
-    assert.ok(!dlp.includes("EX-GUARDRAILS"), "sharing broad AI guardrails cannot manufacture an injection-defense mapping");
+    assert.ok(!dlp.includes("EX-GUARDRAILS"), "guardrails deliver a different capability");
   }
   const source = "entries:\n  - mitigations: [AML.M0020]\n    capabilities: [tech-dlp, tech-llm-guardrails]\n";
   assert.equal(renameMitigationKeys(source), source);

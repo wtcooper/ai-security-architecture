@@ -1,12 +1,15 @@
-/** One row per CoSAI control; retain method-level evidence for the detail view. */
-import { archetypeById, controls, mitigationById, orgStatusFor, orgToolAvailableFor, vendors, controlCategories } from "@/lib/data";
+/** One row per capability the architecture calls for; method-level evidence stays in the detail view. */
+import { archetypeById, capabilities, controlById, mitigationById, orgStatusFor, orgToolAvailableFor, orgToolCapabilityPostureFor, vendors, controlCategories } from "@/lib/data";
 import type { DisplayStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 
 export interface Row {
   id: string;
-  controlId: string;
+  capabilityId: string;
   label: string;
+  /** The pinned methods that support the controls this capability delivers. */
   mitigations: string[];
+  /** The technology dimension of the capability. */
+  categories: string[];
   title?: string;
 }
 
@@ -76,7 +79,6 @@ export interface Cell {
   missing: string[];
 }
 
-const STATUS_RANK: DisplayStatus[] = ["gap", "unmapped", "notAssessed", "inProgress", "enabled"];
 // A not-applicable component neither helps nor hurts a composite; it only shows when every part is.
 const COVERAGE_RANK: ToolCoverage[] = ["none", "unknown", "external", "partial", "native", "notApplicable"];
 const worst = <T,>(rank: T[], values: (T | undefined)[]): T | undefined => {
@@ -95,21 +97,24 @@ export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
     .map((v) => ({ vendorId: v.id, vendorName: v.name, tools: tools.filter((t) => t.vendor === v.id) }))
     .filter((g) => g.tools.length);
 
-/** Combine the architecture’s pinned methods under their CoSAI controls. */
+/** The capabilities whose controls the architecture's pinned methods support, grouped by their first control's group. */
 export function rowsFor(archetypeId: string): RowGroup[] {
   const pinned = (archetypeById.get(archetypeId)?.mitigations ?? []).map((id) => mitigationById.get(id)!);
+  const rows = capabilities.flatMap((capability) => {
+    const methods = pinned.filter((m) => m.controls.some((id) => capability.controls.includes(id)));
+    return methods.length ? [{
+      id: capability.id,
+      capabilityId: capability.id,
+      label: capability.title,
+      mitigations: methods.map((m) => m.id),
+      categories: capability.realization.technology,
+      group: controlById.get(capability.controls[0])!.category,
+    }] : [];
+  });
   return controlCategories.map((category) => ({
     id: category.id,
     title: category.title,
-    rows: controls.filter((c) => c.category === category.id).flatMap((control) => {
-      const methods = pinned.filter((m) => m.controls.includes(control.id));
-      return methods.length ? [{
-        id: control.id,
-        controlId: control.id,
-        label: control.title,
-        mitigations: methods.map((method) => method.id),
-      }] : [];
-    }),
+    rows: rows.filter((r) => r.group === category.id).map(({ group, ...row }) => { void group; return row; }),
   })).filter((group) => group.rows.length);
 }
 
@@ -125,10 +130,12 @@ export function cellFor(tool: Tool, row: Row): Cell {
     status: onboarded && own.get(mitigation)?.coverage !== "notApplicable" ? orgStatusFor(tool.id, mitigation)?.status ?? "notAssessed" : undefined,
   }));
   const coverage = worstCoverage(parts.map((p) => p.control?.coverage));
+  // Status is the product's own record on the capability; coverage is what the vendor documents per method.
+  const applicable = parts.some((p) => p.control?.coverage !== "notApplicable");
   return {
     coverage,
     mixed: new Set(parts.map((p) => p.control?.coverage ?? "unknown").filter((c) => c !== "notApplicable")).size > 1,
-    status: worst(STATUS_RANK, parts.map((p) => p.status)),
+    status: onboarded && applicable ? orgToolCapabilityPostureFor(tool.id, row.capabilityId).status : undefined,
     parts,
     decisive: parts.length === 1 ? parts[0].control : undefined,
     missing: parts.filter((p) => !p.control).map((p) => p.mitigation),

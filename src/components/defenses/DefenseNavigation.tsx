@@ -28,7 +28,7 @@ export function useDefenseSelection(kind: "capability" | "mitigation") {
     next.delete("capability");
     next.delete("mitigation");
     if (id) next.set(kind, id);
-    const destination = kind === "mitigation" ? "/controls" : pathname;
+    const destination = kind === "mitigation" ? "/mitigations" : pathname;
     router.replace(`${destination}${next.size ? `?${next}` : ""}`, { scroll: false });
   };
   return [params.get(kind), select] as const;

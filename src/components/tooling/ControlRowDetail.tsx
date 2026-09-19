@@ -133,7 +133,7 @@ export function ControlRowDetail({ tool, mitigationId, showTitle = false }: { to
                 <Chip tone="mitigated">{c.title}</Chip>
               </Link>
             ))}
-            <Link href={`/controls?mitigation=${mitigationId}`}>
+            <Link href={`/mitigations?mitigation=${mitigationId}`}>
               <Chip tone="introduced">{mitigation?.title ?? mitigationId}</Chip>
             </Link>
           </div>

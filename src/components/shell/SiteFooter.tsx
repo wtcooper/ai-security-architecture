@@ -29,7 +29,7 @@ export function SiteFooter() {
         </span>
         <span>
           {meta.counts.risks} risks · {meta.counts.controls} controls · {meta.counts.mitigations}{" "}
-          mitigations · {meta.counts.capabilities} technology categories · {meta.counts.archetypes} architectures · {meta.counts.tools} tools ·{" "}
+          mitigations · {meta.counts.capabilities} capabilities · {meta.counts.archetypes} architectures · {meta.counts.tools} tools ·{" "}
           {meta.counts.incidents} incidents
         </span>
         <span

@@ -9,13 +9,11 @@ import { usePathname } from "next/navigation";
  * on and what sits below it. Incidents replay on the map and the drawings, so they sit beside
  * the ladder rather than on it.
  */
+/** Three questions in order: what risk, what controls, can we deliver them, where do they go. */
 const LADDER = [
-  { label: "Risk map", href: "/map", matches: ["/map"] },
-  {
-    label: "Taxonomy",
-    href: "/risks",
-    matches: ["/components", "/risks", "/controls", "/personas", "/frameworks", "/mitigations", "/capabilities"],
-  },
+  { label: "Risk map", href: "/map", matches: ["/map", "/components", "/risks", "/personas", "/frameworks"] },
+  { label: "Controls", href: "/controls", matches: ["/controls", "/mitigations"] },
+  { label: "Capabilities", href: "/capabilities", matches: ["/capabilities"] },
   { label: "Architectures", href: "/reference", matches: ["/reference"] },
 ];
 

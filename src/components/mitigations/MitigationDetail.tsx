@@ -7,6 +7,7 @@ import { bandFor } from "@/lib/bands";
 import { BAND_TOKENS } from "@/lib/map-layout";
 import {
   archetypesForMitigation,
+  categoriesForMitigations,
   componentsForMitigation,
   componentTitle,
   controlCategories,
@@ -78,7 +79,15 @@ export function MitigationDetail({ mitigation, onClose, showOrg = true, framed =
         </div>
       )}
 
-      <CapabilityLinks mitigations={[mitigation.id]} />
+      <CapabilityLinks mitigations={[mitigation.id]} title="Capabilities this method serves" />
+      {categoriesForMitigations([mitigation.id]).length > 0 && (
+        <div className="mt-5">
+          <p className="eyebrow">Technology categories that can implement it</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {categoriesForMitigations([mitigation.id]).map((c) => <Link key={c.id} href={`/capabilities?category=${c.id}`}><Chip>{c.title}</Chip></Link>)}
+          </div>
+        </div>
+      )}
       <details className="mt-5">
         <summary className="cursor-pointer text-xs font-semibold text-ink-2">Implementation examples · authored guidance</summary>
         <div className="mt-2 flex flex-wrap gap-1.5">

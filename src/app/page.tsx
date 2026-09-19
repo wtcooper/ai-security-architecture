@@ -29,10 +29,10 @@ const LADDER = [
     count: `${risks.length} risks · ${risks.length * 3} steps`,
   },
   {
-    href: "/risks",
-    label: "Taxonomy",
-    blurb: "Components, risks, controls and mitigations, technology capabilities, personas and framework crosswalks.",
-    count: `${components.length} components · ${controls.length} controls · ${visibleExternalFrameworks.length} frameworks`,
+    href: "/controls",
+    label: "Controls",
+    blurb: "The protections CoSAI names, each delivered by a capability the organisation can record status against.",
+    count: `${controls.length} controls · ${capabilities.length} capabilities · ${visibleExternalFrameworks.length} frameworks`,
   },
   {
     href: "/reference",
@@ -45,9 +45,9 @@ const LADDER = [
 const SECTIONS = [
   {
     href: "/capabilities",
-    label: "Technology capabilities",
-    blurb: "Sourced technology categories linked to MITRE methods and CoSAI controls, with OWASP, ENISA, ECSO, CISA and NIST views.",
-    count: `${capabilities.length} categories`,
+    label: "Capabilities",
+    blurb: "The operational capabilities that deliver the controls, realised by technology, process and people, and the only place status is recorded.",
+    count: `${capabilities.length} capabilities`,
     accent: "var(--introduced)",
   },
   {
@@ -142,7 +142,7 @@ export default function LandingPage() {
       </p>
       <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
         From there the site descends one deliberate rung at a time: the taxonomy
-        behind the map — components, risks, controls, personas and technology capabilities — including the{" "}
+        behind the map — components, risks, controls, mitigations and personas — including the{" "}
         <Link
           href="/controls"
           className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"

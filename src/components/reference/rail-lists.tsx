@@ -9,7 +9,7 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { mitigationById, controlsForMitigation, guidanceByArchetype, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
+import { controlCategories, mitigationById, controlsForMitigation, guidanceByArchetype, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { StatusPill } from "@/components/StatusPill";
@@ -147,10 +147,18 @@ export function MitigationList({
   onHighlight: (h: Highlight | null) => void;
   columns?: 1 | 2;
 }) {
+  // Control first, method second: the numbered chips read under the CoSAI control group they serve.
+  const numbered = archetype.mitigations.map((id, i) => ({ id, i, mitigation: mitigationById.get(id) }));
+  const groups = controlCategories
+    .map((cat) => ({ cat, items: numbered.filter((n) => n.mitigation?.category === cat.id) }))
+    .filter((g) => g.items.length);
+  const orphans = numbered.filter((n) => !n.mitigation);
   return (
     <div className={columns === 2 ? "space-y-1 sm:columns-2 sm:gap-x-6" : "space-y-1"}>
-      {archetype.mitigations.map((id, i) => {
-        const mitigation = mitigationById.get(id);
+      {[...groups.map((g) => ({ key: g.cat.id, title: g.cat.title, items: g.items })), ...(orphans.length ? [{ key: "other", title: "Unresolved", items: orphans }] : [])].map((g) => (
+        <div key={g.key} className="break-inside-avoid">
+          <p className="mb-1 mt-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-3 first:mt-0">{g.title}</p>
+          {g.items.map(({ id, i, mitigation }) => {
         const active = highlight?.kind === "mitigation" && highlight.id === id;
         const notes = notesFor(archetype.pins.mitigations.filter((p) => p.mitigation === id));
         return (
@@ -187,16 +195,18 @@ export function MitigationList({
                 <OrgRefs kind="mitigations" id={id} />
                 <GuidanceFor archetype={archetype} mitigationId={id} />
                 <Link
-                  href={`/controls?mitigation=${id}`}
+                  href={`/mitigations?mitigation=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
                 >
-                  This control class across every surface →
+                  This method across every surface →
                 </Link>
               </div>
             )}
           </div>
         );
-      })}
+          })}
+        </div>
+      ))}
     </div>
   );
 }

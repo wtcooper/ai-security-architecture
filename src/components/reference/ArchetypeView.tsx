@@ -81,7 +81,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     { id: "flows", label: "Sequence flows", count: walks.length },
     { id: "tools", label: "Tools", count: tools.length },
     { id: "mitigations", label: "Mitigations", count: archetype.mitigations.length },
-    { id: "capabilities", label: "Technology", count: capabilitiesForMitigations(archetype.mitigations).length },
+    { id: "capabilities", label: "Capabilities", count: capabilitiesForMitigations(archetype.mitigations).length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
   ];
 

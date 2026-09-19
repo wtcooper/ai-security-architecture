@@ -54,13 +54,13 @@ function buildIndex(): Entry[] {
       kind: "Mitigation",
       title: c.title,
       hint: c.id,
-      href: `/controls?mitigation=${c.id}`,
+      href: `/mitigations?mitigation=${c.id}`,
       text: norm(c.title, c.abbrev, c.id),
     })),
     ...capabilities.map((c) => ({
-      kind: "Technology capability",
+      kind: "Capability",
       title: c.title,
-      hint: c.category,
+      hint: `${c.controls.length} controls`,
       href: `/capabilities?capability=${c.id}`,
       text: norm(c.title, c.id, c.description),
     })),
@@ -101,7 +101,7 @@ function buildIndex(): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Mitigation", "Technology capability", "Component", "Incident", "Persona"];
+const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Mitigation", "Capability", "Component", "Incident", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);

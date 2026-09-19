@@ -9,6 +9,7 @@
 import {
   activePersonas,
   capabilities,
+  technologyCategories,
   authoredMappings,
   mitigations,
   controls,
@@ -26,12 +27,13 @@ import type {
   FrameworkNote,
   Persona,
   Risk,
-  TechnologyCapability,
+  TechnologyCategory,
+  Capability,
   FrameworkEntryInfo,
 } from "./types";
 
-export type EntityKind = "risks" | "controls" | "mitigations" | "capabilities" | "personas";
-type Entity = Risk | Control | Mitigation | TechnologyCapability | Persona;
+export type EntityKind = "risks" | "controls" | "mitigations" | "categories" | "capabilities" | "personas";
+type Entity = Risk | Control | Mitigation | TechnologyCategory | Capability | Persona;
 
 export interface FrameworkEntry {
   /** Bare identifier, with CoSAI's `@version` suffix stripped. */
@@ -49,7 +51,8 @@ export interface FrameworkEntry {
   risks: Risk[];
   controls: Control[];
   mitigations: Mitigation[];
-  capabilities: TechnologyCapability[];
+  categories: TechnologyCategory[];
+  capabilities: Capability[];
   identifierKind?: FrameworkEntryInfo["identifierKind"];
   sourceLocation?: string;
   mappingNotes?: FrameworkEntryInfo["mappingNotes"];
@@ -89,6 +92,7 @@ const ENTITIES: Record<EntityKind, Entity[]> = {
   risks,
   controls,
   mitigations,
+  categories: technologyCategories,
   capabilities,
   personas: activePersonas,
 };
@@ -141,6 +145,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
         risks: [],
         controls: [],
         mitigations: [],
+        categories: [],
         capabilities: [],
         identifierKind: reference[id]?.identifierKind,
         sourceLocation: reference[id]?.sourceLocation,
@@ -170,7 +175,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
     return authored[kind]?.[item.id] ?? [];
   };
 
-  for (const kind of ["risks", "controls", "mitigations", "capabilities", "personas"] as EntityKind[]) {
+  for (const kind of ["risks", "controls", "mitigations", "categories", "capabilities", "personas"] as EntityKind[]) {
     const items = ENTITIES[kind];
     const mapped = items.filter((item) => mappingsFor(kind, item).length);
     if (!mapped.length) continue;
@@ -190,7 +195,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   const entries = [...byEntry.values()]
     .map((e) => ({
       ...e,
-      total: e.risks.length + e.controls.length + e.mitigations.length + e.capabilities.length + e.personas.length,
+      total: e.risks.length + e.controls.length + e.mitigations.length + e.categories.length + e.capabilities.length + e.personas.length,
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
@@ -347,7 +352,8 @@ export const KIND_LABEL: Record<EntityKind, string> = {
   risks: "risks",
   controls: "controls",
   mitigations: "mitigations",
-  capabilities: "technology capabilities",
+  categories: "technology categories",
+  capabilities: "capabilities",
   personas: "personas",
 };
 

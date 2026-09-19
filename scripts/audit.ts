@@ -308,6 +308,7 @@ async function main() {
     tools: Tool[];
     mitigationGaps: Dataset["mitigationGaps"];
     capabilities: Dataset["capabilities"];
+    technologyCategories: Dataset["technologyCategories"];
     frameworks: Dataset["frameworks"];
     authoredMappings: Dataset["authoredMappings"];
   };
@@ -485,16 +486,16 @@ async function main() {
 
   p("## 7. Technology categories and supplementary mappings");
   p();
-  p(`${dataset.capabilities.length} sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.`);
+  p(`${dataset.technologyCategories.length} sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.`);
   p();
   p("| Framework | Technology categories mapped | CoSAI controls mapped here |");
   p("| --- | --- | --- |");
   for (const id of ["owasp-solutions", "enisa-ecsmaf", "ecso-market", "cisa-tic", "nist-csf"]) {
     const mapping = dataset.authoredMappings[id];
-    p(`| ${dataset.frameworks.find((f) => f.id === id)?.name} | ${Object.keys(mapping?.capabilities ?? {}).length} | ${Object.keys(mapping?.controls ?? {}).length} |`);
+    p(`| ${dataset.frameworks.find((f) => f.id === id)?.name} | ${Object.keys(mapping?.categories ?? {}).length} | ${Object.keys(mapping?.controls ?? {}).length} |`);
   }
   p();
-  const namedMethods = new Set(dataset.capabilities.flatMap((c) => c.mitigationMappings.map((m) => m.mitigation)));
+  const namedMethods = new Set(dataset.technologyCategories.flatMap((c) => c.mitigationMappings.map((m) => m.mitigation)));
   const methodsWithoutTechnology = dataset.mitigations.filter((m) => !namedMethods.has(m.id));
   p(`### MITRE methods without a selected technology category — ${methodsWithoutTechnology.length}`);
   p();

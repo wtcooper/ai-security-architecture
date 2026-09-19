@@ -8,7 +8,7 @@ import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { capabilityById, controlById, componentTitle, org, overlayFor } from "@/lib/data";
+import { categoryById, controlById, componentTitle, org, overlayFor } from "@/lib/data";
 import {
   frameworkView,
   isVisibleFramework,
@@ -285,16 +285,24 @@ export function FrameworksBrowser() {
                         <p className="eyebrow">{entry.mitigations.length} mitigations</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.mitigations.map((c) => (
-                            <Link key={c.id} href={`/controls?mitigation=${c.id}`}>
+                            <Link key={c.id} href={`/mitigations?mitigation=${c.id}`}>
                               <Chip tone="introduced">{c.title}</Chip>
                             </Link>
                           ))}
                         </div>
                       </div>
                     )}
+                    {entry.categories.length > 0 && (
+                      <div>
+                        <p className="eyebrow">{entry.categories.length} technology categories</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {entry.categories.map((c) => <Link key={c.id} href={`/capabilities?category=${c.id}`}><Chip>{c.title}</Chip></Link>)}
+                        </div>
+                      </div>
+                    )}
                     {entry.capabilities.length > 0 && (
                       <div>
-                        <p className="eyebrow">{entry.capabilities.length} technology capabilities</p>
+                        <p className="eyebrow">{entry.capabilities.length} capabilities</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.capabilities.map((c) => <Link key={c.id} href={`/capabilities?capability=${c.id}`}><Chip tone="introduced">{c.title}</Chip></Link>)}
                         </div>
@@ -319,7 +327,7 @@ export function FrameworksBrowser() {
                     <summary className="cursor-pointer text-sm font-semibold">Mapping relationships and rationale · authored here</summary>
                     <ul className="mt-3 space-y-3">
                       {entry.mappingNotes.map((m) => <li key={`${m.kind}/${m.entity}`} className="text-sm text-ink-2">
-                        <span className="font-semibold">{(m.kind === "controls" ? controlById : capabilityById).get(m.entity)?.title}</span>
+                        <span className="font-semibold">{(m.kind === "controls" ? controlById : categoryById).get(m.entity)?.title}</span>
                         <span className="ml-2 text-xs text-ink-3">{m.relationship.replaceAll("-", " ")}</span>
                         <p className="mt-1 text-xs leading-relaxed">{m.rationale}</p>
                       </li>)}

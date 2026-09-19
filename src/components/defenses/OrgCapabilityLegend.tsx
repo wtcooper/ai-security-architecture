@@ -7,7 +7,7 @@ export function OrgCapabilityLegend({ derived = false }: { derived?: boolean }) 
       <StatusPill status="enabled" compact /><StatusPill status="inProgress" compact /><StatusPill status="gap" compact /><StatusPill status="notAssessed" compact />
       {derived && <StatusPill status="unmapped" compact />}
     </div>
-    <p className="mt-2">Recorded capability assessments across enterprise and tool deployments on each surface. Mixed statuses roll up as partial; missing records are not assessed.
+    <p className="mt-2">Recorded per capability: the enterprise layer on each surface, and each available product. Mixed statuses roll up as partial; missing records are not assessed.
       {derived && " These links show technology support, not verified mitigation effectiveness or control fulfillment."}</p>
   </div>;
 }

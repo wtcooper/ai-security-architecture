@@ -10,29 +10,30 @@ type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
+/** Three questions, three pages: what controls we need, can we deliver them, where they go. The rest is reference. */
 const NAV: NavItem[] = [
   { href: "/map", label: "Risk map" },
+  { href: "/controls", label: "Controls" },
+  { href: "/capabilities", label: "Capabilities" },
+  { href: "/reference", label: "Architectures" },
+  { href: "/examples", label: "Incidents" },
   {
-    label: "Taxonomy",
+    label: "Reference",
     children: [
       { href: "/components", label: "Components" },
       { href: "/risks", label: "Risks" },
-      { href: "/controls", label: "Controls & Mitigations" },
-      { href: "/capabilities", label: "Technology capabilities" },
+      { href: "/mitigations", label: "Mitigations" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },
     ],
   },
-  { href: "/reference", label: "Architectures" },
-  { href: "/examples", label: "Incidents" },
 ];
 
 /** The flat list, for the small-screen menu. */
 const ALL_LINKS = NAV.flatMap((item) => ("children" in item ? item.children : [item]));
 
 export function SiteHeader() {
-  const route = usePathname();
-  const pathname = route.startsWith("/mitigations") ? "/controls" : route;
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [dropdown, setDropdown] = useState<string | null>(null);
   const [search, setSearch] = useState(false);

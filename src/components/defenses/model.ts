@@ -1,5 +1,5 @@
-import { mitigationById, surfaces } from "@/lib/data";
-import type { Mitigation, TechnologyCapability } from "@/lib/types";
+import { controlById, surfaces } from "@/lib/data";
+import type { Capability, Mitigation } from "@/lib/types";
 import type { MatrixItem } from "./DefenseMatrix";
 
 export function mitigationMatrixItem(mitigation: Mitigation): MatrixItem {
@@ -11,26 +11,15 @@ export function mitigationMatrixItem(mitigation: Mitigation): MatrixItem {
   };
 }
 
-/**
- * Row comes from the mapped mitigations' control groups; column from the capability's own authored
- * surface decision, further limited to surfaces where that mitigation applies. Not a deployment claim.
- */
-export function capabilityMatrixItem(capability: TechnologyCapability): MatrixItem {
+/** Row: the control groups of the controls it delivers. Column: its own authored surface decision. */
+export function capabilityMatrixItem(capability: Capability): MatrixItem {
+  const groups = [...new Set(capability.controls.map((id) => controlById.get(id)!.category))];
   return {
     id: capability.id,
     title: capability.title,
-    placements: capability.mitigationMappings.flatMap(({ mitigation }) =>
-      mitigationMatrixItem(mitigationById.get(mitigation)!).placements
-        .filter((p) => capability.surfaces[p.surface]?.applies)),
+    placements: groups.flatMap((category) => surfaces.filter((s) => capability.surfaces[s.id]?.applies)
+      .map((s) => ({ category, surface: s.id }))),
   };
-}
-
-/** The mitigations a set of capabilities implements inside one matrix cell. */
-export function mitigationsInCell(items: TechnologyCapability[], category: string, surface: string): Mitigation[] {
-  const ids = new Set(items.flatMap((c) => c.mitigationMappings.map((m) => m.mitigation)));
-  return [...ids].map((id) => mitigationById.get(id)!)
-    .filter((m) => m.category === category && m.surfaces[surface]?.applies)
-    .sort((a, b) => a.title.localeCompare(b.title));
 }
 
 export function matchesMatrixFilters(item: MatrixItem, { category, surface }: { category: string; surface: string }) {

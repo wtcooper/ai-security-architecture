@@ -4,14 +4,13 @@ import { readFile, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parse, stringify } from "yaml";
-import { dataset, capabilitiesForMitigations, capabilitiesForControl } from "../src/lib/data";
+import { dataset, categoriesForMitigations, capabilitiesForCategory } from "../src/lib/data";
 import { frameworkView, visibleFrameworks, mappingsForControl } from "../src/lib/frameworks";
-import { loadTechnologyCatalogue } from "./lib/technology-capabilities";
+import { loadTechnologyCategories } from "./lib/technology-categories";
 
 const root = process.cwd();
 const mitigationIds = new Set(dataset.mitigations.map((m) => m.id));
 const controlIds = new Set(dataset.controls.map((c) => c.id));
-const surfaceIds = new Set(dataset.surfaces.map((s) => s.id));
 
 test("CoSAI core entities and NIST AI RMF mappings remain exactly upstream", async () => {
   for (const kind of ["components", "risks", "controls", "personas"] as const) {
@@ -30,32 +29,33 @@ test("CoSAI core entities and NIST AI RMF mappings remain exactly upstream", asy
 });
 
 test("technology categories are sourced, distinct from MITRE, and invert into each framework view", async () => {
-  const catalogue = await loadTechnologyCatalogue(root, mitigationIds, controlIds, surfaceIds);
-  assert.deepEqual(catalogue.capabilities, dataset.capabilities);
-  for (const capability of dataset.capabilities) {
+  const catalogue = await loadTechnologyCategories(root, mitigationIds, controlIds);
+  assert.deepEqual(catalogue.categories, dataset.technologyCategories);
+  for (const capability of dataset.technologyCategories) {
     assert.match(capability.id, /^tech-/);
     assert.ok(!mitigationIds.has(capability.id));
     for (const m of capability.frameworkMappings) {
       const entry = frameworkView(m.framework)!.entries.find((e) => e.id === m.entry)!;
-      assert.ok(entry.capabilities.some((c) => c.id === capability.id), `${capability.id}: ${m.framework}`);
+      assert.ok(entry.categories.some((c) => c.id === capability.id), `${capability.id}: ${m.framework}`);
       assert.ok(entry.mappingNotes?.some((n) => n.entity === capability.id && n.rationale === m.rationale));
       assert.ok(entry.identifierKind && entry.sourceLocation && entry.url);
     }
-    for (const m of capability.mitigationMappings) assert.ok(capabilitiesForMitigations([m.mitigation]).some((c) => c.id === capability.id));
+    for (const m of capability.mitigationMappings) assert.ok(categoriesForMitigations([m.mitigation]).some((c) => c.id === capability.id));
+    assert.ok(capabilitiesForCategory(capability.id).length, `${capability.id}: realises no capability`);
   }
   for (const id of ["owasp-solutions", "enisa-ecsmaf", "ecso-market", "cisa-tic", "nist-csf"]) {
     assert.ok(visibleFrameworks.some((f) => f.id === id));
-    assert.ok(frameworkView(id)!.entries.some((e) => e.capabilities.length));
+    assert.ok(frameworkView(id)!.entries.some((e) => e.categories.length));
   }
 });
 
 test("DLP retains technology identity and several source mappings without merging with AI guardrails", () => {
-  const dlp = dataset.capabilities.find((c) => c.id === "tech-dlp")!;
+  const dlp = dataset.technologyCategories.find((c) => c.id === "tech-dlp")!;
   assert.deepEqual(dlp.frameworkMappings.map((m) => m.framework), ["enisa-ecsmaf", "ecso-market", "cisa-tic", "cisa-tic", "nist-csf"]);
-  assert.ok(dataset.capabilities.some((c) => c.id === "tech-llm-guardrails"));
-  assert.ok(dataset.capabilities.some((c) => c.id === "tech-casb"));
-  assert.ok(dataset.capabilities.some((c) => c.id === "tech-ai-spm"));
-  assert.ok(capabilitiesForControl("controlUserDataManagement").some((c) => c.id === dlp.id));
+  assert.ok(dataset.technologyCategories.some((c) => c.id === "tech-llm-guardrails"));
+  assert.ok(dataset.technologyCategories.some((c) => c.id === "tech-casb"));
+  assert.ok(dataset.technologyCategories.some((c) => c.id === "tech-ai-spm"));
+  assert.ok(capabilitiesForCategory(dlp.id).some((c) => c.id === "cap-ai-data-protection"));
   assert.equal(dlp.frameworkMappings.find((m) => m.framework === "nist-csf")?.relationship, "supports");
   assert.ok(!("status" in dlp), "category links cannot manufacture deployed coverage");
 });
@@ -77,37 +77,37 @@ test("catalogue rejects dangling references, missing evidence, duplicate identit
     await mkdir(join(temp, "data/frameworks"), { recursive: true });
     await mkdir(join(temp, "data/overlay"), { recursive: true });
     const sources = await readFile(join(root, "data/frameworks/technology-sources.yaml"), "utf8");
-    const profile = parse(await readFile(join(root, "data/overlay/technology-capabilities.yaml"), "utf8"));
+    const profile = parse(await readFile(join(root, "data/overlay/technology-categories.yaml"), "utf8"));
     await writeFile(join(temp, "data/frameworks/technology-sources.yaml"), sources);
     for (const [mutate, pattern] of [
-      [(p: typeof profile) => { p.capabilities[0].mitigationMappings[0].mitigation = "D3-INVENTED"; }, /unknown mitigation/],
-      [(p: typeof profile) => { p.capabilities[0].frameworkMappings[0].rationale = ""; }, /invalid framework mapping/],
-      [(p: typeof profile) => { p.capabilities[0].mitigationMappings[0].sources = [{ title: "", url: "not-a-source" }]; }, /invalid implementation source/],
-      [(p: typeof profile) => { p.capabilities.push(p.capabilities[0]); }, /duplicate capability/],
-      [(p: typeof profile) => { p.capabilities[0].frameworkMappings[0].entry = "invented"; p.capabilities[0].primarySource.entry = "invented"; }, /unknown category/],
+      [(p: typeof profile) => { p.categories[0].mitigationMappings[0].mitigation = "D3-INVENTED"; }, /unknown mitigation/],
+      [(p: typeof profile) => { p.categories[0].frameworkMappings[0].rationale = ""; }, /invalid framework mapping/],
+      [(p: typeof profile) => { p.categories[0].mitigationMappings[0].sources = [{ title: "", url: "not-a-source" }]; }, /invalid implementation source/],
+      [(p: typeof profile) => { p.categories.push(p.categories[0]); }, /duplicate category/],
+      [(p: typeof profile) => { p.categories[0].frameworkMappings[0].entry = "invented"; p.categories[0].primarySource.entry = "invented"; }, /unknown category/],
     ] as const) {
       const copy = structuredClone(profile); mutate(copy);
-      await writeFile(join(temp, "data/overlay/technology-capabilities.yaml"), stringify(copy));
-      await assert.rejects(loadTechnologyCatalogue(temp, mitigationIds, controlIds, surfaceIds), pattern);
+      await writeFile(join(temp, "data/overlay/technology-categories.yaml"), stringify(copy));
+      await assert.rejects(loadTechnologyCategories(temp, mitigationIds, controlIds), pattern);
     }
   } finally { await rm(temp, { recursive: true, force: true }); }
 });
 
 test("expanded implementation paths retain sources, scope limits, and original category identities", () => {
-  assert.equal(dataset.capabilities.length, 25);
-  assert.ok(!dataset.capabilities.some((c) => c.id === "tech-llm-firewall"), "firewall folded into guardrails");
-  assert.ok(dataset.capabilities.find((c) => c.id === "tech-llm-guardrails")!.frameworkMappings.some((m) => m.entry === "llm-firewall"));
+  assert.equal(dataset.technologyCategories.length, 25);
+  assert.ok(!dataset.technologyCategories.some((c) => c.id === "tech-llm-firewall"), "firewall folded into guardrails");
+  assert.ok(dataset.technologyCategories.find((c) => c.id === "tech-llm-guardrails")!.frameworkMappings.some((m) => m.entry === "llm-firewall"));
   for (const [capabilityId, methodIds] of [
     ["tech-ai-spm", ["AML.M0023", "D3-DI"]],
     ["tech-access", ["D3-SCP"]],
     ["tech-cwpp", ["D3-FIM"]],
   ] as const) {
-    const capability = dataset.capabilities.find((c) => c.id === capabilityId)!;
+    const capability = dataset.technologyCategories.find((c) => c.id === capabilityId)!;
     for (const id of methodIds) {
       const mapping = capability.mitigationMappings.find((m) => m.mitigation === id)!;
       assert.ok(mapping.sources?.length, id);
       assert.ok(mapping.rationale.length > 120, "retain implementation scope limits");
-      assert.ok(capabilitiesForMitigations([id]).includes(capability));
+      assert.ok(categoriesForMitigations([id]).includes(capability));
     }
   }
 });
