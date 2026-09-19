@@ -6,10 +6,12 @@ NIST AI RMF crosswalk.
 
 ## Technology profile
 
-`technology-sources.yaml` contains selected source entries; `../overlay/technology-capabilities.yaml`
+`technology-sources.yaml` contains selected source entries; `../overlay/technology-categories.yaml`
 contains 25 technology categories and their explicit many-to-many mappings to source entries
-and MITRE mitigations. `scripts/lib/technology-capabilities.ts` compiles these into the existing
-framework index. The five additional lenses are:
+and MITRE mitigations. `scripts/lib/technology-categories.ts` compiles these into the existing
+framework index. A technology category is the technology dimension of a capability
+(`../overlay/capabilities.yaml`); it carries no surfaces and no status. The five additional
+lenses are:
 
 | Lens | Adopted source | Identity and scope |
 | --- | --- | --- |
@@ -45,11 +47,12 @@ control fulfillment. For example, DLP may implement only the sensitive-data part
 AI Guardrails. That does not confer all of that broad mitigation's injection, retrieval, or
 agent-action protections. Guardrails and LLM firewalls overlap; they are not additive coverage.
 
-Architecture Technology tabs derive candidate categories from the architecture's mitigation
-pins. Incident links derive from CoSAI controls. Tool rows expose candidates through their
-reference mitigation. No product, organization status, architecture pin, or incident evidence
-is created by these category associations. The existing mitigation pins and product evidence
-remain authoritative for those views.
+Technology categories have no page of their own. They appear as pills on a capability's
+realisation detail and beside each capability row on an architecture's Tools tab, where the
+rows are the capabilities the architecture needs. Incident links derive from CoSAI controls.
+No product, organization status, architecture pin, or incident evidence is created by these
+category associations; status is authored on capabilities only. The existing mitigation pins
+and product evidence remain authoritative for those views.
 
 ## NIST coexistence and gaps
 
@@ -72,4 +75,5 @@ The tests compare compiled CoSAI core entities to their vendored YAML, check bot
 exercise forward/reverse mappings and reject unknown sources, missing rationales, duplicate
 identities, and dangling MITRE references. The build validates every framework entry reference.
 Legacy `/capabilities?capability=AML.M…` and retired custom-ID links still resolve to Mitigations;
-new `tech-*` links resolve to technology categories.
+`/capabilities?category=tech-…` links open the Capabilities page on the capabilities that
+category realises, since a category has no page of its own.

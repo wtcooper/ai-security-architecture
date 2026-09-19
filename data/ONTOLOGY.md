@@ -16,9 +16,10 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Subcomponent (item) | block `items:` | canonical label+icon from vocabulary where the concept recurs |
 | Flow (edge) | architecture `edges:` | `from->to`, one of three path classes |
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
-| Control | data/cosai/ | CoSAI control identifiers; required protections |
-| Technology capability | data/overlay/technology-capabilities.yaml | Local `tech-*` keys for published OWASP/ENISA/ECSO categories; never mitigation IDs |
-| Mitigation | data/overlay/mitigations.yaml | MITRE-native IDs from pinned D3FEND/ATLAS; per-diagram chip numbers |
+| Control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the capabilities that deliver it |
+| Capability | data/overlay/capabilities.yaml | Authored `cap-*` keys; a durable operational outcome that delivers controls, with authored per-surface applicability; the only entity that carries authored status |
+| Technology category | data/overlay/technology-categories.yaml | Local `tech-*` keys for published OWASP/ENISA/ECSO categories; maps to mitigations and framework entries; no surfaces, no status; never mitigation IDs |
+| Mitigation | data/overlay/mitigations.yaml | MITRE-native IDs from pinned D3FEND/ATLAS; per-diagram chip numbers; no status |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
 | Guidance document | data/reference/guidance/*.yaml | one per architecture; `mode: build | use | hybrid` |
@@ -27,6 +28,15 @@ Components are the things data flows between. Technology implementations such as
 gateway can be drawn as components. Their defensive methods are mitigations pinned to those
 components or flows, and those mitigations support CoSAI controls. The enforcement
 classification below determines where each mitigation must be implemented.
+
+A capability is technology-agnostic. It declares the CoSAI controls it delivers, whether it
+applies on each surface and why, and its realisation: technology categories, process items
+with a playbook sentence, and the CoSAI personas who run it. Capability → control is the only
+countermeasure relation maintained by hand; the build requires every control to be delivered
+by at least one capability and every technology category to realise at least one. Status is
+authored only on capabilities — per surface in the organisation layer, per product in the tool
+layer. Control status, category status and product cells are rollups of those records;
+mitigations carry none.
 
 Technology categories map many-to-many to MITRE mitigations and external source entries.
 `same-category` aligns terminology; `narrower` means the source category is broader; `supports`

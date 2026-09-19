@@ -296,18 +296,37 @@ such everywhere it renders); an adopter creates `local/`, which the build prefer
 upstream never ships. Its catalogues become authored frameworks with `org: true`, inverted from
 the entry-keyed authoring into the same cross-reference shape as the OWASP lenses, so the
 Frameworks tab, the card badges, the architecture rails and hover cards and the AI Tooling tab
-all read them without special cases. Tool posture lives beside it, per tool × pinned mitigation,
-reusing the mitigation posture enum. The `org-taxonomy-customize` skill walks through it.
+all read them without special cases. Every organisation record maps to one `cap-*` capability
+and carries status per surface; tool posture lives beside it, per tool × capability, using the
+same status enum. Status is authored nowhere else: control status is a rollup of the
+capabilities that deliver the control, and mitigations carry none. The
+`org-taxonomy-customize` skill walks through it.
 
-## Technology capabilities and supplementary framework lenses
+## Capabilities
 
-`data/overlay/technology-capabilities.yaml` defines sourced technology categories using local
-`tech-*` keys. `data/frameworks/technology-sources.yaml` records exact category names, source
-versions/locations, official-vs-local identifier kinds, and the additive NIST CSF control
-crosswalk. OWASP is the primary AI naming source; ENISA ECSMAF 3.0 and ECSO supply additional
-technology categories; CISA TIC v3.3 functions and NIST CSF 2.0 outcomes provide supplementary
-views. Descriptions and all category/implementation crosswalks are authored here. Each mapping
-has an explicit relationship and rationale. See [the source contract](frameworks/README.md).
+`data/overlay/capabilities.yaml` is original work: 16 authored capabilities with `cap-*` keys,
+each a durable, technology-agnostic operational outcome. A capability declares the CoSAI
+controls it delivers, an authored `applies` decision and note for each of the three surfaces,
+and its realisation — technology categories from the catalogue below, process items written as
+a title and one playbook sentence, and the CoSAI personas who run it. Titles, descriptions,
+surface notes and process items are repository prose, not a published standard. The build
+requires every CoSAI control to be delivered by at least one capability and every technology
+category to realise at least one, so nothing in the sourced layers dangles without an
+operational owner. Capability → control is the only countermeasure relation maintained by
+hand; a mapping records that a capability delivers a control, never that the control is
+fulfilled.
+
+## Technology categories and supplementary framework lenses
+
+`data/overlay/technology-categories.yaml` defines 25 sourced technology categories using local
+`tech-*` keys. They are the technology dimension of a capability — what the tool registry keys
+on — and carry no surfaces and no status of their own. `data/frameworks/technology-sources.yaml`
+records exact category names, source versions/locations, official-vs-local identifier kinds,
+and the additive NIST CSF control crosswalk. OWASP is the primary AI naming source; ENISA
+ECSMAF 3.0 and ECSO supply additional technology categories; CISA TIC v3.3 functions and NIST
+CSF 2.0 outcomes provide supplementary views. Descriptions and all category/implementation
+crosswalks are authored here. Each mapping has an explicit relationship and rationale. See
+[the source contract](frameworks/README.md).
 
 CoSAI controls and their NIST AI RMF mappings are unchanged. Technology associations never
 change architecture pins, vendor evidence, incident evidence, or organization posture. Names

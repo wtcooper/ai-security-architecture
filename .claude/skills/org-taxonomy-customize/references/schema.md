@@ -11,7 +11,7 @@ organisation:
 capabilities:
   - id: AC-DLP
     title: Corporate endpoint DLP
-    capability: tech-dlp # exactly one existing default technology category
+    capability: cap-ai-data-protection # exactly one cap-* from data/overlay/capabilities.yaml
     description: Sensitive-data inspection for AI prompts and uploads.
     surfaces:
       surfaceEndpoint:
@@ -21,9 +21,11 @@ capabilities:
 ```
 
 `surfaces: {}` means no assessment yet. Other surfaces are `surfaceCloud` and `surfaceSaas`.
-The selected default category must support the surface through its mitigation mappings.
-Organization IDs must be unique, titles nonempty, and technology keys valid. Do not add
-`controls`, `mitigations`, `risks`, or multiple default targets to an organization entry.
+A surface entry is accepted only where the capability's catalogue entry has `applies: true`
+for that surface; the reason is in the catalogue's surface note. Organization IDs must be
+unique, titles nonempty, and the capability key valid. Do not add `controls`, `mitigations`,
+`risks`, `capabilities`, `categories`, or multiple targets to an organization entry; the build
+rejects them.
 
 ```yaml
 # tooling-status.yaml
@@ -32,16 +34,19 @@ tools:
     available: true
     note: Approved for engineering.
     capabilities:
-      AC-DLP: # organization capability ID, not tech-* or a MITRE identifier
+      AC-DLP: # organization capability ID, not cap-*, tech-* or a MITRE identifier
         status: inProgress
         note: Verifying coverage of this tool's outbound prompts.
         evidence: SEC-43
 ```
 
-The product's architecture must contain a mitigation reached by that default capability.
-Unavailable tools do not contribute to surface deployment rollups. Only recorded assessments
-contribute: matching statuses retain their value; mixed statuses become partial. Missing
-records are Not assessed; absent technology mappings are No capability mapping.
+The capability behind the org ID must deliver at least one CoSAI control that a mitigation
+pinned on the product's reference architecture supports; a product is assessed only against
+capabilities its drawing calls for. Unavailable tools do not contribute to surface rollups.
+Only recorded assessments contribute: matching statuses retain their value; mixed statuses
+become partial. Missing records are Not assessed.
 
-All MITRE and CoSAI organization associations are generated. Vendor research remains
-mitigation-specific and is not organization posture. See `data/org/README.md` for migration.
+Status is authored only here, on capabilities. Control status is the rollup of the
+capabilities that deliver it; technology categories and mitigations carry none. All CoSAI and
+MITRE organization associations are generated. Vendor research remains mitigation-specific
+and is not organization posture. See `data/org/README.md` for migration.

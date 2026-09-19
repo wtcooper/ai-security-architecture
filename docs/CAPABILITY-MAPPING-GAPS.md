@@ -1,15 +1,24 @@
-# Technology capability mapping gaps
+# Technology category mapping gaps
+
+> **Note (2026-09-19).** Since the capability layer landed, a mitigation without a technology
+> category is no longer a status gap. Status is authored only on the 16 `cap-*` capabilities in
+> `data/overlay/capabilities.yaml`, every CoSAI control is delivered by at least one capability
+> (the build enforces it), and control status rolls up from those capabilities rather than from
+> a mitigation → category path. The tables below are kept as historical detail on the
+> category ↔ mitigation crosswalk, and the "controls with no capability path" list at the end
+> describes the pre-capability model, where six process-shaped controls had no technology
+> route; each of those is now delivered by a capability whose realisation is mostly process.
 
 Current catalogue: **25 sourced technology categories**, linked to **38 of 59 MITRE mitigations**.
 The 21 mitigations below have no technology category mapping. This is a gap in the repository crosswalk, not a statement that no relevant technology exists. No new categories or forced mappings were added.
 
-Organization capability → default technology category → mitigation → CoSAI control is the only organization mapping path. Organization records are authored against capabilities; the combined Controls & Mitigations page stays organization-neutral. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.
+Organization records are authored against `cap-*` capabilities, which deliver CoSAI controls directly; technology categories are the technology dimension of a capability and map to mitigations as sourced detail. The Controls page stays organization-neutral until **Show org data** is on. These gaps do not remove MITRE methods or CoSAI controls from the catalogue.
 
 ## Mapping review — 2026-09-18
 
 Four implementation mappings were added to existing categories. These are authored relationships supported by product documentation, not universal requirements of the source taxonomy or claims about deployed organization products. Each mapping includes scope limits and source links in its capability detail.
 
-| Technology capability | MITRE mitigation | Implementation evidence and limit |
+| Technology category | MITRE mitigation | Implementation evidence and limit |
 | --- | --- | --- |
 | AI Security Posture Management (AI-SPM) | AI Bill of Materials (AML.M0023) | [Snyk Labs](https://labs.snyk.io/resources/future-aispm/) describes AI discovery producing a BOM of models, datasets, agents and dependencies. Verify inventory completeness, export fields and refresh. |
 | AI Security Posture Management (AI-SPM) | Data Inventory (D3-DI) | [Cortex Cloud discovery](https://docs.paloaltonetworks.com/ai-runtime-security/administration/agent-discovery/ai-agent-discovery-with-cortex-cloud) inventories AI datasets. Inventory alone does not establish provenance or sanitization. |
@@ -44,7 +53,7 @@ Four implementation mappings were added to existing categories. These are author
 
 ## Controls with no capability path
 
-6 of 35 CoSAI controls currently have no path from any default technology capability. Some are process or governance requirements; do not force technology mappings to hide those distinctions.
+Historical: before the capability layer, 6 of 35 CoSAI controls had no path from any technology category. They are process or governance requirements, and each is now delivered by a capability whose realisation is mostly process; do not force technology mappings to hide that distinction.
 
 - Privacy Enhancing Technologies for Model Training (controlModelPrivacyEnhancingTechnologies)
 - Training Data Management (controlTrainingDataManagement)
