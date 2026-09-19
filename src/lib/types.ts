@@ -86,8 +86,6 @@ export type AuthoredMappings = {
   mitigations?: Record<string, string[]>;
   /** Technology categories (tech-*) an external source names. */
   categories?: Record<string, string[]>;
-  /** Capabilities (cap-*) an organisation's own catalogue maps onto. */
-  capabilities?: Record<string, string[]>;
 };
 
 /** An editorial note on a framework CoSAI does carry, where upstream has moved on. */
@@ -125,25 +123,6 @@ export interface FrameworkEntryInfo {
   identifierKind?: "official" | "repository-key";
   sourceLocation?: string;
   mappingNotes?: { kind: "controls" | "categories"; entity: string; relationship: string; rationale: string }[];
-}
-
-/**
- * A durable, technology-agnostic operational outcome the organisation must possess. It delivers
- * CoSAI controls and is realised by technology categories, process items and the personas who
- * run it. The only layer an organisation records status against.
- */
-export interface Capability {
-  id: string;
-  title: string;
-  description: string;
-  controls: string[];
-  /** Authored per surface: whether the capability can exist there, and why or why not. */
-  surfaces: Record<string, { applies: boolean; note: string }>;
-  realization: {
-    technology: string[];
-    process: { title: string; note: string }[];
-    people: string[];
-  };
 }
 
 /** Sourced technology categories: the technology dimension of a capability, keyed to MITRE methods. */
@@ -276,9 +255,19 @@ export interface Mitigation {
   origin: {
     framework: "MITRE D3FEND" | "MITRE ATLAS";
     version: string;
-    entityType: "defensive-technique" | "mitigation";
+    entityType: "defensive-technique" | "mitigation" | "specialisation";
     url?: string;
   };
+  /**
+   * Set on an authored specialisation: the MITRE entry it narrows. A specialisation is one
+   * actionable countermeasure where the parent is too coarse to pin or report on; it inherits
+   * the parent's definition, controls and surfaces unless it overrides them.
+   */
+  parent?: string;
+  /** The retired home-grown capability ids this entry restores; drives the data migration. */
+  legacy?: string[];
+  /** Practice items when the countermeasure is run as a process, beside any technology. */
+  process?: { title: string; note: string }[];
   /** Authored implementation scope, separate from the upstream definition. */
   implementation: string;
   /** Implementation checks within the upstream function; never additional mitigation IDs. */
@@ -903,8 +892,9 @@ export interface Dataset {
   overlays: RiskOverlay[];
   incidents: Incident[];
   surfaces: Surface[];
-  capabilities: Capability[];
-  capabilitiesAttribution: string;
+  /** Authored specialisations of MITRE mitigations, also merged into `mitigations`. */
+  specializations: Mitigation[];
+  specializationsAttribution: string;
   technologyCategories: TechnologyCategory[];
   technologyCategoriesAttribution: string;
   mitigations: Mitigation[];

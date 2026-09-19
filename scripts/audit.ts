@@ -307,7 +307,7 @@ async function main() {
     guidance: Guidance[];
     tools: Tool[];
     mitigationGaps: Dataset["mitigationGaps"];
-    capabilities: Dataset["capabilities"];
+    specializations: Dataset["specializations"];
     technologyCategories: Dataset["technologyCategories"];
     frameworks: Dataset["frameworks"];
     authoredMappings: Dataset["authoredMappings"];
@@ -343,8 +343,10 @@ async function main() {
   p();
 
   const namedCaps = new Set(archetypes.flatMap((a) => a.mitigations));
-  const unusedCaps = dataset.mitigations.filter((c) => !namedCaps.has(c.id));
-  p(`### 4b. Mitigations no architecture pins — ${unusedCaps.length} of ${dataset.mitigations.length}`);
+  // A MITRE parent whose pins all moved to its specialisations is pinned through them.
+  const pinnedFamily = (id: string) => namedCaps.has(id) || dataset.mitigations.some((s) => s.parent === id && namedCaps.has(s.id));
+  const unusedCaps = dataset.mitigations.filter((c) => !pinnedFamily(c.id));
+  p(`### 4b. Capabilities no architecture pins — ${unusedCaps.length} of ${dataset.mitigations.length}`);
   p();
   p(
     unusedCaps.length
@@ -515,7 +517,7 @@ async function main() {
     `docs/AUDIT.md: ${components.length} components, ${EDGES.length} edges, ` +
       `${authored.length} authored + ${seeded.length} seeded overlays, ` +
       `${archetypes.length} flow-style architectures (${unreachedRisks.length} risks and ` +
-      `${unusedCaps.length} mitigations not yet pinned), ` +
+      `${unusedCaps.length} capabilities not yet pinned), ` +
       `${guidance.length} guidance docs, ${tools.length} tools`,
   );
 }

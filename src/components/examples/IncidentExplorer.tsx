@@ -14,7 +14,6 @@ import {
   componentTitle,
   controlTitle,
   incidents,
-  mitigationsForControl,
   riskTitle,
 } from "@/lib/data";
 import type { Archetype, Incident, IncidentSource, IncidentStep, Phase } from "@/lib/types";
@@ -183,7 +182,7 @@ export function IncidentExplorer() {
                   </li>
                 ))}
               </ul>
-              <CapabilityLinks mitigations={[...new Set(incident.controls.flatMap((id) => mitigationsForControl(id).map((m) => m.id)))]} />
+              <CapabilityLinks controls={incident.controls} />
             </>
           )}
 

@@ -22,24 +22,14 @@ export function ControlDetail({ controlId, onClose, framed = true, overlay = fal
     {posture && <p className="mt-2 text-xs text-ink-3">Rolled up from the capabilities below across every surface and available product; never authored against the control itself.</p>}
 
     <Prose blocks={control.description} refs={control.externalReferences} className="mt-4" />
-    <CapabilityLinks controls={[control.id]} />
-    <details className="mt-5">
-      <summary className="cursor-pointer text-xs font-semibold text-ink-2">How · supporting MITRE methods ({mitigationsForControl(control.id).length})</summary>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {mitigationsForControl(control.id).map((m) => (
-          <Link key={m.id} href={`/mitigations?mitigation=${m.id}`}>
-            <Chip tone="introduced">{m.title} <span className="text-ink-3">({m.id})</span></Chip>
-          </Link>
-        ))}
+    <CapabilityLinks controls={[control.id]} overlay={overlay} />
+    {!mitigationsForControl(control.id).length && <p className="mt-4 text-sm text-ink-3">No capability in the catalogue delivers this control yet; it is met by process until one is authored.</p>}
+    {mitigationGap && (
+      <div className="mt-4 rounded-lg border border-line bg-mist p-4">
+        <p className="eyebrow">MITRE coverage · {mitigationGap.assessment}</p>
+        <p className="mt-2 text-sm text-ink-2">{mitigationGap.missing}</p>
       </div>
-      {!mitigationsForControl(control.id).length && <p className="mt-2 text-sm text-ink-3">No MITRE method maps to this control; it is delivered by process.</p>}
-      {mitigationGap && (
-        <div className="mt-3 rounded-lg border border-line bg-mist p-4">
-          <p className="eyebrow">MITRE mitigation mapping · {mitigationGap.assessment}</p>
-          <p className="mt-2 text-sm text-ink-2">{mitigationGap.missing}</p>
-        </div>
-      )}
-    </details>
+    )}
 
     <div className="mt-6 grid gap-6 sm:grid-cols-2">
       <div>

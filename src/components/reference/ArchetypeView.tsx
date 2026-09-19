@@ -10,8 +10,7 @@
  */
 import { useEffect, useState } from "react";
 
-import { capabilitiesForMitigations, guidanceByArchetype, toolsForArchetype } from "@/lib/data";
-import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
+import { guidanceByArchetype, toolsForArchetype } from "@/lib/data";
 import { ToolsForArchitecture } from "@/components/tooling/ToolsForArchitecture";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -22,7 +21,7 @@ import { Section } from "./ArchetypeDetail";
 import { Prose } from "@/components/Prose";
 import { MitigationList, RiskList, WalkList } from "./rail-lists";
 
-type Tab = "overview" | "flows" | "mitigations" | "capabilities" | "risks" | "tools";
+type Tab = "overview" | "flows" | "mitigations" | "risks" | "tools";
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -80,8 +79,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
     { id: "tools", label: "Tools", count: tools.length },
-    { id: "mitigations", label: "Mitigations", count: archetype.mitigations.length },
-    { id: "capabilities", label: "Capabilities", count: capabilitiesForMitigations(archetype.mitigations).length },
+    { id: "mitigations", label: "Capabilities", count: archetype.mitigations.length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
   ];
 
@@ -136,7 +134,6 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
 
       <div className="mt-5">
         {tab === "overview" && <ArchetypeDetail archetype={archetype} />}
-        {tab === "capabilities" && <CapabilityLinks mitigations={archetype.mitigations} />}
 
         {tab === "flows" && (
           <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">

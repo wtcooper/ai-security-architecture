@@ -15,7 +15,7 @@ import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
 import { compileOrgCapabilities, checkOrgToolCapabilities } from "./lib/org-capabilities";
 import { loadTechnologyCategories } from "./lib/technology-categories";
-import { loadCapabilities } from "./lib/capabilities";
+import { loadSpecializations } from "./lib/specializations";
 
 import type {
   Archetype,
@@ -283,14 +283,25 @@ async function main() {
 
   // --- Authored frameworks and notes -------------------------------------------------
   const mitigationIds = new Set(mitigationsDoc.mitigations.map((c) => c.id));
+  checkMitigations(mitigationsDoc, {
+    controlCategories: controlsDoc.categories,
+    controls,
+    riskIds,
+    componentIds,
+  });
+  // Authored specialisations narrow a MITRE entry that is too coarse to pin or report on. They
+  // join the capability list here so pins, tool rows and org records resolve to them like any other.
+  const specializations = await loadSpecializations(ROOT, mitigationsDoc.mitigations, {
+    controls: controlIds,
+    risks: riskIds,
+    components: componentIds,
+    surfaces: new Set(mitigationsDoc.surfaces.map((s) => s.id)),
+    legacy: new Set(Object.keys(mitigationsDoc.aliases)),
+  });
+  mitigationsDoc.mitigations.push(...specializations.specializations);
+  for (const s of specializations.specializations) mitigationIds.add(s.id);
   const technology = await loadTechnologyCategories(ROOT, mitigationIds, controlIds);
   authoredDoc.frameworks.push(...technology.frameworks);
-  const catalogue = await loadCapabilities(ROOT, {
-    controls: controlIds,
-    categories: new Set(technology.categories.map((c) => c.id)),
-    personas: new Set(personasDoc.personas.map((p) => p.id)),
-    surfaces: new Set(mitigationsDoc.surfaces.map((s) => s.id)),
-  });
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
   const allFrameworks = markSuperseded([
@@ -310,13 +321,12 @@ async function main() {
     controlIds,
     mitigationIds,
     categoryIds: new Set(technology.categories.map((c) => c.id)),
-    capabilityIds: new Set(catalogue.capabilities.map((c) => c.id)),
     frameworksDoc,
   });
 
-  // Organization relationships roll up exclusively through the capability catalogue.
+  // Organization records map onto capabilities (MITRE ids or authored specialisations); control links derive.
   const org = await loadOrg();
-  const orgFrameworks = compileOrgCapabilities(org, catalogue.capabilities, mitigationsDoc.mitigations, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
+  const orgFrameworks = compileOrgCapabilities(org, mitigationsDoc.mitigations, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
   allFrameworks.push(...orgFrameworks.frameworks);
   Object.assign(authoredMappings, orgFrameworks.mappings);
   const declaredEntries = { ...entriesDoc.frameworks, ...technology.entries, ...orgFrameworks.entries };
@@ -331,12 +341,6 @@ async function main() {
   });
 
   // --- Mitigations ------------------------------------------------------------
-  checkMitigations(mitigationsDoc, {
-    controlCategories: controlsDoc.categories,
-    controls,
-    riskIds,
-    componentIds,
-  });
 
   // --- Reference architectures ---------------------------------------------------
   const archetypes = checkArchetypes(authoredArchetypes, {
@@ -359,7 +363,7 @@ async function main() {
   });
 
   // --- Organisation tool posture -------------------------------------------------
-  const orgToolPosture = checkOrgToolCapabilities(org.posture, org.capabilities, catalogue.capabilities, mitigationsDoc.mitigations, tools, archetypes);
+  const orgToolPosture = checkOrgToolCapabilities(org.posture, org.capabilities, mitigationsDoc.mitigations, tools, archetypes);
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -442,7 +446,7 @@ async function main() {
         personas: personasDoc.personas.length,
         incidents: incidents.length,
         mitigations: mitigationsDoc.mitigations.length,
-        capabilities: catalogue.capabilities.length,
+        specializations: specializations.specializations.length,
         technologyCategories: technology.categories.length,
         archetypes: archetypes.length,
         guidance: guidance.length,
@@ -470,8 +474,8 @@ async function main() {
     overlays,
     incidents,
     surfaces: mitigationsDoc.surfaces,
-    capabilities: catalogue.capabilities,
-    capabilitiesAttribution: catalogue.attribution,
+    specializations: specializations.specializations,
+    specializationsAttribution: specializations.attribution,
     technologyCategories: technology.categories,
     technologyCategoriesAttribution: technology.attribution,
     mitigations: mitigationsDoc.mitigations,
@@ -1968,7 +1972,6 @@ function checkAuthoredFrameworks(
     controlIds: Set<string>;
     mitigationIds: Set<string>;
     categoryIds: Set<string>;
-    capabilityIds: Set<string>;
     frameworksDoc: { frameworks: Framework[] };
   },
 ): Record<string, AuthoredMappings> {
@@ -1993,10 +1996,9 @@ function checkAuthoredFrameworks(
       controls: ctx.controlIds,
       mitigations: ctx.mitigationIds,
       categories: ctx.categoryIds,
-      capabilities: ctx.capabilityIds,
     };
     const mapped: AuthoredMappings = {};
-    for (const kind of ["risks", "controls", "mitigations", "categories", "capabilities"] as (keyof AuthoredMappings)[]) {
+    for (const kind of ["risks", "controls", "mitigations", "categories"] as (keyof AuthoredMappings)[]) {
       const byId = framework.mappings?.[kind];
       if (!byId) continue;
       for (const [id, entries] of Object.entries(byId)) {
@@ -2005,7 +2007,7 @@ function checkAuthoredFrameworks(
       }
       mapped[kind] = byId;
     }
-    if (!mapped.risks && !mapped.controls && !mapped.mitigations && !mapped.categories && !mapped.capabilities) {
+    if (!mapped.risks && !mapped.controls && !mapped.mitigations && !mapped.categories) {
       fail(`${where}: declares no mappings at all`);
     }
     out[framework.id] = mapped;

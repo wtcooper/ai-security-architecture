@@ -25,8 +25,7 @@ test("all live tabs share native mitigation references, including framework and 
     else if (Array.isArray(value)) value.forEach((v, i) => walk(v, `${path}[${i}]`));
     else if (value && typeof value === "object") for (const [key, v] of Object.entries(value)) {
       // These deliberately preserve historical identifiers, not live entity references.
-      if (key === "migration" || key === "mitigationAliases") continue;
-      if (key === "capability") assert.ok(!mitigationById.has(String(v)), `${path}: MITRE references must use mitigation`);
+      if (key === "migration" || key === "mitigationAliases" || key === "legacy") continue;
       if (key === "capabilities" && Array.isArray(v)) for (const item of v) {
         assert.ok(typeof item !== "string" || !mitigationById.has(item), `${path}: MITRE lists must use mitigations`);
       }

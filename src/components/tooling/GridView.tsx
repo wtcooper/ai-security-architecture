@@ -2,10 +2,10 @@
 
 /** Capabilities and their technology categories stay fixed; org data adds status and product columns. */
 import { useEffect, useRef, useState } from "react";
-import { CapabilityDetail } from "@/components/capabilities/CapabilityDetail";
+import { MitigationDetail } from "@/components/mitigations/MitigationDetail";
 
 import { AvailabilityPill } from "@/components/StatusPill";
-import { archetypeById, categoryById, orgToolAvailableFor } from "@/lib/data";
+import { categoryById, mitigationById, orgToolAvailableFor } from "@/lib/data";
 import type { Tool } from "@/lib/types";
 import { cellFor, columnGroups, type Cell, type Row, type RowGroup } from "./model";
 import { CellDetail, CellHoverCard, CellTile, docsUrlFor } from "./shared";
@@ -97,7 +97,7 @@ export function GridView({
       </div>
       {overlay && hover && <CellHoverCard tool={hover.tool} row={hover.row} cell={hover.cell} overlay={overlay} rect={hover.rect} />}
       <div ref={detailRef} className="scroll-mt-20">
-        {taxonomy && <CapabilityDetail capabilityId={taxonomy} overlay={overlay} surface={archetypeById.get(archetypeId)?.surface} onClose={() => setTaxonomy(null)} />}
+        {taxonomy && mitigationById.get(taxonomy) && <MitigationDetail mitigation={mitigationById.get(taxonomy)!} showOrg={overlay} onClose={() => setTaxonomy(null)} />}
         {overlay && picked && <CellDetail tool={picked.tool} row={picked.row} onClose={() => setPicked(null)} />}
       </div>
     </div>

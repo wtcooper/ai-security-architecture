@@ -1,12 +1,12 @@
-/** One row per capability the architecture calls for; method-level evidence stays in the detail view. */
-import { archetypeById, capabilities, controlById, mitigationById, orgStatusFor, orgToolAvailableFor, orgToolCapabilityPostureFor, vendors, controlCategories } from "@/lib/data";
+/** One row per capability the architecture pins; a capability is a MITRE mitigation or a specialisation of one. */
+import { archetypeById, categoriesForMitigations, mitigationById, orgStatusFor, orgToolAvailableFor, vendors, controlCategories } from "@/lib/data";
 import type { DisplayStatus, Tool, ToolControl, ToolCoverage } from "@/lib/types";
 
 export interface Row {
   id: string;
   capabilityId: string;
   label: string;
-  /** The pinned methods that support the controls this capability delivers. */
+  /** The capability ids the vendor rows are keyed by; one, unless a parent is shown with its specialisations. */
   mitigations: string[];
   /** The technology dimension of the capability. */
   categories: string[];
@@ -97,24 +97,20 @@ export const columnGroups = (tools: Tool[]): ColumnGroup[] =>
     .map((v) => ({ vendorId: v.id, vendorName: v.name, tools: tools.filter((t) => t.vendor === v.id) }))
     .filter((g) => g.tools.length);
 
-/** The capabilities whose controls the architecture's pinned methods support, grouped by their first control's group. */
+/** The architecture's pinned capabilities, grouped by the CoSAI control group each primarily serves. */
 export function rowsFor(archetypeId: string): RowGroup[] {
   const pinned = (archetypeById.get(archetypeId)?.mitigations ?? []).map((id) => mitigationById.get(id)!);
-  const rows = capabilities.flatMap((capability) => {
-    const methods = pinned.filter((m) => m.controls.some((id) => capability.controls.includes(id)));
-    return methods.length ? [{
-      id: capability.id,
-      capabilityId: capability.id,
-      label: capability.title,
-      mitigations: methods.map((m) => m.id),
-      categories: capability.realization.technology,
-      group: controlById.get(capability.controls[0])!.category,
-    }] : [];
-  });
   return controlCategories.map((category) => ({
     id: category.id,
     title: category.title,
-    rows: rows.filter((r) => r.group === category.id).map(({ group, ...row }) => { void group; return row; }),
+    rows: pinned.filter((m) => m.category === category.id).map((m) => ({
+      id: m.id,
+      capabilityId: m.id,
+      label: m.title,
+      title: m.parent ? `${m.title} · ${m.parent}` : undefined,
+      mitigations: [m.id],
+      categories: categoriesForMitigations([m.id]).map((c) => c.id),
+    })),
   })).filter((group) => group.rows.length);
 }
 
@@ -135,7 +131,7 @@ export function cellFor(tool: Tool, row: Row): Cell {
   return {
     coverage,
     mixed: new Set(parts.map((p) => p.control?.coverage ?? "unknown").filter((c) => c !== "notApplicable")).size > 1,
-    status: onboarded && applicable ? orgToolCapabilityPostureFor(tool.id, row.capabilityId).status : undefined,
+    status: onboarded && applicable ? orgStatusFor(tool.id, row.capabilityId).status : undefined,
     parts,
     decisive: parts.length === 1 ? parts[0].control : undefined,
     missing: parts.filter((p) => !p.control).map((p) => p.mitigation),

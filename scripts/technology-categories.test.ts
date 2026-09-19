@@ -4,7 +4,7 @@ import { readFile, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parse, stringify } from "yaml";
-import { dataset, categoriesForMitigations, capabilitiesForCategory } from "../src/lib/data";
+import { dataset, categoriesForMitigations, mitigationsForCategory } from "../src/lib/data";
 import { frameworkView, visibleFrameworks, mappingsForControl } from "../src/lib/frameworks";
 import { loadTechnologyCategories } from "./lib/technology-categories";
 
@@ -41,7 +41,7 @@ test("technology categories are sourced, distinct from MITRE, and invert into ea
       assert.ok(entry.identifierKind && entry.sourceLocation && entry.url);
     }
     for (const m of capability.mitigationMappings) assert.ok(categoriesForMitigations([m.mitigation]).some((c) => c.id === capability.id));
-    assert.ok(capabilitiesForCategory(capability.id).length, `${capability.id}: realises no capability`);
+    assert.ok(mitigationsForCategory(capability.id).length, `${capability.id}: realises no capability`);
   }
   for (const id of ["owasp-solutions", "enisa-ecsmaf", "ecso-market", "cisa-tic", "nist-csf"]) {
     assert.ok(visibleFrameworks.some((f) => f.id === id));
@@ -55,7 +55,7 @@ test("DLP retains technology identity and several source mappings without mergin
   assert.ok(dataset.technologyCategories.some((c) => c.id === "tech-llm-guardrails"));
   assert.ok(dataset.technologyCategories.some((c) => c.id === "tech-casb"));
   assert.ok(dataset.technologyCategories.some((c) => c.id === "tech-ai-spm"));
-  assert.ok(capabilitiesForCategory(dlp.id).some((c) => c.id === "cap-ai-data-protection"));
+  assert.ok(mitigationsForCategory(dlp.id).some((c) => c.id === "cap-sensitive-data-redaction"), "categories reach specialisations through the parent");
   assert.equal(dlp.frameworkMappings.find((m) => m.framework === "nist-csf")?.relationship, "supports");
   assert.ok(!("status" in dlp), "category links cannot manufacture deployed coverage");
 });

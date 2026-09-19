@@ -8,7 +8,6 @@
  */
 import {
   activePersonas,
-  capabilities,
   technologyCategories,
   authoredMappings,
   mitigations,
@@ -28,12 +27,11 @@ import type {
   Persona,
   Risk,
   TechnologyCategory,
-  Capability,
   FrameworkEntryInfo,
 } from "./types";
 
-export type EntityKind = "risks" | "controls" | "mitigations" | "categories" | "capabilities" | "personas";
-type Entity = Risk | Control | Mitigation | TechnologyCategory | Capability | Persona;
+export type EntityKind = "risks" | "controls" | "mitigations" | "categories" | "personas";
+type Entity = Risk | Control | Mitigation | TechnologyCategory | Persona;
 
 export interface FrameworkEntry {
   /** Bare identifier, with CoSAI's `@version` suffix stripped. */
@@ -52,7 +50,6 @@ export interface FrameworkEntry {
   controls: Control[];
   mitigations: Mitigation[];
   categories: TechnologyCategory[];
-  capabilities: Capability[];
   identifierKind?: FrameworkEntryInfo["identifierKind"];
   sourceLocation?: string;
   mappingNotes?: FrameworkEntryInfo["mappingNotes"];
@@ -93,7 +90,6 @@ const ENTITIES: Record<EntityKind, Entity[]> = {
   controls,
   mitigations,
   categories: technologyCategories,
-  capabilities,
   personas: activePersonas,
 };
 
@@ -146,7 +142,6 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
         controls: [],
         mitigations: [],
         categories: [],
-        capabilities: [],
         identifierKind: reference[id]?.identifierKind,
         sourceLocation: reference[id]?.sourceLocation,
         mappingNotes: reference[id]?.mappingNotes,
@@ -175,7 +170,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
     return authored[kind]?.[item.id] ?? [];
   };
 
-  for (const kind of ["risks", "controls", "mitigations", "categories", "capabilities", "personas"] as EntityKind[]) {
+  for (const kind of ["risks", "controls", "mitigations", "categories", "personas"] as EntityKind[]) {
     const items = ENTITIES[kind];
     const mapped = items.filter((item) => mappingsFor(kind, item).length);
     if (!mapped.length) continue;
@@ -195,7 +190,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   const entries = [...byEntry.values()]
     .map((e) => ({
       ...e,
-      total: e.risks.length + e.controls.length + e.mitigations.length + e.categories.length + e.capabilities.length + e.personas.length,
+      total: e.risks.length + e.controls.length + e.mitigations.length + e.categories.length + e.personas.length,
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
@@ -351,9 +346,8 @@ export function resolveFrameworkLink(frameworkId: string, entryId?: string) {
 export const KIND_LABEL: Record<EntityKind, string> = {
   risks: "risks",
   controls: "controls",
-  mitigations: "mitigations",
   categories: "technology categories",
-  capabilities: "capabilities",
+  mitigations: "capabilities",
   personas: "personas",
 };
 

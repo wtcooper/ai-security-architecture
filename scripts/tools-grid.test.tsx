@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { GridView } from "../src/components/tooling/GridView";
 import { rowsFor, cellFor } from "../src/components/tooling/model";
-import { dataset, capabilityById, controlById, mitigationById, toolsForArchetype, orgCapabilities } from "../src/lib/data";
+import { dataset, categoriesForMitigations, mitigationById, toolsForArchetype, orgCapabilities } from "../src/lib/data";
 import { orgEntriesFor } from "../src/lib/frameworks";
 import { renameMitigationKeys } from "./rename-mitigations";
 
-const architecture = dataset.archetypes.find((a) => a.mitigations.includes("AML.M0020") && toolsForArchetype(a.id).length > 1)!;
+const architecture = dataset.archetypes.find((a) => a.mitigations.some((id) => id === "AML.M0020" || mitigationById.get(id)?.parent === "AML.M0020") && toolsForArchetype(a.id).length > 1)!;
 const tools = toolsForArchetype(architecture.id);
 const groups = rowsFor(architecture.id);
 const render = (overlay: boolean, products = tools) => renderToStaticMarkup(
@@ -24,14 +24,13 @@ test("all architecture rows are capabilities the drawing calls for and preserve 
     assert.equal(new Set(allRows.map((r) => r.id)).size, allRows.length);
     for (const group of groups) {
       for (const row of group.rows) {
-        const capability = capabilityById.get(row.capabilityId)!;
+        const capability = mitigationById.get(row.capabilityId)!;
         assert.ok(capability);
-        assert.equal(controlById.get(capability.controls[0])!.category, group.id);
+        assert.equal(capability.category, group.id);
         assert.equal(row.label, capability.title);
-        assert.equal(row.id, capability.id, "one row per capability");
-        assert.deepEqual(row.categories, capability.realization.technology);
-        assert.ok(row.mitigations.length);
-        for (const id of row.mitigations) assert.ok(mitigationById.get(id)!.controls.some((c) => capability.controls.includes(c)));
+        assert.equal(row.id, capability.id, "one row per pinned capability");
+        assert.deepEqual(row.categories, categoriesForMitigations([capability.id]).map((c) => c.id));
+        assert.deepEqual(row.mitigations, [capability.id]);
       }
     }
   }
@@ -82,9 +81,10 @@ test("product details preserve the evidence for every underlying mitigation", ()
 
 test("org capability mappings are explicit and survive the legacy schema migration", () => {
   if (dataset.meta.org.example) {
-    const dlp = orgEntriesFor("capabilities", "cap-ai-data-protection").map((e) => e.id);
-    assert.ok(dlp.includes("EX-DLP"));
-    assert.ok(!dlp.includes("EX-GUARDRAILS"), "guardrails deliver a different capability");
+    const redaction = orgEntriesFor("mitigations", "cap-sensitive-data-redaction").map((e) => e.id);
+    assert.ok(redaction.includes("EX-SENSITIVE-DATA-REDACTION"));
+    assert.ok(!redaction.includes("EX-PROMPT-INJECTION-SCREENING"), "sibling specialisations keep separate records");
+    assert.ok(orgEntriesFor("mitigations", "AML.M0020").map((e) => e.id).includes("EX-SENSITIVE-DATA-REDACTION"), "the parent lists its specialisations' records");
   }
   const source = "entries:\n  - mitigations: [AML.M0020]\n    capabilities: [tech-dlp, tech-llm-guardrails]\n";
   assert.equal(renameMitigationKeys(source), source);
@@ -93,7 +93,9 @@ test("org capability mappings are explicit and survive the legacy schema migrati
 });
 
 test("composite product coverage cannot hide a missing or differently implemented mitigation", () => {
-  const row = groups.flatMap((g) => g.rows).find((r) => r.mitigations.length > 1)!;
+  // A parent shown with its specialisations is the one composite the grid can produce; build one explicitly.
+  const [first, second] = groups.flatMap((g) => g.rows);
+  const row = { ...first, mitigations: [first.capabilityId, second.capabilityId] };
   const base = tools[0].controls[0];
   const native = { ...tools[0], controls: row.mitigations.map((mitigation) => ({ ...base, mitigation, coverage: "native" as const })) };
   assert.equal(cellFor(native, row).coverage, "native");

@@ -37,7 +37,6 @@ export const {
   overlays,
   incidents,
   surfaces,
-  capabilities,
   technologyCategories,
   mitigations,
   mitigationAliases,
@@ -57,23 +56,21 @@ const index = <T extends { id: string }>(items: T[]) => new Map(items.map((i) =>
 export const componentById = index(components);
 export const riskById = index(risks);
 export const controlById = index(controls);
-export const capabilityById = index(capabilities);
 export const categoryById = index(technologyCategories);
 
-/** The capabilities that deliver a CoSAI control: the one hand-maintained relation. */
-export const capabilitiesForControl = (id: string) => capabilities.filter((c) => c.controls.includes(id));
-
-/** A mitigation reaches capabilities through the controls it supports; never a deployment claim. */
-export const capabilitiesForMitigations = (ids: string[]) => {
-  const controlIds = new Set(mitigations.filter((m) => ids.includes(m.id)).flatMap((m) => m.controls));
-  return capabilities.filter((c) => c.controls.some((id) => controlIds.has(id)));
+/**
+ * A capability is a MITRE mitigation or an authored specialisation of one. Categories map to
+ * the MITRE parent, so a specialisation inherits its parent's technology dimension.
+ */
+export const specializationsOf = (id: string) => mitigations.filter((m) => m.parent === id);
+export const categoriesForMitigations = (ids: string[]) => {
+  const roots = new Set(ids.map((id) => mitigations.find((m) => m.id === id)?.parent ?? id));
+  return technologyCategories.filter((c) => c.mitigationMappings.some((m) => roots.has(m.mitigation)));
 };
-
-/** Candidate technology categories for a method; the technology dimension, not a posture. */
-export const categoriesForMitigations = (ids: string[]) =>
-  technologyCategories.filter((c) => c.mitigationMappings.some((m) => ids.includes(m.mitigation)));
-
-export const capabilitiesForCategory = (id: string) => capabilities.filter((c) => c.realization.technology.includes(id));
+export const mitigationsForCategory = (id: string) => {
+  const roots = new Set(technologyCategories.find((c) => c.id === id)?.mitigationMappings.map((m) => m.mitigation) ?? []);
+  return mitigations.filter((m) => roots.has(m.id) || (m.parent && roots.has(m.parent)));
+};
 export const personaById = index(personas);
 export const frameworkById = index(frameworks);
 export const overlayByRisk = new Map(overlays.map((o) => [o.risk, o]));
@@ -335,13 +332,15 @@ export interface OrgCapabilitySupport {
 }
 
 /**
- * Status is authored only against capabilities: per surface for the enterprise layer, per
- * product for the tool layer. Everything else is a rollup of those records. With no surface,
- * the rollup spans every surface and every available product.
+ * Status is authored only against capabilities (a MITRE id or a specialisation): per surface for
+ * the enterprise layer, per product for the tool layer. Everything else is a rollup. A parent
+ * rolls up its specialisations' records too. With no surface, the rollup spans every surface
+ * and every available product.
  */
-function capabilitySupport(capabilityIds: string[], surfaceId?: string, toolId?: string): OrgCapabilitySupport {
-  if (!capabilityIds.length) return { status: "unmapped", note: "No capability delivers this.", contributions: [] };
-  const contributions = orgCapabilities.filter((c) => capabilityIds.includes(c.capability)).flatMap((c) => {
+function capabilitySupport(ids: string[], surfaceId?: string, toolId?: string): OrgCapabilitySupport {
+  if (!ids.length) return { status: "unmapped", note: "No capability delivers this.", contributions: [] };
+  const capabilityIds = new Set(ids.flatMap((id) => [id, ...specializationsOf(id).map((s) => s.id)]));
+  const contributions = orgCapabilities.filter((c) => capabilityIds.has(c.capability)).flatMap((c) => {
     const base = { id: c.id, title: c.title, capability: c.capability };
     if (toolId) return [{ ...base, context: toolById.get(toolId)?.name ?? toolId, record: postureByTool.get(toolId)?.capabilities[c.id] }];
     const onSurface = (id: string) => !surfaceId || id === surfaceId;
@@ -363,22 +362,13 @@ function capabilitySupport(capabilityIds: string[], surfaceId?: string, toolId?:
 }
 
 /** The Capabilities matrix reads the enterprise and product records on one surface. */
-export const orgCapabilitySurfacePostureFor = (capabilityId: string, surfaceId: string) => capabilitySupport([capabilityId], surfaceId);
-export const orgCapabilitySurfaceStatusFor = (capabilityId: string, surfaceId: string) => orgCapabilitySurfacePostureFor(capabilityId, surfaceId).status;
+export const orgSurfacePostureFor = (capabilityId: string, surfaceId: string) => capabilitySupport([capabilityId], surfaceId);
+export const orgSurfaceStatusFor = (capabilityId: string, surfaceId: string): DisplayStatus => orgSurfacePostureFor(capabilityId, surfaceId).status;
 
 /** A product's own record on one capability; nothing from the enterprise layer leaks in. */
-export const orgToolCapabilityPostureFor = (toolId: string, capabilityId: string) => capabilitySupport([capabilityId], undefined, toolId);
+export const orgStatusFor = (toolId: string, capabilityId: string) => capabilitySupport([capabilityId], undefined, toolId);
 
 /** Control status is a rollup of the capabilities that deliver it, never authored. */
 export const orgControlPostureFor = (controlId: string, surfaceId?: string) =>
-  capabilitySupport(capabilitiesForControl(controlId).map((c) => c.id), surfaceId);
+  capabilitySupport(mitigationsForControl(controlId).filter((m) => !m.parent).map((m) => m.id), surfaceId);
 export const orgControlStatusFor = (controlId: string, surfaceId?: string): DisplayStatus => orgControlPostureFor(controlId, surfaceId).status;
-
-/** Per-tool method support, read through the capabilities that deliver the controls the method supports. */
-export const orgStatusFor = (toolId: string, mitigationId: string) =>
-  capabilitySupport(capabilitiesForMitigations([mitigationId]).map((c) => c.id), undefined, toolId);
-
-/** Enterprise method support on a surface, through the same control → capability chain. */
-export const orgSurfacePostureFor = (mitigationId: string, surfaceId: string) =>
-  capabilitySupport(capabilitiesForMitigations([mitigationId]).map((c) => c.id), surfaceId);
-export const orgSurfaceStatusFor = (mitigationId: string, surfaceId: string): DisplayStatus => orgSurfacePostureFor(mitigationId, surfaceId).status;

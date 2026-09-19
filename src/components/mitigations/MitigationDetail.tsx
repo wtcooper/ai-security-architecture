@@ -9,6 +9,8 @@ import {
   archetypesForMitigation,
   categoriesForMitigations,
   componentsForMitigation,
+  mitigationById,
+  specializationsOf,
   componentTitle,
   controlCategories,
   controlsForMitigation,
@@ -23,7 +25,6 @@ import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Mitigation } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "@/components/StatusPill";
-import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 
 export function MitigationDetail({ mitigation, onClose, showOrg = true, framed = true }: { mitigation: Mitigation; onClose?: () => void; showOrg?: boolean; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
@@ -41,7 +42,7 @@ export function MitigationDetail({ mitigation, onClose, showOrg = true, framed =
           <h2 className="display text-[24px] font-bold leading-tight text-ink">
             {mitigation.title}
           </h2>
-          <p className="mt-2 text-xs text-ink-3">{mitigation.origin.framework} · {mitigation.id} · {mitigation.origin.version}</p>
+          <p className="mt-2 text-xs text-ink-3">{mitigation.parent ? `Authored specialisation of ${mitigation.parent} · ${mitigation.id}` : `${mitigation.origin.framework} · ${mitigation.id} · ${mitigation.origin.version}`}</p>
         </div>
         {onClose && (
           <button
@@ -64,7 +65,7 @@ export function MitigationDetail({ mitigation, onClose, showOrg = true, framed =
       <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {mitigation.kind === "support" ? "Governance support" : "Defensive function"} · {mitigation.origin.entityType}</p>
       {mitigation.origin.url && <a href={mitigation.origin.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-introduced hover:underline">Read the official {mitigation.title} definition ↗</a>}
       <div className="mt-4">
-        <p className="eyebrow">Upstream definition · unmodified</p>
+        <p className="eyebrow">{mitigation.parent ? `Upstream definition of ${mitigation.parent} · unmodified` : "Upstream definition · unmodified"}</p>
         <Prose blocks={mitigation.description} className="mt-2 whitespace-pre-line" />
       </div>
       <div className="mt-4 rounded-lg bg-mist p-4">
@@ -79,15 +80,36 @@ export function MitigationDetail({ mitigation, onClose, showOrg = true, framed =
         </div>
       )}
 
-      <CapabilityLinks mitigations={[mitigation.id]} title="Capabilities this method serves" />
-      {categoriesForMitigations([mitigation.id]).length > 0 && (
-        <div className="mt-5">
-          <p className="eyebrow">Technology categories that can implement it</p>
+      {(mitigation.parent || specializationsOf(mitigation.id).length > 0) && (
+        <div className="mt-5 rounded-lg border border-line p-4">
+          <p className="eyebrow">{mitigation.parent ? "Specialises" : "Specialised as"}</p>
+          <p className="mt-1 text-xs text-ink-3">{mitigation.parent
+            ? "An authored narrowing of one MITRE entry, kept where the parent is too coarse to pin or report on. The parent is the citable identifier."
+            : "Authored narrowings of this entry, each one actionable countermeasure; their records roll up here."}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {categoriesForMitigations([mitigation.id]).map((c) => <Link key={c.id} href={`/capabilities?category=${c.id}`}><Chip>{c.title}</Chip></Link>)}
+            {mitigation.parent && <Link href={`/capabilities?capability=${mitigation.parent}`}><Chip tone="introduced">{mitigationById.get(mitigation.parent)?.title} <span className="text-ink-3">({mitigation.parent})</span></Chip></Link>}
+            {specializationsOf(mitigation.id).map((s) => <Link key={s.id} href={`/capabilities?capability=${s.id}`}><Chip tone="introduced">{s.title}</Chip></Link>)}
           </div>
         </div>
       )}
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div>
+          <p className="eyebrow">Realised by · technology categories</p>
+          <p className="mt-1 text-xs text-ink-3">How this is bought. Categories map to the MITRE entry, so a specialisation inherits its parent&rsquo;s.</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {categoriesForMitigations([mitigation.id]).map((c) => <Link key={c.id} href={`/capabilities?category=${c.id}`}><Chip>{c.title}</Chip></Link>)}
+            {!categoriesForMitigations([mitigation.id]).length && <span className="text-xs text-ink-3">No technology category; delivered by process.</span>}
+          </div>
+        </div>
+        {mitigation.process?.length ? (
+          <div>
+            <p className="eyebrow">Realised by · process</p>
+            <ul className="mt-2 space-y-1.5">
+              {mitigation.process.map((item) => <li key={item.title} className="text-[12.5px] leading-snug"><span className="font-medium text-ink">{item.title}</span><span className="block text-[11.5px] text-ink-3">{item.note}</span></li>)}
+            </ul>
+          </div>
+        ) : null}
+      </div>
       <details className="mt-5">
         <summary className="cursor-pointer text-xs font-semibold text-ink-2">Implementation examples · authored guidance</summary>
         <div className="mt-2 flex flex-wrap gap-1.5">

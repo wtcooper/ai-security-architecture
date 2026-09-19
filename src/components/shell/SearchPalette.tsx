@@ -14,7 +14,6 @@ import {
   activePersonas,
   archetypesInOrder,
   mitigationsInOrder,
-  capabilities,
   componentTitle,
   components,
   controls,
@@ -51,18 +50,11 @@ function buildIndex(): Entry[] {
       text: norm(c.title, c.id),
     })),
     ...mitigationsInOrder.map((c) => ({
-      kind: "Mitigation",
-      title: c.title,
-      hint: c.id,
-      href: `/mitigations?mitigation=${c.id}`,
-      text: norm(c.title, c.abbrev, c.id),
-    })),
-    ...capabilities.map((c) => ({
       kind: "Capability",
       title: c.title,
-      hint: `${c.controls.length} controls`,
-      href: `/capabilities?capability=${c.id}`,
-      text: norm(c.title, c.id, c.description),
+      hint: c.parent ? ` · specialisation` : c.id,
+      href: `/capabilities?capability=`,
+      text: norm(c.title, c.abbrev, c.id, c.parent),
     })),
     ...components.map((c) => ({
       kind: "Component",
@@ -101,7 +93,7 @@ function buildIndex(): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Mitigation", "Capability", "Component", "Incident", "Persona"];
+const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);

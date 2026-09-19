@@ -4,7 +4,6 @@ import { REPO_URL } from "@/components/shell/SiteHeader";
 import {
   archetypes,
   mitigations,
-  capabilities,
   components,
   controls,
   incidents,
@@ -18,7 +17,7 @@ import { visibleExternalFrameworks } from "@/lib/frameworks";
 export const metadata = {
   title: "AI Security Architecture",
   description:
-    "AI security from risk map to reference architecture: the full CoSAI taxonomy, the MITRE mitigations that support its controls, and target-state architectures for every class of AI application.",
+    "AI security from risk map to reference architecture: the CoSAI taxonomy, the MITRE-backed capabilities that deliver its controls, and target-state architectures for every class of AI application.",
 };
 
 const LADDER = [
@@ -32,7 +31,7 @@ const LADDER = [
     href: "/controls",
     label: "Controls",
     blurb: "The protections CoSAI names, each delivered by a capability the organisation can record status against.",
-    count: `${controls.length} controls · ${capabilities.length} capabilities · ${visibleExternalFrameworks.length} frameworks`,
+    count: `${controls.length} controls · ${mitigations.length} capabilities · ${visibleExternalFrameworks.length} frameworks`,
   },
   {
     href: "/reference",
@@ -46,8 +45,8 @@ const SECTIONS = [
   {
     href: "/capabilities",
     label: "Capabilities",
-    blurb: "The operational capabilities that deliver the controls, realised by technology, process and people, and the only place status is recorded.",
-    count: `${capabilities.length} capabilities`,
+    blurb: "The actionable countermeasures that deliver each control, pinned where they sit in the data flow, and the only place status is recorded.",
+    count: `${mitigations.length} capabilities`,
     accent: "var(--introduced)",
   },
   {
@@ -73,9 +72,9 @@ const SECTIONS = [
   },
   {
     href: "/controls",
-    label: "Controls & Mitigations",
-    blurb: "CoSAI controls alongside the MITRE methods that support them, with scope, owners and framework mappings.",
-    count: `${controls.length} controls · ${mitigations.length} mitigations`,
+    label: "Controls",
+    blurb: "The CoSAI controls: what each protects, the risks it addresses, who owns it, and the capabilities that deliver it.",
+    count: `${controls.length} controls`,
     accent: "var(--mitigated)",
   },
   {
@@ -142,21 +141,21 @@ export default function LandingPage() {
       </p>
       <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
         From there the site descends one deliberate rung at a time: the taxonomy
-        behind the map — components, risks, controls, mitigations and personas — including the{" "}
+        behind the map — components, risks, controls and personas — the{" "}
         <Link
-          href="/controls"
+          href="/capabilities"
           className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
         >
-          {mitigations.length} MITRE mitigations
+          {mitigations.length} MITRE-backed capabilities
         </Link>{" "}
-        that support the controls, and finally{" "}
+        that deliver the controls, and finally{" "}
         <Link
           href="/reference"
           className="font-medium text-introduced underline decoration-introduced/30 underline-offset-4 hover:decoration-introduced"
         >
           {archetypes.length} reference architectures
         </Link>{" "}
-        — one target-state drawing per class of AI application, with the mitigations numbered
+        — one target-state drawing per class of AI application, with the capabilities numbered
         onto the diagram and the risks tagged where they surface.
       </p>
       <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -170,7 +169,7 @@ export default function LandingPage() {
           Browse the architectures →
         </Link>
         <Link href="/controls" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
-          Explore controls & mitigations →
+          Explore controls →
         </Link>
       </div>
 
@@ -271,10 +270,10 @@ export default function LandingPage() {
         </div>
         <div className="rounded-xl border border-line bg-paper p-5 sm:col-span-2">
           <p className="display text-[15px] font-semibold text-ink">
-            MITRE mitigations and authored integration
+            MITRE-backed capabilities and authored specialisations
           </p>
           <p className="mt-1.5 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">
-            The {mitigations.length} mitigations use MITRE D3FEND and ATLAS identifiers and
+            The {mitigations.length} capabilities use MITRE D3FEND and ATLAS identifiers and
             definitions. Their CoSAI mappings and deployment
             scope are authored here, alongside {archetypes.length} reference architectures across{" "}
             {surfaces.length} surfaces, each block anchored to the CoSAI component it
@@ -282,7 +281,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
             <Link href="/controls" className="text-[13.5px] font-semibold text-introduced hover:underline">
-              Browse controls & mitigations →
+              Browse capabilities →
             </Link>
             <Link href="/reference" className="text-[13.5px] font-semibold text-introduced hover:underline">
               Browse the architectures →

@@ -300,14 +300,6 @@ export function FrameworksBrowser() {
                         </div>
                       </div>
                     )}
-                    {entry.capabilities.length > 0 && (
-                      <div>
-                        <p className="eyebrow">{entry.capabilities.length} capabilities</p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {entry.capabilities.map((c) => <Link key={c.id} href={`/capabilities?capability=${c.id}`}><Chip tone="introduced">{c.title}</Chip></Link>)}
-                        </div>
-                      </div>
-                    )}
                     {entry.personas.length > 0 && (
                       <div>
                         <p className="eyebrow">{entry.personas.length} personas</p>

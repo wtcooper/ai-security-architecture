@@ -1,5 +1,4 @@
 "use client";
-import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 
 /** One tool × one mitigation, in full: mechanism, operator steps, the organisation's note. */
 import Link from "next/link";
@@ -153,7 +152,6 @@ export function ControlRowDetail({ tool, mitigationId, showTitle = false }: { to
             </ul>
           </div>
         )}
-        <CapabilityLinks mitigations={[mitigationId]} />
         {overlay && status && (status.note || status.evidence) && (
           <div>
             <p className="eyebrow">Status note</p>
