@@ -123,7 +123,9 @@ CoSAI's existing historical ATLAS mappings are unchanged.
 It supplies CoSAI supporting relationships with rationale, implementation guidance, examples
 and deployment responsibility. It cannot override canonical titles/definitions or introduce
 non-MITRE IDs. A product category or a feature under a broad mitigation is not another
-mitigation. These mappings are repository judgments, not MITRE or CoSAI endorsements.
+mitigation; where a MITRE entry is too coarse to act on, the narrowing is an authored
+specialisation in `specializations.yaml` (see Capabilities below), never a new id here. These
+mappings are repository judgments, not MITRE or CoSAI endorsements.
 
 `data/overlay/mitigation-gaps.yaml` records missing/partial requirements against existing
 CoSAI control IDs. It introduces no mitigation identifiers. The scope and limitations are in
@@ -296,31 +298,41 @@ such everywhere it renders); an adopter creates `local/`, which the build prefer
 upstream never ships. Its catalogues become authored frameworks with `org: true`, inverted from
 the entry-keyed authoring into the same cross-reference shape as the OWASP lenses, so the
 Frameworks tab, the card badges, the architecture rails and hover cards and the AI Tooling tab
-all read them without special cases. Every organisation record maps to one `cap-*` capability
-and carries status per surface; tool posture lives beside it, per tool × capability, using the
-same status enum. Status is authored nowhere else: control status is a rollup of the
-capabilities that deliver the control, and mitigations carry none. The
+all read them without special cases. Every organisation record maps to one capability — a
+MITRE mitigation id or a `cap-*` specialisation — and carries status per surface; tool posture
+lives beside it, per tool × capability, using the same status enum. Status is authored nowhere
+else: a parent mitigation rolls up its specialisations' records, control status is a rollup of
+the capabilities that support the control, and technology categories carry none. The
 `org-taxonomy-customize` skill walks through it.
 
 ## Capabilities
 
-`data/overlay/capabilities.yaml` is original work: 16 authored capabilities with `cap-*` keys,
-each a durable, technology-agnostic operational outcome. A capability declares the CoSAI
-controls it delivers, an authored `applies` decision and note for each of the three surfaces,
-and its realisation — technology categories from the catalogue below, process items written as
-a title and one playbook sentence, and the CoSAI personas who run it. Titles, descriptions,
-surface notes and process items are repository prose, not a published standard. The build
-requires every CoSAI control to be delivered by at least one capability and every technology
-category to realise at least one, so nothing in the sourced layers dangles without an
-operational owner. Capability → control is the only countermeasure relation maintained by
-hand; a mapping records that a capability delivers a control, never that the control is
-fulfilled.
+A capability is a MITRE mitigation from the selection above, or an authored specialisation of
+one. `data/overlay/specializations.yaml` is original work: 15 specialisations with `cap-*`
+keys, each naming exactly one MITRE parent — three under Operational Risk Assessment
+(`D3-ORA`), two each under Generative AI Guardrails (`AML.M0020`), Access Mediation (`D3-AMED`)
+and Asset Inventory (`D3-AI`), and one each under `AML.M0033`, `D3-OTF`, `D3-PT`, `AML.M0008`,
+`AML.M0024` and `AML.M0014`. A specialisation is a distinct enforcement point, never one
+technology split by risk type: sensitive-data redaction (a DLP point) and retrieval grounding
+checks (the retrieval path) sit beside Generative AI Guardrails, while injection screening and
+output policy stay inside it. The `cap-*` identifiers are repository keys only; the parent is
+the citable mitigation and the sole source of canonical names and definitions. Each specialisation
+authors its implementation scope and feature list, a `legacy` list of the retired home-grown
+capability ids it restores, and optionally a subset of the parent's controls, per-surface
+overrides with a note, examples, risks and process items written as a title and one playbook
+sentence; everything it does not override is inherited from the parent. The build compiles
+them into the mitigation list and checks that the parent is a MITRE entry, the controls are a
+subset of the parent's, the surfaces are well-formed, and each legacy id is restored by exactly
+one specialisation; the MITRE-id rule applies to parents only. Titles, implementation text,
+surface notes and process items are repository prose, not a published standard, and a mapping
+records that a capability supports a control, never that the control is fulfilled.
 
 ## Technology categories and supplementary framework lenses
 
 `data/overlay/technology-categories.yaml` defines 25 sourced technology categories using local
-`tech-*` keys. They are the technology dimension of a capability — what the tool registry keys
-on — and carry no surfaces and no status of their own. `data/frameworks/technology-sources.yaml`
+`tech-*` keys. They are the technology dimension of a capability — each maps to MITRE parents,
+and a specialisation inherits its parent's categories — and carry no surfaces and no status of
+their own. `data/frameworks/technology-sources.yaml`
 records exact category names, source versions/locations, official-vs-local identifier kinds,
 and the additive NIST CSF control crosswalk. OWASP is the primary AI naming source; ENISA
 ECSMAF 3.0 and ECSO supply additional technology categories; CISA TIC v3.3 functions and NIST

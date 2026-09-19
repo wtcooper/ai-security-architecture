@@ -7,18 +7,20 @@ description: Add, refresh or re-verify a named AI product (an agent, coding assi
 
 The registry (`data/tooling/<vendor>/<family>.yaml`) is the one place this repository names
 products. Each entity is one product on one reference architecture, and the architecture fixes
-the **reference control set**: the mitigations pinned on that drawing. The entry's job is to say,
-for each of those, whether the vendor lets an administrator switch it on and exactly where.
+the **reference control set**: the mitigations pinned on that drawing. A pinned mitigation is a
+MITRE entry (`D3-OTF`) or an authored `cap-*` specialisation of one
+(`cap-agent-egress-control`); the app calls that layer Capabilities, the data still says
+`mitigation`. The entry's job is to say, for each of those, whether the vendor lets an
+administrator switch it on and exactly where.
 
 The registry renders in exactly one place: the **Tools** tab of the drawing the product
-instantiates. That grid has one row per `cap-*` capability the architecture needs (a capability
-is needed when it delivers a control that a pinned mitigation supports), technology-category
-pills beside each row, and one column per product; a cell reads the product's `controls[]` rows
-for the mitigations under that capability as vendor coverage, and the organisation's status for
-that product on that capability from `data/org`. The product's full record sits beneath the
-grid, still per mitigation. Nothing in the taxonomy links back to a product, so an entry earns
-its place by being right about that drawing's pinned mitigations, not by being cross-referenced
-elsewhere.
+instantiates. That grid has one row per pinned capability, grouped by control group, with
+technology-category pills beside each row (categories map to the MITRE parent, so a
+specialisation shows its parent's) and one column per product; a cell reads the product's
+`controls[]` row for that capability as vendor coverage, and the organisation's status for that
+product on that capability from `data/org`. The product's full record sits beneath the grid.
+Nothing in the taxonomy links back to a product, so an entry earns its place by being right
+about that drawing's pinned mitigations, not by being cross-referenced elsewhere.
 
 Read `references/schema.md` first. Then run
 `node .claude/skills/tooling-onboard/scripts/reference-set.mjs <architecture id>` to print the
@@ -117,17 +119,19 @@ architectures with their surface).
    (`example/` upstream, `local/` in an adopter's clone). That file is the template an
    organisation edits, so a product is not finished until it has a block there: `available`,
    and under `capabilities` one entry per **organisation capability ID** (the `EX-*` / `YC-*`
-   ids in that profile's `capabilities.yaml`, each mapped to a `cap-*` capability) with a
+   ids in that profile's `capabilities.yaml`, each mapped to a capability: a MITRE id or a
+   `cap-*` specialisation) with a
    `status` and a `note` written as the justification an administrator would give — the
    setting or change that backs the status (`permissions.deny and
    allowManagedPermissionRulesOnly in managed-settings.json`), or for a `gap` why it is not in
    place (`sandbox.enabled pending bubblewrap packaging`; `Vendor offers nothing; kept in the
-   governance register`). A capability may only be assessed for a product when it delivers a
-   control that a mitigation pinned on the product's architecture supports; the build rejects
-   the rest, and `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools <id>`
-   lists the eligible set. Several mitigation rows usually fold into one capability note, so
-   derive it from those rows' `mechanism` fields and name the real keys or console paths.
-   Capabilities whose rows are all `none` still get a note saying what stands in. Upstream, the
+   governance register`). A capability may only be assessed for a product when it is pinned on
+   the product's architecture — itself, its MITRE parent, or a specialisation of it; the build
+   rejects the rest, and `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools <id>`
+   lists the eligible set. Derive the note from the matching row's `mechanism` and name the
+   real keys or console paths; where the organisation keyed its record on a MITRE parent, the
+   rows for its specialisations fold into that one note. A capability whose row is `none`
+   still gets a note saying what stands in. Upstream, the
    example organisation runs a handful of products; set `available: true` only if it plausibly
    would, otherwise `false` — the notes are still the adopter's starting text.
 6. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
@@ -135,7 +139,7 @@ architectures with their surface).
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
 7. **Look at it.** `npm run dev`, open `/reference?archetype=<arch>&tool=<id>`: the drawing's
    Tools tab with your product as a column and its record open beneath the grid. Check that
-   each capability row shows the coverage you expect from its mitigations and that the coverage
+   each capability row shows the coverage you expect from its row and that the coverage
    word links to the page an administrator would actually use, expand the record for the steps,
    and switch **Show org data** on and hover a few cells: every one should show the capability
    note you seeded, none should say "nothing recorded yet". Without a browser, confirm the compiled entry instead:

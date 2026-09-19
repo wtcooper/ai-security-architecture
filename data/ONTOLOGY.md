@@ -17,9 +17,8 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Flow (edge) | architecture `edges:` | `from->to`, one of three path classes |
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
 | Control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the capabilities that deliver it |
-| Capability | data/overlay/capabilities.yaml | Authored `cap-*` keys; a durable operational outcome that delivers controls, with authored per-surface applicability; the only entity that carries authored status |
-| Technology category | data/overlay/technology-categories.yaml | Local `tech-*` keys for published OWASP/ENISA/ECSO categories; maps to mitigations and framework entries; no surfaces, no status; never mitigation IDs |
-| Mitigation | data/overlay/mitigations.yaml | MITRE-native IDs from pinned D3FEND/ATLAS; per-diagram chip numbers; no status |
+| Capability (`mitigation` in data and code) | data/overlay/mitigations.yaml, data/overlay/specializations.yaml | A MITRE mitigation with its MITRE-native ID from pinned D3FEND/ATLAS, or an authored specialisation of one (`cap-*`, exactly one MITRE parent); the pin unit on every drawing, with per-diagram chip numbers and an authored per-surface decision; the only entity that carries authored status |
+| Technology category | data/overlay/technology-categories.yaml | Local `tech-*` keys for published OWASP/ENISA/ECSO categories; maps to MITRE parents and framework entries; no surfaces, no status; never mitigation IDs |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
 | Guidance document | data/reference/guidance/*.yaml | one per architecture; `mode: build | use | hybrid` |
@@ -29,14 +28,18 @@ gateway can be drawn as components. Their defensive methods are mitigations pinn
 components or flows, and those mitigations support CoSAI controls. The enforcement
 classification below determines where each mitigation must be implemented.
 
-A capability is technology-agnostic. It declares the CoSAI controls it delivers, whether it
-applies on each surface and why, and its realisation: technology categories, process items
-with a playbook sentence, and the CoSAI personas who run it. Capability → control is the only
-countermeasure relation maintained by hand; the build requires every control to be delivered
-by at least one capability and every technology category to realise at least one. Status is
-authored only on capabilities — per surface in the organisation layer, per product in the tool
-layer. Control status, category status and product cells are rollups of those records;
-mitigations carry none.
+A capability is a MITRE mitigation or an authored specialisation of one. The MITRE entry is
+the citable identifier and carries the CoSAI controls it supports, the risks it addresses and
+an authored decision per surface with the reason. A specialisation (`cap-*`, in
+`specializations.yaml`) narrows one MITRE parent to a single actionable countermeasure where
+the parent is too coarse to pin or report on; it inherits the parent's definition, controls and
+surfaces unless it overrides them (its controls must be a subset of the parent's), is the pin
+unit where it exists, and lists the retired home-grown ids it restores. In data and code the
+record is called `mitigation`; the app calls the layer Capabilities. Status is authored only on
+capabilities — per surface in the organisation layer, per product in the tool layer. A parent
+rolls up its specialisations' records, control status is the rollup of the capabilities that
+support it, and product cells read that product's own records; technology categories carry
+none.
 
 Technology categories map many-to-many to MITRE mitigations and external source entries.
 `same-category` aligns terminology; `narrower` means the source category is broader; `supports`

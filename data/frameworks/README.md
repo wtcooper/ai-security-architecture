@@ -9,9 +9,10 @@ NIST AI RMF crosswalk.
 `technology-sources.yaml` contains selected source entries; `../overlay/technology-categories.yaml`
 contains 25 technology categories and their explicit many-to-many mappings to source entries
 and MITRE mitigations. `scripts/lib/technology-categories.ts` compiles these into the existing
-framework index. A technology category is the technology dimension of a capability
-(`../overlay/capabilities.yaml`); it carries no surfaces and no status. The five additional
-lenses are:
+framework index. A technology category is the technology dimension of a capability — a MITRE
+mitigation in `../overlay/mitigations.yaml` or a `cap-*` specialisation of one in
+`../overlay/specializations.yaml`; categories map to the MITRE parent and a specialisation
+inherits them — and it carries no surfaces and no status. The five additional lenses are:
 
 | Lens | Adopted source | Identity and scope |
 | --- | --- | --- |
@@ -48,8 +49,8 @@ AI Guardrails. That does not confer all of that broad mitigation's injection, re
 agent-action protections. Guardrails and LLM firewalls overlap; they are not additive coverage.
 
 Technology categories have no page of their own. They appear as pills on a capability's
-realisation detail and beside each capability row on an architecture's Tools tab, where the
-rows are the capabilities the architecture needs. Incident links derive from CoSAI controls.
+detail and beside each pinned capability row on an architecture's Tools tab. Incident links
+derive from CoSAI controls.
 No product, organization status, architecture pin, or incident evidence is created by these
 category associations; status is authored on capabilities only. The existing mitigation pins
 and product evidence remain authoritative for those views.
@@ -74,6 +75,7 @@ Run `npm run data`, `npm run test:capabilities`, `npm run test:technology`, and 
 The tests compare compiled CoSAI core entities to their vendored YAML, check both NIST lenses,
 exercise forward/reverse mappings and reject unknown sources, missing rationales, duplicate
 identities, and dangling MITRE references. The build validates every framework entry reference.
-Legacy `/capabilities?capability=AML.M…` and retired custom-ID links still resolve to Mitigations;
-`/capabilities?category=tech-…` links open the Capabilities page on the capabilities that
-category realises, since a category has no page of its own.
+`/mitigations`, legacy `/capabilities?capability=AML.M…` links and retired custom-ID links all
+resolve into the Capabilities matrix; `/capabilities?category=tech-…` opens it on the
+capabilities that category realises — the MITRE parents it maps to and their specialisations —
+since a category has no page of its own.

@@ -37,11 +37,12 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
   link (except `none`, which never links), so `steps[0].url` must be the page an administrator
   performs the step on. Coverage carries no colour of its own: colour on that screen means the
   organisation's status, from `data/org`.
-- **The grid is per capability, the record per mitigation.** Tools-tab rows are the `cap-*`
-  capabilities the architecture needs, with technology-category pills beside them; a product
-  cell summarises the `controls[]` rows for the mitigations that support that capability's
-  controls (mixed coverage stays visible as mixed). The entity itself still carries one row per
-  pinned mitigation — that is what the record beneath the grid expands.
+- **The grid and the record share one id set.** Tools-tab rows are the capabilities pinned on
+  the architecture — MITRE mitigations and `cap-*` specialisations of them, the same ids your
+  `controls[]` rows name — grouped by control group, with technology-category pills beside
+  them (categories map to the MITRE parent); a product cell shows that row's coverage, and the
+  record beneath the grid expands its steps. Where a parent is shown with its specialisations,
+  mixed coverage stays visible as mixed.
 - **Canonical `facts` labels**, in this order: `Plans`, `Inference & routing`,
   `Data leaving the device`, `Retention & training`, `Docs index`, then anything
   product-specific (`Network requirements`, `Vendor ownership`, …).
@@ -52,7 +53,8 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
 - **Ids are stable**: guidance documents and `data/org/*/tooling-status.yaml` reference them.
 - **The organisation's side lives next door.** `data/org/<profile>/tooling-status.yaml` carries,
   per product, `available` and one `{ status, note, evidence? }` per **organisation capability
-  ID** (each mapped to a `cap-*` capability in that profile's `capabilities.yaml`), never per
-  mitigation or control; the build accepts only capabilities that deliver a control a pinned
-  mitigation supports. The `note` is what the grid shows on hover. Onboarding a product
-  includes writing that block (SKILL.md step 5).
+  ID** (each mapped to a MITRE id or `cap-*` specialisation in that profile's
+  `capabilities.yaml`), never per control; the build accepts only capabilities pinned on the
+  product's architecture — itself, its MITRE parent, or a specialisation of it. The `note` is
+  what the grid shows on hover. Onboarding a product includes writing that block (SKILL.md
+  step 5).

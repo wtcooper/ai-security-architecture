@@ -104,20 +104,19 @@ provenances:
 The nav answers three questions in order — what controls the business needs, whether it can
 deliver them, and where they must be enforced — then keeps the rest as reference: **Risk map** ·
 **Controls** · **Capabilities** · **Architectures** · **Incidents** · **Reference ▾** (Components,
-Risks, Mitigations, Personas, Frameworks).
+Risks, Personas, Frameworks).
 
 | View | What it does |
 | --- | --- |
 | **Landing** | What this is, how to read the three phases, where the data comes from. |
 | **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **Controls** | The 35 CoSAI controls in six groups as a grouped list beside one full entry. Each row carries a rolled-up status pill when **Show org data** is on; the detail lists the capabilities that deliver the control and, as a "how" section, the MITRE mitigations that support it. Filter by control group, search by name. |
-| **Capabilities** | The 16 authored capabilities in a capability × deployment-surface matrix, coloured by status with a gaps-only toggle. This is the only place status is authored. A capability's detail lists the controls it delivers and its realisation in three columns: technology categories, process items, people. |
-| **Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. The rail groups pinned mitigations under the control they support. See the section below. |
-| **Architectures › Tools** | One row per capability the architecture needs, with technology-category pills beside it and one column per named product showing vendor coverage and, with **Show org data**, the organisation's status for that product on that capability. Select a product cell for the underlying mitigation evidence. Mixed coverage and missing evidence remain explicit. |
+| **Controls** | The 35 CoSAI controls in six groups as a grouped list beside one full entry. Each row carries a rolled-up status pill when **Show org data** is on; the detail lists the capabilities that deliver the control — MITRE mitigations and their authored specialisations. Filter by control group, search by name. |
+| **Capabilities** | The pin catalogue — 59 MITRE mitigations and 15 authored specialisations of them — as a control group × deployment-surface matrix, coloured by status with a gaps-only toggle. This is the only place status is authored. A capability's detail shows the MITRE definition, the authored implementation scope, where it is pinned, the technology categories that realise it, any process items, and the organisation's records. `/mitigations` opens the same matrix. |
+| **Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. The rail lists pinned capabilities under their control group. See the section below. |
+| **Architectures › Tools** | One row per pinned capability, with technology-category pills beside it and one column per named product showing vendor coverage and, with **Show org data**, the organisation's status for that product on that capability. Select a product cell for the vendor evidence behind it. Mixed coverage and missing evidence remain explicit. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
-| **Reference › Mitigations** | The 59 MITRE mitigations as a catalogue: the controls each contributes to, its per-surface responsibility and the architectures that pin it. Search by name or MITRE id. Mitigations carry no status. |
 | **Reference › Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Reference › Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 
@@ -195,40 +194,47 @@ Every mapping badge elsewhere in the app links into this view.
 
 ## The countermeasure layers: controls, capabilities, technology categories
 
-Five countermeasure-shaped vocabularies sit at different altitudes, and the app keeps them
+Four countermeasure-shaped vocabularies sit at different altitudes, and the app keeps them
 apart rather than presenting them as parallel catalogues:
 
 | Layer | Source | Role | Status? |
 | --- | --- | --- | --- |
-| Controls | CoSAI | Governance requirements; personas own them | rolled up |
-| Mitigations | MITRE D3FEND, ATLAS | Engineering methods; support controls; the pin vocabulary on drawings | no |
-| **Capabilities** | authored, 16, `cap-*` | Durable operational outcomes, technology-agnostic; realised by people, process and technology | **yes — the only authored status** |
-| Technology categories | OWASP, ENISA, ECSO, 25, `tech-*` | The technology dimension of a capability; what the tool registry keys on | no |
+| Controls | CoSAI | The function the business needs ("Agent Execution Bounds"); personas own them | rolled up |
+| **Capabilities** | MITRE D3FEND + ATLAS, 59, plus 15 authored specialisations (`cap-*`) | The actionable countermeasure at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing | **yes — the only authored status** |
+| Technology categories | OWASP, ENISA, ECSO, 25, `tech-*` | The technology dimension of a capability; pills beside each row on the Tools tab | no |
 | Tools | registry | Named products; each an instance of one reference architecture | per capability |
 
-A capability declares the CoSAI controls it delivers, the surfaces where it can exist (with a
-note per surface saying why or why not), and its realisation: technology categories, process
-items with a playbook sentence, and the CoSAI personas who run it. Capability → control is the
-only relation maintained by hand; the build fails if any control is delivered by no capability
-or any technology category realises none. MITRE mappings stay sourced detail under controls
-(`/controls`, with the mitigations as a "how" section) and under technology categories.
+A capability is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary; each
+carries the CoSAI controls it supports, the risks it addresses and an authored decision per
+surface. Where one MITRE entry is too coarse to report on, an authored **specialisation** in
+`data/overlay/specializations.yaml` carries a local `cap-*` id and exactly one MITRE parent:
+beside Generative AI Guardrails (`AML.M0020`) sit `cap-sensitive-data-redaction`, a DLP
+enforcement point, and `cap-retrieval-grounding-checks` on the retrieval path. A specialisation
+is a distinct enforcement point, never one technology split by risk type — injection screening
+and output policy stay inside the guardrail, because one product inspects inputs and outputs
+across every risk domain. A specialisation inherits its parent's definition, controls and
+surfaces unless it overrides them, is the pin unit where it exists, and lists under `legacy`
+the retired home-grown capability ids it restores. In data and code the record is
+still called `mitigation`, because its identifier is MITRE's; the app calls the layer
+**Capabilities**. Technology categories map to the MITRE parent, so a specialisation inherits
+its parent's technology dimension.
 
-Status is authored in exactly two places, both keyed by capability id: per capability and
-surface in `data/org/<profile>/capabilities.yaml`, and per product and capability in
-`tooling-status.yaml`. Control status is a rollup of the capabilities that deliver it; a
-technology category's status is a rollup of the capabilities it realises; a product cell reads
-that product's own record on the capability. Mitigations have no status. **Show org data**
-switches the rollups on; organization names and evidence belong in selected records, not table
-cells. Missing assessments display as **Not assessed**. Mitigation effectiveness and control
-fulfillment are not inferred from deployment status.
+Status is authored in exactly two places, both keyed by capability id (MITRE or `cap-*`): per
+capability and surface in `data/org/<profile>/capabilities.yaml`, and per product and
+capability in `tooling-status.yaml`. A parent's status is the rollup of its own records and
+its specialisations'; control status is the rollup of the capabilities that support it; a
+product cell reads that product's own record on the capability. Nothing else carries status.
+**Show org data** switches the rollups on; organization names and evidence belong in selected
+records, not table cells. Missing assessments display as **Not assessed**. Mitigation
+effectiveness and control fulfillment are not inferred from deployment status.
 
 The 25 technology categories retain their published naming sources: OWASP for AI categories,
 ENISA ECSMAF 3.0 and ECSO for conventional categories, with CISA TIC and NIST CSF 2.0
 supplementary mappings. They have no page of their own; they appear as pills on a capability's
 detail and on the Tools tab. See [the source and mapping contract](data/frameworks/README.md).
 The MITRE crosswalk under them covers 38 of 59 mitigations; [the mapping review](docs/CAPABILITY-MAPPING-GAPS.md)
-records the history, though a mitigation without a category is no longer a status gap because
-status lives on capabilities.
+records the history, though a capability without a category is not a status gap, because
+status is authored on the capability itself.
 
 CoSAI controls and their existing NIST AI RMF mappings are unchanged. A separate authored
 NIST CSF 2.0 crosswalk maps 34 of the 35 controls at category level; all 22 CSF categories are
@@ -238,27 +244,30 @@ and authored crosswalks, not a new globally standardized catalogue.
 
 CoSAI remains the source for components, risks, controls and personas. Mitigations use
 **MITRE D3FEND 1.6.0 defensive techniques, supplemented by MITRE ATLAS 2026.09 mitigations**:
-35 D3FEND techniques and 24 ATLAS mitigations. There are **no custom mitigation IDs**.
+35 D3FEND techniques and 24 ATLAS mitigations. There are **no custom MITRE IDs**: the only
+local identifiers in the layer are the 15 `cap-*` specialisations, each under one MITRE parent.
 
 Canonical identifiers, names and definitions come directly from checksum-pinned snapshots in
 `data/mitre/`. The selection, implementation guidance, product-category examples, deployment
 responsibility and CoSAI crosswalk remain authored in `data/overlay/mitigations.yaml`.
-Build validation rejects invented IDs and overrides of upstream names or definitions.
+Build validation rejects invented IDs and overrides of upstream names or definitions, and
+checks each specialisation against its parent: the parent is a MITRE entry, the controls are a
+subset of the parent's, the surfaces are well-formed, and every `legacy` id is restored once.
 
-Every mitigation and every capability carries an authored decision per surface
-(endpoint / cloud / third-party SaaS): whether it applies there and why. A capability's column
-in the matrix is its own decision, never inherited from its technology categories or their
-mitigations, so a blank SaaS cell still reads as a finding — training data governance has
-nothing to enforce on the endpoint because managed devices consume models rather than train
-them. Technology categories carry no surface flags of their own. A surface is a
+Every capability carries an authored decision per surface (endpoint / cloud / third-party
+SaaS): whether it applies there and why. A specialisation inherits its parent's decisions
+unless it overrides one — retrieval grounding checks do not apply on SaaS because the vendor
+owns the index — so a blank cell in the matrix is a finding, not missing data; training data
+governance has nothing to enforce on the endpoint because managed devices consume models rather
+than train them. Technology categories carry no surface flags of their own. A surface is a
 customer-deployment profile, not a universal claim about technical availability.
 Provider-internal implementations require supplier evidence.
 
-`AML.M0020` is the canonical Generative AI Guardrails mitigation. Injection screening,
-content-policy screening, sensitive-data blocking/redaction, grounding and retrieval checks
-are implementation features beneath it, not separate mitigations. Verify each feature and
-boundary; one feature is only partial evidence for the broad mitigation. Other MITRE entries
-also overlap, so catalogue counts are not a coverage score.
+`AML.M0020` is the canonical Generative AI Guardrails mitigation and keeps injection screening
+and content-policy screening as implementation features; sensitive-data redaction and retrieval
+grounding checks are its two specialisations, pinned and reported at their own boundaries. One
+feature or one specialisation enabled is only partial evidence for the parent, whose status is
+the rollup. Other MITRE entries also overlap, so catalogue counts are not a coverage score.
 
 **31 of 35 CoSAI controls have a supporting mapping; this does not mean they are fulfilled.**
 The four unmapped controls and important partial matches are documented in
@@ -272,7 +281,11 @@ tool mappings and organization records use native IDs. A tool claim whose former
 mapped one-to-one onto a single mitigation keeps its coverage and verification date; a claim
 that was split across several mitigations, or merged with another, becomes `unknown` until
 reassessed. Original claims/evidence are retained under `migration.original`; retired
-references are archived.
+references are archived. Where a former id is named in a specialisation's `legacy` list,
+`npx tsx scripts/specialize-capabilities.mts` re-points pins, guidance items, enforcement
+vocabulary, tool rows and the shipped org example from the MITRE parent onto that
+specialisation, restoring the original rows with their coverage and verified dates; it is
+idempotent and applies with `--write`.
 
 ### Why the capability layer looks the way it does
 
@@ -280,15 +293,16 @@ Both frameworks stop at the control *strategy*. CoSAI names "User Data Managemen
 asks which tool does that, and on what — the laptop, the cloud service we run, or the vendor AI
 we merely subscribe to. The answer differs on all three, and neither framework models the
 difference. That is why the capability matrix has surfaces as columns, and why each capability
-records its own per-surface decision rather than inheriting one.
+records its own per-surface decision.
 
 The earlier home-grown taxonomy had 56 classes, each admitted only if it was named by at least
 two independent source families, implemented by a technology rather than a practice, and
 different across at least one surface boundary. Those tests still hold for the technology
 layer; what changed is that the 25 technology categories take their *names* from published
 sources (OWASP, ENISA, ECSO) so the repository stops minting its own vocabulary, and the
-16 capabilities above them are deliberately few, stable and technology-agnostic, because a
-status that lives on a market category moves every time the market renames itself. Two
+capabilities above them take their ids from MITRE, with a `cap-*` specialisation only where one
+MITRE entry is too coarse to act on, because a status that lives on a market category moves
+every time the market renames itself. Two
 findings from that earlier survey are worth keeping in view because they change what a
 control mapping can claim:
 **ISO/IEC 42001's Annex A names no security control at all** — no red-teaming, no weight
@@ -302,8 +316,10 @@ detection (single-source, no CoSAI risk), and Zero Trust (an architecture stance
 purchasable capability — it lives inside the segmentation and identity entries).
 
 For a fork still using original capability IDs, run `npm run migrate:capabilities` to preview and add `-- --write`
-to apply. Then run `npm run migrate:mitigations -- --write` to rename live schema fields and organization files. Run `npm run data` and inspect split pin placements; geometry and boundary
-validation may require manual adjustments. The migration is idempotent.
+to apply. Then run `npm run migrate:mitigations -- --write` to rename live schema fields and organization files, and
+`npx tsx scripts/specialize-capabilities.mts --write` to land anything that migrated onto a MITRE parent on the
+specialisation restoring its former id. Run `npm run data` and inspect split pin placements; geometry and boundary
+validation may require manual adjustments. Each migration is idempotent.
 
 Status remains opt-in through **Show org data** and comes from `data/org`. Missing posture
 records read as gaps. The shipped organization is an example, not an assessed deployment.
@@ -384,9 +400,9 @@ data/
 │   ├── mitigations.yaml         ★ MITRE selection, CoSAI mappings + 3 surfaces,
 │   │                               each mapped to CoSAI controls/risks/components,
 │   │                               with per-surface applicability and sources
-│   ├── capabilities.yaml        ★ 16 authored capabilities (cap-*): controls delivered,
-│   │                               per-surface applicability, realisation by technology
-│   │                               categories, process items and personas
+│   ├── specializations.yaml     ★ 15 authored specialisations (cap-*), one MITRE parent each,
+│   │                               with the retired ids they restore, an implementation scope
+│   │                               and optional control, surface, risk and process overrides
 │   ├── technology-categories.yaml  25 sourced technology categories (tech-*), mapped to
 │   │                               MITRE mitigations and framework entries
 │   ├── risk-components.yaml      which components light up per risk × phase
@@ -410,7 +426,8 @@ scripts/
 ├── build-data.ts                 data/** → dataset.json, with every integrity check
 ├── audit.ts                      regenerates docs/AUDIT.md from the data
 ├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
-└── extract-saif-tour.ts          re-extracts the SAIF tour seed
+├── extract-saif-tour.ts          re-extracts the SAIF tour seed
+└── specialize-capabilities.mts   re-points pins, guidance and tool rows onto cap-* specialisations (idempotent, --write)
 
 src/
 ├── data/generated/dataset.json   the compiled dataset (committed, never hand-edited)
@@ -431,8 +448,8 @@ src/
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
-    ├── capabilities/             ★ capability × surface matrix, gaps toggle, realisation detail
-    ├── mitigations/              the MITRE reference catalogue
+    ├── capabilities/             ★ the Capabilities matrix (control group × surface), gaps toggle, detail
+    ├── mitigations/              /mitigations, the historical route, aliased onto the Capabilities matrix
     ├── reference/                ★ flow diagram, insight rail, picker, per-block styling
     └── examples/IncidentExplorer.tsx
 
@@ -479,15 +496,18 @@ overlay phase with no components, a map that has drifted from CoSAI.
 Everything is text. Clone the repository, and:
 
 1. **Map your capability inventory once.** Create `data/org/local/capabilities.yaml` from the
-   active example. Give each organization capability a name and ID, one `capability: cap-*`
-   from `data/overlay/capabilities.yaml`, and a status per surface — only on surfaces where
-   that capability applies. Control and MITRE associations roll up automatically; do not
-   author separate organization mappings to controls, methods or technology categories. The
-   generated `org-capabilities` framework shows your inventory and its derived links.
+   active example. Give each organization capability a name and ID, one `capability:` naming
+   a MITRE mitigation id (`D3-MFA`, `AML.M0020`) or a `cap-*` specialisation from
+   `data/overlay/specializations.yaml` (`cap-sensitive-data-redaction`), and a status per
+   surface — only on surfaces where that capability applies. Control associations roll up
+   automatically, and a record on a specialisation counts towards its MITRE parent; do not
+   author separate organization mappings to controls or technology categories. The generated
+   `org-capabilities` framework shows your inventory and its derived links.
 2. **Record product status where useful.** `tooling-status.yaml` records, per product, whether
    it is available and a status per organization capability — how that product's own settings
-   deliver the capability. A product may only be assessed on capabilities that deliver a
-   control its reference architecture pins. **Show org data** colours the Capabilities matrix,
+   deliver the capability. A product may only be assessed on capabilities its reference
+   architecture pins — the id, its MITRE parent, or a specialisation of it. **Show org data**
+   colours the Capabilities matrix,
    the Controls rollup pills and the architecture Tools table. Missing assessments are **Not
    assessed**; an explicit `gap` is a deployment shortfall. See [the organization guide](data/org/README.md)
    for examples, rollup semantics, and safe migration of old assessments. The previous shipped
