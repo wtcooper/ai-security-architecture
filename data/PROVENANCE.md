@@ -327,6 +327,19 @@ one specialisation; the MITRE-id rule applies to parents only. Titles, implement
 surface notes and process items are repository prose, not a published standard, and a mapping
 records that a capability supports a control, never that the control is fulfilled.
 
+## Enterprise landscape
+
+`data/overlay/landscape.yaml` places every MITRE parent capability onto three borrowed framings
+so coverage reads at the enterprise level, on the Reference architectures page, before any one
+architecture is opened: the CISA Zero Trust Maturity Model's five pillars and three
+cross-cutting capabilities; the Cyber Defense Matrix form with AI asset classes down the side
+and the NIST CSF 2.0 functions across the top; and Gartner's four AI TRiSM market layers. The
+framings are theirs and are cited; the placement of each capability — one primary home per view,
+in a `group`, `group/lane` or `row/column` grammar — is this repository's judgement and does not
+claim the framework authors would agree. Specialisations are never placed: they follow their
+parent and their organisation records roll up into it, exactly as on the Capabilities page. The
+build requires every parent to be placed in every view and refuses any other id.
+
 ## Technology categories and supplementary framework lenses
 
 `data/overlay/technology-categories.yaml` defines 25 sourced technology categories using local

@@ -125,6 +125,48 @@ export interface FrameworkEntryInfo {
   mappingNotes?: { kind: "controls" | "categories"; entity: string; relationship: string; rationale: string }[];
 }
 
+/**
+ * ------------------------------------------------------------------ Enterprise landscape
+ *
+ * The MITRE parent capabilities placed onto well-known enterprise framings, one primary home per
+ * view, so coverage and gaps read at the enterprise level. A grouped view has groups (optionally
+ * subdivided into lanes); the matrix has rows and columns. Placements are strings in the grammar
+ * `group`, `group/lane` or `row/column`; see scripts/lib/landscape.ts resolvePlacement.
+ */
+export interface LandscapeAxisEntry {
+  id: string;
+  title: string;
+  blurb?: string;
+}
+
+export interface LandscapeGroup extends LandscapeAxisEntry {
+  blurb: string;
+  /** Domain view only: pillars stand as columns, cross-cutting groups run as bars beneath. */
+  role?: "pillar" | "crosscutting";
+  lanes?: { id: string; title: string }[];
+}
+
+export interface LandscapeView {
+  id: string;
+  title: string;
+  short: string;
+  kind: "groups" | "matrix";
+  /** The framework this framing is borrowed from, with its source. */
+  basis: string;
+  url: string;
+  description: string;
+  groups?: LandscapeGroup[];
+  rows?: LandscapeAxisEntry[];
+  columns?: LandscapeAxisEntry[];
+}
+
+export interface Landscape {
+  attribution: string;
+  views: LandscapeView[];
+  /** MITRE parent id -> view id -> placement string. */
+  placements: Record<string, Record<string, string>>;
+}
+
 /** Sourced technology categories: the technology dimension of a capability, keyed to MITRE methods. */
 export interface TechnologyCategory {
   id: string;
@@ -911,4 +953,5 @@ export interface Dataset {
   toolingAttribution: string;
   orgToolPosture: OrgToolPosture[];
   orgCapabilities: OrgCapability[];
+  landscape: Landscape;
 }

@@ -15,6 +15,7 @@ import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
 import { compileOrgCapabilities, checkOrgToolCapabilities } from "./lib/org-capabilities";
 import { loadTechnologyCategories } from "./lib/technology-categories";
+import { loadLandscape } from "./lib/landscape";
 import { loadSpecializations } from "./lib/specializations";
 
 import type {
@@ -301,6 +302,8 @@ async function main() {
   mitigationsDoc.mitigations.push(...specializations.specializations);
   for (const s of specializations.specializations) mitigationIds.add(s.id);
   const technology = await loadTechnologyCategories(ROOT, mitigationIds, controlIds);
+  // The enterprise landscape places every MITRE parent onto three framings; specialisations follow their parent.
+  const landscape = await loadLandscape(ROOT, new Set(mitigationsDoc.mitigations.filter((m) => !m.parent).map((m) => m.id)));
   authoredDoc.frameworks.push(...technology.frameworks);
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
@@ -454,6 +457,7 @@ async function main() {
         vendors: toolingLoaded.vendors.length,
         orgFrameworks: orgFrameworks.frameworks.length,
         orgToolPosture: orgToolPosture.length,
+        landscapeViews: landscape.views.length,
       },
       org: org.meta,
     },
@@ -489,6 +493,7 @@ async function main() {
     toolingAttribution: toolingLoaded.attribution,
     orgToolPosture,
     orgCapabilities: org.capabilities,
+    landscape,
   };
 
   await mkdir(OUT_DIR, { recursive: true });

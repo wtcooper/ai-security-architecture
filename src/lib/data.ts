@@ -48,6 +48,7 @@ export const {
   toolingAttribution,
   orgToolPosture,
   orgCapabilities,
+  landscape,
   meta,
 } = dataset;
 
@@ -360,6 +361,9 @@ function capabilitySupport(ids: string[], surfaceId?: string, toolId?: string): 
     evidence: contributions.map((c) => c.record?.evidence).filter(Boolean).join(" · ") || undefined,
   };
 }
+
+/** The landscape tile reads one capability across every surface and available product. */
+export const orgCapabilityPostureFor = (capabilityId: string, surfaceId?: string) => capabilitySupport([capabilityId], surfaceId);
 
 /** The Capabilities matrix reads the enterprise and product records on one surface. */
 export const orgSurfacePostureFor = (capabilityId: string, surfaceId: string) => capabilitySupport([capabilityId], surfaceId);
