@@ -111,7 +111,7 @@ Risks, Personas, Frameworks).
 | **Landing** | What this is, how to read the three phases, where the data comes from. |
 | **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **Controls** | The 35 CoSAI controls in six groups as a grouped list beside one full entry. Each row carries a rolled-up status pill when **Show org data** is on; the detail lists the capabilities that deliver the control — MITRE mitigations and their authored specialisations. Filter by control group, search by name. |
-| **Capabilities** | The pin catalogue — 59 MITRE mitigations and 15 authored specialisations of them — as a control group × deployment-surface matrix, coloured by status with a gaps-only toggle. This is the only place status is authored. A capability's detail shows the MITRE definition, the authored implementation scope, where it is pinned, the technology categories that realise it, any process items, and the organisation's records. `/mitigations` opens the same matrix. |
+| **Capabilities** | The pin catalogue — 59 MITRE mitigations and 17 authored specialisations of them — as a control group × deployment-surface matrix, coloured by status with a gaps-only toggle. This is the only place status is authored. A capability's detail shows the MITRE definition, the authored implementation scope, where it is pinned, the technology categories that realise it, any process items, and the organisation's records. `/mitigations` opens the same matrix. |
 | **Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. The rail lists pinned capabilities under their control group. See the section below. |
 | **Architectures › Tools** | One row per pinned capability, with technology-category pills beside it and one column per named product showing vendor coverage and, with **Show org data**, the organisation's status for that product on that capability. Select a product cell for the vendor evidence behind it. Mixed coverage and missing evidence remain explicit. |
 | **Incidents** | Five real 2025–26 incidents replayed step by step on the map, every step sourced. |
@@ -200,7 +200,7 @@ apart rather than presenting them as parallel catalogues:
 | Layer | Source | Role | Status? |
 | --- | --- | --- | --- |
 | Controls | CoSAI | The function the business needs ("Agent Execution Bounds"); personas own them | rolled up |
-| **Capabilities** | MITRE D3FEND + ATLAS, 59, plus 15 authored specialisations (`cap-*`) | The actionable countermeasure at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing | **yes — the only authored status** |
+| **Capabilities** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable countermeasure at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing | **yes — the only authored status** |
 | Technology categories | OWASP, ENISA, ECSO, 25, `tech-*` | The technology dimension of a capability; pills beside each row on the Tools tab | no |
 | Tools | registry | Named products; each an instance of one reference architecture | per capability |
 
@@ -245,7 +245,7 @@ and authored crosswalks, not a new globally standardized catalogue.
 CoSAI remains the source for components, risks, controls and personas. Mitigations use
 **MITRE D3FEND 1.6.0 defensive techniques, supplemented by MITRE ATLAS 2026.09 mitigations**:
 35 D3FEND techniques and 24 ATLAS mitigations. There are **no custom MITRE IDs**: the only
-local identifiers in the layer are the 15 `cap-*` specialisations, each under one MITRE parent.
+local identifiers in the layer are the 17 `cap-*` specialisations, each under one MITRE parent.
 
 Canonical identifiers, names and definitions come directly from checksum-pinned snapshots in
 `data/mitre/`. The selection, implementation guidance, product-category examples, deployment
@@ -400,7 +400,7 @@ data/
 │   ├── mitigations.yaml         ★ MITRE selection, CoSAI mappings + 3 surfaces,
 │   │                               each mapped to CoSAI controls/risks/components,
 │   │                               with per-surface applicability and sources
-│   ├── specializations.yaml     ★ 15 authored specialisations (cap-*), one MITRE parent each,
+│   ├── specializations.yaml     ★ 17 authored specialisations (cap-*), one MITRE parent each,
 │   │                               with the retired ids they restore, an implementation scope
 │   │                               and optional control, surface, risk and process overrides
 │   ├── technology-categories.yaml  25 sourced technology categories (tech-*), mapped to
@@ -449,7 +449,6 @@ src/
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
     ├── capabilities/             ★ the Capabilities matrix (control group × surface), gaps toggle, detail
-    ├── mitigations/              /mitigations, the historical route, aliased onto the Capabilities matrix
     ├── reference/                ★ flow diagram, insight rail, picker, per-block styling
     └── examples/IncidentExplorer.tsx
 

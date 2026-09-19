@@ -108,65 +108,45 @@ tools:
           user sets tools.exec.mode to allowlist or ask, and tools.elevated lets exec leave the sandbox for
           allowlisted senders.
     controls:
-      - mitigation: AML.M0020
-        coverage: unknown
+      - mitigation: cap-input-guardrails
+        coverage: partial
         mechanism: >-
           External content is wrapped in <<<EXTERNAL_UNTRUSTED_CONTENT>>> boundary markers with chat-template
           special tokens stripped, and an outbound sanitizer strips leaked tool-call scaffolding from replies;
           there is no injection classifier. Hardening is the reader-agent pattern, tool policy and the audit's
           small-model warning.
-        steps:
-          - &a1
-            title: Keep the unsafe-content bypass flags off
+        steps: &a1
+          - title: Keep the unsafe-content bypass flags off
             body:
               - Leave hooks.mappings[].allowUnsafeExternalContent, hooks.gmail.allowUnsafeExternalContent and the cron
                 payload field allowUnsafeExternalContent unset; if one is needed for debugging, isolate that
                 agent with a sandbox, minimal tools and its own session namespace.
             url: https://docs.openclaw.ai/gateway/security/prompt-injection
-          - &a2
-            title: Summarise untrusted content in a reader agent
+          - title: Summarise untrusted content in a reader agent
             body:
-              - Route web, mail and hook content to a read-only or tool-disabled agent under agents.entries.<id>
-                (sandbox mode all, tools.deny for exec/browser/write) and pass only its summary to the main
-                agent; constrain the handoff with tools.agentToAgent.allow.
+              - Route web, mail and hook content to a read-only or tool-disabled agent under agents.entries.<id> (sandbox
+                mode all, tools.deny for exec/browser/write) and pass only its summary to the main agent;
+                constrain the handoff with tools.agentToAgent.allow.
             url: https://docs.openclaw.ai/gateway/security/prompt-injection
-          - &a3
-            title: Deny the high-risk tools unless needed
+          - title: Deny the high-risk tools unless needed
             body:
               - Keep web_search, web_fetch and browser out of tool-enabled agents via tools.deny, and set
                 tools.exec.strictInlineEval true whenever interpreters (python, node, ruby, osascript) are
                 allowlisted so -c/-e forms still need approval.
             url: https://docs.openclaw.ai/gateway/security/prompt-injection
-          - &a4
-            title: Let the audit catch weak-model exposure
+          - title: Let the audit catch weak-model exposure
             body:
-              - "`openclaw security audit` warns when a model of 300B parameters or fewer runs unsandboxed
-                with web or browser tools enabled; fix that finding before exposing the agent to untrusted
-                inboxes."
+              - "`openclaw security audit` warns when a model of 300B parameters or fewer runs unsandboxed with web or
+                browser tools enabled; fix that finding before exposing the agent to untrusted inboxes."
             url: https://docs.openclaw.ai/cli/security
-        evidence:
-          - &a5
-            title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
-            url: https://docs.openclaw.ai/llms.txt
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityPromptInjectionDefense] Boundary markers and token stripping reduce the chance an
-          injected instruction is obeyed; they detect nothing. Detection would be a scanner the operator adds
-          in front of tool results.
-
-
-          [capabilityModelGuardrails] No harm-category, denied-topic or blocked-term filter on model inputs or
-          outputs is documented; the only output processing is the scaffolding sanitizer. Apply guardrails at
-          the provider (the Amazon Bedrock plugin advertises guardrail support but documents no key) and keep
-          /reasoning, /verbose and /trace off in shared rooms.
+          Boundary markers and token stripping reduce the chance an injected instruction is obeyed; they
+          detect nothing. Detection would be a scanner the operator adds in front of tool results.
+        verified: 2026-09-10
         migration:
           from:
             - capabilityPromptInjectionDefense
-            - capabilityModelGuardrails
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityPromptInjectionDefense
               coverage: partial
@@ -175,15 +155,27 @@ tools:
                 chat-template special tokens stripped, and an outbound sanitizer strips leaked tool-call
                 scaffolding from replies; there is no injection classifier. Hardening is the reader-agent
                 pattern, tool policy and the audit's small-model warning.
-              steps:
-                - *a1
-                - *a2
-                - *a3
-                - *a4
+              steps: *a1
               note: >-
                 Boundary markers and token stripping reduce the chance an injected instruction is obeyed; they
                 detect nothing. Detection would be a scanner the operator adds in front of tool results.
               verified: 2026-09-10
+      - mitigation: cap-output-guardrails
+        coverage: none
+        note: >-
+          No harm-category, denied-topic or blocked-term filter on model inputs or outputs is documented; the
+          only output processing is the scaffolding sanitizer. Apply guardrails at the provider (the Amazon
+          Bedrock plugin advertises guardrail support but documents no key) and keep /reasoning, /verbose and
+          /trace off in shared rooms.
+        evidence: &a1
+          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+            url: https://docs.openclaw.ai/llms.txt
+        verified: 2026-09-10
+        migration:
+          from:
+            - capabilityModelGuardrails
+          reviewRequired: false
+          original:
             - capability: capabilityModelGuardrails
               coverage: none
               note: >-
@@ -191,8 +183,7 @@ tools:
                 documented; the only output processing is the scaffolding sanitizer. Apply guardrails at the
                 provider (the Amazon Bedrock plugin advertises guardrail support but documents no key) and
                 keep /reasoning, /verbose and /trace off in shared rooms.
-              evidence:
-                - *a5
+              evidence: *a1
               verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: partial

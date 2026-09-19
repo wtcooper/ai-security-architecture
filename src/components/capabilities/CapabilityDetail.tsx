@@ -26,7 +26,7 @@ import type { Mitigation } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "@/components/StatusPill";
 
-export function MitigationDetail({ mitigation, onClose, showOrg = true, framed = true }: { mitigation: Mitigation; onClose?: () => void; showOrg?: boolean; framed?: boolean }) {
+export function CapabilityDetail({ mitigation, onClose, showOrg = true, framed = true }: { mitigation: Mitigation; onClose?: () => void; showOrg?: boolean; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);

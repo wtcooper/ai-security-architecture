@@ -195,7 +195,7 @@ export function MitigationList({
                 <OrgRefs kind="mitigations" id={id} />
                 <GuidanceFor archetype={archetype} mitigationId={id} />
                 <Link
-                  href={`/mitigations?mitigation=${id}`}
+                  href={`/capabilities?capability=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
                 >
                   This method across every surface →

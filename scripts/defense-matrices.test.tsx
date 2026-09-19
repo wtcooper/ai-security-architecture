@@ -7,8 +7,7 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 import { DefenseMatrix } from "../src/components/defenses/DefenseMatrix";
 import { matrixHref } from "../src/components/defenses/DefenseNavigation";
 import { mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
-import { CapabilitiesRoute } from "../src/components/capabilities/CapabilitiesBrowser";
-import { MitigationsBrowser } from "../src/components/mitigations/MitigationsBrowser";
+import { CapabilitiesBrowser } from "../src/components/capabilities/CapabilitiesBrowser";
 import { ControlsBrowser } from "../src/components/browse/ControlsBrowser";
 import { controls, mitigations, mitigationAliases, orgSurfaceStatusFor, orgSurfacePostureFor, orgCapabilities, surfaces } from "../src/lib/data";
 
@@ -17,7 +16,7 @@ const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRe
 function page(path: string, query = "") {
   return renderToStaticMarkup(<AppRouterContext.Provider value={router}>
     <PathnameContext.Provider value={path}><SearchParamsContext.Provider value={new URLSearchParams(query)}>
-      {path === "/capabilities" ? <CapabilitiesRoute /> : path === "/controls" ? <ControlsBrowser /> : <MitigationsBrowser />}
+      {path === "/controls" ? <ControlsBrowser /> : <CapabilitiesBrowser />}
     </SearchParamsContext.Provider></PathnameContext.Provider>
   </AppRouterContext.Provider>);
 }
@@ -42,10 +41,10 @@ test("shared filters require category and surface to match the same placement", 
   assert.equal(matchesMatrixFilters(item, { category: "data", surface: "endpoint" }), false);
   assert.equal(matchesMatrixFilters(item, { category: "data", surface: "cloud" }), true);
   assert.equal(matrixHref("/capabilities", "data", "cloud"), "/capabilities?group=data&surface=cloud");
-  assert.equal(matrixHref("/mitigations", "", ""), "/mitigations");
+  assert.equal(matrixHref("/capabilities", "", ""), "/capabilities");
 });
 
-test("controls is a master-detail page; capabilities is the pin matrix; /mitigations opens the same matrix", () => {
+test("controls is a master-detail page; capabilities is the pin matrix", () => {
   const html = page("/controls");
   assert.equal(rows(html), controls.length);
   for (const control of controls) assert.ok(html.includes(control.title.replaceAll("&", "&amp;")), control.id);
@@ -55,8 +54,6 @@ test("controls is a master-detail page; capabilities is the pin matrix; /mitigat
   assert.match(matrix, /CoSAI control group/);
   assert.match(matrix, /Show org data/);
   assert.equal(chips(matrix.match(/<table[\s\S]*?<\/table>/)![0]), mitigations.flatMap((m) => mitigationMatrixItem(m).placements).length);
-  const table = (html: string) => html.match(/<table[\s\S]*?<\/table>/)![0];
-  assert.equal(table(page("/mitigations")), table(matrix), "historical route keeps the capability matrix");
 });
 
 test("specialisations sit beside their MITRE parent and restore retired capabilities", () => {
@@ -78,11 +75,9 @@ test("specialisations sit beside their MITRE parent and restore retired capabili
 
 test("native and legacy deep links retain their subjects", () => {
   const method = mitigations[0];
-  for (const path of ["/mitigations", "/capabilities"]) {
-    const html = page(path, `mitigation=${encodeURIComponent(method.id)}`);
-    assert.match(html, /Upstream definition/);
-    assert.ok(html.includes(method.id));
-  }
+  const html = page("/capabilities", `capability=${encodeURIComponent(method.id)}`);
+  assert.match(html, /Upstream definition/);
+  assert.ok(html.includes(method.id));
   const legacy = Object.entries(mitigationAliases).find(([, ids]) => ids.length)!;
   const aliased = page("/capabilities", `capability=${encodeURIComponent(legacy[0])}`);
   assert.match(aliased, /This older link/);

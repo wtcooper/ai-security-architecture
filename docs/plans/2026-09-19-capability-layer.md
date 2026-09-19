@@ -30,11 +30,12 @@ colours that pin enabled, in progress or gap.
 
 A capability is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary. Where one
 MITRE entry is too coarse to report on, an authored **specialisation** carries a local `cap-*`
-id and exactly one MITRE parent: beside Generative AI Guardrails (AML.M0020) sit sensitive-data
-redaction, a DLP enforcement point, and retrieval grounding checks on the retrieval path. A
-specialisation is never a split of one technology by risk type: injection screening and output
-policy stay inside the guardrail, because one product inspects inputs and outputs and classifies
-across every risk domain. Specialisations are the pin unit where they exist; they inherit the parent's controls,
+id and exactly one MITRE parent. Under Generative AI Guardrails (AML.M0020) sit input screening
+guardrails and output content safety guardrails, the two directions of the same gateway crossing,
+sensitive-data redaction at the DLP point, and retrieval grounding checks on the retrieval path.
+A specialisation is a distinct place or direction in the data flow; both guardrail directions keep
+"Guardrails" in their name because one product usually provides both. Specialisations are the pin
+unit where they exist; they inherit the parent's controls,
 surfaces and definition unless they override them, and they restore the pre-MITRE capabilities
 the migration collapsed.
 
@@ -64,13 +65,13 @@ the rollup of the capabilities that support it. Nothing else carries status.
   product columns with vendor coverage and org status.
 - **Incidents** unchanged.
 - **Reference** dropdown: Components, Risks, Personas, Frameworks. Mitigations are no longer a
-  separate page; `/mitigations` redirects into Capabilities.
+  separate page.
 
 ## Data changes
 
 1. `data/overlay/technology-categories.yaml` (was technology-capabilities): ids stay `tech-*`,
    type `TechnologyCategory`, no surfaces, mitigation and framework mappings unchanged.
-2. New `data/overlay/specializations.yaml`: 15 `cap-*` specialisations, each with one MITRE
+2. New `data/overlay/specializations.yaml`: 17 `cap-*` specialisations, each with one MITRE
    parent, a `legacy` list of the retired ids it restores, an authored implementation, and
    optional overrides of controls, surfaces, examples, risks and process items. Compiled into
    the mitigation list at build time; the MITRE-id rule applies to parents only.

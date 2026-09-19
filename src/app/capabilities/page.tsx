@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import { CapabilitiesRoute } from "@/components/capabilities/CapabilitiesBrowser";
+import { CapabilitiesBrowser } from "@/components/capabilities/CapabilitiesBrowser";
 
 export const metadata = { title: "Capabilities · AI Risk Map" };
 
 export default function CapabilitiesPage() {
-  return <Suspense><CapabilitiesRoute /></Suspense>;
+  return <Suspense><CapabilitiesBrowser /></Suspense>;
 }

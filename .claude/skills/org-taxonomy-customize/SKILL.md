@@ -17,7 +17,7 @@ capabilities; if the catalogue lacks one, report the gap.
    their example content. Set `organisation.name` and `shortName` in `capabilities.yaml`.
 3. Give each org capability an ID and title, and map it once using
    `capability: <MITRE id or cap-*>`. `scripts/cosai-index.mjs` lists the capabilities (the 59
-   MITRE mitigations, with the 15 specialisations marked under their parent) with the controls
+   MITRE mitigations, with the 17 specialisations marked under their parent) with the controls
    each supports, its surfaces and the technology categories that realise it;
    `references/mapping-cheatsheet.md` has the common picks. Prefer the specialisation where one
    exists for what is deployed (a DLP product is `cap-sensitive-data-redaction`, not all of

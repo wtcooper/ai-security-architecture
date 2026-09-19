@@ -308,7 +308,7 @@ the capabilities that support the control, and technology categories carry none.
 ## Capabilities
 
 A capability is a MITRE mitigation from the selection above, or an authored specialisation of
-one. `data/overlay/specializations.yaml` is original work: 15 specialisations with `cap-*`
+one. `data/overlay/specializations.yaml` is original work: 17 specialisations with `cap-*`
 keys, each naming exactly one MITRE parent — three under Operational Risk Assessment
 (`D3-ORA`), two each under Generative AI Guardrails (`AML.M0020`), Access Mediation (`D3-AMED`)
 and Asset Inventory (`D3-AI`), and one each under `AML.M0033`, `D3-OTF`, `D3-PT`, `AML.M0008`,

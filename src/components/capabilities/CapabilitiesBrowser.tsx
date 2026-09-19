@@ -10,13 +10,8 @@ import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { OrgCapabilityLegend } from "@/components/defenses/OrgCapabilityLegend";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { MitigationDetail } from "@/components/mitigations/MitigationDetail";
+import { CapabilityDetail } from "@/components/capabilities/CapabilityDetail";
 import { categoryById, mitigations, mitigationById, mitigationAliases, mitigationsForCategory, orgSurfaceStatusFor, surfaces } from "@/lib/data";
-
-/** The pin catalogue: every capability is a MITRE mitigation or an authored specialisation of one. */
-export function CapabilitiesRoute() {
-  return <CapabilitiesBrowser />;
-}
 
 const SOURCES = [
   { id: "", label: "All" },
@@ -25,17 +20,17 @@ const SOURCES = [
   { id: "specialisation", label: "Specialisations" },
 ];
 
-function CapabilitiesBrowser() {
+/** The pin catalogue: every capability is a MITRE mitigation or an authored specialisation of one. */
+export function CapabilitiesBrowser() {
   const params = useSearchParams();
-  const [clicked, setClicked] = useDefenseSelection("capability");
+  const [linked, setClicked] = useDefenseSelection();
   const filters = useMatrixFilters();
   const overlay = useOrgOverlay();
   const detailRef = useRef<HTMLDivElement>(null);
   const [gapsOnly, setGapsOnly] = useState(false);
   const [source, setSource] = useState("");
   const [query, setQuery] = useState("");
-  // Links published as ?mitigation= or with a retired id still open their subject.
-  const linked = clicked ?? params.get("mitigation") ?? params.get("capability");
+  // A retired home-grown id still opens its replacement.
   const replacements = linked ? mitigationAliases[linked] : undefined;
   const selected = replacements?.[0] ?? (linked && mitigationById.has(linked) ? linked : null);
   const capability = selected ? mitigationById.get(selected) : undefined;
@@ -75,7 +70,7 @@ function CapabilitiesBrowser() {
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No capabilities match these filters.</p>}
         <p className="mt-2 text-xs text-ink-3">A capability sits in its primary control group on the surfaces where it applies; a specialisation is shown beside its MITRE parent. A blank cell means nothing in the catalogue reaches that surface.</p>
         <div ref={detailRef} className="mt-6 scroll-mt-20">
-          {capability && <MitigationDetail mitigation={capability} showOrg={overlay} onClose={() => setClicked(null)} />}
+          {capability && <CapabilityDetail mitigation={capability} showOrg={overlay} onClose={() => setClicked(null)} />}
         </div>
       </div>
     </>

@@ -12,7 +12,7 @@ import { usePathname } from "next/navigation";
 /** Three questions in order: what risk, what controls, can we deliver them, where do they go. */
 const LADDER = [
   { label: "Risk map", href: "/map", matches: ["/map", "/components", "/risks", "/personas", "/frameworks"] },
-  { label: "Controls", href: "/controls", matches: ["/controls", "/mitigations"] },
+  { label: "Controls", href: "/controls", matches: ["/controls"] },
   { label: "Capabilities", href: "/capabilities", matches: ["/capabilities"] },
   { label: "Architectures", href: "/reference", matches: ["/reference"] },
 ];

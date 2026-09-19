@@ -2,7 +2,7 @@
 
 /** Capabilities and their technology categories stay fixed; org data adds status and product columns. */
 import { useEffect, useRef, useState } from "react";
-import { MitigationDetail } from "@/components/mitigations/MitigationDetail";
+import { CapabilityDetail } from "@/components/capabilities/CapabilityDetail";
 
 import { AvailabilityPill } from "@/components/StatusPill";
 import { categoryById, mitigationById, orgToolAvailableFor } from "@/lib/data";
@@ -90,14 +90,14 @@ export function GridView({
           </thead>
           <tbody>
             {groups.map((group) => (
-              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={(p) => { setPicked(p); setTaxonomy(null); setHover(null); }} onTaxonomy={(id) => { setTaxonomy(id); setPicked(null); setHover(null); }} overlay={overlay} archetypeId={archetypeId} dim={dim} onHover={setHover} />
+              <GroupRows key={group.id} group={group} cols={cols} span={span} picked={picked} onPick={(p) => { setPicked(p); setTaxonomy(null); setHover(null); }} onTaxonomy={(id) => { setTaxonomy(id); setPicked(null); setHover(null); }} overlay={overlay} dim={dim} onHover={setHover} />
             ))}
           </tbody>
         </table>
       </div>
       {overlay && hover && <CellHoverCard tool={hover.tool} row={hover.row} cell={hover.cell} overlay={overlay} rect={hover.rect} />}
       <div ref={detailRef} className="scroll-mt-20">
-        {taxonomy && mitigationById.get(taxonomy) && <MitigationDetail mitigation={mitigationById.get(taxonomy)!} showOrg={overlay} onClose={() => setTaxonomy(null)} />}
+        {taxonomy && mitigationById.get(taxonomy) && <CapabilityDetail mitigation={mitigationById.get(taxonomy)!} showOrg={overlay} onClose={() => setTaxonomy(null)} />}
         {overlay && picked && <CellDetail tool={picked.tool} row={picked.row} onClose={() => setPicked(null)} />}
       </div>
     </div>
@@ -112,7 +112,6 @@ function GroupRows({
   onPick,
   onTaxonomy,
   overlay,
-  archetypeId,
   dim,
   onHover,
 }: {
@@ -123,7 +122,6 @@ function GroupRows({
   onPick: (p: { tool: Tool; row: Row }) => void;
   onTaxonomy: (id: string) => void;
   overlay: boolean;
-  archetypeId: string;
   dim: (t: Tool) => boolean;
   onHover: (h: { tool: Tool; row: Row; cell: Cell; rect: DOMRect } | null) => void;
 }) {

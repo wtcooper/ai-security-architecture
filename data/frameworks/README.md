@@ -75,7 +75,7 @@ Run `npm run data`, `npm run test:capabilities`, `npm run test:technology`, and 
 The tests compare compiled CoSAI core entities to their vendored YAML, check both NIST lenses,
 exercise forward/reverse mappings and reject unknown sources, missing rationales, duplicate
 identities, and dangling MITRE references. The build validates every framework entry reference.
-`/mitigations`, legacy `/capabilities?capability=AML.M…` links and retired custom-ID links all
-resolve into the Capabilities matrix; `/capabilities?category=tech-…` opens it on the
+`/capabilities?capability=<MITRE id or cap-*>` opens an entry, and retired custom-ID links
+resolve to their replacement; `/capabilities?category=tech-…` opens it on the
 capabilities that category realises — the MITRE parents it maps to and their specialisations —
 since a category has no page of its own.

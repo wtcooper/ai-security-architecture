@@ -10,7 +10,6 @@ import { join } from "node:path";
 import { Document, isAlias, isMap, isSeq, isScalar, parse, parseDocument, type Node, type Scalar } from "yaml";
 import { migrateToolControls, type LegacyToolControl } from "./lib/capability-migration";
 
-const ROOT = process.cwd();
 const WRITE = process.argv.includes("--write");
 /** The last revision whose pin notes still carry "migrated from <legacy>; verify <target>". */
 const NOTED = "ee000cd";

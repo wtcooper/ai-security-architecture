@@ -285,7 +285,7 @@ export function FrameworksBrowser() {
                         <p className="eyebrow">{entry.mitigations.length} mitigations</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.mitigations.map((c) => (
-                            <Link key={c.id} href={`/mitigations?mitigation=${c.id}`}>
+                            <Link key={c.id} href={`/capabilities?capability=${c.id}`}>
                               <Chip tone="introduced">{c.title}</Chip>
                             </Link>
                           ))}

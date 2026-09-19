@@ -18,20 +18,18 @@ export function useMatrixFilters() {
   };
 }
 
-/** Keep selected items bookmarkable and responsive to browser back/forward navigation. */
-export function useDefenseSelection(kind: "capability" | "mitigation") {
+/** Keep the selected capability bookmarkable and responsive to browser back/forward navigation. */
+export function useDefenseSelection() {
   const params = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
   const select = (id: string | null) => {
     const next = new URLSearchParams(params.toString());
     next.delete("capability");
-    next.delete("mitigation");
-    if (id) next.set(kind, id);
-    const destination = kind === "mitigation" ? "/mitigations" : pathname;
-    router.replace(`${destination}${next.size ? `?${next}` : ""}`, { scroll: false });
+    if (id) next.set("capability", id);
+    router.replace(`${pathname}${next.size ? `?${next}` : ""}`, { scroll: false });
   };
-  return [params.get(kind), select] as const;
+  return [params.get("capability"), select] as const;
 }
 
 export function CapabilityFilters() {
