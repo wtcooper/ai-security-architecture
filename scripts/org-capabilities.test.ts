@@ -66,7 +66,9 @@ test("actual surface and tool support can be traced only to their recorded capab
     assert.equal(orgCapabilitySurfacePostureFor("tech-dlp", "surfaceEndpoint").status, "inProgress");
     assert.equal(orgCapabilitySurfacePostureFor("tech-sandbox", "surfaceEndpoint").status, "gap");
     assert.equal(orgCapabilitySurfacePostureFor("tech-pam", "surfaceEndpoint").status, "inProgress", "tool assessment rolls up on its actual surface");
-    assert.equal(orgStatusFor("toolClaudeCode", "AML.M0020").status, "notAssessed", "enterprise DLP does not assert this tool's configuration");
+    const guardrails = orgStatusFor("toolClaudeCode", "AML.M0020");
+    assert.equal(guardrails.status, "inProgress", "the tool's own DLP and guardrail records roll up; enterprise DLP does not assert this tool's configuration");
+    assert.deepEqual(guardrails.contributions.map((c) => c.id).sort(), ["EX-DLP", "EX-GUARDRAILS"]);
   }
 });
 

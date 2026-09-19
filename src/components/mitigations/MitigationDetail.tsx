@@ -24,7 +24,7 @@ import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusPill } from "@/components/StatusPill";
 import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 
-export function MitigationDetail({ mitigation, onClose, showOrg = true }: { mitigation: Mitigation; onClose: () => void; showOrg?: boolean }) {
+export function MitigationDetail({ mitigation, onClose, showOrg = true, framed = true }: { mitigation: Mitigation; onClose?: () => void; showOrg?: boolean; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);
@@ -34,7 +34,7 @@ export function MitigationDetail({ mitigation, onClose, showOrg = true }: { miti
   const overlay = showOrg && orgOverlay;
 
   return (
-    <div className="rounded-xl border border-line bg-paper p-7">
+    <div className={framed ? "rounded-xl border border-line bg-paper p-7" : undefined}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="display text-[24px] font-bold leading-tight text-ink">
@@ -42,20 +42,22 @@ export function MitigationDetail({ mitigation, onClose, showOrg = true }: { miti
           </h2>
           <p className="mt-2 text-xs text-ink-3">{mitigation.origin.framework} · {mitigation.id} · {mitigation.origin.version}</p>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close detail"
-          className="rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <path
-              d="M4 4 L12 12 M12 4 L4 12"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Close detail"
+            className="rounded-md p-1.5 text-ink-3 transition-colors hover:bg-mist hover:text-ink"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M4 4 L12 12 M12 4 L4 12"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       <p className="mt-2 text-xs text-ink-3">{categoryTitle} · {mitigation.kind === "support" ? "Governance support" : "Defensive function"} · {mitigation.origin.entityType}</p>

@@ -1,10 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
-import { controls, controlById, controlCategories, mitigations, mitigationById, mitigationAliases, mitigationsForControl } from "@/lib/data";
-import type { Control } from "@/lib/types";
+import { firstLine } from "@/components/Prose";
+import { FilterPill } from "@/components/browse/RisksBrowser";
+import { controls, controlCategories, mitigations, mitigationById, mitigationAliases, mitigationsForControl } from "@/lib/data";
+import { MasterDetail } from "./MasterDetail";
 import { ControlDetail } from "./ControlDetail";
 import { MitigationDetail } from "@/components/mitigations/MitigationDetail";
 
@@ -14,80 +16,77 @@ export const CONTROL_CATEGORY_ACCENT: Record<string, string> = {
   controlsAssurance: "var(--mitigated)", controlsGovernance: "var(--ink-2)",
 };
 
-export function ControlsMitigationsTable({ shown, selectedControl, selectedMitigation, onSelect }: {
-  shown: Control[];
-  selectedControl?: string | null;
-  selectedMitigation?: string | null;
-  onSelect: (kind: "control" | "mitigation", id: string) => void;
-}) {
-  return <div className="overflow-x-auto rounded-xl border border-line bg-paper">
-    <table className="w-full min-w-[650px] border-collapse text-left" aria-label="CoSAI controls and supporting MITRE mitigations">
-      <thead><tr className="bg-ink text-sm text-white">
-        <th scope="col" className="w-[38%] px-4 py-3">CoSAI controls</th>
-        <th scope="col" className="px-4 py-3">MITRE mitigations</th>
-      </tr></thead>
-      <tbody>{controlCategories.filter((cat) => shown.some((c) => c.category === cat.id)).map((cat) => <Fragment key={cat.id}>
-        <tr><th colSpan={2} scope="colgroup" className="border-t border-line bg-mist px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink-2">{cat.title}</th></tr>
-        {shown.filter((c) => c.category === cat.id).map((control) => {
-          const methods = mitigationsForControl(control.id);
-          return <tr key={control.id} className="border-t border-line">
-            <th scope="row" className="px-4 py-3 align-top text-sm font-medium">
-              <button onClick={() => onSelect("control", control.id)} aria-pressed={selectedControl === control.id}
-                className={`text-left hover:text-introduced hover:underline ${selectedControl === control.id ? "text-introduced underline" : "text-ink"}`}>{control.title}</button>
-            </th>
-            <td className="border-l border-line px-4 py-3">
-              {methods.length ? <div className="flex flex-wrap gap-1.5">{methods.map((m) => <button key={m.id}
-                onClick={() => onSelect("mitigation", m.id)} aria-pressed={selectedMitigation === m.id} title={`${m.title} (${m.id})`}
-                className={`rounded-full border px-2.5 py-1 text-xs ${selectedMitigation === m.id ? "border-ink bg-ink text-white" : "border-line bg-mist text-ink-2 hover:border-ink"}`}>{m.title}</button>)}</div>
-                : <span className="text-xs text-ink-3">No MITRE mitigation mapped</span>}
-            </td>
-          </tr>;
-        })}
-      </Fragment>)}</tbody>
-    </table>
-  </div>;
-}
+type Tab = "controls" | "mitigations";
+const TABS: { id: Tab; label: string; count: number }[] = [
+  { id: "controls", label: "CoSAI controls", count: controls.length },
+  { id: "mitigations", label: "MITRE mitigations", count: mitigations.length },
+];
 
+/**
+ * One page, two taxonomies: the controls CoSAI requires and the MITRE methods that support them,
+ * each as a grouped list beside one full entry. The two are cross-linked from inside the detail.
+ */
 export function ControlsBrowser() {
   const params = useSearchParams();
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const category = controlCategories.find((c) => c.id === params.get("group"))?.id ?? "";
+  const pathname = usePathname();
+  // Links published when "capability" meant a MITRE method still resolve; retired ids explain themselves.
   const linked = params.get("mitigation") ?? params.get("capability");
   const replacements = linked ? mitigationAliases[linked] : undefined;
-  const mitigation = mitigationById.get(replacements?.[0] ?? linked ?? "");
-  const control = !mitigation ? controlById.get(params.get("control") ?? "") : undefined;
-  const detailRef = useRef<HTMLDivElement>(null);
+  const linkedMitigation = replacements?.[0] ?? (linked && mitigationById.has(linked) ? linked : null);
+  const [tab, setTab] = useState<Tab>(linkedMitigation || pathname.startsWith("/mitigations") ? "mitigations" : "controls");
+  const [category, setCategory] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [clicked, setClicked] = useState<string | null>(null);
+  const q = query.trim().toLowerCase();
+
+  const shownControls = controls.filter((c) => (!category || c.category === category) &&
+    `${c.title} ${c.id} ${mitigationsForControl(c.id).map((m) => `${m.title} ${m.id}`).join(" ")}`.toLowerCase().includes(q));
+  const shownMitigations = mitigations.filter((m) => (!category || m.category === category) &&
+    `${m.title} ${m.id} ${m.origin.framework} ${m.implementation}`.toLowerCase().includes(q));
+  const ids = (tab === "controls" ? shownControls : shownMitigations).map((x) => x.id);
+  const linkedId = tab === "controls" ? params.get("control") : linkedMitigation;
+  const selected = clicked && ids.includes(clicked) ? clicked : linkedId && ids.includes(linkedId) ? linkedId : ids[0];
   useEffect(() => {
-    if (control || mitigation) detailRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [control, mitigation]);
-  const select = (kind?: "control" | "mitigation", id?: string, group = category) => {
-    const next = new URLSearchParams();
-    if (group) next.set("group", group);
-    if (kind && id) next.set(kind, id);
-    router.replace(`/controls${next.size ? `?${next}` : ""}`, { scroll: false });
-  };
-  const shown = controls.filter((c) => (!category || c.category === category) &&
-    `${c.title} ${c.id} ${mitigationsForControl(c.id).map((m) => `${m.title} ${m.id}`).join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()));
+    if (typeof window === "undefined" || !selected) return;
+    window.history.replaceState(null, "", `?${tab === "controls" ? "control" : "mitigation"}=${selected}`);
+  }, [tab, selected]);
+
+  const switchTab = (next: Tab) => { setTab(next); setClicked(null); };
+  const groups = <T extends { id: string; title: string; category: string }>(items: T[]) => controlCategories
+    .map((cat) => ({ id: cat.id, title: cat.title, accent: CONTROL_CATEGORY_ACCENT[cat.id], items: items.filter((x) => x.category === cat.id) }))
+    .filter((g) => g.items.length);
+  const countIn = (cat: string) => (tab === "controls" ? controls : mitigations).filter((x) => x.category === cat).length;
+
   return <>
     <PageHeader eyebrow={`${controls.length} CoSAI controls · ${mitigations.length} MITRE mitigations`} title="Controls & Mitigations"
-      lead="Explore the protections CoSAI calls for and the MITRE methods that support them. Select a control or mitigation for its scope, sources and technology capabilities.">
-      <div className="mt-5 flex flex-wrap gap-3">
-        <input type="search" aria-label="Search controls and mitigations" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search controls or mitigations…" className="w-full max-w-md rounded-lg border border-line bg-paper px-3 py-2 text-sm" />
-        <select aria-label="CoSAI control group" value={category} onChange={(e) => select(undefined, undefined, e.target.value)} className="rounded-lg border border-line bg-paper px-3 py-2 text-sm">
-          <option value="">All control groups</option>{controlCategories.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
-        </select>
+      lead="CoSAI names the protections an AI deployment needs; MITRE D3FEND and ATLAS name the defensive methods that support them. A mapping is a contribution, not proof a control is fulfilled.">
+      <div role="tablist" aria-label="Taxonomy" className="mt-5 flex gap-1 rounded-lg border border-line bg-paper p-1 w-fit">
+        {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => switchTab(t.id)}
+          className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${tab === t.id ? "bg-ink text-white" : "text-ink-2 hover:bg-mist"}`}>
+          {t.label} <span className={`ml-1 font-normal ${tab === t.id ? "text-white/70" : "text-ink-3"}`}>{t.count}</span>
+        </button>)}
       </div>
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        <FilterPill active={!category} onClick={() => setCategory(null)}>All</FilterPill>
+        {controlCategories.map((c) => <FilterPill key={c.id} active={category === c.id} accent={CONTROL_CATEGORY_ACCENT[c.id]} onClick={() => setCategory(category === c.id ? null : c.id)}>
+          {c.title}<span className="ml-1.5 opacity-60">{countIn(c.id)}</span>
+        </FilterPill>)}
+      </div>
+      <input type="search" aria-label={`Search ${tab}`} value={query} onChange={(e) => setQuery(e.target.value)}
+        placeholder={tab === "controls" ? "Search controls or the mitigations that support them…" : "Search mitigations by name, MITRE id or implementation…"}
+        className="mt-4 w-full max-w-md rounded-lg border border-line bg-paper px-3 py-2 text-sm" />
+      {replacements && <p className="mt-3 text-xs text-ink-3">This older mitigation link maps to {replacements.length ? replacements.map((id) => mitigationById.get(id)?.title).join(" · ") : "a retired entry; its requirements remain in CoSAI controls"}.</p>}
     </PageHeader>
-    <div className="mx-auto max-w-[1400px] px-6 py-8">
-      {replacements && <p className="mb-3 text-xs text-ink-3">This older mitigation link maps to {replacements.length ? replacements.map((id) => mitigationById.get(id)?.title).join(" · ") : "a retired entry; its requirements remain in CoSAI controls"}.</p>}
-      <ControlsMitigationsTable shown={shown} selectedControl={control?.id} selectedMitigation={mitigation?.id} onSelect={select} />
-      {!shown.length && <p className="mt-4 text-sm text-ink-3">No controls or mitigations match these filters.</p>}
-      <p className="mt-3 text-xs text-ink-3">Supporting relationships are many-to-many. Organization mappings and deployment status are managed on Technology capabilities.</p>
-      <div ref={detailRef} className="mt-6 scroll-mt-20">
-        {control && <ControlDetail controlId={control.id} onClose={() => select()} />}
-        {mitigation && <MitigationDetail mitigation={mitigation} onClose={() => select()} showOrg={false} />}
-      </div>
-    </div>
+    {!selected ? <p className="mx-auto max-w-[1400px] px-6 py-8 text-sm text-ink-3">No {tab} match these filters.</p>
+      : tab === "controls" ? (
+        <MasterDetail groups={groups(shownControls)} selectedId={selected} onSelect={setClicked} meta={(c) => firstLine(c.description, 80)}>
+          <ControlDetail controlId={selected} framed={false} />
+        </MasterDetail>
+      ) : (
+        <MasterDetail groups={groups(shownMitigations)} selectedId={selected} onSelect={setClicked}
+          meta={(m) => <span className="ident">{m.origin.framework.replace("MITRE ", "")} · {m.id}</span>}>
+          <MitigationDetail mitigation={mitigationById.get(selected)!} showOrg={false} framed={false} />
+        </MasterDetail>
+      )}
   </>;
 }

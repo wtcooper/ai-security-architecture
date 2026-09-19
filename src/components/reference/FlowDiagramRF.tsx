@@ -708,7 +708,7 @@ export function FlowDiagramRF({
           data: {
             n,
             dim: false,
-            title: `${n} · ${cap?.title ?? pin.mitigation}`,
+            title: `${n} · ${cap?.title ?? pin.mitigation} · ${pin.mitigation}`,
             body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay),
           },
           draggable: false,
@@ -832,7 +832,7 @@ export function FlowDiagramRF({
           dx: spot.x - geo.midX,
           dy: spot.y - geo.midY,
           n,
-          title: `${n} · ${cap?.title ?? pin.mitigation}`,
+          title: `${n} · ${cap?.title ?? pin.mitigation} · ${pin.mitigation}`,
           body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay),
         });
       });

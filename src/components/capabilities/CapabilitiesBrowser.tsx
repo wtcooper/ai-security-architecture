@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/Panel";
-import { DefenseMatrix } from "@/components/defenses/DefenseMatrix";
+import { DefenseMatrix, type MatrixItem } from "@/components/defenses/DefenseMatrix";
 import { CapabilityFilters, useDefenseSelection, useMatrixFilters } from "@/components/defenses/DefenseNavigation";
-import { capabilityMatrixItem, matchesMatrixFilters } from "@/components/defenses/model";
+import { capabilityMatrixItem, matchesMatrixFilters, mitigationsInCell } from "@/components/defenses/model";
 import { OverlayToggle } from "@/components/tooling/OverlayToggle";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { OrgCapabilityLegend } from "@/components/defenses/OrgCapabilityLegend";
@@ -36,6 +37,16 @@ function CapabilitiesBrowser() {
     if (selected) detailRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selected]);
   const sourceIds = [...new Set(capabilities.flatMap((c) => c.frameworkMappings.map((m) => m.framework)))];
+  // Under each cell's capabilities, the MITRE methods they implement there, linked to the mitigation view.
+  const implementedIn = (category: string, surface: string, cell: MatrixItem[]) => {
+    const methods = mitigationsInCell(cell.map((item) => capabilityById.get(item.id)!), category, surface);
+    if (!methods.length) return null;
+    return <div className="mt-2.5 border-t border-dashed border-line pt-2">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">Implements</p>
+      <div className="flex flex-wrap gap-1">{methods.map((m) => <Link key={m.id} href={`/controls?mitigation=${m.id}`} title={`${m.title} (${m.id})`}
+        className="rounded-full border border-dashed border-line px-2 py-[3px] text-[11px] text-ink-3 hover:border-ink hover:text-ink">{m.title}</Link>)}</div>
+    </div>;
+  };
   return (
     <>
       <PageHeader eyebrow={`${capabilities.length} sourced categories`} title="Technology capabilities" aside={<OverlayToggle />} lead="Technology categories implement defensive methods that support CoSAI controls. OWASP supplies the AI categories; ENISA and ECSO supply additional technology terminology. Explore CISA functions and NIST outcomes as supplementary mappings.">
@@ -51,9 +62,9 @@ function CapabilitiesBrowser() {
         {overlay && <OrgCapabilityLegend />}
         <DefenseMatrix items={shown.map(capabilityMatrixItem)} selectedId={selected}
           onSelect={(id) => setClicked(id === selected ? null : id)} {...filters}
-          statusFor={overlay ? orgCapabilitySurfaceStatusFor : undefined} label="Technology capabilities by control group and deployment surface" />
+          statusFor={overlay ? orgCapabilitySurfaceStatusFor : undefined} label="Technology capabilities by control group and deployment surface" cellExtra={implementedIn} />
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No capabilities match these filters.</p>}
-        <p className="mt-2 text-xs text-ink-3">Placement follows mapped mitigations’ primary CoSAI control groups and applicable surfaces. A category may appear in several groups. These are possible implementation paths, not deployment claims; inspect the mapping rationale for scope.</p>
+        <p className="mt-2 text-xs text-ink-3">A capability sits in the control groups of the mitigations it implements, on the surfaces where it was judged deployable; the reason is on the capability. A blank cell means nothing in the catalogue reaches that surface. These are possible implementation paths, not deployment claims.</p>
         <CapabilityMappingGaps />
         <div ref={detailRef} className="mt-6 scroll-mt-20">
           {capability && <CapabilityDetail capabilityId={capability.id} overlay={overlay} surface={filters.surface} onClose={() => setClicked(null)} />}

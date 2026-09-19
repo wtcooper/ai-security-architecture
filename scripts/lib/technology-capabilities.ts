@@ -9,7 +9,7 @@ interface Source extends Framework {
 }
 
 /** Compile supplementary lenses without changing any upstream CoSAI entity. */
-export async function loadTechnologyCatalogue(root: string, mitigationIds: Set<string>, controlIds: Set<string>) {
+export async function loadTechnologyCatalogue(root: string, mitigationIds: Set<string>, controlIds: Set<string>, surfaceIds: Set<string>) {
   const sourceDoc = parse(await readFile(join(root, "data/frameworks/technology-sources.yaml"), "utf8")) as { frameworks: Source[] };
   const profile = parse(await readFile(join(root, "data/overlay/technology-capabilities.yaml"), "utf8")) as { attribution: string; capabilities: TechnologyCapability[] };
   const sources = new Map(sourceDoc.frameworks.map((f) => [f.id, f]));
@@ -53,6 +53,12 @@ export async function loadTechnologyCatalogue(root: string, mitigationIds: Set<s
       (byId[capability.id] ??= []).push(m.entry);
       (entry!.mappingNotes ??= []).push({ kind: "capabilities", entity: capability.id, relationship: m.relationship, rationale: m.rationale });
     }
+    // Every surface gets a conscious, authored decision; placement never falls back to the mitigations.
+    for (const surface of surfaceIds) {
+      const entry = capability.surfaces?.[surface];
+      check(entry && typeof entry.applies === "boolean" && entry.note?.trim(), `${capability.id}: needs applies and a note for ${surface}`);
+    }
+    for (const surface of Object.keys(capability.surfaces ?? {})) check(surfaceIds.has(surface), `${capability.id}: unknown surface ${surface}`);
     check(capability.mitigationMappings?.length, `${capability.id}: no implementation mapping`);
     const mitigations = new Set<string>();
     for (const m of capability.mitigationMappings) {

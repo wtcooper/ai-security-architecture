@@ -282,7 +282,7 @@ async function main() {
 
   // --- Authored frameworks and notes -------------------------------------------------
   const mitigationIds = new Set(mitigationsDoc.mitigations.map((c) => c.id));
-  const technology = await loadTechnologyCatalogue(ROOT, mitigationIds, controlIds);
+  const technology = await loadTechnologyCatalogue(ROOT, mitigationIds, controlIds, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
   authoredDoc.frameworks.push(...technology.frameworks);
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.

@@ -11,6 +11,7 @@ import { loadTechnologyCatalogue } from "./lib/technology-capabilities";
 const root = process.cwd();
 const mitigationIds = new Set(dataset.mitigations.map((m) => m.id));
 const controlIds = new Set(dataset.controls.map((c) => c.id));
+const surfaceIds = new Set(dataset.surfaces.map((s) => s.id));
 
 test("CoSAI core entities and NIST AI RMF mappings remain exactly upstream", async () => {
   for (const kind of ["components", "risks", "controls", "personas"] as const) {
@@ -29,7 +30,7 @@ test("CoSAI core entities and NIST AI RMF mappings remain exactly upstream", asy
 });
 
 test("technology categories are sourced, distinct from MITRE, and invert into each framework view", async () => {
-  const catalogue = await loadTechnologyCatalogue(root, mitigationIds, controlIds);
+  const catalogue = await loadTechnologyCatalogue(root, mitigationIds, controlIds, surfaceIds);
   assert.deepEqual(catalogue.capabilities, dataset.capabilities);
   for (const capability of dataset.capabilities) {
     assert.match(capability.id, /^tech-/);
@@ -87,7 +88,7 @@ test("catalogue rejects dangling references, missing evidence, duplicate identit
     ] as const) {
       const copy = structuredClone(profile); mutate(copy);
       await writeFile(join(temp, "data/overlay/technology-capabilities.yaml"), stringify(copy));
-      await assert.rejects(loadTechnologyCatalogue(temp, mitigationIds, controlIds), pattern);
+      await assert.rejects(loadTechnologyCatalogue(temp, mitigationIds, controlIds, surfaceIds), pattern);
     }
   } finally { await rm(temp, { recursive: true, force: true }); }
 });

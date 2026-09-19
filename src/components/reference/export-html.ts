@@ -54,7 +54,7 @@ export function buildViewerModel(archetype: Archetype) {
         ]),
       ].map((id) => ({
         n: capNumber.get(id) ?? 0,
-        title: mitigationById.get(id)?.title ?? id,
+        title: `${mitigationById.get(id)?.title ?? id} · ${id}`,
       })),
       ...rect,
       items: (b.items ?? []).map((item, i) => ({
@@ -149,7 +149,7 @@ export function buildViewerModel(archetype: Archetype) {
       const base = {
         kind: "chip",
         n: capNumber.get(pin.mitigation) ?? 0,
-        title: mitigationById.get(pin.mitigation)?.title ?? pin.mitigation,
+        title: `${mitigationById.get(pin.mitigation)?.title ?? pin.mitigation} · ${pin.mitigation}`,
         note: pin.note,
       };
       if (blockRect) {
@@ -210,6 +210,7 @@ export function buildViewerModel(archetype: Archetype) {
     legend: {
       mitigations: archetype.mitigations.map((id, i) => ({
         n: i + 1,
+        id,
         title: mitigationById.get(id)?.title ?? id,
       })),
       risks: archetype.risks.map((id) => ({

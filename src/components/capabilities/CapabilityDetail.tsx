@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Chip, MappingBadges } from "@/components/Chips";
 import { StatusPill } from "@/components/StatusPill";
-import { capabilityById, frameworkById, frameworkEntries, mitigationById, controlById, archetypes, incidents, orgCapabilitySurfacePostureFor, surfaces } from "@/lib/data";
+import { capabilityById, frameworkById, frameworkEntries, mitigationById, controlById, archetypes, incidents, orgCapabilitySurfacePostureFor, orgCapabilitySurfaceStatusFor, surfaces } from "@/lib/data";
 import { frameworkHref, mappingsForControl, orgEntriesFor } from "@/lib/frameworks";
 import { matrixHref } from "@/components/defenses/DefenseNavigation";
 
@@ -20,6 +20,20 @@ export function CapabilityDetail({ capabilityId, overlay, surface = "", onClose 
     <h2 className="display mt-1 text-[27px] font-bold text-ink">{capability.title}</h2>
     <p className="mt-2 text-xs text-ink-3">Repository key: {capability.id} · not an official standard identifier</p>
     <p className="mt-4 text-sm leading-relaxed text-ink-2">{capability.description}</p>
+    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      {surfaces.map((s) => {
+        const info = capability.surfaces[s.id];
+        return <div key={s.id} className={`rounded-lg border border-line p-3.5 ${info?.applies ? "" : "bg-mist"}`}>
+          <p className="flex items-center justify-between gap-2 text-[13px] font-semibold text-ink">
+            {s.title}
+            {info?.applies
+              ? overlay && <StatusPill status={orgCapabilitySurfaceStatusFor(capability.id, s.id)} compact />
+              : <span className="text-[11px] font-medium text-ink-3">not available</span>}
+          </p>
+          <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">{info?.note}</p>
+        </div>;
+      })}
+    </div>
     <div className="mt-6">
       <p className="eyebrow">Source categories and framework mappings</p>
       <p className="mt-1 text-xs text-ink-3">Crosswalks authored here. “Supports” means a contribution to a function or outcome; “narrower” means the source category is broader.</p>

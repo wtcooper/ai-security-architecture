@@ -97,8 +97,9 @@ export function WalkList({
   );
 }
 
+/** One mitigation can sit at several boundaries with the same authored note; say it once. */
 function notesFor(pins: { note?: string }[]) {
-  return pins.map((p) => p.note).filter((n): n is string => Boolean(n));
+  return [...new Set(pins.map((p) => p.note).filter((n): n is string => Boolean(n)))];
 }
 
 /**
@@ -165,6 +166,7 @@ export function MitigationList({
                 {i + 1}
               </span>
               <span className="text-[12.5px] leading-tight text-ink">{mitigation?.title ?? id}</span>
+              <span className="ident ml-auto shrink-0 text-[10px] text-ink-3">{id}</span>
             </button>
             {active && (
               <div className="mb-2 ml-8 mt-1 space-y-2">

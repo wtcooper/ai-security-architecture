@@ -110,8 +110,8 @@ Architectures** (the drawing layer), and **Incidents** (the evidence).
 | **Risk Map Walkthrough** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. The Agent group and the three boundary actors are selectable too. |
 | **Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
-| **Taxonomy › Controls & Mitigations** | All 35 CoSAI controls in the first column, with supporting MITRE mitigations in the second. Select either for details, sources and mappings. This page is organization-neutral. |
-| **Taxonomy › Technology capabilities** | 26 sourced technology categories in a control-group × deployment-surface matrix. **Show org data** colors capability pills; organization names, mappings and evidence appear in selected-item details. |
+| **Taxonomy › Controls & Mitigations** | Two tabs, one layout: the 35 CoSAI controls or the 59 MITRE mitigations as a grouped list beside one full entry. A control's detail lists the mitigations that support it and the technology that implements them; a mitigation's detail lists the controls it contributes to, its per-surface responsibility and the architectures that pin it. Filter by control group, search by name or MITRE id. This page is organization-neutral. |
+| **Taxonomy › Technology capabilities** | 26 sourced technology categories in a control-group × deployment-surface matrix, each placed by its own authored per-surface decision; under every cell's capabilities sit the MITRE mitigations they implement there. Click a capability for its three surface cards, source mappings and implementation paths. **Show org data** colors capability pills; organization names, mappings and evidence appear in selected-item details. |
 | **Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 | **Reference Architectures** | 28 target-state architectures, one per class of AI application, drawn in the mitigation-blocks-and-data-paths grammar. Searchable by any word in a name or description. See the section below. |
@@ -193,9 +193,11 @@ Every mapping badge elsewhere in the app links into this view.
 ## The mitigation layer: defensive techniques and methods
 
 Controls (CoSAI), mitigations (MITRE), and technology capabilities are separate concepts.
-Controls and mitigations share a general two-column table at `/controls`; `/mitigations`
-and old MITRE capability deep links still open their subjects there. Technology capabilities
-retain their surface matrix at `/capabilities`. Both pages live under **Taxonomy** in the header.
+Controls and mitigations are two tabs of one master-detail page at `/controls`: a grouped list
+beside one full entry, cross-linked from inside the detail; `/mitigations` and old MITRE
+capability deep links still open their subjects there. Technology capabilities keep their
+surface matrix at `/capabilities`, and under each cell's capabilities sit the mitigations they
+implement there. Both pages live under **Taxonomy** in the header.
 
 Organization data is authored only against capabilities. **Show org data** adds capability
 status and product columns where relevant; organization names and evidence belong in selected
@@ -224,10 +226,13 @@ Canonical identifiers, names and definitions come directly from checksum-pinned 
 responsibility and CoSAI crosswalk remain authored in `data/overlay/mitigations.yaml`.
 Build validation rejects invented IDs and overrides of upstream names or definitions.
 
-The matrix retains CoSAI control groups and endpoint/cloud/SaaS surfaces. Search by native ID,
-name or implementation category, and filter by MITRE source, risk category or stack layer.
-A surface is a customer-deployment profile, not a universal claim about technical availability.
-Provider-internal implementations require supplier evidence.
+Every mitigation and every technology capability carries an authored decision per surface
+(endpoint / cloud / third-party SaaS): whether it applies there and why. A capability's column
+in the matrix is its own decision, never inherited from its mitigations, so a blank SaaS cell
+still reads as a finding — endpoint protection has nothing under Third-party SaaS because no
+agent can be installed on vendor infrastructure. A surface is a customer-deployment profile,
+not a universal claim about technical availability. Provider-internal implementations require
+supplier evidence.
 
 `AML.M0020` is the canonical Generative AI Guardrails mitigation. Injection screening,
 content-policy screening, sensitive-data blocking/redaction, grounding and retrieval checks
@@ -243,9 +248,35 @@ user-facing transparency remain explicit CoSAI requirements.
 
 All 56 former IDs have migration dispositions in `data/migrations/capabilities-v1.yaml`.
 Legacy deep links show every replacement, or explain retirement. Architecture pins, guidance,
-tool mappings and organization records use native IDs. Changed tool claims become `unknown`;
-formerly enabled organization records become `inProgress` pending reassessment. Original
-claims/evidence are retained under `migration.original`; retired references are archived.
+tool mappings and organization records use native IDs. A tool claim whose former capability
+mapped one-to-one onto a single mitigation keeps its coverage and verification date; a claim
+that was split across several mitigations, or merged with another, becomes `unknown` until
+reassessed. Original claims/evidence are retained under `migration.original`; retired
+references are archived.
+
+### Why the capability layer looks the way it does
+
+Both frameworks stop at the control *strategy*. CoSAI names "User Data Management"; leadership
+asks which tool does that, and on what — the laptop, the cloud service we run, or the vendor AI
+we merely subscribe to. The answer differs on all three, and neither framework models the
+difference. That is why the capability matrix has surfaces as columns, and why each capability
+records its own per-surface decision rather than inheriting one.
+
+The earlier home-grown taxonomy had 56 classes, each admitted only if it was named by at least
+two independent source families, implemented by a technology rather than a practice, and
+different across at least one surface boundary. Those tests still hold; what changed is that
+the 26 current categories take their *names* from published sources (OWASP, ENISA, ECSO) so
+the repository stops minting its own vocabulary. Two findings from that earlier survey are
+worth keeping in view because they change what a control mapping can claim:
+**ISO/IEC 42001's Annex A names no security control at all** — no red-teaming, no weight
+protection, no injection defence; it is a governance catalogue. And **no major cloud provider
+ships model signing**; AI-BOM and artifact signing are standards-mandated with no product behind
+them, which makes them a predictable real-world gap.
+
+Deliberate exclusions carry over with their reasons: bias and fairness testing and standalone
+hallucination detection (safety, not security: CoSAI carries no matching risk), deepfake
+detection (single-source, no CoSAI risk), and Zero Trust (an architecture stance, not a
+purchasable capability — it lives inside the segmentation and identity entries).
 
 For a fork still using original capability IDs, run `npm run migrate:capabilities` to preview and add `-- --write`
 to apply. Then run `npm run migrate:mitigations -- --write` to rename live schema fields and organization files. Run `npm run data` and inspect split pin placements; geometry and boundary

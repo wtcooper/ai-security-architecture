@@ -8,13 +8,13 @@ import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 import { archetypesForControl, mitigationGaps, mitigationsForControl, componentsForControl, componentTitle, controlById, controlCategories, frameworkById, personaTitle, risksForControl } from "@/lib/data";
 import { mappingsForControl } from "@/lib/frameworks";
 
-export function ControlDetail({ controlId, onClose }: { controlId: string; onClose: () => void }) {
+export function ControlDetail({ controlId, onClose, framed = true }: { controlId: string; onClose?: () => void; framed?: boolean }) {
   const control = controlById.get(controlId)!;
   const risks = risksForControl(control.id);
   const comps = componentsForControl(control.id);
   const mitigationGap = mitigationGaps.find((gap) => gap.control === control.id);
-  return <section className="rounded-xl border border-line bg-paper p-6">
-    <button onClick={onClose} className="float-right text-xs text-ink-3 hover:text-ink" aria-label="Close control detail">Close ×</button>
+  return <section className={framed ? "rounded-xl border border-line bg-paper p-6" : undefined}>
+    {onClose && <button onClick={onClose} className="float-right text-xs text-ink-3 hover:text-ink" aria-label="Close control detail">Close ×</button>}
     <p className="eyebrow">{controlCategories.find((c) => c.id === control.category)?.title}</p>
     <h2 className="display mt-1.5 text-[27px] font-bold leading-tight text-ink">{control.title}</h2>
 

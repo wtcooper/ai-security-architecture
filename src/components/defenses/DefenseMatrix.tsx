@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { controlCategories, surfaces } from "@/lib/data";
 import { NEUTRAL_STYLE, STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
 
@@ -7,7 +8,7 @@ export interface MatrixItem {
   placements: { category: string; surface: string }[];
 }
 
-export function DefenseMatrix({ items, selectedId, onSelect, category, surface, statusFor, label }: {
+export function DefenseMatrix({ items, selectedId, onSelect, category, surface, statusFor, label, cellExtra }: {
   items: MatrixItem[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
@@ -15,6 +16,8 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
   surface: string;
   statusFor?: (id: string, surface: string) => DisplayStatus;
   label: string;
+  /** Rendered under the chips of a non-empty cell, e.g. the mitigations those items implement. */
+  cellExtra?: (category: string, surface: string, items: MatrixItem[]) => ReactNode;
 }) {
   const columns = surfaces.filter((s) => !surface || s.id === surface);
   return <div className="overflow-x-auto rounded-xl border border-line bg-paper">
@@ -39,6 +42,7 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
                 {item.title}
               </button>;
             })}</div> : <span className="text-sm text-ink-3">—</span>}
+            {cell.length > 0 && cellExtra?.(cat.id, s.id, cell)}
           </td>;
         })}
       </tr>)}</tbody>

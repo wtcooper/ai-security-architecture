@@ -45,20 +45,34 @@ test("shared filters require category and surface to match the same placement", 
   assert.equal(matrixHref("/mitigations", "", ""), "/mitigations");
 });
 
-test("controls and mitigations share a general table; capabilities keep their surface matrix", () => {
+test("controls and mitigations are two tabs of one master-detail page; capabilities keep their surface matrix", () => {
   const html = page("/controls");
-  assert.match(html, /CoSAI controls and supporting MITRE mitigations/);
-  assert.match(html, /MITRE mitigations/);
-  const rows = [...html.matchAll(/<th scope="row"/g)];
-  assert.equal(rows.length, controls.length);
+  assert.match(html, /role="tablist"/);
+  const rows = (h: string) => [...h.matchAll(/data-id="/g)].length;
+  assert.equal(rows(html), controls.length);
   for (const control of controls) assert.ok(html.includes(control.title.replaceAll("&", "&amp;")), control.id);
-  for (const method of mitigations) assert.ok(html.includes(method.title.replaceAll("&", "&amp;")), method.id);
   assert.doesNotMatch(html, /Show org data|Your status|Organization capability deployment|Defense matrices/);
+  const methods = page("/mitigations");
+  assert.equal(rows(methods), mitigations.length, "old route opens the mitigations tab");
+  for (const method of mitigations) assert.ok(methods.includes(method.title.replaceAll("&", "&amp;")), method.id);
   const technology = page("/capabilities");
   assert.match(technology, /CoSAI control group/);
+  assert.match(technology, /Implements/, "each cell lists the mitigations its capabilities implement");
   assert.doesNotMatch(technology, /Defense matrices/);
   assert.match(technology, /Show org data/);
-  assert.equal(page("/mitigations"), html, "old route retains the combined page");
+});
+
+test("capability surfaces are authored, not inherited, and never exceed the mitigations' reach", () => {
+  for (const capability of capabilities) {
+    for (const surface of surfaces) assert.ok(capability.surfaces[surface.id]?.note, `${capability.id} ${surface.id}`);
+    const item = capabilityMatrixItem(capability);
+    for (const surface of surfaces) {
+      if (!capability.surfaces[surface.id].applies) assert.ok(!item.placements.some((p) => p.surface === surface.id), capability.id);
+    }
+  }
+  const columns = surfaces.map((s) => new Set(capabilities.filter((c) => capabilityMatrixItem(c).placements.some((p) => p.surface === s.id)).map((c) => c.id)));
+  assert.ok(columns.some((a, i) => columns.some((b, j) => i !== j && a.size !== b.size)), "surface columns differ");
+  assert.match(page("/capabilities", "capability=tech-endpoint"), /not available/);
 });
 
 test("capability details and native and legacy mitigation deep links retain their subjects", () => {
@@ -66,7 +80,7 @@ test("capability details and native and legacy mitigation deep links retain thei
   const method = mitigations[0];
   for (const path of ["/mitigations", "/capabilities"]) {
     const html = page(path, `mitigation=${encodeURIComponent(method.id)}`);
-    assert.match(html, /Close detail/);
+    assert.match(html, /Upstream definition/);
     assert.ok(html.includes(method.id));
   }
   const legacy = Object.entries(mitigationAliases).find(([, ids]) => ids.length)!;

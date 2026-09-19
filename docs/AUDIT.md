@@ -1021,7 +1021,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 - MITRE D3FEND 1.6.0: 35 canonical entries.
 - MITRE ATLAS 2026.09: 24 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
-- 777 tool-mitigation rows require reassessment after migration.
+- 615 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
@@ -1053,14 +1053,12 @@ See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope a
 | CISA TIC Capabilities | 12 | 0 |
 | NIST CSF | 26 | 34 |
 
-### MITRE methods without a selected technology category — 25
+### MITRE methods without a selected technology category — 21
 
 These methods remain available. Some describe engineering or governance practices rather than technology categories; others need a further sourced implementation mapping.
 
-- Data Inventory (D3-DI)
 - Maintain AI Dataset Provenance (AML.M0025)
 - Sanitize Training Data (AML.M0007)
-- AI Bill of Materials (AML.M0023)
 - Code Signing (AML.M0013)
 - Verify AI Artifacts (AML.M0014)
 - Restrict Library Loading (AML.M0011)
@@ -1071,7 +1069,6 @@ These methods remain available. Some describe engineering or governance practice
 - Restore Database (D3-RD)
 - Predictive AI Model Hardening (AML.M0003)
 - Generative AI Model Alignment (AML.M0022)
-- System Configuration Permissions (D3-SCP)
 - Generative AI Guidelines (AML.M0021)
 - Restrict AI Agent Tool Invocation on Untrusted Data (AML.M0030)
 - Memory Hardening (AML.M0031)
@@ -1079,7 +1076,6 @@ These methods remain available. Some describe engineering or governance practice
 - Limit AI Workload Resource Consumption (AML.M0036)
 - Credential Transmission Scoping (D3-CTS)
 - Token Binding (D3-TB)
-- File Integrity Monitoring (D3-FIM)
 - System File Analysis (D3-SFA)
 - Software Update (D3-SU)
 

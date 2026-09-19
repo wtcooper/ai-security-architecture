@@ -130,6 +130,8 @@ export interface TechnologyCapability {
   title: string;
   category: string;
   description: string;
+  /** Authored per surface: whether the category can be deployed there, and why or why not. */
+  surfaces: Record<string, { applies: boolean; note: string }>;
   primarySource: { framework: string; entry: string };
   frameworkMappings: {
     framework: string;

@@ -48,13 +48,16 @@ test("every architecture HTML export resolves canonical names and numbered mitig
     const model = buildViewerModel(arch);
     const expected = arch.mitigations.map((id) => mitigationById.get(id)!.title);
     assert.deepEqual(model.legend.mitigations.map((c) => c.title), expected, arch.id);
+    assert.deepEqual(model.legend.mitigations.map((c) => c.id), arch.mitigations, `${arch.id}: legend carries the MITRE id`);
+    // Chips and hover cards cite the MITRE id beside the canonical name.
+    const cited = (n: number) => `${expected[n - 1]} · ${arch.mitigations[n - 1]}`;
     for (const block of model.blocks) for (const c of block.caps) {
       assert.ok(c.n > 0, `${arch.id}: unnumbered ${c.title}`);
-      assert.equal(c.title, expected[c.n - 1], arch.id);
+      assert.equal(c.title, cited(c.n), arch.id);
     }
     for (const pin of [...model.blockPins, ...model.edgePins]) if (pin.kind === "chip") {
       assert.ok(typeof pin.n === "number" && pin.n > 0, `${arch.id}: unnumbered pin`);
-      assert.equal(pin.title, expected[pin.n - 1], arch.id);
+      assert.equal(pin.title, cited(pin.n), arch.id);
     }
   }
 });

@@ -20,7 +20,7 @@ export function compileOrgCapabilities(org: { meta: OrgMeta; capabilities: OrgCa
     const technology = byId.get(entry.capability);
     if (!technology) throw new Error(`org capability ${entry.id}: unknown default capability ${entry.capability}`);
     if (!entry.surfaces || typeof entry.surfaces !== "object" || Array.isArray(entry.surfaces)) throw new Error(`org capability ${entry.id}: surfaces must be a map (or {})`);
-    const applicable = new Set(technology.mitigationMappings.flatMap(({ mitigation }) => Object.entries(methods.get(mitigation)!.surfaces).filter(([, s]) => s.applies).map(([id]) => id)));
+    const applicable = new Set(Object.entries(technology.surfaces).filter(([, s]) => s.applies).map(([id]) => id));
     for (const [surface, record] of Object.entries(entry.surfaces)) {
       if (!surfaceIds.has(surface) || !applicable.has(surface)) throw new Error(`org capability ${entry.id}: unsupported surface ${surface}`);
       if (!ORG_STATUSES.includes(record?.status)) throw new Error(`org capability ${entry.id}: invalid status on ${surface}`);
