@@ -685,7 +685,7 @@ Highlights below are Google's original mapping, not ours.
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 
-### 4b. Capabilities no architecture pins — 1 of 76
+### 4b. Capabilities no architecture pins — 1 of 74
 
 - AI System Threat Modelling (`cap-ai-threat-modeling`)
 
@@ -991,37 +991,37 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 28/28 | _none_ |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Claude Code on the web (cloud sessions) | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 37/37 | _none_ |  |
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Claude Cowork in the cloud | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 15/38 | Agent Authentication, Credential Hardening, Credential Rotation, Encrypt Sensitive Information, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components, Prompt Injection Screening, AI Vendor Risk Assessment, Configuration Inventory, Content and Policy Guardrails, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Tool and MCP Server Integrity, File Integrity Monitoring, Staged Rollout and Rollback Gate, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Agent Execution Tracing, Operational Risk Assessment |  |
+| Claude Cowork in the cloud | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 15/37 | Agent Authentication, Credential Hardening, Credential Rotation, Encrypt Sensitive Information, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components, Generative AI Guardrails, AI Vendor Risk Assessment, Configuration Inventory, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Tool and MCP Server Integrity, File Integrity Monitoring, Staged Rollout and Rollback Gate, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Agent Execution Tracing, Operational Risk Assessment |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 38/38 | _none_ |  |
+| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 37/37 | _none_ |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| Cursor Cloud Agents | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Cursor Cloud Agents | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 37/37 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Grok Bot | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Grok Bot | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 37/37 | _none_ |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| GitHub Copilot cloud agent | github | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| GitHub Copilot cloud agent | github | Vendor-hosted coding & desktop agent sessions | 2026-09 | 37/37 | _none_ |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 36/36 | _none_ |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 19/38 | Multi-factor Authentication, Access Policy Administration, Agent and Tool Registry, Staged Rollout and Rollback Gate, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Prompt Injection Screening, AI Vendor Risk Assessment, Content and Policy Guardrails, Memory Hardening, Operational Risk Assessment, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components |  |
+| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 35/35 | _none_ |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 19/37 | Multi-factor Authentication, Access Policy Administration, Agent and Tool Registry, Staged Rollout and Rollback Gate, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Generative AI Guardrails, AI Vendor Risk Assessment, Memory Hardening, Operational Risk Assessment, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Codex cloud | openai | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Codex cloud | openai | Vendor-hosted coding & desktop agent sessions | 2026-09 | 37/37 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 36/36 | _none_ |  |
+| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 35/35 | _none_ |  |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 
 - MITRE D3FEND 1.6.0: 44 canonical entries.
-- MITRE ATLAS 2026.09: 32 canonical entries.
+- MITRE ATLAS 2026.09: 30 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
-- 447 tool-mitigation rows require reassessment after migration.
+- 455 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
@@ -1053,7 +1053,7 @@ See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope a
 | CISA TIC Capabilities | 12 | 0 |
 | NIST CSF | 25 | 34 |
 
-### MITRE methods without a selected technology category — 38
+### MITRE methods without a selected technology category — 36
 
 These methods remain available. Some describe engineering or governance practices rather than technology categories; others need a further sourced implementation mapping.
 
@@ -1078,9 +1078,7 @@ These methods remain available. Some describe engineering or governance practice
 - Token Binding (D3-TB)
 - System File Analysis (D3-SFA)
 - Software Update (D3-SU)
-- Prompt Injection Screening (cap-prompt-injection-screening)
 - Sensitive Data Detection and Redaction (cap-sensitive-data-redaction)
-- Content and Policy Guardrails (cap-output-policy-enforcement)
 - Retrieval Trust and Grounding Checks (cap-retrieval-grounding-checks)
 - AI Vendor Risk Assessment (cap-ai-vendor-assessment)
 - AI System Threat Modelling (cap-ai-threat-modeling)

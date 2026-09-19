@@ -70,7 +70,7 @@ test("specialisations sit beside their MITRE parent and restore retired capabili
     assert.ok(s.legacy?.length, s.id);
     for (const legacy of s.legacy!) assert.ok(mitigationAliases[legacy]?.includes(s.parent!), `${legacy} was migrated onto ${s.parent}`);
   }
-  const html = page("/capabilities", "capability=cap-prompt-injection-screening");
+  const html = page("/capabilities", "capability=cap-sensitive-data-redaction");
   assert.match(html, /Authored specialisation of AML\.M0020/);
   assert.match(html, /Specialises/);
   assert.match(page("/capabilities", "capability=AML.M0020"), /Specialised as/);
