@@ -538,6 +538,7 @@ export function FlowDiagramRF({
   highlight = null,
   overlay = null,
   className,
+  height = "min(640px, 70vh)",
 }: {
   archetype: Archetype;
   /** The selected sequence data flow, or null — the resting drawing carries no step numbers. */
@@ -547,6 +548,8 @@ export function FlowDiagramRF({
   /** An incident step replayed on the drawing; hides pins and walks while it is set. */
   overlay?: StepOverlay | null;
   className?: string;
+  /** The canvas height: the inline default, or "100%" when the drawing fills the expanded overlay. */
+  height?: string;
 }) {
   const [card, setCard] = useState<HoverCard | null>(null);
   // Hovering one arrow pulls it out of the bundle — the interactive half of the answer to
@@ -950,7 +953,7 @@ export function FlowDiagramRF({
   }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay]);
 
   return (
-    <div data-rfwrap className={className} style={{ height: "min(640px, 70vh)", position: "relative" }}>
+    <div data-rfwrap className={className} style={{ height, position: "relative" }}>
       <ReactFlow
         nodes={displayNodes}
         edges={edges}
