@@ -22,41 +22,71 @@ export const metadata = {
 
 const specialisations = mitigations.filter((m) => m.parent).length;
 
-/** The three questions, in the order the site answers them, with the map in front. */
-const LADDER = [
+/** Every page, in navigation order: the map, the taxonomy, the architectures, the incidents. */
+const SECTIONS = [
   {
     href: "/map",
-    label: "Risk map",
-    blurb: "Where each risk is introduced, exposed and mitigated across the components of an AI system.",
-    count: `${risks.length} risks · ${components.length} components`,
+    label: "Risk Map",
+    blurb: "Step through every risk and watch it light up the components it touches.",
+    count: `${risks.length * 3} steps`,
+    accent: "var(--band-app-rail)",
+  },
+  {
+    href: "/risks",
+    label: "Risks",
+    blurb: "Every risk in full: causes, impact, framework mappings, linked controls.",
+    count: `${risks.length} risks`,
+    accent: "var(--exposed)",
+  },
+  {
+    href: "/components",
+    label: "Components",
+    blurb: "The building blocks of an AI system, and what each one is exposed to.",
+    count: `${components.length} components`,
+    accent: "var(--band-model-rail)",
   },
   {
     href: "/controls",
     label: "Controls",
-    blurb: "The protections CoSAI requires, and how far the organisation delivers each one.",
+    blurb: "The protections CoSAI requires, what they protect, who owns them, and how far the organisation delivers each.",
     count: `${controls.length} controls`,
+    accent: "var(--mitigated)",
   },
   {
     href: "/capabilities",
     label: "Capabilities",
-    blurb: "The countermeasures that deliver the controls, pinned in the data flow. Status lives here.",
+    blurb: "The MITRE-backed countermeasures that deliver the controls, pinned in the data flow. Status lives here.",
     count: `${mitigations.length} capabilities · ${technologyCategories.length} technology categories`,
+    accent: "var(--introduced)",
+  },
+  {
+    href: "/personas",
+    label: "Personas",
+    blurb: "The actors in an AI supply chain, and the risks each one carries.",
+    count: `${activePersonas.length} personas`,
+    accent: "var(--band-infra-rail)",
+  },
+  {
+    href: "/frameworks",
+    label: "Frameworks",
+    blurb: "Read the mapping backwards: pick OWASP, ATLAS or NIST and see where it lands.",
+    count: `${visibleExternalFrameworks.length} frameworks`,
+    accent: "var(--ink-2)",
   },
   {
     href: "/reference",
     label: "Architectures",
-    blurb: "One target-state drawing per class of AI application, with the named products rated against it.",
+    blurb: "One target-state drawing per class of AI application, with the capabilities numbered onto it and the named products rated against it.",
     count: `${archetypes.length} archetypes · ${tools.length} tools`,
+    accent: "var(--band-model-rail)",
   },
-];
-
-/** Reference pages: one line of links, not a second set of cards. */
-const REFERENCE = [
-  { href: "/examples", label: "Incidents", count: incidents.length },
-  { href: "/components", label: "Components", count: components.length },
-  { href: "/risks", label: "Risks", count: risks.length },
-  { href: "/personas", label: "Personas", count: activePersonas.length },
-  { href: "/frameworks", label: "Frameworks", count: visibleExternalFrameworks.length },
+  {
+    href: "/examples",
+    label: "Incidents",
+    blurb: "Real 2025–26 incidents replayed on the same map, step by step and sourced.",
+    count: `${incidents.length} incidents`,
+    accent: "var(--band-data-rail)",
+  },
 ];
 
 const SOURCES = [
@@ -100,9 +130,9 @@ export default function LandingPage() {
         retrieval.
       </p>
       <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-        From the map the site descends one rung at a time: the controls CoSAI requires, the MITRE-backed capabilities that
-        deliver them and where the organisation stands on each, and a reference architecture for every class of AI
-        application with those capabilities numbered onto the drawing.
+        Behind the map sits the taxonomy — every risk, component, control and persona, the MITRE-backed capabilities that
+        deliver the controls and where the organisation stands on each, and the frameworks cross-walked onto them — and
+        a reference architecture for every class of AI application with those capabilities numbered onto the drawing.
       </p>
       <div className="mt-8 flex flex-wrap items-center gap-3">
         <Link href="/map" className="rounded-lg bg-ink px-5 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90">
@@ -116,33 +146,26 @@ export default function LandingPage() {
         </Link>
       </div>
 
-      <div className="mt-10 rounded-xl border border-line bg-paper p-6">
-        <p className="eyebrow">Explore the security model</p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {LADDER.map((rung, i) => (
-            <li key={rung.href} className="relative">
-              <Link href={rung.href} className="group flex h-full flex-col rounded-lg border border-line bg-mist/50 p-4 transition-colors hover:border-ink">
-                <span className="display text-[15px] font-semibold text-ink group-hover:text-introduced">{rung.label}</span>
-                <span className="mt-2 flex-1 text-[13px] leading-snug text-ink-2">{rung.blurb}</span>
-                <span className="ident mt-3 text-ink-3">{rung.count}</span>
-              </Link>
-              {i < LADDER.length - 1 && (
-                <span aria-hidden className="absolute -right-2.5 top-1/2 hidden -translate-y-1/2 text-line-strong lg:block">›</span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <PhaseLegend className="mt-5" />
-      </div>
+      <PhaseLegend className="mt-8" />
 
-      <p className="mt-6 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-[14px] text-ink-2">
-        <span className="eyebrow">Also</span>
-        {REFERENCE.map((r) => (
-          <Link key={r.href} href={r.href} className="font-semibold text-ink hover:text-introduced hover:underline">
-            {r.label} <span className="ident font-normal text-ink-3">{r.count}</span>
-          </Link>
+      <h2 className="display mt-14 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">Explore</h2>
+      <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {SECTIONS.map((s) => (
+          <li key={s.href}>
+            <Link
+              href={s.href}
+              className="group flex h-full flex-col rounded-xl border border-line bg-paper p-5 transition-colors hover:border-line-strong"
+            >
+              <span className="h-[3px] w-8 rounded-full" style={{ background: s.accent }} aria-hidden />
+              <span className="display mt-3 text-[17px] font-semibold text-ink transition-colors group-hover:text-introduced">
+                {s.label}
+              </span>
+              <span className="mt-1.5 flex-1 text-[13.5px] leading-snug text-ink-2">{s.blurb}</span>
+              <span className="ident mt-3">{s.count}</span>
+            </Link>
+          </li>
         ))}
-      </p>
+      </ul>
 
       <h2 className="display mt-16 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">Where the data comes from</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">

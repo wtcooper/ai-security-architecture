@@ -5,27 +5,26 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
-/** All taxonomy concepts share one menu; architectures and incidents are separate views. */
+/** The taxonomy shares one menu; the map, the architectures and the incidents stand alone. */
 type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
-/** Three questions, three pages: what controls we need, can we deliver them, where they go. The rest is reference. */
 const NAV: NavItem[] = [
   { href: "/map", label: "Risk map" },
-  { href: "/controls", label: "Controls" },
-  { href: "/capabilities", label: "Capabilities" },
-  { href: "/reference", label: "Architectures" },
-  { href: "/examples", label: "Incidents" },
   {
-    label: "Reference",
+    label: "Taxonomy",
     children: [
-      { href: "/components", label: "Components" },
       { href: "/risks", label: "Risks" },
+      { href: "/components", label: "Components" },
+      { href: "/controls", label: "Controls" },
+      { href: "/capabilities", label: "Capabilities" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },
     ],
   },
+  { href: "/reference", label: "Architectures" },
+  { href: "/examples", label: "Incidents" },
 ];
 
 /** The flat list, for the small-screen menu. */
