@@ -239,16 +239,32 @@ tools:
         note: >-
           Claude Tag runs server-side, so the only network-layer levers are the Slack admin's app approval and
           the anthropic-allowed-org-ids header on claude.ai traffic for the account linking flow.
-        steps: &a1
+
+
+          [capabilityEgressControl] Enforced server-side by the Agent Proxy for the sandbox; artifact
+          publishing and Slack posting are separate egress paths governed by scope settings, not the domain
+          lists.
+        steps:
           - title: Control the Slack side
             body:
-              - Slack workspace admins decide whether the Claude app is installed; on Enterprise Grid, org admins choose
-                which workspaces get it; removing the app revokes access immediately.
+              - Slack workspace admins decide whether the Claude app is installed; on Enterprise Grid, org
+                admins choose which workspaces get it; removing the app revokes access immediately.
             url: https://code.claude.com/docs/en/slack
+          - title: Allow hosts per bundle
+            body:
+              - On the bundle's Domains tab add each hostname (and non-443 ports); requests to unlisted hosts
+                are blocked and Claude names the blocked host in the thread.
+            url: https://claude.com/docs/claude-tag/admins/add-connections
+          - title: Pin a stricter environment on the scope
+            body:
+              - Create an organisation-shared cloud environment with No access or a Custom list and choose it
+                under the scope's Advanced > Environment.
+            url: https://claude.com/docs/claude-tag/admins/customize
         verified: 2026-09-10
         migration:
           from:
             - capabilitySse
+            - capabilityEgressControl
           reviewRequired: false
           original:
             - capability: capabilitySse
@@ -260,46 +276,32 @@ tools:
                 Claude Tag runs server-side, so the only network-layer levers are the Slack admin's app
                 approval and the anthropic-allowed-org-ids header on claude.ai traffic for the account linking
                 flow.
-              steps: *a1
+              steps: &a1
+                - title: Control the Slack side
+                  body:
+                    - Slack workspace admins decide whether the Claude app is installed; on Enterprise Grid, org admins choose
+                      which workspaces get it; removing the app revokes access immediately.
+                  url: https://code.claude.com/docs/en/slack
               verified: 2026-09-10
-      - mitigation: cap-agent-egress-control
-        coverage: native
-        mechanism: >-
-          Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
-          (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access level
-          (Trusted default, Custom, Full, No access); private ranges and cloud metadata always blocked;
-          HTTP/HTTPS only
-        steps: &a1
-          - title: Allow hosts per bundle
-            body:
-              - On the bundle's Domains tab add each hostname (and non-443 ports); requests to unlisted hosts are blocked
-                and Claude names the blocked host in the thread.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-          - title: Pin a stricter environment on the scope
-            body:
-              - Create an organisation-shared cloud environment with No access or a Custom list and choose it under the
-                scope's Advanced > Environment.
-            url: https://claude.com/docs/claude-tag/admins/customize
-        note: >-
-          Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack posting are
-          separate egress paths governed by scope settings, not the domain lists.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: false
-          original:
             - capability: capabilityEgressControl
               coverage: native
-              mechanism: >-
-                Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
+              mechanism: "Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
                 (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access
                 level (Trusted default, Custom, Full, No access); private ranges and cloud metadata always
-                blocked; HTTP/HTTPS only
-              steps: *a1
-              note: >-
-                Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack posting
-                are separate egress paths governed by scope settings, not the domain lists.
+                blocked; HTTP/HTTPS only"
+              steps:
+                - title: Allow hosts per bundle
+                  body:
+                    - On the bundle's Domains tab add each hostname (and non-443 ports); requests to unlisted
+                      hosts are blocked and Claude names the blocked host in the thread.
+                  url: https://claude.com/docs/claude-tag/admins/add-connections
+                - title: Pin a stricter environment on the scope
+                  body:
+                    - Create an organisation-shared cloud environment with No access or a Custom list and
+                      choose it under the scope's Advanced > Environment.
+                  url: https://claude.com/docs/claude-tag/admins/customize
+              note: Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack posting are
+                separate egress paths governed by scope settings, not the domain lists.
               verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
@@ -315,10 +317,15 @@ tools:
         note: >-
           No content inspection of prompts or outputs is offered; artifact publishing and Slack posting are
           the visible egress paths.
+
+
+          [capabilityBrowserDetectionResponse] Not applicable: the surface is Slack and a server-side sandbox,
+          not a browser session the organisation instruments.
         verified: 2026-09-10
         migration:
           from:
             - capabilityAiDlp
+            - capabilityBrowserDetectionResponse
           reviewRequired: false
           original:
             - capability: capabilityAiDlp
@@ -331,6 +338,17 @@ tools:
                 No content inspection of prompts or outputs is offered; artifact publishing and Slack posting
                 are the visible egress paths.
               verified: 2026-09-10
+            - capability: capabilityBrowserDetectionResponse
+              coverage: notApplicable
+              note: "Not applicable: the surface is Slack and a server-side sandbox, not a browser session the organisation
+                instruments."
+              evidence:
+                - title: Vendor docs index, reviewed for applicability (2026-09-10)
+                  url: https://claude.com/docs/claude-tag/overview
+              verified: 2026-09-10
+        evidence:
+          - title: Vendor docs index, reviewed for applicability (2026-09-10)
+            url: https://claude.com/docs/claude-tag/overview
       - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
@@ -361,131 +379,34 @@ tools:
                 The auto-mode classifier screens proposed actions; the sandbox and default-deny egress
                 contain. Slack messages and connector results are not classified for injected instructions.
               verified: 2026-09-10
-      - mitigation: D3-WSAA
-        coverage: notApplicable
-        verified: "2026-09-10"
-        steps: []
-        evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://claude.com/docs/claude-tag/overview
-        note: >-
-          Not applicable: the surface is Slack and a server-side sandbox, not a browser session the
-          organisation instruments.
-        migration:
-          from:
-            - capabilityBrowserDetectionResponse
-          reviewRequired: false
-          original:
-            - capability: capabilityBrowserDetectionResponse
-              coverage: notApplicable
-              note: >-
-                Not applicable: the surface is Slack and a server-side sandbox, not a browser session the
-                organisation instruments.
-              evidence:
-                - title: Vendor docs index, reviewed for applicability (2026-09-10)
-                  url: https://claude.com/docs/claude-tag/overview
-              verified: 2026-09-10
-      - mitigation: D3-NI
-        coverage: unknown
-        mechanism: >-
-          Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
-          (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access level
-          (Trusted default, Custom, Full, No access); private ranges and cloud metadata always blocked;
-          HTTP/HTTPS only
-        steps:
-          - title: Allow hosts per bundle
-            body:
-              - On the bundle's Domains tab add each hostname (and non-443 ports); requests to unlisted hosts
-                are blocked and Claude names the blocked host in the thread.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-          - title: Pin a stricter environment on the scope
-            body:
-              - Create an organisation-shared cloud environment with No access or a Custom list and choose it
-                under the scope's Advanced > Environment.
-            url: https://claude.com/docs/claude-tag/admins/customize
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEgressControl] Enforced server-side by the Agent Proxy for the sandbox; artifact
-          publishing and Slack posting are separate egress paths governed by scope settings, not the domain
-          lists.
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: true
-          original:
-            - capability: capabilityEgressControl
-              coverage: native
-              mechanism: >-
-                Agent Proxy allow layers: connection allowed websites (credentialed), bundle Domains tab
-                (uncredentialed, wildcard leftmost label, ports), and the scope's environment network access
-                level (Trusted default, Custom, Full, No access); private ranges and cloud metadata always
-                blocked; HTTP/HTTPS only
-              steps:
-                - title: Allow hosts per bundle
-                  body:
-                    - On the bundle's Domains tab add each hostname (and non-443 ports); requests to unlisted
-                      hosts are blocked and Claude names the blocked host in the thread.
-                  url: https://claude.com/docs/claude-tag/admins/add-connections
-                - title: Pin a stricter environment on the scope
-                  body:
-                    - Create an organisation-shared cloud environment with No access or a Custom list and
-                      choose it under the scope's Advanced > Environment.
-                  url: https://claude.com/docs/claude-tag/admins/customize
-              note: >-
-                Enforced server-side by the Agent Proxy for the sandbox; artifact publishing and Slack posting
-                are separate egress paths governed by scope settings, not the domain lists.
-              verified: 2026-09-10
-      - mitigation: D3-ORA
-        coverage: external
-        mechanism: >-
-          Audit page (Scheduled work, Memory, Network events export), Access bundles page with per-connection
-          status, analytics at claude.ai/analytics/claude-tag
-        steps: &a1
-          - title: Inventory what Claude can do and does
-            body:
-              - Review the Access bundles page (Active / Never used per credential), the Audit page tabs at
-                claude.ai/admin-settings/claude-tag/audit, and the per-channel Access summary.
-            url: https://claude.com/docs/claude-tag/admins/audit
-        note: >-
-          The Audit page, Access bundles and analytics are inputs to governance; there is no intake, risk
-          decision, ownership or lifecycle workflow in the product. Rated external on the same rule as every
-          other vendor.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityAiGovernancePlatform
-          reviewRequired: false
-          original:
-            - capability: capabilityAiGovernancePlatform
-              coverage: external
-              mechanism: >-
-                Audit page (Scheduled work, Memory, Network events export), Access bundles page with
-                per-connection status, analytics at claude.ai/analytics/claude-tag
-              steps: *a1
-              note: >-
-                The Audit page, Access bundles and analytics are inputs to governance; there is no intake,
-                risk decision, ownership or lifecycle workflow in the product. Rated external on the same rule
-                as every other vendor.
-              verified: 2026-09-10
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: >-
           Anthropic Trust Center artifacts plus the security-and-data and data-lifecycle pages feed the
           buyer's vendor assessment
-        steps: &a1
+        steps:
           - title: Record beta-specific gaps
             body:
-              - Note in the vendor record that transcripts and memory have no retention period, are excluded from data
-                exports and Compliance API sessions during the beta, and that ZDR organisations are excluded.
+              - Note in the vendor record that transcripts and memory have no retention period, are excluded
+                from data exports and Compliance API sessions during the beta, and that ZDR organisations are
+                excluded.
             url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
+          - title: Inventory what Claude can do and does
+            body:
+              - Review the Access bundles page (Active / Never used per credential), the Audit page tabs at
+                claude.ai/admin-settings/claude-tag/audit, and the per-channel Access summary.
+            url: https://claude.com/docs/claude-tag/admins/audit
+          - title: Evidence the configuration
+            body:
+              - Export the channel Access summary and bundle listings, and read channel-manager credential
+                changes and scope removals from the organisation audit log through the Compliance API.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
         verified: 2026-09-10
         migration:
           from:
             - capabilityAiTprm
+            - capabilityAiGovernancePlatform
+            - capabilityVendorAssurance
           reviewRequired: false
           original:
             - capability: capabilityAiTprm
@@ -493,8 +414,50 @@ tools:
               mechanism: >-
                 Anthropic Trust Center artifacts plus the security-and-data and data-lifecycle pages feed the
                 buyer's vendor assessment
-              steps: *a1
+              steps: &a1
+                - title: Record beta-specific gaps
+                  body:
+                    - Note in the vendor record that transcripts and memory have no retention period, are excluded from data
+                      exports and Compliance API sessions during the beta, and that ZDR organisations are
+                      excluded.
+                  url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
               verified: 2026-09-10
+            - capability: capabilityAiGovernancePlatform
+              coverage: external
+              mechanism: Audit page (Scheduled work, Memory, Network events export), Access bundles page with per-connection
+                status, analytics at claude.ai/analytics/claude-tag
+              steps:
+                - title: Inventory what Claude can do and does
+                  body:
+                    - Review the Access bundles page (Active / Never used per credential), the Audit page tabs
+                      at claude.ai/admin-settings/claude-tag/audit, and the per-channel Access summary.
+                  url: https://claude.com/docs/claude-tag/admins/audit
+              note: The Audit page, Access bundles and analytics are inputs to governance; there is no intake, risk
+                decision, ownership or lifecycle workflow in the product. Rated external on the same rule as
+                every other vendor.
+              verified: 2026-09-10
+            - capability: capabilityVendorAssurance
+              coverage: external
+              mechanism: Admin console readback (Access bundles, scopes, Access summary), audit log entries for
+                channel-manager and deletion actions via the Compliance API Activity Feed
+              steps:
+                - title: Evidence the configuration
+                  body:
+                    - Export the channel Access summary and bundle listings, and read channel-manager
+                      credential changes and scope removals from the organisation audit log through the
+                      Compliance API.
+                  url: https://claude.com/docs/claude-tag/admins/restrict-access
+              note: Console readback and audit entries are the inputs an SSPM product consumes; nothing in the product
+                compares configuration to policy or detects drift.
+              verified: 2026-09-10
+        note: >-
+          [capabilityAiGovernancePlatform] The Audit page, Access bundles and analytics are inputs to
+          governance; there is no intake, risk decision, ownership or lifecycle workflow in the product. Rated
+          external on the same rule as every other vendor.
+
+
+          [capabilityVendorAssurance] Console readback and audit entries are the inputs an SSPM product
+          consumes; nothing in the product compares configuration to policy or detects drift.
       - mitigation: AML.M0029
         coverage: partial
         verified: "2026-09-10"
@@ -588,128 +551,6 @@ tools:
                 native while a vendor-owned app identity is partial. Actions in connected tools carry the
                 service account's authority; DMs carry the member's.
               verified: 2026-09-10
-      - mitigation: D3-CR
-        coverage: unknown
-        mechanism: >-
-          Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated account
-          per connected tool) so actions are attributable in each tool's audit log; DMs use the member's
-          identity; Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow
-          direct messages off, /remove @Claude, bundle deletion (revokes credentials everywhere), workspace
-          disconnect, app uninstall, spend limit reached
-        steps:
-          - title: Provision a dedicated identity per tool
-            body:
-              - Create a mailbox such as claude@yourcompany, add it to each tool with the narrowest role, and
-                paste that account's API key on the setup page; rotate or delete from the bundle's Credentials
-                tab.
-            url: https://claude.com/docs/claude-tag/admins/setup-overview
-          - title: Stop responding and revoke credentials
-            body:
-              - Set the scope's version to Off (or the org toggle), then delete the bundle to revoke its
-                credentials; running sessions may hold a revoked credential briefly.
-            url: https://claude.com/docs/claude-tag/admins/restrict-access
-          - title: Decommission the data
-            body:
-              - Disconnect the workspace at claude.ai/admin-settings/claude-tag to delete its sessions,
-                memory, routines, artifacts and account links.
-            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] Compared with Copilot cloud: the service accounts are provisioned in the
-          organisation's own tools, so the organisation owns their scopes and can revoke them there — which is
-          why this is native while a vendor-owned app identity is partial. Actions in connected tools carry
-          the service account's authority; DMs carry the member's.
-
-
-          [capabilityKillSwitch] Setting a scope Off stops new sessions; a running session may hold a revoked
-          credential briefly, and the docs give no bound for that window — measure it.
-        migration:
-          from:
-            - capabilityNhiManagement
-            - capabilityKillSwitch
-          reviewRequired: true
-          original:
-            - capability: capabilityNhiManagement
-              coverage: native
-              mechanism: >-
-                Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated
-                account per connected tool) so actions are attributable in each tool's audit log; DMs use the
-                member's identity
-              steps:
-                - title: Provision a dedicated identity per tool
-                  body:
-                    - Create a mailbox such as claude@yourcompany, add it to each tool with the narrowest
-                      role, and paste that account's API key on the setup page; rotate or delete from the
-                      bundle's Credentials tab.
-                  url: https://claude.com/docs/claude-tag/admins/setup-overview
-              note: >-
-                Compared with Copilot cloud: the service accounts are provisioned in the organisation's own
-                tools, so the organisation owns their scopes and can revoke them there — which is why this is
-                native while a vendor-owned app identity is partial. Actions in connected tools carry the
-                service account's authority; DMs carry the member's.
-              verified: 2026-09-10
-            - capability: capabilityKillSwitch
-              coverage: native
-              mechanism: >-
-                Enable Claude Tag for your organization toggle, per-scope Claude Tag version Off, Allow direct
-                messages off, /remove @Claude, bundle deletion (revokes credentials everywhere), workspace
-                disconnect, app uninstall, spend limit reached
-              steps:
-                - title: Stop responding and revoke credentials
-                  body:
-                    - Set the scope's version to Off (or the org toggle), then delete the bundle to revoke its
-                      credentials; running sessions may hold a revoked credential briefly.
-                  url: https://claude.com/docs/claude-tag/admins/restrict-access
-                - title: Decommission the data
-                  body:
-                    - Disconnect the workspace at claude.ai/admin-settings/claude-tag to delete its sessions,
-                      memory, routines, artifacts and account links.
-                  url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
-              note: >-
-                Setting a scope Off stops new sessions; a running session may hold a revoked credential
-                briefly, and the docs give no bound for that window — measure it.
-              verified: 2026-09-10
-      - mitigation: D3-CI
-        coverage: external
-        verified: "2026-09-10"
-        mechanism: >-
-          Admin console readback (Access bundles, scopes, Access summary), audit log entries for
-          channel-manager and deletion actions via the Compliance API Activity Feed
-        steps:
-          - title: Evidence the configuration
-            body:
-              - Export the channel Access summary and bundle listings, and read channel-manager credential
-                changes and scope removals from the organisation audit log through the Compliance API.
-            url: https://claude.com/docs/claude-tag/admins/restrict-access
-        evidence: []
-        note: >-
-          Console readback and audit entries are the inputs an SSPM product consumes; nothing in the product
-          compares configuration to policy or detects drift.
-        migration:
-          from:
-            - capabilityVendorAssurance
-          reviewRequired: false
-          original:
-            - capability: capabilityVendorAssurance
-              coverage: external
-              mechanism: >-
-                Admin console readback (Access bundles, scopes, Access summary), audit log entries for
-                channel-manager and deletion actions via the Compliance API Activity Feed
-              steps:
-                - title: Evidence the configuration
-                  body:
-                    - Export the channel Access summary and bundle listings, and read channel-manager
-                      credential changes and scope removals from the organisation audit log through the
-                      Compliance API.
-                  url: https://claude.com/docs/claude-tag/admins/restrict-access
-              note: >-
-                Console readback and audit entries are the inputs an SSPM product consumes; nothing in the
-                product compares configuration to policy or detects drift.
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: partial
         verified: "2026-09-10"
@@ -758,90 +599,7 @@ tools:
                 assesses who can read it beyond the scope model, so discovery and posture assessment remain
                 the customer's DSPM.
               verified: 2026-09-10
-      - mitigation: AML.M0012
-        coverage: partial
-        verified: "2026-09-10"
-        mechanism: >-
-          Credentials kept in a separate write-only credential store and injected at the proxy; Anthropic
-          infrastructure encryption; no CMEK documented for Claude Tag data
-        steps:
-          - title: Understand where credentials live
-            body:
-              - Saved credentials are never displayed again and travel only to the hosts named on the
-                connection; narrow to host, path prefix or read-only methods.
-            url: https://claude.com/docs/claude-tag/concepts/security-and-data
-        evidence: []
-        note: >-
-          Assets and key owners: sessions, memory and artifacts at Anthropic (Anthropic keys, no CMEK
-          documented); connection credentials in the write-only store (Anthropic keys, never exposed to the
-          sandbox); traffic (TLS).
-        migration:
-          from:
-            - capabilityEncryptionKeyManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityEncryptionKeyManagement
-              coverage: partial
-              mechanism: >-
-                Credentials kept in a separate write-only credential store and injected at the proxy;
-                Anthropic infrastructure encryption; no CMEK documented for Claude Tag data
-              steps:
-                - title: Understand where credentials live
-                  body:
-                    - Saved credentials are never displayed again and travel only to the hosts named on the
-                      connection; narrow to host, path prefix or read-only methods.
-                  url: https://claude.com/docs/claude-tag/concepts/security-and-data
-              note: >-
-                Assets and key owners: sessions, memory and artifacts at Anthropic (Anthropic keys, no CMEK
-                documented); connection credentials in the write-only store (Anthropic keys, never exposed to
-                the sandbox); traffic (TLS).
-              verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
-        mechanism: >-
-          Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client credentials,
-          MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links for another admin to
-          submit a secret
-        steps:
-          - title: Add and rotate credentials in bundles
-            body:
-              - On the bundle's Credentials tab connect each service, set Allowed hosts, restrict by HTTP
-                method or path, and use Rotate secret; use "Copy link for another admin" so the secret owner
-                submits it directly.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Bundle credentials are injected at the proxy and never reach the
-          sandbox or the model. They are the bundle's shared credentials, presented for every session in the
-          scope, not per-requester; rotation is manual through the rotate flow.
-        migration:
-          from:
-            - capabilitySecretsManagement
-          reviewRequired: true
-          original:
-            - capability: capabilitySecretsManagement
-              coverage: native
-              mechanism: >-
-                Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client
-                credentials, MCP Connector sign-in) injected by Agent Proxy; rotate secret and setup links for
-                another admin to submit a secret
-              steps:
-                - title: Add and rotate credentials in bundles
-                  body:
-                    - On the bundle's Credentials tab connect each service, set Allowed hosts, restrict by
-                      HTTP method or path, and use Rotate secret; use "Copy link for another admin" so the
-                      secret owner submits it directly.
-                  url: https://claude.com/docs/claude-tag/admins/add-connections
-              note: >-
-                Bundle credentials are injected at the proxy and never reach the sandbox or the model. They
-                are the bundle's shared credentials, presented for every session in the scope, not
-                per-requester; rotation is manual through the rotate flow.
-              verified: 2026-09-10
-      - mitigation: D3-CRO
         coverage: unknown
         mechanism: >-
           Access bundle credentials (Bearer, Basic, AWS SigV4, GCP service account, OAuth client credentials,
@@ -1029,47 +787,6 @@ tools:
                 unsanctioned Claude install belongs to Slack administration, not this product.
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
-        mechanism: >-
-          Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls, excluding git
-          and MCP), attribution under service accounts in each tool's logs, organisation audit log via
-          Compliance API for channel-manager and deletion events
-        steps:
-          - title: Download network events and read tool-side logs
-            body:
-              - Export hourly Network events from claude.ai/admin-settings/claude-tag/audit and correlate with
-                the service account's entries in GitHub, Datadog and other tools.
-            url: https://claude.com/docs/claude-tag/admins/audit
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Session transcripts are not exportable and the Compliance API does not list
-          Claude Tag sessions during the beta.
-        migration:
-          from:
-            - capabilityAuditLogging
-          reviewRequired: true
-          original:
-            - capability: capabilityAuditLogging
-              coverage: partial
-              mechanism: >-
-                Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls,
-                excluding git and MCP), attribution under service accounts in each tool's logs, organisation
-                audit log via Compliance API for channel-manager and deletion events
-              steps:
-                - title: Download network events and read tool-side logs
-                  body:
-                    - Export hourly Network events from claude.ai/admin-settings/claude-tag/audit and
-                      correlate with the service account's entries in GitHub, Datadog and other tools.
-                  url: https://claude.com/docs/claude-tag/admins/audit
-              note: >-
-                Session transcripts are not exportable and the Compliance API does not list Claude Tag
-                sessions during the beta.
-              verified: 2026-09-10
-      - mitigation: D3-SFA
         coverage: unknown
         mechanism: >-
           Audit page (routines, memory, hourly Network events JSON export of Agent Proxy calls, excluding git

@@ -166,6 +166,12 @@ tools:
         note: >-
           The tunnel is server-side connectivity, not an employee access path; SSE applies to the ChatGPT
           clients, not to the tunnel.
+
+
+          [capabilityEgressControl] Outbound-only to OpenAI's endpoints is a design property, not an
+          administrator-defined destination policy: the operator cannot narrow or widen where the client
+          connects beyond choosing a proxy and CA bundle. Enforce destinations for the tunnel host in the
+          network layer.
         evidence: &a1
           - title: Vendor docs index, reviewed for applicability (2026-09-10)
             url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
@@ -173,6 +179,7 @@ tools:
         migration:
           from:
             - capabilitySse
+            - capabilityEgressControl
           reviewRequired: false
           original:
             - capability: capabilitySse
@@ -183,42 +190,34 @@ tools:
                 ChatGPT clients, not to the tunnel.
               evidence: *a1
               verified: 2026-09-10
-      - mitigation: cap-agent-egress-control
-        coverage: partial
-        mechanism: >-
-          Outbound-only to api.openai.com:443 / mtls.api.openai.com:443, outbound proxy and CA bundle support,
-          Harpoon targets by label
-        steps: &a1
+            - capability: capabilityEgressControl
+              coverage: partial
+              mechanism: Outbound-only to api.openai.com:443 / mtls.api.openai.com:443, outbound proxy and CA bundle
+                support, Harpoon targets by label
+              steps:
+                - title: Allow only the two control-plane hosts
+                  body:
+                    - tunnel-client needs api.openai.com:443 (or mtls.api.openai.com:443 with mTLS) plus the
+                      private MCP server; nothing inbound.
+                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+                - title: Route through the corporate proxy
+                  body:
+                    - The sample_mcp_enterprise_proxy profile shows env-backed proxy and CA bundle references.
+                  url: https://github.com/openai/tunnel-client
+              note: "Outbound-only to OpenAI's endpoints is a design property, not an administrator-defined destination
+                policy: the operator cannot narrow or widen where the client connects beyond choosing a proxy
+                and CA bundle. Enforce destinations for the tunnel host in the network layer."
+              verified: 2026-09-10
+        steps:
           - title: Allow only the two control-plane hosts
             body:
-              - tunnel-client needs api.openai.com:443 (or mtls.api.openai.com:443 with mTLS) plus the private MCP server;
-                nothing inbound.
+              - tunnel-client needs api.openai.com:443 (or mtls.api.openai.com:443 with mTLS) plus the private
+                MCP server; nothing inbound.
             url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
           - title: Route through the corporate proxy
             body:
               - The sample_mcp_enterprise_proxy profile shows env-backed proxy and CA bundle references.
             url: https://github.com/openai/tunnel-client
-        note: >-
-          Outbound-only to OpenAI's endpoints is a design property, not an administrator-defined destination
-          policy: the operator cannot narrow or widen where the client connects beyond choosing a proxy and CA
-          bundle. Enforce destinations for the tunnel host in the network layer.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: false
-          original:
-            - capability: capabilityEgressControl
-              coverage: partial
-              mechanism: >-
-                Outbound-only to api.openai.com:443 / mtls.api.openai.com:443, outbound proxy and CA bundle
-                support, Harpoon targets by label
-              steps: *a1
-              note: >-
-                Outbound-only to OpenAI's endpoints is a design property, not an administrator-defined
-                destination policy: the operator cannot narrow or widen where the client connects beyond
-                choosing a proxy and CA bundle. Enforce destinations for the tunnel host in the network layer.
-              verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: external
         mechanism: None in the tunnel; inspect at the MCP server or the outbound proxy
@@ -229,6 +228,7 @@ tools:
         migration:
           from:
             - capabilityAiDlp
+            - capabilityBrowserDetectionResponse
           reviewRequired: false
           original:
             - capability: capabilityAiDlp
@@ -236,6 +236,16 @@ tools:
               mechanism: None in the tunnel; inspect at the MCP server or the outbound proxy
               evidence: *a1
               verified: 2026-09-10
+            - capability: capabilityBrowserDetectionResponse
+              coverage: notApplicable
+              mechanism: Not applicable
+              note: The tunnel has no browser surface; browser detection applies to the ChatGPT clients on the other side.
+              evidence:
+                - title: Vendor docs index, reviewed for applicability (2026-09-10)
+                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+              verified: 2026-09-10
+        note: "[capabilityBrowserDetectionResponse] The tunnel has no browser surface; browser detection applies
+          to the ChatGPT clients on the other side."
       - mitigation: cap-input-guardrails
         coverage: notApplicable
         mechanism: Not in the tunnel; tool output is passed through unchanged
@@ -259,99 +269,6 @@ tools:
                 ChatGPT clients and the MCP server it fronts.
               evidence: *a1
               verified: 2026-09-10
-      - mitigation: D3-WSAA
-        coverage: notApplicable
-        verified: "2026-09-10"
-        mechanism: Not applicable
-        steps: []
-        evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        note: >-
-          The tunnel has no browser surface; browser detection applies to the ChatGPT clients on the other
-          side.
-        migration:
-          from:
-            - capabilityBrowserDetectionResponse
-          reviewRequired: false
-          original:
-            - capability: capabilityBrowserDetectionResponse
-              coverage: notApplicable
-              mechanism: Not applicable
-              note: >-
-                The tunnel has no browser surface; browser detection applies to the ChatGPT clients on the
-                other side.
-              evidence:
-                - title: Vendor docs index, reviewed for applicability (2026-09-10)
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              verified: 2026-09-10
-      - mitigation: D3-NI
-        coverage: unknown
-        mechanism: >-
-          Outbound-only to api.openai.com:443 / mtls.api.openai.com:443, outbound proxy and CA bundle support,
-          Harpoon targets by label
-        steps:
-          - title: Allow only the two control-plane hosts
-            body:
-              - tunnel-client needs api.openai.com:443 (or mtls.api.openai.com:443 with mTLS) plus the private
-                MCP server; nothing inbound.
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-          - title: Route through the corporate proxy
-            body:
-              - The sample_mcp_enterprise_proxy profile shows env-backed proxy and CA bundle references.
-            url: https://github.com/openai/tunnel-client
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEgressControl] Outbound-only to OpenAI's endpoints is a design property, not an
-          administrator-defined destination policy: the operator cannot narrow or widen where the client
-          connects beyond choosing a proxy and CA bundle. Enforce destinations for the tunnel host in the
-          network layer.
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: true
-          original:
-            - capability: capabilityEgressControl
-              coverage: partial
-              mechanism: >-
-                Outbound-only to api.openai.com:443 / mtls.api.openai.com:443, outbound proxy and CA bundle
-                support, Harpoon targets by label
-              steps:
-                - title: Allow only the two control-plane hosts
-                  body:
-                    - tunnel-client needs api.openai.com:443 (or mtls.api.openai.com:443 with mTLS) plus the
-                      private MCP server; nothing inbound.
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-                - title: Route through the corporate proxy
-                  body:
-                    - The sample_mcp_enterprise_proxy profile shows env-backed proxy and CA bundle references.
-                  url: https://github.com/openai/tunnel-client
-              note: >-
-                Outbound-only to OpenAI's endpoints is a design property, not an administrator-defined
-                destination policy: the operator cannot narrow or widen where the client connects beyond
-                choosing a proxy and CA bundle. Enforce destinations for the tunnel host in the network layer.
-              verified: 2026-09-10
-      - mitigation: D3-ORA
-        coverage: external
-        mechanism: Tunnel inventory from Platform settings feeds an external catalogue
-        evidence: &a1
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityAiGovernancePlatform
-          reviewRequired: false
-          original:
-            - capability: capabilityAiGovernancePlatform
-              coverage: external
-              mechanism: Tunnel inventory from Platform settings feeds an external catalogue
-              evidence: *a1
-              verified: 2026-09-10
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: Trust portal evidence (API Platform is in SOC 2 scope)
@@ -364,6 +281,8 @@ tools:
         migration:
           from:
             - capabilityAiTprm
+            - capabilityAiGovernancePlatform
+            - capabilityVendorAssurance
           reviewRequired: false
           original:
             - capability: capabilityAiTprm
@@ -371,6 +290,27 @@ tools:
               mechanism: Trust portal evidence (API Platform is in SOC 2 scope)
               steps: *a1
               verified: 2026-09-10
+            - capability: capabilityAiGovernancePlatform
+              coverage: external
+              mechanism: Tunnel inventory from Platform settings feeds an external catalogue
+              evidence:
+                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+              verified: 2026-09-10
+            - capability: capabilityVendorAssurance
+              coverage: external
+              mechanism: Platform audit logs consumed by an SSPM product
+              note: Platform audit logs are the input; there is no tunnel configuration beyond the endpoint and its scopes,
+                so posture checking is the customer's SSPM reading those logs.
+              evidence:
+                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+              verified: 2026-09-10
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        note: "[capabilityVendorAssurance] Platform audit logs are the input; there is no tunnel configuration
+          beyond the endpoint and its scopes, so posture checking is the customer's SSPM reading those logs."
       - mitigation: AML.M0029
         coverage: notApplicable
         verified: "2026-09-10"
@@ -436,92 +376,6 @@ tools:
                 tunnel carries traffic without authenticating to that server. The identity that authorises
                 tool calls is the ChatGPT user's or workspace's, on the other side.
               verified: 2026-09-10
-      - mitigation: D3-CR
-        coverage: unknown
-        mechanism: >-
-          tunnel_id identity, runtime API key and optional control-plane client certificate; Delete or revoke
-          the tunnel in Platform tunnel settings (Tunnels Read + Manage)
-        steps:
-          - title: Give each server its own tunnel
-            body:
-              - Initialise with tunnel-client init --tunnel-id tunnel_... and CONTROL_PLANE_API_KEY; present
-                --control-plane.client-cert / client-key when mTLS is required.
-            url: https://github.com/openai/tunnel-client
-          - title: Revoke the tunnel
-            body:
-              - Deleting the tunnel endpoint stops every associated organisation and workspace from reaching
-                the server; stop tunnel-client as well.
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] tunnel_id is an identifier and the runtime API key authenticates the
-          tunnel to OpenAI's control plane; neither is a principal the MCP server behind the tunnel
-          authenticates, and the tunnel carries traffic without authenticating to that server. The identity
-          that authorises tool calls is the ChatGPT user's or workspace's, on the other side.
-
-
-          [capabilityKillSwitch]
-        migration:
-          from:
-            - capabilityNhiManagement
-            - capabilityKillSwitch
-          reviewRequired: true
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: tunnel_id identity, runtime API key and optional control-plane client certificate
-              steps:
-                - title: Give each server its own tunnel
-                  body:
-                    - Initialise with tunnel-client init --tunnel-id tunnel_... and CONTROL_PLANE_API_KEY;
-                      present --control-plane.client-cert / client-key when mTLS is required.
-                  url: https://github.com/openai/tunnel-client
-              note: >-
-                tunnel_id is an identifier and the runtime API key authenticates the tunnel to OpenAI's
-                control plane; neither is a principal the MCP server behind the tunnel authenticates, and the
-                tunnel carries traffic without authenticating to that server. The identity that authorises
-                tool calls is the ChatGPT user's or workspace's, on the other side.
-              verified: 2026-09-10
-            - capability: capabilityKillSwitch
-              coverage: native
-              mechanism: Delete or revoke the tunnel in Platform tunnel settings (Tunnels Read + Manage)
-              steps:
-                - title: Revoke the tunnel
-                  body:
-                    - Deleting the tunnel endpoint stops every associated organisation and workspace from
-                      reaching the server; stop tunnel-client as well.
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              verified: 2026-09-10
-      - mitigation: D3-CI
-        coverage: external
-        verified: "2026-09-10"
-        mechanism: Platform audit logs consumed by an SSPM product
-        steps: []
-        evidence:
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        note: >-
-          Platform audit logs are the input; there is no tunnel configuration beyond the endpoint and its
-          scopes, so posture checking is the customer's SSPM reading those logs.
-        migration:
-          from:
-            - capabilityVendorAssurance
-          reviewRequired: false
-          original:
-            - capability: capabilityVendorAssurance
-              coverage: external
-              mechanism: Platform audit logs consumed by an SSPM product
-              note: >-
-                Platform audit logs are the input; there is no tunnel configuration beyond the endpoint and
-                its scopes, so posture checking is the customer's SSPM reading those logs.
-              evidence:
-                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: notApplicable
         verified: "2026-09-10"
@@ -548,79 +402,7 @@ tools:
                 - title: Vendor docs index, reviewed for applicability (2026-09-10)
                   url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
               verified: 2026-09-10
-      - mitigation: AML.M0012
-        coverage: partial
-        verified: "2026-09-10"
-        mechanism: TLS to the control plane, optional mTLS on both legs, custom CA bundles
-        steps:
-          - title: Turn on mTLS where policy requires it
-            body:
-              - Control-plane mTLS goes to mtls.api.openai.com:443; the MCP-side leg accepts client
-                certificates too.
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        evidence: []
-        note: >-
-          Assets and key owners: both tunnel legs (TLS, optional mTLS with the operator's certificates); the
-          tunnel token and TLS key on the host (host disk, the operator's). The tunnel stores no data, so
-          at-rest encryption applies only to those credentials.
-        migration:
-          from:
-            - capabilityEncryptionKeyManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityEncryptionKeyManagement
-              coverage: partial
-              mechanism: TLS to the control plane, optional mTLS on both legs, custom CA bundles
-              steps:
-                - title: Turn on mTLS where policy requires it
-                  body:
-                    - Control-plane mTLS goes to mtls.api.openai.com:443; the MCP-side leg accepts client
-                      certificates too.
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              note: >-
-                Assets and key owners: both tunnel legs (TLS, optional mTLS with the operator's certificates);
-                the tunnel token and TLS key on the host (host disk, the operator's). The tunnel stores no
-                data, so at-rest encryption applies only to those credentials.
-              verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
-        mechanism: >-
-          CONTROL_PLANE_API_KEY from the environment; rotation and revocation in Platform tunnel settings
-        steps:
-          - title: Rotate the runtime key from Platform settings
-            body:
-              - All creation, rotation and revocation happens at
-                platform.openai.com/settings/organization/tunnels.
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] The control-plane key is a long-lived stored secret in the host
-          environment, readable by anyone with access to the tunnel-client process; rotation is manual in
-          Platform settings.
-        migration:
-          from:
-            - capabilitySecretsManagement
-          reviewRequired: true
-          original:
-            - capability: capabilitySecretsManagement
-              coverage: partial
-              mechanism: >-
-                CONTROL_PLANE_API_KEY from the environment; rotation and revocation in Platform tunnel settings
-              steps:
-                - title: Rotate the runtime key from Platform settings
-                  body:
-                    - All creation, rotation and revocation happens at
-                      platform.openai.com/settings/organization/tunnels.
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              note: >-
-                The control-plane key is a long-lived stored secret in the host environment, readable by
-                anyone with access to the tunnel-client process; rotation is manual in Platform settings.
-              verified: 2026-09-10
-      - mitigation: D3-CRO
         coverage: unknown
         mechanism: >-
           CONTROL_PLANE_API_KEY from the environment; rotation and revocation in Platform tunnel settings
@@ -760,43 +542,6 @@ tools:
               evidence: *a1
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
-        mechanism: >-
-          Platform audit logs for tunnel metadata; app-level invocation logs; tunnel-client /metrics and admin
-          UI
-        steps:
-          - title: Combine the three logs
-            body:
-              - Platform audit logs (tunnel.*), ChatGPT app invocation and auth-lifecycle logs, and
-                tunnel-client's own /metrics and loopback-only /ui log export.
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Control-plane tunnel traffic is not emitted as Compliance Platform app
-          events.
-        migration:
-          from:
-            - capabilityAuditLogging
-          reviewRequired: true
-          original:
-            - capability: capabilityAuditLogging
-              coverage: partial
-              mechanism: >-
-                Platform audit logs for tunnel metadata; app-level invocation logs; tunnel-client /metrics and
-                admin UI
-              note: Control-plane tunnel traffic is not emitted as Compliance Platform app events.
-              steps:
-                - title: Combine the three logs
-                  body:
-                    - Platform audit logs (tunnel.*), ChatGPT app invocation and auth-lifecycle logs, and
-                      tunnel-client's own /metrics and loopback-only /ui log export.
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              verified: 2026-09-10
-      - mitigation: D3-SFA
         coverage: unknown
         mechanism: >-
           Platform audit logs for tunnel metadata; app-level invocation logs; tunnel-client /metrics and admin

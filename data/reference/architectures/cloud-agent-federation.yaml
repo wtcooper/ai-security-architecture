@@ -432,6 +432,7 @@ blocks:
     zone: zoneGovernance
     col: 0
     row: 4
+    mitigations: [ D3-APA, D3-AA, D3-CTS ]
   - id: govSecrets
     kind: governance
     title: Secrets & key management
@@ -439,6 +440,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 4
+    mitigations: [ D3-CTS ]
   - id: govPolicy
     kind: governance
     title: Policy & authorization
@@ -446,6 +448,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 4
+    mitigations: [ cap-agent-action-policy-enforcement, AML.M0029, AML.M0004 ]
   - id: govSupplyChain
     kind: governance
     title: Supply-chain assurance
@@ -453,6 +456,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 4
+    mitigations: [ cap-agent-tool-registry, cap-mcp-tool-integrity, cap-ai-vendor-assessment ]
   - id: govObservability
     kind: governance
     title: Observability & response
@@ -460,6 +464,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 4
+    mitigations: [ cap-agent-tracing, cap-agent-kill-switch ]
 
 edges:
   - from: user
@@ -623,19 +628,9 @@ pins:
       at: authServer
       note: >-
         One identity per agent per relationship: our harness registered in each peer platform with its own
-        key, each peer agent registered with us the same way. No shared secrets, no borrowed human sessions, a
-        lifecycle with an owner and a decommission date.
-    - mitigation: D3-CR
-      at: authServer
-      note: >-
-        One identity per agent per relationship: our harness registered in each peer platform with its own
-        key, each peer agent registered with us the same way. No shared secrets, no borrowed human sessions, a
-        lifecycle with an owner and a decommission date.
-    - mitigation: D3-MFA
-      at: idp->authServer
-      note: >-
-        Which peers may be told about which users, decided in the identity provider's registry and evaluated
-        at every exchange. A federation is a relationship a person owns, reviewed like any access grant.
+        key, each peer agent registered with us the same way — keys issued and rotated by the secrets service,
+        never in the harness. No shared secrets, no borrowed human sessions, a lifecycle with an owner and an
+        expiry.
     - mitigation: D3-APA
       at: idp->authServer
       note: >-
@@ -645,30 +640,15 @@ pins:
       at: gateway->authServer
       note: >-
         Every hop gets its own token: user assertion → peer-bound token outbound; peer token → downstream
-        token inbound. The exchange is the delegation record, and nothing crosses a boundary on the credential
-        it arrived with.
-    - mitigation: D3-TB
-      at: gateway->authServer
-      note: >-
-        Every hop gets its own token: user assertion → peer-bound token outbound; peer token → downstream
-        token inbound. The exchange is the delegation record, and nothing crosses a boundary on the credential
-        it arrived with.
+        token inbound, sender-constrained or over mutual TLS so a token lifted from a log cannot be replayed.
+        The exchange is the delegation record, and nothing crosses a boundary on the credential it arrived
+        with.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
       note: >-
         The registry of admitted peer cards — signature verified against a published key, hash pinned, skills
         and security schemes reviewed — and the registry of our own published cards. An agent not in it is not
         a peer.
-    - mitigation: D3-MAN
-      at: gateway->peerVendor
-      note: >-
-        TLS with certificate validation on every binding; mutual TLS or sender-constrained tokens for the
-        agent-to-agent path, so a bearer token lifted from a log cannot be replayed by whoever holds it.
-    - mitigation: D3-MENCR
-      at: gateway->peerVendor
-      note: >-
-        TLS with certificate validation on every binding; mutual TLS or sender-constrained tokens for the
-        agent-to-agent path, so a bearer token lifted from a log cannot be replayed by whoever holds it.
     - mitigation: cap-input-guardrails
       at: gateway->partner
       note: >-
@@ -680,32 +660,10 @@ pins:
         Per-skill authorization on both directions — which peer may invoke which of our skills, which of a
         peer's skills our agent may invoke for which users — enforced at the crossing because the protocol
         only says it SHOULD be.
-    - mitigation: AML.M0037
-      at: gateway
-      note: >-
-        Per-skill authorization on both directions — which peer may invoke which of our skills, which of a
-        peer's skills our agent may invoke for which users — enforced at the crossing because the protocol
-        only says it SHOULD be.
-    - mitigation: AML.M0030
-      at: gateway
-      note: >-
-        Per-skill authorization on both directions — which peer may invoke which of our skills, which of a
-        peer's skills our agent may invoke for which users — enforced at the crossing because the protocol
-        only says it SHOULD be.
-    - mitigation: AML.M0033
-      at: gateway
-      note: >-
-        Per-skill authorization on both directions — which peer may invoke which of our skills, which of a
-        peer's skills our agent may invoke for which users — enforced at the crossing because the protocol
-        only says it SHOULD be.
     - mitigation: cap-sensitive-data-redaction
       at: gateway->peerVendor
-      note: >-
-        Inspect the outbound task payload and the returned artifacts as the boundary crossings they are.
+      note: Inspect the outbound task payload and the returned artifacts as the boundary crossings they are.
     - mitigation: AML.M0004
-      at: gateway->partner
-      note: Per peer, per task and per skill, sized for agents that stream, retry and fan out.
-    - mitigation: AML.M0036
       at: gateway->partner
       note: Per peer, per task and per skill, sized for agents that stream, retry and fan out.
     - mitigation: AML.M0029
@@ -724,42 +682,15 @@ pins:
       note: >-
         W3C trace context on every task, task ids reconciled across organisations, and the agent identity on
         each hop — the only way a delegation chain that spans two audits can be read as one.
-    - mitigation: AML.M0024
-      at: govObservability
-      note: >-
-        Every task in and out with peer, user, skill, scope and outcome, retained where an incident can join
-        it to the peer's record.
-    - mitigation: D3-SFA
-      at: govObservability
-      note: Every task in and out with peer, user, skill, scope and outcome, retained where an incident can join it
-        to the peer's record.
     - mitigation: cap-agent-kill-switch
       at: govObservability
       note: >-
         Revoke a peer at the registry and the authorization server in one action, and let introspection make
         it real for tokens already issued.
-    - mitigation: D3-CR
-      at: govObservability
-      note: >-
-        Revoke a peer at the registry and the authorization server in one action, and let introspection make
-        it real for tokens already issued.
-    - mitigation: D3-CH
-      at: authServer
-      note: The private keys our agent authenticates with at each peer platform, issued and rotated by the secrets
-        service, never in the harness.
-    - mitigation: D3-CRO
-      at: authServer
-      note: The private keys our agent authenticates with at each peer platform, issued and rotated by the secrets
-        service, never in the harness.
     - mitigation: AML.M0031
       at: localTools->memory
       note: Artifacts stored only after classification, scoped to the task that received them.
     - mitigation: cap-mcp-tool-integrity
-      at: gateway->peerVendor
-      note: >-
-        The peer's card treated as a dependency: signature verified against a published key at admission and
-        on every task, hash pinned, a change a decision rather than a surprise.
-    - mitigation: D3-FIM
       at: gateway->peerVendor
       note: >-
         The peer's card treated as a dependency: signature verified against a published key at admission and

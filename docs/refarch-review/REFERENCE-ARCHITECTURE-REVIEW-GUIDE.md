@@ -208,11 +208,14 @@ capability chip, risk tag or step badge lands on a block or runs off the canvas.
 mode, carry attribution, and cite only capabilities pinned on the drawing. Ranks are unique
 within a surface. Deviations have reasons. The SAIF and CoSAI cross-checks pass.
 
-Two known-open items, both intentional and both reported by `npm run audit`: **2 risks and 3
-capabilities are not pinned on any architecture** (down from 7 and 12 after the 2026-09
-remediation; the residue was judged correctly absent, with the reasoning in
-`refarch-review/recommendations/cross-catalogue.md`). Judging whether each remains correctly
-absent is a reasonable thing to include in your review.
+Two known-open items, both intentional and both reported by `npm run audit`: **2 risks and 23
+capabilities are not pinned on any architecture**. The risks were judged correctly absent in
+the 2026-09 remediation (`refarch-review/recommendations/cross-catalogue.md`). Most of the
+capabilities are the 2026-09-18 migration's fan-out twins, collapsed on 2026-09-24 so each
+drawing pins one mitigation per control concept (Credential Revocation beside Agent
+Authentication, the three Restore IDs beside the staged-rollout gate, and so on); several are
+parents of specialisations that are pinned. Judging whether each remains correctly absent is a
+reasonable thing to include in your review.
 
 ---
 

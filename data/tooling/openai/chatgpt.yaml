@@ -263,15 +263,31 @@ tools:
           Comparable to Claude chat: the vendor pins tenancy (allowed_chatgpt_workspaces) and offers workspace
           IP access restrictions, and the inline inspection is the customer's SSE; rated partial for the same
           reason.
-        steps: &a1
+
+
+          [capabilityEgressControl] Work Cloud code and shell follow the managed allowlist when public
+          internet access is off; Work Local commands follow [experimental_network]. Browser, computer use and
+          connector traffic are outside both and need a network-layer control.
+        steps:
           - title: Pin the desktop app to the workspace
             body:
               - allowed_chatgpt_workspaces in requirements.toml restricts sign-in to listed workspace UUIDs.
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+          - title: Turn off public internet for cloud code and shell
+            body:
+              - When disabled, commands reach only required hostnames from a managed allowlist; this controls
+                destinations, not commands.
+            url: https://learn.chatgpt.com/docs/sandboxing
+          - title: Allowlist domains for local commands
+            body:
+              - "[experimental_network] with managed_allowed_domains_only = true; browser tools and MCP are
+                outside it."
             url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
         verified: 2026-09-10
         migration:
           from:
             - capabilitySse
+            - capabilityEgressControl
           reviewRequired: false
           original:
             - capability: capabilitySse
@@ -283,43 +299,30 @@ tools:
                 Comparable to Claude chat: the vendor pins tenancy (allowed_chatgpt_workspaces) and offers
                 workspace IP access restrictions, and the inline inspection is the customer's SSE; rated
                 partial for the same reason.
-              steps: *a1
+              steps: &a1
+                - title: Pin the desktop app to the workspace
+                  body:
+                    - allowed_chatgpt_workspaces in requirements.toml restricts sign-in to listed workspace UUIDs.
+                  url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
               verified: 2026-09-10
-      - mitigation: cap-agent-egress-control
-        coverage: partial
-        mechanism: >-
-          "Allow public internet access" for Work Cloud code/shell (managed allowlist when off);
-          [experimental_network] for Work Local
-        steps: &a1
-          - title: Turn off public internet for cloud code and shell
-            body:
-              - When disabled, commands reach only required hostnames from a managed allowlist; this controls
-                destinations, not commands.
-            url: https://learn.chatgpt.com/docs/sandboxing
-          - title: Allowlist domains for local commands
-            body:
-              - "[experimental_network] with managed_allowed_domains_only = true; browser tools and MCP are outside it."
-            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
-        note: >-
-          Work Cloud code and shell follow the managed allowlist when public internet access is off; Work
-          Local commands follow [experimental_network]. Browser, computer use and connector traffic are
-          outside both and need a network-layer control.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: false
-          original:
             - capability: capabilityEgressControl
               coverage: partial
-              mechanism: >-
-                "Allow public internet access" for Work Cloud code/shell (managed allowlist when off);
-                [experimental_network] for Work Local
-              steps: *a1
-              note: >-
-                Work Cloud code and shell follow the managed allowlist when public internet access is off;
-                Work Local commands follow [experimental_network]. Browser, computer use and connector traffic
-                are outside both and need a network-layer control.
+              mechanism: '"Allow public internet access" for Work Cloud code/shell (managed allowlist when off);
+                [experimental_network] for Work Local'
+              steps:
+                - title: Turn off public internet for cloud code and shell
+                  body:
+                    - When disabled, commands reach only required hostnames from a managed allowlist; this
+                      controls destinations, not commands.
+                  url: https://learn.chatgpt.com/docs/sandboxing
+                - title: Allowlist domains for local commands
+                  body:
+                    - "[experimental_network] with managed_allowed_domains_only = true; browser tools and MCP
+                      are outside it."
+                  url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+              note: Work Cloud code and shell follow the managed allowlist when public internet access is off; Work Local
+                commands follow [experimental_network]. Browser, computer use and connector traffic are
+                outside both and need a network-layer control.
               verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
@@ -327,7 +330,13 @@ tools:
         note: >-
           In-product controls limit what agents can reach and screenshot; nothing inspects prompt or upload
           content.
-        steps: &a1
+
+
+          [capabilityBrowserDetectionResponse] Covers the agent's browser, not the employee's browser session
+          on chatgpt.com. Rated partial for the managed agent browser only; the employee's own browser on
+          chatgpt.com is secured by the organisation's browser tooling, which is external here as for every
+          other chat SaaS.
+        steps:
           - title: Limit what connections may do
             body:
               - Action control allows read-only, all or a custom set of actions per connection.
@@ -336,10 +345,16 @@ tools:
             body:
               - allow_appshots = false and [permissions.filesystem] deny_read in requirements.toml.
             url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-local-security
+          - title: Restrict the built-in browser
+            body:
+              - Set [features] browser_use and browser_use_full_cdp_access = false, or use the managed browser
+                controls to restrict origins, uploads, downloads and developer access.
+            url: https://learn.chatgpt.com/docs/browser
         verified: 2026-09-10
         migration:
           from:
             - capabilityAiDlp
+            - capabilityBrowserDetectionResponse
           reviewRequired: false
           original:
             - capability: capabilityAiDlp
@@ -348,7 +363,29 @@ tools:
               note: >-
                 In-product controls limit what agents can reach and screenshot; nothing inspects prompt or
                 upload content.
-              steps: *a1
+              steps: &a1
+                - title: Limit what connections may do
+                  body:
+                    - Action control allows read-only, all or a custom set of actions per connection.
+                  url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+                - title: Stop screenshots and secret reads on the desktop
+                  body:
+                    - allow_appshots = false and [permissions.filesystem] deny_read in requirements.toml.
+                  url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-local-security
+              verified: 2026-09-10
+            - capability: capabilityBrowserDetectionResponse
+              coverage: partial
+              mechanism: Managed browser controls for the built-in browser (origins, uploads, downloads, developer access;
+                browser_use flags)
+              note: Covers the agent's browser, not the employee's browser session on chatgpt.com. Rated partial for the
+                managed agent browser only; the employee's own browser on chatgpt.com is secured by the
+                organisation's browser tooling, which is external here as for every other chat SaaS.
+              steps:
+                - title: Restrict the built-in browser
+                  body:
+                    - Set [features] browser_use and browser_use_full_cdp_access = false, or use the managed
+                      browser controls to restrict origins, uploads, downloads and developer access.
+                  url: https://learn.chatgpt.com/docs/browser
               verified: 2026-09-10
       - mitigation: cap-input-guardrails
         coverage: partial
@@ -380,115 +417,6 @@ tools:
                 Vendor-operated review on browser sign-in and Auto approve actions; page and file content the
                 assistant reads is not classified for injected instructions, and nothing is customer-tunable.
               verified: 2026-09-10
-      - mitigation: D3-WSAA
-        coverage: partial
-        verified: "2026-09-10"
-        mechanism: >-
-          Managed browser controls for the built-in browser (origins, uploads, downloads, developer access;
-          browser_use flags)
-        steps:
-          - title: Restrict the built-in browser
-            body:
-              - Set [features] browser_use and browser_use_full_cdp_access = false, or use the managed browser
-                controls to restrict origins, uploads, downloads and developer access.
-            url: https://learn.chatgpt.com/docs/browser
-        evidence: []
-        note: >-
-          Covers the agent's browser, not the employee's browser session on chatgpt.com. Rated partial for the
-          managed agent browser only; the employee's own browser on chatgpt.com is secured by the
-          organisation's browser tooling, which is external here as for every other chat SaaS.
-        migration:
-          from:
-            - capabilityBrowserDetectionResponse
-          reviewRequired: false
-          original:
-            - capability: capabilityBrowserDetectionResponse
-              coverage: partial
-              mechanism: >-
-                Managed browser controls for the built-in browser (origins, uploads, downloads, developer
-                access; browser_use flags)
-              note: >-
-                Covers the agent's browser, not the employee's browser session on chatgpt.com. Rated partial
-                for the managed agent browser only; the employee's own browser on chatgpt.com is secured by
-                the organisation's browser tooling, which is external here as for every other chat SaaS.
-              steps:
-                - title: Restrict the built-in browser
-                  body:
-                    - Set [features] browser_use and browser_use_full_cdp_access = false, or use the managed
-                      browser controls to restrict origins, uploads, downloads and developer access.
-                  url: https://learn.chatgpt.com/docs/browser
-              verified: 2026-09-10
-      - mitigation: D3-NI
-        coverage: unknown
-        mechanism: >-
-          "Allow public internet access" for Work Cloud code/shell (managed allowlist when off);
-          [experimental_network] for Work Local
-        steps:
-          - title: Turn off public internet for cloud code and shell
-            body:
-              - When disabled, commands reach only required hostnames from a managed allowlist; this controls
-                destinations, not commands.
-            url: https://learn.chatgpt.com/docs/sandboxing
-          - title: Allowlist domains for local commands
-            body:
-              - "[experimental_network] with managed_allowed_domains_only = true; browser tools and MCP are
-                outside it."
-            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEgressControl] Work Cloud code and shell follow the managed allowlist when public
-          internet access is off; Work Local commands follow [experimental_network]. Browser, computer use and
-          connector traffic are outside both and need a network-layer control.
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: true
-          original:
-            - capability: capabilityEgressControl
-              coverage: partial
-              mechanism: >-
-                "Allow public internet access" for Work Cloud code/shell (managed allowlist when off);
-                [experimental_network] for Work Local
-              steps:
-                - title: Turn off public internet for cloud code and shell
-                  body:
-                    - When disabled, commands reach only required hostnames from a managed allowlist; this
-                      controls destinations, not commands.
-                  url: https://learn.chatgpt.com/docs/sandboxing
-                - title: Allowlist domains for local commands
-                  body:
-                    - "[experimental_network] with managed_allowed_domains_only = true; browser tools and MCP
-                      are outside it."
-                  url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
-              note: >-
-                Work Cloud code and shell follow the managed allowlist when public internet access is off;
-                Work Local commands follow [experimental_network]. Browser, computer use and connector traffic
-                are outside both and need a network-layer control.
-              verified: 2026-09-10
-      - mitigation: D3-ORA
-        coverage: external
-        mechanism: >-
-          Workspace analytics, Analytics API and the GPT management dashboard feed an external system of record
-        evidence: &a1
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityAiGovernancePlatform
-          reviewRequired: false
-          original:
-            - capability: capabilityAiGovernancePlatform
-              coverage: external
-              mechanism: >-
-                Workspace analytics, Analytics API and the GPT management dashboard feed an external system of
-                record
-              evidence: *a1
-              verified: 2026-09-10
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: Trust portal evidence (SOC 2 Type 2 scope names ChatGPT Enterprise, Edu and Team)
@@ -501,6 +429,8 @@ tools:
         migration:
           from:
             - capabilityAiTprm
+            - capabilityAiGovernancePlatform
+            - capabilityVendorAssurance
           reviewRequired: false
           original:
             - capability: capabilityAiTprm
@@ -508,6 +438,28 @@ tools:
               mechanism: Trust portal evidence (SOC 2 Type 2 scope names ChatGPT Enterprise, Edu and Team)
               steps: *a1
               verified: 2026-09-10
+            - capability: capabilityAiGovernancePlatform
+              coverage: external
+              mechanism: Workspace analytics, Analytics API and the GPT management dashboard feed an external system of
+                record
+              evidence:
+                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+                  url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
+              verified: 2026-09-10
+            - capability: capabilityVendorAssurance
+              coverage: external
+              mechanism: Compliance API, Analytics API and Admin API consumed by an SSPM product
+              note: Compliance, Analytics and Admin APIs are the inputs; comparison to a baseline and drift detection are
+                the SSPM product's.
+              evidence:
+                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+                  url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
+              verified: 2026-09-10
+        evidence:
+          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
+        note: "[capabilityVendorAssurance] Compliance, Analytics and Admin APIs are the inputs; comparison to a
+          baseline and drift detection are the SSPM product's."
       - mitigation: AML.M0029
         coverage: native
         verified: "2026-09-10"
@@ -603,113 +555,6 @@ tools:
                 workspace APIs; chat and agent actions on a member's behalf carry the member's identity, not a
                 distinct agent principal.
               verified: 2026-09-10
-      - mitigation: D3-CR
-        coverage: unknown
-        mechanism: >-
-          Service accounts and workload identity federation; Role Off for Work Local / Work Cloud / plugins,
-          token revocation, service-account disable
-        steps:
-          - title: Create service accounts for automation
-            body:
-              - Owners and admins create them; roles User / Configure / Manager; SCIM userType
-                "ServiceAccount".
-            url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-          - title: Federate short-lived tokens
-            body:
-              - OIDC or SPIFFE tokens exchange for workspace tokens capped at one hour; disabling a rule
-                revokes issued tokens.
-            url: https://learn.chatgpt.com/docs/enterprise/workload-identity
-          - title: Turn surfaces off by role
-            body:
-              - Work Cloud and Work Local are distinct toggles in Permissions & roles; plugins can be made
-                unavailable in Admin > Plugins.
-            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
-          - title: Revoke credentials
-            body:
-              - Owners and admins revoke any token; disabling a service account revokes all of its tokens.
-            url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] Service accounts and federated workload identities are principals for
-          automation against the workspace APIs; chat and agent actions on a member's behalf carry the
-          member's identity, not a distinct agent principal.
-
-
-          [capabilityKillSwitch] Role and token changes apply at the next request; an in-flight request
-          completes. The docs state no propagation delay, so measure it before relying on it.
-        migration:
-          from:
-            - capabilityNhiManagement
-            - capabilityKillSwitch
-          reviewRequired: true
-          original:
-            - capability: capabilityNhiManagement
-              coverage: native
-              mechanism: Service accounts and workload identity federation
-              steps:
-                - title: Create service accounts for automation
-                  body:
-                    - Owners and admins create them; roles User / Configure / Manager; SCIM userType
-                      "ServiceAccount".
-                  url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-                - title: Federate short-lived tokens
-                  body:
-                    - OIDC or SPIFFE tokens exchange for workspace tokens capped at one hour; disabling a rule
-                      revokes issued tokens.
-                  url: https://learn.chatgpt.com/docs/enterprise/workload-identity
-              note: >-
-                Service accounts and federated workload identities are principals for automation against the
-                workspace APIs; chat and agent actions on a member's behalf carry the member's identity, not a
-                distinct agent principal.
-              verified: 2026-09-10
-            - capability: capabilityKillSwitch
-              coverage: native
-              mechanism: Role Off for Work Local / Work Cloud / plugins, token revocation, service-account disable
-              steps:
-                - title: Turn surfaces off by role
-                  body:
-                    - Work Cloud and Work Local are distinct toggles in Permissions & roles; plugins can be
-                      made unavailable in Admin > Plugins.
-                  url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-cloud-security
-                - title: Revoke credentials
-                  body:
-                    - Owners and admins revoke any token; disabling a service account revokes all of its
-                      tokens.
-                  url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-              note: >-
-                Role and token changes apply at the next request; an in-flight request completes. The docs
-                state no propagation delay, so measure it before relying on it.
-              verified: 2026-09-10
-      - mitigation: D3-CI
-        coverage: external
-        verified: "2026-09-10"
-        mechanism: Compliance API, Analytics API and Admin API consumed by an SSPM product
-        steps: []
-        evidence:
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
-        note: >-
-          Compliance, Analytics and Admin APIs are the inputs; comparison to a baseline and drift detection
-          are the SSPM product's.
-        migration:
-          from:
-            - capabilityVendorAssurance
-          reviewRequired: false
-          original:
-            - capability: capabilityVendorAssurance
-              coverage: external
-              mechanism: Compliance API, Analytics API and Admin API consumed by an SSPM product
-              note: >-
-                Compliance, Analytics and Admin APIs are the inputs; comparison to a baseline and drift
-                detection are the SSPM product's.
-              evidence:
-                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-                  url: https://learn.chatgpt.com/docs/enterprise/chatgpt-work-overview
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: partial
         verified: "2026-09-10"
@@ -753,72 +598,7 @@ tools:
                 exposure assessment of workspace content are the customer's DSPM product reading the
                 Compliance API.
               verified: 2026-09-10
-      - mitigation: AML.M0012
-        coverage: partial
-        verified: "2026-09-10"
-        mechanism: Vendor-managed encryption under SOC 2 / ISO scope; residency honoured
-        steps:
-          - title: Verify scope
-            body:
-              - ISO 27001, 27017, 27018, 27701 and 42001 plus SOC 2 Type 2 cover ChatGPT Enterprise.
-            url: https://trust.openai.com/
-        evidence: []
-        note: >-
-          No customer-managed key for ChatGPT workspaces is documented on a page that resolved.
-        migration:
-          from:
-            - capabilityEncryptionKeyManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityEncryptionKeyManagement
-              coverage: partial
-              mechanism: Vendor-managed encryption under SOC 2 / ISO scope; residency honoured
-              note: No customer-managed key for ChatGPT workspaces is documented on a page that resolved.
-              steps:
-                - title: Verify scope
-                  body:
-                    - ISO 27001, 27017, 27018, 27701 and 42001 plus SOC 2 Type 2 cover ChatGPT Enterprise.
-                  url: https://trust.openai.com/
-              verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
-        mechanism: >-
-          Access-token expiration limit, service-account token lifetime (maximum one year), federation
-        steps:
-          - title: Bound and rotate tokens
-            body:
-              - Tokens require an expiry at creation; owners set the workspace-wide limit; treat tokens as
-                automation secrets.
-            url: https://learn.chatgpt.com/docs/enterprise/access-tokens
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Token lifetime limits bound how long a stored credential works;
-          nothing issues per-request credentials. Connector tokens are held by OpenAI and never shown to the
-          model.
-        migration:
-          from:
-            - capabilitySecretsManagement
-          reviewRequired: true
-          original:
-            - capability: capabilitySecretsManagement
-              coverage: partial
-              mechanism: >-
-                Access-token expiration limit, service-account token lifetime (maximum one year), federation
-              steps:
-                - title: Bound and rotate tokens
-                  body:
-                    - Tokens require an expiry at creation; owners set the workspace-wide limit; treat tokens
-                      as automation secrets.
-                  url: https://learn.chatgpt.com/docs/enterprise/access-tokens
-              note: >-
-                Token lifetime limits bound how long a stored credential works; nothing issues per-request
-                credentials. Connector tokens are held by OpenAI and never shown to the model.
-              verified: 2026-09-10
-      - mitigation: D3-CRO
         coverage: unknown
         mechanism: >-
           Access-token expiration limit, service-account token lifetime (maximum one year), federation
@@ -971,41 +751,6 @@ tools:
               evidence: *a1
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
-        mechanism: Compliance API (30-day source retention) and workspace analytics
-        steps:
-          - title: Export continuously
-            body:
-              - Use COMPLIANCE_API_KEY against the Admin API; the source window does not replace your
-                retention policy.
-            url: https://learn.chatgpt.com/docs/enterprise/compliance-api
-        evidence: []
-        note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Not every local file operation, screenshot or Chrome-extension action
-          appears in the Compliance API.
-        migration:
-          from:
-            - capabilityAuditLogging
-          reviewRequired: true
-          original:
-            - capability: capabilityAuditLogging
-              coverage: partial
-              mechanism: Compliance API (30-day source retention) and workspace analytics
-              note: >-
-                Not every local file operation, screenshot or Chrome-extension action appears in the
-                Compliance API.
-              steps:
-                - title: Export continuously
-                  body:
-                    - Use COMPLIANCE_API_KEY against the Admin API; the source window does not replace your
-                      retention policy.
-                  url: https://learn.chatgpt.com/docs/enterprise/compliance-api
-              verified: 2026-09-10
-      - mitigation: D3-SFA
         coverage: unknown
         mechanism: Compliance API (30-day source retention) and workspace analytics
         steps:

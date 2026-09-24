@@ -685,8 +685,30 @@ Highlights below are Google's original mapping, not ours.
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 
-### 4b. Capabilities no architecture pins — 1 of 76
+### 4b. Capabilities no architecture pins — 23 of 76
 
+- Configuration Inventory (`D3-CI`)
+- Restrict Library Loading (`AML.M0011`)
+- Credential Revocation (`D3-CR`)
+- Credential Rotation (`D3-CRO`)
+- Message Encryption (`D3-MENCR`)
+- Restore Configuration (`D3-RC`)
+- Restore Software (`D3-RS`)
+- Restore Database (`D3-RD`)
+- Predictive AI Model Hardening (`AML.M0003`)
+- Generative AI Model Alignment (`AML.M0022`)
+- System Configuration Permissions (`D3-SCP`)
+- Generative AI Guidelines (`AML.M0021`)
+- AI Agent Authority Expansion Controls (`AML.M0037`)
+- Restrict AI Agent Tool Invocation on Untrusted Data (`AML.M0030`)
+- AI Agent Scope Drift Detection (`AML.M0038`)
+- Token Binding (`D3-TB`)
+- File Integrity Monitoring (`D3-FIM`)
+- AI Red Team (`AML.M0035`)
+- Resource Access Pattern Analysis (`D3-RAPA`)
+- System File Analysis (`D3-SFA`)
+- Dynamic Analysis (`D3-DA`)
+- Software Update (`D3-SU`)
 - AI System Threat Modelling (`cap-ai-threat-modeling`)
 
 ### 4c. CoSAI components no architecture anchors — 8 of 23
@@ -966,17 +988,17 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Mode | Status | Items | Pinned mitigations not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 7 | File Analysis, Restrict Library Loading |
+| Single agent workflow | build | draft | 7 | _none_ |
 | Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
-| Multi-agent workflow | build | draft | 8 | File Analysis, Restrict Library Loading |
-| Chat agent with tools | build | draft | 7 | File Analysis, Restrict Library Loading |
+| Multi-agent workflow | build | draft | 8 | _none_ |
+| Chat agent with tools | build | draft | 7 | _none_ |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 7 | _none_ |
-| First-party coding & desktop agents | hybrid | draft | 6 | File Analysis, Restrict Library Loading |
-| Third-party coding & desktop agents | use | draft | 9 | Agent Kill Switch and Quarantine, Credential Revocation, File Analysis, Restrict Library Loading |
+| First-party coding & desktop agents | hybrid | draft | 6 | _none_ |
+| Third-party coding & desktop agents | use | draft | 9 | Agent Kill Switch and Quarantine |
 | Local model runtime | use | draft | 4 | _none_ |
-| Personal autonomous agent | use | draft | 7 | File Analysis, Restrict Library Loading |
+| Personal autonomous agent | use | draft | 7 | File Analysis |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
@@ -988,40 +1010,40 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 
 | Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |
 | --- | --- | --- | --- | --- | --- | --- |
-| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
-| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 28/28 | _none_ |  |
-| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
+| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
+| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/15 | _none_ |  |
+| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
+| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 10/14 | Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent Authentication, AI Vendor Risk Assessment |  |
-| Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
+| Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
+| Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
-| Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
+| Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
+| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Grok Bot | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
+| GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
+| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
-| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 36/36 | _none_ |  |
+| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
+| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
+| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
+| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 10/16 | Multi-factor Authentication, Agent and Tool Registry, Staged Rollout and Rollback Gate, Agent Action Policy Enforcement, Memory Hardening, Input Screening Guardrails |  |
-| ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| Codex | openai | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
+| ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
+| Codex | openai | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Codex SDK | openai | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
-| Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 36/36 | _none_ |  |
+| Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
+| Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
+| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 
 - MITRE D3FEND 1.6.0: 44 canonical entries.
 - MITRE ATLAS 2026.09: 32 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
-- 347 tool-mitigation rows require reassessment after migration.
+- 140 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |

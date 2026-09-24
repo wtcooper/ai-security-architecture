@@ -755,17 +755,20 @@ function checkArchetypes(
     }
 
     // --- Pins ----------------------------------------------------------------
-    const resolvePin = (at: string, ref: string) => {
-      if (blockIds.has(ref) || edgeKeys.has(ref)) return;
+    // A pin may name a bidirectional edge from either end; it is stored under the authored
+    // direction, because every renderer looks edges up by that key and would drop the pin.
+    const resolvePin = (at: string, ref: string): string => {
+      if (blockIds.has(ref) || edgeKeys.has(ref)) return ref;
       const [a, b] = (ref ?? "").split("->");
-      if (a && b && bidir.has(`${b}->${a}`)) return;
+      if (a && b && bidir.has(`${b}->${a}`)) return `${b}->${a}`;
       fail(`${at}: "${ref}" is neither a block id nor an edge "from->to"`);
+      return ref;
     };
     const risks: string[] = [];
     for (const pin of arch.pins?.risks ?? []) {
       const at = `${where} risk pin ${pin.risk} @ ${pin.at}`;
       if (!ctx.riskIds.has(pin.risk)) fail(`${at}: unknown risk`);
-      resolvePin(at, pin.at);
+      pin.at = resolvePin(at, pin.at);
       if (!risks.includes(pin.risk)) risks.push(pin.risk);
     }
     const mitigations: string[] = [];
@@ -779,7 +782,7 @@ function checkArchetypes(
             "fix one of the two, they cannot both be right",
         );
       }
-      resolvePin(at, pin.at);
+      pin.at = resolvePin(at, pin.at);
       if (!mitigations.includes(pin.mitigation)) mitigations.push(pin.mitigation);
     }
     if (!risks.length) fail(`${where}: needs at least one pinned risk`);
