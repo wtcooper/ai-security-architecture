@@ -133,10 +133,11 @@ An architecture file has these sections, in this order.
 
 ### `zones`
 The ownership bands, each with an `owner` from the six, and a `note` saying what the band means
-*on this drawing*. Band order is left-to-right by convention, and four drawings deliberately
-break it — the training pipeline (external on the left, because it is an ingest architecture)
-and all three SaaS drawings (vendor before our cloud, because the user or maker reaches the
-vendor first). All four have deviations recording it.
+*on this drawing*. Band order is left-to-right by convention, and three drawings deliberately
+break it — the training pipeline (external on the left, because it is an ingest architecture),
+and the enterprise AI chat and UI/low-code runtime (vendor before our cloud, because the user or
+maker reaches the vendor first). All three have deviations recording it. The API/SDK and coding
+& desktop runtimes keep the conventional order: the user reaches our front end or machine first.
 
 ### `blocks`
 The components. Each carries `kind`, `title`, `zone`, grid `col`/`row`, an optional `parent` for

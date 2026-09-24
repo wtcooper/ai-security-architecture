@@ -935,6 +935,7 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
 | Coding & desktop session managed agent runtime | Native tools | provider | `componentTools` |
 | Coding & desktop session managed agent runtime | Vendor service | provider | `componentApplication` |
+| Coding & desktop session managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | Coding & desktop session managed agent runtime | AI gateway | service | (none) |
 | Coding & desktop session managed agent runtime | Tool services | service | `componentTools` |
 | Coding & desktop session managed agent runtime | Enterprise data | external | `componentDataSources` |
@@ -1013,19 +1014,19 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/15 | _none_ |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
+| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/15 | Credential Hardening |  |
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
-| Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 10/14 | Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent Authentication, AI Vendor Risk Assessment |  |
+| Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 10/15 | Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent Authentication, AI Vendor Risk Assessment, Credential Hardening |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
-| Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
+| Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/15 | Credential Hardening |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
-| Grok Bot | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
+| Grok Bot | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/15 | Credential Hardening |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
-| GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
+| GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/15 | Credential Hardening |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
@@ -1033,7 +1034,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 10/16 | Multi-factor Authentication, Agent and Tool Registry, Staged Rollout and Rollback Gate, Agent Action Policy Enforcement, Memory Hardening, Input Screening Guardrails |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
-| Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
+| Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/15 | Credential Hardening |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |

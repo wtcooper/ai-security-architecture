@@ -86,9 +86,8 @@ zones:
   - id: zoneCloud
     owner: cloud
     note: >
-      The narrow strip that is still ours: the gateway a published agent is admitted through,
-      our own tool servers behind it, and the on-premises data gateway for the systems that
-      never leave our network.
+      The narrow strip that is still ours: the tunnel the platform reaches us through, the
+      gateway a published agent is admitted at, and our own tool servers and data behind it.
   - id: zoneExternal
     owner: external
     note: The model the vendor calls on our behalf, and the third-party services their connectors reach.
@@ -153,11 +152,10 @@ blocks:
     kind: service
     title: AI gateway
     zone: zoneCloud
-    col: 2
+    col: 3
     row: 1
     note: >
-      Where a published agent is admitted into our systems, and the one hop on that path we
-      run. It carries no inference here — the vendor calls its own model — so this is purely
+      Where a published agent is admitted into our systems, and the policy point on that path. It carries no inference here — the vendor calls its own model — so this is purely
       about tools and data, which is the useful distinction from every other gateway in the
       catalogue.
     items:
@@ -172,12 +170,12 @@ blocks:
     cosaiComponent: componentTools
     zone: zoneCloud
     col: 3
-    row: 1
+    row: 2
     pack: toolServicesRemote
     note: >
       Our own MCP servers and connectors. The platform's MCP path is not a policy bypass — the
-      same data policies that regulate its connectors regulate its MCP tools — but reaching one
-      of ours still needs a publicly resolvable endpoint.
+      same data policies that regulate its connectors regulate its MCP tools — reached through
+      the tunnel and our gateway, never exposed to the platform directly.
 
   - id: dataGateway
     kind: service
@@ -185,15 +183,15 @@ blocks:
     cosaiComponent: componentAgentUserQuery
     zone: zoneCloud
     col: 2
-    row: 2
+    row: 1
     note: >
-      The on-premises data gateway — the only on-premises crossing in the architecture, on a
-      host we run beside the gateway and tool services we also run. Outbound-only connections,
-      so nothing is opened inbound. It relays data queries — not MCP, which is why it reaches
-      the source directly here where the same component on the two SaaS siblings hands to our
-      gateway; it does not run agents, and it has hard payload limits that make it a query
-      path rather than a bulk one. The credentials it
-      caches sit on this host, which is why the secrets pin lands here.
+      The platform's on-premises data gateway, or its private-network equivalent: vendor-supplied
+      software on a host we run that dials out, so nothing is opened inbound, and relays the
+      platform's connector and MCP calls to our gateway — the same component, and the same
+      chain, as on every SaaS sibling. It does not run agents and does not authenticate for
+      us, and its hard payload limits make it a query path rather than a bulk one. The
+      connection credentials it caches sit on this host, which is why the secrets pin lands
+      here.
     items:
       - id: outbound
         label: Outbound connector
@@ -206,7 +204,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 3
-    row: 2
+    row: 3
     pack: enterpriseData
     note: >
       The systems of record a maker attached as grounding or as an action target — often
@@ -236,7 +234,7 @@ blocks:
     cosaiComponent: componentTools
     zone: zoneExternal
     col: 4
-    row: 3
+    row: 4
     pack: toolServicesRemote
     note: Third-party services the platform's connectors reach, on whichever credential the maker chose.
 
@@ -330,14 +328,6 @@ edges:
     note: >
       The vendor calls its own model provider. We are not on this path and hold no key for it,
       which is why our gateway carries tools and data only.
-  - from: platform
-    to: aiGateway
-    path: external
-    bidir: true
-    label: connector calls into our systems
-    note: >
-      The one hop we own. A vendor-hosted agent reaching our data crosses here or it does not
-      reach it at all.
   - from: aiGateway
     to: internalTools
     path: primary
@@ -350,23 +340,23 @@ edges:
     bidir: true
     label: scoped reads & writes
     note: Grounding content and action targets, reached on our terms.
-  - from: dataGateway
-    to: orgData
-    path: primary
-    bidir: true
-    label: on-prem query
-    note: >
-      For systems that never leave our network. The gateway relays rather than hosts, and its
-      payload ceiling makes it a query path rather than a bulk one.
   - from: platform
     to: dataGateway
     path: external
     bidir: true
-    route: vh
-    label: outbound-only relay
+    label: outbound-only tunnel
     note: >
-      Their cloud reaching an on-premises source through software we run. Outbound-only, so
-      nothing is opened inbound.
+      Their cloud reaching back into us through software we run. Outbound-only, so nothing is
+      opened inbound; the public-endpoint form most platforms default to is recorded as a
+      deviation.
+  - from: dataGateway
+    to: aiGateway
+    path: primary
+    bidir: true
+    label: connector calls into our systems
+    note: >
+      The tunnel hands to our gateway rather than to a server or the data. A vendor-hosted
+      agent reaching our data crosses here or it does not reach it at all.
   - from: platform
     to: extTools
     path: external
@@ -408,10 +398,10 @@ pins:
         Grounding content and connector results re-enter the agent as instruction. A document
         dropped in a shared folder is an instruction channel on this platform.
     - risk: riskSensitiveDataDisclosure
-      at: dataGateway->orgData
+      at: dataGateway
       note: >
-        The on-premises path reaches systems that were never meant to be internet-adjacent, and
-        the credentials it caches sit on a host somebody has to patch.
+        The tunnel reaches into systems that were never meant to be internet-adjacent, and the
+        credentials it caches sit on a host somebody has to patch.
     - risk: riskExcessiveDataHandlingDuringInference
       at: platform->provider
       note: Grounding content leaves for a model we do not broker and hold no key for.
@@ -496,10 +486,9 @@ pins:
     - mitigation: cap-data-access-governance
       at: orgData
       note: >-
-        What a maker may attach as grounding, and what the on-premises path may query: sources with governed
-        write access only, classified before they are attachable, and the relay scoped to named sources and
-        the invoker's entitlement rather than assumed from its payload ceiling. The default connector set is
-        the real policy, and a permissive default is a decision nobody remembers making.
+        What a maker may attach as grounding: sources with governed write access only, classified before they
+        are attachable, and every read scoped to the invoker's entitlement. The default connector set is the
+        real policy, and a permissive default is a decision nobody remembers making.
     - mitigation: cap-agent-tracing
       at: govObservability
       note: >-
@@ -536,9 +525,12 @@ walkthrough:
     - follow: provider->platform
       label: completion
       note: The completion comes back into their runtime as the turn's plan.
-    - follow: platform->aiGateway
+    - follow: platform->dataGateway
+      label: down the tunnel
+      note: Their cloud reaches back into us through the connection our tunnel holds open.
+    - follow: dataGateway->aiGateway
       label: reach into our data
-      note: The one hop we own. A published agent reaching our data crosses here or not at all.
+      note: Handed to our gateway. A published agent reaching our data crosses here or not at all.
     - follow: aiGateway->internalTools
       label: scoped grant
       note: Scoped to grants we decided, rather than to the maker's standing access.
@@ -551,23 +543,12 @@ walkthrough:
     - follow: internalTools->aiGateway
       label: recorded
       note: Through our crossing, where the call is recorded.
-    - follow: aiGateway->platform
-      label: tool result
-      note: And out to their runtime as a tool result.
-    - follow: platform->dataGateway
-      label: on-premises query
-      note: >
-        For systems that never leave our network, their cloud reaches an on-premises source
-        through a connector we operate.
-    - follow: dataGateway->orgData
-      label: capped query
-      note: A query path rather than a bulk one — the connector caps what any single call carries.
-    - follow: orgData->dataGateway
-      label: rows
-      note: The rows the query asked for, and no more.
+    - follow: aiGateway->dataGateway
+      label: into the tunnel
+      note: Classified at the gateway, then back into the connector.
     - follow: dataGateway->platform
-      label: up the tunnel
-      note: Back up the tunnel to their runtime.
+      label: tool result
+      note: And up the tunnel to their runtime as a tool result.
     - follow: platform->consumer
       label: reply
       note: The reply returns to the colleague who ran it, grounded on everything the walk touched.
@@ -584,14 +565,20 @@ scenarios:
           Colleagues run it — and inherit the maker's access to whatever it was attached to.
           The gap between who built an agent and whose access it uses is where this
           archetype's incidents live.
-      - follow: platform->aiGateway
+      - follow: platform->dataGateway
+        label: back into us
+        note: The agent reaches back into our systems through the tunnel.
+      - follow: dataGateway->aiGateway
         label: reach bounded at our tier
         note: Which is only bounded at all because the reach into our systems crosses a tier we run.
   - title: A shared drive becomes an instruction channel
     steps:
-      - follow: platform->aiGateway
+      - follow: platform->dataGateway
         label: folder as grounding
         note: A running agent asks for a folder somebody uses as grounding.
+      - follow: dataGateway->aiGateway
+        label: to our gateway
+        note: The request comes up the tunnel to our gateway.
       - follow: aiGateway->internalTools
         label: admitted read
         note: Admitted like any other read.
@@ -604,7 +591,10 @@ scenarios:
       - follow: internalTools->aiGateway
         label: tool result
         note: It crosses back as an ordinary tool result.
-      - follow: aiGateway->platform
+      - follow: aiGateway->dataGateway
+        label: into the tunnel
+        note: Classified at the gateway, which cannot tell it apart from any other record.
+      - follow: dataGateway->platform
         label: model input
         note: And enters their runtime as model input.
       - follow: platform->extTools
@@ -623,7 +613,10 @@ scenarios:
           The maker's third-party grants keep flowing — these never touch our network, so only
           the platform's connection-ownership transfer or revocation can cut them. That
           inventory operation is the primary response.
-      - follow: platform->aiGateway
+      - follow: platform->dataGateway
+        label: grants into us
+        note: The departed maker's grants into our systems still arrive through the tunnel.
+      - follow: dataGateway->aiGateway
         label: our slice cut
         note: >
           Our gateway cuts the slice it issued — the grants into our own systems — which is
@@ -636,9 +629,12 @@ scenarios:
         note: >
           A maker publishes to a public channel and leaves authentication off; the "consumer"
           is now anyone who finds the URL, and recon tooling finds them by the thousands.
-      - follow: platform->aiGateway
+      - follow: platform->dataGateway
+        label: down the tunnel
+        note: The stranger's question comes back into us through the tunnel.
+      - follow: dataGateway->aiGateway
         label: agent's own grants
-        note: The stranger's question reaches our crossing on the agent's own grants.
+        note: It reaches our crossing on the agent's own grants.
       - follow: aiGateway->internalTools
         label: admitted like any run
         note: Admitted like any run of this agent — the catalogue does not know who is asking.
@@ -651,15 +647,24 @@ deviations:
     reason: >
       Band order is left-to-right by convention; here the vendor sits first because a maker
       reaches the platform first and the platform reaches back into us second. The same
-      break, for the same reason, as both SaaS siblings.
+      break, for the same reason, as the enterprise chat sibling; the API/SDK runtime, reached
+      through our own front end, keeps the conventional order.
   - subject: The tunnel absorbs secrets
     reason: >
-      Credential hardening (D3-CH) is embodied by the AI gateway, but the on-prem relay never
-      crosses it: the cached connection credentials sit on the tunnel host, so the pin lands
-      there and the issuance story lives in the governance call-out. The tunnel fronts
-      whatever we point it at: the source directly for an on-premises data gateway here, our
-      gateway for MCP-class backends on the enterprise chat drawing — the same component,
-      two chains.
+      Credential hardening (D3-CH) is embodied by the AI gateway, but the load-bearing secrets
+      on this path are the connection credentials cached on the tunnel host — the pin sits
+      where they live, and the issuance story in the governance call-out.
+  - subject: The tunnel is drawn; the public endpoint and the direct data path are recorded
+    reason: >
+      The target state is the SaaS siblings': the platform reaches our gateway through an
+      outbound-only tunnel on a host we run, so none of our endpoints faces the internet. Most
+      platforms in this class default instead to calling an internet-facing endpoint of ours,
+      admitted at our edge by their published IP ranges — the same crossing with a weaker
+      admission — and some offer private networking in place of a relay. The on-premises data
+      gateway can also carry the platform's standard data connectors straight to an
+      on-premises source, bypassing our gateway; where that path is used, the connector's
+      data-policy classification and the relay's scoped credentials are the only controls on
+      it, and it is recorded here rather than drawn as a second chain.
   - subject: The AI gateway does not reach a model provider
     reason: >
       Everywhere else in the catalogue the gateway is the model path, and the registered
