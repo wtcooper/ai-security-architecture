@@ -25,7 +25,7 @@ Sixteen of them, across three surfaces:
 | --- | --- | --- |
 | Endpoint | 5 | Third-party coding & desktop agents, First-party coding & desktop agents, Personal autonomous agent, Local model runtime, Browser AI agents & extensions |
 | Cloud & hosted | 7 | Single agent workflow, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline, Agent-to-agent federation |
-| Third-party SaaS | 4 | Enterprise AI chat with connectors, UI/low-code managed agent runtime, Vendor-hosted coding & desktop agent sessions, API/SDK managed agent runtime |
+| Third-party SaaS | 4 | Enterprise AI chat with connectors, UI/low-code managed agent runtime, Coding & desktop session managed agent runtime, API/SDK managed agent runtime |
 
 They are deliberately **not** all distinct in shape. The three cloud agent architectures are one
 drawing three times, differing only in their trigger and fan-out; the two coding-agent drawings

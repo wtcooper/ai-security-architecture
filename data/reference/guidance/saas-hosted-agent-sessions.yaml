@@ -1,4 +1,4 @@
-# Controls guidance for the vendor-hosted coding & desktop agent sessions archetype. Audience:
+# Controls guidance for the coding & desktop session managed agent runtime. Audience:
 # admins, architects and security teams. This is a use-mode pattern: the vendor runs the loop,
 # the model and the sandbox; the organisation configures the tenant, owns the repository host
 # and the gateway, and holds the merge gate. The build's derivation check fails this document
@@ -32,7 +32,7 @@ overview:
 
 items:
   - title: Decide hosted mode per group, and know who a session runs as
-    mitigations: [D3-MFA, D3-APA, D3-AA, D3-CR, cap-agent-tool-registry]
+    mitigations: [D3-APA, D3-AA, cap-agent-tool-registry]
     body:
       - >-
         Hosted mode is an organisation decision, not a user one: enable it per role or group
@@ -48,7 +48,7 @@ items:
         operation that would have stopped it.
 
   - title: Only a verified human with write access starts a session
-    mitigations: [D3-MFA, D3-APA, cap-input-guardrails]
+    mitigations: [D3-APA, cap-input-guardrails]
     body:
       - >-
         The repository host is the ingress. Require that a session can be started or steered
@@ -61,7 +61,7 @@ items:
         class began with text someone without commit access was allowed to write.
 
   - title: Lock the egress allowlist, and restrict what the permitted hosts may receive
-    mitigations: [cap-agent-egress-control, D3-NI, D3-EI, AML.M0028]
+    mitigations: [cap-agent-egress-control, D3-EI, AML.M0028]
     body:
       - >-
         Defaults diverge across products — off in the agent phase on some, allow-all on others
@@ -73,10 +73,11 @@ items:
         the repository host, the package registries — are write-capable, so restrict methods
         where the product allows and watch those destinations for writes. Confirm the sandbox
         is one microVM or container per session with no shared filesystem, reclaimed at the
-        end, and that snapshots have a retention you chose.
+        end, and that snapshots have a retention you chose. The connector and MCP allowlist
+        belongs in the same locked environment, where the session cannot widen it.
 
   - title: The repository credential never enters the sandbox
-    mitigations: [ D3-CTS, D3-TB, D3-CH, D3-CRO, AML.M0012 ]
+    mitigations: [ D3-CTS ]
     body:
       - >-
         Prefer the products whose proxy substitutes a scoped credential so the sandbox holds a
@@ -85,24 +86,25 @@ items:
         secrets removed before the agent runs, runtime secrets redacted from transcripts and
         commits — and treat environment variables as visible to the model and to everyone
         who shares the environment. Verify the plan-gated gaps per product: proxied API
-        credentials exist on some plans and not others, and customer-managed keys cover some
-        of the vendor's storage and not all of it.
+        credentials exist on some plans and not others.
 
   - title: One branch, no merge, a reviewer who is not the initiator
-    mitigations: [AML.M0028, AML.M0029, cap-agent-action-policy-enforcement, AML.M0037, AML.M0030, AML.M0033]
+    mitigations: [AML.M0028, AML.M0029]
     body:
       - >-
         The session's token reaches one repository and one branch; it cannot push the default
         branch, mark a pull request ready, approve it or merge it. A human reviews the draft,
         the initiator's approval does not count toward the required number, and any workflow
-        the pull request would fire waits for "approve and run". Disable automations that
+        the pull request would fire waits for "approve and run", and the agent's own
+        configuration — instruction files, hooks, setup scripts, MCP config — sits under
+        CODEOWNERS so a session cannot change what the next one runs. Disable automations that
         approve pull requests on the agent's behalf, and do not let an agent's replies fire
         comment-triggered automation. Inside the session, pick the permission mode the tenant
         allows — unattended runs have no prompt to answer, so remove bypass modes in managed
         settings and let the environment's allowlists do the work the prompt would have done.
 
   - title: The gate approves the output; contain the actions
-    mitigations: [AML.M0029, cap-output-guardrails, AML.M0004, AML.M0036]
+    mitigations: [AML.M0029, AML.M0036]
     body:
       - >-
         By the time a reviewer sees the draft, every tool call, fetch and push the session
@@ -113,35 +115,24 @@ items:
         and set session budgets and automation caps so a loop that re-triggers itself on its
         own replies has a ceiling.
 
-  - title: Admit the definition like code, and evaluate before it ships
-    mitigations: [cap-staged-rollout-gate, D3-RC, D3-RS, D3-RD, AML.M0008, cap-mcp-tool-integrity, D3-FIM, cap-ai-vendor-assessment]
-    body:
-      - >-
-        The session's definition is repository content — instruction files, setup scripts,
-        hooks, MCP configuration — plus the environment an owner defined. Version both through
-        review, roll back by revert, and run behavioural checks before a change to either
-        reaches the environment the team uses. Connector and MCP allowlists live in the
-        control plane, where the session cannot widen them; the runtime verifies nothing
-        about what a declared server serves, so admission is the whole control. Assess the
-        platform's isolation, retention and tenancy claims like any critical vendor dependency,
-        because none of them can be tested from your side.
-
   - title: The gateway is on the tool path only; re-obtain inference controls from the tenant
-    mitigations: [AML.M0028, cap-input-guardrails, D3-CI]
+    mitigations: [D3-CTS, AML.M0028, cap-input-guardrails, cap-ai-vendor-assessment]
     body:
       - >-
         No product in this class routes the hosted loop's inference through a customer
         gateway, including the variants that execute on your own runners. Admit the vendor's
-        connector service to your MCP servers at your gateway, on grants you issue, and
-        classify what returns before it goes back to a loop you cannot see. Everything the
-        gateway does for inference elsewhere — model allowlist, prompt inspection, spend
-        ceilings, the prompt-level record — has to be re-obtained as tenant configuration and
-        exported audit, and re-verified on a clock because the defaults move: egress on or off,
+        connector service to your MCP servers at your gateway, on per-user, audience-bound
+        grants you issue, scoped to a named server list, and classify what returns before it
+        goes back to a loop you cannot see. Everything the gateway does for inference
+        elsewhere — model allowlist, prompt inspection, spend ceilings, the prompt-level
+        record — has to be re-obtained as tenant configuration and exported audit. Assess the
+        platform's isolation, retention and tenancy claims like any critical vendor
+        dependency, and re-assess on a clock because the defaults move: egress on or off,
         self-approving automations, which plan gets proxied credentials, whether the
         compliance export covers this surface at all.
 
   - title: Fuse the exports, and define the stop with its delay
-    mitigations: [cap-agent-tracing, AML.M0024, D3-SFA, D3-ORA, cap-agent-kill-switch, D3-CR, AML.M0031]
+    mitigations: [cap-agent-tracing, cap-agent-kill-switch, AML.M0031]
     body:
       - >-
         Export the vendor's session logs and agentic audit events and fuse them with the

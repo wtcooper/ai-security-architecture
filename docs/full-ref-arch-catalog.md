@@ -104,7 +104,7 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | --- | --- | --- | --- |
 | 1 | Enterprise AI chat with connectors | `archEnterpriseAiChat` | `saas-enterprise-ai-chat.yaml` |
 | 2 | UI/low-code managed agent runtime | `archLowCodeAgentBuilder` | `saas-low-code-agent-builder.yaml` |
-| 3 | Vendor-hosted coding & desktop agent sessions | `archHostedAgentSessions` | `saas-hosted-agent-sessions.yaml` |
+| 3 | Coding & desktop session managed agent runtime | `archHostedAgentSessions` | `saas-hosted-agent-sessions.yaml` |
 | 4 | API/SDK managed agent runtime | `archManagedAgentRuntime` | `saas-managed-agent-runtime.yaml` |
 
 - The managed agent runtime moved from Cloud & hosted to SaaS — it is a vendor-operated
@@ -112,7 +112,8 @@ workflow with a different tool set, a single node, or a control drawn as a place
   Copilot Studio / Foundry class) vs **API/SDK** (Anthropic managed agents, the OpenAI Agents
   API, hyperscaler SDK runtimes).
 
-- **Vendor-hosted coding & desktop agent sessions** (added 2026-09-17) is where the hosted
+- **Coding & desktop session managed agent runtime** (added 2026-09-17 as *Vendor-hosted
+  coding & desktop agent sessions*, renamed 2026-09-24) is where the hosted
   coding products went. They had been mapped onto the API/SDK runtime, whose entry path — a
   customer-owned application front end with identity binding, an engineer-authored definition,
   custom tools executed in our code — none of them has. The 2026-09-01 review's MR-01 verdict

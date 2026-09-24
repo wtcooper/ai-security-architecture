@@ -678,7 +678,7 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- |
 | Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
 | Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
-| Third-party SaaS | 4 — Enterprise AI chat with connectors, Vendor-hosted coding & desktop agent sessions, UI/low-code managed agent runtime, API/SDK managed agent runtime |
+| Third-party SaaS | 4 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime |
 
 ### 4a. Risks no architecture pins — 2 of 36
 
@@ -907,23 +907,23 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
 | Enterprise AI chat with connectors | Supply-chain assurance | governance | (none) |
 | Enterprise AI chat with connectors | Observability & response | governance | (none) |
-| Vendor-hosted coding & desktop agent sessions | Remote device | service | `componentAgentUserQuery` |
-| Vendor-hosted coding & desktop agent sessions | Local applications | service | `componentApplication` |
-| Vendor-hosted coding & desktop agent sessions | Source control | service | `componentDataSources` |
-| Vendor-hosted coding & desktop agent sessions | Managed runtime | provider | `componentReasoningCore` |
-| Vendor-hosted coding & desktop agent sessions | Native tools | provider | `componentTools` |
-| Vendor-hosted coding & desktop agent sessions | Vendor service | provider | `componentApplication` |
-| Vendor-hosted coding & desktop agent sessions | AI gateway | service | (none) |
-| Vendor-hosted coding & desktop agent sessions | Tool services | service | `componentTools` |
-| Vendor-hosted coding & desktop agent sessions | Enterprise data | external | `componentDataSources` |
-| Vendor-hosted coding & desktop agent sessions | Public package sources | external | (none) |
-| Vendor-hosted coding & desktop agent sessions | Downstream services | external | `componentDataSources` |
-| Vendor-hosted coding & desktop agent sessions | Tool services | service | `componentTools` |
-| Vendor-hosted coding & desktop agent sessions | Identity services | governance | (none) |
-| Vendor-hosted coding & desktop agent sessions | Secrets & key management | governance | (none) |
-| Vendor-hosted coding & desktop agent sessions | Policy & authorization | governance | (none) |
-| Vendor-hosted coding & desktop agent sessions | Supply-chain assurance | governance | (none) |
-| Vendor-hosted coding & desktop agent sessions | Observability & response | governance | (none) |
+| Coding & desktop session managed agent runtime | Remote device | service | `componentAgentUserQuery` |
+| Coding & desktop session managed agent runtime | Local applications | service | `componentApplication` |
+| Coding & desktop session managed agent runtime | Source control | service | `componentDataSources` |
+| Coding & desktop session managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
+| Coding & desktop session managed agent runtime | Native tools | provider | `componentTools` |
+| Coding & desktop session managed agent runtime | Vendor service | provider | `componentApplication` |
+| Coding & desktop session managed agent runtime | AI gateway | service | (none) |
+| Coding & desktop session managed agent runtime | Tool services | service | `componentTools` |
+| Coding & desktop session managed agent runtime | Enterprise data | external | `componentDataSources` |
+| Coding & desktop session managed agent runtime | Public package sources | external | (none) |
+| Coding & desktop session managed agent runtime | Downstream services | external | `componentDataSources` |
+| Coding & desktop session managed agent runtime | Tool services | service | `componentTools` |
+| Coding & desktop session managed agent runtime | Identity services | governance | (none) |
+| Coding & desktop session managed agent runtime | Secrets & key management | governance | (none) |
+| Coding & desktop session managed agent runtime | Policy & authorization | governance | (none) |
+| Coding & desktop session managed agent runtime | Supply-chain assurance | governance | (none) |
+| Coding & desktop session managed agent runtime | Observability & response | governance | (none) |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
@@ -960,7 +960,7 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- | --- |
 | Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | Browser AI agents & extensions |
 | Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
-| Third-party SaaS | Enterprise AI chat with connectors, Vendor-hosted coding & desktop agent sessions, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
+| Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
 
 ### 5a. Documents
 
@@ -978,9 +978,9 @@ Highlights below are Google's original mapping, not ours.
 | Local model runtime | use | draft | 4 | _none_ |
 | Personal autonomous agent | use | draft | 7 | File Analysis, Restrict Library Loading |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
-| Vendor-hosted coding & desktop agent sessions | use | draft | 9 | _none_ |
+| Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 9 | Execution Isolation, Agent Egress Control, Network Isolation, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components, Credential Transmission Scoping, Token Binding, Tool and MCP Server Integrity, File Integrity Monitoring |
+| API/SDK managed agent runtime | hybrid | draft | 9 | Execution Isolation, Agent Egress Control |
 
 ### 5b. AI tooling registry
 
@@ -991,27 +991,27 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
 | Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 28/28 | _none_ |  |
 | Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Claude Cowork in the cloud | anthropic | Vendor-hosted coding & desktop agent sessions | 2026-09 | 15/38 | Agent Authentication, Credential Hardening, Credential Rotation, Encrypt Sensitive Information, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components, Input Screening Guardrails, AI Vendor Risk Assessment, Configuration Inventory, Output Content Safety Guardrails, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Tool and MCP Server Integrity, File Integrity Monitoring, Staged Rollout and Rollback Gate, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Agent Execution Tracing, Operational Risk Assessment |  |
+| Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 10/14 | Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent Authentication, AI Vendor Risk Assessment |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 38/38 | _none_ |  |
+| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
-| Cursor Cloud Agents | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Grok Bot | cursor | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Grok Bot | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| GitHub Copilot cloud agent | github | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 36/36 | _none_ |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 19/38 | Multi-factor Authentication, Access Policy Administration, Agent and Tool Registry, Staged Rollout and Rollback Gate, Validate AI Model, Restore Configuration, Restore Software, Restore Database, Input Screening Guardrails, AI Vendor Risk Assessment, Output Content Safety Guardrails, Memory Hardening, Operational Risk Assessment, Limit AI Service Query Volume and Rate, Limit AI Workload Resource Consumption, Agent Action Policy Enforcement, AI Agent Authority Expansion Controls, Restrict AI Agent Tool Invocation on Untrusted Data, Input and Output Validation for AI Agent Components |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 10/16 | Multi-factor Authentication, Agent and Tool Registry, Staged Rollout and Rollback Gate, Agent Action Policy Enforcement, Memory Hardening, Input Screening Guardrails |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 36/36 | _none_ |  |
-| Codex cloud | openai | Vendor-hosted coding & desktop agent sessions | 2026-09 | 38/38 | _none_ |  |
+| Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 39/39 | _none_ |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 25/25 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 36/36 | _none_ |  |
@@ -1021,7 +1021,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 - MITRE D3FEND 1.6.0: 44 canonical entries.
 - MITRE ATLAS 2026.09: 32 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
-- 447 tool-mitigation rows require reassessment after migration.
+- 347 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |

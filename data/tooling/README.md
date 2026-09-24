@@ -97,8 +97,8 @@ Applied by the `tooling-onboard` skill under `.claude/skills/`:
    that cannot be verified is `coverage: unknown`, never a guess.
 3. Choose the architecture by surface class (coding shells → third-party coding agent;
    vendor-hosted coding sessions started from a local harness, the vendor's web or chat surfaces,
-   a repository event or a schedule → hosted agent sessions; programmatic API/SDK runtimes →
-   managed agent runtime; chat and add-ins → enterprise AI chat; autonomous
+   a repository event or a schedule → coding & desktop session managed agent runtime;
+   programmatic API/SDK runtimes → API/SDK managed agent runtime; chat and add-ins → enterprise AI chat; autonomous
    personal agents → personal agent), and write `controls[]` only for its pins.
 4. Record `asOf`, a `verified` date per control, advisories from 2025–26, and the docs index.
 
