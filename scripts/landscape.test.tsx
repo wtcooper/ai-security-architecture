@@ -4,23 +4,20 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { dataset, landscape, mitigations } from "../src/lib/data";
 import { loadLandscape, resolvePlacement } from "./lib/landscape";
-import { aiKindOf, coverageOf, isAiSpecific, parents, placementOf, tilesFor, tilesInCell, tilesInGroup } from "../src/components/landscape/model";
+import { aiKindOf, coverageOf, isAiSpecific, parents, placementOf, tilesFor, tilesInGroup } from "../src/components/landscape/model";
 import { DomainPoster } from "../src/components/landscape/DomainPoster";
-import { AssetFunctionMatrix } from "../src/components/landscape/AssetFunctionMatrix";
-import { LayerStack } from "../src/components/landscape/LayerStack";
 
 const parentIds = new Set(parents.map((m) => m.id));
 const tiles = (html: string) => [...html.matchAll(/data-tile="([^"]+)"/g)].map((m) => m[1]);
 const draw = (viewId: string, overlay: boolean, surface: string | null = null, aiOnly = false) => {
   const view = landscape.views.find((v) => v.id === viewId)!;
   const props = { view, tiles: tilesFor(surface, overlay, aiOnly), surface, aiOnly, overlay, selected: null, onSelect: () => {} };
-  const el = viewId === "matrix" ? <AssetFunctionMatrix {...props} /> : viewId === "layers" ? <LayerStack {...props} /> : <DomainPoster {...props} />;
-  return renderToStaticMarkup(el);
+  return renderToStaticMarkup(<DomainPoster {...props} />);
 };
 
 test("the landscape compiles from YAML exactly as the dataset carries it", async () => {
   assert.deepEqual(await loadLandscape(process.cwd(), parentIds), dataset.landscape);
-  assert.equal(landscape.views.length, 3);
+  assert.deepEqual(landscape.views.map((v) => v.id), ["domains"]);
   await assert.rejects(loadLandscape(process.cwd(), new Set([...parentIds, "D3-NEW"])), /D3-NEW has no landscape placement/);
 });
 
@@ -35,8 +32,7 @@ test("every MITRE parent has one resolvable home per view; specialisations are n
       const placed = resolvePlacement(view, landscape.placements[m.id][view.id]);
       assert.ok(placed, `${m.id} in ${view.id}`);
       const p = placementOf(view, m.id);
-      if (view.kind === "matrix") assert.deepEqual(placed, { row: p.a, column: p.b });
-      else assert.deepEqual(placed, p.b ? { group: p.a, lane: p.b } : { group: p.a });
+      assert.deepEqual(placed, p.b ? { group: p.a, lane: p.b } : { group: p.a });
     }
   }
   const domains = landscape.views.find((v) => v.id === "domains")!;
@@ -54,14 +50,9 @@ test("each drawing shows every parent exactly once, and a surface filter keeps o
       assert.deepEqual([...onSurface].sort(), parents.filter((m) => m.surfaces[s.id]?.applies).map((m) => m.id).sort(), `${view.id} ${s.id}`);
     }
   }
-  const matrix = landscape.views.find((v) => v.id === "matrix")!;
+  const domains = landscape.views.find((v) => v.id === "domains")!;
   const all = tilesFor(null, false);
-  const cells = matrix.rows!.flatMap((r) => matrix.columns!.map((c) => tilesInCell(matrix, all, r.id, c.id).length));
-  assert.equal(cells.reduce((a, b) => a + b, 0), parents.length);
-  assert.ok(cells.some((n) => n === 0), "the matrix has structural gaps to show");
-  assert.match(draw("matrix", false), /none in catalogue/);
-  const layers = landscape.views.find((v) => v.id === "layers")!;
-  assert.equal(layers.groups!.reduce((n, g) => n + tilesInGroup(layers, all, g.id).length, 0), parents.length);
+  assert.equal(domains.groups!.reduce((n, g) => n + tilesInGroup(domains, all, g.id).length, 0), parents.length);
 });
 
 test("the org overlay tints tiles and adds coverage without changing which tiles are drawn", () => {

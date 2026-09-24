@@ -114,7 +114,7 @@ export function ArchitecturesBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`${landscape.views.length} enterprise landscape views · ${archetypesInOrder.length} application archetypes · authored`}
+        eyebrow={`${landscape.views.length} enterprise landscape view${landscape.views.length === 1 ? "" : "s"} · ${archetypesInOrder.length} application archetypes · authored`}
         title="Reference architectures"
         lead="Target-state architectures in the reference-architecture grammar the industry actually reads: mitigation blocks connected by typed data paths, the mitigations to deploy numbered onto the drawing, the risks tagged where they surface, and a numbered walkthrough paired with its sequence diagram. Built to be copied, not audited against."
         aside={<OverlayToggle />}
@@ -159,11 +159,7 @@ export function ArchitecturesBrowser() {
             <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">{landscapeView.description}</p>
             <p className="mt-2 flex flex-wrap gap-x-3 text-[11.5px] text-ink-3">
               <span>{parents.length} MITRE parent capabilities</span>
-              {landscapeView.kind === "matrix" ? (
-                <span>{landscapeView.rows!.length} asset classes × {landscapeView.columns!.length} functions</span>
-              ) : (
-                <span>{landscapeView.groups!.length} groups</span>
-              )}
+              <span>{landscapeView.groups!.length} groups</span>
               <span>{landscapeView.basis}</span>
             </p>
           </div>

@@ -63,12 +63,6 @@ export const tilesInGroup = (view: LandscapeView, tiles: Tile[], group: string, 
     return p.a === group && (lane === undefined || p.b === lane);
   });
 
-export const tilesInCell = (view: LandscapeView, tiles: Tile[], row: string, column: string) =>
-  tiles.filter((t) => {
-    const p = placementOf(view, t.id);
-    return p.a === row && p.b === column;
-  });
-
 export type Coverage = Record<Exclude<DisplayStatus, "unmapped">, number> & { total: number };
 
 /** How a set of tiles reads with the overlay on; every tile has a status, absent records are not assessed. */
