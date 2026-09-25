@@ -1,0 +1,757 @@
+# GitHub MCP server — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: the built-in GitHub MCP server as wired into Copilot Chat on github.com (seven fixed skills), the Copilot
+# cloud agent (repository-scoped read-only token) and Copilot CLI is recorded on those entities, not here; the GitHub
+# MCP Registry (github.com/mcp) is a discovery catalogue, not this server; community GitHub MCP servers built on the
+# public API are not GitHub's product. The exported Go library is "unstable" and not an entity.
+# 2026-09-25: onboarded toolGithubMcpServer on archRemoteMcpServer against the MITRE capability rules; every
+# github.com and docs.github.com page cited answered 200 with no redirect except configuring-rate-limits
+# (enterprise-server@latest lands on @3.22);
+# docs.github.com/en/apps/using-github-apps/suspending-a-github-app-installation 404s (not cited; suspension is on
+# reviewing-and-modifying-installed-github-apps). Behaviour the docs do not state (the `http` command's
+# --listen-host default, no Origin check and CORS *, --log-file / --enable-command-logging, job-log downloads) was
+# read in the source on main (v1.12.2, commit 85598ba). docs.github.com's enterprise
+# configuration page says an unprefixed GHES host "defaults to http://"; the README and source refuse scheme-less and
+# non-HTTPS hosts — both recorded on D3-MAN.
+vendor: github
+family: GitHub MCP server
+tools:
+  - id: toolGithubMcpServer
+    name: GitHub MCP server
+    surfaceClasses:
+      - remoteMcpServer
+      - selfHostedServer
+    variants:
+      - name: Remote GitHub MCP server (api.githubcopilot.com/mcp; GHE.com at copilot-api.<subdomain>.ghe.com/mcp)
+        class: remoteMcpServer
+        url: https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md
+      - name: Local server — stdio binary or container (ghcr.io/github/github-mcp-server); the only option for GHES
+        class: selfHostedServer
+        url: https://github.com/github/github-mcp-server
+      - name: Self-hosted Streamable HTTP mode (`github-mcp-server http`, port 8082)
+        class: selfHostedServer
+        url: https://github.com/github/github-mcp-server/blob/main/docs/streamable-http.md
+    architecture: archRemoteMcpServer
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        GitHub's own MCP server: tools, resources and prompts over repositories, issues, pull requests, Actions, code
+        security, projects and more, grouped into toolsets. One open-source Go codebase (MIT, v1.12.2 on 2026-09-16)
+        ships as a local stdio binary and container, a self-hosted Streamable HTTP server, and — bound into GitHub's
+        infrastructure from an internal repository — the hosted remote server at https://api.githubcopilot.com/mcp/,
+        which adds remote-only toolsets (Copilot Spaces, support-docs search, handing work to the Copilot cloud agent).
+      - >-
+        No model runs in it. Every tool call becomes a GitHub REST or GraphQL call made with the caller's own GitHub
+        credential — OAuth user token, fine-grained or classic PAT, or GitHub App installation token — so the caller
+        can reach nothing it could not reach through the API; results and the tool descriptions land in the consuming
+        agent's model context. The remote server is stateless since the 2026-07 protocol revision and supports GHE.com
+        (data residency); GitHub Enterprise Server is local-only.
+      - >-
+        Governance sits in GitHub, not in the server: the "MCP servers in Copilot" policy for Copilot hosts, OAuth app
+        and GitHub App approval for third-party hosts, PAT policies for tokens, SAML SSO as an overlay. GitHub states
+        there is no single toggle for all GitHub MCP server traffic and that MCP calls appear in the audit log only as
+        ordinary API calls. Callers choose toolsets, read-only and lockdown mode by header or URL (remote) or flag
+        (local).
+    facts:
+      - label: Plans
+        value: >-
+          Available to all GitHub users regardless of plan; each tool inherits its feature's licence (cloud agent
+          tools need a paid Copilot licence). Members of Copilot Business or Enterprise organizations need the "MCP
+          servers in Copilot" policy enabled to use it from Copilot.
+        url: >-
+          https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/set-up-the-github-mcp-server
+      - label: Inference & routing
+        value: >-
+          None in the server. Tool calls are executed as GitHub API calls with the caller's token against
+          api.github.com (or the --gh-host GHES / ghe.com host); the consuming agent's own model reads the results.
+        url: https://github.com/github/github-mcp-server/blob/main/docs/policies-and-governance.md
+      - label: Data leaving the device
+        value: >-
+          Local: GitHub API traffic from the host to the configured GitHub host only. Remote: MCP requests and results
+          transit api.githubcopilot.com, which reads method and tool headers "for logging and secret scanning";
+          repository content returned becomes part of the caller's model context at that agent's vendor.
+        url: https://github.blog/changelog/2026-07-23-github-mcp-server-supports-the-next-mcp-specification/
+      - label: Retention & training
+        value: >-
+          Not stated for the server on the pages fetched. The remote server keeps no protocol session state since the
+          2026-07 stateless change (no session database writes or reads); the underlying API activity is in the
+          organization's GitHub audit log.
+        url: https://github.blog/changelog/2026-07-23-github-mcp-server-supports-the-next-mcp-specification/
+      - label: Docs index
+        value: >-
+          github/github-mcp-server README and docs/ (remote server, server configuration, policies and governance,
+          scope filtering, OAuth login, GitHub App auth, Streamable HTTP, host integration); docs.github.com "About
+          Model Context Protocol".
+        url: https://docs.github.com/en/copilot/concepts/context/mcp
+      - label: Endpoints
+        value: >-
+          https://api.githubcopilot.com/mcp/ with /readonly, /insiders, /x/all and /x/{toolset} path variants;
+          https://copilot-api.<subdomain>.ghe.com/mcp for GHE.com; GHES "does not support remote MCP server hosting".
+        url: >-
+          https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/enterprise-configuration
+      - label: Releases
+        value: >-
+          Tagged releases on GitHub (v1.12.2, 2026-09-16), container ghcr.io/github/github-mcp-server signed with cosign,
+          binaries with build-provenance attestations; listed in the MCP registry as io.github.github/github-mcp-server.
+        url: https://github.com/github/github-mcp-server/releases
+      - label: Secret push protection
+        value: >-
+          For public repositories and private repositories covered by GitHub Advanced Security, push protection blocks
+          secrets in AI-generated tool inputs and actions taken through the server.
+        url: https://docs.github.com/en/copilot/concepts/context/mcp
+    items:
+      - title: Authentication paths and the policy that governs each
+        body:
+          - "Remote server: OAuth through the host's registered OAuth App or GitHub App (OAuth app access restrictions,
+            or GitHub App installation), a PAT in the Authorization header (PAT policies), or a GitHub App installation
+            token. The server \"does not provide Authentication services\" and accepts any valid GitHub access token;
+            dynamic client registration is not supported. SAML SSO applies to OAuth tokens and PATs, not installation
+            tokens."
+          - "Local server: OAuth login with the baked-in app on github.com (token in memory only; bring your own app
+            for GHES and ghe.com), GitHub App installation auth (--app-id, --app-installation-id,
+            --app-private-key-path), or GITHUB_PERSONAL_ACCESS_TOKEN, which takes precedence. With Enterprise Managed
+            Users, PAT use is disabled by default unless an enterprise administrator enables it."
+        links:
+          - title: Policies & governance for the GitHub MCP server
+            url: https://github.com/github/github-mcp-server/blob/main/docs/policies-and-governance.md
+          - title: Host integration guide (any valid access token; no dynamic client registration)
+            url: https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md
+          - title: Local server OAuth login
+            url: https://github.com/github/github-mcp-server/blob/main/docs/oauth-login.md
+      - title: Tool exposure — toolsets, tools, read-only, lockdown
+        body:
+          - "Remote: X-MCP-Toolsets, X-MCP-Tools, X-MCP-Exclude-Tools, X-MCP-Readonly, X-MCP-Lockdown and
+            X-MCP-Insiders headers, or /x/{toolset}/readonly style URLs. Local: --toolsets, --tools, --exclude-tools,
+            --read-only, --lockdown-mode, --insiders (GITHUB_* environment equivalents). Default toolsets: context,
+            issues, pull_requests, repos, users. Read-only overrides everything; exclude-tools overrides toolsets and
+            tools."
+          - "Lockdown mode surfaces public-repository content only from users with push access (github-actions[bot] and
+            copilot always trusted); GitHub calls it \"a best-effort content filter, not a security boundary\". In HTTP
+            mode the operator's --lockdown-mode is an upper bound the header cannot relax."
+        links:
+          - title: Server configuration guide
+            url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+          - title: Remote server — toolsets, headers and URL paths
+            url: https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md
+    riskNotes:
+      - risk: riskPromptInjection
+        note: >-
+          Issues, pull requests, comments and commits in public repositories are attacker-writable text the server
+          returns into the caller's context. Invariant Labs (May 2025) showed a public issue steering an agent to copy
+          private-repository data into a public pull request through this server — a token with both public and private
+          reach is the whole exploit. Lockdown mode filters authors without push access but is best-effort by GitHub's
+          own statement.
+      - risk: riskToolRegistryTampering
+        note: >-
+          The remote server's tools change as GitHub redeploys, with no version a consumer can pin; renamed tools resolve
+          silently through deprecation aliases; on a local server anyone who can write github-mcp-server-config.json
+          beside the binary or set GITHUB_MCP_TOOL_*_DESCRIPTION variables rewrites the descriptions the model reads.
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          The caller's GitHub token is relayed to GitHub's API and any valid GitHub token is accepted, so a token minted
+          for one host app works through the server for every tool its scopes allow; the delegation is the full
+          user's, bounded only by token scope, SSO authorization and organization approvals.
+      - risk: riskCrossTenantCredentialPropagation
+        note: >-
+          CVE-2026-48529: in self-hosted HTTP mode with lockdown on, the repository-access cache was a process-wide
+          singleton holding the first user's GraphQL client, so later users' access checks ran on that user's
+          credentials (fixed 1.1.2). A multi-user HTTP deployment is exactly where per-caller isolation lives in code.
+      - risk: riskEconomicDenialOfWallet
+        note: >-
+          Quotas are GitHub's per-identity API limits, shared by every app and token acting for the same user, so one
+          looping agent drains the person's budget; CVE-2026-47427 let an unauthenticated malformed completion/complete
+          request crash a self-hosted server (fixed 1.1.0).
+      - risk: riskMCPTransportHijacking
+        note: >-
+          The self-hosted `http` command serves plain HTTP and binds every interface unless --listen-host is set, with
+          CORS open to any origin by design; the delete_repository confirmation is carried as client-held state sealed
+          with GITHUB_MCP_SERVER_MRTR_STATE_KEY, which must stay secret and identical across replicas.
+      - risk: riskZombieShadowMCPServers
+        note: >-
+          Anyone with a PAT can run the local server or point any host at the remote one; GitHub lists "Real-time list
+          of active MCP connections" among governance features not yet available, so long-lived PATs and approved host
+          apps are the grants to inventory.
+      - risk: riskStaleAgentIdentityBinding
+        note: >-
+          Classic PATs carry no expiry unless a lifetime policy is set, and revoking an SSO authorization or a
+          fine-grained PAT's organization access leaves the token valid on public and personal resources.
+    controls:
+      - mitigation: D3-CTS
+        coverage: partial
+        mechanism: >-
+          Accepts any valid GitHub access token (OAuth App or GitHub App user tokens, fine-grained and classic PATs,
+          GitHub App installation tokens) with no audience binding to the MCP endpoint and relays it to GitHub's API;
+          transmission is scoped by the token itself (fine-grained PAT resource owner and repositories, installation
+          repositories), SAML SSO authorization per organization, and the organization's PAT policies
+        steps:
+          - title: Admit only approved, resource-scoped tokens
+            body:
+              - >-
+                Enterprise > Policies > Personal access tokens: require administrator approval of fine-grained tokens,
+                restrict Tokens (classic) from organization resources and set maximum lifetimes, so the tokens hosts
+                present to the server are organization-approved and bound to one resource owner.
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+          - title: Keep SSO authorization per organization
+            body:
+              - >-
+                Enforce SAML SSO so every PAT must be authorized for each SSO-protected organization and every OAuth or
+                GitHub App sign-in needs an active SSO session before its token can reach that organization.
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/about-authentication-with-single-sign-on
+          - title: Name the resource in self-hosted metadata
+            body:
+              - >-
+                Run `github-mcp-server http --base-url https://mcp.example.com --base-path /mcp` so the Protected
+                Resource Metadata `resource` is this server's canonical URL, and leave --trust-proxy-headers off
+                unless a trusted proxy sets X-Forwarded-Host.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/streamable-http.md
+        note: >-
+          Partial by the D3-CTS rule on this drawing (scoped OAuth/PAT without audience binding): the remote server
+          "does not provide Authentication services" and hosts "may also supply any valid access token", so a GitHub
+          token minted for any OAuth App, GitHub App or PAT is accepted and no resource-indicator or audience check is
+          documented; the same token is valid at api.github.com and every other GitHub endpoint. The server forwards
+          the caller's token to GitHub's API — same issuer and resource owner, so not a cross-vendor passthrough, but
+          not a downstream-audience exchange either. What narrows transmission is the token: fine-grained PATs to one
+          resource owner and selected repositories, installation tokens to the installation's repositories, SSO
+          authorization per organization (not for installation tokens). Self-hosted HTTP mode advertises
+          github.com/login/oauth (or --authorization-server) and ignores X-Forwarded-* headers by default, so a client
+          cannot rewrite the metadata that names the authorization server.
+        verified: "2026-09-25"
+      - mitigation: AML.M0004
+        coverage: partial
+        mechanism: >-
+          Inherited GitHub API primary and secondary rate limits per user, OAuth/GitHub App and installation; no
+          MCP-specific per-client or per-tool quota documented for the remote server or settable in the binary; GHES
+          Management Console "Enable HTTP API Rate Limiting" when the local server targets GHES
+        steps:
+          - title: Give unattended callers their own rate budget
+            body:
+              - >-
+                GitHub allows 5,000 REST requests per hour per user (shared by every PAT and app acting for that user),
+                15,000 for apps and installations on an Enterprise Cloud organization, and secondary limits of 100
+                concurrent requests and 80 content-creating requests per minute; run agents on a GitHub App
+                installation so a looping agent exhausts its own budget, not a person's.
+            url: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+          - title: Set API limits on GitHub Enterprise Server
+            body:
+              - >-
+                Site admin > Management Console > Rate Limiting: select Enable HTTP API Rate Limiting and set the
+                limits the local server's calls will meet.
+            url: >-
+              https://docs.github.com/en/enterprise-server@3.22/admin/configuring-settings/configuring-user-applications-for-your-enterprise/configuring-rate-limits
+        note: >-
+          Partial by the AML.M0004 rule on this drawing (inherited platform API rate limits only): the server is
+          "subject to GitHub API rate limits based on authentication method" and documents nothing of its own. The
+          limits are per identity, not per MCP client, host or tool, and higher-limit apps draw down the same user's
+          budget, so one agent can starve the person's other tools; secondary limits "are subject to change without
+          notice". Remote-side throttling of the MCP endpoint itself is not documented. Per-client and per-tool quotas
+          in front of a self-hosted HTTP deployment are an MCP or API gateway's job.
+        verified: "2026-09-25"
+      - mitigation: D3-MAN
+        coverage: partial
+        mechanism: >-
+          HTTPS to api.githubcopilot.com/mcp; --gh-host / GITHUB_HOST must carry an https:// scheme (non-HTTPS refused
+          except loopback); bearer token on every request; no Origin validation (cross-origin protection deliberately
+          off, CORS *); self-hosted `http` command serves plain HTTP on :8082 on all interfaces unless --listen-host
+        steps:
+          - title: Set the GitHub host with an explicit https:// scheme
+            body:
+              - >-
+                Set GITHUB_HOST / --gh-host to https://<GHES host> or https://<subdomain>.ghe.com; the README says
+                non-HTTPS hosts are refused, while docs.github.com says an unprefixed host "defaults to http://", so
+                always write the scheme.
+            url: https://github.com/github/github-mcp-server
+          - title: Bind the HTTP server to loopback or behind a TLS proxy
+            body:
+              - >-
+                Start `github-mcp-server http --listen-host 127.0.0.1` (empty binds all interfaces) and terminate TLS at
+                a reverse proxy, advertising the HTTPS URL with --base-url.
+            url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
+          - title: Publish the container's OAuth callback to loopback only
+            body:
+              - >-
+                Run the container with -p 127.0.0.1:8085:8085 and GITHUB_OAUTH_CALLBACK_PORT=8085, never -p 8085:8085,
+                which would expose the authorization code to the network.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/oauth-login.md
+        note: >-
+          Partial by the D3-MAN rule on this drawing (HTTPS without Origin validation): the remote endpoint is HTTPS and
+          each request carries a bearer token GitHub validates, so the sender is authenticated per message; no replay
+          protection beyond token lifetime is documented. The server validates no Origin: the HTTP handler leaves
+          cross-origin protection unset and answers CORS with * on the reasoning that bearer tokens, not cookies,
+          leave nothing ambient for a rebinding page to ride. Local stdio has no listener except the OAuth loopback
+          callback (random port, or a fixed port that must be published to 127.0.0.1). The self-hosted `http` command
+          has no TLS option and binds every interface by default. The GHES scheme conflict between docs.github.com and
+          the README is recorded in the step; current source refuses both scheme-less and http:// hosts.
+        verified: "2026-09-25"
+      - mitigation: AML.M0028
+        coverage: native
+        mechanism: >-
+          Toolsets, tools, exclude-tools and read-only (GITHUB_TOOLSETS, GITHUB_TOOLS, GITHUB_EXCLUDE_TOOLS,
+          GITHUB_READ_ONLY / flags locally; X-MCP-* headers or /x/{toolset}/readonly URLs remotely); tool list filtered
+          by classic-PAT and --oauth-scopes scopes; per-call OAuth scope challenges (remote; `http --scope-challenge`);
+          every call authorized by GitHub's permission model as the caller
+        steps:
+          - title: Run the server read-only with named toolsets
+            body:
+              - >-
+                Start the local server with --read-only --toolsets repos,issues (or GITHUB_READ_ONLY=1 and
+                GITHUB_TOOLSETS) and --exclude-tools for anything never wanted; read-only removes write tools even when
+                requested, and exclusions beat toolsets and tools.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+          - title: Point remote clients at a read-only toolset URL
+            body:
+              - >-
+                Configure hosts with https://api.githubcopilot.com/mcp/x/{toolset}/readonly, or X-MCP-Toolsets with
+                X-MCP-Readonly: true, instead of the default URL.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md
+          - title: Narrow the token so the tool list follows it
+            body:
+              - >-
+                On the local OAuth login set --oauth-scopes (GITHUB_OAUTH_SCOPES), which narrows the grant and hides
+                tools needing other scopes; self-hosted HTTP deployments add --scope-challenge for 403 step-up
+                challenges.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/oauth-login.md
+          - title: Approve the permissions tokens carry
+            body:
+              - >-
+                Organization Settings > Personal access tokens > Settings: keep "Require administrator approval" for
+                fine-grained tokens and restrict classic tokens, so an owner reviews each token's repositories and
+                permissions before it reaches organization data.
+            url: >-
+              https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization
+        note: >-
+          Native by the tool-permission rule on this drawing (token-scope filtering plus toolset/read-only
+          configuration): tool exposure is set by toolset, tool and read-only, the list is filtered by the presenting
+          token's scopes, and the remote server answers a call needing more with an OAuth scope challenge whose scope
+          depends on the arguments (workflow only when a workflow file changes; delete_repo never in the default set);
+          GitHub's API then authorizes every call as the caller, outside the model. Boundaries: scope filtering covers
+          classic PATs and local OAuth scopes only — fine-grained PATs, GitHub App and installation tokens list every
+          tool and rely on API errors — and it fails open, showing all tools, if the scope lookup fails; public read
+          tools are always listed. OAuth scopes are coarse (repo is every private repository, read and write), so
+          minimal grants need fine-grained PATs or GitHub Apps. On the remote server toolsets and read-only are headers
+          or URL paths chosen by whoever writes the host's MCP configuration: the consuming organization cannot force
+          them, its enforceable ceiling is the token. Unknown toolset names are silently ignored. Lockdown mode is a
+          content filter, not a permission.
+        verified: "2026-09-25"
+      - mitigation: cap-mcp-tool-integrity
+        coverage: partial
+        mechanism: >-
+          Local: tagged releases, cosign-signed container images and build-provenance attestations; tool schemas
+          snapshotted in the repository and diffed on every pull request (MCP Server Diff workflow). Remote: updated
+          continuously from an internal repository with no version pin; deprecation aliases resolve renamed tools
+          silently; descriptions overridable by a local config file or environment variables
+        steps:
+          - title: Pin the local server to a release
+            body:
+              - >-
+                Run a tagged release binary or ghcr.io/github/github-mcp-server at a fixed version, referenced by digest,
+                rather than latest or a build of main, and upgrade deliberately.
+            url: https://github.com/github/github-mcp-server/releases
+          - title: Verify the image signature before admitting it
+            body:
+              - >-
+                The publish workflow signs each image digest with cosign (keyless, Sigstore) and the release workflow
+                attaches signed build-provenance attestations to binaries; verify them in the pipeline that admits the
+                server.
+            url: https://github.com/github/github-mcp-server/blob/main/.github/workflows/docker-publish.yml
+          - title: Lock the description overrides
+            body:
+              - >-
+                Keep github-mcp-server-config.json beside the binary absent or root-owned and unset
+                GITHUB_MCP_TOOL_*_DESCRIPTION variables, because both replace the tool descriptions the model reads.
+            url: https://github.com/github/github-mcp-server
+        note: >-
+          Partial by the MCP-integrity rule on this drawing (versioned local releases, unannounced remote changes): a
+          pinned, signed local release gives a fixed set of definitions, and GitHub tracks every tool schema in version
+          control (__toolsnaps__) and diffs the tool surface on each change. The remote server is "regularly
+          update[d]" from this code through an internal repository with no version field, deployment log or hash a
+          consumer can pin; insiders mode and feature flags change tools per request; renamed tools resolve silently
+          through deprecation aliases. Descriptions are rewritable by whoever controls the local config file or
+          environment. Hash pinning with alert-on-change stays an MCP-gateway job on the consumer side; Copilot's
+          allowlists and registry admit the server by URL or name only.
+        verified: "2026-09-25"
+      - mitigation: D3-SYSVA
+        coverage: native
+        mechanism: >-
+          CodeQL code scanning (Go, JavaScript, Actions) on every push and pull request, lint and end-to-end tests in
+          CI; coordinated disclosure to opensource-security@github.com; repository security advisories with CVEs
+        steps:
+          - title: Track the server's advisories against your version
+            body:
+              - >-
+                Review github/github-mcp-server Security > Advisories (GHSA-pjp5-fpmr-3349, GHSA-w4q6-qw23-4rg7) against
+                the release each self-hosted deployment runs.
+            url: https://github.com/github/github-mcp-server/security/advisories
+          - title: Report findings through coordinated disclosure
+            body:
+              - >-
+                Send vulnerabilities to opensource-security@github.com, not public issues; open-source repositories are
+                outside GitHub's bug bounty scope.
+            url: https://github.com/github/github-mcp-server/blob/main/SECURITY.md
+          - title: Confirm the publisher's code scanning
+            body:
+              - >-
+                The CodeQL workflow analyses Go, JavaScript and Actions on every push, pull request and manual run of
+                the main repository.
+            url: https://github.com/github/github-mcp-server/blob/main/.github/workflows/code-scanning.yml
+        note: >-
+          Native by the D3-SYSVA rule on this drawing (documented code scanning plus vulnerability disclosure): the
+          handlers — the same code the remote server is built from as a library — are scanned by CodeQL on every
+          change, GitHub runs coordinated disclosure, and two 2026 advisories with GitHub-assigned CVEs were published
+          with affected and patched ranges. Boundaries: the remote server's hosting wrapper lives in an internal
+          repository whose testing is not published; SECURITY.md puts open-source repositories outside the bug bounty
+          and the pages fetched do not say whether api.githubcopilot.com is in scope; no third-party assessment or
+          penetration test of the server is published. A self-hosted deployment's proxy, TLS and key handling are the
+          operator's to assess.
+        verified: "2026-09-25"
+      - mitigation: cap-data-access-governance
+        coverage: native
+        mechanism: >-
+          Every read and write is a GitHub API call as the presenting principal ("Users and apps cannot use an MCP
+          server to access more resources than they could otherwise access normally via the API"), under repository
+          roles, SAML SSO authorization, OAuth app access restrictions, GitHub App repository selection and
+          fine-grained PAT approval enforced by GitHub server-side; lockdown mode as a best-effort content filter
+        steps:
+          - title: Keep OAuth app access restrictions on
+            body:
+              - >-
+                Organization Settings > Third-party Access > OAuth app policy: keep restrictions enabled (the default for
+                new organizations) and approve each MCP host's OAuth app individually; unapproved apps get no API access
+                to private organization resources.
+            url: >-
+              https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions
+          - title: Install host GitHub Apps on selected repositories
+            body:
+              - >-
+                Organization Settings > Third-party Access > GitHub Apps > Configure: under Repository access choose Only
+                select repositories and review the permissions granted.
+            url: https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps
+          - title: Require approval of fine-grained tokens
+            body:
+              - >-
+                Organization Settings > Personal access tokens > Settings: Require administrator approval, and restrict
+                classic tokens, since classic tokens are never subject to approval.
+            url: >-
+              https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization
+          - title: Fix over-broad base permissions before agents surface them
+            body:
+              - >-
+                Organization Settings > Member privileges > Base permissions: set the lowest level members need;
+                internal repositories stay readable by every enterprise member regardless.
+            url: >-
+              https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/setting-base-permissions-for-an-organization
+        note: >-
+          Native by the retrieval rule on this drawing: the server holds no data and scopes nothing itself — every read
+          runs with the caller's own GitHub entitlements, and the organization's policies (SSO authorization per
+          organization, OAuth app restrictions, GitHub App repository selection, fine-grained PAT approval) are enforced
+          by GitHub on each call, remote or local. Boundaries: the bound is the caller's whole entitlement, so a token
+          reaching public and private repositories lets an injected agent carry data between them (Invariant Labs,
+          May 2025); lockdown mode hides public content from authors without push access but is "not a security
+          boundary"; privileged OAuth apps bypass OAuth restrictions; SSO does not apply to installation tokens; PATs
+          read public organization resources whatever the policy. GitHub offers no oversharing analysis for what the
+          server can reach, and whether an organization IP allow list sees the user's address or GitHub's for calls
+          through the remote server is not documented.
+        verified: "2026-09-25"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Local: OAuth login token held in memory only; GitHub App private key read from a mounted file
+          (--app-private-key-path; no inline-PEM flag) minting short-lived, auto-refreshed installation tokens;
+          otherwise a PAT in GITHUB_PERSONAL_ACCESS_TOKEN. Remote: stateless, stores no customer credential. The
+          caller's GitHub token is relayed to GitHub's API — no separate per-upstream credential
+        steps:
+          - title: Use OAuth login instead of a PAT on the local server
+            body:
+              - >-
+                Start `github-mcp-server stdio` with no GITHUB_PERSONAL_ACCESS_TOKEN set, so it runs the PKCE OAuth flow
+                and keeps the token in memory only (bring your own app with --oauth-client-id for GHES and ghe.com).
+            url: https://github.com/github/github-mcp-server/blob/main/docs/oauth-login.md
+          - title: Hold the GitHub App key as a read-only file
+            body:
+              - >-
+                For unattended use set --app-private-key-path to a read-only mounted PEM (preferred over
+                GITHUB_APP_PRIVATE_KEY), restrict access to the server process, and install the app only on the
+                repositories it needs.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/github-app-auth.md
+          - title: Cap PAT lifetimes where PATs remain
+            body:
+              - >-
+                Enterprise > Policies > Personal access tokens: "Set maximum lifetimes for personal access tokens" on
+                both the Fine-grained tokens and Tokens (classic) tabs; GitHub's governance page recommends 90 days at
+                most.
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+          - title: Keep the HTTP confirmation key in a secrets manager
+            body:
+              - >-
+                For self-hosted HTTP set GITHUB_MCP_SERVER_MRTR_STATE_KEY (32 random bytes, Base64) from a secrets
+                manager, identical on every replica; without it delete_repository is not exposed.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/streamable-http.md
+        note: >-
+          Partial by the D3-CH rule on this drawing: the pin's shape — one credential per upstream, never the caller's
+          token — does not hold, because the server's only upstream is GitHub (API, uploads, raw and the log-download
+          URLs it returns) and it calls it with the caller's own token; that keeps attribution on the user but is a
+          relay, not an exchange. Custody is well handled on the local OAuth and GitHub App paths (in-memory token, key
+          file off the command line, short-lived installation tokens, the authorization URL kept out of model context
+          by URL elicitation), but the most-documented path is a long-lived PAT in an environment variable or .env file
+          — some hosts need it hard-coded in config — and the baked-in OAuth client secret is public by design (PKCE
+          secures the flow). The remote server stores nothing; token custody is the host's.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-egress-control
+        coverage: notApplicable
+        mechanism: >-
+          The server's own outbound calls go only to the configured GitHub host (--gh-host derives the REST, GraphQL,
+          uploads, raw and OAuth endpoints; api.github.com by default) and the job-log download URLs GitHub's API
+          returns; it is a protected resource, not an authorization server, so it fetches no client metadata documents
+        evidence:
+          - title: Streamable HTTP server — protected resource, not the authorization server
+            url: https://github.com/github/github-mcp-server/blob/main/docs/streamable-http.md
+          - title: Local server OAuth login — endpoints derived from --gh-host
+            url: https://github.com/github/github-mcp-server/blob/main/docs/oauth-login.md
+          - title: Host integration guide — dynamic client registration not supported
+            url: https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md
+        note: >-
+          Not applicable by the egress rule on this drawing: the server makes no outbound calls beyond GitHub's own
+          endpoints, and its destinations follow from one setting, the GitHub host. There is no discovery-fetch SSRF
+          surface — GitHub's authorization server does the OAuth work and dynamic client registration is not
+          supported. Restricting a self-hosted deployment's network egress to that host is the operator's firewall or
+          egress-proxy job; the remote server's egress is GitHub's. The consuming agent's own egress belongs to that
+          agent's drawing.
+        verified: "2026-09-25"
+      - mitigation: AML.M0024
+        coverage: partial
+        mechanism: >-
+          Calls appear in the GitHub audit log as ordinary API activity attributable to the actor and the OAuth app,
+          GitHub App or token; "Enable API Request Events" streams security-relevant API requests; no MCP tool,
+          parameters or host in customer logs; self-hosted binary --log-file with --enable-command-logging records every
+          request and response locally
+        steps:
+          - title: Stream the audit log
+            body:
+              - >-
+                Enterprise > Settings > Audit log > Log streaming: configure a destination so API activity from MCP
+                hosts is kept beyond GitHub's own retention.
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+          - title: Include API request events
+            body:
+              - >-
+                Enterprise > Settings > Audit log > Settings > API Requests: select Enable API Request Events (limited to
+                security-relevant endpoints).
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+          - title: Log tool calls on a self-hosted server
+            body:
+              - >-
+                Start the server with --log-file <path> --enable-command-logging to write every MCP request and response
+                to that file, and ship it to the SIEM.
+            url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
+        note: >-
+          Partial by the telemetry rule on this drawing (API request logs without tool-call detail): GitHub states "MCP
+          traffic appears in standard GitHub audit logs as normal API calls" and that granular, action-by-action MCP
+          audit logs, per-tool or per-host dashboards and a list of active connections are not yet available. API
+          request streaming covers only security-relevant endpoints, so most reads leave no customer-visible record.
+          The self-hosted command log (flag help only, not in the docs) captures parameters but is a local file with no
+          tenant or delegation context. The remote server reads MCP headers "for logging and secret scanning" on
+          GitHub's side and exports none of it; Copilot Usage Records Streaming is not documented as covering this
+          server. Capture is not tamper resistance.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-kill-switch
+        coverage: native
+        mechanism: >-
+          Revocation that reaches issued tokens: Authentication security > revoke SSO authorizations (per user, per
+          credential type or bulk; Enterprise Managed Users can delete tokens outright); organization Personal access
+          tokens > Active tokens > Revoke; deny a previously approved OAuth app; suspend or uninstall a GitHub App;
+          "MCP servers in Copilot" disabled for Copilot hosts
+        steps:
+          - title: Revoke SSO authorizations or delete credentials
+            body:
+              - >-
+                Enterprise Settings > Authentication security: revoke SSO authorizations for one member, one credential
+                type (such as classic PATs) or all members; with Enterprise Managed Users, delete keys and tokens
+                outright. Organization owners have the same actions.
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/respond-to-incidents/revoke-authorizations-or-tokens
+          - title: Revoke a fine-grained token's organization access
+            body:
+              - >-
+                Organization Settings > Personal access tokens > Active tokens: select the token (filter by owner,
+                repository or permission) and click Revoke.
+            url: >-
+              https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/reviewing-and-revoking-personal-access-tokens-in-your-organization
+          - title: Cut off a host app
+            body:
+              - >-
+                Suspend or uninstall the host's GitHub App from the organization's installed apps, or deny its
+                previously approved OAuth app in the OAuth app policy.
+            url: https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps
+          - title: Switch MCP off for Copilot hosts
+            body:
+              - >-
+                Enterprise > AI controls > MCP: disable "MCP servers in Copilot", which blocks the GitHub MCP server,
+                remote and local, in the Copilot hosts it governs (not third-party hosts).
+            url: https://github.com/github/github-mcp-server/blob/main/docs/policies-and-governance.md
+        note: >-
+          Native by the kill-switch rule on this drawing: revocation reaches tokens already issued — the server is
+          stateless and GitHub authorizes every call, so a revoked SSO authorization, fine-grained PAT, OAuth app
+          approval or GitHub App installation fails the next tool call in every host, remote or local; no time bound is
+          published. Boundaries: GitHub says there is no single toggle for all GitHub MCP server traffic; "MCP servers
+          in Copilot" reaches Copilot hosts only, propagation delay not documented; revoking SSO authorization or a
+          PAT's organization access leaves the token working on public and personal resources, and outside Enterprise
+          Managed Users the token itself is not deleted; bulk actions do not touch GitHub App installation tokens. A
+          call already executing completes, and a local server process runs until its host stops it.
+        verified: "2026-09-25"
+      - mitigation: D3-AVE
+        coverage: native
+        mechanism: >-
+          Tagged releases; GHSAs with CVEs and affected/patched ranges for the Go module
+          github.com/github/github-mcp-server in the GitHub Advisory Database; weekly Dependabot updates for Go modules
+          (including the MCP go-sdk), the Docker base image and Actions
+        steps:
+          - title: Follow releases and upgrade the pinned version
+            body:
+              - >-
+                Watch github/github-mcp-server releases (v1.12.2 on 2026-09-16) and move self-hosted deployments to each
+                release that carries a security fix.
+            url: https://github.com/github/github-mcp-server/releases
+          - title: Match advisories to deployed versions
+            body:
+              - >-
+                Check each deployment against the Advisory Database entries: CVE-2026-48529 affects 0.22.0 up to 1.1.2,
+                CVE-2026-47427 versions before 1.1.0.
+            url: https://github.com/advisories/GHSA-pjp5-fpmr-3349
+        note: >-
+          Native by the D3-AVE rule on this drawing (releases, advisories and dependency scanning): the self-hosted
+          server has an enumerable patch stream — releases, reviewed GHSAs in the Advisory Database (so Dependabot
+          alerts fire for anything importing the module), and the publisher's own dependencies on weekly Dependabot
+          updates. Boundaries: the remote server is patched by GitHub with no customer-visible version or deployment
+          record; advisories in the MCP go-sdk are that SDK's maintainers' and surface here only as dependency bumps;
+          no SBOM appears on the pages fetched (third-party licence lists do).
+        verified: "2026-09-25"
+      - mitigation: D3-APA
+        coverage: partial
+        mechanism: >-
+          "MCP servers in Copilot" policy (Enterprise > AI controls > MCP; Copilot hosts only) with the registry
+          restriction and managed-settings allowlists; OAuth app access restrictions and GitHub App installation
+          approval for third-party hosts; PAT approval and classic-token restriction (PATs off by default for Enterprise
+          Managed Users); SAML SSO and, under Enterprise Managed Users with OIDC, the IdP's Conditional Access Policy
+        steps:
+          - title: Decide MCP for Copilot hosts at enterprise level
+            body:
+              - >-
+                Enterprise > AI controls > MCP: set "MCP servers in Copilot" for the enterprise rather than letting
+                organizations decide; it does not control the GitHub MCP server in third-party hosts.
+            url: >-
+              https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-enterprise-policies
+          - title: Approve third-party hosts one by one
+            body:
+              - >-
+                Keep OAuth app access restrictions enabled and approve each host's OAuth app; install host GitHub Apps
+                only where approved, on selected repositories.
+            url: >-
+              https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions
+          - title: Gate personal access tokens
+            body:
+              - >-
+                Organization Settings > Personal access tokens > Settings: Require administrator approval for
+                fine-grained tokens and restrict classic tokens from organization resources.
+            url: >-
+              https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization
+          - title: With Enterprise Managed Users, apply the IdP's conditional access
+            body:
+              - >-
+                Use OIDC SSO so GitHub applies the Entra ID Conditional Access Policy IP conditions to token use, and
+                leave PATs disabled unless needed.
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/configuring-authentication-for-enterprise-managed-users/about-support-for-your-idps-conditional-access-policy
+        note: >-
+          Partial by the D3-APA rule on this drawing: GitHub's governance page lists the levers and adds that "GitHub
+          does not provide a single toggle that blocks all GitHub MCP server traffic for every user". Each is enforced
+          server-side, but they decide different things: the MCP policy and the name-matched registry decide whether
+          Copilot hosts may run MCP servers; OAuth app and GitHub App approval decide which host apps reach
+          organization data, for all members rather than per group (privileged OAuth apps bypass); PAT approval decides
+          per token. None expresses "these groups may use this server under these conditions" the way the pin's IdP
+          registry does, and under Enterprise Managed Users GitHub enforces the IdP's IP conditions on token use but MFA
+          only at sign-in. The server itself is open to every GitHub account; the policies govern organization data.
+        verified: "2026-09-25"
+      - mitigation: D3-AA
+        coverage: native
+        mechanism: >-
+          GitHub App installation authentication: the local stdio server signs a JWT with the app's private key
+          (--app-id, --app-installation-id, --app-private-key-path / GITHUB_APP_*) and refreshes short-lived
+          installation tokens; the remote server accepts installation tokens ("similar to the OAuth 2.0 client
+          credentials flow"); permissions and repositories set per installation and approved by an organization owner
+        steps:
+          - title: Run unattended callers as a GitHub App installation
+            body:
+              - >-
+                Start `github-mcp-server stdio --app-id <id> --app-installation-id <id> --app-private-key-path
+                /secrets/app.pem` with the key mounted read-only; exactly one of PAT, OAuth or App auth may be set.
+            url: https://github.com/github/github-mcp-server/blob/main/docs/github-app-auth.md
+          - title: Limit the installation's reach
+            body:
+              - >-
+                In the installed app's settings choose Only select repositories and review Permissions, so the workload
+                holds narrower rights than any user.
+            url: https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps
+        note: >-
+          Native by the D3-AA rule on this drawing (GitHub App installation tokens with narrower scopes): an autonomous
+          workload authenticates as its own installation with a key-signed JWT and no user, with permissions and
+          repositories an organization owner approved; installations are listed in organization settings and revoked
+          by suspension or uninstall. Boundaries: installation auth is built into the local stdio server only — the
+          `http` command's clients must bring their own token; SSO enforcement does not apply to installation tokens;
+          the private key "can mint tokens for every repository and permission granted to the installation", so its
+          custody is the operator's; nothing forces agents onto an app rather than a PAT, which GitHub calls "not
+          recommended for production automation".
+        verified: "2026-09-25"
+    advisories:
+      - title: >-
+          CVE-2026-48529 — self-hosted HTTP mode with lockdown on ran every user's repository-access checks on the
+          first user's GraphQL client (GitHub-assigned; fixed 1.1.2)
+        url: https://github.com/advisories/GHSA-pjp5-fpmr-3349
+        date: "2026-06"
+      - title: >-
+          CVE-2026-47427 — nil pointer dereference in the completion/complete handler lets an unauthenticated request
+          crash the server (GitHub-assigned; fixed 1.1.0)
+        url: https://github.com/advisories/GHSA-w4q6-qw23-4rg7
+        date: "2026-07"
+      - title: >-
+          Invariant Labs research (no CVE) — a public-repository issue steers an agent using the GitHub MCP server to
+          leak private-repository data into a public pull request
+        url: https://invariantlabs.ai/blog/mcp-github-vulnerability
+        date: "2025-05"
+    sources:
+      - title: github/github-mcp-server README
+        url: https://github.com/github/github-mcp-server
+      - title: Policies & governance for the GitHub MCP server
+        url: https://github.com/github/github-mcp-server/blob/main/docs/policies-and-governance.md
+      - title: Remote GitHub MCP server
+        url: https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md
+      - title: Server configuration guide
+        url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+      - title: PAT scope filtering
+        url: https://github.com/github/github-mcp-server/blob/main/docs/scope-filtering.md
+      - title: Streamable HTTP server
+        url: https://github.com/github/github-mcp-server/blob/main/docs/streamable-http.md
+      - title: GitHub App authentication
+        url: https://github.com/github/github-mcp-server/blob/main/docs/github-app-auth.md
+      - title: Host integration guide
+        url: https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md
+      - title: Tool renaming guide (deprecation aliases)
+        url: https://github.com/github/github-mcp-server/blob/main/docs/tool-renaming.md
+      - title: Security policy
+        url: https://github.com/github/github-mcp-server/blob/main/SECURITY.md
+      - title: MCP Server Diff workflow (tool-surface diff on every pull request)
+        url: https://github.com/github/github-mcp-server/blob/main/.github/workflows/mcp-diff.yml
+      - title: Setting up the GitHub MCP server (docs.github.com)
+        url: >-
+          https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/set-up-the-github-mcp-server
+      - title: Configuring the GitHub MCP server for GitHub Enterprise
+        url: >-
+          https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp-in-your-ide/enterprise-configuration
+      - title: MCP server usage in your company
+        url: https://docs.github.com/en/copilot/concepts/enterprise/mcp-management
+      - title: Remote GitHub MCP Server is now generally available (changelog, 2025-09-04)
+        url: https://github.blog/changelog/2025-09-04-remote-github-mcp-server-is-now-generally-available/
