@@ -12,6 +12,11 @@ export const SURFACE_CLASS_META: Record<ToolSurfaceClass, { label: string; short
   saasChat: { label: "Vendor chat (SaaS)", short: "Chat" },
   officeAddin: { label: "Office add-in", short: "Office" },
   ciIntegration: { label: "CI / code review", short: "CI" },
+  sdkFramework: { label: "Library / framework", short: "SDK" },
+  selfHostedServer: { label: "Self-hosted server", short: "Server" },
+  remoteMcpServer: { label: "Remote MCP server", short: "MCP" },
+  saasAgentPlatform: { label: "Vendor-hosted agent platform", short: "SaaS agent" },
+  agenticBrowser: { label: "Agentic browser", short: "Browser" },
 };
 
 export const SURFACE_CLASS_ORDER = Object.keys(SURFACE_CLASS_META) as ToolSurfaceClass[];

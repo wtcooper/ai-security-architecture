@@ -662,7 +662,12 @@ export type ToolSurfaceClass =
   | "chatIntegration"
   | "saasChat"
   | "officeAddin"
-  | "ciIntegration";
+  | "ciIntegration"
+  | "sdkFramework"
+  | "selfHostedServer"
+  | "remoteMcpServer"
+  | "saasAgentPlatform"
+  | "agenticBrowser";
 export const TOOL_SURFACE_CLASSES: ToolSurfaceClass[] = [
   "endpointCli",
   "ideExtension",
@@ -674,6 +679,11 @@ export const TOOL_SURFACE_CLASSES: ToolSurfaceClass[] = [
   "saasChat",
   "officeAddin",
   "ciIntegration",
+  "sdkFramework",
+  "selfHostedServer",
+  "remoteMcpServer",
+  "saasAgentPlatform",
+  "agenticBrowser",
 ];
 
 export type ToolStatus = "ga" | "beta" | "preview" | "announced";

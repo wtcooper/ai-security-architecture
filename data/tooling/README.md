@@ -11,9 +11,11 @@ entries older than six months and lists the pinned mitigations each tool does no
 
 ## Inclusion rule
 
-An entity is a product surface that runs an agent, hosts one, or feeds one with organisation
-data, from the four vendors in scope (Anthropic, OpenAI, Cursor, GitHub) plus the open-source
-personal-agent exemplars the guidance layer already cites. A product's UI shells (CLI, IDE
+An entity is a product surface that runs an agent, hosts one, serves or trains a model for one, or
+feeds one with organisation data: the products of the original vendors in scope (Anthropic,
+OpenAI, Cursor, GitHub, Google) plus every named product in a reference architecture's
+`exemplars` block. Generic classes and protocols in that block (a specification, "homegrown
+harnesses") are not entities; a class exemplar is represented by one named product. A product's UI shells (CLI, IDE
 extension, desktop app) are `variants` of one entity; a shell becomes its own entity only when
 its reference architecture or its admin mechanism differs (a cloud-hosted variant of a local
 agent is the usual case).
@@ -28,7 +30,8 @@ tools:
     name: Claude Code
     surfaceClasses: [endpointCli, ideExtension, desktopApp]
     #  endpointCli | ideExtension | desktopApp | browserExtension | cloudAgent |
-    #  managedRuntime | chatIntegration | saasChat | officeAddin | ciIntegration
+    #  managedRuntime | chatIntegration | saasChat | officeAddin | ciIntegration |
+    #  sdkFramework | selfHostedServer | remoteMcpServer | saasAgentPlatform | agenticBrowser
     variants:                           # named shells, each with a class from surfaceClasses
       - { name: Claude Code CLI, class: endpointCli, url: ... }
     architecture: archCodingAgentThirdParty   # the ONE architecture it instantiates; its pins are the reference control set
@@ -129,7 +132,6 @@ Recorded here when a surface is deliberately left out, with the reason.
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.
 - OpenAI ChatGPT Atlas — winding down; browser features moved into the ChatGPT app's built-in browser (recorded as a variant of toolChatgptDesktop). The Help Center article "Evolving Atlas into ChatGPT" returned 403 to automated fetch on 2026-09-10.
 - OpenAI Agent Builder — scheduled shutdown 2026-11-30 per developers.openai.com/api/docs/guides/agent-builder; ChatKit and the Agents SDK are the replacement.
-- ChatGPT Workspace Agents (research preview) — no official page resolved on 2026-09-10 (openai.com/business/workspace-agents and openai.com/index 403, learn.chatgpt.com guesses 404, help.openai.com 403); only a "Workspace Agents" access-token scope on learn.chatgpt.com/docs/enterprise/access-tokens confirms it exists, so no control row could be verified.
 - GitHub Copilot Extensions (GitHub Apps) — retired 2025-11-10; superseded by MCP servers.
 - GitHub `gh copilot` CLI extension — retired 2025-10-25; Copilot CLI (toolCopilotCli) replaces it.
 - GitHub Copilot Workspace — discontinued; no product page to verify.

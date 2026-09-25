@@ -1,6 +1,7 @@
 # Claude for Microsoft 365 — one entity per product × reference architecture. Facts are dated
 # (asOf) and cite the vendor's own documentation; re-verify before enforcing.
 # Schema: data/tooling/README.md.
+# 2026-09-25: re-verified toolClaudeM365 (all 16 rows) against the MITRE capability rules; every claude.com/docs/office-agents, platform.claude.com, support.claude.com, learn.microsoft.com and github.com page cited answered 200 with no redirect (support.claude.com/en/articles/12650343-use-claude-for-excel now redirects to claude.com/docs/office-agents/excel and is not cited); trust.anthropic.com renders client-side and was read in a browser; the add-in pages call Compliance API coverage "public beta" while the Compliance API reference calls it stable; the add-in pages no longer say Claude for Excel is not ZDR-eligible.
 vendor: anthropic
 family: Claude for Microsoft 365
 tools:
@@ -34,10 +35,12 @@ tools:
       - >-
         Admins deploy and gate the add-ins through the Microsoft 365 Admin Center and toggle "Let Claude work
         across apps" at Organization settings > Office agents. Governance gaps are explicit in the docs: the
-        add-ins do not inherit custom data retention, activity is not in Enterprise audit logs or data
-        exports, and Compliance API transcript coverage (office_agents/* local sessions) is in beta. A custom
-        OpenTelemetry collector receives the full unfiltered audit trail (prompts, tool inputs and outputs,
-        document references) from each user's browser and must support CORS.
+        add-ins do not inherit custom data retention and activity is not in Enterprise audit logs or data
+        exports. Enterprise organisations with the Compliance API get add-in session transcripts
+        (office_agents/* local sessions), which the add-in pages label public beta and the Compliance API
+        reference calls stable. A custom OpenTelemetry collector receives the full unfiltered audit trail
+        (prompts, tool inputs and outputs, document references) from each user's browser and must support
+        CORS.
     facts:
       - label: Plans
         value: >-
@@ -57,9 +60,10 @@ tools:
         url: https://claude.com/docs/office-agents/data-storage
       - label: Retention & training
         value: >-
-          Backend inputs and outputs deleted within 30 days; local history keeps the 50 most recent
-          conversations per user, organisation and app with no admin retention window; not ZDR-eligible
-          (Claude for Excel); commercial terms, no training.
+          Backend inputs and outputs deleted within 30 days per the add-in pages, but Enterprise organisations
+          with the Compliance API have add-in session transcripts held 6 years by default (Compliance API
+          reference); local history keeps the 50 most recent conversations per user, organisation and app
+          with no admin retention window; commercial terms, no training.
         url: https://claude.com/docs/office-agents/data-storage
       - label: Docs index
         value: >-
@@ -86,32 +90,52 @@ tools:
           activity is absent from Enterprise audit logs and exports.
     controls:
       - mitigation: D3-MFA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Claude account sign-in (SSO/SCIM at the organisation) plus Microsoft 365 Admin Center add-in
-          assignment; Entra ID identity in third-party mode
+          Require SSO for Claude (claude.ai/admin-settings/organization, Authentication) governs the add-in's
+          claude.ai sign-in and Migrate accounts using your domain sends new domain accounts through SSO; the
+          Outlook Graph token and the Entra-based third-party paths sign in with Microsoft Entra ID through
+          nested app authentication, governed by Conditional Access on the Claude for Office enterprise app or
+          on your own app registration (graph_client_id)
         steps:
-          - title: Assign the add-ins to users
+          - title: Require SSO so the IdP's MFA governs the add-in sign-in
             body:
-              - Manage member access to the Excel, PowerPoint, Word and Outlook add-ins through the Microsoft
-                365 Admin Center and grant the one-time Microsoft Graph consent for Outlook.
-            url: https://claude.com/docs/office-agents/overview
-          - title: Enforce the Claude organisation
-            body:
-              - Require SSO for Claude and use domain capture so the add-in sign-in lands in the managed
-                organisation.
+              - >-
+                After verifying your domain, turn on Require SSO for Claude in the Authentication section at
+                claude.ai/admin-settings/organization and enforce MFA on the Claude application in your IdP;
+                the add-in's Log in button completes that claude.ai sign-in in a browser window.
             url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-        evidence: []
+          - title: Consolidate accounts on your domain
+            body:
+              - >-
+                On Enterprise, turn on Migrate accounts using your domain under Organization settings >
+                Organization and access > Security, so new accounts on the domain go straight through SSO into
+                the workspace instead of becoming personal accounts.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+          - title: Put Conditional Access on the Entra sign-in
+            body:
+              - >-
+                Target an MFA Conditional Access policy at the Claude for Office enterprise application
+                (c2995f31-11e7-4882-b7a7-ef9def0a0266), or at your own single-tenant app set with
+                graph_client_id, which governs the Outlook Graph token and Entra sign-in on Bedrock direct,
+                keyless Foundry and gateway_auth_source=entra deployments.
+            url: https://claude.com/docs/office-agents/outlook
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial on the MFA rule applied to every vendor: Anthropic has no organisation "require 2FA" switch of
+          its own, so the second factor is whatever the IdP enforces — behind Require SSO on the Claude-account
+          path, and Entra Conditional Access for the Graph token and the Entra-based third-party paths. Paths
+          with no interactive factor: a static gateway token or Foundry API key delivered in the manifest,
+          Entra extension attributes or a bootstrap response authenticates inference with no login, and Vertex
+          AI direct relies on the user's Google account. The Claude-account access and refresh tokens sit in
+          the webview's localStorage; no session lifetime is documented, so a sign-in lasts until the user
+          signs out or the profile's storage is cleared. Personal Pro and Max accounts can sign in to the same
+          AppSource add-in: domain capture covers only verified domains, and the tenant-restriction header at
+          the proxy is the network-side backstop.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -131,44 +155,62 @@ tools:
                   url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
               verified: 2026-09-10
       - mitigation: D3-APA
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          Claude account sign-in (SSO/SCIM at the organisation) plus Microsoft 365 Admin Center add-in
-          assignment; Entra ID identity in third-party mode; The add-in reads only the currently open file or
-          the open email; Outlook access is bounded by the Graph consent granted by the admin
+          Microsoft 365 admin center Settings > Integrated apps assigns the add-ins to everyone, users or
+          groups, with self-install closed by Let users access the Office Store (Word, Excel, PowerPoint) and
+          the My Marketplace Apps / My Custom Apps / My ReadWriteMailbox Apps user roles (Outlook); a
+          documented tenant-wide Microsoft Graph admin consent to Anthropic's Claude for Office Entra app
+          (c2995f31-11e7-4882-b7a7-ef9def0a0266) or your own single-tenant app via graph_client_id; per-user
+          disabled_features / access_policies through Entra extension attributes or a bootstrap endpoint in
+          custom-manifest deployments; claude.ai Organization settings > Office agents is org-wide only
         steps:
-          - title: Assign the add-ins to users
+          - title: Assign the add-ins to groups
             body:
-              - Manage member access to the Excel, PowerPoint, Word and Outlook add-ins through the Microsoft
-                365 Admin Center and grant the one-time Microsoft Graph consent for Outlook.
-            url: https://claude.com/docs/office-agents/overview
-          - title: Enforce the Claude organisation
+              - >-
+                In the Microsoft 365 admin center go to Settings > Integrated apps > Add-ins > Deploy Add-in,
+                choose the Claude listing or upload the manifest, and assign Specific users/groups; group
+                membership then grants and removes access.
+            url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-deployment-of-add-ins
+          - title: Close the self-install paths
             body:
-              - Require SSO for Claude and use domain capture so the add-in sign-in lands in the managed
-                organisation.
-            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Scope Graph consent
+              - >-
+                Clear Let users access the Office Store at Settings > Org settings > Services > User owned apps
+                and services, and for Outlook remove My Marketplace Apps, My Custom Apps and My
+                ReadWriteMailbox Apps from the default role assignment policy in the Exchange admin center.
+            url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-addins-in-the-admin-center
+          - title: Decide the Graph consent
             body:
-              - Grant only the Microsoft Graph permissions the Outlook add-in documents during the one-time
-                admin consent.
+              - >-
+                Have a Global Administrator open the documented admin-consent link for Claude for Office
+                (Mail.ReadWrite, Calendars.Read, User.Read, offline_access), or register a single-tenant app
+                with those delegated permissions and set graph_client_id on the manifest URL instead.
             url: https://claude.com/docs/office-agents/outlook
-        evidence: []
+          - title: Set per-user feature policy
+            body:
+              - >-
+                In custom-manifest deployments deliver disabled_features (comma-separated) through Entra ID
+                extension attributes, or access_policies statements through the manifest or a bootstrap
+                endpoint, so features vary by user.
+            url: https://claude.com/docs/office-agents/third-party-platforms
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
-
-
-          [capabilityDataAccessGovernance] Delegated: the open document is what the user already has; Outlook
-          retrieval carries the Graph consent the admin granted, so that consent, not the user's mailbox
-          permissions, is the ceiling.
+          Native by the rule, with the add-in's authorization plane split across two consoles. The Microsoft
+          side decides who may run the add-in (group assignment; unassigned users are blocked only once the
+          Office Store setting and the Exchange add-in user roles, both on by default, are closed) and whether
+          the Graph grant exists at all: Anthropic documents the consent URL, the app ID, the verified publisher
+          (Anthropic, PBC), the redirect URIs and the delegated scopes, plus a single-tenant alternative whose
+          approval and Conditional Access the organisation owns (the setup plugin's manifest command also lists
+          People.Read for that app; the Outlook page lists four scopes). That consent is the Microsoft 365
+          tenant's own control. The claude.ai side is coarse: Organization settings > Office agents switches
+          cross-app mode for everyone, Enterprise custom roles do not list the add-ins, and model access
+          follows the member's role. Per-user feature policy exists only where configuration keys are
+          delivered, which the docs describe for third-party-platform deployments.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
             - capabilityDataAccessGovernance
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -204,30 +246,44 @@ tools:
                 ceiling.
               verified: 2026-09-10
       - mitigation: D3-OTF
-        coverage: external
+        coverage: partial
         mechanism: >-
-          pivot.claude.ai and the model endpoint are ordinary HTTPS from the Office webview;
-          tenant-restriction header and IP allowlisting apply to claude.ai traffic
+          The anthropic-allowed-org-ids tenant-restriction header, injected by the organisation's proxy on
+          claude.ai, api.anthropic.com, claude.com and anthropic.com (Enterprise), covers the add-in's
+          Claude-account sign-in and inference; the per-path domain allowlist; disabled_features web_search
+          removes Anthropic-served web search and fetch in custom-manifest deployments
         steps:
-          - title: Keep add-in traffic in the corporate tenant
+          - title: Inject the tenant-restriction header
             body:
-              - Inject anthropic-allowed-org-ids at the proxy for claude.ai and api.anthropic.com so the
-                add-in cannot sign in to a personal organisation.
+              - >-
+                Have your proxy add anthropic-allowed-org-ids with your organisation UUIDs on claude.ai,
+                api.anthropic.com, claude.com and anthropic.com; a request for any other organisation fails
+                with 403 tenant_restriction_violation.
             url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
-          - title: Allowlist the documented destinations
+          - title: Allow only the documented destinations
             body:
-              - Permit pivot.claude.ai plus your model endpoint and collector; in third-party mode
-                conversation content goes only to your Vertex, Bedrock, Azure or gateway endpoint.
-            url: https://claude.com/docs/office-agents/data-storage
+              - >-
+                Permit pivot.claude.ai, claude.ai, api.anthropic.com, appsforoffice.microsoft.com and, when
+                used, login.microsoftonline.com, graph.microsoft.com, mcp-proxy.anthropic.com and
+                bridge.claudeusercontent.com (Claude account), or your gateway and cloud endpoints (third-party
+                platform).
+            url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Keep web search inside your network
+            body:
+              - >-
+                In custom-manifest deployments set disabled_features=web_search and attach an in-network search
+                tool with mcp_servers, so search queries stop going to Anthropic's search provider.
+            url: https://claude.com/docs/office-agents/third-party-platforms
         note: >-
-          The add-in itself offers nothing; the vendor-side tenant restriction is credited on the Claude chat
-          entity, and the proxy that enforces the header is the organisation's SSE. Confirm the Office webview
-          honours the proxy before relying on it.
-
-
-          [capabilityEgressControl] The add-in documents a small fixed destination set; it enforces no policy
-          of its own, and the Office webview's traffic must be bounded by the proxy or SSE.
-        verified: 2026-09-10
+          Partial by the rule: Anthropic enforces the tenant block server-side and the organisation's SSE
+          injects the header. The header article lists web, desktop, API-key and OAuth-token access but does
+          not name the Office add-ins, so confirm with a personal-organisation sign-in through the proxy. A
+          customer proxy does not control egress Anthropic performs for the add-in: built-in web search and web
+          fetch (Anthropic's search provider), code-execution containers and MCP connector calls through
+          mcp-proxy.anthropic.com leave from Anthropic's cloud. On third-party platforms inference goes only to
+          the organisation's gateway or cloud endpoint, so the header is moot there and the gateway is the
+          egress point.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySse
@@ -239,7 +295,7 @@ tools:
               mechanism: >-
                 pivot.claude.ai and the model endpoint are ordinary HTTPS from the Office webview;
                 tenant-restriction header and IP allowlisting apply to claude.ai traffic
-              steps: &a1
+              steps:
                 - title: Keep add-in traffic in the corporate tenant
                   body:
                     - Inject anthropic-allowed-org-ids at the proxy for claude.ai and api.anthropic.com so the add-in cannot
@@ -267,27 +323,44 @@ tools:
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
-          Custom OpenTelemetry collector receives prompts and document references for detection; no inline
-          blocking; Inference hooks are documented for claude.ai, Cowork and Claude Code, not M365
+          access_policies statements that deny addin.access on an open document, or file.upload of an attached
+          file, by Microsoft Purview sensitivity label GUID (mip_label_guid), label name or file path, with an
+          allow-list mode and fail-closed handling of unreadable labels (manifest or bootstrap); Microsoft's
+          Allow programmatic access = false label option keeps Outlook add-ins off encrypted mail; no content
+          detection, and Inference hooks do not cover the add-ins
         steps:
-          - title: Route the audit trail to your DLP pipeline
+          - title: Block the add-in on labelled content
             body:
-              - Configure a custom collector endpoint (CORS-enabled, forwarding to your backend) so spans with
-                prompt content and tool inputs reach your inspection tooling.
-            url: https://claude.com/docs/office-agents/enterprise-readiness
-          - title: Treat pivot.claude.ai as a governed SaaS origin
+              - >-
+                Add access_policies deny statements for addin.access with an open_file resource matching your
+                restricted sublabel GUIDs, and for file.upload with an uploaded_file resource on the same
+                labels, and deliver the array in the manifest or bootstrap response.
+            url: https://github.com/anthropics/financial-services/blob/main/claude-for-msft-365-install/commands/access-policies.md
+          - title: Keep Outlook add-ins off encrypted mail
             body:
-              - Apply your web-content policy to https://pivot.claude.ai and the configured model endpoint.
-            url: https://claude.com/docs/office-agents/data-storage
+              - >-
+                For sensitivity labels that encrypt mail, set the Allow programmatic access custom policy option
+                to false; Outlook add-ins do not activate on those items.
+            url: https://learn.microsoft.com/en-us/office/dev/add-ins/outlook/outlook-add-ins-overview
+          - title: Scan transcripts after the fact
+            body:
+              - >-
+                Pull office_agents/* local session transcripts from the Compliance API into your DLP scanner;
+                this detects after the prompt was sent and cannot block it.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
         note: >-
-          The telemetry collector sees prompts after the fact; it cannot block. Preventive DLP on document and
-          mail content is the endpoint DLP or SSE product, and Inference hooks are not documented for the
-          add-ins.
-
-
-          [capabilityBrowserDetectionResponse] No vendor inspection point; Office on the web places the add-in
-          in a third-party frame that browsers partition.
-        verified: 2026-09-10
+          Partial by the rule: label-based restriction without content detection. access_policies reads the
+          label, not the content — an unlabelled document carrying card numbers passes unless labels are
+          allow-listed (the first allow flips that scope to default-deny, and exists: false refuses unlabelled
+          files). It gates only the open document and uploaded attachments: text the user types or pastes,
+          mail read through Graph (thread retrieval, search, attachments read inline), connector results and
+          cross-app context are not documented as label-checked, and the key is documented for manifest and
+          bootstrap delivery, not the AppSource install with Claude sign-in. Microsoft Purview lists DLP and
+          sensitivity labels as unsupported for Anthropic Claude interactions, Anthropic's Inference hooks
+          govern claude.ai, Cowork, Claude Code and Claude Tag but not the add-ins, and the OpenTelemetry
+          collector and Compliance API see prompts only after they were sent. Preventive inspection of typed
+          content is the endpoint DLP or SSE product's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -300,7 +373,7 @@ tools:
                 Custom OpenTelemetry collector receives prompts and document references for detection; no
                 inline blocking; Inference hooks are documented for claude.ai, Cowork and Claude Code, not
                 M365
-              steps: &a1
+              steps:
                 - title: Route the audit trail to your DLP pipeline
                   body:
                     - Configure a custom collector endpoint (CORS-enabled, forwarding to your backend) so spans with prompt
@@ -325,16 +398,29 @@ tools:
                   url: https://claude.com/docs/office-agents/data-storage
               verified: 2026-09-10
       - mitigation: cap-input-guardrails
-        coverage: partial
-        mechanism: Anthropic model-side safeguards only; document and email content is the untrusted input
-        note: No admin-tunable detector; the vendor documents no add-in-specific injection controls.
-        steps: &a1
-          - title: Limit exposure through connectors and scope
-            body:
-              - Enable only vetted connectors and skills for the add-ins and keep cross-app mode off where email content
-                should not steer spreadsheet edits.
-            url: https://claude.com/docs/office-agents/work-across-apps
-        verified: 2026-09-10
+        coverage: external
+        mechanism: >-
+          Nothing in the product: no documented screening of document, mail, attachment or connector content,
+          and Inference hooks do not cover the add-ins; on third-party platforms every model request passes the
+          organisation's LLM gateway (gateway_url, or azure_base_url for Foundry), the inline point for an AI
+          gateway's injection classifier
+        evidence:
+          - title: Use Claude for Outlook — prompt injection risks (user review only, no screening setting)
+            url: https://claude.com/docs/office-agents/outlook
+          - title: Inference hooks — governed surfaces are claude.ai, Cowork, Claude Code and Claude Tag
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+          - title: Use Claude for M365 with third-party platforms — LLM gateway path and gateway requirements
+            url: https://claude.com/docs/office-agents/third-party-platforms
+        note: >-
+          External by the rule: nothing in the product screens returned content. An AI gateway placed on the
+          third-party gateway path sees every /v1/messages request — open-document content, email bodies and
+          tool results included — and can block it; the Claude-account path goes straight to api.anthropic.com
+          with no inspection point the organisation runs. The Excel, PowerPoint and Word pages say risky
+          operations ask for confirmation and the Outlook page tells users to review drafts from untrusted
+          senders; confirmation gates the action, not the input, and is credited under human approval.
+          Turning off Let Claude work across apps (Organization settings > Office agents) stops an email's
+          instructions steering an edit in another app — containment, not screening.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -344,30 +430,34 @@ tools:
               coverage: partial
               mechanism: Anthropic model-side safeguards only; document and email content is the untrusted input
               note: No admin-tunable detector; the vendor documents no add-in-specific injection controls.
-              steps: *a1
+              steps:
+                - title: Limit exposure through connectors and scope
+                  body:
+                    - Enable only vetted connectors and skills for the add-ins and keep cross-app mode off where email content
+                      should not steer spreadsheet edits.
+                  url: https://claude.com/docs/office-agents/work-across-apps
               verified: 2026-09-10
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: >-
-          Trust Center first-party and third-party architecture overviews for Claude for Excel, PowerPoint,
-          Word
-        steps:
-          - title: Attach the architecture diagrams
-            body:
-              - Download the deployment-mode architecture overview from the Trust Center resources linked on
-                the enterprise-readiness page.
+          Anthropic Trust Center lists "Claude for Excel, Powerpoint, Word: Architecture Overview" for
+          Anthropic first party and for third party platforms; the add-in docs publish data-storage,
+          network-allowlist and sign-in-redirect detail for the assessment
+        evidence:
+          - title: Anthropic Trust Center resources (add-in architecture overviews, read in a browser)
+            url: https://trust.anthropic.com/resources
+          - title: Security, admin auditability, and analytics (links the architecture overviews)
             url: https://claude.com/docs/office-agents/enterprise-readiness
-          - title: Pull usage into your platform
-            body:
-              - Use the Claude Enterprise Analytics API for per-surface aggregates and the admin console usage
-                CSV for per-seat spend.
-            url: https://claude.com/docs/office-agents/enterprise-readiness
-          - title: Record the documented gaps
-            body:
-              - Note in posture checks that the add-ins ignore custom retention and are excluded from
-                Enterprise audit logs and data exports; use the Trust Center diagrams for the deployment mode.
-            url: https://claude.com/docs/office-agents/work-across-apps
-        verified: 2026-09-10
+          - title: Data storage and retention (device stores, what leaves the device)
+            url: https://claude.com/docs/office-agents/data-storage
+        note: >-
+          External: the assessment is the organisation's TPRM process. The Trust Center resources page lists
+          the two add-in architecture overviews and a Microsoft 365 connector data-flow document; no
+          Outlook-specific overview is listed. Re-assess when the documented gaps move: add-in activity is
+          excluded from Enterprise audit logs and data exports, custom retention is not inherited, Outlook is
+          beta, and the Compliance API coverage label differs between pages. On Azure AI Foundry, Anthropic
+          processes prompts as an independent processor for Microsoft, which the assessment should record.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiTprm
@@ -380,7 +470,7 @@ tools:
               mechanism: >-
                 Trust Center first-party and third-party architecture overviews for Claude for Excel,
                 PowerPoint, Word
-              steps: &a1
+              steps:
                 - title: Attach the architecture diagrams
                   body:
                     - Download the deployment-mode architecture overview from the Trust Center resources linked on the
@@ -412,21 +502,43 @@ tools:
               note: "Readback only, and incomplete: add-in activity is absent from audit logs and exports, so an SSPM
                 product cannot evidence add-in use from the vendor's streams."
               verified: 2026-09-10
-        note: "[capabilityVendorAssurance] Readback only, and incomplete: add-in activity is absent from audit
-          logs and exports, so an SSPM product cannot evidence add-in use from the vendor's streams."
       - mitigation: AML.M0029
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          Word edits land as tracked changes and comments for review; Outlook drafts are left unsent; no
-          admin-configurable approval gates
+          The add-in asks the user to confirm an operation it judges risky before it runs, and Outlook drafts
+          and invites land unsent (no Mail.Send scope); OpenTelemetry records each tool call's
+          tool.accept_decision (manual, auto_accept standing approval, deferred); connector Tool permissions
+          (Always allow / Needs approval / Blocked) are set org-wide on claude.ai; no add-in setting forces
+          per-action approval
         steps:
-          - title: Keep humans on the output
+          - title: Set connector write tools to Needs approval
             body:
-              - Rely on tracked changes in Word and draft-only mail in Outlook; there is no org-level approval
-                setting for add-in actions.
-            url: https://claude.com/docs/office-agents/overview
-        evidence: []
+              - >-
+                As an Owner, open each connector's Tool permissions under Customize > Connectors and set
+                write/delete tools to Needs approval or Blocked; the restriction applies org-wide and users
+                can't override it.
+            url: https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
+          - title: Audit how each action was approved
+            body:
+              - >-
+                Configure the custom collector and alert on agent.tool_execution spans with tool.read_write
+                write and tool.accept_decision auto_accept.
+            url: https://claude.com/docs/office-agents/opentelemetry
+          - title: Keep sending with the user
+            body:
+              - >-
+                Rely on the Outlook add-in's scope set (Mail.ReadWrite, Calendars.Read, User.Read,
+                offline_access, no Mail.Send): every draft and invite lands unsent for the user to send.
+            url: https://claude.com/docs/office-agents/outlook
+        note: >-
+          Partial by the rule: a present human confirms, but the administrator cannot require it and users can
+          hold a standing approval (auto_accept). The add-in decides which operations count as risky; Word's
+          tracked-changes mode is one the user enters, not a policy; Outlook's move and flag operations run
+          through Graph under Mail.ReadWrite and whether they prompt is not documented. Connector Tool
+          permissions are documented for claude.ai connectors; the add-in pages say connectors are enabled in
+          Claude settings but do not state that Needs approval is enforced in the add-ins. On third-party
+          platforms connectors are "coming soon" and admin-attached mcp_servers carry no approval setting.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -445,22 +557,42 @@ tools:
                   url: https://claude.com/docs/office-agents/overview
               verified: 2026-09-10
       - mitigation: D3-AA
-        coverage: unknown
-        steps: []
-        evidence:
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
-            url: https://claude.com/docs/office-agents/overview
+        coverage: partial
+        mechanism: >-
+          Microsoft Graph access runs on one tenant-wide admin-consented delegated grant to the Claude for
+          Office enterprise app (or your own app), listed and revocable at Entra ID > Enterprise apps > All
+          applications > Claude for Office > Permissions, with per-user tokens issued by Entra through nested
+          app authentication; MCP connector authorisations are per user and per device, held in the add-in's
+          browser storage, with no admin listing or revoke
+        steps:
+          - title: Review and revoke the Graph grant
+            body:
+              - >-
+                In Entra ID > Enterprise apps > All applications open Claude for Office
+                (c2995f31-11e7-4882-b7a7-ef9def0a0266), review Permissions > Admin consent, and revoke there or
+                with Remove-MgOauth2PermissionGrant.
+            url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions
+          - title: Issue connector credentials from your own endpoint
+            body:
+              - >-
+                In custom-manifest deployments provision connectors per user with mcp_servers from a bootstrap
+                endpoint, so the credential is one your endpoint issues and expires rather than a user's OAuth
+                grant on the device.
+            url: https://claude.com/docs/office-agents/third-party-platforms
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] The add-in runs entirely as the signed-in user; there is no workload or
-          agent identity to govern.
+          Partial by the rule: the Graph grant is inventoried and revocable in Entra and new tokens stop when
+          the Entra account is disabled, but it is one grant for every user, and a revoke stops new token
+          issuance only — access tokens already cached in each user's MSAL store run to their expiry. Connector
+          grants are the gap: the add-in keeps connector client registrations (claude-mcp-gateways, scoped to
+          the connector's address rather than the user, so shared by anyone on the same OS account) and their
+          tokens in local storage on each device; nothing in the claude.ai console or the Compliance API lists
+          them, only the user (or the connector's own IdP) can revoke them, no expiry is documented, and
+          removing a Claude seat leaves them on disk.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityNhiManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityNhiManagement
               coverage: none
@@ -472,22 +604,32 @@ tools:
                   url: https://claude.com/docs/office-agents/overview
               verified: 2026-09-10
       - mitigation: D3-DI
-        coverage: partial
-        verified: "2026-09-10"
+        coverage: external
         mechanism: >-
-          Backend deletion within 30 days; local store bounded to 50 conversations per user/org/app; users can
-          delete all history; export scripts before reimaging; no admin retention setting
-        steps:
-          - title: Manage the device-side store
-            body:
-              - Use the claude-for-msft-365-install plugin export scripts before rebuilds and treat exports as
-                secrets (they contain credentials); control lifetime through profile cleanup rather than an
-                add-in setting.
+          No inventory or classification in the product: the add-in keeps no index and reaches the open file,
+          the user's own mailbox and calendar through Graph (Outlook) and user-connected connectors;
+          OpenTelemetry document.url per turn and Compliance API transcripts record which documents were sent,
+          and the data-storage page maps the device-side stores
+        evidence:
+          - title: Data storage and retention (device stores and what each holds)
             url: https://claude.com/docs/office-agents/data-storage
-        evidence: []
+          - title: Configure a custom OpenTelemetry collector (document.url on agent.query spans)
+            url: https://claude.com/docs/office-agents/opentelemetry
+          - title: Microsoft Purview for Anthropic Claude (Enterprise) — DSPM and data classification supported
+            url: https://learn.microsoft.com/en-us/purview/ai-claude-enterprise
+          - title: Set up a connector to manage Anthropic Claude data (imported data types)
+            url: https://learn.microsoft.com/en-us/purview/manage-anthropic-data
         note: >-
-          Lifecycle only: nothing here discovers or classifies sensitive content in the local store; that is
-          the endpoint DLP or DSPM product's job.
+          External: inventory and oversharing discovery of the SharePoint, OneDrive and Exchange content the
+          add-in can reach belong to the DSPM / data-classification product (Microsoft Purview DSPM, for
+          example); the add-in reaches whatever the user opens or their delegated Graph scope allows. It
+          contributes a use record, not an inventory: document.url on every agent.query span, and file contents
+          in Compliance API transcripts (Enterprise). Purview's Anthropic Claude connector (preview) imports the
+          activity feed and chat conversations through the Compliance API; session transcripts, where add-in
+          activity sits, are not among its listed data types. The device-side stores (claude-chat-history
+          holds attached file contents) are an endpoint data store for the organisation's own inventory; the
+          30-day backend deletion and the 50-conversation cap are retention, not inventory.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityDspm
@@ -510,29 +652,48 @@ tools:
                 that is the endpoint DLP or DSPM product's job.
               verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Cloud-provider sign-ins use short-lived tokens renewed on device; a centrally issued gateway token
-          or API key is a shared secret on every device
+          Graph and cloud-provider tokens are obtained and used on the device and never reach Anthropic or the
+          model; Claude sign-in, connector and gateway credentials sit unencrypted in the webview's
+          localStorage; keyless options (gateway_auth_source=entra, Bedrock via Entra-to-STS, keyless Foundry)
+          and a bootstrap_url that re-issues the gateway token about five minutes before its declared expiry
+          let the administrator bound credential lifetime; no tunnel
         steps:
-          - title: Prefer per-user sign-in over a shared key
+          - title: Replace static keys with Entra-issued tokens
             body:
-              - Use Entra ID / cloud-provider sign-in in third-party mode instead of distributing a gateway
-                API key in the manifest.
-            url: https://claude.com/docs/office-agents/data-storage
-        evidence: []
+              - >-
+                Set entra_sso=1, graph_client_id, entra_scope and gateway_auth_source=entra so the add-in sends
+                each user's short-lived Entra access token to your gateway or Foundry resource and ignores any
+                gateway_token or azure_api_key.
+            url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Issue gateway tokens from a bootstrap endpoint
+            body:
+              - >-
+                Serve the gateway token from bootstrap_url with an expiry; the add-in calls the endpoint again
+                about five minutes before expiry and once on a 401, so tokens rotate without users signing out.
+            url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Keep secrets out of the manifest query string
+            body:
+              - >-
+                Put gateway_token, azure_api_key, google_client_secret, otlp_headers, inference_headers and
+                mcp_servers after # in the manifest URL; the add-in ignores them in the query string from
+                October 19, 2026.
+            url: https://claude.com/docs/office-agents/third-party-platforms
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Cloud sign-ins are short-lived; a centrally issued gateway token or
-          API key is a long-lived shared secret on every device, readable from the add-in's local storage by
-          anyone with the user's OS session.
+          Partial by the rule: the administrator can bound lifetime and rotation for the gateway credential
+          (Entra or bootstrap), but the Claude-account access and refresh tokens and MCP connector tokens are
+          held unencrypted in the add-in's localStorage — the OS account is the only boundary — with no admin
+          lifetime or rotation setting, and a static gateway token or API key is a shared secret on every
+          device, held until changed and copied into data exports. Custody is otherwise sound where documented:
+          the Graph token stays in the MSAL cache and goes only to graph.microsoft.com, and the redirect
+          through pivot.claude.ai carries only a code or a consent outcome. Anthropic offers no tunnel for the
+          add-ins; admin-attached mcp_servers are called directly from the user's browser.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -552,20 +713,41 @@ tools:
               verified: 2026-09-10
       - mitigation: AML.M0028
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          "Let Claude work across apps" org toggle at Organization settings > Office agents (no published
-          default); a separate per-add-in, per-device "Let Claude work across files" setting is on by default
-          for Pro/Max and off by default for Team/Enterprise; connector and skill availability follows
-          organisation connector settings; Graph consent scopes for Outlook
+          Organization settings > Connectors enablement and per-tool Always allow / Needs approval / Blocked
+          on claude.ai (enforcement in the add-ins not stated); Organization settings > Office agents "Let
+          Claude work across apps" plus the per-device "Let Claude work across files"; disabled_features
+          (web_search, file.upload, skills.authoring) and admin-provisioned mcp_servers in custom-manifest
+          deployments; a fixed Graph scope set for Outlook
         steps:
-          - title: Turn cross-app mode on or off
+          - title: Enable only vetted connectors
             body:
-              - At Organization settings > Office agents toggle "Let Claude work across apps"; each user's
-                add-in also has its own "Let Claude work across files" setting in Settings, on by default on
-                Pro/Max and off by default on Team/Enterprise.
+              - >-
+                An Owner adds connectors at Organization settings > Connectors and sets each connector's Tool
+                permissions; the add-ins offer only connectors enabled in Claude settings.
+            url: https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
+          - title: Turn cross-app mode off where it is not needed
+            body:
+              - >-
+                At Organization settings > Office agents turn off Let Claude work across apps; the per-device
+                Let Claude work across files setting is off by default on Team and Enterprise.
             url: https://claude.com/docs/office-agents/work-across-apps
-        evidence: []
+          - title: Remove tools in custom-manifest deployments
+            body:
+              - >-
+                Set disabled_features (or access_policies deny statements) for web_search, file.upload and
+                skills.authoring, and give each user only the in-network servers listed in mcp_servers.
+            url: https://claude.com/docs/office-agents/third-party-platforms
+        note: >-
+          Partial by the rule: connector-level admission and feature switches exist, but no per-tool or
+          read/write scoping per group is documented for the add-ins. Tool permissions are documented for
+          claude.ai connectors, and Enterprise custom roles gate connectors per tool, yet neither page names
+          the Office add-ins. The built-in Office tools (cell and document writes, execute_office_js) have no
+          admin scoping, and Outlook's Graph scope is a fixed delegated set (Mail.ReadWrite, Calendars.Read,
+          User.Read, offline_access), all-or-nothing at consent. disabled_features applies per user through
+          Entra extension attributes or a bootstrap endpoint; access_policies only through the manifest or
+          bootstrap.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -589,17 +771,32 @@ tools:
       - mitigation: cap-data-access-governance
         coverage: partial
         mechanism: >-
-          The add-in reads only the currently open file or the open email; Outlook access is bounded by the
-          Graph consent granted by the admin
-        steps: &a1
-          - title: Scope Graph consent
+          Retrieval runs as the user: Office.js reads only the open file or the open mail item, and Outlook's
+          Graph calls use the user's own delegated token; access_policies addin.access statements keyed on
+          sensitivity label or file path restrict which open documents the add-in will run on (manifest or
+          bootstrap); no admin scoping of mailboxes, folders or connector corpora
+        steps:
+          - title: Restrict the add-in to approved documents
             body:
-              - Grant only the Microsoft Graph permissions the Outlook add-in documents during the one-time admin consent.
+              - >-
+                Add an access_policies allow statement for addin.access listing your General and Public label
+                GUIDs (default-deny for everything else), or deny statements for restricted labels and
+                file_path prefixes such as a restricted share.
+            url: https://github.com/anthropics/financial-services/blob/main/claude-for-msft-365-install/commands/access-policies.md
+          - title: Own the Graph application
+            body:
+              - >-
+                Register a single-tenant app with the delegated Graph permissions and set graph_client_id, so
+                approval and Conditional Access for mailbox access sit under your own application.
             url: https://claude.com/docs/office-agents/outlook
         note: >-
-          Delegated: the open document is what the user already has; Outlook retrieval carries the Graph
-          consent the admin granted, so that consent, not the user's mailbox permissions, is the ceiling.
-        verified: 2026-09-10
+          Partial by the rule: identity-scoped retrieval holds — the open document is one the user already
+          opened, and Graph delegated access is bounded by both the consented scopes and the user's own mailbox
+          and calendar permissions, so whatever the user can already reach, oversharing included, is
+          reachable. The admin restriction covers only the open document (label or path), is documented for
+          manifest and bootstrap delivery, and does not scope mailbox search, thread retrieval or connectors.
+          Oversharing analysis of SharePoint, OneDrive and Exchange is the DSPM product's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityDataAccessGovernance
@@ -610,7 +807,11 @@ tools:
               mechanism: >-
                 The add-in reads only the currently open file or the open email; Outlook access is bounded by
                 the Graph consent granted by the admin
-              steps: *a1
+              steps:
+                - title: Scope Graph consent
+                  body:
+                    - Grant only the Microsoft Graph permissions the Outlook add-in documents during the one-time admin consent.
+                  url: https://claude.com/docs/office-agents/outlook
               note: >-
                 Delegated: the open document is what the user already has; Outlook retrieval carries the Graph
                 consent the admin granted, so that consent, not the user's mailbox permissions, is the
@@ -619,18 +820,37 @@ tools:
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
-          Microsoft 365 Admin Center integrated-apps inventory of deployed Claude add-ins; Compliance API
-          local sessions with office_agents/* product_surface (beta)
-        steps: &a1
-          - title: Inventory deployments and sessions
+          Microsoft 365 admin center Integrated apps lists the add-ins the organisation deployed, and closing
+          the Office Store and the Exchange add-in user roles blocks others; Organization settings > Connectors
+          is the approved connector catalogue; Compliance API local sessions (product_surface office_agents/*)
+          record use
+        steps:
+          - title: Hold the deployment record in Integrated apps
             body:
-              - List deployed add-ins in the M365 Admin Center and, on Enterprise, query local sessions with
-                product_surface office_agents/excel and similar.
+              - >-
+                Deploy the Claude add-ins from Settings > Integrated apps and clear Let users access the Office
+                Store, so users run only centrally deployed add-ins.
+            url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-addins-in-the-admin-center
+          - title: Close Outlook self-install
+            body:
+              - >-
+                Remove My Marketplace Apps, My Custom Apps and My ReadWriteMailbox Apps from the default role
+                assignment policy under Roles > User roles in the Exchange admin center.
+            url: https://learn.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/add-ins-for-outlook/specify-who-can-install-and-manage-add-ins
+          - title: Reconcile use against the record
+            body:
+              - >-
+                List local sessions whose product_surface is office_agents/excel, office_agents/powerpoint,
+                office_agents/word or office_agents/outlook from the Compliance API.
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
         note: >-
-          The Admin Center inventory records deployment, not ownership or approval of what the add-ins may do;
-          treat it as an input to the organisation's inventory.
-        verified: 2026-09-10
+          Partial by the rule: enforcement exists (only deployed add-ins once self-install is closed; only
+          Owner-enabled connectors) but there is no owner or approval record per add-in or connector.
+          Integrated apps shows what administrators deployed, not copies users installed from AppSource while
+          the store was open or a third-party manifest pointing the add-in at another gateway; connectors a
+          user authorised live only on that user's device. Compliance API session listings cover Claude-account
+          Enterprise use only.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -641,23 +861,37 @@ tools:
               mechanism: >-
                 Microsoft 365 Admin Center integrated-apps inventory of deployed Claude add-ins; Compliance
                 API local sessions with office_agents/* product_surface (beta)
-              steps: *a1
+              steps:
+                - title: Inventory deployments and sessions
+                  body:
+                    - List deployed add-ins in the M365 Admin Center and, on Enterprise, query local sessions with
+                      product_surface office_agents/excel and similar.
+                  url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
               note: >-
                 The Admin Center inventory records deployment, not ownership or approval of what the add-ins
                 may do; treat it as an input to the organisation's inventory.
               verified: 2026-09-10
       - mitigation: cap-shadow-ai-discovery
-        coverage: external
+        coverage: partial
         mechanism: >-
-          M365 Admin Center controls whether users can acquire AppSource add-ins; tenant restrictions block
-          personal Claude organisations
-        steps: &a1
-          - title: Control add-in acquisition
+          Enterprise domain claiming (Organization settings > Organization and access > Security, Migrate
+          accounts using your domain) lists personal Free, Pro and Max accounts on verified domains with plan
+          and last-active date and a CSV export; the add-ins' Claude-account sign-in uses those same accounts
+        steps:
+          - title: Review personal accounts on your domains
             body:
-              - Manage which users can install the Claude add-ins through the Microsoft 365 Admin Center and enforce the
-                tenant-restriction header for claude.ai.
-            url: https://claude.com/docs/office-agents/overview
-        verified: 2026-09-10
+              - >-
+                Turn on Migrate accounts using your domain and review the list of existing personal accounts
+                (email, plan, creation and last active dates), exported as CSV, before claiming them.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+        note: >-
+          Partial by the rule: the domain-claim list is a genuine discovery signal for personal Claude accounts
+          on verified domains — the accounts a user would sign in to the add-in with — though not for which of
+          them used the add-in. Personal accounts on other addresses, add-ins users installed themselves
+          (Integrated apps does not list them) and third-party manifests pointed at an unsanctioned gateway
+          are found by SSE, CASB or endpoint inventory. The tenant-restriction header and closing the Office
+          Store are prevention, credited here only in this note.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityShadowAiDiscovery
@@ -668,30 +902,54 @@ tools:
               mechanism: >-
                 M365 Admin Center controls whether users can acquire AppSource add-ins; tenant restrictions
                 block personal Claude organisations
-              steps: *a1
+              steps:
+                - title: Control add-in acquisition
+                  body:
+                    - Manage which users can install the Claude add-ins through the Microsoft 365 Admin Center and enforce the
+                      tenant-restriction header for claude.ai.
+                  url: https://claude.com/docs/office-agents/overview
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          Custom OpenTelemetry collector receives the full span trail per user (CORS required); Compliance API
-          M365 session transcripts (beta); excluded from Enterprise audit logs and data exports
+          Compliance API local session endpoints (GET /v1/compliance/apps/sessions/local and
+          /{session_id}/messages, product_surface office_agents/*, scope read:compliance_user_data) return
+          Enterprise add-in transcripts with prompts, responses, tool calls and results; a custom OpenTelemetry
+          collector (otlp_endpoint and otlp_headers at Organization settings > Office agents, or the same keys
+          in the manifest, Entra attributes or bootstrap) receives agent.query, agent.stream and
+          agent.tool_execution spans
         steps:
-          - title: Configure a custom collector
+          - title: Pull add-in transcripts from the Compliance API
             body:
-              - Point the add-in at an OpenTelemetry Collector you run with a CORS-enabled OTLP HTTP receiver;
-                the collector, not the browser, authenticates to your backend.
-            url: https://claude.com/docs/office-agents/enterprise-readiness
-        evidence: []
+              - >-
+                With a Compliance Access Key holding read:compliance_user_data, list GET
+                /v1/compliance/apps/sessions/local with updated_at.gte, keep sessions whose product_surface
+                starts with office_agents, and fetch each session's /messages transcript.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+          - title: Stream spans to a collector you run
+            body:
+              - >-
+                Set otlp_endpoint (and otlp_headers) at Organization settings > Office agents on Enterprise, or
+                as a configuration key on third-party platforms, pointing at an OpenTelemetry Collector with a
+                CORS-enabled OTLP/HTTP receiver; raise otlp_attr_max_chars if 4,000-character truncation loses
+                evidence.
+            url: https://claude.com/docs/office-agents/opentelemetry
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging]
+          Native by the rule: programmatic export of conversation content and tool events. Boundaries: the
+          Compliance API covers Claude-account Enterprise sign-in only (the add-in pages call this coverage
+          public beta, the Compliance API reference calls it stable), not Pro, Max, Team or third-party-platform
+          deployments, and HIPAA-ready or ZDR organisations capture no local sessions. Add-in activity is not in
+          Enterprise audit logs or data exports, and deleting a conversation in the add-in does not remove the
+          session. OpenTelemetry spans are posted from each user's browser, so a user who controls the client
+          can suppress them — telemetry, not tamper resistance; they omit assistant response text, record
+          connector tools as mcp_tool, and on third-party platforms carry no user identity (correlate
+          session.id with Entra or gateway logs). On the third-party path the organisation's gateway log is the
+          record to fuse with.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: partial
@@ -707,20 +965,44 @@ tools:
                   url: https://claude.com/docs/office-agents/enterprise-readiness
               verified: 2026-09-10
       - mitigation: cap-agent-kill-switch
-        coverage: native
+        coverage: partial
         mechanism: >-
-          Remove the add-in deployment in the M365 Admin Center, disable cross-app mode, remove the user's
-          Claude seat; local data persists until the profile is wiped
-        steps: &a1
-          - title: Withdraw the add-in
+          Remove the add-in (or its assignment) in Integrated apps; deny addin.access through access_policies
+          or disabled_features ("Kill switch: the add-in refuses to run") in custom-manifest or bootstrap
+          deployments; disable the Claude for Office enterprise app (Enabled for users to sign-in? = No) and
+          revoke its admin consent in Entra; no claude.ai setting disables the add-ins
+        steps:
+          - title: Remove the add-in deployment
             body:
-              - Remove or block the add-ins in the M365 Admin Center and turn off "Let Claude work across apps"; wipe the
-                device profile to remove local history and credentials.
-            url: https://claude.com/docs/office-agents/data-storage
+              - >-
+                In Settings > Integrated apps select the Claude add-in and remove it (or remove users under
+                Users); a removed add-in is not accessible to any user.
+            url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-addins-in-the-admin-center
+          - title: Make the add-in refuse to run
+            body:
+              - >-
+                Deliver disabled_features=addin.access, or an access_policies deny for addin.access, through the
+                manifest, Entra extension attributes or a bootstrap endpoint; the add-in reads it when it loads.
+            url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Stop token issuance in Entra
+            body:
+              - >-
+                In Entra ID > Enterprise apps > Claude for Office > Properties set Enabled for users to sign-in?
+                to No, which prevents all tokens being issued for the app, and revoke its admin-consented
+                permissions.
+            url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/disable-user-sign-in-portal
         note: >-
-          Withdrawing the add-in applies at the client's next add-in catalogue refresh, and seat removal at
-          the next request; the docs state no delay, so measure it.
-        verified: 2026-09-10
+          Partial by the rule: each stop blocks the next load or the next token, not a task pane already
+          running, and the delay is not documented (Microsoft gives 24 to 72 hours for deployments to appear;
+          removal timing is not stated). Configuration keys are read when the add-in loads — only served
+          settings, which are re-read while it runs, are documented as applying mid-session, and they are
+          preview. Disabling the Entra app stops new tokens; cached Graph access tokens run to expiry. Connector
+          grants on each device cannot be revoked in bulk, and copies users installed themselves from AppSource
+          are not removed by Integrated apps. No claude.ai control disables the add-ins; removing a member's
+          seat or revoking the gateway token at your gateway is the practical stop for inference, though the
+          add-in pages do not document its effect. Local history, skills and credentials persist until the
+          device profile is wiped.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -731,7 +1013,12 @@ tools:
               mechanism: >-
                 Remove the add-in deployment in the M365 Admin Center, disable cross-app mode, remove the
                 user's Claude seat; local data persists until the profile is wiped
-              steps: *a1
+              steps:
+                - title: Withdraw the add-in
+                  body:
+                    - Remove or block the add-ins in the M365 Admin Center and turn off "Let Claude work across apps"; wipe the
+                      device profile to remove local history and credentials.
+                  url: https://claude.com/docs/office-agents/data-storage
               note: >-
                 Withdrawing the add-in applies at the client's next add-in catalogue refresh, and seat removal
                 at the next request; the docs state no delay, so measure it.
@@ -743,9 +1030,17 @@ tools:
         url: https://claude.com/docs/office-agents/work-across-apps
       - title: Security, admin auditability, and analytics
         url: https://claude.com/docs/office-agents/enterprise-readiness
+      - title: Configure a custom OpenTelemetry collector
+        url: https://claude.com/docs/office-agents/opentelemetry
       - title: Data storage and retention
         url: https://claude.com/docs/office-agents/data-storage
+      - title: Use Claude for Outlook (Graph consent, own Entra app, mailbox access)
+        url: https://claude.com/docs/office-agents/outlook
       - title: Use Claude for M365 with third-party platforms
         url: https://claude.com/docs/office-agents/third-party-platforms
+      - title: claude-for-msft-365-install — access_policies reference
+        url: https://github.com/anthropics/financial-services/blob/main/claude-for-msft-365-install/commands/access-policies.md
       - title: Retrieve session transcripts (office_agents coverage)
         url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+      - title: Deploy Office Add-ins in the Microsoft 365 admin center
+        url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-deployment-of-add-ins

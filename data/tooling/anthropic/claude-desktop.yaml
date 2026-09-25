@@ -2,6 +2,10 @@
 # (asOf) and cite the vendor's own documentation; re-verify before enforcing.
 # Schema: data/tooling/README.md. Claude Desktop on 3P (Bedrock / Vertex / Foundry / gateway
 # inference with local conversation storage) is recorded as a variant, not an entity.
+# 2026-09-25: re-verified toolClaudeDesktop against the MITRE capability rules; every cited support.claude.com,
+# claude.com and platform.claude.com page answered 200 with no redirect (platform and claude.com docs read as
+# .md); trust.anthropic.com renders client-side and was read in a browser; nvd.nist.gov answers 403 to curl
+# without a browser user agent and lands on the lower-case CVE path.
 vendor: anthropic
 family: Claude Desktop
 tools:
@@ -80,8 +84,9 @@ tools:
       - title: Managed deployment and device policies
         body:
           - "Device policies live in the macOS configuration-profile domain com.anthropic.claudefordesktop and
-            the Windows HKLM\\SOFTWARE\\Policies\\Claude registry key (HKCU is ignored when HKLM exists). The
-            keys that matter for control: isDesktopExtensionEnabled and isDesktopExtensionDirectoryEnabled
+            the Windows HKLM\\SOFTWARE\\Policies\\Claude registry key (machine-level settings take priority
+            over HKCU when both are configured). The keys that matter for control: isDesktopExtensionEnabled
+            and isDesktopExtensionDirectoryEnabled
             (kill switches for extensions and the directory), isLocalDevMcpEnabled (local MCP server
             connections), isClaudeCodeForDesktopEnabled, secureVmFeaturesEnabled (Cowork access),
             forceLoginOrgUUID, allowedWorkspaceFolders, effortLevel, disableAutoUpdates and
@@ -156,38 +161,54 @@ tools:
           allowlisting; domain capture and SSO enforcement pull verified-domain users into the organisation.
     controls:
       - mitigation: D3-MFA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          SSO (SAML/OIDC) with Require SSO for Claude, domain verification and capture, JIT or SCIM
-          provisioning with group-to-role mapping, custom roles and groups (Enterprise)
+          "Require SSO for Claude" (claude.ai/admin-settings/organization, Authentication) sends every
+          interactive web, desktop and mobile sign-in through the IdP, whose MFA policy applies; "Shortened
+          session length" (Enterprise) forces a fresh sign-in; forceLoginOrgUUID pins Claude Desktop to the
+          organisation; Enterprise domain capture ("Migrate accounts using your domain") leaves no personal
+          account on a verified domain
         steps:
-          - title: Enforce SSO
+          - title: Require SSO so the IdP's MFA governs every login
             body:
-              - Verify domains at claude.ai/admin-settings/organization, configure the IdP through WorkOS,
-                then toggle "Require SSO for Claude" in Authentication settings.
+              - >-
+                After verifying your domains at claude.ai/admin-settings/organization, set up SSO through
+                WorkOS, turn on Require SSO for Claude in the Authentication section, and enforce MFA on the
+                Claude app in your IdP.
             url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Provision and deprovision from the directory
+          - title: Bound how long a sign-in lasts (Enterprise)
             body:
-              - Enable SCIM with group-to-role mapping (Enterprise / Console); users removed from all mapped
-                groups are removed at the next sync.
-            url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
-          - title: Gate features by role
+              - >-
+                At Organization settings > Organization and access > Session security click Enable next to
+                Shortened session length and choose 1, 7, 14 or 28 days; older sessions expire at once.
+            url: https://support.claude.com/en/articles/13163631-configuring-session-security-settings
+          - title: Pin the desktop app to your organisation
             body:
-              - Create custom roles and groups at Organization settings > Roles and Groups to gate Claude
-                Code, Cowork, Chrome, connectors, Claude Tag, models and admin scopes.
+              - >-
+                Deploy forceLoginOrgUUID in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude;
+                login fails for any account outside the listed organisations.
             url: >-
-              https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
-        evidence: []
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Pull personal accounts on your domain into the tenant (Enterprise)
+            body:
+              - >-
+                With Restrict organization creation, SSO enforcement and JIT or SCIM in place, turn on Migrate
+                accounts using your domain under Organization settings > Organization and access > Security.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial on the MFA rule applied to every vendor: Claude documents no second-factor requirement of its
+          own, so the factor is whatever the IdP enforces behind Require SSO. Paths that skip a fresh challenge:
+          a signed-in web, desktop or mobile session stays active while the user stays active unless Shortened
+          session length is set (Enterprise only); Compliance Access Keys, which never expire on their own, and
+          Admin API keys; personal accounts on other addresses, which only the tenant-restriction header blocks;
+          and Team plans, which can verify a domain and Restrict organization creation but not claim existing
+          accounts or shorten sessions. Claude Desktop on 3P has no Anthropic identity; sign-in is the inference
+          provider's or the organisation's IdP.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -213,53 +234,48 @@ tools:
                     https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
               verified: 2026-09-10
       - mitigation: D3-APA
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          SSO (SAML/OIDC) with Require SSO for Claude, domain verification and capture, JIT or SCIM
-          provisioning with group-to-role mapping, custom roles and groups (Enterprise); Connectors retrieve
-          as the authenticated user (OAuth) or as the scoped managed authorisation; verified-domain
-          restriction stops org services connecting to outside accounts
+          Enterprise custom roles and groups (Organization settings > Roles, Groups) grant capabilities, each
+          connector and connector tool (Always allow / Needs approval / Blocked) and admin permissions, with
+          "View effective role"; target-tenant consent for the connector apps is documented: Microsoft Entra
+          admin consent for the two Microsoft 365 connector apps (client IDs 08ad6f98-a4f8-4635-bb8d-f1a3044760f0
+          and 07c030f6-5743-41b7-ba00-0a6e85f37c17) and Google Workspace API controls trust for Claude
         steps:
-          - title: Enforce SSO
+          - title: Authorise features and connectors by role
             body:
-              - Verify domains at claude.ai/admin-settings/organization, configure the IdP through WorkOS,
-                then toggle "Require SSO for Claude" in Authentication settings.
-            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Provision and deprovision from the directory
-            body:
-              - Enable SCIM with group-to-role mapping (Enterprise / Console); users removed from all mapped
-                groups are removed at the next sync.
-            url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
-          - title: Gate features by role
-            body:
-              - Create custom roles and groups at Organization settings > Roles and Groups to gate Claude
-                Code, Cowork, Chrome, connectors, Claude Tag, models and admin scopes.
+              - >-
+                At Organization settings > Roles create custom roles, choose their groups, toggle capabilities
+                and set each connector or tool on the Connectors tab; check a member with View effective role.
             url: >-
               https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
-          - title: Keep retrieval per user
+          - title: Decide in Microsoft Entra whether the connector may be granted
             body:
-              - Prefer user OAuth or role-scoped managed authorisation over shared service accounts and turn
-                on the verified-domain connector restriction on Enterprise.
-            url: >-
-              https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
-        evidence: []
+              - >-
+                A Global Administrator grants admin consent through the adminconsent URLs for both client IDs,
+                requires assignment on the M365 MCP Server for Claude and M365 MCP Client for Claude enterprise
+                apps, and revokes Graph permissions the organisation does not want.
+            url: https://support.claude.com/en/articles/12542951-set-up-the-microsoft-365-connector
+          - title: Decide in Google Workspace
+            body:
+              - >-
+                In admin.google.com under Security > Access and data control > API controls > Manage
+                third-party app access, set Claude to Trusted, or leave it blocked.
+            url: https://support.claude.com/en/articles/10166901-use-google-workspace-connectors
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
-
-
-          [capabilityDataAccessGovernance] Delegated when the connector runs as the user (the source system
-          enforces the user's permissions, oversharing included); service-owned when enterprise-managed
-          authorisation is used, in which case the managed scope, not the user's entitlements, bounds
-          retrieval for everyone.
+          Native on Enterprise by the rule: the console administers role and group authorisation over
+          connectors, tools and features, enforced on Anthropic's servers and failing toward deny, and the
+          vendor documents the target-tenant consent path with the app IDs. Team plans have organisation-wide
+          connector and tool policy only, which is partial. Connector permissions apply only to members on the
+          Custom role (User, Admin and Owner see every organisation connector under the organisation-wide
+          policy), grants are additive across roles, and role changes take up to 15 minutes. The consent itself
+          is the target tenant's control, not Anthropic's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
             - capabilityDataAccessGovernance
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -305,35 +321,41 @@ tools:
       - mitigation: D3-OTF
         coverage: partial
         mechanism: >-
-          IP allowlisting (Enterprise, CIDR ranges enabled by Anthropic support) and tenant restrictions
-          (anthropic-allowed-org-ids header injected by a TLS-inspecting proxy)
+          anthropic-allowed-org-ids tenant-restriction header (Enterprise and Console) injected by the
+          organisation's TLS-inspecting proxy and enforced by Anthropic for claude.ai web, desktop, API-key and
+          OAuth traffic; IP allowlisting (Enterprise, CIDR ranges enabled by Anthropic support); the code
+          execution sandbox's own egress set at Organization settings > Capabilities
         steps:
-          - title: Restrict where Claude can be used from
-            body:
-              - Compile CIDR ranges and have Anthropic enable IP allowlisting; every authenticated request
-                outside the ranges is denied (Anthropic-hosted cloud sessions then need an exemption).
-            url: https://support.claude.com/en/articles/13200993-restrict-access-to-claude-with-ip-allowlisting
           - title: Block other tenants at the proxy
             body:
-              - Inject anthropic-allowed-org-ids with your org UUIDs for claude.ai, api.anthropic.com,
-                claude.com and anthropic.com (up to 500 UUIDs across numbered headers).
+              - >-
+                Inject anthropic-allowed-org-ids with your organisation UUIDs (numbered continuation headers,
+                up to 500 UUIDs) for claude.ai, api.anthropic.com, claude.com and anthropic.com, overwriting the
+                header on every request.
             url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
-          - title: Allowlist the documented hosts
+          - title: Restrict where your tenant can be used from (Enterprise)
             body:
-              - Permit anthropic.com, claude.ai, claude.com, platform.claude.com, downloads.claude.ai,
-                *.claudeusercontent.com and *.claudemcpcontent.com (plus optional CDN hosts for artifacts) and
-                route through egressProxyUrl on managed devices.
-            url: https://code.claude.com/docs/en/desktop
+              - >-
+                Send Anthropic support your office and VPN CIDR ranges; every authenticated request from
+                another address is then denied.
+            url: https://support.claude.com/en/articles/13200993-restrict-access-to-claude-with-ip-allowlisting
+          - title: Set the sandbox's own egress
+            body:
+              - >-
+                At Organization settings > Capabilities under Code execution and file creation, leave Allow
+                network egress off or limit it to package managers and named domains.
+            url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
         note: >-
-          IP allowlisting is enforced by Anthropic; the tenant-restriction header is enforced by a
-          TLS-inspecting proxy the organisation operates. Neither is an SSE service: inline inspection of
-          prompts and uploads is the customer's SSE, and its completeness depends on which paths it sees.
-
-
-          [capabilityEgressControl] The product documents its destinations and offers proxy keys; it enforces
-          no destination policy of its own. Connector traffic egresses from Anthropic's MCP proxy, outside the
-          organisation's network.
-        verified: 2026-09-10
+          Partial on the D3-OTF rule: Anthropic honours a documented tenant-restriction header that the
+          organisation's SSE injects (TLS inspection required; other organisations get a 403
+          tenant_restriction_violation), so personal and foreign tenants are blocked on managed networks. A
+          customer proxy does not control the vendor's own egress: remote connectors reach MCP servers from
+          Anthropic's cloud, web search runs on Anthropic's servers, and the code execution sandbox is governed
+          only by the Capabilities network setting (off for new Enterprise organisations, package managers only
+          on Team; connector traffic stays possible whatever it says). Off-network and unmanaged devices bypass
+          the header; IP allowlisting gates only the organisation's own tenant. Local MCP servers in Claude
+          Desktop use the device's network.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySse
@@ -345,7 +367,7 @@ tools:
               mechanism: >-
                 IP allowlisting (Enterprise, CIDR ranges enabled by Anthropic support) and tenant restrictions
                 (anthropic-allowed-org-ids header injected by a TLS-inspecting proxy)
-              steps: &a1
+              steps:
                 - title: Restrict where Claude can be used from
                   body:
                     - Compile CIDR ranges and have Anthropic enable IP allowlisting; every authenticated request outside the
@@ -383,29 +405,34 @@ tools:
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
-          Inference hooks (Enterprise, beta) route every governed prompt to your AI security server for
-          allow/deny; connector tool restrictions limit outbound actions; no built-in content classifier
+          Inference hooks (Enterprise, beta) hold every governed claude.ai request on web, desktop and mobile,
+          with its tool calls, tool results and extracted attachment text, for an allow or deny verdict from
+          the organisation's DLP or AI security server; the Compliance API supports detection after the fact
         steps:
-          - title: Enable Inference hooks
+          - title: Put your DLP inline (Enterprise, beta)
             body:
-              - Configure the AI security server endpoint and signing secret, run shadow mode, then enforce;
-                denied requests never reach the model and are recorded in the Activity Feed. Not available on
-                Bedrock or Google Cloud.
-            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
-          - title: Instrument the browser session
+              - >-
+                At Organization settings > Data and privacy > Inference hooks turn on Allow for your
+                organization, register the endpoint and signing secret, set Failure handling to Block the
+                request, Requests inspected to 100 and turn on Enforce verdicts.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Scan stored content after the fact
             body:
-              - Apply your browser-security policy to claude.ai and *.claudeusercontent.com and use the
-                tenant-restriction header to keep sessions in the corporate tenant.
-            url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+              - >-
+                Give your DLP or DSPM product a Compliance Access Key with read:compliance_user_data to page
+                through /v1/compliance/apps/chats, messages and files, and delete:compliance_user_data only on a
+                separate key.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-content-data
         note: >-
-          Inference hooks route governed prompts to the organisation's scanner; the product itself classifies
-          nothing, and uploads, connector results and outputs are outside the hook unless the hook contract
-          says otherwise.
-
-
-          [capabilityBrowserDetectionResponse] Anthropic offers no in-page inspection; pair the
-          tenant-restriction header with browser D&R or SSE inline controls.
-        verified: 2026-09-10
+          Partial by the rule: an inline hook that hands prompts to the organisation's DLP with a block verdict
+          is an attach point, and Claude classifies nothing itself. The hook allows or denies only (no masking or
+          redaction), never receives image bytes (a screenshot of a document is not inspected), has no
+          response-side event yet, skips voice mode, members of excluded custom roles and requests outside the
+          rollout percentage, and falls back to the failure-handling choice when the server errs or the circuit
+          breaker trips. A blocked message stays in the conversation. It is not available on Bedrock or Google
+          Cloud, nor on Team plans. Blocking connector write tools and custom retention are minimisation and
+          lifecycle, not detection; Compliance API scanning finds content after it reached Anthropic.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -417,7 +444,7 @@ tools:
               mechanism: >-
                 Inference hooks (Enterprise, beta) route every governed prompt to your AI security server for
                 allow/deny; connector tool restrictions limit outbound actions; no built-in content classifier
-              steps: &a1
+              steps:
                 - title: Enable Inference hooks
                   body:
                     - Configure the AI security server endpoint and signing secret, run shadow mode, then enforce; denied
@@ -445,17 +472,32 @@ tools:
       - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
-          Anthropic model-side safeguards and web-fetch isolation; connector tool restrictions; Inference
-          hooks for inline policy
-        steps: &a1
-          - title: Limit what an injected instruction can do
+          Anthropic's model-layer defenses against injected instructions (no administrator setting); Inference
+          hooks (Enterprise, beta) hand each governed request, including connector tool calls and the results
+          they return, to the organisation's AI security server before the next inference step
+        steps:
+          - title: Put a screen on returned connector content (Enterprise, beta)
             body:
-              - Restrict connectors to read-only tools and enable only vetted connectors; use Inference hooks to deny
-                prompts carrying policy-violating content.
-            url: >-
-              https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
-        note: No admin-configurable injection classifier is exposed for chat.
-        verified: 2026-09-10
+              - >-
+                At Organization settings > Data and privacy > Inference hooks register an AI security server
+                that classifies tool results for injection, set Failure handling to Block the request and turn
+                on Enforce verdicts.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Know what the vendor screening covers
+            body:
+              - >-
+                The connector verification page tells members to stay aware of prompt injection "even though
+                Claude has built-in protections"; Verified and Community labels are not a security audit of what
+                a connector returns.
+            url: https://claude.com/docs/connectors/verification
+        note: >-
+          Partial on the rule applied to every vendor: vendor-internal defenses documented only in general terms
+          (no setting, threshold, quarantine or event an administrator can see), plus an inline hook that is an
+          attach point until the organisation's server does the classifying. The hook returns allow or deny (no
+          strip or quarantine), never receives system prompts or tool definitions, so a poisoned connector
+          description is not seen, and ignores images. Claude.ai has no action classifier to lean on; restricting
+          write tools limits what an injection can do, which is AML.M0028, not screening.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -466,31 +508,36 @@ tools:
               mechanism: >-
                 Anthropic model-side safeguards and web-fetch isolation; connector tool restrictions;
                 Inference hooks for inline policy
-              steps: *a1
+              steps:
+                - title: Limit what an injected instruction can do
+                  body:
+                    - Restrict connectors to read-only tools and enable only vetted connectors; use Inference hooks to deny
+                      prompts carrying policy-violating content.
+                  url: >-
+                    https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
               note: No admin-configurable injection classifier is exposed for chat.
               verified: 2026-09-10
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: >-
-          Trust Center artifacts (SOC 2, ISO 27001, HIPAA implementation guide, architecture overviews) feed
-          the buyer's TPRM platform
-        steps:
-          - title: Collect artifacts
-            body:
-              - Request the Trust Center resources referenced across the docs, including the Cowork desktop
-                security architecture overview and the M365 architecture diagrams.
-            url: https://trust.anthropic.com
-          - title: Mirror organisation state
-            body:
-              - Pull organizations, users, roles, groups and effective settings from the Compliance API and
-                per-user engagement from the Enterprise Analytics API.
-            url: https://platform.claude.com/docs/en/manage-claude/compliance-api
-          - title: Evidence configuration continuously
-            body:
-              - Poll each organisation's effective settings and the Activity Feed with a Compliance Access
-                Key; use the audit log export (180 days) for point-in-time evidence.
-            url: https://platform.claude.com/docs/en/manage-claude/compliance-api
-        verified: 2026-09-10
+          The Anthropic Trust Center (compliance scope table, SOC 2 Type 2 and CSA STAR L2 report, ISO 27001 and
+          ISO 42001 certificates, HIPAA reports, SIG Lite, CAIQ, VSA and HECVAT questionnaires, infrastructure
+          diagram, security advisories) and the Compliance API effective-settings endpoint feed the
+          organisation's TPRM platform
+        evidence:
+          - title: Anthropic Trust Center (compliance scope table and resources, read 2026-09-25)
+            url: https://trust.anthropic.com/
+          - title: Compliance API — organizations, users, roles, groups and effective settings
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-org-data
+        note: >-
+          External by the rule applied to every vendor: the questionnaire, evidence expiry and reassessment
+          trigger live in the organisation's TPRM platform. The Trust Center scope table lists SOC 2 Type 2, ISO
+          27001, ISO 42001, CSA STAR, HIPAA and NIST 800-171 for Claude Enterprise, and all but HIPAA for Claude
+          Team; the reports and questionnaires sit behind Request access, and it publishes CVE-2026-22561 for the
+          Claude for Windows installer. Re-assess the tenant on a clock by reading each organisation's effective
+          settings through the Compliance API (Enterprise); a readback is evidence for the assessment, not the
+          assessment.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiTprm
@@ -503,7 +550,7 @@ tools:
               mechanism: >-
                 Trust Center artifacts (SOC 2, ISO 27001, HIPAA implementation guide, architecture overviews)
                 feed the buyer's TPRM platform
-              steps: &a1
+              steps:
                 - title: Collect artifacts
                   body:
                     - Request the Trust Center resources referenced across the docs, including the Cowork desktop security
@@ -535,23 +582,37 @@ tools:
                 polls; nothing in the product compares settings to a baseline, detects drift or remediates.
                 The same rule applies to every vendor with a readback API.
               verified: 2026-09-10
-        note: "[capabilityVendorAssurance] The Compliance API effective-settings and Activity Feed endpoints are
-          the readback an SSPM product polls; nothing in the product compares settings to a baseline, detects
-          drift or remediates. The same rule applies to every vendor with a readback API."
       - mitigation: AML.M0029
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          Connector tool calls prompt per tool unless the user chooses always allow; Owners can set connector
-          tools to ask or blocked org-wide; no approval workflow for chat outputs
+          Connector tool policy per connector and tool (Always allow / Needs approval / Blocked) at Organization
+          settings > Connectors and, on Enterprise, on each custom role's Connectors tab; a Needs approval
+          ceiling makes Claude ask before each call and removes the member's "Always allow"; device keys remove
+          local MCP servers and desktop extensions
         steps:
-          - title: Force approval on connector actions
+          - title: Cap write tools at Needs approval
             body:
-              - At Organization settings > Connectors set tools that write (send message, create issue) to ask
-                or remove them; these settings are enforced in Claude Code and Cowork sessions too.
+              - >-
+                Set send, create, update and delete tools to Needs approval (or Blocked) in the organisation-wide
+                tool policy at Organization settings > Connectors and on each role's Connectors tab; members then
+                confirm every call and cannot choose Always allow.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Remove the tools the policy does not reach
+            body:
+              - >-
+                Set isLocalDevMcpEnabled false, or isDesktopExtensionEnabled false, in com.anthropic.claudefordesktop
+                or HKLM\SOFTWARE\Policies\Claude where local tools are not wanted.
             url: >-
-              https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
-        evidence: []
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+        note: >-
+          Partial by the rule: a present person approves each call of an organisation connector's tool and an
+          administrator can force that per tool, non-overridably and enforced on Anthropic's servers for web,
+          desktop and mobile, but the docs do not say the prompt shows the tool's arguments, so approval bound to
+          the exact action is not documented. Outside the policy: local MCP servers and desktop extensions, whose
+          prompts the user can set to always allow unless the device keys remove them; code execution with
+          network egress, which acts without per-action approval; and roles or organisations left at Always
+          allow, where members keep persistent approval. Team plans set the policy organisation-wide only.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -572,29 +633,45 @@ tools:
                     https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
               verified: 2026-09-10
       - mitigation: D3-AA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Compliance Access Keys and Admin API keys with scopes; connector service identities via
-          enterprise-managed authorisation; no per-agent identity for chat
+          Enterprise-managed authorisation (Organization settings > Connectors > connector > Configuration >
+          Managed authorization) issues connector grants from the IdP by role and removes them on IdP
+          deprovisioning; the Activity Feed records integration_user_connected, integration_user_disconnected and
+          mcp_server_managed_auth_token_exchanged per member; member removal ends access immediately
         steps:
-          - title: Scope machine credentials
+          - title: Issue connector grants from the IdP
             body:
-              - Create a Compliance Access Key with only the scopes needed (read:compliance_activities,
-                read:compliance_user_data) rather than an Owner's session.
-            url: https://platform.claude.com/docs/en/manage-claude/compliance-api
-        evidence: []
+              - >-
+                On a supported connector click Set up next to Managed authorization, confirm the Okta connection,
+                choose the roles and the scopes Claude may request, then Save & turn on.
+            url: >-
+              https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+          - title: Inventory grants from the Activity Feed (Enterprise)
+            body:
+              - >-
+                Query /v1/compliance/activities with activity_types[] integration_user_connected and
+                integration_user_disconnected to keep a per-member register of connector grants.
+            url: https://platform.claude.com/docs/en/api/compliance/activities/list
+          - title: End grants with the person
+            body:
+              - >-
+                Use SCIM directory sync so members removed from the IdP app are removed from the organisation,
+                which ends their access immediately.
+            url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] The scoped API keys identify automation reading the organisation, not an
-          agent acting for users; connector service identities are the vendor's; chat actions carry the user's
-          identity.
+          Partial by the rule: no console page or API lists each member's live connector grants with a revoke
+          action, so the register is the organisation's, rebuilt from Activity Feed events; per-grant revocation
+          is the member's (Customize > Connectors) or the source's (Entra, Google), and Owners can only remove a
+          connector for everyone. Managed authorisation binds grants to the IdP lifecycle, with token lifetime set
+          by the connector's authorisation server, but covers ten listed connectors and Okta only; individually
+          authorised grants live as long as the source allows (Microsoft 365 refresh tokens lapse after 90 days of
+          inactivity by default). Chat has no agent identity of its own: connector actions carry the member's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityNhiManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityNhiManagement
               coverage: partial
@@ -613,22 +690,30 @@ tools:
               verified: 2026-09-10
       - mitigation: D3-DI
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          Custom data retention (30 days to indefinite) for chats and projects, Compliance API retrieve and
-          delete for chats, files and projects, organisation data export
+          The Compliance API enumerates every chat, file, project and project attachment, and chat messages name
+          the integration and MCP server behind each tool call; Organization settings > Connectors lists the
+          organisation's connectors; the Activity Feed records which member connected which integration
         steps:
-          - title: Set retention and delete on demand
+          - title: Enumerate what Claude holds (Enterprise)
             body:
-              - Configure retention at Organization settings > Data and privacy (Owner) and use the Compliance
-                API content endpoints to retrieve or delete chats, files and projects.
-            url: >-
-              https://support.claude.com/en/articles/10440198-configure-custom-data-retention-controls-for-enterprise-plans
-        evidence: []
+              - >-
+                Page /v1/compliance/apps/chats with order_by=updated_at, then each chat's messages, files and
+                artifacts, and the projects and project attachments, with a read:compliance_user_data key.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-content-data
+          - title: List the sources behind the connectors
+            body:
+              - >-
+                Export the connectors at Organization settings > Connectors and the integration_user_connected
+                events, then run your data-classification tooling over those sources before enabling them.
+            url: https://platform.claude.com/docs/en/api/compliance/activities/list
         note: >-
-          Retention, deletion and export are data lifecycle controls. They do not discover or classify
-          sensitive content in chats, files or projects, nor assess exposure; a DSPM product consumes the
-          Compliance API content endpoints to do that.
+          Partial by the rule: the product lists what it stores and which sources are connected, without
+          classification or an oversharing report on the drives, mailboxes, sites and channels behind the
+          connectors (the Microsoft 365 connector retrieves on demand and caches no file content, so there is no
+          index to inspect). Custom retention and deletion are lifecycle controls, not inventory. Knowing what
+          the connectors reach is a DSPM or data-classification product, which can consume the Compliance API.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityDspm
@@ -652,30 +737,45 @@ tools:
                 the Compliance API content endpoints to do that.
               verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Connector OAuth tokens held by the platform; enterprise-managed authorisation replaces per-user
-          grants; API and compliance keys are scoped and revocable in the console
+          Connector OAuth tokens encrypted in Anthropic's backend and never shown to the model, their lifetime
+          set by the source or, under managed authorisation, the IdP; MCP tunnels (Enterprise research preview)
+          with a tunnel token rotated by re-running setup and revoked by archiving; Compliance Access Keys scoped
+          at creation and deleted at Organization settings > API
         steps:
-          - title: Centralise connector credentials
+          - title: Rotate and revoke the tunnel credentials
             body:
-              - Use enterprise-managed authorisation so connector access is inherited from IdP roles on first
-                login instead of users pasting tokens.
+              - >-
+                Revoke the Tunnels API key at Organization settings > Tunnels > Tunnels API after every setup
+                run, rotate the tunnel token by incrementing tunnel.tokenVersion (Helm) or --token-version
+                (Compose) and re-running setup, and archive a tunnel to invalidate it.
+            url: https://claude.com/docs/connectors/mcp-tunnels/setup
+          - title: Scope and rotate compliance keys
+            body:
+              - >-
+                Create separate read and delete Compliance Access Keys at Organization settings > API and rotate
+                them yourself; they never expire and a deleted key fails on the next request.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-api-access
+          - title: Issue connector credentials through the IdP
+            body:
+              - >-
+                Set up Managed authorization on supported connectors so the IdP and the connector's
+                authorisation server set token lifetime and deprovisioning revokes access.
             url: >-
               https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Connector tokens are held by the platform and never shown to the
-          model; the API and compliance keys are long-lived until rotated in the console. Enterprise-managed
-          authorisation replaces per-user grants — it does not make the underlying credential ephemeral.
+          Partial by the rule: a vendor tunnel exists and its credentials are scoped and revocable, but rotating
+          the tunnel token means re-running setup and restarting cloudflared (a redeploy of the tunnel stack),
+          the token and TLS private keys are stored in your environment (Helm release Secrets are not encrypted
+          at rest by default), and the preview carries no uptime or support commitment. Compliance Access Keys do
+          not expire, and individually authorised connector tokens live as long as the source allows. Custody of
+          the desktop app's own sign-in token is not documented for standard deployments.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -696,28 +796,42 @@ tools:
               verified: 2026-09-10
       - mitigation: AML.M0028
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          Connector enablement per organisation, per-tool read/write restrictions, role-based connector
-          access, desktop extension allowlist, isLocalDevMcpEnabled, isDesktopExtensionEnabled
+          Only Owners add connectors (Organization settings > Connectors) and members can connect only those;
+          per-tool Always allow / Needs approval / Blocked as an organisation-wide ceiling and, on Enterprise,
+          per custom role, enforced on Anthropic's servers; isLocalDevMcpEnabled, isDesktopExtensionEnabled and
+          the desktop extension allowlist on the device
         steps:
-          - title: Enable and scope connectors
+          - title: Set the organisation-wide tool policy
             body:
-              - Enable connectors at Organization settings > Connectors > Browse connectors and restrict each
-                connector's tools (for example search but not send) for the whole organisation.
+              - >-
+                At Organization settings > Connectors open each connector's tool permissions and set every tool
+                or category to Always allow, Needs approval or Blocked; members cannot widen it.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Narrow it per group (Enterprise)
+            body:
+              - >-
+                On each custom role's Connectors tab under Organization settings > Roles set All connectors, each
+                connector or each tool; new roles default to Needs approval, and the stricter of role and
+                organisation policy applies.
             url: >-
-              https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
+              https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
           - title: Lock down device-side tools
             body:
-              - Turn on the desktop extension allowlist and set isLocalDevMcpEnabled or
-                isDesktopExtensionEnabled false in device policy where local tools are not wanted.
+              - >-
+                Turn on the allowlist at Organization settings > Connectors > Desktop and set isLocalDevMcpEnabled
+                false in device policy where local MCP servers are not wanted.
             url: >-
               https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
-        evidence: []
         note: >-
-          Connector enablement and per-tool read/write restrictions hide or limit connector tools org-wide;
-          there is no argument-level scoping (which folder, which channel) beyond what the connector's own
-          authorisation grants.
+          Native on Enterprise by the rule: an administrator allowlist of connectors plus per-tool (read versus
+          write) scoping per group, locked against members and enforced outside the model; when permissions
+          cannot load, access fails toward deny. Boundaries: no argument or resource scoping (which folder, which
+          channel) beyond the source system's own permissions; Team plans scope organisation-wide only; members on
+          built-in roles get every organisation connector under the organisation-wide policy; local MCP servers
+          and desktop extensions are outside the tool policy (device keys and the extension allowlist only, and
+          the allowlist does not guard against tampering with installed files).
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -749,20 +863,39 @@ tools:
       - mitigation: cap-data-access-governance
         coverage: partial
         mechanism: >-
-          Connectors retrieve as the authenticated user (OAuth) or as the scoped managed authorisation;
-          verified-domain restriction stops org services connecting to outside accounts
-        steps: &a1
-          - title: Keep retrieval per user
+          Connectors retrieve with each member's own permissions at the source (per-user OAuth, or the IdP's
+          assertion under managed authorisation); administrators choose which connectors and tools exist, narrow
+          Microsoft Graph permissions in Entra, and stop verified-domain services connecting to outside Claude
+          accounts; no site, drive or mailbox scoping in Claude
+        steps:
+          - title: Keep retrieval on the member's own entitlements
             body:
-              - Prefer user OAuth or role-scoped managed authorisation over shared service accounts and turn on the
-                verified-domain connector restriction on Enterprise.
+              - >-
+                Add only the connectors you govern at Organization settings > Connectors; each member then
+                authenticates individually and reaches only what their source account can.
             url: >-
               https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
+          - title: Narrow what the Microsoft 365 connector may read
+            body:
+              - >-
+                In Entra under Enterprise applications > M365 MCP Server for Claude > Permissions revoke Graph
+                permissions such as Sites.Read.All or Mail.Read that the organisation does not want reached.
+            url: https://support.claude.com/en/articles/12542951-set-up-the-microsoft-365-connector
+          - title: Keep work data out of personal Claude accounts (Enterprise)
+            body:
+              - >-
+                At Organization settings > Organization and access > Connector domain restriction turn on
+                Restrict verified-domain connectors to your enterprise.
+            url: >-
+              https://support.claude.com/en/articles/15402193-restrict-verified-domain-connectors-to-your-enterprise
         note: >-
-          Delegated when the connector runs as the user (the source system enforces the user's permissions,
-          oversharing included); service-owned when enterprise-managed authorisation is used, in which case
-          the managed scope, not the user's entitlements, bounds retrieval for everyone.
-        verified: 2026-09-10
+          Partial by the rule: retrieval runs with the requesting member's entitlements, so the source enforces
+          them (oversharing included, and Microsoft 365 DLP applies to delegated calls), but administrators can
+          only include or exclude whole connectors, tools or Graph permission scopes, not choose which sites,
+          drives or mailboxes the assistant may search; the Ask Your Org enterprise search project uses the same
+          per-member connectors. Under managed authorisation the Owner-chosen scopes bound every member of the
+          roles selected. Oversharing remediation is the source's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityDataAccessGovernance
@@ -773,7 +906,13 @@ tools:
               mechanism: >-
                 Connectors retrieve as the authenticated user (OAuth) or as the scoped managed authorisation;
                 verified-domain restriction stops org services connecting to outside accounts
-              steps: *a1
+              steps:
+                - title: Keep retrieval per user
+                  body:
+                    - Prefer user OAuth or role-scoped managed authorisation over shared service accounts and turn on the
+                      verified-domain connector restriction on Enterprise.
+                  url: >-
+                    https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
               note: >-
                 Delegated when the connector runs as the user (the source system enforces the user's
                 permissions, oversharing included); service-owned when enterprise-managed authorisation is
@@ -783,20 +922,37 @@ tools:
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
-          Organisation connector catalogue, extension allowlist and role assignments in the console;
-          Compliance API session listings for Cowork and Claude Code
-        steps: &a1
-          - title: Treat the connector catalogue as the registry
+          Organization settings > Connectors lists every organisation connector (only Owners add them, members
+          connect only those); the desktop extension allowlist at Organization settings > Connectors > Desktop;
+          Organization settings > Plugins & skills Inventory and Requests tabs list governed plugins and skills
+          and the approval queue for member submissions
+        steps:
+          - title: Treat the connector list as the enforced register
             body:
-              - Only Owner-enabled connectors and allowlisted extensions are available to members; review them under
-                Organization settings > Connectors.
+              - >-
+                Keep custom connectors Owner-added at Organization settings > Connectors and remove any that
+                have no owner in your inventory.
+            url: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
+          - title: Turn on the desktop extension allowlist
+            body:
+              - >-
+                Toggle Allowlist on under Organization settings > Connectors > Desktop; unlisted extensions are
+                force-deleted and new installs come only from the sanctioned registry.
             url: >-
               https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
+          - title: Approve plugins and skills before they spread
+            body:
+              - >-
+                Review the Inventory and approve or deny member submissions on the Requests tab of Organization
+                settings > Plugins & skills.
+            url: https://claude.com/docs/plugins/admin
         note: >-
-          The connector catalogue and extension allowlist are approved configuration; session listings are
-          use. There is no owner or approval record per connector and no reconciliation — the organisation's
-          inventory holds those.
-        verified: 2026-09-10
+          Partial by the rule: the connector list and extension allowlist are enforced registers, but they carry
+          no owner or approval record per connector, the allowlist ships off, local MCP servers configured in
+          claude_desktop_config.json appear nowhere unless isLocalDevMcpEnabled removes them, and members with
+          the Create skills capability add their own skills. Reconciliation against actual use is the
+          organisation's inventory.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -807,7 +963,13 @@ tools:
               mechanism: >-
                 Organisation connector catalogue, extension allowlist and role assignments in the console;
                 Compliance API session listings for Cowork and Claude Code
-              steps: *a1
+              steps:
+                - title: Treat the connector catalogue as the registry
+                  body:
+                    - Only Owner-enabled connectors and allowlisted extensions are available to members; review them under
+                      Organization settings > Connectors.
+                  url: >-
+                    https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
               note: >-
                 The connector catalogue and extension allowlist are approved configuration; session listings
                 are use. There is no owner or approval record per connector and no reconciliation — the
@@ -816,20 +978,31 @@ tools:
       - mitigation: cap-shadow-ai-discovery
         coverage: partial
         mechanism: >-
-          Domain capture pulls verified-domain accounts into the organisation; tenant restrictions and IP
-          allowlisting block personal accounts on corporate networks
-        steps: &a1
-          - title: Capture and block
+          Enterprise domain claiming lists every personal Free, Pro and Max account on a verified domain (email,
+          plan, created, last active; CSV export) and "Migrate accounts using your domain" moves or closes them;
+          Restrict organization creation, the anthropic-allowed-org-ids header and forceLoginOrgUUID prevent new
+          personal use
+        steps:
+          - title: Review personal accounts on your domain (Enterprise)
             body:
-              - Verify domains for account claiming and deploy the tenant-restriction header so personal claude.ai use
-                from managed networks is refused.
-            url: >-
-              https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+              - >-
+                After domain verification, SSO enforcement and JIT or SCIM, review and export the personal
+                accounts on the domain, then turn on Migrate accounts using your domain under Organization
+                settings > Organization and access > Security.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+          - title: Stop new personal organisations on the domain
+            body:
+              - >-
+                Turn on Restrict organization creation under Security on the Organization and access page once
+                the domain shows Verified.
+            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
         note: >-
-          Domain capture is a genuine discovery signal: it finds personal accounts on verified domains and
-          pulls them into the organisation. Its scope is accounts on your domains — personal accounts on other
-          addresses and unmanaged devices are found by proxy or endpoint inventory.
-        verified: 2026-09-10
+          Partial by the rule: the vendor lists personal accounts on the verified domains, not what they do,
+          accounts on personal addresses, Claude on unmanaged devices, or connectors members attach, which remain
+          for SSE/CASB and endpoint inventory. Domain capture is one-way and has a fixed 30-day window; Team plans
+          can verify a domain and block new personal accounts but not list or claim existing ones. The header and
+          forceLoginOrgUUID prevent rather than discover.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityShadowAiDiscovery
@@ -840,36 +1013,59 @@ tools:
               mechanism: >-
                 Domain capture pulls verified-domain accounts into the organisation; tenant restrictions and
                 IP allowlisting block personal accounts on corporate networks
-              steps: *a1
+              steps:
+                - title: Capture and block
+                  body:
+                    - Verify domains for account claiming and deploy the tenant-restriction header so personal claude.ai use
+                      from managed networks is refused.
+                  url: >-
+                    https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
               note: >-
                 Domain capture is a genuine discovery signal: it finds personal accounts on verified domains
                 and pulls them into the organisation. Its scope is accounts on your domains — personal
                 accounts on other addresses and unmanaged devices are found by proxy or endpoint inventory.
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          Enterprise audit logs (30+ event types, 180-day export) and the Compliance API Activity Feed with
-          actor, IP, user agent and device; session transcripts for Cowork, Claude Code, M365 and Science
+          Compliance API (Enterprise): /v1/compliance/apps/chats and each chat's messages return prompts,
+          responses and tool_use blocks (tool name, JSON input, integration name, mcp_server_url) with tool_result
+          text, files and artifacts; /v1/compliance/activities returns control-plane and connector events such as
+          integration_user_connected, mcp_tool_policy_updated and inference_hooks_request_denied; a 180-day
+          audit-log CSV export
         steps:
-          - title: Export or stream audit events
+          - title: Create a Compliance Access Key (Enterprise)
             body:
-              - Owners export logs from Organization settings > Data and privacy, or query GET
-                /v1/compliance/activities continuously into the SIEM.
-            url: https://support.claude.com/en/articles/9970975-access-audit-logs
-        evidence: []
+              - >-
+                The primary owner enables the Compliance API at Organization settings > API and creates a key
+                with read:compliance_activities and read:compliance_user_data only.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-api-access
+          - title: Pull conversations with their tool calls
+            body:
+              - >-
+                Walk /v1/compliance/apps/chats with order_by=updated_at and fetch each chat's messages with
+                tool_result_max_chars and tool_use_input_max_chars set to -1 so inputs and results are not cut at
+                10,000 characters.
+            url: https://platform.claude.com/docs/en/api/compliance/apps/chats/messages/list
+          - title: Stream the Activity Feed to the SIEM
+            body:
+              - >-
+                Poll /v1/compliance/activities from the last saved cursor and correlate its events with your
+                gateway's records.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-activity-feed
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Vendor-held audit log with a 180-day export window and the Activity Feed;
-          durable retention and tamper evidence beyond that window are the organisation's archive. Events are
-          attributed, not signed.
+          Native by the rule: an administrator exports conversation content with each connector call's tool,
+          arguments, server and result, plus connector and policy events, programmatically. Boundaries: Enterprise
+          only (Team has neither the API nor audit logs); pull-based, so a chat a member deletes before the next
+          poll comes back with deleted_at and no content, and retention deletions are final; non-text tool
+          results are omitted; transcripts of Cowork and Claude Code sessions are separate endpoints; integrity
+          and retention beyond Anthropic's are the SIEM's. Inference hooks can push each governed transcript in
+          real time as an archival alternative.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: native
@@ -889,21 +1085,47 @@ tools:
                 not signed.
               verified: 2026-09-10
       - mitigation: cap-agent-kill-switch
-        coverage: native
+        coverage: partial
         mechanism: >-
-          SCIM deprovisioning, member removal, connector disable (revokes for all), extension allowlist
-          force-delete, device keys (isClaudeCodeForDesktopEnabled, secureVmFeaturesEnabled,
-          isDesktopExtensionEnabled), Compliance API delete
-        steps: &a1
-          - title: Cut access and remove data
+          Member removal (Organization settings > Members > Remove from team, or SCIM) ends access immediately;
+          an Owner removes a connector for everyone at Organization settings > Connectors or sets its tools to
+          Blocked; the Chat capability off on custom roles (up to 15 minutes); an Inference hooks deny for an
+          account (Enterprise, beta); isLocalDevMcpEnabled and isDesktopExtensionEnabled false on devices
+        steps:
+          - title: Cut a member off
             body:
-              - Remove the member or SCIM group, disable the connector at Organization settings > Connectors, and delete
-                chats, files or projects through the Compliance API.
-            url: https://platform.claude.com/docs/en/manage-claude/compliance-api
+              - >-
+                Select Remove from team at Organization settings > Members, or remove the person from the IdP app
+                with SCIM; they lose access to the organisation immediately.
+            url: https://support.claude.com/en/articles/13133750-manage-members-on-team-and-enterprise-plans
+          - title: Remove a connector for everyone
+            body:
+              - >-
+                At Organization settings > Connectors click Remove (or the three dots) on the connector, or set
+                all of its tools to Blocked, then revoke the app's grant at the source (Entra, Google, your IdP).
+            url: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
+          - title: Refuse inference for an account (Enterprise, beta)
+            body:
+              - >-
+                With Enforce verdicts on, have your AI security server deny that member's requests; turning
+                enforcement on or off reaches every Anthropic server in about a minute.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Remove device-side tools
+            body:
+              - >-
+                Set isLocalDevMcpEnabled and isDesktopExtensionEnabled false in com.anthropic.claudefordesktop or
+                HKLM\SOFTWARE\Policies\Claude.
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
         note: >-
-          Seat removal and connector disable apply at the next request; a connector call in flight completes.
-          The docs state no propagation delay, so measure it.
-        verified: 2026-09-10
+          Partial by the rule: there is no organisation-wide switch for claude.ai chat (the Chat capability can be
+          turned off only on custom roles, and built-in roles keep it); removing a connector disables it for every
+          member, but revocation of the grants at the source is not documented, so revoke them there; and the
+          effect of either on a research run or tool loop already in progress is not documented (delay not
+          documented; role changes up to 15 minutes). Member removal is documented as immediate. An Inference
+          hooks deny refuses the next inference request, which halts a running tool loop at its next step, but
+          only on Enterprise and only while the hook is enforcing.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -915,11 +1137,22 @@ tools:
                 SCIM deprovisioning, member removal, connector disable (revokes for all), extension allowlist
                 force-delete, device keys (isClaudeCodeForDesktopEnabled, secureVmFeaturesEnabled,
                 isDesktopExtensionEnabled), Compliance API delete
-              steps: *a1
+              steps:
+                - title: Cut access and remove data
+                  body:
+                    - Remove the member or SCIM group, disable the connector at Organization settings > Connectors, and delete
+                      chats, files or projects through the Compliance API.
+                  url: https://platform.claude.com/docs/en/manage-claude/compliance-api
               note: >-
                 Seat removal and connector disable apply at the next request; a connector call in flight
                 completes. The docs state no propagation delay, so measure it.
               verified: 2026-09-10
+    advisories:
+      - title: >-
+          CVE-2026-22561 — DLL search-order hijacking in the Claude for Windows installer (local privilege
+          escalation; fixed in 1.1.3363)
+        url: https://nvd.nist.gov/vuln/detail/cve-2026-22561
+        date: "2026-03"
     sources:
       - title: What is the Enterprise plan
         url: https://support.claude.com/en/articles/9797531-what-is-the-enterprise-plan
