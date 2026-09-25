@@ -1,0 +1,783 @@
+# Vercel AI SDK — one entity per product × reference architecture. Facts are dated (asOf) and cite the
+# vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: Vercel AI Gateway, Vercel Workflow (WorkflowAgent from @ai-sdk/workflow) and Vercel Sandbox are
+# separate products, recorded only as facts and in the rows where the AI SDK docs wire them in. AI SDK
+# Harnesses (HarnessAgent adapters that run Claude Code, Codex, OpenCode, Cline and others) run other vendors'
+# agents and are not onboarded here; their 2026 advisories (GHSA-222v-gj5h-ff73, GHSA-vmqp-7rwf-cq3w,
+# CVE-2026-64650, CVE-2026-64651) belong to those adapter packages. AI SDK RSC (legacy) and the Chat SDK are
+# out of scope. AI Elements and Streamdown are companion UI libraries cited on the output-encoding row only.
+# 2026-09-25: onboarded toolVercelAiSdk (22 rows) against the MITRE capability rules for AI SDK 7 (ai 7.0.114
+# on npm); read with WebFetch and the pages' .md variants; https://ai-sdk.dev/docs redirects to
+# /docs/introduction; the approval, loop, telemetry, middleware, MCP and gateway pages all answered 200;
+# activeTools enforcement at parse time confirmed in the vercel/ai generateText source, not stated in docs.
+vendor: vercel
+family: Vercel AI SDK
+tools:
+  - id: toolVercelAiSdk
+    name: Vercel AI SDK
+    surfaceClasses:
+      - sdkFramework
+    variants:
+      - name: "ai (AI SDK Core: generateText, streamText, ToolLoopAgent)"
+        class: sdkFramework
+        url: https://ai-sdk.dev/docs/getting-started/navigating-the-library
+      - name: "@ai-sdk/react and the other UI hooks (AI SDK UI: useChat)"
+        class: sdkFramework
+        url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
+      - name: "@ai-sdk/mcp (MCP client)"
+        class: sdkFramework
+        url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+      - name: "@ai-sdk/otel (OpenTelemetry integration)"
+        class: sdkFramework
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+      - name: "@ai-sdk/policy-opa (policy-based tool approvals)"
+        class: sdkFramework
+        url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+    architecture: archChatAgent
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        An open-source TypeScript toolkit (Apache-2.0) that runs the agent loop inside the customer's own server
+        code: generateText / streamText and ToolLoopAgent call a model, execute the tools declared on that call in
+        the application process, and loop until a stop condition; useChat streams the conversation to a React (or
+        Vue, Svelte) front end. Nothing is hosted by Vercel unless the application routes model calls through AI
+        Gateway, which plain model strings do by default.
+      - >-
+        Its controls are call options the deployer sets: toolApproval (manual approval, automatic allow or deny,
+        or an OPA policy through @ai-sdk/policy-opa) with experimental_toolApprovalSecret to sign approvals,
+        activeTools and prepareStep, stopWhen and timeout, language-model middleware as the guardrail attach
+        point, OpenTelemetry spans through @ai-sdk/otel, and an MCP client with OAuth and tool-definition
+        fingerprinting. Authentication, chat persistence, rate limiting, sandboxing and egress are the
+        application's or its platform's.
+    facts:
+      - label: Plans
+        value: >-
+          Free, open-source library (Apache-2.0, vercel/ai); no Vercel plan is needed. Model usage is billed by the
+          chosen provider, or by Vercel when routed through AI Gateway (a separate product; request-level ZDR only
+          on Pro and Enterprise).
+        url: https://github.com/vercel/ai
+      - label: Inference & routing
+        value: >-
+          Plain model strings resolve through the global default provider, which is Vercel AI Gateway
+          (ai-gateway.vercel.sh) unless globalThis.AI_SDK_DEFAULT_PROVIDER is set; provider packages
+          (@ai-sdk/openai, @ai-sdk/anthropic and others) call the provider directly with its own key.
+        url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+      - label: Data leaving the device
+        value: >-
+          From the customer's server: prompts, files, tool definitions and tool results to the model provider or AI
+          Gateway. In the standard useChat pattern the browser sends the whole message history to the route every
+          turn. Telemetry goes only to integrations the application registers, with inputs and outputs recorded by
+          default.
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+      - label: Retention & training
+        value: >-
+          The SDK stores nothing; chat history, memory and traces live where the application puts them.
+          Model-side retention is the provider's terms; through AI Gateway, providerOptions.gateway
+          zeroDataRetention and disallowPromptTraining restrict routing to providers with those agreements with
+          Vercel (the training filter is not applied to BYOK credentials).
+        url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+      - label: Docs index
+        value: >-
+          ai-sdk.dev/docs (llms.txt, a search endpoint and a .md variant of every page); AI SDK 7, ai 7.0.114 on npm
+          on 2026-09-25.
+        url: https://ai-sdk.dev/docs/introduction
+      - label: Version 7 changes that move controls
+        value: >-
+          toolApproval on the call or agent replaces the deprecated needsApproval on tools (kept for
+          WorkflowAgent); experimental_telemetry became telemetry and OpenTelemetry moved to @ai-sdk/otel, opt-out
+          once registered; stepCountIs became isStepCount.
+        url: https://ai-sdk.dev/docs/migration-guides/migration-guide-7-0
+      - label: Separate Vercel products the docs wire in
+        value: >-
+          AI Gateway (default provider, OIDC authentication, quotaEntityId quotas, ZDR routing); Vercel Workflow for
+          WorkflowAgent (durable runs and approvals that survive suspension, no default step limit); Vercel Sandbox
+          as one isolation provider behind Experimental_SandboxSession. Each control that depends on them needs
+          that product.
+        url: https://ai-sdk.dev/docs/agents/workflow-agent
+    riskNotes:
+      - risk: riskRogueActions
+        note: >-
+          In the default useChat pattern the server rebuilds the conversation from client-sent messages, so without
+          experimental_toolApprovalSecret a client can fabricate an approval for any schema-valid input; tools with
+          an execute function and no toolApproval run as soon as the model calls them.
+      - risk: riskRunawayAgentToolLoops
+        note: >-
+          ToolLoopAgent stops at isStepCount(20) by default, generateText and streamText at one step; isLoopFinished()
+          removes the cap and WorkflowAgent has none, so a durable run loops until the model stops calling tools.
+      - risk: riskToolRegistryTampering
+        note: >-
+          mcpClient.tools() returns whatever the server serves on each call and the SDK uses it unchanged unless the
+          application compares fingerprintTools digests against a stored baseline with detectToolDrift.
+      - risk: riskInsecureModelOutput
+        note: >-
+          useChat hands the application typed parts and renders nothing; the docs' chatbot examples put model file
+          URLs straight into img src, and Streamdown, the companion renderer, allows every image and link prefix
+          until configured.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Once an OpenTelemetry integration is registered every call records inputs and outputs by default, and
+          approval metadata keeps the original tool input including fields a schema transform removed.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          Tools run in the application process; Experimental_SandboxSession is only an interface and does not
+          sandbox the tool, and code mode's QuickJS sandbox leaves every provided tool executing on the host.
+    controls:
+      - mitigation: cap-agent-tool-registry
+        coverage: partial
+        mechanism: >-
+          Tools declared per call in the tools map (ToolLoopAgent, generateText, streamText) with activeTools;
+          opaCapabilityMiddleware dropping tools that an OPA policy does not list before the model sees them;
+          wrapMcpTools with default 'denied' over discovered MCP tools; mcpClient.tools({ schemas }) pulling only
+          named tools
+        steps:
+          - title: Serve the admitted tool list from policy
+            body:
+              - >-
+                Wrap the model with wrapLanguageModel({ model, middleware: opaCapabilityMiddleware({ client, path:
+                'agent/tools/allowed' }) }) and keep the registry's admitted tool names in the OPA data; an
+                evaluator error leaves the model with no tools.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+          - title: Refuse discovered tools the registry has not admitted
+            body:
+              - >-
+                Pass MCP tools through wrapMcpTools(await mcpClient.tools(), opaPolicy({ client, path }), { default:
+                'denied' }) so any tool the policy does not name is denied at dispatch.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+          - title: Pull only the MCP tools you named
+            body:
+              - >-
+                Call mcpClient.tools({ schemas: { ... } }) with an entry per admitted tool; the client then pulls only
+                the explicitly defined tools.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        note: >-
+          Partial by this drawing's rule (tools declared in code per call; native only with an enforced registry):
+          the SDK admits exactly the tools each call declares and can consult an OPA-served list per call, fail
+          closed, which is where a registry plugs in, but it keeps no record of owner, version or approval state
+          and reconciles nothing. Agents built on the SDK are not inventoried anywhere, provider-executed tools are
+          declared in the same map, and a tool list is whatever the application's code assembles.
+        verified: "2026-09-25"
+      - mitigation: AML.M0008
+        coverage: external
+        mechanism: >-
+          None in the SDK; an evaluation or red-team platform in the deployer's CI drives generateText or the
+          ToolLoopAgent headless; experimental_evaluate is a runtime LLM-judge API, not a release gate
+        evidence:
+          - title: Evaluation (experimental_evaluate, an evaluation-model API for choice, score and boolean questions)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/evaluation
+          - title: Navigating the library (no test harness or release gate among the packages)
+            url: https://ai-sdk.dev/docs/getting-started/navigating-the-library
+        note: >-
+          External (an evaluation or red-team platform in CI): the SDK ships nothing that tests a model, prompt or
+          tool change and blocks its release. experimental_evaluate asks an evaluation model named questions about
+          one state and returns uncalibrated estimates; it can score outputs inside a test the platform runs, but
+          the test set, its protection and the promotion decision are the platform's. Integration point: run the
+          agent headless in CI with a pinned model id and gate on the results and the telemetry spans.
+        verified: "2026-09-25"
+      - mitigation: AML.M0029
+        coverage: native
+        mechanism: >-
+          toolApproval status 'user-approval' (per tool, per input, or one GenericToolApprovalFunction) on
+          ToolLoopAgent, generateText or streamText; the call returns a tool-approval-request (approvalId,
+          toolCallId, input) instead of executing; useChat shows the part in state 'approval-requested' and
+          addToolApprovalResponse answers it; experimental_toolApprovalSecret HMAC-signs the request to the tool
+          name, tool call ID and input
+        steps:
+          - title: Mark consequential tools for approval
+            body:
+              - >-
+                Set toolApproval: { <tool>: 'user-approval' } on the ToolLoopAgent or streamText call, or a function
+                that returns 'user-approval' from the input and runtimeContext; the agent returns a
+                tool-approval-request instead of running the tool.
+            url: https://ai-sdk.dev/docs/agents/tool-approvals
+          - title: Show the exact call in the thread
+            body:
+              - >-
+                Render tool parts with state 'approval-requested' (tool name, input, approval.requestReason) and answer
+                with addToolApprovalResponse({ id: part.approval.id, approved }), with sendAutomaticallyWhen set to
+                lastAssistantMessageIsCompleteWithApprovalResponses.
+            url: https://ai-sdk.dev/docs/agents/tool-approvals
+          - title: Sign approvals on the server
+            body:
+              - >-
+                Pass experimental_toolApprovalSecret (at least 32 random bytes, the same value on every instance) so a
+                fabricated or altered approval fails with AI_InvalidToolApprovalSignatureError before the tool runs.
+            url: https://ai-sdk.dev/docs/agents/tool-approvals
+        note: >-
+          Native by this drawing's rule: a built-in primitive pauses the SDK-executed call, surfaces it in the UI
+          stream and runs it only on an approval that, with the secret set, is bound to that call ID, tool and
+          arguments, failing closed. The deployer supplies the approver's authentication and UI. Boundaries: without
+          the secret the history is client-controlled and the docs say a crafted approval bypasses the person; the
+          signature does not bind the approver, the conversation or an expiry, and single use is not documented;
+          subagent tools cannot use toolApproval and provider-executed tools never ask; automatic 'approved'
+          statuses and policy decisions are not human approval; the secret option is experimental.
+        verified: "2026-09-25"
+      - mitigation: D3-APA
+        coverage: partial
+        mechanism: >-
+          callOptionsSchema and prepareCall on ToolLoopAgent, or runtimeContext on generateText / streamText,
+          carrying the authenticated user's role and tenant into toolApproval; @ai-sdk/policy-opa Rego policies
+          (opaPolicy, httpPolicyClient bundles with IdP group data, shadow rollout, opa test); the grant itself is
+          the application's authentication
+        steps:
+          - title: Carry the user's grant into every call
+            body:
+              - >-
+                Define callOptionsSchema on the ToolLoopAgent and return toolApproval from prepareCall using the role
+                and tenant read from the server-side session, never from the request body.
+            url: https://ai-sdk.dev/docs/agents/tool-approvals
+          - title: Administer tool authorisation as policy code
+            body:
+              - >-
+                Write .rego rules over input.tool.name, input.args and input.runtimeContext, test them with opa test,
+                deploy through shadow(opaPolicy(...), { enforce: false }) and switch to enforce: true.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+          - title: Update entitlements without a deploy
+            body:
+              - >-
+                Point httpPolicyClient({ url }) at an OPA server whose bundles carry role-to-permission mappings and IdP
+                group memberships.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        note: >-
+          Partial on the rule for this drawing (the deployer's auth; name the SDK hooks): the SDK carries per-request
+          user context into a policy it evaluates on every tool call and ships the package to author, test and roll
+          out that policy, but it authenticates nobody and issues no delegated grant. Session identity, scope and
+          expiry come from the application's auth layer or IdP; runtimeContext holds whatever the route puts there,
+          and the message-persistence guide states it does not cover authorization.
+        verified: "2026-09-25"
+      - mitigation: AML.M0028
+        coverage: native
+        mechanism: >-
+          activeTools per call and per step (prepareStep); inputSchema validation of every call before execute
+          (InvalidToolInputError) and strict: true for provider-side strict tool calling; toolApproval or opaPolicy
+          deciding by runtimeContext principal, tool name and arguments; toolsContext giving each tool only its own
+          contextSchema-validated context
+        steps:
+          - title: Expose only the user's tools on each call
+            body:
+              - >-
+                Set activeTools on generateText or streamText, or return activeTools from prepareStep, computed from
+                the authenticated user's entitlements.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling
+          - title: Validate every argument
+            body:
+              - >-
+                Give each tool a bounded inputSchema (enums, limits); calls that fail it raise InvalidToolInputError
+                before execute, and strict: true asks supporting providers to generate only valid calls.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling
+          - title: Decide per principal, operation and resource
+            body:
+              - >-
+                Pass toolApproval: opaPolicy({ client, path }) with default decision := { "decision": "deny" } so a call
+                the user's role may not make is denied before dispatch.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+          - title: Run tools on the user's credential
+            body:
+              - >-
+                Pass the user's token in toolsContext for the tool that needs it, declared with contextSchema, instead
+                of a service key read inside execute.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/runtime-and-tool-context
+        note: >-
+          Native by this drawing's rule: per-call tool selection and schema validation are enforced by the SDK
+          outside the model (a call to a tool outside the step's active set fails as NoSuchToolError in the
+          generateText source), and the policy package decides per principal, operation and resource, failing closed
+          on evaluator errors. Boundaries: activeTools defaults to every tool and an unmatched policy rule allows;
+          the principal is whatever the route puts in runtimeContext; subagent and provider-executed tools are
+          outside toolApproval; dispatcher tools (bash, HTTP, MCP proxy) need their own argument rules; the user's
+          authority reaches a downstream system only if the tool uses the credential passed in toolsContext.
+        verified: "2026-09-25"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          The AI Gateway provider authenticating the deployment with the Vercel OIDC token (no API key) on Vercel
+          deployments; direct provider packages reading static API keys; an OAuthClientProvider as authProvider on
+          each createMCPClient HTTP or SSE transport
+        steps:
+          - title: Authenticate model calls with the deployment's OIDC identity
+            body:
+              - >-
+                On a Vercel deployment use the gateway provider and leave AI_GATEWAY_API_KEY and apiKey unset; any API
+                key present is used instead of OIDC, even if invalid.
+            url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+          - title: Register the agent as its own OAuth client at each tool server
+            body:
+              - >-
+                Pass an authProvider to createMCPClient({ transport: { type: 'http', url, authProvider } }) and
+                implement validateAuthorizationServerURL to allow only trusted authorization servers.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        note: >-
+          Partial by the rule for this drawing: the SDK authenticates with whatever the host supplies. The OIDC
+          token is issued by the Vercel platform to the project and needs AI Gateway, so every route and agent in
+          the deployment shares it (local tokens expire after 12 hours); direct providers use standing keys; an MCP
+          OAuth client registration is whatever the application's authProvider holds. No agent principal distinct
+          from the application is minted, and issuance, rotation and revocation are the platform's or the IdP's.
+        verified: "2026-09-25"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Vercel OIDC for the AI Gateway credential (obtained and refreshed automatically on deployments);
+          toolsContext with contextSchema so tool secrets never enter the prompt and are left out of telemetry
+          unless includeToolsContext names them; MCP authProvider OAuth tokens in the application's storage; env on
+          Experimental_SandboxSession.run instead of secrets inlined in commands
+        steps:
+          - title: Drop the standing model key
+            body:
+              - >-
+                Route model calls through the AI Gateway provider on Vercel with OIDC and remove AI_GATEWAY_API_KEY and
+                provider API keys from the deployment's environment.
+            url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+          - title: Keep tool secrets out of the prompt and traces
+            body:
+              - >-
+                Declare contextSchema on the tool, pass the secret in toolsContext, and leave it out of
+                telemetry.includeToolsContext, which excludes every property not set to true.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/runtime-and-tool-context
+          - title: Use OAuth rather than static MCP bearer headers
+            body:
+              - >-
+                Configure authProvider on the MCP transport instead of headers: { Authorization: 'Bearer ...' } so
+                tokens are obtained and refreshed through the OAuth flow.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        note: >-
+          Partial by the rule for this drawing (native only with short-lived or OIDC credentials supported by
+          configuration): only the model credential can be short-lived, and only through AI Gateway on Vercel.
+          Provider keys, tool keys, MCP headers and OAuth tokens are whatever the application holds and stores;
+          nothing brokers a user-scoped credential per call. toolsContext keeps values out of the model's context,
+          but every tool shares the process, and a secret a tool returns lands in spans because recordInputs and
+          recordOutputs default to true.
+        verified: "2026-09-25"
+      - mitigation: AML.M0031
+        coverage: partial
+        mechanism: >-
+          Stateless calls (the model sees only the messages the route passes); a chat id with server-side storage
+          per the persistence guide (prepareSendMessagesRequest sending only the last message, server-side message
+          ids); validateUIMessages on stored and incoming history; memory tools or providers the deployer chooses
+        steps:
+          - title: Keep the thread on the server
+            body:
+              - >-
+                In DefaultChatTransport set prepareSendMessagesRequest to send only the last message and the chat id,
+                and load the rest from your store after checking that the signed-in user owns that chat id.
+            url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+          - title: Validate history before the model reads it
+            body:
+              - >-
+                Run validateUIMessages with the tools map on the loaded and incoming messages before
+                convertToModelMessages, and reject the turn on a validation error.
+            url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+          - title: Key long-term memory to the authenticated user
+            body:
+              - >-
+                If you add a memory tool or provider, pass the user id from runtimeContext or toolsContext to its
+                reads and writes, never an id taken from the model's tool input.
+            url: https://ai-sdk.dev/docs/agents/memory
+        note: >-
+          Partial by the rule for this drawing (chat persistence is the deployer's store): a call reads only the
+          messages it is given, but in the default useChat pattern the client sends the whole history each turn and
+          can rewrite earlier turns, tool results included, unless the route loads history server-side. Chat-id
+          ownership checks are the application's. validateUIMessages checks shape and tool schemas, not provenance.
+          Memory tools write wherever their execute function writes, and memory providers (Letta, Mem0,
+          Supermemory, Hindsight) scope data on their own services.
+        verified: "2026-09-25"
+      - mitigation: cap-data-access-governance
+        coverage: external
+        mechanism: >-
+          None in the SDK; the data source, retrieval service or an MCP server authorised with the user's OAuth
+          token applies the entitlements; the SDK passes per-request credentials in toolsContext or per-transport
+          authProvider
+        evidence:
+          - title: Runtime and Tool Context (per-tool credentials passed per request)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/runtime-and-tool-context
+          - title: Model Context Protocol (headers or authProvider per transport)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        note: >-
+          External (the data source or retrieval service enforcing the requesting user's entitlements): by this
+          drawing's rule, external unless the SDK ships retrieval with identity passthrough, and it does not.
+          Retrieval is a tool the application writes, run with whatever credential it is given. Integration points:
+          put the user's token in that tool's toolsContext on each request, or build one MCP client per user with
+          an authProvider holding that user's OAuth grant. Oversharing analysis of the sources is outside the SDK.
+        verified: "2026-09-25"
+      - mitigation: cap-retrieval-grounding-checks
+        coverage: notApplicable
+        evidence:
+          - title: Embeddings (vectors only; the data store for retrieval is the application's)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/embeddings
+          - title: Navigating the library (reviewed for applicability, 2026-09-25)
+            url: https://ai-sdk.dev/docs/getting-started/navigating-the-library
+        note: >-
+          Not applicable: the SDK ships embed, embedMany and rerank calls but no corpus, vector store or index, so
+          there is nothing of its own to trust-tier, isolate per tenant or screen at ingest. The store an
+          application attaches (a vector database, a search service, an MCP server) owns index scoping,
+          ingest screening and grounding checks; record them on that store.
+        verified: "2026-09-25"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          LanguageModelV4Middleware through wrapLanguageModel: transformParams sees each step's prompt (user turns,
+          file parts, tool results) before the provider call and can throw or strip; no injection classifier ships
+        steps:
+          - title: Screen every step's prompt
+            body:
+              - >-
+                Wrap the model with wrapLanguageModel({ model, middleware }) whose transformParams sends user, file and
+                tool-result parts in params.prompt to your injection classifier and throws or strips on a hit.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/middleware
+          - title: Use the wrapped model everywhere
+            body:
+              - >-
+                Pass only the wrapped model to ToolLoopAgent and to any model returned from prepareStep, so no step
+                reaches an unwrapped model.
+            url: https://ai-sdk.dev/docs/agents/loop-control
+        note: >-
+          Partial by this drawing's rule (middleware with a classifier attached; native only with a shipped
+          classifier): middleware is the attach point and the classifier is the deployer's. Because the loop calls
+          the model once per step, transformParams sees tool results before the next step, so returned record
+          content is covered as well as user turns and uploads (file parts the classifier must decode). The
+          policy-package docs call semantic filtering best-effort. A model left unwrapped, or switched in by
+          prepareStep, bypasses it.
+        verified: "2026-09-25"
+      - mitigation: cap-output-encoding
+        coverage: partial
+        mechanism: >-
+          None in ai or @ai-sdk/react (useChat returns typed parts and the application renders them); the companion
+          AI Elements MessageResponse component and Streamdown renderer, with rehype-sanitize on by default and
+          allowedImagePrefixes, allowedLinkPrefixes, allowedProtocols and allowDataImages permissive by default
+        steps:
+          - title: Render model text through a hardened renderer
+            body:
+              - >-
+                Render text parts with Streamdown or AI Elements MessageResponse and set allowedImagePrefixes and
+                allowedLinkPrefixes to your own origins, allowedProtocols to https and allowDataImages to false.
+            url: https://streamdown.ai/docs/security
+          - title: Drop raw HTML
+            body:
+              - >-
+                Set skipHtml on Streamdown so raw HTML in model output is ignored rather than sanitised.
+            url: https://streamdown.ai/docs/security
+          - title: Do not auto-load model-supplied URLs
+            body:
+              - >-
+                Render file and source-url parts only from an origin allowlist instead of placing part.url straight
+                into img src or href as the chatbot guide's examples do.
+            url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
+        note: >-
+          Partial by this drawing's rule (an optional sanitiser): the AI SDK's own UI layer renders nothing, so
+          encoding is the application's renderer. The companion components can close the image-exfiltration path
+          the pin names, but they are optional (AI Elements is a shadcn registry copied into the application,
+          Streamdown a separate package), and Streamdown allows every image, link, protocol and data image until
+          configured; it does strip dangerous raw HTML by default. The SDK's chatbot guide and markdown cookbook use
+          plain img and react-markdown. Content-security policy is the application's.
+        verified: "2026-09-25"
+      - mitigation: cap-sensitive-data-redaction
+        coverage: partial
+        mechanism: >-
+          Language-model middleware (transformParams, wrapGenerate, wrapStream) as the attach point for a detector
+          that masks or blocks; telemetry recordInputs / recordOutputs (on by default) and includeRuntimeContext /
+          includeToolsContext (off by default) as minimisation; pruneMessages in prepareStep
+        steps:
+          - title: Mask what reaches the model and the user
+            body:
+              - >-
+                In a middleware, run your PII and secret detector in transformParams over the prompt and in
+                wrapGenerate / wrapStream over output text, buffering each text block before masking as the docs'
+                guardrail example does.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/middleware
+          - title: Keep content out of traces
+            body:
+              - >-
+                Set telemetry: { recordInputs: false, recordOutputs: false } on calls that handle sensitive content.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+          - title: Trim what the session carries forward
+            body:
+              - >-
+                Return messages: pruneMessages({ messages, toolCalls: 'before-last-3-messages', reasoning: 'all' })
+                from prepareStep so old tool results stop riding along.
+            url: https://ai-sdk.dev/docs/agents/loop-control
+        note: >-
+          Partial by the rule, as for the Claude Agent SDK: middleware can block or mask, but no detector ships and
+          nothing is inspected until one is attached; the telemetry switches and pruning are minimisation. The
+          middleware sees model traffic only: tool results streamed to the UI and history the application persists
+          keep raw values unless it redacts them, and approval metadata keeps the original tool input, including
+          fields a schema transform removed. Recording is on by default once telemetry is registered.
+        verified: "2026-09-25"
+      - mitigation: AML.M0004
+        coverage: external
+        mechanism: >-
+          None in the SDK; a rate limit in the route handler before streamText (the docs' example uses Upstash
+          Ratelimit) or at the edge (Vercel WAF rate limiting); AI Gateway providerOptions.gateway.quotaEntityId for
+          per-entity quota
+        evidence:
+          - title: Rate Limiting (route-handler pattern with Upstash Ratelimit)
+            url: https://ai-sdk.dev/docs/advanced/rate-limiting
+          - title: Vercel WAF rate limiting (counting keys and limits by plan)
+            url: https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting
+          - title: AI Gateway provider (quotaEntityId, user and tags)
+            url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+        note: >-
+          External (edge WAF, API gateway or a rate-limit store in the route): the SDK counts nothing per user or
+          session. Integration points: the chat route before streamText or agent.stream, keyed on the authenticated
+          user rather than the IP the docs' example uses; Vercel WAF rate limiting (IP and JA4 keys on Hobby and
+          Pro, header keys on Enterprise, counters per region); AI Gateway quotaEntityId, which needs that product.
+          Volume inside one turn is AML.M0036.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-tracing
+        coverage: native
+        mechanism: >-
+          registerTelemetry(new OpenTelemetry()) from @ai-sdk/otel: an invoke_agent root span, a chat span per
+          step with gen_ai.input.messages, gen_ai.output.messages, gen_ai.tool.definitions and usage, and an
+          execute_tool span per tool with gen_ai.tool.call.id, arguments and result; telemetry.functionId and
+          includeRuntimeContext for correlation; exported by the application's OpenTelemetry provider
+        steps:
+          - title: Register the integration once
+            body:
+              - >-
+                Install @ai-sdk/otel and call registerTelemetry(new OpenTelemetry()) at startup (in Next.js,
+                instrumentation.ts beside registerOTel) with an exporter to your collector.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+          - title: Correlate runs to users and chats
+            body:
+              - >-
+                Pass runtimeContext { userId, chatId, requestId }, list those keys in telemetry.includeRuntimeContext,
+                and set telemetry.functionId per agent.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+          - title: Record policy decisions and approvals
+            body:
+              - >-
+                Wrap the policy in shadow(opaPolicy(...), { enforce: true, onDecision }) to log each decision, and keep
+                tool-approval-response messages with the stored chat.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        note: >-
+          Native by this drawing's rule: once registered, every generateText, streamText and ToolLoopAgent call
+          traces the turn, each model step and each tool execution with arguments and results, on by default and
+          exported to the customer's collector. Limits: nothing is emitted until an integration is registered, and
+          telemetry { isEnabled: false } opts a call out; v6 code that relied on experimental_telemetry emits
+          nothing after the v7 upgrade until @ai-sdk/otel is added; approvals and policy decisions are not
+          telemetry events; useChat stop and approve clicks are not traced; integration errors are swallowed.
+          Emission is not tamper resistance or detection.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          abortSignal on generateText, streamText and agent calls (forwarding req.signal); useChat stop();
+          "supportsCancellation" in vercel.json on Vercel; timeout.totalMs; onAbort for cleanup; tools receive the
+          abortSignal in their execute options
+        steps:
+          - title: Wire cancellation end to end
+            body:
+              - >-
+                Forward req.signal as abortSignal in the chat route and, on Vercel, add "supportsCancellation": true
+                for that function in vercel.json so useChat's stop() ends the model request.
+            url: https://ai-sdk.dev/docs/advanced/stopping-streams
+          - title: Stop a live run from the server
+            body:
+              - >-
+                Keep an AbortController per active chat and abort it from an operator action; persist partial steps
+                and release resources in onAbort.
+            url: https://ai-sdk.dev/docs/advanced/stopping-streams
+        note: >-
+          Partial by the rule for this drawing (abort signals per request; native only with a documented stop of
+          live sessions): an abort ends the in-flight model call, and tools stop only if their code honours the
+          signal they receive. There is no SDK-level list of live runs and no stop that reaches every instance; a
+          client stop needs the platform to propagate the disconnect. Revoking the provider or AI Gateway key
+          refuses only later requests (delay not documented), and WorkflowAgent runs on Vercel Workflow, whose
+          cancellation is that product's.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-action-policy-enforcement
+        coverage: partial
+        mechanism: >-
+          toolApproval evaluated before every SDK-executed tool call, including @ai-sdk/policy-opa opaPolicy over
+          tool name, arguments, messages and runtimeContext (allow, deny, requires-approval; fail closed on
+          evaluator errors); experimental_toolApprovalSecret binding an approval to tool name, call ID and input
+        steps:
+          - title: Decide every call in policy
+            body:
+              - >-
+                Pass toolApproval: opaPolicy({ client, path: 'agent/call/decision' }) with default decision := {
+                "decision": "deny" }, allow for read-only tools and requires-approval for mutating ones.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+          - title: Cover discovered and dispatcher tools
+            body:
+              - >-
+                Wrap MCP tools with wrapMcpTools(..., { default: 'denied' }) and give bash, HTTP and proxy tools a
+                toInput that reduces their input to the action being taken.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+          - title: Bind approvals to the call
+            body:
+              - >-
+                Set experimental_toolApprovalSecret so an approval replayed with a different tool, call ID or input is
+                rejected before execution.
+            url: https://ai-sdk.dev/docs/agents/tool-approvals
+          - title: Log every decision
+            body:
+              - >-
+                Wrap the policy in shadow(..., { enforce: true, onDecision }), or use OPA decision logs from the HTTP
+                backend.
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        note: >-
+          Partial by this drawing's rule (native needs built-in enforcement of an approval bound to the action, its
+          arguments and the session): the SDK ships the policy decision point and binds approvals to the tool, call
+          ID and arguments, but not to the session or user, and with client-held history the docs do not say a
+          signed approval is single-use or confined to its conversation. The session leg is the application's
+          server-side history. Unmatched rules allow unless defaulted to deny, optionalOpaPolicy allows all when no
+          policy loads, subagent and provider-executed tools are outside toolApproval, and an approved tool does
+          whatever its code does.
+        verified: "2026-09-25"
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          stopWhen: isStepCount(n) (ToolLoopAgent default 20, generateText and streamText default 1, WorkflowAgent
+          none); timeout { totalMs, stepMs, toolMs, <tool>Ms }; maxOutputTokens per call or per step; a custom
+          StopCondition over steps[].usage for a token or cost ceiling
+        steps:
+          - title: Cap steps
+            body:
+              - >-
+                Set stopWhen: isStepCount(n) on every agent and streamText call, and never isLoopFinished() on a
+                user-facing route.
+            url: https://ai-sdk.dev/docs/agents/loop-control
+          - title: Cap wall-clock and tool time
+            body:
+              - >-
+                Set timeout: { totalMs, stepMs, toolMs } on the call; a tool that overruns returns a tool-error.
+            url: https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text
+          - title: Cap tokens per turn
+            body:
+              - >-
+                Set maxOutputTokens and add a StopCondition that sums steps[].usage input and output tokens and returns
+                true at the turn's budget.
+            url: https://ai-sdk.dev/docs/agents/loop-control
+        note: >-
+          Partial by this drawing's rule (native needs step-count and token limits that end a turn): the step
+          count, wall clock and per-step output ceiling are enforced by the SDK, but a token or spend ceiling that
+          ends the turn is a StopCondition the deployer writes (the docs' budgetExceeded example), checked only
+          between steps. Input tokens grow with every step unless pruned, WorkflowAgent has no default step limit,
+          and AI Gateway's quotaEntityId is a separate product's quota.
+        verified: "2026-09-25"
+      - mitigation: D3-CTS
+        coverage: external
+        mechanism: >-
+          None in the SDK (no token exchange); headers or an authProvider per createMCPClient transport, redirect
+          'error' by default, validateAuthorizationServerURL and callbackIssuer checks; the MCP client forwards
+          whatever token the application sets
+        evidence:
+          - title: Model Context Protocol (transports, OAuth authorization server and issuer validation)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+          - title: createMCPClient reference (headers, authProvider, redirect defaults to 'error')
+            url: https://ai-sdk.dev/docs/reference/ai-sdk-core/create-mcp-client
+        note: >-
+          External (an MCP or API gateway that exchanges the user's token for a narrowed one): by this drawing's
+          rule, external unless the SDK performs token exchange, and it does not. The MCP client sends the headers or
+          OAuth token configured for one transport to that one server, refuses redirects unless redirect is set to
+          'follow', and can allowlist authorization servers. A user's upstream token placed in headers is forwarded
+          as-is, so passthrough is prevented only by what the application puts there.
+        verified: "2026-09-25"
+      - mitigation: cap-mcp-tool-integrity
+        coverage: partial
+        mechanism: >-
+          fingerprintTools and detectToolDrift digests of each MCP tool's description, resolved input schema and
+          title against a stored baseline; mcpClient.tools({ schemas }) with client-side input schemas; wrapMcpTools
+          default 'denied' for tools the policy does not name
+        steps:
+          - title: Pin the reviewed definitions
+            body:
+              - >-
+                At review time persist fingerprintTools(await mcpClient.tools()); before each call compare the current
+                digests with detectToolDrift and withhold the tools when changed or added is non-empty.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+          - title: Pull only reviewed tools with your own schemas
+            body:
+              - >-
+                Pass schemas to mcpClient.tools() so only the named tools load, validated against input schemas you
+                define.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+          - title: Refuse unlisted tools at dispatch
+            body:
+              - >-
+                Wrap discovered tools with wrapMcpTools(tools, opaPolicy(...), { default: 'denied' }).
+            url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        note: >-
+          Partial by core rule 1: the SDK ships the content hash and the diff, but the baseline store and the refusal
+          are the application's code (the docs say core does not persist baselines or block calls), so nothing is
+          refused until the deployer writes the check. A behaviour or endpoint swap behind an unchanged definition is
+          invisible to it, nothing scans descriptions statically, server annotations such as readOnlyHint are
+          untrusted hints, and a stdio server runs whatever command the application gives.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-egress-control
+        coverage: external
+        mechanism: >-
+          None in the SDK; tools run in the application process on its network; Experimental_SandboxSession is an
+          interface whose isolation is the provider's; code mode's QuickJS sandbox has no fetch but its tools run on
+          the host
+        evidence:
+          - title: Experimental_SandboxSession (does not sandbox the tool itself)
+            url: https://ai-sdk.dev/docs/reference/ai-sdk-core/sandbox
+          - title: Code Mode (isolation and tool access)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/code-mode
+          - title: Tool Calling (the SDK forwards a sandbox but does not create or isolate one)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling
+        note: >-
+          External (an egress proxy or firewall on the function's network, or a sandbox provider with a network
+          policy): the SDK docs configure no outbound allowlist anywhere. Vercel Sandbox is named only as one
+          isolation option, and its network policy is that product's. Integration points: route command tools
+          through experimental_sandbox to an isolation provider with a domain allowlist, give MCP transports a
+          custom fetch that goes through the egress proxy, and restrict the hosting platform's outbound network.
+        verified: "2026-09-25"
+      - mitigation: D3-FA
+        coverage: external
+        mechanism: >-
+          None in the SDK; admission scanning at the npm mirror or artifact repository the build and any
+          npx-launched stdio MCP server resolve packages from
+        evidence:
+          - title: Navigating the library (ai and @ai-sdk/* packages installed from npm)
+            url: https://ai-sdk.dev/docs/getting-started/navigating-the-library
+          - title: Model Context Protocol (stdio servers start from a command the application gives)
+            url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        note: >-
+          External (package firewall or artifact-repository scanning at the mirror): the SDK scans nothing it loads.
+          The ai and @ai-sdk/* packages, community providers and memory providers, and stdio MCP servers started
+          with npx all come from whichever registry the build or host reaches. Integration points: point the npm
+          registry at the scanning mirror, pin versions in the lockfile, and allow only the mirror on the egress
+          path. No model weights load; inference is remote.
+        verified: "2026-09-25"
+    advisories:
+      - title: >-
+          CVE-2026-8769 (GHSA-866g-f22w-33x8) — @ai-sdk/provider-utils response handlers read bodies without a size
+          limit, allowing memory exhaustion (fixed 3.0.28, 4.0.33, 5.0.1)
+        url: https://github.com/advisories/GHSA-866g-f22w-33x8
+        date: "2026-05"
+      - title: >-
+          CVE-2025-48985 (GHSA-rwvc-j5jr-mgvh) — ai file-type allowlists could be bypassed when uploading files
+          (fixed 5.0.52)
+        url: https://github.com/advisories/GHSA-rwvc-j5jr-mgvh
+        date: "2025-11"
+    sources:
+      - title: AI SDK introduction
+        url: https://ai-sdk.dev/docs/introduction
+      - title: Tool Approvals
+        url: https://ai-sdk.dev/docs/agents/tool-approvals
+      - title: Policy-Based Tool Approvals (@ai-sdk/policy-opa)
+        url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+      - title: Loop Control
+        url: https://ai-sdk.dev/docs/agents/loop-control
+      - title: Tool Calling
+        url: https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling
+      - title: Runtime and Tool Context
+        url: https://ai-sdk.dev/docs/ai-sdk-core/runtime-and-tool-context
+      - title: Language Model Middleware
+        url: https://ai-sdk.dev/docs/ai-sdk-core/middleware
+      - title: Telemetry
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+      - title: Model Context Protocol (MCP)
+        url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+      - title: Chatbot Message Persistence
+        url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+      - title: Stopping Streams
+        url: https://ai-sdk.dev/docs/advanced/stopping-streams
+      - title: AI Gateway provider
+        url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+      - title: Migrate AI SDK 6.x to 7.0
+        url: https://ai-sdk.dev/docs/migration-guides/migration-guide-7-0
+      - title: vercel/ai security policy (Vercel Open Source HackerOne program)
+        url: https://github.com/vercel/ai/security/policy
+      - title: Vercel security
+        url: https://vercel.com/security
