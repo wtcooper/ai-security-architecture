@@ -1,0 +1,656 @@
+# Salesforce Agentforce — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: embedded generative AI used directly (Prompt Builder templates in Service Replies, Work Summaries,
+# Sales Emails) is not an agent and is where Trust Layer data masking still applies; Setup with Agentforce (the
+# admin assistant), Agentforce Vibes (coding), Tableau Next and classic Einstein Bots are other products.
+# MuleSoft Agent Fabric (Agent Broker, cross-platform Agent Registry, Trusted Agent Identity, Flex Gateway
+# policies) is a separate control plane and not onboarded; Agentforce Gateway policies inside the org are
+# recorded here. Agentforce DX (Salesforce CLI, VS Code) is a pro-code shell over the same metadata with no admin
+# surface of its own, recorded as a fact. Agent types (Employee, Service, Lead Nurturing) are facts, not variants.
+# 2026-09-25: onboarded toolAgentforce against the MITRE capability rules; help.salesforce.com renders client-side (WebFetch and curl return only the loading shell) and developer.salesforce.com answered 403 to curl and WebFetch, so both were read in a browser (Playwright) as the last resort; sf.* help ids redirect to xcloud.* (named_credentials_about, nc_named_creds_and_ext_creds, admin_monitorsetup, private_connect_overview); developer.salesforce.com/docs/einstein/genai/guide/* -> /docs/ai/agentforce/guide/*; www.salesforce.com pages append ?bc=OTH; compliance.salesforce.com documents need a login and trust.salesforce.com (200) was not read; help.salesforce.com/llms.txt 401, developer.salesforce.com/llms.txt 403.
+vendor: salesforce
+family: Salesforce Agentforce
+tools:
+  - id: toolAgentforce
+    name: Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels)
+    surfaceClasses:
+      - saasAgentPlatform
+    variants:
+      - name: New Agentforce Builder (Agentforce Studio app; Canvas and Script views, Agent Script)
+        class: saasAgentPlatform
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_builder_studio.htm&type=5
+        note: >-
+          Lives outside Setup and is reachable by any user with the Manage AI Agents permission, which grants
+          org-wide management, activation and deactivation of every agent.
+      - name: Legacy Agentforce Builder (Setup > Agentforce Agents)
+        class: saasAgentPlatform
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-agent-id.html
+        note: >-
+          The original visual subagent editor; filters on subagents and actions and the Agent Access tab are
+          documented here first.
+    architecture: archLowCodeAgentBuilder
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Salesforce's CRM-embedded agent builder: makers assemble agents from subagents (formerly topics),
+        instructions and actions (flows, Apex, prompt templates, MCP tools, MuleSoft API Catalog APIs), ground
+        them on CRM records, Data 360 and Agentforce Data Libraries (Knowledge, uploaded files), and deploy them to
+        Lightning Experience, Slack, Enhanced Chat and messaging, email, voice and the Agent API. Agents run in
+        Salesforce's cloud through the Einstein generative AI platform, which calls OpenAI or Azure OpenAI,
+        Anthropic on Amazon Bedrock, Gemini on Vertex AI or Salesforce-hosted models under zero-data-retention
+        agreements; Einstein Trust Layer data masking is disabled for agents, so grounding reaches the model
+        unmasked.
+      - >-
+        The administrator is the Salesforce org administrator in Setup: Einstein Setup (Turn on Einstein, Configure
+        Model Providers, Enable In-Region Model Requests Only), Einstein Trust Layer (Safety & Security), Einstein
+        Audit, Analytics, and Monitoring Setup (Audit and Feedback, Agentforce Session Tracing), Agentforce Registry
+        and Agentforce Gateway policies, Named and External Credentials, permission sets (Enabled Agent Access,
+        Manage AI Agents) and the agent user. Who an agent runs as is fixed by its type: Employee agents act as the
+        logged-in user, Service agents as a dedicated agent user.
+    facts:
+      - label: Plans
+        value: >-
+          Enterprise, Performance, Unlimited and Developer Editions; required add-on licences vary by agent type
+          (Agentforce Gateway needs Foundations or Agentforce 1 Editions). Priced by consumption (Flex Credits per
+          agent action), hybrid per-user licensing, or business metrics; Session Tracing, Audit and Feedback and
+          Data Libraries also consume Data 360 credits.
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_usage.htm&type=5
+      - label: Inference & routing
+        value: >-
+          Einstein generative AI platform routes to OpenAI or Azure OpenAI, Anthropic on Amazon Bedrock and Gemini on
+          Vertex AI in the region of the org's Data 360 instance, falling back to other regions unless Enable
+          In-Region Model Requests Only is on in Einstein Setup; Salesforce-hosted models keep data inside the
+          Salesforce trust boundary. Providers are toggled at Einstein Setup > Configure Model Providers.
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_platform_geo_aware_routing.htm&type=5
+      - label: Data leaving the device
+        value: >-
+          Agent turns carry CRM, Data 360 and Data Library grounding to the model provider unmasked (Trust Layer
+          masking is disabled for agents, including prompt templates called through agent actions). Actions call
+          external systems from Salesforce's cloud through named credentials, Agentforce Registry MCP servers or
+          MuleSoft API connections.
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_trust_data_masking.htm&type=5
+      - label: Retention & training
+        value: >-
+          Third-party LLMs retain nothing and do not train on it (zero data retention; no human review at the
+          provider unless Salesforce grants it for suspected abuse). Audit and Feedback and Session Tracing data are
+          stored in a Data 360 data space in the org until deleted; enhanced event logs are kept seven days;
+          Salesforce notes that agents may store data.
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_layer.htm&type=5
+      - label: Docs index
+        value: >-
+          help.salesforce.com "Agentforce and Einstein Generative AI"; Agentforce Developer Guide
+          (developer.salesforce.com/docs/ai/agentforce)
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai.htm&type=5
+      - label: Run-as identity by agent type
+        value: >-
+          Employee agents (Lightning Experience, mobile, Slack, Experience Cloud) run as the logged-in user. Service
+          agents (Enhanced Chat, messaging channels) run as the agent user (EinsteinServiceAgent User) unless
+          credential-based user verification is on for Enhanced Chat on an Experience Cloud site. Lead Nurturing
+          agents run as the EinsteinSDRAgent User. Flow actions add their own run context (user, system with
+          sharing, system without sharing).
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_execution_data.htm&type=5
+      - label: Agent API
+        value: >-
+          REST sessions against an agent through an external client app with the client credentials flow; every
+          call runs as the app's Run As user. Not supported for Agentforce (Default).
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html
+      - label: Pro-code shell (Agentforce DX)
+        value: >-
+          Salesforce CLI and VS Code commands author, preview, test, retrieve, deploy, activate and deactivate the
+          same agent metadata (Bot, BotVersion, GenAiPlannerBundle, GenAiPlugin, GenAiFunction, AiAuthoringBundle);
+          no admin surface of its own.
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx.html
+      - label: Agentforce platform toggle
+        value: >-
+          Salesforce plans to turn on the Agentforce platform for all orgs with Agentforce access in August 2026 and
+          remove the Agentforce toggle from the Agentforce Agents Setup page.
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_setup_enable.htm&type=5
+    items:
+      - title: Where each control lives
+        body:
+          - >-
+            Setup: Einstein Setup (Turn on Einstein, Configure Model Providers, Enable In-Region Model Requests
+            Only), Einstein Trust Layer (Data Masking and Safety & Security tabs), Einstein Audit, Analytics, and
+            Monitoring Setup (Audit and Feedback, Agentforce Session Tracing), Agentforce Registry (MCP servers,
+            tools, policies), Policies (Agentforce Gateway Policy Builder), Agentforce Data Library, Named
+            Credentials and External Credentials, External Client Apps Manager, Users (agent users), Permission Sets
+            (Enabled Agent Access, Manage AI Agents), View Setup Audit Trail. Agentforce Studio app: Agents list,
+            Agentforce Builder (Agent Access, Script view config block), Testing Center.
+        links:
+          - title: Einstein Trust Layer
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_layer.htm&type=5
+          - title: Trust and Agentforce
+            url: https://help.salesforce.com/s/articleView?id=ai.copilot_trust.htm&type=5
+          - title: Agentforce Gateway
+            url: https://help.salesforce.com/s/articleView?id=ai.agentforce_gateway_policies.htm&type=5
+      - title: What the Trust Layer does and does not do for agents
+        body:
+          - >-
+            For agents the Trust Layer contributes zero data retention with external providers, secure data
+            retrieval with the running user's permissions, system policies and beta prompt-injection scoring,
+            toxicity scoring, and the Data 360 audit trail. Pattern-based and field-based data masking is disabled
+            for agents; it still applies to prompt templates used directly in embedded features.
+        links:
+          - title: Data Masking Limitations in Agentforce
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_trust_data_masking.htm&type=5
+          - title: Content Safety and Security
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_content_safety_and_security.htm&type=5
+    riskNotes:
+      - risk: riskAgenticDelegationConfusedDeputy
+        note: >-
+          Agentforce never lends the maker's credentials, but it lends shared service identities instead: Service
+          agents answer unidentified customers as the agent user, the Agent API runs as one Run As user, and MCP
+          servers accept only OAuth client credentials, so every consumer inherits that identity's reach. Flow
+          actions in system context without sharing reach all objects regardless of who asked.
+      - risk: riskShadowAndUnknownAgents
+        note: >-
+          Agentforce Studio is in the App Launcher for every user by default, and Manage AI Agents grants org-wide
+          management and activation of all agents; the agent record carries no documented owner field, so an agent
+          outlives its builder unless someone queries BotDefinition.
+      - risk: riskPromptInjection
+        note: >-
+          Public-write objects are an instruction channel: ForcedLeak (2025) and SalesBleed (2026) both planted
+          instructions in Web-to-Lead submissions that an internal user's agent later read, and exfiltrated CRM
+          data through URL rendering; both were fixed server-side in Trusted URLs enforcement. Prompt injection
+          detection is beta and scores rather than blocks.
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Trust Layer masking is off for agents, and a Service agent published to an unauthenticated channel
+          answers with everything its agent user can read; session-trace and audit data in Data 360 hold PII and
+          are readable by System Administrators under the default Allow All data-space policy.
+      - risk: riskExcessiveDataHandlingDuringInference
+        note: >-
+          Grounding leaves unmasked for OpenAI or Azure OpenAI, Anthropic on Bedrock or Gemini on Vertex under
+          zero-data-retention terms, and requests fall back to another region unless Enable In-Region Model
+          Requests Only is on.
+    controls:
+      - mitigation: cap-sensitive-data-redaction
+        coverage: external
+        mechanism: >-
+          Nothing in the product for agents: Einstein Trust Layer LLM data masking (Setup > Einstein Trust Layer >
+          Data Masking) is documented as disabled for agents, including prompt templates called through agent
+          actions; the integration point is the maker's and consumer's browser session to Salesforce, where an
+          SSE/CASB with inline DLP can inspect Data Library file uploads and typed prompts
+        evidence:
+          - title: Data Masking Limitations in Agentforce (masking disabled for agents)
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_trust_data_masking.htm&type=5
+          - title: Set up Einstein Trust Layer (data masking is disabled for agents)
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_setup.htm&type=5
+          - title: Use Salesforce Knowledge (Data Library source scoping)
+            url: https://help.salesforce.com/s/articleView?id=ai.data_library_select_fields.htm&type=5
+        note: >-
+          External on the redaction rule (core rule 5). Salesforce ships real content inspection, pattern-based and
+          field-based masking with demasking in the response, but documents it as disabled for agents, so nothing
+          inspects what a maker uploads to an Agentforce Data Library or what a consumer types before it reaches the
+          model, and no response-side inspection exists for agents. Rated below toolCopilotStudio (partial on a
+          label-based restriction) because no label-based restriction applies to agent grounding either. Stand-ins:
+          SSE/CASB inline DLP on the maker's and consumer's sessions to Salesforce. Minimisation, not detection:
+          Knowledge libraries index only published articles and can be limited to public articles or data
+          categories; file_upload mode disabled in an agent's Script view config block refuses consumer uploads.
+          Dynamic Data Masking policies in Data 360 redact PII in stored session-trace and audit data, not on the
+          prompt path.
+        verified: "2026-09-25"
+      - mitigation: D3-APA
+        coverage: partial
+        mechanism: >-
+          Agent type fixes whose authority an agent uses (Employee agents: the logged-in user; Service agents: the
+          agent user unless credential-based user verification is on; Agent API: the external client app's Run As
+          user); Enabled Agent Access on permission sets or profiles scopes who may use each Employee agent; the
+          Manage AI Agents permission scopes who may build and activate
+        steps:
+          - title: Scope who may use each Employee agent
+            body:
+              - >-
+                In Agentforce Builder open the agent, go to Settings > Agent Access and add only the permission sets
+                that should reach it (or edit Enabled Agent Access on the permission set in Setup); on Experience
+                Cloud sites use a permission set, not the shared profile.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_manage_aea_access.htm&type=5
+          - title: Keep each Service agent user least-privilege
+            body:
+              - >-
+                In Setup > Users find the EinsteinServiceAgent User (Einstein Agent User profile) and grant only the
+                objects its actions need on the [Agent_Name]_Permissions permission set; only administrators can
+                view or edit agent users.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_user.htm&type=5
+          - title: Require verification before private actions
+            body:
+              - >-
+                In the agent's Context panel > Filters create a filter on verification variables and apply it to
+                every subagent and action that acts for a customer; on Enhanced Chat deployed to an Experience Cloud
+                site turn on credential-based user verification so the agent runs as the logged-in site user.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_asset_filters.htm&type=5
+          - title: Limit the builder permission
+            body:
+              - >-
+                Assign Manage AI Agents only to people who need org-wide management of all agents, and control who
+                sees the Agentforce Studio app through its profile assignments.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_builder_studio.htm&type=5
+        note: >-
+          Partial on the authorisation rule; toolCopilotStudio is native because a tenant data policy can force
+          authentication on every channel and remove maker credentials. Agentforce never runs an agent on the
+          maker's credentials: Employee agents run as the invoking user (profile, permission sets, field-level
+          security, sharing), and the administrator scopes who may use each Employee agent. But nothing org-wide
+          forces end-user authentication: Service agents on messaging channels answer unidentified users as the agent
+          user by design, credential-based user verification exists only for Enhanced Chat on Experience Cloud
+          sites, and verification filters are set per agent by whoever holds Manage AI Agents. The agent user, the
+          Agent API Run As user and MCP servers (OAuth 2.0 client credentials only; user-level authentication
+          unsupported) are shared service identities every consumer inherits; they are administrator-owned rather
+          than maker-owned, which bounds but does not remove the confused-deputy case.
+        verified: "2026-09-25"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          Service and Lead Nurturing agents run as a dedicated agent user (a User record with the Einstein Agent
+          licence, Einstein Agent User profile and an [Agent_Name]_Permissions permission set) created or selected
+          when the agent is made; Employee agents have no principal of their own
+        steps:
+          - title: Mint one agent user per Service agent
+            body:
+              - >-
+                When creating each Service agent create a new agent user rather than selecting an existing one, set
+                its first name to the agent's name, and keep a Users list view filtered on the Einstein Agent User
+                profile.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_user.htm&type=5
+          - title: Bind permissions to that principal only
+            body:
+              - >-
+                Grant the agent's access on its own [Agent_Name]_Permissions permission set (associated with the
+                Einstein Agent licence and profile), never on a set shared with people.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_user.htm&type=5
+          - title: Reassign the agent user after every deployment
+            body:
+              - >-
+                Deployed agent metadata carries the source org's username; set the target org's agent user by string
+                replacement on a draft, or create a new version of a committed agent and assign it there.
+            url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-deploy-metadata.html
+        note: >-
+          Partial on the agent-identity rule, the same word as toolCopilotStudio. A Service agent can have its own
+          principal in the org's directory, whose permission sets and sharing attach to that one agent and which only
+          administrators can edit. But one agent user can be selected for several agents; Employee agents, the
+          internal default, have no identity of their own and act entirely as the invoking user; the agent user is
+          not an identity in the corporate IdP, so conditional access, ownership transfer and token issuance for it
+          are not documented; the BotDefinition Id is a record key, not a principal. MuleSoft Agent Fabric's Trusted
+          Agent Identity (announced GA 2026-04-15) is a gateway feature of another product and is not assessed here.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-tool-registry
+        coverage: partial
+        mechanism: >-
+          The org's agent metadata as inventory: the Agents list in Agentforce Studio (and Setup > Agentforce Agents),
+          the BotDefinition object, and Metadata API retrieval of every agent and version (Bot, BotVersion,
+          GenAiPlannerBundle, GenAiPlugin, GenAiFunction) with its actions and run-as username; Setup > Agentforce
+          Registry for MCP servers with a per-tool allowlist and risk score
+        steps:
+          - title: Query the agent population
+            body:
+              - >-
+                Query the BotDefinition object with SOQL for the agent list, and retrieve every agent and version
+                with a package.xml member of * to read each agent's actions and agent username.
+            url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-agent-id.html
+          - title: Retrieve the definitions as source
+            body:
+              - >-
+                Retrieve with Salesforce CLI using a manifest member of MyAgent#* (all versions) into a DX project so
+                the inventory is diffable in version control.
+            url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-deploy-metadata.html
+          - title: Register and allowlist MCP servers
+            body:
+              - >-
+                In Setup > Agentforce Registry > New register each MCP server, read its risk score, and allowlist only
+                the tools you trust; agents can call only allowlisted tools.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_mcp_connect_register.htm&type=5
+        note: >-
+          Partial on the registry rule; toolCopilotStudio is native because its inventory carries owner and
+          per-connector credential mode with block and quarantine. Every Agentforce agent is org metadata, so the
+          platform's list is authoritative for this org and queryable, and an MCP server must be registered,
+          scanned for tool poisoning and allowlisted per tool before an agent can call it. Missing: no documented
+          owner, approval-state or credential-mode field on the agent record (run-as follows from agent type and the
+          agent username in metadata; a named credential's principal type sits on the external credential, not the
+          agent); MCP registrations are not packaged between orgs; the enforcement lever is deactivation, not a
+          registry that denies unregistered agents; the risk score is advisory. Agents in other orgs and vendors are
+          outside it (MuleSoft Agent Fabric's registry is the cross-platform product).
+        verified: "2026-09-25"
+      - mitigation: cap-staged-rollout-gate
+        coverage: partial
+        mechanism: >-
+          Agent versions (commit an immutable snapshot, create drafts, compare, one active version), Testing Center
+          batch tests in a sandbox, sandbox-to-production promotion through Metadata API and Salesforce CLI, Enabled
+          Agent Access for a limited first audience, and Activate/Deactivate of a committed version as release and
+          rollback
+        steps:
+          - title: Test in a sandbox
+            body:
+              - >-
+                Run Testing Center suites (generated from subagents, actions and knowledge, or uploaded) in a
+                sandbox only, because test runs can modify CRM data.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_testing_center.htm&type=5
+          - title: Promote by metadata, not by editing production
+            body:
+              - >-
+                Retrieve the committed version (MyAgent#2) from the sandbox and deploy it to production with Salesforce
+                CLI, keeping the DX project in version control as the source of truth.
+            url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-deploy-metadata.html
+          - title: Release to a pilot audience first
+            body:
+              - >-
+                On an Employee agent's Agent Access page add only a pilot permission set before widening access.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_manage_aea_access.htm&type=5
+          - title: Roll back by activating the prior version
+            body:
+              - >-
+                In Agentforce Builder select the earlier committed version from the header and click Activate; the
+                current version is deactivated automatically.
+            url: https://help.salesforce.com/s/articleView?id=ai.copilot_setup_activate_deactivate.htm&type=5
+        note: >-
+          Partial on the rollout rule, the same word as toolCopilotStudio. Met: versioning (committed versions are
+          immutable metadata snapshots; drafts and compare), promotion through metadata so production can be kept
+          deploy-only, a limited first audience for Employee agents, and rollback by activating an earlier committed
+          version. Not met: no approval step; anyone holding Manage AI Agents can commit and activate any agent
+          directly in production, so the gate exists only where the administrator withholds that permission in
+          production; Testing Center scores do not block activation; no canary or percentage release, and none for
+          Service agents on public channels. MCP registrations are not packaged and the agent user must be reassigned
+          in the target org.
+        verified: "2026-09-25"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          Setup > Einstein Trust Layer > Safety & Security > prompt injection detection (Beta), an org-level toggle
+          whose scores are logged to the audit trail in Data 360; built-in system policies (always on); MCP Risk
+          Score on tool descriptions at registration
+        steps:
+          - title: Turn on prompt injection detection
+            body:
+              - >-
+                From Setup open Einstein Trust Layer, click Safety & Security, accept the beta service terms and turn
+                on prompt injection detection (needs View Setup and Customize Application).
+            url: >-
+              https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_configure_prompt_injection_detection.htm&type=5
+          - title: Collect the detections as events
+            body:
+              - >-
+                In Einstein Audit, Analytics, and Monitoring Setup turn Audit and Feedback on and alert on prompt
+                injection scores from the Data 360 DMOs.
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_feedback_enable.htm&type=5
+          - title: Screen MCP tool descriptions before allowlisting
+            body:
+              - >-
+                Refuse tools with a High (red) risk score or with the bidirectional, invisible or mixed-script
+                characters warning shown during registration.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_mcp_registration_manage_risk_score.htm&type=5
+        note: >-
+          Partial on the input-screening rule, the same word as toolCopilotStudio. The administrator can switch on
+          an org-wide classifier that covers direct injection and injection arriving indirectly through data sources
+          included in the prompt (role-play, rule changes, prompt leakage, encoding, privacy and malicious-code
+          attacks), but it is beta and documented as scoring and logging to the audit trail, not blocking or
+          stripping the flagged content, so the model still reasons over it. System policies are always on and not
+          configurable. The MCP risk score scans tool descriptions once, at registration, and is a recommendation.
+          Trusted URLs enforcement, the server-side fix for ForcedLeak and SalesBleed, limits where output may send
+          data, not what enters context. Grounding that crosses our tier is screened at our gateway.
+        verified: "2026-09-25"
+      - mitigation: cap-ai-vendor-assessment
+        coverage: external
+        mechanism: >-
+          Trust and Compliance Documentation (Einstein Platform SPARC, Data 360 SPARC, Infrastructure &
+          Sub-processors) and the compliance portal feed the organisation's TPRM platform
+        evidence:
+          - title: Salesforce Trust and Compliance Documentation (Einstein Platform SPARC, Data 360 SPARC, I&S)
+            url: https://www.salesforce.com/company/legal/trust-and-compliance-documentation/
+          - title: Salesforce Compliance portal (certifications and reports, login required)
+            url: https://compliance.salesforce.com/en
+          - title: Einstein Trust Layer (zero data retention with model providers)
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_layer.htm&type=5
+        note: >-
+          External: the assessment, evidence expiry and reassessment trigger live in the organisation's TPRM
+          platform, as for every vendor. Salesforce publishes per-service Trust and Compliance Documentation, the
+          Einstein Platform SPARC (2026-07-24, covering the Employee, Service and SDR agents), the Data 360 SPARC
+          and the Infrastructure & Sub-processors list (both 2026-09-22); certification reports sit behind a login
+          on compliance.salesforce.com and were not read. Model subprocessors are OpenAI or Azure OpenAI, Anthropic
+          on Amazon Bedrock and Gemini on Vertex AI under zero-data-retention agreements. Re-assess when a model
+          provider is enabled, when MCP servers or MuleSoft APIs are connected, and after disclosures of the
+          ForcedLeak and SalesBleed class.
+        verified: "2026-09-25"
+      - mitigation: AML.M0028
+        coverage: partial
+        mechanism: >-
+          Agentforce Gateway policies (Setup > Policies > Policy Builder): MCP Attribute-Based Access Control allows
+          or blocks MCP tools by name for target agents and Restrictive Access limits HTTP methods and paths on
+          MuleSoft API Catalog connections; the Agentforce Registry tool allowlist; the agent user's object and
+          field permissions; subagent and action filters
+        steps:
+          - title: Allowlist tools per MCP server
+            body:
+              - >-
+                In Setup > Agentforce Registry open the server, go to Tools > Edit Tools and keep only the tools
+                agents need.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_mcp_registration_manage_allowlist.htm&type=5
+          - title: Restrict tools per agent at the gateway
+            body:
+              - >-
+                Create a policy from the MCP Attribute-Based Access Control template that allows or blocks named
+                tools, then on the Agents tab choose Specific agents (select at least one, or it is not enforced).
+            url: https://help.salesforce.com/s/articleView?id=ai.agentforce_gateway_policy_templates.htm&type=5
+          - title: Restrict API methods and paths
+            body:
+              - >-
+                For API connections apply a Restrictive Access policy listing the HTTP methods and paths agents may
+                not call, with a Quota Management policy per agent.
+            url: https://help.salesforce.com/s/articleView?id=ai.agentforce_gateway_policy_templates.htm&type=5
+          - title: Bound CRM operations by the running user
+            body:
+              - >-
+                Grant a Service agent's agent user only the object permissions its actions need on
+                [Agent_Name]_Permissions; Employee agents inherit the invoking user's.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_user.htm&type=5
+        note: >-
+          Partial on the tool-permission rule; toolCopilotStudio is native because its data policies classify every
+          connector and refuse a confidential-plus-exfiltration combination at publish. Agentforce has real
+          per-principal, per-operation restriction enforced outside the model: tool allowlists per MCP server,
+          per-agent allow and block of MCP tools and HTTP method and path limits on API connections at Agentforce
+          Gateway, and CRM object and field access bounded by the running user. It has no connector classification
+          and no combination rule, so nothing stops an agent that reads confidential CRM data from also holding an
+          action that sends data out. Gateway policies apply only to committed or active agents, not drafts. Flow
+          actions running in system context without sharing reach all objects whatever the running user holds.
+        verified: "2026-09-25"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          No on-premises data gateway: private systems are reached through Named Credentials with External
+          Credentials (tokens encrypted in the User External Credential object; principals linked to permission sets
+          and checked at run time), over Private Connect (AWS PrivateLink, add-on) or a public endpoint; MCP
+          registration creates the named credential, external credential and permission set itself
+        steps:
+          - title: Put every connection behind an external credential
+            body:
+              - >-
+                In Setup > Named Credentials create an external credential for the authentication protocol and a
+                named credential for the endpoint, and grant the principal through a dedicated permission set.
+            url: https://help.salesforce.com/s/articleView?id=xcloud.nc_named_creds_and_ext_creds.htm&type=5
+          - title: Keep private traffic off the internet
+            body:
+              - >-
+                For systems in AWS, set up a Private Connect outbound connection from the org to the VPC and point the
+                named credential at it.
+            url: https://help.salesforce.com/s/articleView?id=xcloud.private_connect_overview.htm&type=5
+          - title: Revoke centrally
+            body:
+              - >-
+                Remove the permission set that links the external credential principal to the agent user (or edit
+                the external credential's secret); callouts are refused at run time without redeploying anything.
+            url: https://help.salesforce.com/s/articleView?id=xcloud.nc_named_creds_and_ext_creds.htm&type=5
+        note: >-
+          Partial on the credential rule, the same word as toolCopilotStudio. Salesforce offers no on-premises data
+          gateway or relay host: the drawing's tunnel is either Private Connect (a Salesforce-managed PrivateLink to
+          our AWS VPC; AWS only) or an internet-facing endpoint of ours, so no connection credential is cached on a
+          host we run and the whole custody question sits with Salesforce. There, external credentials keep
+          authentication out of Apex and flow definitions, store tokens encrypted per user, and admit a callout only
+          when the running user holds the principal's permission set, so a connection is revocable centrally. Not
+          documented on the pages read: rotation schedules or short-lived issuance for client secrets; MCP servers
+          support OAuth 2.0 client credentials only, one standing secret per server. A relay we place ourselves is our
+          custody, not Salesforce's.
+        verified: "2026-09-25"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: >-
+          Secure data retrieval grounds prompts with the running user's profile, permissions, field-level security
+          and sharing (the invoking user for Employee agents, the agent user for Service agents); Agentforce Data
+          Library setup requires Data Cloud admin and System Administrator permissions, and Knowledge libraries index
+          only published articles, optionally public ones or selected data categories
+        steps:
+          - title: Keep grounding sources an administrator decision
+            body:
+              - >-
+                Assign Data Cloud admin and System Administrator only to administrators, so makers cannot create or
+                edit Agentforce Data Libraries.
+            url: https://help.salesforce.com/s/articleView?id=ai.data_library_select_fields.htm&type=5
+          - title: Scope Knowledge libraries
+            body:
+              - >-
+                Under Knowledge Settings enable Use Public Knowledge Articles or Filter by Knowledge Data Categories so
+                only articles meant for the agent's audience are indexed.
+            url: https://help.salesforce.com/s/articleView?id=ai.data_library_select_fields.htm&type=5
+          - title: Run reads as the invoker where possible
+            body:
+              - >-
+                Use Employee agents for internal users and credential-based user verification for Enhanced Chat on
+                Experience Cloud sites; otherwise the agent user's grants decide every read.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_execution_data.htm&type=5
+        note: >-
+          Partial on the retrieval rule; toolCopilotStudio is native because its SharePoint grounding is documented
+          as trimmed to the invoking user. Agentforce meets the administrator half (makers cannot create Data
+          Libraries; Knowledge libraries are limited to published articles with public-only and data-category
+          filters) and the identity half for CRM and Data 360 grounding reached by Employee agents, which run as the
+          logged-in user. Not met: Service agents read with the agent user's grants rather than the customer's;
+          the Data Library index (Knowledge, uploaded files) is not documented as trimmed per invoker; flows in
+          system context without sharing reach all objects. Oversharing remediation in the indexed sources is ours.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-tracing
+        coverage: partial
+        mechanism: >-
+          Einstein Audit, Analytics, and Monitoring Setup: Agentforce Session Tracing (turn-by-turn interactions,
+          reasoning-engine executions, actions, prompt and gateway inputs and outputs, errors) and Audit and Feedback
+          stream to DMOs in a Data 360 data space; AiAgentSessionLog adds Tool, LLM, Retrieval, Guardrail, Auth and
+          Delegation events; per-agent enhanced event logs keep seven days
+        steps:
+          - title: Turn on Session Tracing org-wide
+            body:
+              - >-
+                From Setup open Einstein Audit, Analytics, and Monitoring Setup, turn Agentforce Session Tracing on and
+                select the target data space (Standard Data Model 1.130 or later).
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_session_trace_setup.htm&type=5
+          - title: Turn on Audit and Feedback
+            body:
+              - >-
+                On the same page turn Audit and Feedback on to store prompts, responses and trust-layer scores in Data
+                360.
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_feedback_enable.htm&type=5
+          - title: Query the trace model
+            body:
+              - >-
+                Build detections on the AIAgentSession, AIAgentInteraction, AIAgentInteractionStep,
+                AIAgentInteractionMessage and AiAgentSessionLog DMOs, joined on session and trace ids.
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_session_trace_data_model.htm&type=5
+          - title: Protect the trace data
+            body:
+              - >-
+                Apply data-space permissions and Data 360 Dynamic Data Masking, and delete or narrow the default
+                Allow All policy that lets System Administrators query every DMO.
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_session_trace_setup.htm&type=5
+        note: >-
+          Partial on the tracing rule, the same word as toolCopilotStudio for the opposite gap. The run half is
+          complete: an administrator-set, org-wide switch captures every agent's sessions per step, including
+          actions, prompt and model-gateway inputs and outputs, errors and delegation between agents, into our own
+          Data 360 data space within minutes, queryable and correlated by trace id. The maker half is missing: Setup
+          Audit Trail lists permission-set, profile and user changes (so Agent Access grants are audited) but not
+          agent, subagent or action edits, and no maker event for committing or activating an agent is documented;
+          committed versions in metadata are the only history. Data stays in Data 360 unless we export it; tracing
+          is off by default in orgs with more than one data space and consumes Data 360 credits.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          Deactivate on the agent in Agentforce Builder (or the Salesforce CLI agent deactivate command) takes it out of service and
+          interrupts ongoing conversations; Einstein Setup > Configure Model Providers turns providers off
+          org-wide (up to ten minutes); connections are cut per MCP tool allowlist, Gateway block policy or external
+          credential principal
+        steps:
+          - title: Deactivate the agent
+            body:
+              - >-
+                From the Agents page of Agentforce Studio open the agent and click Deactivate (or run the Salesforce CLI
+                agent deactivate command from a pipeline); ongoing conversations are interrupted.
+            url: https://help.salesforce.com/s/articleView?id=ai.copilot_setup_activate_deactivate.htm&type=5
+          - title: Cut its tools
+            body:
+              - >-
+                In Setup > Agentforce Registry remove the agent's MCP tools from the allowlist, or apply a Gateway
+                MCP Attribute-Based Access Control policy that blocks them for that agent.
+            url: https://help.salesforce.com/s/articleView?id=ai.agent_mcp_registration_manage_allowlist.htm&type=5
+          - title: Revoke its credentials
+            body:
+              - >-
+                Remove the permission set that grants the external credential principal to the agent user so its
+                named-credential callouts fail.
+            url: https://help.salesforce.com/s/articleView?id=xcloud.nc_named_creds_and_ext_creds.htm&type=5
+          - title: Stop generative AI org-wide
+            body:
+              - >-
+                In Einstein Setup > Configure Model Providers turn off the providers; affected agents stop within
+                up to ten minutes, along with every other generative AI feature on them.
+            url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_model_provider.htm&type=5
+        note: >-
+          Partial on the kill-switch rule, the same word as toolCopilotStudio for a different gap. The per-agent stop
+          is documented in full: deactivation interrupts ongoing conversations at once (the agent returns the system
+          error message, and an Enhanced Chat window stays open without the agent), and the CLI can do it. Missing is
+          a documented org-wide agent stop: the Agentforce toggle is being removed from the Agentforce Agents page
+          from August 2026, and the remaining lever, turning off model providers, "can stop" agents after up to ten
+          minutes and takes every other generative AI feature with it. Revocation is per connection with no bulk
+          revoke, Employee agents hold no credential of their own, and cancellation of flows or Apex already
+          dispatched by an action is not documented. Every holder of Manage AI Agents can deactivate and reactivate
+          any agent.
+        verified: "2026-09-25"
+    advisories:
+      - title: >-
+          ForcedLeak — indirect prompt injection via Web-to-Lead exfiltrating CRM data through an expired allowlisted
+          domain (Noma Labs; CVSS 9.4, no CVE; fixed 2025-09-08 by Trusted URLs Enforcement)
+        url: https://noma.security/blog/forcedleak-agent-risks-exposed-in-salesforce-agentforce/
+        date: "2025-09"
+      - title: >-
+          SalesBleed — zero-click CRM exfiltration via Web-to-Lead injection and a Trusted URLs redaction bypass in the
+          default General CRM subagent (Zenity Labs; no CVE; fixed 2026-08-18)
+        url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+        date: "2026-09"
+    sources:
+      - title: Agentforce and Einstein Generative AI (Salesforce Help)
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai.htm&type=5
+      - title: Einstein Trust Layer
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_layer.htm&type=5
+      - title: Trust and Agentforce
+        url: https://help.salesforce.com/s/articleView?id=ai.copilot_trust.htm&type=5
+      - title: Agent Execution Context and Data Access by Type
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_execution_data.htm&type=5
+      - title: Configure Service Agent Access (agent user)
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_user.htm&type=5
+      - title: Agentforce Gateway
+        url: https://help.salesforce.com/s/articleView?id=ai.agentforce_gateway_policies.htm&type=5
+      - title: Considerations for MCP for Agentforce
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_mcp_considerations.htm&type=5
+      - title: Versioning and Editing Agents
+        url: https://help.salesforce.com/s/articleView?id=ai.agent_versions_lifecycle.htm&type=5
+      - title: About Agentforce Session Tracing
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_session_trace_about.htm&type=5
+      - title: Monitor Agentforce Session Log Events
+        url: https://help.salesforce.com/s/articleView?id=ai.agentforce_diagnostic_data_model.htm&type=5
+      - title: Enable Enhanced Event Logs
+        url: https://help.salesforce.com/s/articleView?id=ai.copilot_setup_enhanced_event_logs.htm&type=5
+      - title: Monitor Setup Changes with Setup Audit Trail
+        url: https://help.salesforce.com/s/articleView?id=xcloud.admin_monitorsetup.htm&type=5
+      - title: Named Credentials
+        url: https://help.salesforce.com/s/articleView?id=xcloud.named_credentials_about.htm&type=5
+      - title: Set Up Einstein Generative AI
+        url: https://help.salesforce.com/s/articleView?id=ai.generative_ai_enable.htm&type=5
+      - title: Agentforce Developer Guide — Trust Layer
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/trust.html
+      - title: Agentforce DX — Manage an Agent (activate and deactivate from the CLI)
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-manage.html
+      - title: Agent Metadata (Bot, BotVersion, GenAiPlannerBundle, GenAiPlugin, GenAiFunction)
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-metadata.html
