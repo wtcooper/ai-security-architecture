@@ -561,3 +561,91 @@ tools:
         status: gap
         note: Not deployed. Baseline is an Agent-to-Anywhere gateway binding on every agent with registered endpoints
           and iap.resources.egressViaIAP per principal; VPC-SC plus PSC interface where the gateway cannot be used
+  - tool: toolOllama
+    available: false
+    note: Not approved. No local model runtime is sanctioned on managed laptops, so every Ollama install found is
+      shadow AI; each note below is the baseline the endpoint team would enforce before approving it.
+    capabilities:
+      EX-D3-MFA:
+        status: gap
+        note: Not deployed. The local API has no sign-in, so the baseline is OLLAMA_HOST=127.0.0.1:11434 pinned by MDM
+          with an identity-aware proxy in front that requires IdP MFA; any local process calling port 11434 directly
+          still bypasses it, which is why approval also needs the EDR listener check
+      EX-OUTPUT-GUARDRAILS:
+        status: gap
+        note: Not deployed. Ollama returns raw model output and has no classifier or hook; baseline is routing
+          applications through the AI gateway's content guardrails (optionally a llama-guard3 classifier) with Ollama
+          left on loopback so the gateway is the only documented path
+      EX-AML-M0004:
+        status: gap
+        note: Not deployed. Only global limits exist; baseline is OLLAMA_MAX_QUEUE, OLLAMA_NUM_PARALLEL,
+          OLLAMA_MAX_LOADED_MODELS and OLLAMA_CONTEXT_LENGTH set in the service environment, with per-caller quotas left
+          to the gateway because Ollama has no caller identity
+      EX-AML-M0023:
+        status: gap
+        note: Not deployed. Baseline is an MDM script collecting GET /api/tags (name, digest, size, details), POST
+          /api/show (license, template) and GET /api/version from each approved device into the AI inventory; source
+          is only implicit in the model name, so approved names are recorded with their digests
+      EX-D3-ORA:
+        status: gap
+        note: Not deployed. Local inference is not an approved use in the AI governance platform; approval would record
+          allowed model sources and machines, enforced by OLLAMA_NO_CLOUD=1, OLLAMA_REMOTES, HTTPS_PROXY through the
+          SSE allowlist for ollama.com and hf.co pulls, and a pinned OLLAMA_VERSION on Linux
+      EX-D3-PA:
+        status: gap
+        note: Not deployed as an Ollama-specific policy. EDR covers the endpoints; baseline adds detections on the ollama
+          serve process and its child inference processes, a listener on TCP 11434 bound to anything but 127.0.0.1,
+          and executables staged in %TEMP%\ollama* on Windows, with server.log / journalctl -u ollama collected
+      EX-SHADOW-AI-DISCOVERY:
+        status: gap
+        note: Not in place. Baseline is an EDR/MDM query for Ollama.app, /usr/local/bin/ollama, %LOCALAPPDATA%\Programs\Ollama
+          (installed per user without Administrator), /usr/bin/ollama with ollama.service, the ollama/ollama image,
+          and TCP 11434 answering "Ollama is running", with hits sent to the shadow-AI reconciliation queue
+      EX-AML-M0008:
+        status: gap
+        note: Not deployed. Ollama evaluates nothing and a pull makes a model servable at once; baseline is the
+          evaluation harness run against a staging instance's /v1 endpoint, with the approved digest recorded before
+          the model is allowed on devices
+  - tool: toolLmStudio
+    available: false
+    note: Not approved. Local inference is not sanctioned on managed laptops; LM Studio installs are treated as shadow AI
+      and each note below is the baseline the endpoint team would require before approving it for a named group.
+    capabilities:
+      EX-D3-MFA:
+        status: gap
+        note: Not deployed. The local server has no human sign-in, so MFA would come from the IdP-backed reverse proxy
+          in front; baseline is Require Authentication on (Developer > Server Settings, one token held by the proxy),
+          lms server start --bind 127.0.0.1 and LM Link off (Settings > LM Link) so the proxy is the only path
+      EX-OUTPUT-GUARDRAILS:
+        status: gap
+        note: Not deployed. LM Studio ships no content classifier and prompt-preprocessor plugins see only chat-UI
+          input; the runtime guardrail service would sit in front of a loopback-bound server holding the only API
+          token
+      EX-AML-M0004:
+        status: gap
+        note: Not deployed. Only per-model limits exist (Max Concurrent Predictions, default 4; Just in Time Model
+          Loading off); per-caller rates and quotas would come from the gateway, with one API token per application
+      EX-AML-M0008:
+        status: gap
+        note: Not deployed. LM Studio has no evaluation or load gate; candidate models would be run through the
+          evaluation harness against a staging copy's OpenAI-compatible endpoint before promotion into the models
+          directory
+      EX-AML-M0023:
+        status: gap
+        note: Not deployed. lms ls --json and GET /api/v1/models give publisher, key, format and quantization but no
+          digest or revision; the BOM would come from an MDM script hashing ~/.lmstudio/models/<publisher>/<model>/
+      EX-D3-ORA:
+        status: gap
+        note: Not deployed. Local inference is not approved in the AI governance register; LM Studio has no
+          model-source allowlist, so an approval would be enforced by egress rules to huggingface.co, the models
+          directory location and MDM application control
+      EX-D3-PA:
+        status: gap
+        note: Not deployed for this product. EDR would need detections for the LM Studio app and llmster, a listener
+          on TCP 1234, ~/.lmstudio/bin/lms and /etc/systemd/system/lmstudio.service, plus version tracking of the
+          app, llmster and the llama.cpp / MLX engine packs
+      EX-SHADOW-AI-DISCOVERY:
+        status: gap
+        note: Not deployed. Discovery rules would flag the LM Studio app, the per-user ~/.lmstudio tree, llmster
+          installed via lmstudio.ai/install.sh or install.ps1, and GET /v1/models answering on port 1234; LM Studio
+          reports nothing itself

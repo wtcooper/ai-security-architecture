@@ -1,0 +1,532 @@
+# Ollama — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: direct Ollama Cloud API access (https://ollama.com/api and /v1 with OLLAMA_API_KEY, no local
+# install) is hosted inference, not a local runtime, and is not onboarded; cloud models and web search reached
+# through the local API are recorded as facts and a risk note on toolOllama. The Ollama VS Code extension and the
+# `ollama launch` integrations (Claude Code, Codex, OpenCode, Droid) are clients of the local API, not entities.
+# 2026-09-25: onboarded toolOllama on archLocalInference against the MITRE capability rules; every docs.ollama.com
+# page cited (and its .md variant) answered 200 with no redirect; the old GitHub docs/faq.md is gone (docs moved to
+# docs.ollama.com); nvd.nist.gov answered 403 to curl (CVE-2026-5530 read through the NVD API instead);
+# ollama.com/library pages answer 405 to HEAD and 200 to GET. Behaviour the docs do not state (pull-time digest
+# check, Host validation, default origins, the desktop app's Expose toggle) was read in the GitHub source on main.
+vendor: ollama
+family: Ollama
+tools:
+  - id: toolOllama
+    name: Ollama
+    surfaceClasses:
+      - desktopApp
+      - endpointCli
+      - selfHostedServer
+    variants:
+      - name: Ollama for macOS (app, menubar server and CLI)
+        class: desktopApp
+        url: https://docs.ollama.com/macos
+        note: >-
+          The app starts `ollama serve` itself and merges its own Settings into the server environment: "Expose
+          Ollama to the network" sets OLLAMA_HOST=0.0.0.0 over any launchctl value; the Cloud toggle is greyed out
+          when OLLAMA_NO_CLOUD forces cloud off. Models and logs live under ~/.ollama.
+      - name: Ollama for Windows (app, tray server and CLI)
+        class: desktopApp
+        url: https://docs.ollama.com/windows
+        note: >-
+          Installs per user under %LOCALAPPDATA%\Programs\Ollama without Administrator rights and auto-downloads
+          updates; inherits user and system environment variables. Same app Settings as macOS.
+      - name: Ollama for Linux (CLI and ollama.service)
+        class: endpointCli
+        url: https://docs.ollama.com/linux
+        note: >-
+          The standard installer creates an `ollama` system user with home /usr/share/ollama and a systemd unit
+          running `ollama serve` as that user; configuration is Environment= lines in a root-owned override.conf.
+      - name: Ollama Docker image (ollama/ollama)
+        class: selfHostedServer
+        url: https://docs.ollama.com/docker
+        note: >-
+          The image sets OLLAMA_HOST=0.0.0.0:11434 and the documented `docker run -p 11434:11434` publishes the
+          port on every host interface; publish as -p 127.0.0.1:11434:11434 to keep it on loopback.
+    architecture: archLocalInference
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Open-source (MIT) local model runtime: a daemon (`ollama serve`) that pulls open-weights models by name from
+        the ollama.com library or Hugging Face (hf.co/{user}/{repo}), stores them as content-addressed blobs, and
+        serves them on http://127.0.0.1:11434 through its own API plus OpenAI- and Anthropic-compatible endpoints.
+        Shipped as a macOS and Windows desktop app, a Linux CLI and systemd service, and a Docker image; current
+        release v0.34.4 (2026-09-23).
+      - >-
+        Inference runs on the device and local prompts do not leave it. Signed in to ollama.com (`ollama signin`),
+        the same local API also serves cloud models (names ending -cloud or :cloud) and web search, which forward the
+        prompt to Ollama's cloud; OLLAMA_NO_CLOUD=1 or disable_ollama_cloud in ~/.ollama/server.json turns both off.
+        Model pulls, app updates and limited usage metadata are the other outbound traffic.
+      - >-
+        Every control is an environment variable of the server process, delivered by systemd override, launchctl
+        or Windows environment variables: OLLAMA_HOST (bind), OLLAMA_ORIGINS (browser origins), OLLAMA_NUM_PARALLEL
+        and OLLAMA_MAX_QUEUE (global load), OLLAMA_MODELS (store), OLLAMA_NO_CLOUD and OLLAMA_REMOTES (cloud
+        egress). The local API has no authentication at all, so any caller that reaches the port can pull, create,
+        copy, delete and push models as well as run them.
+    facts:
+      - label: Plans
+        value: >-
+          The runtime is free and open source. ollama.com accounts (Free, Pro $20/mo, Max $100/mo, Team $500/mo,
+          Enterprise custom) meter cloud-model use only; Team adds centralised billing and administration,
+          Enterprise adds model access controls and cost budgets for users and API keys — all on the cloud side.
+        url: https://ollama.com/pricing
+      - label: Inference & routing
+        value: >-
+          Local CPU/GPU by default. With the machine signed in, a cloud model name (gpt-oss:120b-cloud, gemma4:cloud)
+          sent to the local API is forwarded to Ollama's cloud; OLLAMA_REMOTES lists the hosts remote models may
+          reach (default ollama.com). Direct cloud calls to https://ollama.com/api need OLLAMA_API_KEY and no local
+          install (excluded here).
+        url: https://docs.ollama.com/api/authentication
+      - label: Data leaving the device
+        value: >-
+          Local runs: "We don't see your prompts or data when you run locally." Outbound traffic is model pulls over
+          HTTPS (HTTPS_PROXY honoured; HTTP_PROXY discouraged), macOS/Windows update downloads, and limited device and
+          usage metadata (app version, request counts). Cloud models and web search send prompts and queries to
+          Ollama; OLLAMA_NO_CLOUD=1 or "disable_ollama_cloud": true in ~/.ollama/server.json disables both and the log
+          shows "Ollama cloud disabled: true".
+        url: https://docs.ollama.com/faq
+      - label: Retention & training
+        value: >-
+          Cloud prompts and responses are processed transiently, not stored beyond the request and not used for
+          training; cloud compute is primarily in the United States with overflow to Europe and Singapore (privacy
+          policy updated March 2026; pricing page). Locally, model files and the ed25519 identity key sit under
+          ~/.ollama (/usr/share/ollama/.ollama for the Linux service) until removed.
+        url: https://ollama.com/privacy
+      - label: Docs index
+        value: docs.ollama.com (machine-readable index at /llms.txt; OpenAPI at /openapi.yaml)
+        url: https://docs.ollama.com/llms.txt
+      - label: Local endpoint
+        value: >-
+          http://127.0.0.1:11434 — native /api, OpenAI-compatible /v1 and Anthropic-compatible /v1/messages on one
+          port; GET / answers "Ollama is running". "The local API at http://localhost:11434 does not require
+          authentication."
+        url: https://docs.ollama.com/api/introduction
+      - label: Updates
+        value: >-
+          macOS and Windows apps auto-download updates (user Settings toggle "Auto-download updates"); Linux re-runs
+          install.sh, and OLLAMA_VERSION pins the version it installs. The Windows updater verified no signature
+          before CVE-2026-42248 was reported.
+        url: https://docs.ollama.com/linux
+      - label: Exposure research
+        value: >-
+          Cisco Talos found 1,139 internet-exposed Ollama servers by Shodan (September 2025); SentinelLABS and Censys
+          observed 175,108 unique Ollama hosts in 130 countries over 293 days (January 2026); Cyera cites roughly
+          300,000 exposed servers without naming its source (May 2026).
+        url: >-
+          https://www.sentinelone.com/labs/silent-brothers-ollama-hosts-form-anonymous-ai-network-beyond-platform-guardrails/
+    items:
+      - title: Delivering the runtime's security settings by device management
+        body:
+          - "Linux: Environment=\"OLLAMA_HOST=127.0.0.1:11434\" (and OLLAMA_ORIGINS, OLLAMA_NO_CLOUD,
+            OLLAMA_MAX_QUEUE) in /etc/systemd/system/ollama.service.d/override.conf, then systemctl daemon-reload and
+            restart; the file is root-owned, so this is the one platform where the setting holds against the user."
+          - "macOS: the app reads variables set with launchctl setenv, which an MDM script must reapply at each
+            login; the app's own Settings then override OLLAMA_HOST when \"Expose Ollama to the network\" is on, so
+            pair the variable with a compliance check that port 11434 listens only on 127.0.0.1. OLLAMA_NO_CLOUD set
+            this way does lock the Cloud toggle."
+          - "Windows: the app inherits user and system environment variables; set them as system variables by
+            policy, because user variables are user-writable, and restart the app."
+        links:
+          - title: FAQ — How do I configure Ollama server?
+            url: https://docs.ollama.com/faq
+          - title: Linux — Customizing (override.conf)
+            url: https://docs.ollama.com/linux
+          - title: Desktop app server launcher (Expose → OLLAMA_HOST=0.0.0.0, cloud setting → OLLAMA_NO_CLOUD)
+            url: https://github.com/ollama/ollama/blob/main/app/server/server.go
+    riskNotes:
+      - risk: riskMaliciousLoaderDeserialization
+        note: >-
+          Ollama imports only GGUF and Safetensors, so the pickle axis is closed by construction; the live class is
+          the native GGUF parser. CVE-2026-7482 (Bleeding Llama) read past the heap from a crafted GGUF sent to the
+          unauthenticated /api/create, and CVE-2025-0312/0315/0317 crashed the server the same way. Chat templates are
+          Go templates selected from Ollama's list or shipped in the model's template layer, not Jinja.
+      - risk: riskModelSourceTampering
+        note: >-
+          Pulls are by name from the ollama.com library, any user namespace pushed there, or hf.co/{user}/{repo}. The
+          sha256 check compares each layer with a manifest from the same registry, so it proves the transfer, not the
+          publisher; no signature is verified. CVE-2025-51471 showed a malicious registry's WWW-Authenticate realm
+          could steal the client's authentication token during a pull.
+      - risk: riskDenialOfMLService
+        note: >-
+          One global queue (OLLAMA_MAX_QUEUE 512) and OLLAMA_NUM_PARALLEL 1 per model are shared by every caller, and
+          callers can raise num_ctx and pin models with keep_alive -1. Exposed hosts are counted by Cisco Talos
+          (1,139, 2025), SentinelLABS with Censys (175,108, 2026) and Cyera (about 300,000, unsourced, 2026).
+      - risk: riskModelExfiltration
+        note: >-
+          Any caller of the port can POST /api/push to copy a local model, including an organisation's fine-tune, to a
+          registry it names — the exfiltration step of Cyera's Bleeding Llama chain; on macOS and Windows the blobs
+          sit in ~/.ollama/models, readable by every process of the user.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          Fast-moving native serving code with a steady CVE stream (twelve GitHub Advisory Database entries published 2025–26), and
+          an auto-updater that on Windows 0.12.10–0.17.5 verified no signature and let response headers steer the
+          write path (CVE-2026-42248, CVE-2026-42249, reported by CERT Polska).
+      - risk: riskExcessiveDataHandlingDuringInference
+        note: >-
+          A -cloud or :cloud model name, or the app's web search, sends the prompt to Ollama's cloud through the same
+          local API once the machine is signed in; OLLAMA_NO_CLOUD=1 is the device-level off switch.
+          OLLAMA_DEBUG_LOG_REQUESTS writes request bodies to a temporary directory and should stay off.
+      - risk: riskModelDeploymentTampering
+        note: >-
+          /api/create, /api/copy and /api/delete need no authentication (recorded as CVE-2025-63389), so any local
+          process or web-exposed caller can repoint a model name; a blob swapped on disk is not re-hashed at load.
+    controls:
+      - mitigation: D3-FA
+        coverage: partial
+        mechanism: >-
+          Built into the pull path: `ollama pull` / POST /api/pull recomputes the sha256 of every newly downloaded
+          layer against the registry manifest and deletes a mismatched blob; imports (Modelfile FROM) accept only GGUF
+          and Safetensors, with no pickle loader. No content scanning and no quarantine step.
+        steps:
+          - title: Pull only over the verified path
+            body:
+              - >-
+                Acquire models with `ollama pull <name>` or POST /api/pull and never set the request's insecure field
+                ("Allow downloading over insecure connections"), so every layer arrives over TLS and is hashed
+                against its manifest.
+            url: https://docs.ollama.com/api/pull
+          - title: Keep the pull-time digest check intact
+            body:
+              - >-
+                Run v0.32.10 or later: the pull handler re-hashes each layer that was not already on disk and removes
+                a blob whose sha256 differs, and v0.32.10 fixed the check being skipped when an OCI manifest's config
+                and layer share a digest.
+            url: https://github.com/ollama/ollama/blob/main/server/images.go
+          - title: Scan third-party files before `ollama create`
+            body:
+              - >-
+                Stage GGUF or Safetensors files outside OLLAMA_MODELS, scan them with a model-file scanner, and only
+                then import with a Modelfile `FROM /path/to/file.gguf` (or a Safetensors directory) and `ollama
+                create`; Ollama has no importer for pickle-based checkpoints.
+            url: https://docs.ollama.com/import
+        note: >-
+          Partial on this drawing's rule — safe formats by construction and a digest check on pull only. The digest
+          is compared with a manifest from the same registry that served the blob, so it proves the transfer, not
+          the publisher or the content; layers already on disk skip it, and nothing re-hashes at load. There is no
+          content inspection and no quarantine: `ollama pull hf.co/{user}/{repo}` fetches an arbitrary community GGUF
+          and makes it loadable in one step, and any caller of the unauthenticated API can upload a blob to
+          /api/blobs and /api/create a model from it — the route CVE-2026-7482's crafted GGUF took into the native
+          parser. A model scanner at a quarantine directory or a scanning registry mirror (external) is the missing
+          half.
+        verified: "2026-09-25"
+      - mitigation: D3-MFA
+        coverage: external
+        mechanism: >-
+          An authenticating reverse proxy or identity-aware proxy, backed by the IdP's MFA, in front of an Ollama
+          left bound to 127.0.0.1:11434; the local API has no sign-in
+        evidence:
+          - title: Ollama API — Authentication ("The local API at http://localhost:11434 does not require authentication")
+            url: https://docs.ollama.com/api/authentication
+          - title: Ollama FAQ — How can I use Ollama with a proxy server? (Nginx, Host localhost:11434)
+            url: https://docs.ollama.com/faq
+        note: >-
+          External on this drawing's rule: the runtime has no human sign-in on its API, so a second factor can only
+          come from a proxy that authenticates callers against the IdP. Integration point: keep OLLAMA_HOST on
+          127.0.0.1:11434 so only the proxy on the same host reaches it, with the proxy setting Host localhost:11434
+          as in the FAQ's Nginx example; any local process that calls the port directly still bypasses the proxy.
+          `ollama signin` and ollama.com API keys authenticate this machine to Ollama's cloud (cloud models, private
+          pulls, push), not callers of the local port, and an ollama.com second factor is not documented. The
+          OLLAMA_AUTH variable only makes the CLI sign its own requests; the server code checks no caller credential.
+        verified: "2026-09-25"
+      - mitigation: cap-output-guardrails
+        coverage: external
+        mechanism: >-
+          A guardrail proxy or AI gateway on the request path, optionally calling a safety-classifier model served by
+          the same Ollama (llama-guard3, shieldgemma); the runtime ships no content classification
+        evidence:
+          - title: Ollama docs index (no guardrail, moderation or content-policy setting)
+            url: https://docs.ollama.com/llms.txt
+          - title: Ollama library — llama-guard3 (content safety classification of LLM inputs and responses)
+            url: https://ollama.com/library/llama-guard3
+        note: >-
+          External: Ollama returns the raw completion; it has no harm-category, denied-topic or policy classifier and
+          no hook between the API and the model runner to attach one. A Modelfile SYSTEM prompt is an instruction to
+          the model, not a control, and callers can send their own system message. The library hosts classifier
+          models, but invoking them on every request and blocking on the verdict is the gateway's job. Integration
+          point: point applications at the gateway and keep Ollama on loopback; a caller that reaches port 11434
+          directly skips the classification.
+        verified: "2026-09-25"
+      - mitigation: AML.M0004
+        coverage: partial
+        mechanism: >-
+          Server-wide OLLAMA_MAX_QUEUE (default 512, then HTTP 503), OLLAMA_NUM_PARALLEL (default 1 per model),
+          OLLAMA_MAX_LOADED_MODELS and a default OLLAMA_CONTEXT_LENGTH; nothing per caller or key
+        steps:
+          - title: Cap the shared queue
+            body:
+              - >-
+                Set OLLAMA_MAX_QUEUE in the server environment (systemd override.conf, launchctl setenv, system
+                environment variable) so requests beyond it are rejected with 503 instead of queuing without bound.
+            url: https://docs.ollama.com/faq
+          - title: Bound concurrency and resident models
+            body:
+              - >-
+                Set OLLAMA_NUM_PARALLEL and OLLAMA_MAX_LOADED_MODELS to what the machine can serve; memory scales with
+                OLLAMA_NUM_PARALLEL × OLLAMA_CONTEXT_LENGTH.
+            url: https://docs.ollama.com/faq
+          - title: Set a default context window
+            body:
+              - >-
+                Set OLLAMA_CONTEXT_LENGTH explicitly in the server environment (or the app's Context length slider)
+                instead of relying on the VRAM-based default.
+            url: https://docs.ollama.com/context-length
+        note: >-
+          Partial on this drawing's rule: global concurrency, queue and context limits, not per caller — Ollama has no
+          caller identity to meter against. One caller can fill the queue for all, raise options.num_ctx per request
+          and pin models with keep_alive -1 (FAQ), so the context default is not a ceiling. The two vendor pages
+          disagree on that default (FAQ: 4096 tokens; Context length page: 4k, 32k or 256k by VRAM), so set it. Per-
+          caller or per-key quotas need an AI or API gateway in front (external). Plan concurrency limits and
+          Enterprise budgets on ollama.com apply to cloud models only.
+        verified: "2026-09-25"
+      - mitigation: D3-MAN
+        coverage: partial
+        mechanism: >-
+          OLLAMA_HOST (default 127.0.0.1:11434), OLLAMA_ORIGINS (a disallowed Origin is refused with 403) and Host
+          validation while bound to loopback; the local API has no authentication option
+        steps:
+          - title: Pin the bind to loopback
+            body:
+              - >-
+                Set OLLAMA_HOST=127.0.0.1:11434 explicitly in the server environment (Environment= in
+                /etc/systemd/system/ollama.service.d/override.conf on Linux, launchctl setenv on macOS, a system
+                variable on Windows) rather than relying on the default.
+            url: https://docs.ollama.com/faq
+          - title: Keep the desktop app's network exposure off
+            body:
+              - >-
+                Leave Settings → "Expose Ollama to the network" off on macOS and Windows: when on, the app starts the
+                server with OLLAMA_HOST=0.0.0.0, overriding the variable you set; it is a per-user setting, so verify
+                the listener with a compliance check.
+            url: https://github.com/ollama/ollama/blob/main/app/server/server.go
+          - title: Allow only named browser origins
+            body:
+              - >-
+                Leave OLLAMA_ORIGINS unset or list exact origins, never * or the chrome-extension://* style wildcards
+                the FAQ shows; the defaults already admit localhost, 127.0.0.1 and 0.0.0.0 on any port.
+            url: https://docs.ollama.com/faq
+          - title: Publish the container port on loopback
+            body:
+              - >-
+                Run the ollama/ollama image with -p 127.0.0.1:11434:11434, not the documented -p 11434:11434, because
+                the image sets OLLAMA_HOST=0.0.0.0:11434 and Docker then publishes on every host interface.
+            url: https://docs.ollama.com/docker
+        note: >-
+          Partial on this drawing's rule: loopback bind by default plus Origin and Host validation, all built in, but
+          no authentication — "The local API at http://localhost:11434 does not require authentication", so any
+          local process is a full caller (pull, create, copy, delete, push). Host validation (the DNS-rebinding fix
+          for CVE-2024-28224) runs only while bound to loopback and accepts the machine's hostname, *.localhost,
+          *.local and *.internal names and private IP literals; a routable bind skips it. The origin check applies
+          only to requests that carry an Origin header, and the default list (per source) also admits file://*,
+          app://*, tauri://*, vscode-webview://* and vscode-file://*. Only the Linux systemd override is out of the
+          user's reach; launchctl values are overridden by the app's Expose toggle and Windows user variables are
+          user-writable. Authenticated transport needs a proxy (external), and a host firewall on 11434 is the
+          backstop.
+        verified: "2026-09-25"
+      - mitigation: AML.M0005
+        coverage: partial
+        mechanism: >-
+          Content-addressed store (models/blobs named sha256-<digest>, referenced by manifests) under OLLAMA_MODELS;
+          digest verified on pull only; the Linux service runs as the dedicated ollama user owning
+          /usr/share/ollama/.ollama/models, while macOS and Windows keep models in the user's ~/.ollama
+        steps:
+          - title: Run the Linux service as its own account
+            body:
+              - >-
+                Install with the standard installer (or useradd -r -s /bin/false -U -m -d /usr/share/ollama ollama and
+                User=ollama in ollama.service) so the model store belongs to the ollama account, not to users.
+            url: https://docs.ollama.com/linux
+          - title: Move the store to a restricted directory
+            body:
+              - >-
+                Set OLLAMA_MODELS to a directory only the serving account can write, and on Linux run sudo chown -R
+                ollama:ollama <directory> as the FAQ describes.
+            url: https://docs.ollama.com/faq
+        note: >-
+          Partial on this drawing's rule: content-addressed and digest-checked on download only, with permissions
+          left to the OS. Nothing re-hashes a blob when it is loaded, so a file swapped under models/blobs is served on
+          the next load; on macOS and Windows the store sits in the user's home, readable and writable by any process
+          running as the user, including org fine-tunes. The unauthenticated API is a second path to read or replace
+          models (/api/push, /api/copy, /api/delete, /api/create). File-integrity monitoring over the blobs
+          directory, re-hashing each file against its sha256-<digest> name, is the external half. Same rule as
+          toolLmStudio, rated external there because its store is neither content-addressed nor digest-checked.
+        verified: "2026-09-25"
+      - mitigation: D3-ORA
+        coverage: external
+        mechanism: >-
+          GRC / AI governance platform holds the decision; the device settings that enforce it are OLLAMA_NO_CLOUD (or
+          disable_ollama_cloud), OLLAMA_REMOTES, HTTPS_PROXY for pulls, OLLAMA_MODELS and the Linux OLLAMA_VERSION pin
+        evidence:
+          - title: Ollama SECURITY.md (report to hello@ollama.com; user best practices)
+            url: https://github.com/ollama/ollama/blob/main/SECURITY.md
+          - title: Ollama release notes
+            url: https://github.com/ollama/ollama/releases
+          - title: Ollama environment variables (OLLAMA_NO_CLOUD, OLLAMA_REMOTES), printed by `ollama serve --help`
+            url: https://github.com/ollama/ollama/blob/main/envconfig/config.go
+          - title: Ollama FAQ — disable cloud features; behind a proxy
+            url: https://docs.ollama.com/faq
+        note: >-
+          External on this drawing's rule: the runtime cannot assess itself, so whether local inference may run, from
+          which sources and on which machines is recorded in the GRC or AI-governance platform. Inputs Ollama
+          publishes: SECURITY.md (private report to hello@ollama.com, a three-line best-practice list, no bounty),
+          GitHub release notes and the privacy policy. It publishes no repository security advisories — its 2025–26
+          CVEs reach the GitHub Advisory Database through NVD, CERT Polska, VulDB and researchers — and no
+          release-signing statement. Device settings that enforce the decision: OLLAMA_NO_CLOUD=1 (cloud models and
+          web search off), OLLAMA_REMOTES (hosts remote models may reach, default ollama.com), HTTPS_PROXY so pulls
+          from ollama.com and hf.co pass a proxy allowlist, a pre-approved OLLAMA_MODELS store, and OLLAMA_VERSION on
+          the Linux installer; "Auto-download updates" is a user setting.
+        verified: "2026-09-25"
+      - mitigation: D3-PA
+        coverage: external
+        mechanism: >-
+          Third-party EDR over the ollama server process and the inference processes it spawns; integration points
+          are port 11434, the ollama.service unit, the server.log / app.log paths and the %TEMP%\ollama* executables
+          on Windows
+        evidence:
+          - title: Ollama troubleshooting — log locations per platform
+            url: https://docs.ollama.com/troubleshooting
+          - title: Ollama for Windows — install, log and temporary-executable paths
+            url: https://docs.ollama.com/windows
+          - title: Ollama for macOS — file locations
+            url: https://docs.ollama.com/macos
+        note: >-
+          External: Ollama writes operational logs but no security telemetry and has no self-protection. Integration
+          points: the `ollama serve` process (Linux systemd ollama.service running as User=ollama; started by
+          Ollama.app on macOS and `ollama app.exe` on Windows) and its per-model inference child processes; TCP 11434;
+          logs in ~/.ollama/logs/server.log and app.log (macOS), %LOCALAPPDATA%\Ollama\server.log, app.log and
+          upgrade.log (Windows), journalctl -u ollama (Linux), docker logs (container). Windows stages temporary
+          executables in %TEMP%\ollama* directories, so EDR should trust the signer and path, not the name.
+          GET /api/version or `ollama -v` gives the version for vulnerable-version discovery. OLLAMA_DEBUG raises log
+          detail; OLLAMA_DEBUG_LOG_REQUESTS writes request bodies to disk and should stay off.
+        verified: "2026-09-25"
+      - mitigation: AML.M0023
+        coverage: partial
+        mechanism: >-
+          Local list APIs for fleet tooling to collect: `ollama ls` / GET /api/tags (name, sha256 digest, size,
+          modified_at, format, family, parameter_size, quantization_level, remote_host for cloud models), POST
+          /api/show (license, template, parameters, model_info), GET /api/ps and GET /api/version
+        steps:
+          - title: Collect each device's model list
+            body:
+              - >-
+                Have the MDM or EDR agent call GET http://127.0.0.1:11434/api/tags (or run `ollama ls`) on a schedule
+                and ship name, digest, size, modified_at and details to the inventory.
+            url: https://docs.ollama.com/api/tags
+          - title: Record licence, template and parameters
+            body:
+              - >-
+                POST /api/show with each model name to capture license, template, parameters, capabilities and
+                model_info for the bill of materials.
+            url: https://docs.ollama.com/api-reference/show-model-details
+          - title: Record the runtime version
+            body:
+              - >-
+                GET /api/version on each device so the inventory ties models to the runtime build that serves them.
+            url: https://docs.ollama.com/api-reference/get-version
+        note: >-
+          Partial on this drawing's rule: a local list API with digests that fleet tooling can collect; the product has
+          no fleet inventory. The source is only implicit in the name (a bare library name, a user/model namespace
+          anyone can push, or an hf.co/ prefix), not a signed provenance record, and a model built with `ollama
+          create` from a local GGUF records no upstream at all. The listed digest identifies content on this machine,
+          not the publisher. Same rule as toolLmStudio, rated external there because its lists carry no digest or
+          source.
+        verified: "2026-09-25"
+      - mitigation: cap-shadow-ai-discovery
+        coverage: external
+        mechanism: >-
+          EDR/MDM software inventory and network scanning for the Ollama app and binary, its service and data
+          directories, and TCP 11434 answering "Ollama is running"
+        evidence:
+          - title: Ollama for macOS — file locations
+            url: https://docs.ollama.com/macos
+          - title: Ollama for Windows — per-user install without Administrator
+            url: https://docs.ollama.com/windows
+          - title: Ollama for Linux — binary, service and user
+            url: https://docs.ollama.com/linux
+          - title: Ollama server routes (GET / returns "Ollama is running")
+            url: https://github.com/ollama/ollama/blob/main/server/routes.go
+        note: >-
+          External: Ollama registers itself nowhere the organisation controls. Discovery points: /Applications/
+          Ollama.app and /usr/local/bin/ollama (macOS); %LOCALAPPDATA%\Programs\Ollama, installed per user without
+          Administrator, so it can be missing from the software catalogue (Windows); /usr/bin/ollama, the ollama
+          user and ollama.service (Linux); the ollama/ollama container image; ~/.ollama directories with an
+          id_ed25519 key; the login item or Startup app entry; and TCP 11434 answering GET / with "Ollama is running"
+          and GET /api/version. Signed-in cloud use shows as traffic to ollama.com at the SSE.
+        verified: "2026-09-25"
+      - mitigation: AML.M0008
+        coverage: external
+        mechanism: >-
+          An evaluation / red-team harness run against the candidate model on a staging instance before its digest is
+          approved; Ollama ships no model evaluation
+        evidence:
+          - title: Ollama docs index (no evaluation or model-testing feature)
+            url: https://docs.ollama.com/llms.txt
+          - title: Ollama OpenAI compatibility (http://localhost:11434/v1 for harnesses)
+            url: https://docs.ollama.com/api/openai-compatibility
+        note: >-
+          External: nothing in Ollama tests what weights do, and a pull makes a model servable at once. Integration
+          point: a harness calls the candidate through the OpenAI-compatible /v1 or native /api/chat endpoint on a
+          staging instance with its own OLLAMA_MODELS, and the governance band approves the resulting digest; the
+          gate lives with the harness and the approval record, not the runtime. Refusal behaviour is whatever the
+          weights carry, and abliterated or uncensored variants are one pull away.
+        verified: "2026-09-25"
+    advisories:
+      - title: >-
+          CVE-2026-7482 "Bleeding Llama" — heap out-of-bounds read from a crafted GGUF via /api/create leaks process
+          memory (found by Cyera; fixed 0.17.1)
+        url: https://github.com/advisories/GHSA-x8qc-fggm-mpqg
+        date: "2026-05"
+      - title: >-
+          CVE-2026-42248 and CVE-2026-42249 — Ollama for Windows 0.12.10–0.17.5 updater skips signature verification
+          and trusts response headers for the write path (CERT Polska; no fixed version named)
+        url: https://cert.pl/en/posts/2026/04/CVE-2026-42248/
+        date: "2026-04"
+      - title: >-
+          CVE-2026-5530 — server-side request forgery in the model pull API up to 0.18.1 (VulDB-assigned; vendor did
+          not respond)
+        url: https://nvd.nist.gov/vuln/detail/CVE-2026-5530
+        date: "2026-04"
+      - title: >-
+          CVE-2025-63389 — model-management endpoints require no authentication (critical; no patched version)
+        url: https://github.com/advisories/GHSA-f6mr-38g8-39rg
+        date: "2025-12"
+      - title: >-
+          CVE-2025-51471 — a malicious WWW-Authenticate realm returned during /api/pull steals the client's
+          authentication token
+        url: https://github.com/advisories/GHSA-x9hg-5q6g-q3jr
+        date: "2025-07"
+      - title: CVE-2025-1975 — denial of service from a crafted manifest during model download
+        url: https://github.com/advisories/GHSA-wrh5-cmwx-q2qr
+        date: "2025-05"
+      - title: >-
+          CVE-2025-0315 — unbounded memory allocation from a crafted GGUF upload (with CVE-2025-0312 and CVE-2025-0317,
+          same class)
+        url: https://github.com/advisories/GHSA-fccc-8m69-8r78
+        date: "2025-03"
+    sources:
+      - title: Ollama documentation index
+        url: https://docs.ollama.com/llms.txt
+      - title: Ollama FAQ
+        url: https://docs.ollama.com/faq
+      - title: Ollama API — Authentication
+        url: https://docs.ollama.com/api/authentication
+      - title: Ollama Cloud
+        url: https://docs.ollama.com/cloud
+      - title: Ollama — Importing a model
+        url: https://docs.ollama.com/import
+      - title: Ollama Privacy Policy
+        url: https://ollama.com/privacy
+      - title: Ollama pricing
+        url: https://ollama.com/pricing
+      - title: Ollama SECURITY.md
+        url: https://github.com/ollama/ollama/blob/main/SECURITY.md
+      - title: Hugging Face — Use Ollama with any GGUF model on the Hub
+        url: https://huggingface.co/docs/hub/ollama
+      - title: "Cisco Talos — Detecting exposed LLM servers: a Shodan case study on Ollama (2025-09)"
+        url: https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama
+      - title: "SentinelLABS and Censys — Silent Brothers: Ollama hosts form an anonymous AI network (2026-01)"
+        url: >-
+          https://www.sentinelone.com/labs/silent-brothers-ollama-hosts-form-anonymous-ai-network-beyond-platform-guardrails/
+      - title: "Cyera — Bleeding Llama: critical unauthenticated memory leak in Ollama (2026-05)"
+        url: https://www.cyera.com/research/bleeding-llama-critical-unauthenticated-memory-leak-in-ollama
