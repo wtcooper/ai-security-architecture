@@ -125,10 +125,19 @@ escalation, an unlockable exclusion list) is not a required boundary; a kill swi
 new sessions is partial unless the stop of a running one is documented; a path exclusion is
 minimisation, not detection.
 
+The same pass then ran across every other drawing the same day: the remaining 14 registry entities
+were re-verified under the same rules, and one or two mainstream exemplars were onboarded where a
+drawing had none or named one — Microsoft 365 Copilot, Bedrock AgentCore, Vertex AI Agent Engine,
+Copilot Studio, Agentforce, opencode, Cline, Ollama, LM Studio, the OpenAI Agents SDK, the Vercel AI
+SDK, the GitHub MCP server, vLLM and MLflow. Every entity on every drawing now addresses every
+pinned capability. Agent-to-agent federation has no registry entity: its exemplars are a protocol,
+a draft grant type and a class of platforms, not products.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.
 
+- Architecture exemplars not onboarded (scope decision 2026-09-25: existing entities plus one or two mainstream products per drawing) — Perplexity Comet, Dia, Microsoft Edge Copilot Mode, Gemini in Chrome (browser AI); Goose (first-party coding); llama.cpp server (local runtime); Zapier Agents (low-code); Sierra (single agent); Intercom Fin, Decagon (chat agent); Atlassian Remote MCP Server, Cloudflare remote MCP hosting (remote MCP); KServe, SGLang (self-hosted inference); Axolotl, Hugging Face PEFT (training); Temporal, LangGraph, Microsoft Agent Framework (multi-agent workflow); the A2A specification, A2A-enabled agent platforms and the identity-assertion grant (federation).
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.
 - OpenAI ChatGPT Atlas — winding down; browser features moved into the ChatGPT app's built-in browser (recorded as a variant of toolChatgptDesktop). The Help Center article "Evolving Atlas into ChatGPT" returned 403 to automated fetch on 2026-09-10.
 - OpenAI Agent Builder — scheduled shutdown 2026-11-30 per developers.openai.com/api/docs/guides/agent-builder; ChatKit and the Agents SDK are the replacement.

@@ -1021,6 +1021,8 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
+| Amazon Bedrock AgentCore | aws | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
+| Cline | cline | First-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Grok Bot | cursor | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
@@ -1029,22 +1031,34 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
+| GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 14/14 | _none_ |  |
+| Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
+| LM Studio | lmstudio | Local model runtime | 2026-09 | 11/11 | _none_ |  |
+| Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 12/12 | _none_ |  |
+| Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
+| MLflow Tracking Server and Model Registry | mlflow | Fine-tuning and model registry pipeline | 2026-09 | 15/15 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 10/16 | Multi-factor Authentication, Agent and Tool Registry, Staged Rollout and Rollback Gate, Agent Action Policy Enforcement, Memory Hardening, Input Screening Guardrails |  |
+| Ollama | ollama | Local model runtime | 2026-09 | 11/11 | _none_ |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
+| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 19/19 | _none_ |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
+| opencode | opencode | First-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
+| Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 12/12 | _none_ |  |
+| Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 22/22 | _none_ |  |
+| vLLM | vllm | Self-hosted model inference | 2026-09 | 15/15 | _none_ |  |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 
 - MITRE D3FEND 1.6.0: 44 canonical entries.
 - MITRE ATLAS 2026.09: 32 canonical entries.
 - 31/35 CoSAI controls have supporting mappings; this is not fulfillment.
-- 75 tool-mitigation rows require reassessment after migration.
+- 0 tool-mitigation rows require reassessment after migration.
 
 | CoSAI control | Mapping | Remaining requirement |
 | --- | --- | --- |
