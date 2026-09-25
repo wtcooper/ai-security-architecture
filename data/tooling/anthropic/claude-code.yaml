@@ -6,6 +6,7 @@
 # Bedrock / Vertex (Google Cloud's Agent Platform) / Foundry / Claude apps gateway / LLM gateway
 # routing are facts on toolClaudeCode, not entities.
 # 2026-09-15: toolClaudeCodeWeb gained sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched cloud-environments, claude-code-on-the-web, server-managed-settings, managed-mcp (all 200).
+# 2026-09-25: re-verified toolClaudeCode, toolClaudeCodeWeb against the MITRE capability rules; every code.claude.com, platform.claude.com and support.claude.com page cited answered 200 with no redirect; code.claude.com/docs/en/claude-tag returned 403 (Cloudflare challenge, not cited); trust.anthropic.com renders client-side and was read in a browser; no iam page exists in the docs map.
 vendor: anthropic
 family: Claude Code
 tools:
@@ -61,8 +62,8 @@ tools:
         Anthropic API by default; organisations can route it to Amazon Bedrock, Google Cloud's Agent Platform
         (Vertex), Microsoft Foundry, Claude Platform on AWS, a self-hosted Claude apps gateway, or any LLM
         gateway via ANTHROPIC_BASE_URL. All prompts, tool results and file contents Claude reads leave the
-        device to the configured provider over TLS; operational telemetry and error reports to Anthropic are
-        on by default on the Anthropic API and off on third-party providers.
+        device to the configured provider over TLS; usage metrics go to Anthropic by default on the Anthropic API
+        (error reports only for Pro and Max sign-ins) and are off on cloud providers.
       - >-
         Two admin channels share one top-precedence managed tier: endpoint-managed settings delivered as files
         or OS policies via MDM/GPO (macOS com.anthropic.claudecode plist, HKLM\SOFTWARE\Policies\ClaudeCode,
@@ -97,8 +98,9 @@ tools:
       - label: Data leaving the device
         value: >-
           Prompts, model outputs and everything a tool returns go to the model provider over TLS 1.2+. Metrics
-          (no code or prompts) and redacted error reports go to Anthropic and a third-party logging service by
-          default on the Anthropic API; DISABLE_TELEMETRY, DISABLE_ERROR_REPORTING or
+          (no code, prompts or file paths) go to Anthropic and third-party logging infrastructure by default on
+          the Anthropic API; redacted error reports go to a third-party error tracker by default only for Pro and
+          Max sign-ins; DISABLE_TELEMETRY, DISABLE_ERROR_REPORTING or
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC turn them off. WebFetch sends each hostname to
           api.anthropic.com for a safety-blocklist check (skipWebFetchPreflight disables). /feedback uploads
           the transcript.
@@ -203,8 +205,8 @@ tools:
         note: >-
           Auto mode is the built-in starting mode on Pro, Max and Team. There is no managed per-session token
           or turn budget in the CLI; spend is bounded at the organisation level (admin spend limits, Console
-          workspace limits, or gateway per-user limits) and per run only through --max-turns in headless and
-          GitHub Actions use.
+          workspace limits, or gateway per-user limits) and per run only through --max-turns and --max-budget-usd
+          in print mode and GitHub Actions use.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Background agents (claude agents, --bg), agent teams, cross-session messaging and Remote Control all
@@ -212,38 +214,52 @@ tools:
           (corporate launcher), crossSessionInbound and disableRemoteControl are the switches.
     controls:
       - mitigation: D3-MFA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          claude.ai login pinned to the organisation (forceLoginMethod, forceLoginOrgUUID) with SSO/SCIM at
-          the org level; Claude apps gateway for IdP sign-in on third-party providers
+          Require SSO for Claude (claude.ai/admin-settings/organization, Authentication) hands every
+          interactive claude.ai login to the IdP's MFA; managed forceLoginMethod "claudeai" and
+          forceLoginOrgUUID pin the client to the organisation; forceLoginMethod "gateway" with
+          forceLoginGatewayUrl sends cloud-provider deployments through a Claude apps gateway's OIDC sign-in
         steps:
-          - title: Pin logins to your organisation
+          - title: Require SSO so the IdP's MFA governs every login
             body:
-              - Deploy forceLoginMethod ("claudeai" or "console") and forceLoginOrgUUID (your org UUID from
-                claude.ai/admin-settings/organization) through MDM or managed-settings.json; sessions on
-                ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or apiKeyHelper are then blocked at startup.
-            url: https://code.claude.com/docs/en/authentication
-          - title: Enforce SSO and SCIM at the organisation
-            body:
-              - Turn on "Require SSO for Claude" at claude.ai/admin-settings/organization after domain
-                verification; Enterprise adds SCIM group-to-role mapping and automatic deprovisioning.
+              - >-
+                After verifying your domain, turn on Require SSO for Claude (and Require SSO for Console) in
+                the Authentication section at claude.ai/admin-settings/organization, and enforce MFA on the
+                Claude app in your IdP.
             url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: On Bedrock, Vertex or Foundry use the Claude apps gateway
+          - title: Pin the client to your organisation
             body:
-              - Run claude gateway with an OIDC IdP; developers sign in with corporate SSO, receive
-                short-lived bearer tokens, and lose access when deprovisioned in the IdP.
+              - >-
+                Deploy forceLoginMethod "claudeai" and forceLoginOrgUUID through MDM or managed-settings.json,
+                and in server-managed settings too; a managed forceLoginOrgUUID rejects other organisations'
+                claude.ai logins and blocks startup on ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN and
+                apiKeyHelper credentials.
+            url: https://code.claude.com/docs/en/authentication
+          - title: On Bedrock, Vertex or Foundry, sign in through a Claude apps gateway
+            body:
+              - >-
+                Set forceLoginMethod "gateway" and forceLoginGatewayUrl in an on-machine managed source so
+                developers sign in with corporate SSO and hold short-lived gateway tokens that lapse within
+                the one-hour default session lifetime after IdP deprovisioning.
             url: https://code.claude.com/docs/en/claude-apps-gateway
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial on the MFA rule applied to every vendor: Claude has no organisation "require 2FA" switch of
+          its own, so the second factor is whatever the IdP enforces behind Require SSO, and the client pin
+          makes the organisation's SSO login the only claude.ai login Claude Code accepts. Paths that skip
+          that interactive login: Console logins (the terminal login screen pre-selects but doesn't enforce
+          forceLoginMethod, and forceLoginOrgUUID doesn't check a Console credential's organisation); the
+          one-year CLAUDE_CODE_OAUTH_TOKEN that claude setup-token mints (setup-token and /install-github-app
+          honour only forceLoginMethod, so they can mint in another organisation); cloud-provider credentials
+          and Anthropic profile or federation credentials, which the keys don't block. Server-managed settings
+          can't redirect a first login, so deliver the keys by MDM; the tenant-restriction header at the proxy
+          is the network-side backstop. Remote Control alone adds a device-bound step-up: Require trusted
+          devices (beta) under Organization settings > Capabilities > Remote sessions.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -272,33 +288,48 @@ tools:
       - mitigation: cap-agent-action-policy-enforcement
         coverage: native
         mechanism: >-
-          permissions.deny / ask / allow rules in managed settings plus PreToolUse hooks (command, http,
-          mcp_tool); deny rules and hooks run before every permission mode, including bypassPermissions and
-          the auto-mode classifier
-        steps: &a1
-          - title: Author deny rules that no mode can override
+          Managed permissions.deny / ask / allow rules with allowManagedPermissionRulesOnly, and managed
+          PreToolUse hooks (command, http, mcp_tool) under allowManagedHooksOnly, evaluated by the harness
+          before every tool call in every permission mode; each decision is emitted as a
+          claude_code.tool_decision event
+        steps:
+          - title: Author deny and ask rules no mode can override
             body:
-              - Put permissions.deny entries such as Bash(curl *), Read(./.env), Read(./secrets/**) and mcp__* patterns in
-                managed settings and set allowManagedPermissionRulesOnly so user, project and --allowedTools
-                rules are ignored.
+              - >-
+                Put permissions.deny and permissions.ask rules such as Bash(curl *), Read(./secrets/**) and
+                mcp__server__tool in managed settings and set allowManagedPermissionRulesOnly so user,
+                project, local, --settings and --allowedTools rules are ignored.
             url: https://code.claude.com/docs/en/permissions
-          - title: Add a PreToolUse policy hook
+          - title: Add a managed PreToolUse policy hook
             body:
-              - Deploy a managed hooks.PreToolUse entry whose command or HTTP endpoint returns permissionDecision "deny"
-                or "ask"; hooks fire in every permission mode and a hook deny applies even with
-                --dangerously-skip-permissions.
-            url: https://code.claude.com/docs/en/hooks
-          - title: Constrain the auto-mode classifier
+              - >-
+                Deploy a managed hooks.PreToolUse entry whose command or HTTP endpoint returns
+                permissionDecision "deny" or "ask"; PreToolUse hooks fire before any permission-mode check,
+                and a deny holds even with --dangerously-skip-permissions.
+            url: https://code.claude.com/docs/en/hooks-guide
+          - title: Run only the organisation's hooks
             body:
-              - Deliver an autoMode block (environment, hard_deny, soft_deny, allow, classifyAllShell) through managed
-                settings; note the docs call the classifier a second gate that permissions.deny always
-                precedes.
-            url: https://code.claude.com/docs/en/auto-mode-config
+              - >-
+                Set allowManagedHooksOnly true in managed settings so user, project, local and non-forced
+                plugin hooks are blocked and only managed hooks decide.
+            url: https://code.claude.com/docs/en/settings-reference
+          - title: Log every decision
+            body:
+              - >-
+                Set CLAUDE_CODE_ENABLE_TELEMETRY and OTEL_LOGS_EXPORTER in the managed env block so each
+                claude_code.tool_decision event, with its decision and source (config, hook or user), reaches
+                your collector.
+            url: https://code.claude.com/docs/en/monitoring-usage
         note: >-
-          Deny rules and hooks are deterministic and run before every mode, including bypass; the auto-mode
-          classifier is not deterministic. Subagents inherit the rules; MCP tools are matched by mcp_tool
-          hooks; a remote MCP server's own side effects are outside the hook.
-        verified: 2026-09-10
+          Native: deterministic, admin-locked rules and hooks decide every built-in and MCP tool call outside
+          the model, in every mode including bypassPermissions, and the decision is logged. Outside the
+          decision point: files pulled in with an @ reference (no tool call; use a Read deny rule),
+          EndConversation, what a remote MCP server does after the call, and processes a plugin's hooks or MCP
+          servers start on their own. Bash deny patterns match the command as written, so pair them with a
+          hook or the sandbox. The auto-mode classifier is a second, non-deterministic gate that deny and ask
+          rules precede. Server-managed delivery is a client-side control; MDM delivery is the stronger
+          channel.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRuntimeEnforcement
@@ -310,7 +341,25 @@ tools:
                 permissions.deny / ask / allow rules in managed settings plus PreToolUse hooks (command, http,
                 mcp_tool); deny rules and hooks run before every permission mode, including bypassPermissions
                 and the auto-mode classifier
-              steps: *a1
+              steps:
+                - title: Author deny rules that no mode can override
+                  body:
+                    - Put permissions.deny entries such as Bash(curl *), Read(./.env), Read(./secrets/**) and mcp__* patterns in
+                      managed settings and set allowManagedPermissionRulesOnly so user, project and --allowedTools
+                      rules are ignored.
+                  url: https://code.claude.com/docs/en/permissions
+                - title: Add a PreToolUse policy hook
+                  body:
+                    - Deploy a managed hooks.PreToolUse entry whose command or HTTP endpoint returns permissionDecision "deny"
+                      or "ask"; hooks fire in every permission mode and a hook deny applies even with
+                      --dangerously-skip-permissions.
+                  url: https://code.claude.com/docs/en/hooks
+                - title: Constrain the auto-mode classifier
+                  body:
+                    - Deliver an autoMode block (environment, hard_deny, soft_deny, allow, classifyAllShell) through managed
+                      settings; note the docs call the classifier a second gate that permissions.deny always
+                      precedes.
+                  url: https://code.claude.com/docs/en/auto-mode-config
               note: >-
                 Deny rules and hooks are deterministic and run before every mode, including bypass; the
                 auto-mode classifier is not deterministic. Subagents inherit the rules; MCP tools are matched
@@ -318,18 +367,19 @@ tools:
               verified: 2026-09-10
       - mitigation: cap-ai-vendor-assessment
         coverage: external
-        mechanism: Anthropic Trust Center (SOC 2 Type 2, ISO 27001 artifacts) feeds the buyer's TPRM platform
-        note: >-
-          Vendor assurance artifacts are published at trust.anthropic.com and linked from the security page;
-          the reassessment cadence and evidence expiry live in the organisation's own TPRM tooling, not in
-          Claude Code.
-        steps: &a1
-          - title: Collect vendor evidence from the Trust Center
-            body:
-              - Download the SOC 2 Type 2 report and ISO 27001 certificate referenced on the Claude Code security page and
-                attach them to the vendor record.
+        mechanism: Anthropic Trust Center artifacts feed the organisation's TPRM platform
+        evidence:
+          - title: Anthropic Trust Center (compliance table and Request access)
+            url: https://trust.anthropic.com/
+          - title: Claude Code security page (links the Trust Center)
             url: https://code.claude.com/docs/en/security
-        verified: 2026-09-10
+        note: >-
+          External: the assessment, its evidence expiry and the reassessment trigger live in the
+          organisation's TPRM platform, not in Claude Code. The Trust Center lists SOC 2 Type 2, ISO 27001,
+          ISO 42001, CSA STAR, HIPAA and NIST 800-171 coverage for Claude Enterprise and the Anthropic API
+          (Claude Team: all but HIPAA), with the reports, questionnaires and an infrastructure diagram behind
+          Request access.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiTprm
@@ -342,36 +392,55 @@ tools:
                 Vendor assurance artifacts are published at trust.anthropic.com and linked from the security
                 page; the reassessment cadence and evidence expiry live in the organisation's own TPRM
                 tooling, not in Claude Code.
-              steps: *a1
+              steps:
+                - title: Collect vendor evidence from the Trust Center
+                  body:
+                    - Download the SOC 2 Type 2 report and ISO 27001 certificate referenced on the Claude Code security page and
+                      attach them to the vendor record.
+                  url: https://code.claude.com/docs/en/security
               verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
-          Read() / Edit() deny rules, sandbox.credentials masking and sandbox.filesystem.denyRead keep named
-          secrets out of the context; Enterprise Inference hooks send each governed prompt to the
-          organisation's AI security server for an allow/deny verdict
-        steps: &a1
-          - title: Exclude sensitive files from the context
+          Inference hooks (Enterprise, beta) send each governed Claude Code request, with its tool calls and
+          results, to the organisation's AI security server for an allow/deny verdict; a managed
+          UserPromptSubmit hook can block a typed prompt; sandbox.credentials mask entries give sandboxed
+          commands a placeholder; Read deny rules keep named paths out
+        steps:
+          - title: Inspect governed requests with Inference hooks
             body:
-              - Add permissions.deny rules such as Read(./.env), Read(./.env.*) and Read(//**/.pem) in managed settings;
-                the JetBrains and VS Code extensions honour Read deny rules for selection sharing too.
-            url: https://code.claude.com/docs/en/permissions
-          - title: Mask credentials inside the sandbox
+              - >-
+                In claude.ai Organization settings > Data and privacy > Inference hooks, turn on Allow for
+                your organization, register your AI security server and choose failure handling; Anthropic
+                holds each governed request until the server returns allow or deny.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Block prompts on the device
             body:
-              - Set sandbox.credentials.files and sandbox.credentials.envVars with mode deny or mask so sandboxed commands
-                see placeholders and the proxy re-injects the real value only for allowed hosts.
+              - >-
+                Deploy a managed UserPromptSubmit hook that passes the prompt to your DLP inspector and
+                returns decision "block", which stops the prompt and erases it from context.
+            url: https://code.claude.com/docs/en/hooks
+          - title: Mask named secrets in the sandbox
+            body:
+              - >-
+                List secrets under sandbox.credentials.envVars and sandbox.credentials.files with mode "mask"
+                and set sandbox.network.tlsTerminate, so sandboxed commands see a placeholder and the proxy
+                substitutes the value only for allowed hosts.
             url: https://code.claude.com/docs/en/sandboxing
-          - title: Inspect prompts inline with Inference hooks (Enterprise, beta)
+          - title: Keep secret files out of context
             body:
-              - Configure an AI security server endpoint; Anthropic POSTs each governed Claude Code prompt transcript for
-                an allow/deny verdict before inference, with shadow mode and rollout percentages.
-            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+              - >-
+                Add managed permissions.deny rules such as Read(./.env) and Read(./secrets/**); matching files
+                are excluded from discovery and reads.
+            url: https://code.claude.com/docs/en/permissions
         note: >-
-          Deny rules and credential masking restrict paths; they inspect nothing. Inference hooks deliver each
-          governed prompt to the organisation's own AI security server, so content inspection exists only
-          where the organisation runs that server. Pastes and tool results outside governed prompts are not
-          covered.
-        verified: 2026-09-10
+          Partial by the rule: detection is the organisation's own inspector at two attach points —
+          Anthropic-side Inference hooks (Enterprise claude.ai logins only; not Console API keys, Bedrock or
+          Google Cloud) and a device-side hook — plus product masking of the secrets you list, inside the
+          sandbox only. Inference hooks allow or deny (no redaction), read extracted attachment text but not
+          images, have no response-side event yet, and fail open or closed by your failure-handling setting.
+          Read deny rules are data minimisation, not detection.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -383,84 +452,61 @@ tools:
                 Read() / Edit() deny rules, sandbox.credentials masking and sandbox.filesystem.denyRead keep
                 named secrets out of the context; Enterprise Inference hooks send each governed prompt to the
                 organisation's AI security server for an allow/deny verdict
-              steps: *a1
+              steps:
+                - title: Exclude sensitive files from the context
+                  body:
+                    - Add permissions.deny rules such as Read(./.env), Read(./.env.*) and Read(//**/.pem) in managed settings;
+                      the JetBrains and VS Code extensions honour Read deny rules for selection sharing too.
+                  url: https://code.claude.com/docs/en/permissions
+                - title: Mask credentials inside the sandbox
+                  body:
+                    - Set sandbox.credentials.files and sandbox.credentials.envVars with mode deny or mask so sandboxed commands
+                      see placeholders and the proxy re-injects the real value only for allowed hosts.
+                  url: https://code.claude.com/docs/en/sandboxing
+                - title: Inspect prompts inline with Inference hooks (Enterprise, beta)
+                  body:
+                    - Configure an AI security server endpoint; Anthropic POSTs each governed Claude Code prompt transcript for
+                      an allow/deny verdict before inference, with shadow mode and rollout percentages.
+                  url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
               note: >-
                 Deny rules and credential masking restrict paths; they inspect nothing. Inference hooks
                 deliver each governed prompt to the organisation's own AI security server, so content
                 inspection exists only where the organisation runs that server. Pastes and tool results
                 outside governed prompts are not covered.
               verified: 2026-09-10
-      - mitigation: cap-input-guardrails
-        coverage: partial
-        mechanism: >-
-          Built-in context-aware analysis, command-injection detection, fail-closed command matching, an
-          isolated context window for WebFetch, the auto-mode classifier's exfiltration rules, and the
-          WebFetch hostname safety check
-        steps: &a1
-          - title: Keep the built-in safeguards on
-            body:
-              - Do not set skipWebFetchPreflight; keep permissions.deny for curl/wget and rely on the auto-mode
-                classifier's built-in hard_deny data-exfiltration rule by including "$defaults" in any
-                autoMode override.
-            url: https://code.claude.com/docs/en/security
-          - title: Treat repositories and MCP servers as untrusted
-            body:
-              - Trust verification runs for new folders and MCP servers in interactive mode only (not with -p); use
-                managed MCP allowlists and strictPluginOnlyCustomization so a checked-in file cannot add tools
-                or hooks.
-            url: https://code.claude.com/docs/en/managed-mcp
-        note: >-
-          These are model- and heuristic-based; Anthropic states no system is immune. There is no
-          admin-configurable classifier or third-party detector hook in the local product beyond PreToolUse
-          hooks and Enterprise Inference hooks.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityPromptInjectionDefense
-          reviewRequired: false
-          original:
-            - capability: capabilityPromptInjectionDefense
-              coverage: partial
-              mechanism: >-
-                Built-in context-aware analysis, command-injection detection, fail-closed command matching, an
-                isolated context window for WebFetch, the auto-mode classifier's exfiltration rules, and the
-                WebFetch hostname safety check
-              steps: *a1
-              note: >-
-                These are model- and heuristic-based; Anthropic states no system is immune. There is no
-                admin-configurable classifier or third-party detector hook in the local product beyond
-                PreToolUse hooks and Enterprise Inference hooks.
-              verified: 2026-09-10
       - mitigation: AML.M0028
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          permissions.allow/ask/deny with tool specifiers, bare-name deny rules that remove a tool from
-          Claude's context, permissions.defaultMode, disableBypassPermissionsMode, disableAutoMode,
-          additionalDirectories and blockReadsOutsideWorkingDirectories
+          permissions.allow / ask / deny with tool specifiers, bare-name deny rules that remove a tool,
+          allowManagedPermissionRulesOnly, permissions.defaultMode, disableBypassPermissionsMode,
+          disableAutoMode, additionalDirectories and blockReadsOutsideWorkingDirectories in managed settings
         steps:
-          - title: Fix the starting permission mode and remove escape hatches
+          - title: Fix the starting mode and remove the escape hatches
             body:
-              - In managed settings set permissions.defaultMode, permissions.disableBypassPermissionsMode
-                "disable" and permissions.disableAutoMode "disable" (auto mode can also be turned off for the
-                organisation on Team and Enterprise).
+              - >-
+                In managed settings set permissions.defaultMode, permissions.disableBypassPermissionsMode
+                "disable" and permissions.disableAutoMode "disable".
             url: https://code.claude.com/docs/en/permission-modes
           - title: Remove tools or scope them
             body:
-              - A bare deny such as "WebFetch" or "mcp__*" removes the tool from context; scoped rules like
-                Bash(git push *) in permissions.ask force a prompt even in auto mode.
+              - >-
+                Deny WebFetch or mcp__* by bare name to remove the tool, scope the rest with specifiers such
+                as Bash(git push *), Read(./secrets/**) and mcp__server__tool, and set
+                allowManagedPermissionRulesOnly so only managed rules count.
             url: https://code.claude.com/docs/en/permissions
           - title: Fence file access
             body:
-              - Set permissions.blockReadsOutsideWorkingDirectories true and control
+              - >-
+                Set permissions.blockReadsOutsideWorkingDirectories true and control
                 permissions.additionalDirectories so reads and edits stay inside approved roots in every mode.
             url: https://code.claude.com/docs/en/settings-reference
-        evidence: []
         note: >-
-          Bare-name deny hides a tool; allow pre-approves it; specifiers such as Bash(git push *) limit
-          arguments. Bypass and auto modes must be disabled in managed settings or they override allow/ask;
-          MCP tools use mcp__server__tool patterns, and a resource-level limit (which repository, which
-          bucket) is not expressible for most tools.
+          Native: admin-locked allow, ask and deny per tool with argument and path specifiers, enforced by the
+          harness outside the model, with bypass and auto modes removable. Limits: Bash specifiers match the
+          command text (the sandbox is the OS-level backstop); MCP tools are scoped by server and tool name,
+          not arguments; a resource-level limit such as one repository or bucket isn't expressible for most
+          tools; tools run with the developer's own authority.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -498,36 +544,41 @@ tools:
                 repository, which bucket) is not expressible for most tools.
               verified: 2026-09-10
       - mitigation: D3-EI
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          sandbox.* block (Seatbelt on macOS, bubblewrap plus socat on Linux/WSL2; not native Windows) with
-          filesystem allow/deny paths, a hostname-allowlisting network proxy, failIfUnavailable and
-          allowUnsandboxedCommands false
+          sandbox.enabled with failIfUnavailable and allowUnsandboxedCommands false (Seatbelt on macOS,
+          bubblewrap on Linux and WSL2), filesystem and network lists locked with allowManagedReadPathsOnly
+          and allowManagedDomainsOnly; sandbox.excludedCommands has no managed-only lock
         steps:
           - title: Require the sandbox fleet-wide
             body:
-              - Set sandbox.enabled true, sandbox.failIfUnavailable true and sandbox.allowUnsandboxedCommands
-                false in managed settings so commands cannot fall back to running unsandboxed.
+              - >-
+                Deliver sandbox.enabled true, sandbox.failIfUnavailable true and
+                sandbox.allowUnsandboxedCommands false in managed settings, so a missing sandbox blocks
+                startup and Claude can't retry a command unsandboxed.
             url: https://code.claude.com/docs/en/sandboxing
-          - title: Lock the filesystem and network lists to managed settings
+          - title: Keep developers from widening the lists
             body:
-              - Use sandbox.filesystem.denyRead / allowWrite with
-                sandbox.filesystem.allowManagedReadPathsOnly, and sandbox.network.allowedDomains with
-                sandbox.network.allowManagedDomainsOnly; these lock keys are honoured from any
-                admin-controlled source.
-            url: https://code.claude.com/docs/en/managed-settings
-          - title: Know the limits
+              - >-
+                Set sandbox.filesystem.allowManagedReadPathsOnly and sandbox.network.allowManagedDomainsOnly
+                in managed settings so only managed read paths and domains count.
+            url: https://code.claude.com/docs/en/sandboxing
+          - title: Pin the switches that weaken isolation
             body:
-              - The proxy allowlists by client-supplied hostname and does not terminate TLS unless
-                sandbox.network.tlsTerminate is set; the sandbox shares the host kernel. Use dev containers or
-                VMs for untrusted content.
-            url: https://code.claude.com/docs/en/agent-sdk/secure-deployment
-        evidence: []
+              - >-
+                Set sandbox.allowAppleEvents, sandbox.enableWeakerNestedSandbox and
+                sandbox.network.allowAllUnixSockets to false in managed settings; Boolean sandbox keys take
+                the managed value.
+            url: https://code.claude.com/docs/en/settings-reference
         note: >-
-          Inside the boundary: shell commands. Outside: MCP servers, WebFetch and the CLI process itself,
-          which are bounded by permissions and network rules instead. macOS and Linux/WSL2 only — native
-          Windows has no sandbox, so failIfUnavailable decides whether commands run unsandboxed there.
+          Partial on the fall-back test: sandbox.excludedCommands merges from every settings scope with no
+          managed-only lock, so a developer, or a repository's .claude/settings.json, can append commands that
+          run outside the sandbox (still through the permission prompt); the vendor states this plainly.
+          Inside: Bash, PowerShell and Monitor commands and their children on macOS, Linux and WSL2; native
+          Windows and WSL1 have no sandbox. Outside: built-in file tools (bounded by permission rules), MCP
+          servers and hooks, the CLI process itself, and commands a developer types at the ! prompt. The proxy
+          allows by client-supplied hostname without TLS inspection, and the sandbox shares the host kernel.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -566,35 +617,54 @@ tools:
                 there.
               verified: 2026-09-10
       - mitigation: D3-CTS
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          apiKeyHelper rotating credentials, Claude apps gateway holding the upstream key, sandbox credential
-          masking with per-host re-injection, and per-purpose short-lived Remote Control credentials; the
-          agent otherwise acts with the developer's own identity
+          sandbox.credentials files and envVars entries (deny hides the credential; mask substitutes it at the
+          proxy only for allowed hosts), sandbox.filesystem.denyRead, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB in the
+          managed env block, and Unix sockets blocked in the sandbox by default; a Claude apps gateway keeps
+          the upstream model credential off the device
         steps:
-          - title: Keep the model credential out of the developer's hands
+          - title: Deny credential paths to agent commands
             body:
-              - Route through a Claude apps gateway (developers hold only short-lived gateway tokens) or set
-                apiKeyHelper to a vault-backed script with CLAUDE_CODE_API_KEY_HELPER_TTL_MS.
-            url: https://code.claude.com/docs/en/claude-apps-gateway
-          - title: Inject tool credentials at the proxy, not in the shell
-            body:
-              - Use sandbox.credentials.envVars mask entries with sandbox.network.tlsTerminate so the sandbox
-                holds placeholders and the proxy substitutes the secret only for allowed hosts; AWS SigV4
-                re-signing is supported via credentials.awsPairs.
+              - >-
+                In managed settings add sandbox.credentials.files entries such as ~/.ssh and
+                ~/.aws/credentials and envVars entries such as GITHUB_TOKEN with mode "deny"; no other
+                settings scope can remove a deny entry.
             url: https://code.claude.com/docs/en/sandboxing
-        evidence: []
+          - title: Inject credentials only for named hosts
+            body:
+              - >-
+                Use mode "mask" with sandbox.network.tlsTerminate so sandboxed commands hold a placeholder and
+                the proxy substitutes the secret only on requests to allowed hosts;
+                sandbox.credentials.awsPairs re-signs AWS requests.
+            url: https://code.claude.com/docs/en/sandboxing
+          - title: Scrub credentials from every subprocess
+            body:
+              - >-
+                Set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 in the managed env block to strip Anthropic,
+                cloud-provider and other recognised credentials from Bash, hook and stdio MCP server
+                environments.
+            url: https://code.claude.com/docs/en/env-vars
+          - title: Keep the model credential off the device
+            body:
+              - >-
+                Route through a Claude apps gateway so the upstream API or cloud credential stays in your
+                infrastructure and developers hold only short-lived gateway tokens.
+            url: https://code.claude.com/docs/en/claude-apps-gateway
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] Git, cloud CLI and MCP tools still run as the developer; there is no
-          on-behalf-of exchange or delegation-chain tracking in the local product.
+          Partial: the scoping is OS-enforced and admin-deliverable but lives in the Bash sandbox, which a
+          developer can widen with sandbox.excludedCommands (no managed lock), and it covers only the paths
+          and variables you list — there is no built-in deny list, so by default agent commands can read
+          ~/.ssh, ~/.aws, git credential helpers, gh and cloud CLI config and browser profiles. The
+          environment scrub reaches hooks and stdio MCP servers; credential files don't. File masking
+          substitutes on Linux and WSL2 only (macOS blocks the file), mask needs the experimental
+          tlsTerminate, and native Windows has no sandbox. Git, cloud CLIs and MCP servers still act as the
+          developer; there is no on-behalf-of exchange.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: partial
@@ -620,41 +690,38 @@ tools:
               verified: 2026-09-10
       - mitigation: AML.M0031
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          autoMemoryEnabled, autoMemoryDirectory, claudeMd (managed org-wide CLAUDE.md), claudeMdExcludes,
-          cleanupPeriodDays and fileCheckpointingEnabled in settings
+          autoMemoryEnabled false or CLAUDE_CODE_DISABLE_AUTO_MEMORY in managed settings, the managed claudeMd
+          key or managed-policy CLAUDE.md, pluginConfigs agents-md@builtin instructionFiles "managed-only",
+          strictPluginOnlyCustomization and cleanupPeriodDays
         steps:
           - title: Decide whether auto memory runs
             body:
-              - Set autoMemoryEnabled false (or CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 in env) to stop Claude
-                writing persistent memories under ~/.claude/projects/<project>/memory/, or point
-                autoMemoryDirectory at a governed location.
+              - >-
+                Set autoMemoryEnabled false in managed settings, or CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 in the
+                managed env block, so Claude neither reads nor writes ~/.claude/projects/<project>/memory/.
             url: https://code.claude.com/docs/en/settings-reference
-          - title: Bound transcript retention on the device
+          - title: Load only organisation instructions
             body:
-              - Set cleanupPeriodDays (default 30) and desktopSessionCleanupPeriodDays so plaintext session
-                transcripts are pruned.
-            url: https://code.claude.com/docs/en/data-usage
-          - title: Deploy organisation-wide instructions
+              - >-
+                Set pluginConfigs "agents-md@builtin" options.instructionFiles to "managed-only" in managed
+                settings, and put the organisation's instructions in the managed claudeMd key or the
+                managed-policy CLAUDE.md path, which users can't exclude.
+            url: https://code.claude.com/docs/en/memory
+          - title: Lock customisation sources
             body:
-              - Put org instructions in the managed claudeMd key or the managed policy CLAUDE.md path; they
-                load in every session and cannot be excluded by users.
-            url: https://code.claude.com/docs/en/admin-setup
-          - title: Lock custom agents, skills and hooks to managed or plugin sources
-            body:
-              - Set strictPluginOnlyCustomization true (or its agents / hooks / mcp sub-keys) so user and
-                project sources cannot add instructions that run with tool access.
+              - >-
+                Set strictPluginOnlyCustomization true (or its skills, agents, hooks and mcp sub-keys) so user
+                and project sources can't add instructions that run with tool access.
             url: https://code.claude.com/docs/en/settings-reference
-        evidence: []
         note: >-
-          Memory files are plain Markdown the agent edits with ordinary Write/Edit tools; there is no
-          validation, quarantine or rollback of memory contents beyond file checkpoints.
-
-
-          [capabilitySystemPromptManagement] Project and user CLAUDE.md files remain untrusted instruction
-          sources loaded into the same context; there is no structural hierarchy separating them from managed
-          instructions.
+          Partial: an administrator can switch memory off or relocate it and narrow the instruction sources,
+          but nothing validates, gates or reviews memory writes — Claude edits plain Markdown with its file
+          tools and Claude Code only stamps a modified time — and memory files are exempt from the
+          cleanupPeriodDays sweep. Under managed-only, a subdirectory's CLAUDE.md and .claude/rules files
+          still load when Claude reads files there, and managed instructions arrive as a user message, not a
+          system prompt. Session transcripts sit in plaintext under ~/.claude/projects for 30 days by default.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMemoryProtection
@@ -700,38 +767,112 @@ tools:
               note: Project and user CLAUDE.md files remain untrusted instruction sources loaded into the same context;
                 there is no structural hierarchy separating them from managed instructions.
               verified: 2026-09-10
-      - mitigation: D3-CH
-        coverage: unknown
+      - mitigation: cap-input-guardrails
+        coverage: partial
         mechanism: >-
-          apiKeyHelper / otelHeadersHelper / awsCredentialExport / gcpAuthRefresh scripts for rotating
-          credentials; macOS Keychain or 0600 credentials file; CLAUDE_CODE_OAUTH_TOKEN and GitHub Actions
-          secrets or workload identity federation for CI
+          Managed PostToolUse hooks that can replace a tool's output (updatedToolOutput) before Claude sees
+          it, and Enterprise Inference hooks that send each governed request's transcript, tool results
+          included, to the organisation's AI security server before inference; built-in safeguards are not
+          configurable
         steps:
-          - title: Use helper scripts instead of static keys
+          - title: Screen tool results with a managed PostToolUse hook
             body:
-              - Set apiKeyHelper (re-run every five minutes by default) to fetch a short-lived token from your
-                vault; forceLoginOrgUUID blocks ambient ANTHROPIC_API_KEY use.
+              - >-
+                Deploy a managed PostToolUse hook for WebFetch, Bash and mcp__ tools that sends the result to
+                your injection classifier and returns updatedToolOutput with a quarantine notice; managed
+                hooks keep running when a user sets disableAllHooks.
+            url: https://code.claude.com/docs/en/hooks
+          - title: Deny poisoned requests before inference
+            body:
+              - >-
+                Allow Inference hooks for the organisation so your AI security server can deny a request whose
+                transcript carries an injected tool result or file before the model reasons over it.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+        note: >-
+          Partial by the rule: both are attach points for the organisation's own classifier; the product ships
+          no admin-configurable input screening. Its built-in safeguards (an isolated context window for
+          WebFetch, command-injection detection) are vendor-internal, and workspace and MCP trust prompts are
+          admission, not screening. The auto-mode classifier judges the proposed action, not the input, and is
+          credited under action policy. updatedToolOutput changes only what Claude sees (telemetry keeps the
+          original); @-referenced files, CLAUDE.md and memory enter context without a tool call; Inference
+          hooks cover Enterprise claude.ai logins only.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityPromptInjectionDefense
+          reviewRequired: false
+          original:
+            - capability: capabilityPromptInjectionDefense
+              coverage: partial
+              mechanism: >-
+                Built-in context-aware analysis, command-injection detection, fail-closed command matching, an
+                isolated context window for WebFetch, the auto-mode classifier's exfiltration rules, and the
+                WebFetch hostname safety check
+              steps:
+                - title: Keep the built-in safeguards on
+                  body:
+                    - Do not set skipWebFetchPreflight; keep permissions.deny for curl/wget and rely on the auto-mode
+                      classifier's built-in hard_deny data-exfiltration rule by including "$defaults" in any
+                      autoMode override.
+                  url: https://code.claude.com/docs/en/security
+                - title: Treat repositories and MCP servers as untrusted
+                  body:
+                    - Trust verification runs for new folders and MCP servers in interactive mode only (not with -p); use
+                      managed MCP allowlists and strictPluginOnlyCustomization so a checked-in file cannot add tools
+                      or hooks.
+                  url: https://code.claude.com/docs/en/managed-mcp
+              note: >-
+                These are model- and heuristic-based; Anthropic states no system is immune. There is no
+                admin-configurable classifier or third-party detector hook in the local product beyond
+                PreToolUse hooks and Enterprise Inference hooks.
+              verified: 2026-09-10
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          macOS Keychain storage (a 0600 ~/.claude/.credentials.json on Linux, a profile-protected file on
+          Windows); rotating credentials through apiKeyHelper, awsCredentialExport, gcpAuthRefresh and
+          otelHeadersHelper; short-lived Claude apps gateway tokens; keyless workload identity federation in
+          GitHub Actions; managed forceLoginOrgUUID or forceLoginMethod "gateway" to refuse environment keys
+        steps:
+          - title: Use a helper instead of a stored key
+            body:
+              - >-
+                Set apiKeyHelper in managed settings to a script that fetches a short-lived token from your
+                vault; Claude Code re-runs it after five minutes (CLAUDE_CODE_API_KEY_HELPER_TTL_MS), on a 401
+                or 403, and when a cached JWT has expired.
+            url: https://code.claude.com/docs/en/settings-reference
+          - title: Make machines gateway-only
+            body:
+              - >-
+                Set forceLoginMethod "gateway" and forceLoginGatewayUrl in an on-machine managed source so
+                Claude Code ignores leftover logins, API keys and apiKeyHelper and uses only the gateway's
+                short-lived token.
             url: https://code.claude.com/docs/en/settings-reference
           - title: Go keyless in CI
             body:
-              - In GitHub Actions pass anthropic_federation_rule_id and anthropic_organization_id with
-                id-token write so the workflow exchanges its OIDC token for Claude API access through a
-                Console service account; on Bedrock/Vertex/Foundry use OIDC as well.
+              - >-
+                In GitHub Actions pass anthropic_federation_rule_id and anthropic_organization_id with
+                id-token: write instead of an ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN secret.
             url: https://code.claude.com/docs/en/github-actions
-        evidence: []
+          - title: Refuse environment keys on claude.ai-login fleets
+            body:
+              - >-
+                A managed forceLoginOrgUUID blocks startup on ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN and
+                apiKeyHelper, so use it where developers sign in with claude.ai rather than through a helper.
+            url: https://code.claude.com/docs/en/authentication
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Storage (Keychain or a 0600 file) and ephemeral issuance (helper
-          scripts, federation) are separate claims — a stored long-lived key is not ephemeral. Readers: shell
-          commands read the developer's environment unless the sandbox masks it; the model sees a secret only
-          if a tool returns it; MCP servers get their own configured credentials.
+          Partial: short-lived and keyless options exist and some static keys can be refused, but storage is
+          encrypted only in the macOS Keychain (Linux and Windows keep a plaintext file protected by file
+          permissions), and long-lived credentials aren't fully blockable: claude setup-token mints a one-year
+          CLAUDE_CODE_OAUTH_TOKEN, a Console login under forceLoginOrgUUID creates and stores an API key, and
+          cloud-provider credentials in the environment are neither refused nor held to gateway-only mode.
+          Values in a settings env block are plain text. Keeping secrets out of the model's context is the
+          sandbox masking under D3-CTS.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -758,35 +899,41 @@ tools:
                 returns it; MCP servers get their own configured credentials.
               verified: 2026-09-10
       - mitigation: cap-mcp-tool-integrity
-        coverage: native
+        coverage: partial
         mechanism: >-
-          allowedMcpServers / deniedMcpServers / allowManagedMcpServersOnly / managedMcpServers, exclusive
-          managed-mcp.json, disableClaudeAiConnectors, org connector tool controls (ask / blocked),
-          strictKnownMarketplaces and blockedMarketplaces for plugins
-        steps: &a1
-          - title: Deploy a fixed server set or an allowlist
+          allowedMcpServers / deniedMcpServers serverUrl and serverCommand entries with
+          allowManagedMcpServersOnly, an exclusive managed-mcp.json, strictKnownMarketplaces /
+          blockedMarketplaces for plugins, plugin archive sha256 pins, and organisation connector tool
+          controls (ask / blocked)
+        steps:
+          - title: Admit servers by exact command or URL
             body:
-              - Place managed-mcp.json in the system directory for exclusive control (an empty mcpServers object disables
-                MCP entirely), or deliver allowedMcpServers plus allowManagedMcpServersOnly through
-                server-managed settings.
+              - >-
+                Deliver allowedMcpServers with serverCommand entries (the exact argv, including a pinned
+                package version such as npx -y pkg@1.2.3) and serverUrl entries plus
+                allowManagedMcpServersOnly, or deploy managed-mcp.json for exclusive control; serverName
+                entries are not a control.
             url: https://code.claude.com/docs/en/managed-mcp
-          - title: Restrict plugin and marketplace sources
+          - title: Restrict plugin sources
             body:
-              - Set strictKnownMarketplaces to an allowlist (an empty array blocks every marketplace),
-                blockedMarketplaces, disableCommandPluginSources true and disableSideloadFlags true.
-            url: https://code.claude.com/docs/en/plugin-marketplaces
-          - title: Mark sensitive MCP tools as always-ask
+              - >-
+                Set strictKnownMarketplaces and blockedMarketplaces, and disableSideloadFlags, so plugins and
+                the MCP servers they carry come only from sources you list.
+            url: https://code.claude.com/docs/en/plugins/org
+          - title: Gate connector tools
             body:
-              - Servers can set _meta anthropic/requiresUserInteraction so a tool always prompts; claude.ai connector
-                tools an Owner sets to ask or blocked are enforced in every mode.
+              - >-
+                Set individual claude.ai connector tools to ask or blocked in the organisation's connector
+                tool controls; Claude Code enforces them in every mode.
             url: https://code.claude.com/docs/en/mcp
         note: >-
-          Rated native on the same rule as Copilot CLI, Codex and Cowork: an exclusive managed-mcp.json and
-          the allowlist admit servers by identity, and marketplace restrictions admit plugins by source.
-          Admission is not integrity — Anthropic reviews Directory connectors against listing criteria but
-          does not security-audit MCP servers, and nothing pins the tool descriptions a server returns or
-          detects a changed implementation.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: an allowlist admits servers but pins nothing they
+          serve. An exact serverCommand match that names a versioned package is version pinning for stdio
+          servers only; remote serverUrl servers stay unpinned, list_changed notifications refresh a server's
+          tool definitions with no re-approval, nothing scans tool descriptions, and Anthropic reviews
+          Directory listings but doesn't security-audit MCP servers. A plugin archive's sha256 pin verifies
+          the download, not the servers it starts.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMcpToolSecurity
@@ -798,7 +945,23 @@ tools:
                 allowedMcpServers / deniedMcpServers / allowManagedMcpServersOnly / managedMcpServers,
                 exclusive managed-mcp.json, disableClaudeAiConnectors, org connector tool controls (ask /
                 blocked), strictKnownMarketplaces and blockedMarketplaces for plugins
-              steps: *a1
+              steps:
+                - title: Deploy a fixed server set or an allowlist
+                  body:
+                    - Place managed-mcp.json in the system directory for exclusive control (an empty mcpServers object disables
+                      MCP entirely), or deliver allowedMcpServers plus allowManagedMcpServersOnly through
+                      server-managed settings.
+                  url: https://code.claude.com/docs/en/managed-mcp
+                - title: Restrict plugin and marketplace sources
+                  body:
+                    - Set strictKnownMarketplaces to an allowlist (an empty array blocks every marketplace),
+                      blockedMarketplaces, disableCommandPluginSources true and disableSideloadFlags true.
+                  url: https://code.claude.com/docs/en/plugin-marketplaces
+                - title: Mark sensitive MCP tools as always-ask
+                  body:
+                    - Servers can set _meta anthropic/requiresUserInteraction so a tool always prompts; claude.ai connector
+                      tools an Owner sets to ask or blocked are enforced in every mode.
+                  url: https://code.claude.com/docs/en/mcp
               note: >-
                 Rated native on the same rule as Copilot CLI, Codex and Cowork: an exclusive managed-mcp.json
                 and the allowlist admit servers by identity, and marketplace restrictions admit plugins by
@@ -808,23 +971,39 @@ tools:
               verified: 2026-09-10
       - mitigation: AML.M0029
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          Manual permission mode, permissions.ask rules (honoured even in auto mode), plan mode, PreToolUse
-          hooks returning "ask", and GitHub Actions gating by write access and human actor
+          Managed permissions.ask rules (prompt in every mode, including auto and bypassPermissions),
+          disableBypassPermissionsMode and disableAutoMode, allowManagedPermissionRulesOnly (hides the
+          always-allow choices) and allowManagedHooksOnly (no user hook answers prompts)
         steps:
           - title: Force a human checkpoint on named actions
             body:
-              - Add permissions.ask entries such as Bash(git push *) and Bash(gh pr create *); an explicit ask
-                rule prompts even when auto mode or an allow rule would otherwise approve.
+              - >-
+                Add permissions.ask entries such as Bash(git push *) and Bash(gh pr create *) to managed
+                settings; the prompt shows the command, and no mode, allow rule or classifier can approve it
+                silently.
             url: https://code.claude.com/docs/en/auto-mode-config
-          - title: Keep the mode set that asks
+          - title: Remove the modes and persistence that bypass it
             body:
-              - Set permissions.defaultMode "default" and disable auto and bypass modes so edits and
-                non-read-only commands prompt; Accept Edits still asks outside the working directory and for
-                critical paths.
-            url: https://code.claude.com/docs/en/permission-modes
-        evidence: []
+              - >-
+                Set permissions.disableBypassPermissionsMode and disableAutoMode to "disable" and
+                allowManagedPermissionRulesOnly true, which hides the always-allow choices and stops saving
+                new rules.
+            url: https://code.claude.com/docs/en/settings-reference
+          - title: Decide whether sandboxed commands prompt
+            body:
+              - >-
+                Set sandbox.autoAllowBashIfSandboxed false in managed settings if sandboxed Bash commands
+                should go through the prompt too.
+            url: https://code.claude.com/docs/en/settings-reference
+        note: >-
+          Native: a present developer approves each matched action with its current arguments, and an
+          administrator can force the prompt and remove the modes and persistence that bypass it. Boundaries:
+          acceptEdits stays selectable (in-scope edits and mkdir, touch, rm, mv, cp and sed run unprompted); a
+          managed PermissionRequest hook can answer prompts; Remote Control approvals come from a phone; -p
+          runs and GitHub Actions have no present human, so matched calls are denied or answered by the host.
+          The auto-mode classifier is not human approval.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -851,26 +1030,43 @@ tools:
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
-          Seat assignment and per-role Claude Code capability in the claude.ai admin console;
-          disableAgentView, agent teams and cross-session messaging flags; the analytics dashboard lists
-          active users and sessions
-        steps: &a1
-          - title: Gate who may run Claude Code
+          claude.ai Organization settings > Plugins & skills (Inventory with source, version, capabilities and
+          audience; Requests review; organisation marketplaces) enforced in Claude Code by
+          strictKnownMarketplaces and strictPluginOnlyCustomization; MCP servers admitted by allowedMcpServers
+          or managed-mcp.json; the Claude Code capability in Enterprise custom roles
+        steps:
+          - title: Keep the organisation's registry
             body:
-              - Assign Claude Code access by seat (Organization settings > Organization) and, on Enterprise, by custom
-                role and group under Organization settings > Roles.
-            url: >-
-              https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
-          - title: Control background and peer agents
+              - >-
+                Publish approved plugins and skills through Organization settings > Plugins & skills
+                (Marketplaces tab), review submissions on the Requests tab, and track source and version on
+                the Inventory tab.
+            url: https://support.claude.com/en/articles/13837433-manage-plugins-for-your-organization
+          - title: Make Claude Code consult it
             body:
-              - Set disableAgentView true to turn off claude agents, --bg and the supervisor; crossSessionInbound and
-                isolatePeerMachines govern cross-session messaging.
+              - >-
+                Set strictKnownMarketplaces to a hostPattern entry matching claude.ai, plus any marketplace
+                you declare in managed settings, so Claude Code refuses plugins from any other source.
+            url: https://code.claude.com/docs/en/plugins/org
+          - title: Refuse unregistered skills, agents, hooks and servers
+            body:
+              - >-
+                Set strictPluginOnlyCustomization true so skills, agents, hooks and MCP servers can come only
+                from plugins or managed settings.
             url: https://code.claude.com/docs/en/settings-reference
+          - title: Gate who runs Claude Code
+            body:
+              - >-
+                On Enterprise, grant the Claude Code capability only through custom roles under Organization
+                settings > Roles.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
         note: >-
-          There is no registry of agents or tool servers with owners and approval state; the analytics
-          dashboard and OpenTelemetry attributes (organization.id, user.account_uuid, session.id) are the
-          inventory.
-        verified: 2026-09-10
+          Partial: the registry exists and the client can be forced to consult it for plugins, skills and
+          subagents, but tool servers configured in managed settings or managed-mcp.json have no owner,
+          version or approval record there, the claude.ai host entry also admits the claude.ai default
+          marketplaces, and the Claude Code installations and sessions themselves aren't registry entries —
+          seats, the analytics dashboard and OpenTelemetry attributes are the only inventory of those.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -882,29 +1078,46 @@ tools:
                 Seat assignment and per-role Claude Code capability in the claude.ai admin console;
                 disableAgentView, agent teams and cross-session messaging flags; the analytics dashboard lists
                 active users and sessions
-              steps: *a1
+              steps:
+                - title: Gate who may run Claude Code
+                  body:
+                    - Assign Claude Code access by seat (Organization settings > Organization) and, on Enterprise, by custom
+                      role and group under Organization settings > Roles.
+                  url: >-
+                    https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
+                - title: Control background and peer agents
+                  body:
+                    - Set disableAgentView true to turn off claude agents, --bg and the supervisor; crossSessionInbound and
+                      isolatePeerMachines govern cross-session messaging.
+                  url: https://code.claude.com/docs/en/settings-reference
               note: >-
                 There is no registry of agents or tool servers with owners and approval state; the analytics
                 dashboard and OpenTelemetry attributes (organization.id, user.account_uuid, session.id) are
                 the inventory.
               verified: 2026-09-10
       - mitigation: cap-shadow-ai-discovery
-        coverage: external
+        coverage: partial
         mechanism: >-
-          Tenant restrictions header (anthropic-allowed-org-ids) injected by the corporate proxy; the
-          analytics dashboard shows who is active; endpoint tooling finds unmanaged installs
-        note: >-
-          Claude Code does not discover unsanctioned installs; the vendor lever is the proxy-injected
-          tenant-restrictions header that blocks personal-account use, plus IP allowlisting. Pair with EDR/SSE
-          inventory of the claude binary and ~/.claude directories.
-        steps: &a1
-          - title: Block personal accounts on the corporate network
+          Domain memberships report for verified domains (claude.ai/admin-settings/organization, Domains),
+          with Restrict organization creation, Require SSO and the proxy-injected tenant-restriction header as
+          prevention
+        steps:
+          - title: List the accounts on your verified domains
             body:
-              - Configure the TLS-inspecting proxy to inject anthropic-allowed-org-ids with your org UUIDs for claude.ai,
-                api.anthropic.com, claude.com and anthropic.com.
+              - >-
+                After domain verification, open Domain memberships in the Domains section at
+                claude.ai/admin-settings/organization and download the Claude and Console accounts on your
+                domains as CSV or JSON.
             url: >-
-              https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
-        verified: 2026-09-10
+              https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        note: >-
+          Partial by the rule: the vendor lists personal and other-organisation accounts on the organisation's
+          verified domains, but doesn't find Claude Code installs on devices, accounts under personal email
+          addresses, or API keys from other organisations — EDR/MDM inventory of the claude binary and
+          ~/.claude, and SSE/CASB, cover those. Prevention, credited here only: Restrict organization creation
+          (Organization and access, Security), Require SSO for Claude, the anthropic-allowed-org-ids
+          tenant-restriction header (Enterprise) and a managed forceLoginOrgUUID.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityShadowAiDiscovery
@@ -919,46 +1132,61 @@ tools:
                 Claude Code does not discover unsanctioned installs; the vendor lever is the proxy-injected
                 tenant-restrictions header that blocks personal-account use, plus IP allowlisting. Pair with
                 EDR/SSE inventory of the claude binary and ~/.claude directories.
-              steps: *a1
+              steps:
+                - title: Block personal accounts on the corporate network
+                  body:
+                    - Configure the TLS-inspecting proxy to inject anthropic-allowed-org-ids with your org UUIDs for claude.ai,
+                      api.anthropic.com, claude.com and anthropic.com.
+                  url: >-
+                    https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          OpenTelemetry events (claude_code.tool_decision, tool_result, user_prompt, api_request) with
-          user.account_uuid and organization.id; Compliance API local-session transcripts (Enterprise);
-          ConfigChange hooks; server-managed settings change audit
+          OpenTelemetry from the managed env block (user_prompt, tool_decision, tool_result, api_request,
+          permission mode, hook and managed-settings events keyed by session.id and user.account_uuid), with
+          the managed endpoint removing developer-set destinations; Compliance API local-session transcripts
+          (Enterprise); admin-console settings changes in the audit log
         steps:
-          - title: Export tool decisions fleet-wide
+          - title: Export every session's events to your collector
             body:
-              - In the managed env block set CLAUDE_CODE_ENABLE_TELEMETRY=1, OTEL_LOGS_EXPORTER=otlp and
-                OTEL_EXPORTER_OTLP_ENDPOINT; developer overrides of the exporter are removed at startup. Add
-                OTEL_LOG_TOOL_DETAILS=1 only if the collector may hold commands.
+              - >-
+                In the managed env block set CLAUDE_CODE_ENABLE_TELEMETRY=1, OTEL_LOGS_EXPORTER and
+                OTEL_METRICS_EXPORTER to otlp and OTEL_EXPORTER_OTLP_ENDPOINT; Claude Code removes
+                developer-set endpoints, and a repository's settings can't enable or redirect export.
+            url: https://code.claude.com/docs/en/monitoring-usage
+          - title: Decide what content is captured
+            body:
+              - >-
+                Set OTEL_LOG_USER_PROMPTS and OTEL_LOG_TOOL_DETAILS in managed settings; prompts are redacted
+                and tool parameters omitted by default.
             url: https://code.claude.com/docs/en/monitoring-usage
           - title: Pull transcripts after the fact
             body:
-              - Enterprise organisations retrieve Claude Code local-session transcripts (prompts, tool calls,
-                results; 6-year retention by default) with a Compliance Access Key and the
-                read:compliance_user_data scope.
+              - >-
+                Enterprise organisations list and retrieve local Claude Code transcripts from
+                /v1/compliance/apps/sessions/local with a Compliance Access Key carrying
+                read:compliance_user_data.
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
-          - title: Audit settings edits
+          - title: Audit policy changes
             body:
-              - Add a ConfigChange hook to log or block user_settings / project_settings changes;
-                policy_settings changes cannot be blocked and server-managed changes are audited through the
-                Compliance API.
-            url: https://code.claude.com/docs/en/hooks-guide
-        evidence: []
+              - >-
+                Changes to server-managed settings are audit events, with the actor and the previous and new
+                values, in the Compliance API or audit log export.
+            url: https://code.claude.com/docs/en/server-managed-settings
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Native event emission and Compliance API transcripts; durability and tamper
-          evidence are the collector's and the archive's. Events carry the user's account id, which is
-          attribution, not a signature — non-repudiation needs the organisation's immutable store.
+          Native: the export is admin-enforced and per-session, and a developer can't turn it off from
+          settings when the variables come from managed settings (a managed env value overrides the shell).
+          Capture is not tamper resistance: durability and non-repudiation belong to the collector. Gaps:
+          server-managed delivery is skipped on Bedrock, Vertex, Foundry or a custom ANTHROPIC_BASE_URL (use
+          MDM there); a modified binary escapes any client-side control; Compliance API transcripts exclude
+          Console API-key, cloud-provider and ZDR sessions; OpenTelemetry tool results are metadata unless
+          content capture is turned on.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: native
@@ -993,24 +1221,43 @@ tools:
       - mitigation: cap-agent-kill-switch
         coverage: partial
         mechanism: >-
-          Seat removal / SCIM deprovisioning, /logout revocation, requiredMinimumVersion /
-          requiredMaximumVersion, forceRemoteSettingsRefresh fail-closed startup, and disableRemoteControl /
-          disableAgentView
-        steps: &a1
-          - title: Cut access at the identity layer
+          A managed permissions.deny ["*"] delivered to running sessions on the policy refresh; seat or SCIM
+          removal and Sign out everywhere; requiredMinimumVersion / requiredMaximumVersion and
+          forceRemoteSettingsRefresh at startup; disableRemoteControl and disableAgentView
+        steps:
+          - title: Stop tool use fleet-wide
             body:
-              - Remove the seat or SCIM group; Console API keys are deleted in the Console; a gateway sign-in expires
-                within the session lifetime (one hour by default).
+              - >-
+                Deliver permissions.deny ["*"] as a managed setting; running sessions apply it without a
+                restart on the next policy check (server-managed hourly, MDM or HKLM every 30 minutes, the
+                managed file on change).
+            url: https://code.claude.com/docs/en/managed-settings
+          - title: Cut the member's access
+            body:
+              - >-
+                Remove the member from the IdP app or SCIM group (Enterprise) or from the organisation's
+                members list.
             url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+          - title: Revoke the member's sessions and devices
+            body:
+              - >-
+                Use Sign out everywhere in the admin console to revoke every session and enrolled trusted
+                device for that member.
+            url: https://code.claude.com/docs/en/remote-control
           - title: Refuse to start outside policy
             body:
-              - Deliver requiredMinimumVersion and requiredMaximumVersion, and set forceRemoteSettingsRefresh true so
-                clients exit when the server policy cannot be fetched.
-            url: https://code.claude.com/docs/en/server-managed-settings
+              - >-
+                Deliver requiredMinimumVersion and requiredMaximumVersion, and set forceRemoteSettingsRefresh
+                true so clients exit when the server policy can't be fetched.
+            url: https://code.claude.com/docs/en/settings-reference
         note: >-
-          Running sessions keep working until credentials expire; there is no server-side "stop all sessions"
-          for local clients. Local transcripts must be deleted on the device.
-        verified: 2026-09-10
+          Partial: there is no documented admin stop for a running local session. A managed deny-all halts
+          tool calls within the refresh interval, but the process and its model calls continue; how long a
+          running CLI session keeps working after seat, SCIM or Sign out everywhere revocation is not
+          documented (delay not documented); requiredMinimumVersion and forceRemoteSettingsRefresh act at the
+          next start only. An EDR process kill is the external complement, and local transcripts must be
+          deleted on the device.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -1022,41 +1269,46 @@ tools:
                 Seat removal / SCIM deprovisioning, /logout revocation, requiredMinimumVersion /
                 requiredMaximumVersion, forceRemoteSettingsRefresh fail-closed startup, and
                 disableRemoteControl / disableAgentView
-              steps: *a1
+              steps:
+                - title: Cut access at the identity layer
+                  body:
+                    - Remove the seat or SCIM group; Console API keys are deleted in the Console; a gateway sign-in expires
+                      within the session lifetime (one hour by default).
+                  url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+                - title: Refuse to start outside policy
+                  body:
+                    - Deliver requiredMinimumVersion and requiredMaximumVersion, and set forceRemoteSettingsRefresh true so
+                      clients exit when the server policy cannot be fetched.
+                  url: https://code.claude.com/docs/en/server-managed-settings
               note: >-
                 Running sessions keep working until credentials expire; there is no server-side "stop all
                 sessions" for local clients. Local transcripts must be deleted on the device.
               verified: 2026-09-10
       - mitigation: D3-PA
-        coverage: unknown
+        coverage: external
         mechanism: >-
-          processWrapper / CLAUDE_CODE_PROCESS_WRAPPER corporate launcher for every self-spawned process; OTel
-          tool events feed the SIEM; WSL sessions need an in-distro Linux sensor
-        steps:
-          - title: Route every Claude Code process through the corporate launcher
-            body:
-              - Set processWrapper (or env CLAUDE_CODE_PROCESS_WRAPPER) in managed settings to your launcher's
-                absolute path; it wraps the background service, agent-view sessions and Remote Control
-                processes (not Windows).
+          EDR on the host; integration points are processWrapper / CLAUDE_CODE_PROCESS_WRAPPER (corporate
+          launcher), OpenTelemetry tool events carrying each command, and an in-distro Linux sensor for WSL
+        evidence:
+          - title: Run Claude Code behind a corporate launcher
             url: https://code.claude.com/docs/en/corporate-launcher
-          - title: Cover WSL sessions
-            body:
-              - Windows-side sensors do not see WSL 2 processes; run your EDR vendor's Linux sensor inside the
-                distribution or rely on the identical OTel tool-execution telemetry.
+          - title: Set up Claude Code for your organization (WSL sensor note)
             url: https://code.claude.com/docs/en/admin-setup
-        evidence: []
+          - title: Monitoring (tool decision and tool result events)
+            url: https://code.claude.com/docs/en/monitoring-usage
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEdr] Sensor scope: the host, where the CLI and its child processes run; the corporate
-          launcher makes every self-spawned process visible to it. WSL sessions need a Linux sensor in the
-          distro. Hooks are not a sensor — they are where the sensor can be consulted before a tool call.
+          External (EDR): Claude Code analyses no process behaviour. Integration points for the sensor:
+          processWrapper or CLAUDE_CODE_PROCESS_WRAPPER in managed settings starts the background service,
+          agent-view, Remote Control and teammate processes through your launcher (macOS and Linux; ignored on
+          Windows; sessions started in a terminal and a deep link's first process start outside it);
+          OpenTelemetry tool_decision and tool_result events carry each Bash full_command when
+          OTEL_LOG_TOOL_DETAILS is set, for correlation in the SIEM; WSL 2 processes are invisible to
+          Windows-side sensors, so run the vendor's Linux sensor in the distribution.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEdr
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityEdr
               coverage: external
@@ -1082,34 +1334,39 @@ tools:
                 call.
               verified: 2026-09-10
       - mitigation: cap-agent-egress-control
-        coverage: native
+        coverage: partial
         mechanism: >-
-          sandbox.network.allowedDomains / deniedDomains / strictAllowlist / allowManagedDomainsOnly,
-          WebFetch(domain:) rules, permissions.deny for curl/wget, HTTPS_PROXY / NODE_EXTRA_CA_CERTS, and the
-          documented outbound host list
-        steps: &a1
+          sandbox.network.allowedDomains / deniedDomains with strictAllowlist and allowManagedDomainsOnly for
+          sandboxed commands, managed WebFetch(domain:) rules for the fetch tool, and HTTPS_PROXY with the
+          documented host list at the firewall
+        steps:
           - title: Allowlist sandbox egress from managed settings
             body:
-              - Set sandbox.network.allowedDomains, sandbox.network.strictAllowlist true and
-                sandbox.network.allowManagedDomainsOnly true; non-allowed hosts are then blocked instead of
-                prompting, for Bash and its child processes.
+              - >-
+                Deliver sandbox.network.allowedDomains with sandbox.network.allowManagedDomainsOnly true (and
+                strictAllowlist), so sandboxed commands reach only listed hosts and others are blocked, not
+                prompted.
             url: https://code.claude.com/docs/en/sandboxing
-          - title: Restrict the fetch tool and network commands
+          - title: Restrict the fetch tool
             body:
-              - Deny WebFetch or allow only WebFetch(domain:host) entries, and deny Bash(curl *) and Bash(wget *); the
-                docs note deny rules match the command as written, so pair them with the sandbox allowlist.
+              - >-
+                Allow only WebFetch(domain:host) rules in managed settings with
+                allowManagedPermissionRulesOnly, or deny WebFetch outright.
             url: https://code.claude.com/docs/en/permissions
           - title: Pin the proxy and firewall allowlist
             body:
-              - Deliver HTTPS_PROXY and NODE_EXTRA_CA_CERTS in the managed env block and allow only the documented hosts
-                (api.anthropic.com, claude.ai, platform.claude.com, downloads.claude.ai,
-                mcp-proxy.anthropic.com and so on) at the firewall.
+              - >-
+                Set HTTPS_PROXY and NODE_EXTRA_CA_CERTS in the managed env block and allow only the documented
+                hosts at the firewall, which is what bounds MCP servers and the CLI's own traffic.
             url: https://code.claude.com/docs/en/network-config
         note: >-
-          Sandbox network rules bound sandboxed commands and WebFetch rules bound WebFetch; MCP servers and
-          the CLI's own calls are bounded only by HTTPS_PROXY and host network policy. A configured proxy is
-          routing until direct egress is blocked at the host.
-        verified: 2026-09-10
+          Partial on the same finding as D3-EI: the allowlist is admin-lockable but doesn't cover every
+          agent-executed command, because sandbox.excludedCommands (no managed lock) lets a developer run
+          named commands outside the sandbox with the host's network. Also outside it: MCP servers and hooks,
+          the CLI's own API traffic, and native Windows. The proxy decides on the client-supplied hostname
+          without TLS inspection (domain fronting is possible), and a configured proxy is routing until direct
+          egress is blocked at the host.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -1121,37 +1378,70 @@ tools:
                 sandbox.network.allowedDomains / deniedDomains / strictAllowlist / allowManagedDomainsOnly,
                 WebFetch(domain:) rules, permissions.deny for curl/wget, HTTPS_PROXY / NODE_EXTRA_CA_CERTS,
                 and the documented outbound host list
-              steps: *a1
+              steps:
+                - title: Allowlist sandbox egress from managed settings
+                  body:
+                    - Set sandbox.network.allowedDomains, sandbox.network.strictAllowlist true and
+                      sandbox.network.allowManagedDomainsOnly true; non-allowed hosts are then blocked instead of
+                      prompting, for Bash and its child processes.
+                  url: https://code.claude.com/docs/en/sandboxing
+                - title: Restrict the fetch tool and network commands
+                  body:
+                    - Deny WebFetch or allow only WebFetch(domain:host) entries, and deny Bash(curl *) and Bash(wget *); the
+                      docs note deny rules match the command as written, so pair them with the sandbox allowlist.
+                  url: https://code.claude.com/docs/en/permissions
+                - title: Pin the proxy and firewall allowlist
+                  body:
+                    - Deliver HTTPS_PROXY and NODE_EXTRA_CA_CERTS in the managed env block and allow only the documented hosts
+                      (api.anthropic.com, claude.ai, platform.claude.com, downloads.claude.ai,
+                      mcp-proxy.anthropic.com and so on) at the firewall.
+                  url: https://code.claude.com/docs/en/network-config
               note: >-
                 Sandbox network rules bound sandboxed commands and WebFetch rules bound WebFetch; MCP servers
                 and the CLI's own calls are bounded only by HTTPS_PROXY and host network policy. A configured
                 proxy is routing until direct egress is blocked at the host.
               verified: 2026-09-10
       - mitigation: D3-FA
-        coverage: unknown
-        steps: []
-        evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://code.claude.com/docs/en/claude_code_docs_map.md
+        coverage: partial
+        mechanism: >-
+          Skill and plugin security scanning (Enterprise) of third-party skills and plugins uploaded to the
+          claude.ai organisation, which reach Claude Code as synced plugins or claude.ai marketplaces; plugin
+          archive sha256 pins; the package mirror sits outside, reached through the sandbox domain allowlist
+        steps:
+          - title: Scan uploaded skills and plugins
+            body:
+              - >-
+                Turn on Skill and plugin security scanning under Organization settings > Plugins & skills >
+                Policy; a fail result blocks the uploaded skill or plugin before anyone in the organisation
+                can use it.
+            url: https://support.claude.com/en/articles/15927065-get-started-with-skill-and-plugin-scanning
+          - title: Take plugins only through that path
+            body:
+              - >-
+                Set strictKnownMarketplaces to a hostPattern entry for claude.ai so Claude Code installs
+                plugins from your organisation's claude.ai marketplaces.
+            url: https://code.claude.com/docs/en/plugins/org
+          - title: Force dependency installs through your scanning mirror
+            body:
+              - >-
+                Point package managers at your mirror and allow only its host in
+                sandbox.network.allowedDomains with allowManagedDomainsOnly, so sandboxed installs can't reach
+                public registries directly.
+            url: https://code.claude.com/docs/en/sandboxing
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityModelScanning] Not applicable to the product: Claude Code loads no model artifacts
-          locally; inference is remote on the configured provider. Nothing to scan on the endpoint.
-
-
-          [capabilityAiBom] The vendor ships pinned versions (requiredMinimumVersion, SDK-bundled binary,
-          plugin archive SHA-256 digests) but no signed manifest of the models, plugins and MCP servers a
-          session composes; the March 2026 npm source-map exposure showed release packaging is not attested.
-          Generate an AI-BOM from managed settings, managed-mcp.json and the plugin marketplace lockfile
-          yourself.
+          Partial by the rule: the vendor scans one artifact class — third-party skills and plugins uploaded
+          to the organisation (Enterprise; off by default until 2026-10-02) — and not MCP servers or hooks,
+          skills shared through MCP, items that predate enablement, CMEK, ZDR or HIPAA organisations, or
+          plugins a developer installs from a git marketplace. The archive sha256 pin verifies integrity, not
+          content. Dependencies Claude installs are out of the product's reach: admission scanning at the
+          package mirror or artifact repository is the external control. Claude Code loads no model weights
+          locally.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityModelScanning
             - capabilityAiBom
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityModelScanning
               coverage: notApplicable
@@ -1253,10 +1543,11 @@ tools:
     asOf: "2026-09"
     summary:
       - >-
-        Claude Code sessions that run on Anthropic-managed VMs (research preview for Pro, Max, Team and
-        Enterprise premium / Chat + Claude Code seats) rather than on the developer's machine. The VM clones
-        the GitHub repository, works on a branch, and can open pull requests; a security proxy carries git and
-        MCP traffic with scoped credentials so the user's GitHub token never enters the sandbox. Sessions
+        Claude Code sessions that run on Anthropic-managed VMs (Pro, Max, Team, and Enterprise premium / Chat +
+        Claude Code seats) rather than on the developer's machine. The VM clones the GitHub repository, works on
+        a branch, and can open pull requests; a GitHub proxy carries git traffic on a scoped credential so the
+        user's GitHub token never enters the sandbox, and MCP connector traffic goes through Anthropic's
+        servers. Sessions
         persist after the browser closes, can be driven from the mobile app, Slack (Claude Tag) or the CLI,
         and are reclaimed after inactivity. Organisations that need execution on their own network run
         self-hosted environments; inference still goes to api.anthropic.com with a session-scoped OAuth token.
@@ -1271,7 +1562,8 @@ tools:
     facts:
       - label: Plans
         value: >-
-          Research preview on Pro, Max and Team; Enterprise with premium or Chat + Claude Code seats. Not
+          Pro, Max and Team; Enterprise with premium or Chat + Claude Code seats (Routines and Code Review are
+          research previews; self-hosted environments are a public beta). Not
           available through Console API keys, Bedrock, Vertex, Foundry or ZDR organisations. Repositories must
           be on GitHub (GHES supported on Team/Enterprise); non-GitHub repos can be sent as a bundle but
           cannot push back.
@@ -1301,8 +1593,9 @@ tools:
     riskNotes:
       - risk: riskSensitiveDataDisclosure
         note: >-
-          A cloud session can reach any repository the connecting GitHub account can see, not just
-          repositories the Claude GitHub App is installed on; restrict at GitHub. Shared environments'
+          Through the Claude GitHub App a cloud session reaches public repositories and private ones the App is
+          installed on; through /web-setup (Quick web setup) it reaches every repository the member's gh token
+          can; restrict at GitHub. Shared environments'
           variables are readable by every member's sessions, so secrets must not go there (API credentials
           that stay outside the sandbox exist only on Pro/Max today).
       - risk: riskRogueActions
@@ -1321,34 +1614,53 @@ tools:
           levers.
     controls:
       - mitigation: D3-APA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          claude.ai organisation login with SSO/SCIM; per-role Claude Code capability on Enterprise;
-          Owner-only admin toggles at claude.ai/admin-settings/claude-code
+          Owner toggles at claude.ai/admin-settings/claude-code (the allow_remote_sessions policy, Quick web
+          setup, Remote Control, Routines), Allow self-hosted environments on the Cloud environments page, the
+          GitHub connector at Admin settings > Connectors, and the Claude Code capability in Enterprise custom
+          roles; who or what may trigger a session is not an admin policy
         steps:
-          - title: Gate cloud sessions by seat and role
+          - title: Decide whether cloud sessions exist
             body:
-              - Assign Claude Code seats and, on Enterprise, grant the Claude Code capability to custom roles
-                under Organization settings > Roles; sessions always use the subscription login (API keys
-                cannot start them).
-            url: >-
-              https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
-          - title: Decide whether the web surface exists
+              - >-
+                An Owner turns cloud sessions on or off for the organisation with the allow_remote_sessions
+                policy at claude.ai/admin-settings/claude-code, and leaves Quick web setup off so members
+                can't hand a personal gh token to cloud sessions with /web-setup.
+            url: https://code.claude.com/docs/en/claude-code-on-the-web
+          - title: Grant Claude Code by role
             body:
-              - Owners turn "Code in the web", the allow_remote_sessions policy, Remote Control and Quick web
-                setup on or off at claude.ai/admin-settings/claude-code.
-            url: https://code.claude.com/docs/en/desktop
-        evidence: []
+              - >-
+                On Enterprise, set members to the Custom role and grant the Claude Code capability only to the
+                groups that should run it, under Organization settings > Roles.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Keep unattended runs owned
+            body:
+              - >-
+                Turn the Routines toggle off at claude.ai/admin-settings/claude-code unless someone owns
+                scheduled, API and GitHub-triggered runs; turning it off stops existing routines and blocks
+                new ones.
+            url: https://code.claude.com/docs/en/routines
+          - title: Keep self-hosted execution off until owned
+            body:
+              - >-
+                Leave Allow self-hosted environments off on the Cloud environments admin page until a team
+                owns the runners.
+            url: https://code.claude.com/docs/en/self-hosted-environments
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial on the rule: enablement is organisation-wide (the custom-role capability covers all of
+          Claude Code, not cloud sessions specifically, and Team plans have no per-group control), and trigger
+          policy is not an admin setting: a routine's GitHub trigger fires on pull-request and release events
+          in any repository where the Claude GitHub App is installed, narrowed only by filters its owner sets
+          (such as Author); auto-fix acts on any reviewer comment or CI failure on a watched PR; an API
+          trigger admits whoever holds the routine's token. The widening switches are admin-controlled and off
+          by default on Team and Enterprise: Quick web setup, Remote Control, self-hosted environments and the
+          GitHub connector itself.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -1370,30 +1682,44 @@ tools:
                   url: https://code.claude.com/docs/en/desktop
               verified: 2026-09-10
       - mitigation: D3-AA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Sessions run under the user's account with proxy-issued scoped git credentials; self-hosted runners
-          register with an environment key and receive runner tokens; Claude Tag channel sessions run under an
-          agent identity
+          Anthropic-hosted sessions act as the creator's claude.ai account and GitHub grant (the Claude GitHub
+          App authorisation or a /web-setup gh token the GitHub proxy holds), attributed by Claude-Session
+          trailers and labelled replies; self-hosted sessions carry a signed per-session JWT
+          (CLAUDE_CODE_SESSION_ACCESS_TOKEN) with an RFC 8693 act chain; routine API triggers use per-routine
+          bearer tokens
         steps:
-          - title: Treat the environment key as a workload credential
+          - title: Verify session identity in self-hosted environments
             body:
-              - The environment secret shown once at creation authenticates every runner; store it in a
-                secrets manager and rotate it from the Cloud environments admin page.
-            url: https://code.claude.com/docs/en/self-hosted-environments
-        evidence: []
+              - >-
+                Have internal services verify CLAUDE_CODE_SESSION_ACCESS_TOKEN against the published JWKS,
+                check aud against your ccpool_ environment ID, and key on act.sub and ccr:session_id.
+            url: https://code.claude.com/docs/en/self-hosted-environments-identity
+          - title: Revoke a member's GitHub grant
+            body:
+              - >-
+                Disconnect GitHub at claude.ai/customize/connectors, and revoke the token on GitHub, to stop
+                cloud sessions acting through that member's GitHub identity.
+            url: https://code.claude.com/docs/en/web-quickstart
+          - title: Rotate routine trigger tokens
+            body:
+              - >-
+                Use Regenerate or Revoke in a routine's API trigger modal; each token can fire only that
+                routine.
+            url: https://code.claude.com/docs/en/routines
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] Anthropic-hosted sessions have no distinct agent identity: GitHub actions
-          appear as the user (or the Claude GitHub App). Session identity can be verified by your own services
-          in self-hosted environments.
+          Partial by the rule: sessions run on the user's own identity and GitHub grant with attribution only
+          — commits and PR bodies carry the session URL, review replies are labelled as Claude Code, and
+          routine actions appear as the routine's owner. Revocation is the user's GitHub disconnect or the
+          seat, not a separate agent identity an admin inventories; the organisation's service identity exists
+          only for Claude Tag channel sessions (toolClaudeTag). The self-hosted session JWT lasts four hours
+          by default, eight at most, and can't be revoked early: Anthropic publishes no revocation feed.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityNhiManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityNhiManagement
               coverage: partial
@@ -1415,19 +1741,30 @@ tools:
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
-          Session list at claude.ai/code with Team visibility on Team/Enterprise; organisation-shared and
-          self-hosted environments managed by Owners on the Cloud environments admin page; Routines listed per
-          user
-        steps: &a2
+          Owner-managed organisation-shared and self-hosted environments on the Cloud environments admin page;
+          routines kept per user at claude.ai/code/routines; Compliance API Activity Feed events for cloud
+          sessions, session shares and managed-settings changes; the Routines toggle as the only enforcement
+        steps:
           - title: Centralise environments
             body:
-              - Owners create organisation-shared environments and set the organisation default on the Cloud environments
-                page; Admins cannot open it. Members' own environments are personal to their account.
+              - >-
+                Create organisation-shared environments on the Cloud environments admin page and set the
+                organisation default at claude.ai/admin-settings/claude-code, so sessions run in an
+                Owner-managed list.
             url: https://code.claude.com/docs/en/cloud-environments
+          - title: Reconcile sessions from the Activity Feed
+            body:
+              - >-
+                Query the Compliance API Activity Feed for ccr_session_created, session_share_created and
+                claude_code_managed_settings activities to see who runs cloud sessions and what changed.
+            url: https://platform.claude.com/docs/en/api/compliance/activities/list
         note: >-
-          There is no approval workflow or owner record for sessions or routines beyond the user who created
-          them.
-        verified: 2026-09-10
+          Partial: environments have an Owner and a list, but routines belong to individual accounts and
+          aren't shared (no admin listing is documented), members' personal environments are approved by no
+          one, and nothing denies an unregistered routine or environment short of the organisation-wide
+          Routines and cloud-session switches. Sessions and GitHub App installations have no owner or approval
+          record beyond who created them.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -1439,60 +1776,60 @@ tools:
                 Session list at claude.ai/code with Team visibility on Team/Enterprise; organisation-shared
                 and self-hosted environments managed by Owners on the Cloud environments admin page; Routines
                 listed per user
-              steps: *a2
+              steps:
+                - title: Centralise environments
+                  body:
+                    - Owners create organisation-shared environments and set the organisation default on the Cloud environments
+                      page; Admins cannot open it. Members' own environments are personal to their account.
+                  url: https://code.claude.com/docs/en/cloud-environments
               note: >-
                 There is no approval workflow or owner record for sessions or routines beyond the user who
                 created them.
               verified: 2026-09-10
       - mitigation: AML.M0028
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          Server-managed settings (permissions.allow/ask/deny, allowManagedPermissionRulesOnly,
-          disableAutoMode) apply to cloud sessions; permission mode is chosen per session from the web UI;
-          connectors filtered by allowedMcpServers / deniedMcpServers
+          Server-managed permissions.deny / ask / allow with allowManagedPermissionRulesOnly and
+          disableAutoMode (Bypass isn't offered in cloud sessions); allowedMcpServers / deniedMcpServers and
+          connector tool controls filter delivered connectors; the GitHub proxy limits push to the session
+          branch and API calls to attached repositories; network access is set per environment
         steps:
-          - title: Deliver the same permission policy as the desktop fleet
+          - title: Deliver the permission policy from the console
             body:
-              - Configure permissions.deny, disableBypassPermissionsMode and allowManagedPermissionRulesOnly
-                under Admin Settings > Claude Code > Managed settings; endpoint-managed files do not reach
-                Anthropic-hosted sessions.
+              - >-
+                Under Admin Settings > Claude Code > Managed settings, deliver permissions.deny rules,
+                disableBypassPermissionsMode and allowManagedPermissionRulesOnly true; device MDM files don't
+                reach Anthropic-hosted sessions.
             url: https://code.claude.com/docs/en/server-managed-settings
-          - title: Filter connectors in cloud sessions
+          - title: Remove Auto from the mode picker
             body:
-              - Connectors are passed to the cloud VM and filtered by the organisation's allowedMcpServers /
-                deniedMcpServers patterns; disableSideloadFlags drops servers the server delivered through
-                --mcp-config.
-            url: https://code.claude.com/docs/en/managed-mcp
-          - title: Deliver deny rules through server-managed settings
+              - >-
+                Set permissions.disableAutoMode "disable" in server-managed settings; cloud sessions then
+                offer only Accept edits and Plan.
+            url: https://code.claude.com/docs/en/permission-modes
+          - title: Filter the connectors a session receives
             body:
-              - Configure permissions.deny and allowManagedPermissionRulesOnly under Admin settings > Claude
-                Code; deny rules run before every permission mode in the session, and endpoint-managed files
-                never reach Anthropic-hosted sessions.
-            url: https://code.claude.com/docs/en/server-managed-settings
-          - title: Filter connectors organisation-wide
+              - >-
+                Deliver allowedMcpServers and deniedMcpServers through server-managed settings (the session's
+                proxy rewrites connector URLs, so match accordingly) and set unneeded connector tools to
+                blocked.
+            url: https://code.claude.com/docs/en/mcp
+          - title: Standardise the environment
             body:
-              - Deliver allowedMcpServers and deniedMcpServers through server-managed settings so only
-                matching connectors reach cloud sessions; disableSideloadFlags drops servers a session tried
-                to add itself.
-            url: https://code.claude.com/docs/en/managed-mcp
-        evidence: []
+              - >-
+                Give sessions an Owner-managed shared environment with Custom network access and make it the
+                organisation default.
+            url: https://code.claude.com/docs/en/cloud-environments
         note: >-
-          Server-managed deny hides, allow pre-approves, specifiers limit arguments; the per-session mode
-          picker can still choose Auto unless disableAutoMode is set. Connector tools follow the org's
-          ask/blocked settings.
-
-
-          [capabilityAgentRuntimeEnforcement] Deny rules are deterministic and organisation-owned. Hooks are
-          repository code, writable by anyone with push access, so they are not enterprise policy. Connector
-          tools follow the organisation's ask or blocked settings; a connector's own actions are outside the
-          rules.
-
-
-          [capabilityMcpToolSecurity] Rated native on the same rule as Claude Code: admission by identity,
-          organisation-wide. Admission is not integrity — nothing pins the tool descriptions a connector
-          returns or detects a changed implementation. Connector traffic runs through Anthropic's servers and
-          never passes the environment's network policy.
+          Partial: tool rules are admin-locked (Bypass isn't offered, Auto is removable), but the rest of the
+          locked environment isn't: members can create personal environments with Full network access and pick
+          them, and the docs say there is no organisation-level allowlist admins can push. The GitHub proxy
+          restricts push to the session's branch and API calls to attached repositories, but nothing documents
+          that the session's GitHub grant can't merge, approve or mark a PR ready; with Quick web setup on,
+          /web-setup reaches every repository a member's gh token can; routines run with no permission-mode
+          picker; a single-repository session loads the repository's hooks and .mcp.json servers without
+          asking unless managed settings say otherwise.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -1556,26 +1893,33 @@ tools:
                 environment's network policy."
               verified: 2026-09-15
       - mitigation: AML.M0029
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          Per-session permission mode picker (Accept edits, Plan, Auto; Bypass unavailable in cloud sessions),
-          permissions.ask rules from server-managed settings, MCP connector tool approvals that pause the
-          session
+          Server-managed permissions.ask rules and connector tools set to ask stop an interactive cloud
+          session for the user's approval; for everything else the gate is the draft branch or pull request a
+          person reviews
         steps:
           - title: Force prompts on named actions
             body:
-              - Add permissions.ask rules such as Bash(git push *) in server-managed settings; the session
-                waits for the user (and expires if it waits too long) rather than auto-approving.
-            url: https://code.claude.com/docs/en/auto-mode-config
-          - title: Review before merge
+              - >-
+                Add permissions.ask rules such as Bash(git push *) in server-managed settings; an ask rule
+                prompts even in Auto, and the prompt appears in claude.ai or the mobile app.
+            url: https://code.claude.com/docs/en/permission-modes
+          - title: Keep auto-fix off where comments deploy
             body:
-              - Sessions produce a diff and a PR rather than merging; auto-fix acts only on PRs where the
-                toggle is on, and the docs recommend disabling it where a PR comment can deploy
-                infrastructure. The PR gates the output, not actions taken during the session — use
-                permissions.ask for those.
+              - >-
+                Leave the per-PR Auto-fix toggle off on repositories where an issue_comment can run Atlantis,
+                Terraform Cloud or privileged Actions; auto-fix pushes and replies under the user's GitHub
+                account.
             url: https://code.claude.com/docs/en/claude-code-on-the-web
-        evidence: []
+        note: >-
+          Partial by the rule: a merge gate approves the output, not the actions. Cloud sessions pre-approve
+          file edits in every mode and Accept edits pushes the branch without stopping; ask rules and
+          connector ask settings do make a person approve named actions in interactive sessions, but routines
+          and GitHub-triggered runs have no permission-mode picker and run without stopping for approval, so
+          no one is present. The auto-mode classifier and Code Review are not human approval; the reviewer's
+          merge on GitHub comes after the actions ran.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -1602,231 +1946,40 @@ tools:
                       permissions.ask for those.
                   url: https://code.claude.com/docs/en/claude-code-on-the-web
               verified: 2026-09-10
-      - mitigation: cap-input-guardrails
-        coverage: partial
-        mechanism: >-
-          Same built-in safeguards as local Claude Code plus the auto-mode classifier and a default-limited
-          network egress; Enterprise Inference hooks apply to Claude Code sessions
-        steps: &a2
-          - title: Keep egress at Trusted or Custom
-            body:
-              - Set the environment's network access level to Trusted (default) or a Custom allowlist so an injected
-                instruction cannot reach arbitrary hosts.
-            url: https://code.claude.com/docs/en/cloud-environments
-          - title: Add inline prompt inspection (Enterprise, beta)
-            body:
-              - Configure Inference hooks so every governed Claude Code prompt is sent to your AI security server for an
-                allow/deny verdict before inference.
-            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
-        note: >-
-          The built-in safeguards detect a subset of injected commands and web content; the egress limit and
-          auto-mode classifier contain the rest. Nothing detects injection in repository files or MCP results
-          as such.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityPromptInjectionDefense
-          reviewRequired: false
-          original:
-            - capability: capabilityPromptInjectionDefense
-              coverage: partial
-              mechanism: >-
-                Same built-in safeguards as local Claude Code plus the auto-mode classifier and a
-                default-limited network egress; Enterprise Inference hooks apply to Claude Code sessions
-              steps: *a2
-              note: >-
-                The built-in safeguards detect a subset of injected commands and web content; the egress limit
-                and auto-mode classifier contain the rest. Nothing detects injection in repository files or
-                MCP results as such.
-              verified: 2026-09-10
-      - mitigation: cap-ai-vendor-assessment
-        coverage: external
-        mechanism: Anthropic Trust Center artifacts (SOC 2 Type 2, ISO 27001) into the buyer's TPRM platform
-        note: >-
-          Vendor evidence is published; cadence and reassessment are the organisation's own TPRM process.
-
-
-          [capabilityVendorAssurance] Readback only: the Compliance API exposes effective settings for an SSPM
-          product to compare against policy; the product ships no baseline comparison, drift detection or
-          remediation.
-        steps:
-          - title: Attach vendor evidence
-            body:
-              - Pull the Trust Center reports linked from the Claude Code security page into the vendor
-                record; the cloud execution section documents the isolation claims to assess.
-            url: https://code.claude.com/docs/en/security
-          - title: Read effective settings programmatically
-            body:
-              - Use the Compliance API directory endpoints (organizations, users, roles, groups and each
-                organisation's effective settings) with a Compliance Access Key to evidence the configuration.
-            url: https://platform.claude.com/docs/en/manage-claude/compliance-api
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityAiTprm
-            - capabilityVendorAssurance
-          reviewRequired: false
-          original:
-            - capability: capabilityAiTprm
-              coverage: external
-              mechanism: Anthropic Trust Center artifacts (SOC 2 Type 2, ISO 27001) into the buyer's TPRM platform
-              note: >-
-                Vendor evidence is published; cadence and reassessment are the organisation's own TPRM process.
-              steps: &a2
-                - title: Attach vendor evidence
-                  body:
-                    - Pull the Trust Center reports linked from the Claude Code security page into the vendor record; the cloud
-                      execution section documents the isolation claims to assess.
-                  url: https://code.claude.com/docs/en/security
-              verified: 2026-09-10
-            - capability: capabilityVendorAssurance
-              coverage: external
-              mechanism: Compliance API organisation settings endpoint and Activity Feed expose effective settings and admin
-                actions to posture tooling; server-managed settings are readable by Owners
-              steps:
-                - title: Read effective settings programmatically
-                  body:
-                    - Use the Compliance API directory endpoints (organizations, users, roles, groups and each
-                      organisation's effective settings) with a Compliance Access Key to evidence the
-                      configuration.
-                  url: https://platform.claude.com/docs/en/manage-claude/compliance-api
-              note: "Readback only: the Compliance API exposes effective settings for an SSPM product to compare against
-                policy; the product ships no baseline comparison, drift detection or remediation."
-              verified: 2026-09-10
-      - mitigation: cap-agent-tracing
-        coverage: partial
-        mechanism: >-
-          Session transcript and diff view at claude.ai/code; all outbound traffic through the security proxy
-          is logged for audit; self-hosted runners expose metrics and a health endpoint and forward OTel from
-          sessions
-        steps:
-          - title: Read the session record
-            body:
-              - Each session keeps the full conversation, tool activity and per-file diffs, visible to the
-                user and (with Team visibility) the organisation.
-            url: https://code.claude.com/docs/en/claude-code-on-the-web
-          - title: Export runner and session telemetry when self-hosting
-            body:
-              - The runner honours the OpenTelemetry variables from network-config and sessions inherit them;
-                the reference lists runner metrics and the health endpoint.
-            url: https://code.claude.com/docs/en/self-hosted-environments
-          - title: Export admin and settings events
-            body:
-              - Enterprise Owners export audit logs (180 days) from Organization settings > Data and privacy
-                or query the Compliance API Activity Feed; server-managed settings changes are audited there.
-            url: https://support.claude.com/en/articles/9970975-access-audit-logs
-        note: >-
-          Anthropic-hosted sessions do not expose an OTLP export to the organisation's collector and the
-          Compliance API does not return Claude Code web transcripts.
-
-
-          [capabilityAuditLogging] The Compliance API session endpoints explicitly exclude Claude Code on the
-          web; the vendor's own operation logs are not customer-accessible.
-        verified: 2026-09-10
-        migration:
-          from:
-            - capabilityAgentObservability
-            - capabilityAuditLogging
-          reviewRequired: false
-          original:
-            - capability: capabilityAgentObservability
-              coverage: partial
-              mechanism: >-
-                Session transcript and diff view at claude.ai/code; all outbound traffic through the security
-                proxy is logged for audit; self-hosted runners expose metrics and a health endpoint and
-                forward OTel from sessions
-              steps: &a2
-                - title: Read the session record
-                  body:
-                    - Each session keeps the full conversation, tool activity and per-file diffs, visible to the user and (with
-                      Team visibility) the organisation.
-                  url: https://code.claude.com/docs/en/claude-code-on-the-web
-                - title: Export runner and session telemetry when self-hosting
-                  body:
-                    - The runner honours the OpenTelemetry variables from network-config and sessions inherit them; the
-                      reference lists runner metrics and the health endpoint.
-                  url: https://code.claude.com/docs/en/self-hosted-environments
-              note: >-
-                Anthropic-hosted sessions do not expose an OTLP export to the organisation's collector and the
-                Compliance API does not return Claude Code web transcripts.
-              verified: 2026-09-10
-            - capability: capabilityAuditLogging
-              coverage: partial
-              mechanism: Anthropic logs all cloud-session operations and proxy traffic for compliance; admin console changes
-                appear in the Enterprise audit log / Compliance API Activity Feed; session transcripts are not
-                exported
-              steps:
-                - title: Export admin and settings events
-                  body:
-                    - Enterprise Owners export audit logs (180 days) from Organization settings > Data and
-                      privacy or query the Compliance API Activity Feed; server-managed settings changes are
-                      audited there.
-                  url: https://support.claude.com/en/articles/9970975-access-audit-logs
-              note: The Compliance API session endpoints explicitly exclude Claude Code on the web; the vendor's own
-                operation logs are not customer-accessible.
-              verified: 2026-09-10
-      - mitigation: AML.M0031
-        coverage: partial
-        verified: "2026-09-10"
-        mechanism: >-
-          Session VMs are reclaimed after inactivity and conversation history is restored on reopen; users can
-          delete sessions permanently; auto memory follows the repository's settings
-        steps:
-          - title: Delete sessions and bound the VM lifetime
-            body:
-              - Users delete sessions (event data removed permanently) from the sidebar; VMs are automatically
-                reclaimed after inactivity and background work is not restored.
-            url: https://code.claude.com/docs/en/claude-code-on-the-web
-        evidence: []
-        note: >-
-          Retention and deletion only: transcripts are restored on reopen and deletable. Transcript retention
-          is not poisoning detection; auto memory in the repository is the same plain-file store as local
-          Claude Code, with no validation or rollback.
-        migration:
-          from:
-            - capabilityMemoryProtection
-          reviewRequired: false
-          original:
-            - capability: capabilityMemoryProtection
-              coverage: partial
-              mechanism: >-
-                Session VMs are reclaimed after inactivity and conversation history is restored on reopen;
-                users can delete sessions permanently; auto memory follows the repository's settings
-              steps:
-                - title: Delete sessions and bound the VM lifetime
-                  body:
-                    - Users delete sessions (event data removed permanently) from the sidebar; VMs are
-                      automatically reclaimed after inactivity and background work is not restored.
-                  url: https://code.claude.com/docs/en/claude-code-on-the-web
-              note: >-
-                Retention and deletion only: transcripts are restored on reopen and deletable. Transcript
-                retention is not poisoning detection; auto memory in the repository is the same plain-file
-                store as local Claude Code, with no validation or rollback.
-              verified: 2026-09-10
       - mitigation: AML.M0036
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          Cloud sessions share the account's rate limits; organisation and per-user spend limits in the admin
-          console; no per-session budget or time cap
+          Organisation, group, per-user and pooled monthly spend limits under Organization settings > Usage
+          (Enterprise); a monthly spend limit on usage credits (Team and seat-based Enterprise); vendor-fixed
+          seat limits, routine daily run caps and GitHub-trigger hourly caps
         steps:
-          - title: Set organisation, group and user spend limits
+          - title: Set group, user and organisation spend limits
             body:
-              - Configure limits under Organization settings > Usage (org default, by group, per user); Claude
-                Code, Cowork and chat draw from the same consumption pool.
+              - >-
+                Under Organization settings > Usage > Spend limits, set group limits (By group/tier), per-user
+                limits and, if needed, a pooled monthly budget; members stop at whichever limit runs out
+                first.
             url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
-        evidence: []
+          - title: Cap usage credits on seat-based plans
+            body:
+              - >-
+                On Team and seat-based Enterprise, set the monthly spend limit on usage credits under
+                Organization settings > Usage, or leave credits off so members stop at the seat's included
+                usage.
+            url: https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityRateLimiting] Sessions stop only when the account's limits are exhausted; there is no
-          turn or wall-clock cap for a cloud session. Sub-limits present: account rate limits and organisation
-          or per-user spend limits (hard at the account). Absent: turn, wall-clock and per-session spend caps.
+          Native on the rule: admin-set spend limits stop usage when exhausted — the consumption guide says
+          members at their limit are blocked mid-task and usage can go slightly over before it pauses — and
+          routine runs past the limit are rejected without usage credits. Not admin-settable: session
+          duration, concurrency, fan-out or a per-session budget; the routine daily run cap, per-routine
+          GitHub event caps and the VM ceilings (about 4 vCPUs, 16 GB RAM, 30 GB disk) are vendor-fixed, and
+          Team seats carry fixed included usage. Cloud sessions share the account's rate limits with all other
+          Claude usage.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityRateLimiting
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityRateLimiting
               coverage: partial
@@ -1844,178 +1997,98 @@ tools:
                 for a cloud session. Sub-limits present: account rate limits and organisation or per-user
                 spend limits (hard at the account). Absent: turn, wall-clock and per-session spend caps.
               verified: 2026-09-10
-      - mitigation: cap-agent-kill-switch
+      - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
-          Owner toggles (Code in the web, allow_remote_sessions, Remote Control, Allow self-hosted
-          environments), seat removal, session archive/delete, runner --retire-at and SIGTERM drain
-        steps: &a2
-          - title: Turn the surface off
+          Enterprise Inference hooks send each governed request's transcript, tool results included, to the
+          organisation's AI security server before inference; server-managed PostToolUse hooks run in cloud
+          sessions and can replace a tool's output; built-in safeguards are not configurable
+        steps:
+          - title: Deny poisoned requests before inference
             body:
-              - Owners disable "Code in the web" and allow_remote_sessions at claude.ai/admin-settings/claude-code; new
-                cloud sessions then fail with a policy error.
-            url: https://code.claude.com/docs/en/claude-code-on-the-web
-          - title: Stop runners cleanly
+              - >-
+                Allow Inference hooks for the organisation; they govern Claude Code sessions on the web, so
+                your AI security server can deny a request carrying injected issue text, file content or tool
+                output.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+          - title: Replace suspect tool output
             body:
-              - Self-hosted runners drain on SIGTERM or at --retire-at, releasing sessions so they resume elsewhere;
-                revoking the environment key stops new claims.
-            url: https://code.claude.com/docs/en/self-hosted-environments
+              - >-
+                Deliver a PostToolUse hook through server-managed settings that classifies WebFetch, Bash and
+                MCP results and returns updatedToolOutput with a quarantine notice.
+            url: https://code.claude.com/docs/en/hooks
         note: >-
-          Running Anthropic-hosted sessions are not remotely terminable by an admin; they end at inactivity.
-        verified: 2026-09-10
+          Partial by the rule: both are attach points for the organisation's own classifier. Nothing in the
+          product classifies issue text, review comments, repository files or fetched pages for injection, and
+          no hidden-character or HTML-comment filtering is documented; the auto-mode classifier judges
+          actions, not inputs; the Trusted network level is containment. CODEOWNERS on .claude/, CLAUDE.md and
+          the environment's setup script is the process control.
+        verified: "2026-09-25"
         migration:
           from:
-            - capabilityKillSwitch
+            - capabilityPromptInjectionDefense
           reviewRequired: false
           original:
-            - capability: capabilityKillSwitch
+            - capability: capabilityPromptInjectionDefense
               coverage: partial
               mechanism: >-
-                Owner toggles (Code in the web, allow_remote_sessions, Remote Control, Allow self-hosted
-                environments), seat removal, session archive/delete, runner --retire-at and SIGTERM drain
-              steps: *a2
-              note: >-
-                Running Anthropic-hosted sessions are not remotely terminable by an admin; they end at
-                inactivity.
-              verified: 2026-09-10
-      - mitigation: D3-EI
-        coverage: native
-        verified: "2026-09-15"
-        mechanism: >-
-          Isolated Anthropic-managed VM per session; sessions routed to a self-hosted environment run on the
-          organisation's own runners
-        steps:
-          - title: Keep sessions in isolated environments
-            body:
-              - Each cloud session runs in an isolated, Anthropic-managed VM; a session routed to a
-                self-hosted environment runs on your runners, where isolation is your deployment's
-                responsibility.
-            url: https://code.claude.com/docs/en/claude-code-on-the-web
-          - title: Harden self-hosted runners yourself
-            body:
-              - Build the runner image, default-deny egress and git credential supply into the deployment;
-                Anthropic's boundary stops at the session it hands the runner.
-            url: https://code.claude.com/docs/en/self-hosted-environments
-        evidence: []
-        note: >-
-          Inside the boundary: the shell, file tools, Docker and the setup script. Outside: the model, MCP
-          connectors (their traffic runs through Anthropic's servers) and the GitHub proxy. The VM is
-          reclaimed after inactivity and background work is not restored.
-        migration:
-          from:
-            - capabilityAgentSandboxing
-          reviewRequired: false
-          original:
-            - capability: capabilityAgentSandboxing
-              coverage: native
-              mechanism: >-
-                Isolated Anthropic-managed VM per session; sessions routed to a self-hosted environment run on
-                the organisation's own runners
+                Same built-in safeguards as local Claude Code plus the auto-mode classifier and a
+                default-limited network egress; Enterprise Inference hooks apply to Claude Code sessions
               steps:
-                - title: Keep sessions in isolated environments
+                - title: Keep egress at Trusted or Custom
                   body:
-                    - Each cloud session runs in an isolated, Anthropic-managed VM; a session routed to a
-                      self-hosted environment runs on your runners, where isolation is your deployment's
-                      responsibility.
-                  url: https://code.claude.com/docs/en/claude-code-on-the-web
-                - title: Harden self-hosted runners yourself
+                    - Set the environment's network access level to Trusted (default) or a Custom allowlist so an injected
+                      instruction cannot reach arbitrary hosts.
+                  url: https://code.claude.com/docs/en/cloud-environments
+                - title: Add inline prompt inspection (Enterprise, beta)
                   body:
-                    - Build the runner image, default-deny egress and git credential supply into the
-                      deployment; Anthropic's boundary stops at the session it hands the runner.
-                  url: https://code.claude.com/docs/en/self-hosted-environments
+                    - Configure Inference hooks so every governed Claude Code prompt is sent to your AI security server for an
+                      allow/deny verdict before inference.
+                  url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
               note: >-
-                Inside the boundary: the shell, file tools, Docker and the setup script. Outside: the model,
-                MCP connectors (their traffic runs through Anthropic's servers) and the GitHub proxy. The VM
-                is reclaimed after inactivity and background work is not restored.
-              verified: 2026-09-15
-      - mitigation: cap-agent-egress-control
-        coverage: native
-        mechanism: >-
-          Environment Network access level (None, Trusted, Full, Custom with Allowed domains) enforced by the
-          security proxy in Anthropic-hosted environments; default Trusted; organisation-shared environments
-          with an organisation default
-        steps: &a2
-          - title: Set the environment's network access level
-            body:
-              - In the environment dialog choose None, Trusted (package registries, GitHub, cloud SDKs) or Custom with
-                your own Allowed domains; Full allows any domain. The security proxy carries every outbound
-                request and keeps a DNS-level audit trail.
-            url: https://code.claude.com/docs/en/cloud-environments
-          - title: Share a locked-down environment organisation-wide
-            body:
-              - Owners create organisation-shared environments on the Cloud environments admin page and set an
-                organisation default so members' sessions inherit it; do not put secrets in its variables,
-                every member's session reads them.
-            url: https://code.claude.com/docs/en/cloud-environments
-        note: >-
-          Paths the allowlist never sees, at every level including None: GitHub through its proxy, MCP
-          connectors through Anthropic's servers, hosts listed on API credentials, and the Anthropic API
-          itself. In a self-hosted environment egress is your own firewall.
-        verified: 2026-09-15
-        migration:
-          from:
-            - capabilityEgressControl
-          reviewRequired: false
-          original:
-            - capability: capabilityEgressControl
-              coverage: native
-              mechanism: >-
-                Environment Network access level (None, Trusted, Full, Custom with Allowed domains) enforced
-                by the security proxy in Anthropic-hosted environments; default Trusted; organisation-shared
-                environments with an organisation default
-              steps: *a2
-              note: >-
-                Paths the allowlist never sees, at every level including None: GitHub through its proxy, MCP
-                connectors through Anthropic's servers, hosts listed on API credentials, and the Anthropic API
-                itself. In a self-hosted environment egress is your own firewall.
-              verified: 2026-09-15
+                The built-in safeguards detect a subset of injected commands and web content; the egress limit
+                and auto-mode classifier contain the rest. Nothing detects injection in repository files or
+                MCP results as such.
+              verified: 2026-09-10
       - mitigation: D3-CTS
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          GitHub proxy keeps git credentials and signing keys outside the VM (a scoped credential swapped at
-          the proxy, push limited to the working branch, API requests scoped to attached repositories); API
-          credentials attached per host by the agent proxy on Pro and Max only; environment variables readable
-          by the session
+          GitHub proxy (a scoped credential in the VM swapped for the user's token; push to the session
+          branch; API calls to attached repositories; a pinned GraphQL set); API credentials attached per host
+          by the agent proxy (Pro and Max only); every other secret an environment variable the session can
+          read
         steps:
-          - title: Rely on the GitHub proxy, not tokens in the environment
+          - title: Let the GitHub proxy hold the repository credential
             body:
-              - "Leave GitHub access to the proxy: the git client holds a scoped credential the proxy swaps
-                for your token, push works only against the session's branch, and GitHub API calls reach only
-                attached repositories. A GH_TOKEN you set gets the same restrictions."
+              - >-
+                Leave GH_TOKEN and GITHUB_TOKEN unset so both read proxy-injected and the proxy substitutes
+                the real credential outside the VM; a token you set is an ordinary variable everyone using the
+                environment can read.
             url: https://code.claude.com/docs/en/cloud-environments
-          - title: Never put secrets in environment variables
+          - title: Keep other keys out of the VM where the plan allows
             body:
-              - Every session in a shared environment can read its variables and setup script; on Pro/Max
-                store keys as API credentials with allowed hosts instead. Team and Enterprise do not have API
-                credentials yet.
+              - >-
+                On Pro and Max, store keys as API credentials with allowed hosts so the agent proxy attaches
+                them after the request leaves the VM; Team and Enterprise don't have API credentials yet.
             url: https://code.claude.com/docs/en/cloud-environments
-          - title: Supply git credentials from your own store in self-hosted environments
+          - title: Supply git credentials per session when self-hosting
             body:
-              - Configure per-session minted credentials or the Anthropic git proxy in the runner deployment
-                rather than baking tokens into the runner image.
-            url: https://code.claude.com/docs/en/self-hosted-environments
-        evidence: []
+              - >-
+                Start runners with --use-anthropic-git-proxy, or mint a short-lived per-session token in the
+                wrapper script, instead of baking credentials into the runner image.
+            url: https://code.claude.com/docs/en/self-hosted-environments-deploy
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] Rated partial on the same rule as the Claude Agent SDK: the GitHub
-          path is isolated by default, but on Team and Enterprise every other credential a session needs is an
-          environment variable readable by commands and, through tool output, by the model — per-host API
-          credentials exist on Pro and Max only. No on-behalf-of exchange: sessions act as the connecting
-          user's GitHub identity.
-
-
-          [capabilitySecretsManagement] Git credentials and signing keys are held by the proxy and never enter
-          the sandbox; environment variables set on the environment are readable by every command in the
-          session and by the model through tool output. Per-host API credential injection is a Pro/Max
-          feature, not an Enterprise one.
+          Partial by the rule: the repository credential stays outside the sandbox, but on Team and Enterprise
+          every other secret a session needs is an environment variable that the setup script, every command
+          and — through tool output — the model can read, as can every member sharing the environment;
+          setup-phase secrets aren't removed before the agent runs. Connector credentials stay on Anthropic's
+          side. The session exercises the user's GitHub grant; there is no on-behalf-of exchange.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: partial
@@ -2059,6 +2132,403 @@ tools:
                 through tool output. Per-host API credential injection is a Pro/Max feature, not an Enterprise
                 one.
               verified: 2026-09-10
+      - mitigation: AML.M0031
+        coverage: partial
+        mechanism: >-
+          Transcripts kept under the account's retention and restored on reopen (the owner deletes them);
+          per-session Team or Public sharing chosen by the user; environment cache snapshots of setup-script
+          output; repository CLAUDE.md and .claude/ loaded from the clone; server-managed claudeMd and
+          strictPluginOnlyCustomization
+        steps:
+          - title: Lock what the repository can add
+            body:
+              - >-
+                Deliver strictPluginOnlyCustomization in server-managed settings so repository skills, agents,
+                hooks and MCP servers can't add instructions that run with tool access.
+            url: https://code.claude.com/docs/en/settings-reference
+          - title: Put organisation instructions above the repository's
+            body:
+              - >-
+                Set the managed claudeMd key in server-managed settings; it loads before project CLAUDE.md
+                files and can't be excluded.
+            url: https://code.claude.com/docs/en/memory
+          - title: Review the cached environment
+            body:
+              - >-
+                Treat a shared environment's setup script as reviewed code; editing it rebuilds the snapshot
+                every member's sessions start from.
+            url: https://code.claude.com/docs/en/cloud-environments
+        note: >-
+          Partial by the rule: what persists is set by the vendor and the user, not admin policy. Transcripts
+          follow the plan's retention and only their owner deletes them; sharing is a per-session user toggle
+          (Team visibility on Team and Enterprise, with repository access verification on by default; Public
+          on Pro and Max), and Claude-in-Slack sessions are shared with Team visibility automatically; the
+          environment cache keeps setup output for later sessions for about seven days; auto memory is
+          machine-local and doesn't carry across cloud environments. Instruction files and hooks arrive with
+          the clone, writable by anyone with push access, and nothing validates them.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityMemoryProtection
+          reviewRequired: false
+          original:
+            - capability: capabilityMemoryProtection
+              coverage: partial
+              mechanism: >-
+                Session VMs are reclaimed after inactivity and conversation history is restored on reopen;
+                users can delete sessions permanently; auto memory follows the repository's settings
+              steps:
+                - title: Delete sessions and bound the VM lifetime
+                  body:
+                    - Users delete sessions (event data removed permanently) from the sidebar; VMs are
+                      automatically reclaimed after inactivity and background work is not restored.
+                  url: https://code.claude.com/docs/en/claude-code-on-the-web
+              note: >-
+                Retention and deletion only: transcripts are restored on reopen and deletable. Transcript
+                retention is not poisoning detection; auto memory in the repository is the same plain-file
+                store as local Claude Code, with no validation or rollback.
+              verified: 2026-09-10
+      - mitigation: cap-ai-vendor-assessment
+        coverage: external
+        mechanism: Anthropic Trust Center artifacts feed the organisation's TPRM platform
+        evidence:
+          - title: Anthropic Trust Center (compliance table and Request access)
+            url: https://trust.anthropic.com/
+          - title: Claude Code security page, cloud execution security
+            url: https://code.claude.com/docs/en/security
+        note: >-
+          External: assessed in the organisation's TPRM platform. The Trust Center lists SOC 2 Type 2, ISO
+          27001, ISO 42001, CSA STAR, HIPAA and NIST 800-171 for Claude Enterprise (Claude Team: all but
+          HIPAA), with reports behind Request access; the security page's cloud execution section states the
+          isolation, credential-proxy, branch-restriction and audit-logging claims to assess. Re-assess when
+          the defaults move: network level, which plans get API credentials, and Compliance API coverage of
+          cloud sessions.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityAiTprm
+            - capabilityVendorAssurance
+          reviewRequired: false
+          original:
+            - capability: capabilityAiTprm
+              coverage: external
+              mechanism: Anthropic Trust Center artifacts (SOC 2 Type 2, ISO 27001) into the buyer's TPRM platform
+              note: >-
+                Vendor evidence is published; cadence and reassessment are the organisation's own TPRM process.
+              steps: &a2
+                - title: Attach vendor evidence
+                  body:
+                    - Pull the Trust Center reports linked from the Claude Code security page into the vendor record; the cloud
+                      execution section documents the isolation claims to assess.
+                  url: https://code.claude.com/docs/en/security
+              verified: 2026-09-10
+            - capability: capabilityVendorAssurance
+              coverage: external
+              mechanism: Compliance API organisation settings endpoint and Activity Feed expose effective settings and admin
+                actions to posture tooling; server-managed settings are readable by Owners
+              steps:
+                - title: Read effective settings programmatically
+                  body:
+                    - Use the Compliance API directory endpoints (organizations, users, roles, groups and each
+                      organisation's effective settings) with a Compliance Access Key to evidence the
+                      configuration.
+                  url: https://platform.claude.com/docs/en/manage-claude/compliance-api
+              note: "Readback only: the Compliance API exposes effective settings for an SSPM product to compare against
+                policy; the product ships no baseline comparison, drift detection or remediation."
+              verified: 2026-09-10
+      - mitigation: D3-EI
+        coverage: native
+        mechanism: >-
+          A fresh, isolated Anthropic-managed VM per cloud session, reclaimed after inactivity; sessions
+          routed to a self-hosted environment run on the organisation's own runners
+        steps:
+          - title: Keep sessions in isolated environments
+            body:
+              - >-
+                Each cloud session runs in an isolated, Anthropic-managed VM; a session routed to a
+                self-hosted environment runs on your runners, where isolation is your deployment's
+                responsibility.
+            url: https://code.claude.com/docs/en/claude-code-on-the-web
+          - title: Give each self-hosted session its own container
+            body:
+              - >-
+                Run self-hosted runners at --capacity 1 with an ephemeral container per session, or use
+                on-demand runners, and keep the environment secret off hosts that run sessions.
+            url: https://code.claude.com/docs/en/self-hosted-environments-deploy
+        note: >-
+          Native: each Anthropic-hosted session gets a fresh VM (Ubuntu 24.04, x86_64) that is reclaimed after
+          inactivity; background work isn't restored. Shared across sessions: only the environment cache, a
+          filesystem snapshot of the setup script's output that later sessions start from. Inside: shell, file
+          tools, Docker and the setup script, which runs as root. Outside: the model, MCP connectors (through
+          Anthropic's servers) and the GitHub proxy. In a self-hosted environment isolation is the operator's.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityAgentSandboxing
+          reviewRequired: false
+          original:
+            - capability: capabilityAgentSandboxing
+              coverage: native
+              mechanism: >-
+                Isolated Anthropic-managed VM per session; sessions routed to a self-hosted environment run on
+                the organisation's own runners
+              steps:
+                - title: Keep sessions in isolated environments
+                  body:
+                    - Each cloud session runs in an isolated, Anthropic-managed VM; a session routed to a
+                      self-hosted environment runs on your runners, where isolation is your deployment's
+                      responsibility.
+                  url: https://code.claude.com/docs/en/claude-code-on-the-web
+                - title: Harden self-hosted runners yourself
+                  body:
+                    - Build the runner image, default-deny egress and git credential supply into the
+                      deployment; Anthropic's boundary stops at the session it hands the runner.
+                  url: https://code.claude.com/docs/en/self-hosted-environments
+              note: >-
+                Inside the boundary: the shell, file tools, Docker and the setup script. Outside: the model,
+                MCP connectors (their traffic runs through Anthropic's servers) and the GitHub proxy. The VM
+                is reclaimed after inactivity and background work is not restored.
+              verified: 2026-09-15
+      - mitigation: cap-agent-egress-control
+        coverage: partial
+        mechanism: >-
+          Environment network access level (None, Trusted, Full, Custom with Allowed domains) enforced by the
+          security proxy in Anthropic-hosted environments; default Trusted; Owner-managed shared environments
+          and an organisation default
+        steps:
+          - title: Author the allowlist on a shared environment
+            body:
+              - >-
+                On the Cloud environments admin page, create a shared environment with Network access set to
+                Custom and your Allowed domains; members see it read-only.
+            url: https://code.claude.com/docs/en/cloud-environments
+          - title: Make it the organisation default
+            body:
+              - >-
+                Choose that environment as the organisation's default at claude.ai/admin-settings/claude-code
+                so sessions members start without picking one use it.
+            url: https://code.claude.com/docs/en/cloud-environments
+        note: >-
+          Partial by the rule: an Owner authors a Custom allowlist on shared environments, but it isn't locked
+          — members can create personal environments at Full and select them, and the docs say there is no
+          organisation-level allowlist admins can push. Setup and agent phases share one network policy.
+          Bypassing the allowlist at every level, None included: GitHub through its proxy, MCP connectors
+          through Anthropic's servers, API-credential hosts and the Anthropic API. The Trusted defaults
+          include write-capable hosts such as gist.github.com, npm and PyPI. In a self-hosted environment
+          egress is your own boundary.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityEgressControl
+          reviewRequired: false
+          original:
+            - capability: capabilityEgressControl
+              coverage: native
+              mechanism: >-
+                Environment Network access level (None, Trusted, Full, Custom with Allowed domains) enforced
+                by the security proxy in Anthropic-hosted environments; default Trusted; organisation-shared
+                environments with an organisation default
+              steps:
+                - title: Set the environment's network access level
+                  body:
+                    - In the environment dialog choose None, Trusted (package registries, GitHub, cloud SDKs) or Custom with
+                      your own Allowed domains; Full allows any domain. The security proxy carries every outbound
+                      request and keeps a DNS-level audit trail.
+                  url: https://code.claude.com/docs/en/cloud-environments
+                - title: Share a locked-down environment organisation-wide
+                  body:
+                    - Owners create organisation-shared environments on the Cloud environments admin page and set an
+                      organisation default so members' sessions inherit it; do not put secrets in its variables,
+                      every member's session reads them.
+                  url: https://code.claude.com/docs/en/cloud-environments
+              note: >-
+                Paths the allowlist never sees, at every level including None: GitHub through its proxy, MCP
+                connectors through Anthropic's servers, hosts listed on API credentials, and the Anthropic API
+                itself. In a self-hosted environment egress is your own firewall.
+              verified: 2026-09-15
+      - mitigation: cap-agent-tracing
+        coverage: partial
+        mechanism: >-
+          Transcript and diff at claude.ai/code with Claude-Session commit trailers; Activity Feed
+          control-plane events (ccr_session_created, session_share_created, managed-settings changes);
+          Inference hooks push each governed request's transcript (Enterprise, beta); self-hosted runners pin
+          an OTLP destination
+        steps:
+          - title: Link every commit to its session
+            body:
+              - >-
+                Keep attribution.sessionUrl at its default so commits carry a Claude-Session trailer and PR
+                bodies link the transcript.
+            url: https://code.claude.com/docs/en/cloud-environments
+          - title: Pull control-plane events
+            body:
+              - >-
+                Read ccr_session_created, ccr_session_updated, session_share_created and
+                claude_code_managed_settings activities from the Compliance API Activity Feed.
+            url: https://platform.claude.com/docs/en/api/compliance/activities/list
+          - title: Archive transcripts as they happen
+            body:
+              - >-
+                Have your Inference hooks server store each governed request's transcript and return allow.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+          - title: Export OpenTelemetry from self-hosted runners
+            body:
+              - >-
+                Name the OTLP endpoint in the runner's environment; Claude Code pins it like a managed
+                setting.
+            url: https://code.claude.com/docs/en/monitoring-usage
+        note: >-
+          Partial by the rule: nothing exports the Anthropic-hosted session record itself. The Compliance API
+          session endpoints exclude Claude Code cloud sessions (the remote endpoints return Cowork only); the
+          Activity Feed is control-plane; the Inference hooks feed is a beta pre-inference policy hook (prompt
+          event only, so a session's final response isn't sent, and ancillary requests are skipped), not a
+          session export; OpenTelemetry export is documented for self-hosted runners, not Anthropic-hosted
+          sessions. The security page says cloud operations are logged for compliance; customer access to
+          those logs isn't documented.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityAgentObservability
+            - capabilityAuditLogging
+          reviewRequired: false
+          original:
+            - capability: capabilityAgentObservability
+              coverage: partial
+              mechanism: >-
+                Session transcript and diff view at claude.ai/code; all outbound traffic through the security
+                proxy is logged for audit; self-hosted runners expose metrics and a health endpoint and
+                forward OTel from sessions
+              steps: &a2
+                - title: Read the session record
+                  body:
+                    - Each session keeps the full conversation, tool activity and per-file diffs, visible to the user and (with
+                      Team visibility) the organisation.
+                  url: https://code.claude.com/docs/en/claude-code-on-the-web
+                - title: Export runner and session telemetry when self-hosting
+                  body:
+                    - The runner honours the OpenTelemetry variables from network-config and sessions inherit them; the
+                      reference lists runner metrics and the health endpoint.
+                  url: https://code.claude.com/docs/en/self-hosted-environments
+              note: >-
+                Anthropic-hosted sessions do not expose an OTLP export to the organisation's collector and the
+                Compliance API does not return Claude Code web transcripts.
+              verified: 2026-09-10
+            - capability: capabilityAuditLogging
+              coverage: partial
+              mechanism: Anthropic logs all cloud-session operations and proxy traffic for compliance; admin console changes
+                appear in the Enterprise audit log / Compliance API Activity Feed; session transcripts are not
+                exported
+              steps:
+                - title: Export admin and settings events
+                  body:
+                    - Enterprise Owners export audit logs (180 days) from Organization settings > Data and
+                      privacy or query the Compliance API Activity Feed; server-managed settings changes are
+                      audited there.
+                  url: https://support.claude.com/en/articles/9970975-access-audit-logs
+              note: The Compliance API session endpoints explicitly exclude Claude Code on the web; the vendor's own
+                operation logs are not customer-accessible.
+              verified: 2026-09-10
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          Owner toggles (allow_remote_sessions, Routines), archiving a shared environment, seat removal,
+          owner-only session archive and delete; for self-hosted environments, environment-secret revocation
+          and runner drain
+        steps:
+          - title: Turn cloud sessions off
+            body:
+              - >-
+                Turn the allow_remote_sessions policy off at claude.ai/admin-settings/claude-code; new cloud
+                sessions and CLI follow-ups then fail with a policy error.
+            url: https://code.claude.com/docs/en/claude-code-on-the-web
+          - title: Stop routines
+            body:
+              - >-
+                Turn the Routines toggle off; existing routines stop running and members can't create new
+                ones.
+            url: https://code.claude.com/docs/en/routines
+          - title: Retire an environment
+            body:
+              - >-
+                Archive a shared environment on the Cloud environments page so no new session starts in it;
+                sessions already running continue.
+            url: https://code.claude.com/docs/en/cloud-environments
+          - title: Cut off self-hosted runners
+            body:
+              - >-
+                Revoke the environment secret on the environment's Configuration tab; runners holding it fail
+                their next poll and exit.
+            url: https://code.claude.com/docs/en/self-hosted-environments-quickstart
+        note: >-
+          Partial: no documented admin stop for a running Anthropic-hosted session — archive and delete are
+          the session owner's actions, and the VM is reclaimed only after an unstated idle period. Turning
+          cloud sessions off, archiving an environment or removing a seat blocks new sessions; whether a
+          running session stops is not documented (delay not documented). Revoking a self-hosted environment
+          secret stops runners at their next poll, while issued session JWTs stay valid until they expire.
+        verified: "2026-09-25"
+        migration:
+          from:
+            - capabilityKillSwitch
+          reviewRequired: false
+          original:
+            - capability: capabilityKillSwitch
+              coverage: partial
+              mechanism: >-
+                Owner toggles (Code in the web, allow_remote_sessions, Remote Control, Allow self-hosted
+                environments), seat removal, session archive/delete, runner --retire-at and SIGTERM drain
+              steps:
+                - title: Turn the surface off
+                  body:
+                    - Owners disable "Code in the web" and allow_remote_sessions at claude.ai/admin-settings/claude-code; new
+                      cloud sessions then fail with a policy error.
+                  url: https://code.claude.com/docs/en/claude-code-on-the-web
+                - title: Stop runners cleanly
+                  body:
+                    - Self-hosted runners drain on SIGTERM or at --retire-at, releasing sessions so they resume elsewhere;
+                      revoking the environment key stops new claims.
+                  url: https://code.claude.com/docs/en/self-hosted-environments
+              note: >-
+                Running Anthropic-hosted sessions are not remotely terminable by an admin; they end at
+                inactivity.
+              verified: 2026-09-10
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Write-only API credentials on Pro and Max environments (unreadable after saving, attached by the
+          agent proxy); plain environment variables on Team and Enterprise; the user's GitHub token held by
+          the GitHub proxy, with /web-setup tokens stored encrypted with the account; for self-hosted
+          environments a rotatable environment secret and short-lived session tokens
+        steps:
+          - title: Keep secrets out of environment variables
+            body:
+              - >-
+                Don't put secrets in an environment's variables or setup script, which everyone using the
+                environment can read; on Pro and Max use API credentials, which can't be viewed after saving.
+            url: https://code.claude.com/docs/en/cloud-environments
+          - title: Remove a stored GitHub token
+            body:
+              - >-
+                Disconnect GitHub at claude.ai/customize/connectors to delete the stored /web-setup token, and
+                revoke it on GitHub to invalidate it.
+            url: https://code.claude.com/docs/en/web-quickstart
+          - title: Rotate the self-hosted environment secret
+            body:
+              - >-
+                Create a new secret on the environment's Configuration tab, roll it out to runners and revoke
+                the old one; each secret expires 365 days after creation.
+            url: https://code.claude.com/docs/en/self-hosted-environments-quickstart
+        note: >-
+          Partial by the rule: the write-only secret store exists only on Pro and Max; on Team and Enterprise
+          environment secrets are plain variables readable by every member sharing the environment, every
+          command and the model through tool output. The repository credential sits outside the VM, but its
+          lifetime is the connected GitHub grant — a /web-setup gh token is long-lived — and no shorter-lived
+          repository credential is documented for Anthropic-hosted sessions. Tunnel: Anthropic offers no
+          private-network tunnel for Anthropic-hosted sessions; connectors reach your servers from Anthropic's
+          side. Self-hosted environments are the private-network option: the environment secret is shown once,
+          expires after 365 days and is rotated and revoked per environment (the orchestrator's SCM connector
+          tunnel to GitHub Enterprise Server authenticates with it), runner inference tokens last about 30
+          minutes, and session JWTs four hours with no revocation feed.
+        verified: "2026-09-25"
     advisories:
       - title: >-
           CVE-2026-39861 — sandbox symlink escape in Claude Code (affects the same agent runtime; fixed 2.1.64)

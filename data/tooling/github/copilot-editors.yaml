@@ -2,6 +2,10 @@
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
 # Excluded: Copilot Extensions (GitHub Apps, retired 2025-11-10), the `gh copilot` extension
 # (retired 2025-10-25), Copilot Workspace and GitHub Spark (retired 2026-08-31) — not shipped.
+# 2026-09-25: re-verified toolGithubCopilot against the MITRE capability rules; redirects:
+# concepts/context/content-exclusion -> concepts/security-governance-and-network-settings/content-exclusion,
+# the Visual Studio admin page lands on ?view=visualstudio; copilot.github.trust.page renders client-side
+# (read in a browser).
 vendor: github
 family: GitHub Copilot
 tools:
@@ -16,7 +20,7 @@ tools:
         url: https://code.visualstudio.com/docs/enterprise/ai-settings
       - name: Copilot in Visual Studio
         class: ideExtension
-        url: https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin
+        url: https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin?view=visualstudio
       - name: Copilot in JetBrains IDEs (agent mode via Copilot CLI ACP server)
         class: ideExtension
         url: https://docs.github.com/en/copilot/concepts/agents/copilot-in-jetbrains
@@ -162,41 +166,54 @@ tools:
           agent seat, with its own model and data path.
     controls:
       - mitigation: D3-MFA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Enterprise licensing (seat assignment, enterprise teams synced from the IdP) plus the VS Code
-          ChatApprovedAccountOrganizations device policy and Visual Studio ADMX
+          GitHub's own second-factor requirement (Enterprise > Settings > Authentication security > "Require
+          two-factor authentication for the enterprise and all of its organizations", optionally "Only allow
+          secure two-factor methods") plus client pinning in VS Code (ChatApprovedAccountOrganizations) and
+          Visual Studio (ADMX Copilot Settings); the JetBrains, Xcode, Eclipse and Vim plugins cannot be pinned
         steps:
-          - title: Assign seats through enterprise teams or organisations
+          - title: Require two-factor authentication for every organization
             body:
-              - "Enterprise > Billing and licensing > Licensing > Copilot > Manage: assign licences to users
-                or enterprise teams; with Enterprise Managed Users, sync the team to an IdP group so access
-                follows the IdP."
+              - >-
+                Enterprise > Settings > Authentication security: select "Require two-factor authentication for
+                the enterprise and all of its organizations" and "Only allow secure two-factor methods"; members
+                without 2FA cannot reach organization resources until they enable it. The policy is not
+                available to Enterprise Managed Users, whose second factor is the IdP's.
             url: >-
-              https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-access/grant-access
-          - title: Gate VS Code chat to approved GitHub organisations
+              https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-security-settings-in-your-enterprise
+          - title: Pin VS Code to your organizations
             body:
-              - Set the ChatApprovedAccountOrganizations policy to the list of organisation logins; chat,
-                agents and inline suggestions stay off until the signed-in account belongs to one, which
-                forces the organisation's policies to apply before any AI feature works.
-            url: https://code.visualstudio.com/docs/enterprise/policies
-          - title: Block personal Copilot accounts in Visual Studio
+              - >-
+                Set the ChatApprovedAccountOrganizations policy to your organization logins; chat, agents and
+                inline suggestions stay disabled (the policy is fail-closed) until the signed-in GitHub account
+                belongs to one of them and its account-side policy has resolved.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Block personal Copilot plans in Visual Studio
             body:
-              - Deploy the Visual Studio ADMX templates and use Computer Configuration > Administrative
-                Templates > Visual Studio > Copilot Settings to disable Copilot for individual accounts or
-                Copilot Free.
-            url: https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin
-        evidence: []
+              - >-
+                Deploy the Visual Studio ADMX templates and under Computer Configuration > Administrative
+                Templates > Visual Studio > Copilot Settings disable Copilot for individual accounts (17.10+) and
+                Copilot Free (17.13+).
+            url: >-
+              https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin?view=visualstudio
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial by the rule applied to every vendor. GitHub's identity layer can require a second factor for
+          every organization member, but this entity can pin its client to the organization account only in VS
+          Code (ChatApprovedAccountOrganizations, fail-closed) and Visual Studio (ADMX blocks individual and
+          Copilot Free plans); the JetBrains, Xcode, Eclipse and Vim plugins document no account pin, so a
+          personal account works there. VS Code alone meets the native definition. With Enterprise Managed Users
+          the 2FA policy is unavailable: MFA is configured in the IdP and, per GitHub, enforced only at IdP
+          sign-in. Paths that skip the second factor once issued: the OAuth token each editor keeps (lifetime not
+          documented) and fine-grained PATs (Enterprise > Policies > Personal access tokens can cap lifetime and
+          require approval for organization resources; whether that governs the Copilot Requests account
+          permission is not documented). In VS Code, Codex sessions can run on a ChatGPT sign-in
+          (chat.agentHost.allowSignedOutWhenUsable); Codex3PIntegration=false closes that path.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -225,38 +242,49 @@ tools:
                   url: https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin
               verified: 2026-09-10
       - mitigation: cap-agent-action-policy-enforcement
-        coverage: native
+        coverage: partial
         mechanism: >-
-          managed-settings.json permissions.deny / ask / allow (Shell, Read, Edit, Domain selectors; GA
-          2026-09-09) for VS Code Agent Host sessions, plus PreToolUse hooks
-        steps: &a1
+          Managed permissions.deny / ask / allow (Shell, Read, Edit, Domain selectors) and machine-wide Copilot
+          Policy Hooks (preToolUse deny) in VS Code Copilot sessions on Agent Host only; Local-harness sessions
+          have ChatToolsEligibleForAutoApproval and Preview PreToolUse hooks (ChatAllowManagedHooksOnly)
+        steps:
           - title: Pin deny / ask / allow rules in the managed file
             body:
-              - Write permissions.deny, permissions.ask and permissions.allow with Shell(...), Read(...), Edit(...) and
-                Domain(...) selectors. Deny wins from any source, ask forces a fresh approval that bypass mode
-                cannot satisfy, and the effective allow list is the intersection of all sources.
+              - >-
+                In copilot/managed-settings.json set permissions.deny, permissions.ask and permissions.allow with
+                Shell(...), Read(...), Edit(...) and Domain(...) selectors; deny from any source wins and a managed
+                ask cannot be satisfied by bypass mode, auto-approval, a hook or a saved grant. VS Code applies
+                these rules only to Copilot sessions that use Agent Host.
             url: >-
               https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
-          - title: Confirm the client honours managed permissions
+          - title: Deploy a machine-wide policy hook
             body:
-              - Managed permissions are enforced in VS Code sessions that use Agent Host, the Copilot app and the CLI; the
-                reference matrix shows JetBrains honouring only permissions.disableBypassPermissionsMode, so
-                JetBrains lockdown relies on that key and the sandbox.
-            url: >-
-              https://github.blog/changelog/2026-09-09-enterprise-managed-permissions-for-github-copilot-agent-operations/
-          - title: Add a PreToolUse hook as a second gate
+              - >-
+                Install a root-owned hook file in /etc/github-copilot/policy.d/ (Windows
+                C:\ProgramData\GitHub\Copilot\policy.d\ or HKLM\Software\Policies\GitHub\Copilot) whose preToolUse
+                hook calls your policy service and returns permissionDecision "deny"; policy hooks load first and
+                disableAllHooks cannot switch them off.
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
+          - title: Move editor chat onto the harness that runs them
             body:
-              - VS Code runs .github/hooks/*.json and ~/.copilot/hooks; a PreToolUse hook returns permissionDecision allow
-                / deny / ask. Set ChatAllowManagedHooksOnly so only enterprise-managed hooks and
-                policy-enabled plugins can register.
-            url: https://code.visualstudio.com/docs/agent-customization/hooks
+              - >-
+                Set ChatEditorPreferCopilotHarness=true (VS Code 1.134+) so new editor-chat sessions use the
+                Copilot SDK harness, which loads Policy Hooks, and ChatAllowManagedHooksOnly=true so Local-harness
+                hooks come only from managed sources and policy-enabled plugins.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
         note: >-
-          Component-specific: managed permissions and PreToolUse hooks apply to VS Code Agent Host sessions
-          (enterprise-managed settings page); the VS Code enterprise AI settings page governs editor policies
-          and auto-approval, a different scope. JetBrains, Visual Studio and the other plugins have no runtime
-          rule engine. Where the two pages appear to conflict, the enterprise-managed settings reference is
-          the narrower and authoritative one.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: the rules cover only some sessions. Inside: VS Code
+          Copilot sessions on Agent Host, where managed deny/ask/allow govern shell, file and domain operations
+          and a Policy Hook can deny any tool, MCP included (command hooks fail closed on error but open on
+          timeout; HTTP preToolUse hooks fail open). Outside: Local-harness sessions (ChatToolsEligibleForAutoApproval
+          only forces a prompt, a false terminal rule "does not block the command", and Local PreToolUse hooks
+          are Preview), Claude and Codex harness sessions (their own permission
+          models), JetBrains (honours only permissions.disableBypassPermissionsMode among the permission keys)
+          and Visual Studio, Xcode and Eclipse (no rule engine; Visual Studio can only disable agent mode).
+          Managed selectors do not name MCP tools; only a hook does. VS Code's AI-settings page still warns that
+          the granular permissions are "supported only in GitHub Copilot CLI" while GitHub's reference and the
+          2026-09-09 changelog list VS Code Agent Host sessions — test before relying on them.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRuntimeEnforcement
@@ -267,7 +295,27 @@ tools:
               mechanism: >-
                 managed-settings.json permissions.deny / ask / allow (Shell, Read, Edit, Domain selectors; GA
                 2026-09-09) for VS Code Agent Host sessions, plus PreToolUse hooks
-              steps: *a1
+              steps:
+                - title: Pin deny / ask / allow rules in the managed file
+                  body:
+                    - Write permissions.deny, permissions.ask and permissions.allow with Shell(...), Read(...), Edit(...) and
+                      Domain(...) selectors. Deny wins from any source, ask forces a fresh approval that bypass mode
+                      cannot satisfy, and the effective allow list is the intersection of all sources.
+                  url: >-
+                    https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+                - title: Confirm the client honours managed permissions
+                  body:
+                    - Managed permissions are enforced in VS Code sessions that use Agent Host, the Copilot app and the CLI; the
+                      reference matrix shows JetBrains honouring only permissions.disableBypassPermissionsMode, so
+                      JetBrains lockdown relies on that key and the sandbox.
+                  url: >-
+                    https://github.blog/changelog/2026-09-09-enterprise-managed-permissions-for-github-copilot-agent-operations/
+                - title: Add a PreToolUse hook as a second gate
+                  body:
+                    - VS Code runs .github/hooks/*.json and ~/.copilot/hooks; a PreToolUse hook returns permissionDecision allow
+                      / deny / ask. Set ChatAllowManagedHooksOnly so only enterprise-managed hooks and
+                      policy-enabled plugins can register.
+                  url: https://code.visualstudio.com/docs/agent-customization/hooks
               note: >-
                 Component-specific: managed permissions and PreToolUse hooks apply to VS Code Agent Host
                 sessions (enterprise-managed settings page); the VS Code enterprise AI settings page governs
@@ -278,20 +326,24 @@ tools:
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: >-
-          No vendor feature; the assessment inputs are the model-hosting page (providers, ZDR terms) and the
-          Copilot Trust Center
-        note: >-
-          Treat GitHub plus each model provider (OpenAI on Azure, Anthropic on AWS/GCP/Anthropic, Google, xAI,
-          Moonshot on Foundry/Fireworks) as the subprocessor set; the hosting page is the only first-party
-          list and it changes with every model launch. The trust centre page did not render for automated
-          fetch on 2026-09-10.
-        steps: &a1
-          - title: Record the model-provider set and their retention terms
-            body:
-              - Use the hosting page to enumerate where each model runs and which retain data (Claude Fable 5 / 5.1 retain
-                by default; request the ZDR exemption).
+          No vendor feature; the organisation's TPRM platform assesses GitHub and each model provider from the
+          GitHub Copilot Trust Center and the model-hosting page
+        evidence:
+          - title: GitHub Copilot Trust Center (compliance reports; most documents behind Request access)
+            url: https://copilot.github.trust.page/
+          - title: Hosting of models for GitHub Copilot (providers and retention terms)
             url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
-        verified: 2026-09-10
+        note: >-
+          External: the organisation's TPRM platform owns the assessment. Rendered in a browser on 2026-09-25 the
+          trust center lists SOC 1, SOC 2 and SOC 3 (SOC 1 Type 2 and SOC 2 Type 2 reports), ISO 27001:2013,
+          ISO/IEC 42001:2023, CSA STAR Level 2, TISAX, a 2026 CAIQ, a PCI DSS AOC and bug-bounty letters, most
+          behind Request access; no penetration-test summary is listed. Treat GitHub plus each model provider as
+          the subprocessor set: OpenAI on Azure, Anthropic models on AWS, Anthropic and Google Cloud (Claude
+          Fable 5 / 5.1 retain prompts and outputs by default outside the ZDR agreement; a ZDR exemption can be
+          requested through end-2026), Google, xAI, and Moonshot models on Azure AI Foundry and Fireworks. The
+          hosting page changes with each model launch; local BYOK moves prompts to whatever provider the
+          developer configures.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiTprm
@@ -307,31 +359,52 @@ tools:
                 Google, xAI, Moonshot on Foundry/Fireworks) as the subprocessor set; the hosting page is the
                 only first-party list and it changes with every model launch. The trust centre page did not
                 render for automated fetch on 2026-09-10.
-              steps: *a1
+              steps:
+                - title: Record the model-provider set and their retention terms
+                  body:
+                    - Use the hosting page to enumerate where each model runs and which retain data (Claude Fable 5 / 5.1 retain
+                      by default; request the ZDR exemption).
+                  url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
               verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
-          Content exclusion (repository / organisation / enterprise) plus telemetry.captureContent=false with
-          lockCaptureContent
-        note: >-
-          Content exclusion is a context filter, not DLP: it does not apply to edit and agent modes, symlinks
-          or remote filesystems, and IDE-provided type information can still leak. Inline inspection of the
-          prompt stream needs an SSE or endpoint DLP product.
-        steps: &a1
-          - title: Exclude secret-bearing paths at enterprise scope
+          No built-in detector; Copilot Policy Hooks in VS Code Copilot sessions on Agent Host can rewrite or
+          deny prompt and tool traffic (userPromptTransformed, preToolUse modifiedArgs, postToolUse
+          modifiedResult); content exclusion as data minimisation
+        steps:
+          - title: Hand prompt and tool traffic to your inspector
             body:
-              - 'Enterprise > AI controls > Copilot > Content exclusion (or Organization Settings > Copilot > Content
-                exclusion): add fnmatch entries such as "*": ["**/.env"] and per-repository paths; changes
-                propagate within 30 minutes.'
+              - >-
+                In a root-owned /etc/github-copilot/policy.d/*.json policy hook, return modifiedTransformedPrompt
+                from userPromptTransformed with secrets masked, and have preToolUse and postToolUse call your DLP
+                service and deny or return modifiedArgs / modifiedResult.
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
+          - title: Route editor chat through the harness that runs the hooks
+            body:
+              - >-
+                Set ChatEditorPreferCopilotHarness=true; Local-harness sessions do not load Policy Hooks.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Exclude secret-bearing paths
+            body:
+              - >-
+                Enterprise > AI controls > Copilot > Content exclusion (or the organization's Copilot > Content
+                exclusion): add fnmatch entries such as "*": ["**/.env"]; changes can take up to 30 minutes to
+                reach IDEs that already loaded the settings.
             url: >-
               https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
-          - title: Keep prompt content out of the telemetry export
-            body:
-              - In managed-settings.json set telemetry.captureContent to false and telemetry.lockCaptureContent to true so
-                users cannot turn content capture on.
-            url: https://code.visualstudio.com/docs/enterprise/ai-settings
-        verified: 2026-09-10
+        note: >-
+          Partial by the rule applied to every vendor: no Copilot editor detects secrets or PII itself; the
+          Agent Host Copilot harness exposes inline hooks that can block or rewrite prompt and tool content, an
+          attach point that works only once the organisation attaches a detector (userPromptSubmitted
+          config-file hooks cannot change the prompt; userPromptTransformed can). Content exclusion is path
+          filtering, credited as data minimisation: VS Code honours it in chat but not in Edit or Agent mode,
+          Xcode and Eclipse chat do not honour it, symlinks and remote filesystems are exempt, and IDE-provided
+          type information from excluded files can still reach the model. Local-harness, Claude and Codex
+          sessions and the other editors have no such hook; endpoint DLP or an SSE / AI gateway covers them.
+          telemetry.captureContent=false with lockCaptureContent keeps prompts out of the OTel export — data
+          minimisation of telemetry, not redaction.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -346,24 +419,47 @@ tools:
                 Content exclusion is a context filter, not DLP: it does not apply to edit and agent modes,
                 symlinks or remote filesystems, and IDE-provided type information can still leak. Inline
                 inspection of the prompt stream needs an SSE or endpoint DLP product.
-              steps: *a1
+              steps:
+                - title: Exclude secret-bearing paths at enterprise scope
+                  body:
+                    - 'Enterprise > AI controls > Copilot > Content exclusion (or Organization Settings > Copilot > Content
+                      exclusion): add fnmatch entries such as "*": ["**/.env"] and per-repository paths; changes
+                      propagate within 30 minutes.'
+                  url: >-
+                    https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
+                - title: Keep prompt content out of the telemetry export
+                  body:
+                    - In managed-settings.json set telemetry.captureContent to false and telemetry.lockCaptureContent to true so
+                      users cannot turn content capture on.
+                  url: https://code.visualstudio.com/docs/enterprise/ai-settings
               verified: 2026-09-10
       - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
-          VS Code two-step URL approval, Workspace Trust restricted mode, edit review flow; no configurable
-          injection classifier
-        note: >-
-          Defences are structural (approvals, trust boundaries, sandbox), not detection. Prompt injection has
-          produced RCE on this surface twice (CVE-2025-53773, CVE-2026-21516), so pair these with tool scoping
-          and egress control rather than relying on them.
-        steps: &a1
-          - title: Keep the structural defences on
+          No classifier; a Copilot Policy Hook's postToolUse can replace a tool result before the model sees it
+          (VS Code Copilot sessions on Agent Host); URL response review and Workspace Trust are human review and
+          admission
+        steps:
+          - title: Screen tool results with a post-tool hook
             body:
-              - Leave URL fetching on the two-step trust-domain-then-review flow, keep Workspace Trust so untrusted
-                folders open in restricted mode with agents disabled, and require edit review before commits.
-            url: https://code.visualstudio.com/docs/agents/run/security
-        verified: 2026-09-10
+              - >-
+                In a policy hook, have postToolUse send each result to your classifier and return modifiedResult
+                (a replacement textResultForLlm) or a failure when it flags injected instructions.
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
+          - title: Keep fetched content under review
+            body:
+              - >-
+                Leave chat.tools.urls.autoApprove without approveResponse: true entries so fetched pages are shown
+                for review before they are added to the chat context.
+            url: https://code.visualstudio.com/docs/agents/run/approvals
+        note: >-
+          Partial by the rule applied to every vendor: GitHub ships no injection classifier for tool results,
+          fetched pages or repository files in any editor. The post-tool hook is an attach point in VS Code
+          Copilot sessions on Agent Host only; URL response approval is a person reading content, and Workspace
+          Trust and MCP server trust are admission decisions, not screening. For Local-harness, Claude and Codex
+          sessions and the other editors the answer is external: an AI or MCP gateway classifier on the brokered
+          path. Prompt injection produced code execution on this surface (CVE-2025-53773, CVE-2026-21516).
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -378,37 +474,57 @@ tools:
                 Defences are structural (approvals, trust boundaries, sandbox), not detection. Prompt
                 injection has produced RCE on this surface twice (CVE-2025-53773, CVE-2026-21516), so pair
                 these with tool scoping and egress control rather than relying on them.
-              steps: *a1
+              steps:
+                - title: Keep the structural defences on
+                  body:
+                    - Leave URL fetching on the two-step trust-domain-then-review flow, keep Workspace Trust so untrusted
+                      folders open in restricted mode with agents disabled, and require edit review before commits.
+                  url: https://code.visualstudio.com/docs/agents/run/security
               verified: 2026-09-10
       - mitigation: AML.M0028
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
           VS Code policies ChatToolsAutoApprove, ChatToolsEligibleForAutoApproval, ChatAgentExtensionTools,
-          BrowserChatTools, ChatAgentMode; Visual Studio "Disable Agent Mode"; managed permissions
+          BrowserChatTools, ChatMCP and ChatAgentMode (per tool class); argument-scoped managed permissions in
+          Agent Host Copilot sessions only; Visual Studio "Disable Agent Mode"
         steps:
-          - title: Remove global auto-approval and pick eligible tools
+          - title: Remove global auto-approval and pin approval-only tools
             body:
-              - Set ChatToolsAutoApprove to false (it "disables manual approval completely for all tools in
-                all workspaces") and use ChatToolsEligibleForAutoApproval to name the tools that may ever skip
-                approval.
+              - >-
+                Set ChatToolsAutoApprove to false and ChatToolsEligibleForAutoApproval to entries such as
+                {"runTask": false, "fetch": false, "runInTerminal": false} so those tools always need a manual
+                approval users cannot switch off.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Cut extension and browser tools
+          - title: Cut tool classes you do not need
             body:
-              - ChatAgentExtensionTools=false blocks tools contributed by third-party extensions;
-                BrowserChatTools=false removes the integrated browser tool; ChatAgentMode=false removes agent
-                mode entirely.
-            url: https://code.visualstudio.com/docs/enterprise/policies
+              - >-
+                ChatAgentExtensionTools=false blocks extension-contributed tools, BrowserChatTools=false removes
+                the integrated-browser tools, ChatMCP=registry or none limits MCP sources, and ChatAgentMode=false
+                removes agents entirely.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Scope arguments in Agent Host sessions
+            body:
+              - >-
+                Use permissions.deny / ask / allow with Shell(git push *), Read(~/.ssh/**), Edit(//etc/**) and
+                Domain(...) selectors; they apply to VS Code Copilot sessions that use Agent Host.
+            url: >-
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
           - title: Disable agent mode in Visual Studio where needed
             body:
-              - Visual Studio 17.14.16+ honours Computer Configuration > Administrative Templates > Visual
-                Studio > Copilot Settings > Disable Agent Mode.
-            url: https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin
-        evidence: []
+              - >-
+                Visual Studio 17.14.16+ honours Computer Configuration > Administrative Templates > Visual Studio >
+                Copilot Settings > Disable Agent Mode.
+            url: >-
+              https://learn.microsoft.com/en-us/visualstudio/ide/visual-studio-github-copilot-admin?view=visualstudio
         note: >-
-          VS Code policies hide tool classes and control auto-approval; managed permissions limit arguments
-          for Agent Host sessions; Visual Studio can only disable agent mode. Other editors have no tool-level
-          policy.
+          Partial by the rule applied to every vendor: outside Agent Host the admin controls are per tool class
+          (on/off or approval-required), with no argument or path scoping; the managed Shell/Read/Edit/Domain
+          selectors reach only VS Code Copilot sessions on Agent Host and do not name MCP tools. Bypass is not
+          fully removable: Agents-window worktree sessions always run with Allow all ("can't be changed"), and
+          the Claude harness has a user setting, github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions,
+          that bypasses every check (Claude3PIntegration=false removes the harness). JetBrains honours only
+          permissions.disableBypassPermissionsMode; Xcode and Eclipse have no tool policy.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -445,37 +561,53 @@ tools:
               verified: 2026-09-10
       - mitigation: D3-EI
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          VS Code ChatAgentSandboxEnabled / AllowNetwork / AllowAutoApprove / AllowUnsandboxedCommands (macOS,
-          Linux, WSL2; preview); JetBrains enterprise-managed sandbox (preview 2026-09-08); per-server MCP
-          sandbox
+          VS Code ChatAgentSandboxEnabled with ChatAgentSandboxAllowUnsandboxedCommands and
+          ChatAgentSandboxAllowNetwork (terminal commands; macOS, Linux, WSL2 Preview); Agent Host SDK-shell
+          sandbox (chat.agentHost.sdkSandbox.enabled, Experimental); JetBrains enterprise-managed sandbox
+          (preview); per-server stdio MCP sandbox in mcp.json
         steps:
-          - title: Force the VS Code sandbox on and close its exits
+          - title: Require the VS Code terminal sandbox and close its exits
             body:
-              - Set ChatAgentSandboxEnabled=true, ChatAgentSandboxAllowNetwork=false and
-                ChatAgentSandboxAllowUnsandboxedCommands=false; keep ChatAgentSandboxAllowAutoApprove false
-                unless sandboxed commands may run unattended.
+              - >-
+                Set ChatAgentSandboxEnabled=on, ChatAgentSandboxAllowUnsandboxedCommands=false and
+                ChatAgentSandboxAllowNetwork=false so agent terminal commands run sandboxed and cannot leave the
+                sandbox after a confirmation.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Sandbox stdio MCP servers
+          - title: Check Agent Host sessions and Windows
             body:
-              - "In the server entry set sandboxEnabled: true with allowWrite paths and allowedDomains;
-                sandboxed servers can only touch the paths and domains listed."
-            url: https://code.visualstudio.com/docs/agent-customization/mcp-servers
+              - >-
+                Copilot sessions on Agent Host use the Copilot SDK built-in shell, whose sandbox is Experimental
+                and enabled by chat.agentHost.sdkSandbox.enabled; Windows uses chat.agent.sandbox.enabledWindows
+                (Experimental). Run /sandbox-policy in a session to see the effective policy.
+            url: https://code.visualstudio.com/docs/agents/run/agent-sandboxing
           - title: Push the JetBrains sandbox policy from managed settings
             body:
-              - The JetBrains plugin reads the managed sandbox policy (enablement, filesystem and network
-                access, proxy, dev-tool and Keychain access) under GitHub Copilot > Sandbox — public preview.
-            url: >-
-              https://github.blog/changelog/2026-09-08-enterprise-managed-sandbox-in-copilot-for-jetbrains/
-        evidence: []
+              - >-
+                The JetBrains plugin reads the enterprise-managed sandbox policy (enablement, filesystem and
+                network access, proxy, developer-tool and macOS Keychain access) and locks it under GitHub Copilot
+                > Sandbox — public preview.
+            url: https://github.blog/changelog/2026-09-08-enterprise-managed-sandbox-in-copilot-for-jetbrains/
+          - title: Sandbox local stdio MCP servers
+            body:
+              - >-
+                In a server entry set "sandboxEnabled": true with sandbox allowWrite paths and allowedDomains
+                (macOS and Linux); this is a user or workspace mcp.json setting, not a policy.
+            url: https://code.visualstudio.com/docs/agent-customization/mcp-servers
         note: >-
-          Rated partial because the entity spans editors with different support: VS Code (macOS, Linux, WSL2;
-          preview) and JetBrains (preview 2026-09-08) can be required to sandbox, while Visual Studio and the
-          Xcode, Eclipse and Vim plugins have no sandbox at all. Inside the boundary: terminal commands and
-          per-server local MCP; outside: remote MCP servers, the editor's own tools and the model endpoint.
-          The VS Code setting chat.agent.sandbox.retryWithAllowNetworkRequests has no policy, so a sandboxed
-          command can be retried with network unless allowNetwork is also false.
+          Partial by the rule applied to every vendor: the sandbox exists but is platform-limited and only partly
+          admin-requirable. VS Code can require it by policy for Local sessions and the Agent Host custom
+          terminal tool on macOS, Linux and WSL2 (Preview), disables the session toggle when a managed setting
+          requires it without a bypass, and does not fall back unsandboxed when its dependencies are missing;
+          the Agent Host's default SDK shell and Windows sandboxes are Experimental,
+          enabled by settings the policy reference does not list. The boundary is terminal commands only:
+          built-in file tools, extension tools, remote MCP servers, the extension host and the Agent Host process
+          run outside it, and chat.agent.sandbox.retryWithAllowNetworkRequests (no policy) lets a user retry a
+          blocked command with open network. Copilot's managed sandbox key is not supported in VS Code, and
+          GitHub's managed-settings reference marks it unsupported in JetBrains too, while the 2026-09-08
+          changelog announces a JetBrains managed sandbox in preview. Visual Studio, Xcode and Eclipse have no
+          sandbox; a dev container or VM supplies one.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -516,30 +648,47 @@ tools:
                     https://github.blog/changelog/2026-09-08-enterprise-managed-sandbox-in-copilot-for-jetbrains/
               verified: 2026-09-10
       - mitigation: D3-CTS
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          The agent acts with the developer's own GitHub session; org OAuth-app access policy and PAT policies
-          bound what the GitHub MCP server can reach
+          VS Code terminal sandbox (ChatAgentSandboxEnabled) keeps sensitive home-directory locations away from
+          sandboxed commands by default, with extra denyRead rules in chat.agent.sandbox.fileSystem.mac / .linux;
+          managed Read(...) denies in Agent Host sessions; otherwise the agent holds the developer's credentials
         steps:
-          - title: Bound the GitHub MCP server with org access policies
+          - title: Require the sandbox so credential paths stay unreadable
             body:
-              - Enforce the OAuth app access policy for third-party hosts, require approval of fine-grained
-                PATs and keep SSO enforcement on so tokens must map to a recent SSO login.
-            url: https://github.com/github/github-mcp-server/blob/main/docs/policies-and-governance.md
-        evidence: []
+              - >-
+                Set ChatAgentSandboxEnabled=on and ChatAgentSandboxAllowUnsandboxedCommands=false so terminal
+                commands cannot leave the sandbox after a confirmation.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Deny credential directories explicitly
+            body:
+              - >-
+                Add denyRead entries for the SSH, cloud-CLI and browser-profile directories to
+                chat.agent.sandbox.fileSystem.mac and chat.agent.sandbox.fileSystem.linux; these are user
+                settings with no enterprise policy.
+            url: https://code.visualstudio.com/docs/agents/run/agent-sandboxing
+          - title: Deny credential reads in Agent Host sessions
+            body:
+              - >-
+                Put Read(~/.ssh/**) and similar selectors under permissions.deny in the managed file; VS Code
+                applies them to Copilot sessions that use Agent Host.
+            url: >-
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] There is no on-behalf-of exchange: tool calls carry the signed-in
-          user's authority. The usable boundaries are the organisation's OAuth app access restrictions,
-          fine-grained PAT approval and SSO enforcement on the GitHub MCP server, and the sandbox for local
-          commands.
+          Partial by the rule applied to every vendor. VS Code's sandbox makes "sensitive locations in your home
+          directory" unreadable to sandboxed terminal commands by default and can be required by policy on
+          macOS, Linux and WSL2 (Preview), but the path rules are user settings, the Agent Host's default SDK
+          shell sandbox and the Windows sandbox are Experimental, and built-in file tools, MCP servers and
+          extensions sit outside the terminal sandbox. Not documented: whether environment variables, the
+          ssh-agent socket or the git credential helper reach sandboxed commands. Tool calls carry the signed-in
+          user's GitHub authority with no on-behalf-of exchange. JetBrains' managed sandbox (preview) adds
+          Keychain and developer-tool access switches; Visual Studio, Xcode and Eclipse run with the
+          developer's full credential set, where a dev container or VM is the external fix.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: partial
@@ -559,43 +708,47 @@ tools:
               verified: 2026-09-10
       - mitigation: AML.M0031
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          CopilotSessionSync policy (VS Code) and the "Store local sessions in the Cloud" policy; Copilot
-          Memory does not apply to IDEs
+          ChatStrictPluginOnlyCustomization and ChatAllowManagedHooksOnly lock instruction and hook sources;
+          CopilotSessionSync and the "Store local sessions in the Cloud" policy govern session sync; VS Code's
+          local memory tool has no documented policy; Copilot Memory does not apply to IDEs
         steps:
-          - title: Decide whether IDE sessions sync to GitHub
+          - title: Lock customization sources to managed plugins
             body:
-              - Set the CopilotSessionSync policy (chat.sessionSync.enabled) to false to keep session history
-                local; at the organisation level the "Store local sessions in the Cloud" policy controls the
-                same sync for Copilot clients.
-            url: https://code.visualstudio.com/docs/enterprise/policies
-          - title: Confirm Memory is out of scope for IDEs
-            body:
-              - The supported-surfaces table lists Copilot Memory as not supported in IDEs, the CLI and the
-                app; the memory policy therefore governs github.com, the cloud agent and code review only.
-            url: https://docs.github.com/en/copilot/reference/supported-surfaces-for-policies
-          - title: Apply organisation instructions and managed agents
-            body:
-              - Enable github.copilot.chat.organizationInstructions.enabled and
-                showOrganizationAndEnterpriseAgents so organisation-level instructions and custom agents are
-                applied and offered by default.
+              - >-
+                Set ChatStrictPluginOnlyCustomization=true to block standalone user and workspace skills, agents,
+                hooks, instructions and MCP servers, and ChatAllowManagedHooksOnly=true so hooks come only from
+                managed sources (VS Code 1.132+).
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Block user and workspace overrides
+          - title: Decide whether sessions leave the device
             body:
-              - ChatStrictPluginOnlyCustomization removes standalone user and workspace instructions, agents,
-                skills and hooks; ChatAllowManagedHooksOnly keeps hooks to managed sources.
+              - >-
+                Set the CopilotSessionSync policy (chat.sessionSync.enabled) to false to keep session history
+                local.
             url: https://code.visualstudio.com/docs/enterprise/policies
-        evidence: []
+          - title: Review and clear local agent memory
+            body:
+              - >-
+                VS Code's memory tool writes /memories/ (user, auto-loaded into every session up to 200 lines),
+                /memories/repo/ and /memories/session/ locally; use Chat: Show Memory Files and Chat: Clear All
+                Memory Files to inspect and remove them.
+            url: https://code.visualstudio.com/docs/agents/run/memory
+          - title: Confirm Copilot Memory is out of scope for IDEs
+            body:
+              - >-
+                The supported-surfaces table marks the Copilot Memory policy as not applying to IDEs (it applies to
+                the cloud agent, third-party agents, the CLI and code review).
+            url: https://docs.github.com/en/copilot/reference/supported-surfaces-for-policies
         note: >-
-          IDE sessions have no persistent agent memory of their own; the exposure is session history synced to
-          github.com and repository custom-instruction files, which the agent reads as trusted context.
-
-
-          [capabilitySystemPromptManagement] Repository .github instruction files are read as trusted context
-          and are writable by anyone with push access — CVE-2025-53773 exploited exactly that pattern against
-          settings files. The enterprise can force its own instructions but cannot version-pin repository
-          ones.
+          Partial by the rule applied to every vendor: an administrator can lock instruction and hook sources in
+          VS Code (ChatStrictPluginOnlyCustomization, ChatAllowManagedHooksOnly) and keep sessions local, but
+          VS Code's own memory tool writes notes that are loaded into later sessions with no documented policy to
+          disable it and no validation or review of what it stores. Organization instructions and agents are
+          applied only when the developer leaves github.copilot.chat.organizationInstructions.enabled and
+          showOrganizationAndEnterpriseAgents on — user settings, not policy. Repository instruction files are
+          read as trusted context and writable by anyone with push access (the CVE-2025-53773 pattern); nothing
+          version-pins them. Other editors expose no memory or instruction-source control.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMemoryProtection
@@ -646,33 +799,46 @@ tools:
                   url: https://code.visualstudio.com/docs/enterprise/policies
               verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          chat.tools.edits.autoApprove glob patterns, content exclusion for secret files, GitHub sign-in
-          through the editor's account provider
+          VS Code's secure credential store for MCP server inputs; GitHub PAT policies (maximum lifetime,
+          restrict access); edit approval for secret files (chat.tools.edits.autoApprove); nothing forbids the
+          static keys a developer brings (local BYOK, API keys in MCP env files)
         steps:
-          - title: Require manual review for edits to secret files
+          - title: Keep MCP secrets out of configuration files
             body:
-              - 'Set chat.tools.edits.autoApprove with patterns such as "**/.env": false so those files always
-                need explicit approval.'
+              - >-
+                Supply MCP API keys as sensitive input parameters rather than literals in mcp.json; VS Code stores
+                sensitive MCP input parameters in its secure credentials store.
             url: https://code.visualstudio.com/docs/agents/run/security
-          - title: Exclude secret files from context
+          - title: Cap personal access token lifetime
             body:
-              - Add **/.env and credential paths to organisation or enterprise content exclusion.
+              - >-
+                Enterprise > Policies > Personal access tokens: set "Set maximum lifetimes for personal access
+                tokens", require approval of fine-grained tokens, and restrict classic tokens from organization
+                resources.
             url: >-
-              https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
-        evidence: []
+              https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+          - title: Require approval for edits to secret files
+            body:
+              - >-
+                Set chat.tools.edits.autoApprove with patterns such as "**/.env": false so those edits need
+                explicit approval (a user setting).
+            url: https://code.visualstudio.com/docs/agents/run/review-code-edits
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] No vault integration: agents read whatever the developer's environment
-          holds. The vendor lever is to keep secret files out of context and out of auto-approved edits.
+          Partial by the rule applied to every vendor: MCP inputs sit in an encrypted store and PAT lifetime can
+          be capped, but the editors issue no short-lived credentials to tools, the GitHub sign-in token's
+          lifetime is not documented, and no admin control forbids static keys (local BYOK provider keys, API
+          keys in MCP env files) — the BYOK concept page says local BYOK in IDEs can be disabled by an
+          enterprise or organization policy without naming it. McpEnterpriseManagedAuthIdp (OAuth/OIDC IdP for
+          enterprise-managed MCP authentication) is listed in the VS Code policy reference with a one-line
+          description only. Keeping secrets out of model context relies on content exclusion (not honoured in
+          VS Code Edit or Agent mode) and edit approval; agents read whatever the developer's environment holds.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -695,35 +861,45 @@ tools:
                     https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
               verified: 2026-09-10
       - mitigation: cap-mcp-tool-integrity
-        coverage: native
+        coverage: partial
         mechanism: >-
-          managed-settings.json allowedMcpServers / deniedMcpServers (name, URL wildcard, stdio command),
-          ChatAllowManagedMcpServersOnly, McpGalleryServiceUrl registry, Visual Studio 2026 allowlist
-        steps: &a1
+          managed-settings.json allowedMcpServers / deniedMcpServers (serverName, serverUrl with wildcards,
+          exact serverCommand) with ChatAllowManagedMcpServersOnly; the registry restriction (MCP Registry URL,
+          Registry only; McpGalleryServiceUrl in VS Code) matches names only and is what Visual Studio 2026,
+          Eclipse and Xcode enforce
+        steps:
           - title: Publish the enterprise MCP allowlist
             body:
-              - In .github-private/copilot/managed-settings.json set allowedMcpServers entries with serverName, serverUrl
-                (wildcards allowed) or serverCommand arrays and deniedMcpServers for hard blocks; prerequisite
-                is MCP servers in Copilot enabled and Restrict MCP access to registry servers set to Allow
-                all.
+              - >-
+                In .github-private copilot/managed-settings.json set allowedMcpServers entries with serverUrl or
+                serverCommand (pin package versions inside serverCommand, e.g. an exact npx package@version) and
+                deniedMcpServers for hard blocks; keep "MCP servers in Copilot" enabled and set "Restrict MCP access
+                to registry servers" to Allow all.
             url: >-
               https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-enterprise-allowlist
           - title: Make VS Code ignore user and workspace allowlists
             body:
-              - Set ChatAllowManagedMcpServersOnly (managed key allowManagedMcpServersOnly) to true and ChatMCP to
-                registry or none; point McpGalleryServiceUrl at a private registry if one exists.
+              - >-
+                Set ChatAllowManagedMcpServersOnly (managed key allowManagedMcpServersOnly, VS Code 1.132+) to true
+                so only the enterprise-managed allowlist can grant access.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Treat the registry restriction as advisory
+          - title: Treat the registry restriction as discovery
             body:
-              - Registry-only enforcement matches on server name/ID and "can be bypassed by editing configuration files";
-                the cloud agent ignores it. Use it for discovery, not control.
+              - >-
+                "Registry only" enforcement matches server name/ID and "can be bypassed by editing configuration
+                files"; the cloud agent ignores it.
             url: >-
               https://docs.github.com/en/copilot/reference/enterprise-administrators/mcp-private-registry-enforcement
         note: >-
-          Admission by identity: allowedMcpServers and deniedMcpServers with ChatAllowManagedMcpServersOnly.
-          Admission is not integrity — nothing pins the tool descriptions a server returns or detects a
-          changed implementation.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: an allowlist admits servers but pins nothing they serve.
+          Nothing hashes or re-verifies tool definitions: VS Code re-shows its trust dialog when a non-workspace
+          server's configuration changes (workspace servers inherit Workspace Trust even after their
+          configuration changes), not when its tools change. Exact serverCommand matching that includes a pinned
+          package version is version pinning for stdio servers only; remote (serverUrl) servers stay unpinned,
+          and first-party servers such as the built-in GitHub MCP server are exempt from deny rules. The
+          managed allowlist reaches VS Code and JetBrains; Visual Studio, Eclipse and Xcode enforce only the
+          name-matched registry restriction. An MCP gateway supplies definition scanning and pinning.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMcpToolSecurity
@@ -735,38 +911,76 @@ tools:
                 managed-settings.json allowedMcpServers / deniedMcpServers (name, URL wildcard, stdio
                 command), ChatAllowManagedMcpServersOnly, McpGalleryServiceUrl registry, Visual Studio 2026
                 allowlist
-              steps: *a1
+              steps:
+                - title: Publish the enterprise MCP allowlist
+                  body:
+                    - In .github-private/copilot/managed-settings.json set allowedMcpServers entries with serverName, serverUrl
+                      (wildcards allowed) or serverCommand arrays and deniedMcpServers for hard blocks; prerequisite
+                      is MCP servers in Copilot enabled and Restrict MCP access to registry servers set to Allow
+                      all.
+                  url: >-
+                    https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer-copilot/manage-mcp-usage/configure-enterprise-allowlist
+                - title: Make VS Code ignore user and workspace allowlists
+                  body:
+                    - Set ChatAllowManagedMcpServersOnly (managed key allowManagedMcpServersOnly) to true and ChatMCP to
+                      registry or none; point McpGalleryServiceUrl at a private registry if one exists.
+                  url: https://code.visualstudio.com/docs/enterprise/ai-settings
+                - title: Treat the registry restriction as advisory
+                  body:
+                    - Registry-only enforcement matches on server name/ID and "can be bypassed by editing configuration files";
+                      the cloud agent ignores it. Use it for discovery, not control.
+                  url: >-
+                    https://docs.github.com/en/copilot/reference/enterprise-administrators/mcp-private-registry-enforcement
               note: >-
                 Admission by identity: allowedMcpServers and deniedMcpServers with
                 ChatAllowManagedMcpServersOnly. Admission is not integrity — nothing pins the tool
                 descriptions a server returns or detects a changed implementation.
               verified: 2026-09-10
       - mitigation: AML.M0029
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          permissions.ask rules and disableBypassPermissionsMode in managed settings; VS Code
-          ChatToolsAutoApprove and ChatToolsTerminalEnableAutoApprove policies
+          permissions.disableBypassPermissionsMode and permissions.ask in managed settings (ask only in Agent
+          Host Copilot sessions); VS Code ChatToolsAutoApprove, ChatToolsEligibleForAutoApproval,
+          ChatToolsTerminalEnableAutoApprove and ChatAgentSandboxAllowAutoApprove
         steps:
-          - title: Kill bypass and Autopilot modes fleet-wide
+          - title: Remove bypass and Autopilot
             body:
-              - Set permissions.disableBypassPermissionsMode to "disable"; VS Code and the app then reject
-                auto-approve settings, the CLI drops --yolo / --allow-all, and JetBrains blocks Bypass
-                Approvals and Autopilot.
+              - >-
+                Set permissions.disableBypassPermissionsMode to "disable": VS Code turns off
+                chat.tools.global.autoApprove and it cannot be re-enabled; JetBrains honours the same key.
             url: >-
               https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
           - title: Force approval on the operations that matter
             body:
-              - Put Shell(git push*), Edit(**/.env) and similar selectors under permissions.ask; ask entries
-                require a fresh approval every time and cannot be satisfied by saved approvals.
+              - >-
+                Put Shell(git push *), Edit(/.github/workflows/**) and similar selectors under permissions.ask;
+                a managed ask needs a fresh approval every time and cannot be satisfied by bypass, auto-approval,
+                hooks or saved grants (Agent Host Copilot sessions).
             url: >-
-              https://github.blog/changelog/2026-09-09-enterprise-managed-permissions-for-github-copilot-agent-operations/
-          - title: Disable terminal auto-approval rules
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Remove the auto-approval paths in Local sessions
             body:
-              - ChatToolsTerminalEnableAutoApprove=false removes the regex-based terminal auto-approval, whose
-                parser has documented gaps around aliases and complex syntax.
-            url: https://code.visualstudio.com/docs/agents/run/security
-        evidence: []
+              - >-
+                Set ChatToolsTerminalEnableAutoApprove=false and name tools under ChatToolsEligibleForAutoApproval
+                so they always prompt.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Stop sandboxed commands from auto-approving
+            body:
+              - >-
+                Set ChatAgentSandboxAllowAutoApprove=false so terminal commands that run inside the sandbox go
+                through the existing approval flow instead of being auto-approved.
+            url: https://code.visualstudio.com/docs/enterprise/policies
+        note: >-
+          Partial by the rule applied to every vendor: a person approves each prompted action and sees the
+          command, but auto-approval paths remain that the admin cannot remove. Agents-window worktree sessions
+          always run with Allow all ("can't be changed"); sandboxed stdio MCP servers' tool calls are
+          auto-approved; users can persist session, workspace or user-level tool approvals; the Claude harness
+          has allowDangerouslySkipPermissions and the Codex harness offers Auto-Review (an AI reviewer, not a
+          person) and Full Access (Claude3PIntegration / Codex3PIntegration=false remove them); Assisted
+          permissions is an LLM judge, hidden when global auto-approval is disabled. Managed ask holds only in
+          Agent Host Copilot sessions; JetBrains honours only the bypass lockout; Visual Studio, Xcode and
+          Eclipse have no admin approval control beyond disabling agent mode.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -800,25 +1014,43 @@ tools:
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
-          Enterprise-level custom agents (AI Controls, REST API), enterprise plugin standards (enabledPlugins,
-          strictKnownMarketplaces), private MCP registry
-        note: >-
-          The enterprise can publish approved agents, plugins and MCP servers, but there is no inventory of
-          what developers actually run and no reconciliation; ChatStrictPluginOnlyCustomization is the nearest
-          thing to "deny what is not registered".
-        steps: &a1
-          - title: Publish approved agents and plugins centrally
+          Enterprise custom agents (AI Controls, REST API), plugin standards (enabledPlugins,
+          strictKnownMarketplaces), MCP Registry URL with "Restrict MCP access to registry servers",
+          ChatStrictPluginOnlyCustomization
+        steps:
+          - title: Publish approved agents centrally
             body:
-              - Define enterprise custom agents under AI Controls or the REST API, and in managed settings set
-                enabledPlugins (plugin@marketplace) with strictKnownMarketplaces so only listed marketplaces
-                are trusted.
+              - >-
+                Define enterprise-level custom agents from the AI Controls view or the REST API and control who can
+                manage them.
             url: https://docs.github.com/en/copilot/concepts/enterprise/agent-management
-          - title: Block unregistered customisation in VS Code
+          - title: Pin plugins and marketplaces
             body:
-              - ChatStrictPluginOnlyCustomization blocks standalone user and workspace skills, agents, hooks, instructions
-                and MCP servers, leaving only policy-supplied plugins.
+              - >-
+                In managed settings set enabledPlugins (PLUGIN@MARKETPLACE: true|false) and
+                strictKnownMarketplaces (an empty array locks installation).
+            url: >-
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Point clients at the MCP registry
+            body:
+              - >-
+                Enterprise > AI controls > MCP: enter the MCP Registry URL and set "Restrict MCP access to registry
+                servers" to Registry only.
+            url: >-
+              https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/restrict-based-on-registry
+          - title: Block unregistered customization in VS Code
+            body:
+              - >-
+                ChatStrictPluginOnlyCustomization blocks standalone user and workspace skills, agents, hooks,
+                instructions and MCP servers, leaving policy-supplied plugins.
             url: https://code.visualstudio.com/docs/enterprise/policies
-        verified: 2026-09-10
+        note: >-
+          Partial by the rule applied to every vendor: the MCP registry records servers and versions but its
+          "Registry only" enforcement matches names and can be bypassed by editing configuration files; the
+          managed allowlist, plugin standards and enterprise custom agents are enforced but carry no owner,
+          version or approval record, and there is no inventory or reconciliation of what developers actually
+          run.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -833,23 +1065,33 @@ tools:
                 The enterprise can publish approved agents, plugins and MCP servers, but there is no inventory
                 of what developers actually run and no reconciliation; ChatStrictPluginOnlyCustomization is
                 the nearest thing to "deny what is not registered".
-              steps: *a1
+              steps:
+                - title: Publish approved agents and plugins centrally
+                  body:
+                    - Define enterprise custom agents under AI Controls or the REST API, and in managed settings set
+                      enabledPlugins (plugin@marketplace) with strictKnownMarketplaces so only listed marketplaces
+                      are trusted.
+                  url: https://docs.github.com/en/copilot/concepts/enterprise/agent-management
+                - title: Block unregistered customisation in VS Code
+                  body:
+                    - ChatStrictPluginOnlyCustomization blocks standalone user and workspace skills, agents, hooks, instructions
+                      and MCP servers, leaving only policy-supplied plugins.
+                  url: https://code.visualstudio.com/docs/enterprise/policies
               verified: 2026-09-10
       - mitigation: cap-shadow-ai-discovery
         coverage: external
         mechanism: >-
           No discovery feature; VS Code AllowedExtensions and ChatApprovedAccountOrganizations prevent rather
           than find
-        note: >-
-          Use the AllowedExtensions policy to stop unsanctioned AI extensions installing and the
-          approved-organisations gate to stop personal Copilot accounts; discovery of what is already running
-          belongs to endpoint or SSE tooling.
-        steps: &a1
-          - title: Restrict installable extensions
-            body:
-              - Set AllowedExtensions (extensions.allowed) to the sanctioned publisher and extension list.
+        evidence:
+          - title: VS Code enterprise policy reference (AllowedExtensions, ChatApprovedAccountOrganizations)
             url: https://code.visualstudio.com/docs/enterprise/policies
-        verified: 2026-09-10
+        note: >-
+          External: endpoint inventory (EDR/MDM) and SSE/CASB find unsanctioned assistants and personal
+          accounts. GitHub offers no domain capture or personal-account detection for editor clients. Credited as
+          prevention only: AllowedExtensions (extensions.allowed) stops unsanctioned AI extensions installing and
+          ChatApprovedAccountOrganizations stops personal accounts in VS Code.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityShadowAiDiscovery
@@ -864,39 +1106,56 @@ tools:
                 Use the AllowedExtensions policy to stop unsanctioned AI extensions installing and the
                 approved-organisations gate to stop personal Copilot accounts; discovery of what is already
                 running belongs to endpoint or SSE tooling.
-              steps: *a1
+              steps:
+                - title: Restrict installable extensions
+                  body:
+                    - Set AllowedExtensions (extensions.allowed) to the sanctioned publisher and extension list.
+                  url: https://code.visualstudio.com/docs/enterprise/policies
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Enterprise/organisation audit log (action:copilot, 180 days, streamable) for policy and licensing
-          events; CopilotOtel* / telemetry.* managed OpenTelemetry export for session content
+          Managed telemetry.* OpenTelemetry export (CopilotOtel* policies; content off unless captureContent);
+          Copilot Usage Records Streaming policy (Copilot API request/response records, preview, EMU and data
+          residency only); audit log action:copilot and actor:Copilot for control-plane and cloud-agent events
         steps:
           - title: Pin the OpenTelemetry export in managed settings
             body:
-              - Set telemetry.enabled, telemetry.endpoint, telemetry.protocol, telemetry.headers and
-                telemetry.serviceName; when managed, users cannot override the exporter and CopilotOtelOutfile
-                prevents local file export.
+              - >-
+                Set telemetry.enabled, telemetry.endpoint, telemetry.protocol, telemetry.headers,
+                telemetry.captureContent and telemetry.lockCaptureContent; each maps to a chat.agentHost.otel.*
+                setting and CopilotOtel* policy.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Stream Copilot API usage records
+            body:
+              - >-
+                Enterprise > AI Controls: set "Copilot Usage Records Streaming" to Enabled everywhere and configure
+                an audit-log stream destination (public preview; Enterprise Managed Users and data-residency
+                enterprises).
+            url: >-
+              https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
           - title: Stream the audit log
             body:
-              - Search action:copilot for licence and policy changes; stream the enterprise audit log to a
-                SIEM for retention beyond 180 days.
+              - >-
+                Search action:copilot for licence and policy changes and actor:Copilot for agent activity; stream to
+                a SIEM for retention beyond 180 days.
             url: >-
               https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/review-audit-logs
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] The audit log "does not capture client session data, such as the prompts a
-          user sends"; session-level evidence exists only if the enterprise runs an OTLP collector and pins
-          the export in managed settings.
+          Partial by the rule applied to every vendor: the per-session OTel export is admin-settable but the user
+          can still steer it in the Copilot Chat extension, where "OTel environment variables can still override
+          managed values"; managed telemetry.headers are not delivered to the agent host process, so an
+          authenticated collector misses Agent Host telemetry in this release; tool calls appear as execute_tool
+          spans (arguments only with content capture), but permission decisions are not a documented event.
+          Usage-records streaming is server-side and user-proof but covers Copilot API traffic only (not local
+          BYOK), without session correlation or redaction control, and only for EMU and data-residency
+          enterprises. The audit log "does not include client session data". JetBrains honours managed telemetry;
+          Visual Studio, Xcode and Eclipse document none. Capture is not tamper resistance.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: partial
@@ -922,26 +1181,49 @@ tools:
                     https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/review-audit-logs
               verified: 2026-09-10
       - mitigation: cap-agent-kill-switch
-        coverage: native
+        coverage: partial
         mechanism: >-
-          Enterprise policy "Disabled everywhere" per feature, seat removal, ChatAgentMode=false, Visual
-          Studio ADMX Disable Copilot
-        steps: &a1
-          - title: Disable at enterprise scope, not organisation scope
+          Enterprise AI controls policies for agent mode and chat in the IDE set to Disabled everywhere;
+          enterprise licence unassignment; ChatAgentMode=false device policy; Visual Studio ADMX Disable Agent
+          Mode
+        steps:
+          - title: Disable IDE agent mode at enterprise scope
             body:
-              - Within one enterprise the least restrictive organisation policy usually wins for a user, so set the
-                feature policy to Disabled everywhere on the enterprise AI controls tab to make it stick.
+              - >-
+                Enterprise > AI controls > Copilot > Configure features & clients: select the disabled
+                enforcement option for the IDE agent-mode and IDE chat policies.
+            url: >-
+              https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-enterprise-policies
+          - title: Set it where the least restrictive organization cannot win
+            body:
+              - >-
+                "Copilot Agent Mode in IDE Chat" and "Copilot Chat in the IDE" resolve to the least restrictive
+                organization for a user, so only an enterprise-level setting is a stop.
             url: https://docs.github.com/en/copilot/reference/enterprise-administrators/policy-conflicts
+          - title: Revoke the seat at enterprise level
+            body:
+              - >-
+                Remove the user from the enterprise team or unassign their licence in enterprise settings, "which
+                revokes access immediately".
+            url: >-
+              https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-organization/manage-access/revoke-access
           - title: Remove agent mode on the device
             body:
-              - ChatAgentMode=false disables agent mode and side-effect tools in VS Code regardless of account; the Visual
-                Studio ADMX policy disables Copilot outright.
+              - >-
+                ChatAgentMode=false (chat.agent.enabled) removes agent mode and side-effect tools in VS Code
+                regardless of the signed-in account.
             url: https://code.visualstudio.com/docs/enterprise/policies
         note: >-
-          Enterprise policy applies at the next request to GitHub, so an agent loop stops at its next model
-          call; managed settings on the device refresh within about an hour or on restart. A command the agent
-          has already started in the terminal runs to completion.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: the admin controls block new work, but no vendor control
+          stops a session already running on the device, and the delay for a running session is not documented.
+          Enterprise licence unassignment "revokes access immediately", yet GitHub does not say that the running
+          agent's next model call fails; organization-level removal is documented both as immediate
+          (license-changes) and as lasting to the end of the billing cycle (revoke-access). Managed settings
+          reach clients within about an hour or on restart, device policies on the next policy read, and an
+          Agent Host session can keep running with no client window open. A command already started in the
+          terminal runs to completion; local BYOK sessions do not touch the Copilot API. EDR process kill is the
+          external complement.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -952,30 +1234,44 @@ tools:
               mechanism: >-
                 Enterprise policy "Disabled everywhere" per feature, seat removal, ChatAgentMode=false, Visual
                 Studio ADMX Disable Copilot
-              steps: *a1
+              steps:
+                - title: Disable at enterprise scope, not organisation scope
+                  body:
+                    - Within one enterprise the least restrictive organisation policy usually wins for a user, so set the
+                      feature policy to Disabled everywhere on the enterprise AI controls tab to make it stick.
+                  url: https://docs.github.com/en/copilot/reference/enterprise-administrators/policy-conflicts
+                - title: Remove agent mode on the device
+                  body:
+                    - ChatAgentMode=false disables agent mode and side-effect tools in VS Code regardless of account; the Visual
+                      Studio ADMX policy disables Copilot outright.
+                  url: https://code.visualstudio.com/docs/enterprise/policies
               note: >-
                 Enterprise policy applies at the next request to GitHub, so an agent loop stops at its next
                 model call; managed settings on the device refresh within about an hour or on restart. A
                 command the agent has already started in the terminal runs to completion.
               verified: 2026-09-10
       - mitigation: D3-PA
-        coverage: unknown
-        mechanism: None from the vendor; the OS sandbox and PreToolUse hooks are the only device-side hooks
-        steps: []
+        coverage: external
+        mechanism: >-
+          None from the vendor; EDR analyses the editor, extension-host and Agent Host processes, fed by Copilot
+          OTel spans and Policy Hooks
         evidence:
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://docs.github.com/en/copilot
+          - title: VS Code Agent Host architecture (dedicated agent process, `code agent host`)
+            url: https://code.visualstudio.com/docs/agents/concepts/agent-host
+          - title: GitHub Copilot hooks reference (policy hooks can post every tool call over HTTPS)
+            url: https://docs.github.com/en/copilot/reference/hooks-reference
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEdr] Endpoint agents that instrument coding agents by name are the answer; the vendor
-          exposes PreToolUse hooks and an OTLP export an EDR integration can consume.
+          External (EDR): no Copilot editor analyses process behaviour. Integration points an EDR can correlate:
+          VS Code runs agents in a dedicated Agent Host process (local utility process, or a standalone server
+          started with code agent host) separate from the extension host; Copilot OTel execute_tool spans name
+          each tool call (arguments with content capture); and in Agent Host Copilot sessions a policy hook can
+          post each preToolUse event to an EDR or SIEM over HTTPS. Other editors run Copilot inside the IDE
+          process with no hook.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEdr
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityEdr
               coverage: external
@@ -988,34 +1284,42 @@ tools:
                   url: https://docs.github.com/en/copilot
               verified: 2026-09-10
       - mitigation: cap-agent-egress-control
-        coverage: native
+        coverage: partial
         mechanism: >-
-          VS Code ChatAgentNetworkFilter with ChatAgentAllowedNetworkDomains / DeniedNetworkDomains, sandbox
-          allowNetwork, Domain() managed permissions, documented proxy allowlist
-        steps: &a1
+          VS Code ChatAgentNetworkFilter with ChatAgentAllowedNetworkDomains / ChatAgentDeniedNetworkDomains
+          (fetch tool, integrated browser, and sandboxed terminal commands on macOS and Linux); Domain() managed
+          permissions in Agent Host sessions; Copilot service domains at the proxy
+        steps:
           - title: Turn on the agent network filter with an allowlist
             body:
-              - Set ChatAgentNetworkFilter=true; with both domain lists empty all domains are blocked, so add
-                ChatAgentAllowedNetworkDomains entries (wildcards allowed) and let
-                ChatAgentDeniedNetworkDomains take precedence.
+              - >-
+                Set ChatAgentNetworkFilter=true, ChatAgentSandboxEnabled=on, ChatAgentSandboxAllowNetwork=false,
+                ChatAgentSandboxAllowUnsandboxedCommands=false and list ChatAgentAllowedNetworkDomains (wildcards
+                allowed; an empty list blocks all), with ChatAgentDeniedNetworkDomains taking precedence.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
           - title: Deny domains in managed permissions
             body:
-              - Use Domain(...) selectors under permissions.deny for hosts the agent's fetch and browser tools must never
-                reach; host matching is case-insensitive and *.example.com covers subdomains.
+              - >-
+                Use Domain(...) selectors under permissions.deny for hosts Agent Host sessions must never reach;
+                *.example.com covers subdomains.
             url: >-
               https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
           - title: Allowlist the Copilot service domains at the proxy
             body:
-              - Permit *.githubcopilot.com plus the plan-specific *.business or *.enterprise.githubcopilot.com, the
-                github.com login and copilot_internal endpoints and copilot-proxy.githubusercontent.com; pull
-                the current set from gh api meta.
+              - >-
+                Permit *.githubcopilot.com with the plan-specific *.business or *.enterprise.githubcopilot.com, the
+                github.com login and copilot_internal endpoints and copilot-proxy.githubusercontent.com; pull the
+                current set from gh api meta.
             url: https://docs.github.com/en/copilot/reference/copilot-allowlist-reference
         note: >-
-          VS Code only: the network filter and sandbox allowNetwork bound agent fetches and sandboxed commands
-          there; other editors are bounded by host network policy. Remote MCP servers connect outside the
-          filter.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: the domain allowlist covers only some tools and is not
+          fully admin-lockable. It binds the fetch tool, the integrated browser and, with the sandbox on,
+          terminal commands on macOS and Linux; the Agent Host's Copilot SDK shell and the Windows sandbox get
+          all-or-nothing network only, and chat.agent.sandbox.retryWithAllowNetworkRequests (default true, no
+          policy) lets a user retry a blocked command with unrestricted network. Remote MCP servers, extensions,
+          the extension host and the agent's own API traffic bypass it; JetBrains' managed sandbox (preview)
+          has network switches; Visual Studio, Xcode and Eclipse rely on the host firewall or SSE.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -1026,38 +1330,54 @@ tools:
               mechanism: >-
                 VS Code ChatAgentNetworkFilter with ChatAgentAllowedNetworkDomains / DeniedNetworkDomains,
                 sandbox allowNetwork, Domain() managed permissions, documented proxy allowlist
-              steps: *a1
+              steps:
+                - title: Turn on the agent network filter with an allowlist
+                  body:
+                    - Set ChatAgentNetworkFilter=true; with both domain lists empty all domains are blocked, so add
+                      ChatAgentAllowedNetworkDomains entries (wildcards allowed) and let
+                      ChatAgentDeniedNetworkDomains take precedence.
+                  url: https://code.visualstudio.com/docs/enterprise/ai-settings
+                - title: Deny domains in managed permissions
+                  body:
+                    - Use Domain(...) selectors under permissions.deny for hosts the agent's fetch and browser tools must never
+                      reach; host matching is case-insensitive and *.example.com covers subdomains.
+                  url: >-
+                    https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+                - title: Allowlist the Copilot service domains at the proxy
+                  body:
+                    - Permit *.githubcopilot.com plus the plan-specific *.business or *.enterprise.githubcopilot.com, the
+                      github.com login and copilot_internal endpoints and copilot-proxy.githubusercontent.com; pull
+                      the current set from gh api meta.
+                  url: https://docs.github.com/en/copilot/reference/copilot-allowlist-reference
               note: >-
                 VS Code only: the network filter and sandbox allowNetwork bound agent fetches and sandboxed
                 commands there; other editors are bounded by host network policy. Remote MCP servers connect
                 outside the filter.
               verified: 2026-09-10
       - mitigation: D3-FA
-        coverage: unknown
+        coverage: external
         mechanism: >-
-          Not applicable to vendor-hosted models; local BYOK models (Ollama etc.) are the organisation's own
-          artefacts
-        steps: []
+          None in the product; a package mirror / artifact repository with malware scanning, reached by forcing
+          agent installs through it with the VS Code network allowlist
         evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://docs.github.com/en/copilot
+          - title: VS Code AI settings — agent network filtering (the integration point)
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Enterprise managed settings — strictKnownMarketplaces and extraKnownMarketplaces
+            url: >-
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityModelScanning] The product loads no weights; vendor-hosted models are the vendor's. Local
-          BYOK models (Ollama etc.) are a separate server the organisation runs and scans; disable it through
-          the "Configure custom models" policy if that obligation is unwanted.
-
-
-          [capabilityAiBom] Plugins install from marketplaces by name; strictKnownMarketplaces limits sources
-          but nothing verifies content. Record extension and plugin versions yourself.
+          External (package mirror or artifact repository with malware scanning). The editors do not scan the
+          plugins, skills or packages an agent installs; strictKnownMarketplaces limits plugin sources and an
+          extraKnownMarketplaces github source can pin a ref or SHA, which is source pinning, not analysis.
+          Integration point: set ChatAgentAllowedNetworkDomains (with the sandbox required) to the mirror's host
+          so sandboxed installs cannot reach public registries directly. Vendor-hosted models load no weights on
+          the device; local BYOK models are the organisation's own artefacts to scan.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityModelScanning
             - capabilityAiBom
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityModelScanning
               coverage: notApplicable
@@ -1112,7 +1432,8 @@ tools:
         url: >-
           https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-enterprise-policies
       - title: Copilot content exclusion concepts
-        url: https://docs.github.com/en/copilot/concepts/context/content-exclusion
+        url: >-
+          https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/content-exclusion
       - title: Enterprise managed settings — configuration and delivery
         url: >-
           https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/use-managed-settings/get-started

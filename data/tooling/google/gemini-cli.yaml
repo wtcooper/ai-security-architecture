@@ -3,6 +3,11 @@
 # Excluded: Antigravity CLI (the consumer replacement since 2026-06-18) and the run-gemini-cli
 # GitHub Action (a CI runtime; its advisory is recorded here because it patched the CLI itself).
 # The Gemini Code Assist IDE extensions are a separate product family and are not onboarded.
+# 2026-09-25: re-verified toolGeminiCli against the MITRE capability rules; every geminicli.com and
+# docs.cloud.google.com URL resolved without redirect; goo.gle/manage-gemini-cli (the Management Console link)
+# still lands on the geminicli.com home page; support.google.com/a/answer/9176657 and /1668854 redirect to
+# knowledge.workspace.google.com/admin/security/*; cloud.google.com/security/compliance redirects to
+# cloud.google.com/compliance.
 vendor: google
 family: Gemini CLI
 tools:
@@ -11,7 +16,7 @@ tools:
     surfaceClasses:
       - endpointCli
     variants:
-      - name: Gemini CLI (npm @google/gemini-cli, v0.59.0 stable 2026-09-08)
+      - name: Gemini CLI (npm @google/gemini-cli, v0.61.0 stable 2026-09-23)
         class: endpointCli
         url: https://github.com/google-gemini/gemini-cli/releases
     architecture: archCodingAgentThirdParty
@@ -53,8 +58,9 @@ tools:
         value: >-
           Remote only: Code Assist API for licensed Workspace/Cloud accounts (needs GOOGLE_CLOUD_PROJECT and
           the Gemini for Cloud API), Gemini API with GEMINI_API_KEY, or Vertex AI with ADC / service-account
-          JSON / GOOGLE_API_KEY. GOOGLE_GEMINI_BASE_URL and GOOGLE_VERTEX_BASE_URL redirect the API calls
-          through an organisation proxy.
+          JSON / GOOGLE_API_KEY. GOOGLE_GEMINI_BASE_URL (API-key auth) and GOOGLE_VERTEX_BASE_URL (Vertex
+          auth) redirect those calls through an organisation proxy; the Code Assist path has no documented
+          base-URL override.
         url: https://geminicli.com/docs/get-started/authentication/
       - label: Data leaving the device
         value: >-
@@ -125,8 +131,9 @@ tools:
           GEMINI.md context files are loaded from the repository, its parents and any directory a tool
           touches; the first public exploit (Tracebit, 2025-07) hid instructions in a README.md the CLI pulled
           into context and chained a payload behind an allowlisted grep. Trusted folders keep workspace
-          settings, .env, MCP servers, hooks and context files off until the user trusts the folder; nothing
-          classifies the content.
+          settings (and with them project hooks), .env files, MCP servers and custom commands off until the user
+          trusts the folder; the page does not list GEMINI.md context loading among them, and nothing classifies
+          the content.
       - risk: riskRogueActions
         note: >-
           --yolo and per-session "always allow" remain user choices unless the admin sets
@@ -145,34 +152,51 @@ tools:
           false, so set it explicitly in the system file.
     controls:
       - mitigation: D3-MFA
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          Google account sign-in gated by a Gemini Code Assist licence and Google Cloud project IAM;
-          security.auth.enforcedType in the system settings file
+          Google Workspace / Cloud Identity 2-Step Verification enforcement (Admin console > Security >
+          Authentication > 2-step verification > Enforcement) on the accounts holding Gemini Code Assist
+          Standard/Enterprise licences; security.auth.enforcedType "oauth-personal" in the system settings.json
+          pins the CLI to Sign in with Google; the X-GeminiCodeAssist-Allowed-Domains header pins the account
+          domain
         steps:
-          - title: Force the organisation's auth path
+          - title: Enforce 2-Step Verification on the licensed accounts
             body:
-              - In the system settings.json set security.auth.enforcedType (the enterprise page's example is
-                "oauth-personal") so a mismatched cached credential triggers re-authentication rather than
-                silently using an API key.
+              - In the Google Admin console go to Security > Authentication > 2-step verification, select the
+                organizational unit or group that holds Code Assist users, check Allow users to turn on 2-Step
+                Verification and set Enforcement to On; keep the New user enrollment period short and leave
+                Allow user to trust the device unchecked.
+            url: https://knowledge.workspace.google.com/admin/security/deploy-2-step-verification
+          - title: Pin the CLI to Google sign-in
+            body:
+              - In the system settings.json (/etc/gemini-cli, C:\ProgramData\gemini-cli or /Library/Application
+                Support/GeminiCli) set security.auth.enforcedType to "oauth-personal"; a user configured for
+                another method is prompted to switch, and non-interactive runs exit with an error.
             url: https://geminicli.com/docs/cli/enterprise/
-          - title: Licence and project
+          - title: Pin the account domain
             body:
-              - Company, school and Workspace accounts need a Gemini Code Assist licence, GOOGLE_CLOUD_PROJECT
-                set, the Gemini for Cloud API enabled and IAM access on that project; without them Sign in
-                with Google does not serve the CLI.
-            url: https://geminicli.com/docs/get-started/authentication/
-        evidence: []
+              - On the organisation's TLS-inspecting proxy inject X-GeminiCodeAssist-Allowed-Domains with the
+                organisation's domains into requests to https://cloudcode-pa.googleapis.com, so the Code Assist
+                backend rejects any other Google account.
+            url: https://docs.cloud.google.com/gemini/docs/codeassist/network-access
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Rated native: the vendor's own account layer can require the second factor for every org member, and
+          the client can be pinned to that account. 2SV is enforced by Google sign-in for Google-managed
+          Workspace or Cloud Identity accounts; where the organisation federates to a third-party IdP the
+          second factor is that IdP's policy instead. It covers interactive Sign in with Google only. Paths
+          that skip it: the locally cached OAuth credential reused by later and headless runs (its lifetime is
+          not documented on the authentication page), GEMINI_API_KEY, Google Cloud API keys and Vertex
+          service-account JSON keys. enforcedType makes the CLI refuse those, but it lives in a local file that
+          a user with local administrator rights, or one who re-points GEMINI_CLI_SYSTEM_SETTINGS_PATH without
+          the enterprise page's wrapper script, can bypass; the domain header binds only traffic that crosses
+          the organisation's proxy. Consumer Login with Google stopped serving the CLI on 2026-06-18, so a
+          personal account is refused by the service itself. A 2SV enforcement date or new-user enrollment
+          period allows password-only sign-in until it ends.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -195,26 +219,39 @@ tools:
               verified: 2026-09-10
       - mitigation: cap-agent-action-policy-enforcement
         coverage: native
-        mechanism: Admin-tier policy engine TOML plus BeforeTool hooks in the system settings file
-        steps: &a1
+        mechanism: >-
+          Admin-tier policy engine TOML in the system policies directory (toolName, mcpName, argsPattern,
+          commandPrefix / commandRegex, subagent; decision allow / deny / ask_user); hooks.BeforeTool in the
+          system settings as an organisation-written attach point
+        steps:
           - title: Ship admin policies
             body:
-              - "Place [[rule]] files in /etc/gemini-cli/policies (or the macOS / Windows equivalents): admin tier 5
-                outranks user and workspace tiers; use commandPrefix / commandRegex for shell, mcpName for
-                servers, decision deny with denyMessage."
+              - Place [[rule]] TOML files in /etc/gemini-cli/policies (macOS /Library/Application
+                Support/GeminiCli/policies, Windows C:\ProgramData\gemini-cli\policies), root-owned and not
+                writable by group or others or the CLI ignores them; match shell calls with commandPrefix or
+                commandRegex, MCP tools with mcpName, arguments with argsPattern, and set decision "deny" with a
+                denyMessage.
             url: https://geminicli.com/docs/reference/policy-engine/
           - title: Add a BeforeTool gate
             body:
-              - 'A hooks.BeforeTool command in the system settings receives tool_name and tool_input and blocks with
-                {"decision": "deny"} or exit code 2. The hooks page ranks project and user settings above
-                system settings for hooks, so treat the admin policy tier as the enforced layer and the hook
-                as defence in depth.'
+              - A hooks.BeforeTool command in the system settings receives tool_name and tool_input and blocks
+                the call with decision "deny" or exit code 2; treat it as defence in depth behind the admin
+                policy tier.
             url: https://geminicli.com/docs/hooks/reference/
         note: >-
-          The policy engine TOML is deterministic and admin-tiered; BeforeTool hooks are an integration point
-          whose logic the organisation writes. Sub-agents and MCP tools pass through the same engine; a remote
-          server's own actions are outside it.
-        verified: 2026-09-10
+          Native: admin policies are declarative rules over tool name, arguments and target, evaluated by the
+          harness before every built-in, MCP and sub-agent tool call, and the admin tier outranks extension,
+          user and default rules (yolo's allow-all is a default-tier rule); supplemental --admin-policy and
+          adminPolicyPaths files are ignored once the standard directory holds TOML. The decision is logged in
+          the gemini_cli.tool_call telemetry event when telemetry is on. Boundary: enforced by the CLI on the
+          device, per machine rather than per user principal; the enterprise page warns that a user with local
+          administrator rights can circumvent its controls; an underscore in an MCP server name makes mcpName
+          rules fail silently; a remote server's own downstream actions are outside it. Hooks are not
+          admin-locked (project and user hooks rank above system hooks, /hooks disable-all turns them off, and
+          non-JSON output is treated as allow). security.enableConseca (off by default) adds an LLM-generated
+          per-prompt policy, non-deterministic and credited as a supplement only. The workspace policy tier is
+          currently non-functional; the page gives the admin tier base 5 in its table and 4 in its text.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRuntimeEnforcement
@@ -223,7 +260,20 @@ tools:
             - capability: capabilityAgentRuntimeEnforcement
               coverage: native
               mechanism: Admin-tier policy engine TOML plus BeforeTool hooks in the system settings file
-              steps: *a1
+              steps:
+                - title: Ship admin policies
+                  body:
+                    - "Place [[rule]] files in /etc/gemini-cli/policies (or the macOS / Windows equivalents): admin
+                      tier 5 outranks user and workspace tiers; use commandPrefix / commandRegex for shell, mcpName
+                      for servers, decision deny with denyMessage."
+                  url: https://geminicli.com/docs/reference/policy-engine/
+                - title: Add a BeforeTool gate
+                  body:
+                    - 'A hooks.BeforeTool command in the system settings receives tool_name and tool_input and
+                      blocks with {"decision": "deny"} or exit code 2. The hooks page ranks project and user
+                      settings above system settings for hooks, so treat the admin policy tier as the enforced
+                      layer and the hook as defence in depth.'
+                  url: https://geminicli.com/docs/hooks/reference/
               note: >-
                 The policy engine TOML is deterministic and admin-tiered; BeforeTool hooks are an integration
                 point whose logic the organisation writes. Sub-agents and MCP tools pass through the same
@@ -232,19 +282,27 @@ tools:
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: >-
-          Google Cloud terms and the Code Assist security, privacy and compliance page consumed by the
-          organisation's TPRM platform
-        note: >-
-          The CLI is covered by the Gemini Code Assist Standard/Enterprise commitments (stateless service, no
-          training without permission, VPC Service Controls) when used with that licence; the API-key and
-          Vertex paths carry different terms, listed on the CLI's Terms and Privacy page.
-        steps: &a1
-          - title: Record which terms apply
-            body:
-              - Match the auth path the organisation enforces to its terms row on the Terms and Privacy page and file the
-                Code Assist compliance page as the vendor evidence.
+          The organisation's TPRM platform, consuming Google Cloud's Gemini certifications page and the Code
+          Assist security, privacy and compliance page
+        evidence:
+          - title: >-
+              Certifications and security for Gemini products in Google Cloud (SOC 1/2/3, ISO 27001/27017/27018/
+              27701, ISO 42001 listed)
+            url: https://docs.cloud.google.com/gemini/docs/discover/certifications
+          - title: Security, privacy and compliance for Gemini Code Assist Standard and Enterprise
+            url: https://docs.cloud.google.com/gemini/docs/codeassist/security-privacy-compliance
+          - title: Gemini CLI terms and privacy notices by authentication path
             url: https://geminicli.com/docs/resources/tos-privacy/
-        verified: 2026-09-10
+        note: >-
+          External: the assessment is the organisation's TPRM process; Google publishes the evidence. The
+          certifications page lists BSI C5, CSA STAR, HIPAA, HITRUST CSF, ISO 27001/27017/27018/27701, ISO
+          42001, PCI-DSS v4.0.1 and SOC 1/2/3 as compliant for Gemini products in Google Cloud (not for Code
+          Assist on GitHub). The Code Assist Standard/Enterprise page describes a stateless service, no training
+          on customer data without permission and VPC Service Controls, and the Code Assist Gemini CLI page says
+          those practices apply to the CLI for Standard and Enterprise users. API-key (Gemini API unpaid or
+          paid) and Vertex paths carry different terms, listed on the CLI's Terms and Privacy page, so assess
+          the path the organisation enforces.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiTprm
@@ -260,23 +318,44 @@ tools:
                 service, no training without permission, VPC Service Controls) when used with that licence;
                 the API-key and Vertex paths carry different terms, listed on the CLI's Terms and Privacy
                 page.
-              steps: *a1
+              steps:
+                - title: Record which terms apply
+                  body:
+                    - Match the auth path the organisation enforces to its terms row on the Terms and Privacy page
+                      and file the Code Assist compliance page as the vendor evidence.
+                  url: https://geminicli.com/docs/resources/tos-privacy/
               verified: 2026-09-10
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
-        mechanism: BeforeModel / AfterModel hooks for redaction; no vendor DLP
-        note: >-
-          Hooks can rewrite the outbound request and filter the response, and inherited environment variables
-          matching TOKEN / SECRET / PASSWORD / KEY patterns are redacted before MCP servers see them; content
-          inspection of prompts and uploads is the organisation's own hook or a proxy at
-          GOOGLE_GEMINI_BASE_URL.
-        steps: &a1
-          - title: Wire a redaction hook
+        mechanism: >-
+          hooks.BeforeModel / AfterModel in the system settings as the attach point for an organisation
+          inspector; security.environmentVariableRedaction for secret-named variables in tool environments; no
+          vendor DLP
+        steps:
+          - title: Wire an inspection hook
             body:
-              - Configure hooks.BeforeModel and hooks.AfterModel commands in the system settings file to inspect and
-                redact the request and response payloads.
-            url: https://geminicli.com/docs/hooks/
-        verified: 2026-09-10
+              - Configure hooks.BeforeModel in the system settings to pass llm_request to the organisation's DLP
+                inspector and return decision "deny" (or exit code 2) to abort the turn, or
+                hookSpecificOutput.llm_request to rewrite it; add hooks.AfterModel to replace response chunks
+                with hookSpecificOutput.llm_response.
+            url: https://geminicli.com/docs/hooks/reference/
+          - title: Redact secrets from tool environments
+            body:
+              - Set security.environmentVariableRedaction.enabled to true in the system settings (off by
+                default) so secret-named and secret-valued variables are withheld from shell commands, and add
+                names to security.environmentVariableRedaction.blocked.
+            url: https://geminicli.com/docs/reference/configuration/
+        note: >-
+          Partial on the rule applied to every vendor: BeforeModel is an inline hook that can hand prompt
+          content to an organisation inspector and block; Gemini CLI itself detects nothing in prompts or tool
+          traffic. Boundary: hooks run on the device and are not admin-locked (project and user hooks rank
+          above system hooks, /hooks disable-all switches them off, non-JSON output is treated as allow).
+          Environment redaction masks secrets in child-process environments (stdio MCP servers get it by
+          default unless a variable is declared in the server's env block), not in content sent to the model.
+          .geminiignore and context.fileFiltering keep files out of context — data minimisation, not detection.
+          The inline alternative is an AI gateway at GOOGLE_GEMINI_BASE_URL / GOOGLE_VERTEX_BASE_URL (API-key
+          and Vertex auth only; the Code Assist path has no documented base-URL override) or endpoint DLP.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -290,27 +369,41 @@ tools:
                 variables matching TOKEN / SECRET / PASSWORD / KEY patterns are redacted before MCP servers
                 see them; content inspection of prompts and uploads is the organisation's own hook or a proxy
                 at GOOGLE_GEMINI_BASE_URL.
-              steps: *a1
+              steps:
+                - title: Wire a redaction hook
+                  body:
+                    - Configure hooks.BeforeModel and hooks.AfterModel commands in the system settings file to
+                      inspect and redact the request and response payloads.
+                  url: https://geminicli.com/docs/hooks/
               verified: 2026-09-10
       - mitigation: cap-input-guardrails
         coverage: partial
-        mechanism: Not offered; structural mitigations only
-        steps: &a1
-          - title: Attach a detector in hooks
+        mechanism: >-
+          hooks.AfterTool (a deny replaces the tool result the model sees) and hooks.BeforeModel as attach points
+          for an organisation classifier; no vendor injection screening
+        steps:
+          - title: Screen tool results
             body:
-              - Register a BeforeModel hook in the system settings file that sends the assembled prompt (GEMINI.md
-                context, MCP results, fetched pages) to your classifier and rejects on a hit; without it
-                nothing detects an injected instruction.
-            url: https://geminicli.com/docs/hooks/
+              - Register a hooks.AfterTool command in the system settings that sends tool_response to the
+                organisation's injection classifier; decision "deny" (or exit code 2) hides the real output and
+                the reason text replaces the result sent back to the model.
+            url: https://geminicli.com/docs/hooks/reference/
+          - title: Screen the assembled request
+            body:
+              - A hooks.BeforeModel command receives llm_request, including context files, fetched pages and MCP
+                results already in the conversation, and can return decision "deny" to abort the turn.
+            url: https://geminicli.com/docs/hooks/reference/
         note: >-
-          Rated like Copilot CLI and the Copilot SDK: no injection or jailbreak classifier is documented, but
-          BeforeModel and AfterModel hooks are the attach point for one, and the post-2025-07 shell-command
-          validation blocks a class of injected commands. Trusted folders and ask_user policies contain; they
-          do not detect. Treat every GEMINI.md, MCP response and fetched page as untrusted.
-        evidence: &a2
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
-            url: https://geminicli.com/docs/
-        verified: 2026-09-10
+          Partial on the rule applied to every vendor: a post-tool hook that can block or replace output before
+          the model sees it is an attach point; nothing classifies content until the organisation attaches a
+          classifier. No injection or jailbreak classifier is documented. security.enableConseca judges
+          proposed tool calls (credited under action policy); web_fetch's block on private and internal
+          addresses and the policy engine's redirection check constrain actions; trusted folders and project-hook
+          fingerprinting are admission. None of these screens content. Hooks are user-disableable and fail open
+          (see the redaction row). GEMINI.md files load from the workspace, its ancestors and any directory a
+          tool touches; treat them, MCP responses and fetched pages as untrusted. The external alternative is
+          an AI gateway or MCP gateway classifier on the brokered path.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -319,42 +412,58 @@ tools:
             - capability: capabilityPromptInjectionDefense
               coverage: partial
               mechanism: Not offered; structural mitigations only
-              steps: *a1
+              steps:
+                - title: Attach a detector in hooks
+                  body:
+                    - Register a BeforeModel hook in the system settings file that sends the assembled prompt
+                      (GEMINI.md context, MCP results, fetched pages) to your classifier and rejects on a hit;
+                      without it nothing detects an injected instruction.
+                  url: https://geminicli.com/docs/hooks/
               note: >-
                 Rated like Copilot CLI and the Copilot SDK: no injection or jailbreak classifier is
                 documented, but BeforeModel and AfterModel hooks are the attach point for one, and the
                 post-2025-07 shell-command validation blocks a class of injected commands. Trusted folders and
                 ask_user policies contain; they do not detect. Treat every GEMINI.md, MCP response and fetched
                 page as untrusted.
-              evidence: *a2
+              evidence:
+                - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+                  url: https://geminicli.com/docs/
               verified: 2026-09-10
       - mitigation: AML.M0028
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          tools.core allowlist, tools.confirmationRequired, per-server includeTools / excludeTools,
-          mcp.allowed / mcp.excluded in the system settings file
+          Admin-tier policy engine TOML (toolName, mcpName, argsPattern, commandPrefix / commandRegex,
+          subagent); tools.core and per-server includeTools / excludeTools with mcp.allowed in the system
+          settings; security.disableYoloMode and security.disableAlwaysAllow
         steps:
-          - title: Allowlist built-in tools
+          - title: Scope tools in the admin tier
             body:
-              - Set tools.core in the system settings (for example ReadFileTool, GlobTool, ShellTool(ls));
-                tools.exclude is deprecated in favour of the allowlist.
+              - In /etc/gemini-cli/policies (or the macOS / Windows equivalent) write deny, ask_user or allow
+                rules by toolName with argsPattern on the arguments or commandPrefix for shell commands, and
+                mcpName plus toolName for MCP tools; admin rules outrank user, extension and default rules.
+            url: https://geminicli.com/docs/reference/policy-engine/
+          - title: Narrow the tool surface
+            body:
+              - In the system settings.json set tools.core to the permitted built-ins (for example ReadFileTool,
+                GlobTool, ShellTool(ls)), define approved mcpServers with includeTools and list their names in
+                mcp.allowed.
             url: https://geminicli.com/docs/cli/enterprise/
-          - title: Scope MCP tools
+          - title: Remove the bypass modes
             body:
-              - Define mcpServers centrally and set mcp.allowed to the same names, or users can add their own;
-                trim each server with includeTools / excludeTools and keep trust unset so calls still confirm.
-            url: https://geminicli.com/docs/tools/mcp-server/
-          - title: Keep confirmation on specific tools
-            body:
-              - tools.confirmationRequired forces approval for named tools even when tools.allowed would skip
-                it.
+              - Set security.disableYoloMode and security.disableAlwaysAllow to true in the system settings and
+                keep security.enablePermanentToolApproval false.
             url: https://geminicli.com/docs/reference/configuration/
-        evidence: []
         note: >-
-          tools.core hides built-ins, includeTools/excludeTools hide MCP tools, confirmationRequired gates;
-          argument limits come from the policy engine TOML, not these lists. YOLO mode must be disabled or it
-          pre-approves everything.
+          Native: admin-delivered rules over tool, arguments and target, enforced by the CLI outside the model,
+          with yolo and "Always allow" removable by the administrator. Boundary: rules bind the machine, not
+          the user principal (the subagent field scopes by calling sub-agent). tools.core and mcp.allowed live
+          in the system settings file, which environment variables and command-line flags outrank:
+          GEMINI_CLI_SYSTEM_SETTINGS_PATH can re-point it unless the enterprise page's wrapper script pins it,
+          and --allowed-mcp-server-names and --allowed-tools are session flags whose interaction with
+          mcp.allowed and admin rules is not documented. The admin policy directory is checked for root
+          ownership and is not affected by that variable. tools.exclude is deprecated in favour of deny rules.
+          The enterprise page warns that a user with local administrator rights can circumvent all of it.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -388,27 +497,40 @@ tools:
                 disabled or it pre-approves everything.
               verified: 2026-09-10
       - mitigation: D3-EI
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          tools.sandbox (docker / podman / sandbox-exec), Seatbelt profiles, tools.sandboxNetworkAccess
+          tools.sandbox (docker / podman / runsc / lxc / sandbox-exec) or security.toolSandboxing in the system
+          settings; SEATBELT_PROFILE on macOS; tools.sandboxNetworkAccess and tools.sandboxAllowedPaths
         steps:
-          - title: Enforce a container sandbox
+          - title: Set a container sandbox
             body:
-              - Set tools.sandbox to "docker" or "podman" in the system settings so tool execution runs in
-                ghcr.io/google/gemini-cli (or a custom image via tools.sandbox.image) with the workspace
-                mounted at the same path.
-            url: https://geminicli.com/docs/cli/enterprise/
-          - title: Pick a macOS profile
-            body:
-              - On macOS the default Seatbelt profile is permissive-open; choose restrictive-* or strict-* and
-                a *-proxied variant via SEATBELT_PROFILE when network must go through a proxy.
+              - In the system settings.json set tools.sandbox to "docker", "podman" or "runsc" (gVisor, Linux),
+                or to an object with command and image pointing at a hardened image in the organisation's
+                registry.
             url: https://geminicli.com/docs/cli/sandbox/
-        evidence: []
+          - title: Choose a restrictive macOS profile
+            body:
+              - With sandbox-exec, set SEATBELT_PROFILE to a restrictive-* or strict-* profile in the environment
+                the organisation's wrapper exports; the default permissive-open allows broad reads and network.
+            url: https://geminicli.com/docs/cli/sandbox/
+          - title: Keep network and mounts closed
+            body:
+              - Leave tools.sandboxNetworkAccess false and tools.sandboxAllowedPaths empty in the system
+                settings.
+            url: https://geminicli.com/docs/reference/configuration/
         note: >-
-          Inside the boundary: the CLI process and the tools it spawns, in docker, podman or a Seatbelt
-          profile. Outside: remote MCP servers and the model endpoint. Docker and podman need the runtime
-          installed on every developer machine; Seatbelt is macOS only.
+          Partial: the sandbox is OS- or container-enforced but an administrator cannot require it. The sandbox
+          page ranks the -s flag and the GEMINI_SANDBOX environment variable above the settings file, and
+          GEMINI_SANDBOX accepts false, so a user can run unsandboxed; sandbox expansion requests let the user
+          widen filesystem or network access per command; the Management Console has no sandbox control. A
+          wrapper that exports GEMINI_SANDBOX and SEATBELT_PROFILE (the pattern the enterprise page uses for
+          the settings path) raises the bar but is not enforcement. Inside the boundary in full-process mode:
+          the CLI and the tools it spawns, with the workspace mounted at the same path. With
+          security.toolSandboxing only individual tool executions are isolated and the CLI process stays on the
+          host. Outside: remote MCP servers, the model endpoint and every unsandboxed run. Docker or Podman
+          must be installed on each machine; Seatbelt is macOS-only, gVisor and LXC Linux-only, and the Windows
+          native sandbox leaves persistent Low integrity labels.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -437,30 +559,49 @@ tools:
                 runtime installed on every developer machine; Seatbelt is macOS only.
               verified: 2026-09-10
       - mitigation: D3-CTS
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Per-user cached OAuth credential; Vertex AI service accounts; MCP OAuth per server; GEMINI_CLI_HOME
-          for job isolation
+          Container or Seatbelt sandbox confining agent commands to the workspace; default redaction of
+          secret-named variables for stdio MCP servers; security.environmentVariableRedaction for shell
+          commands; GEMINI_CLI_HOME for shared runners
         steps:
+          - title: Keep credential paths outside the sandbox
+            body:
+              - Run tools in the sandbox (by default it only has access to the current project workspace) and do
+                not mount ~/.ssh, cloud CLI configuration or browser profiles through SANDBOX_MOUNTS; on macOS
+                use a strict-* SEATBELT_PROFILE, which restricts reads as well as writes.
+            url: https://geminicli.com/docs/cli/sandbox/
+          - title: Redact secrets from shell environments
+            body:
+              - Set security.environmentVariableRedaction.enabled to true in the system settings (off by
+                default) and list extra names under security.environmentVariableRedaction.blocked.
+            url: https://geminicli.com/docs/reference/configuration/
+          - title: Scope what MCP servers receive
+            body:
+              - Stdio MCP servers get secret-named host variables (*TOKEN*, *SECRET*, *KEY*, *CREDENTIAL*)
+                stripped by default; declare in each server's env block only the variables it needs, because
+                declared variables skip redaction.
+            url: https://geminicli.com/docs/tools/mcp-server/
           - title: Isolate shared runners
             body:
               - Set GEMINI_CLI_HOME per job so credentials, trust decisions and history do not leak between
                 users on a shared machine.
             url: https://geminicli.com/docs/cli/enterprise/
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] The agent runs with the developer's Google identity and whatever
-          shell credentials it inherits; required MCP servers can carry targetServiceAccount /
-          authProviderType, and shared runners can point GEMINI_CLI_HOME at a per-job directory, but there is
-          no on-behalf-of exchange for the agent itself.
+          Partial: the product can keep credential paths out of sandboxed commands and strip secrets from child
+          environments, but none of it is admin-requirable (the sandbox yields to -s and GEMINI_SANDBOX; see
+          D3-EI) and there is no credential broker. Unsandboxed, run_shell_command inherits the developer's
+          full credential set: the ssh-agent socket, the git credential helper, gcloud application-default
+          credentials, ~/.aws, kube configurations and browser profiles; environment redaction removes
+          variables, not files or sockets. Required MCP servers can authenticate with google_credentials or
+          service_account_impersonation instead of a user token. The configuration reference names the
+          redaction keys both security.environmentVariableRedaction.* and security.allowedEnvironmentVariables /
+          blockedEnvironmentVariables; the settings table uses the former.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: partial
@@ -481,37 +622,43 @@ tools:
               verified: 2026-09-10
       - mitigation: AML.M0031
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          Trusted folders gate context and .env loading; auto memory is experimental, off by default and
-          approval-gated; checkpointing snapshots before edits
+          security.folderTrust.enabled; experimental.autoMemory (off, inbox review); admin policy rules over
+          write_file / replace on memory files; general.checkpointing.enabled; context.fileName
         steps:
           - title: Require folder trust
             body:
               - Set security.folderTrust.enabled to true in the system settings; untrusted folders then skip
-                workspace settings, .env, MCP servers, extensions, custom commands and automatic context
-                loading. Do not ship GEMINI_CLI_TRUST_WORKSPACE=true or --skip-trust outside CI.
+                workspace settings, .env files, MCP servers, custom commands and extension management. Do not
+                ship GEMINI_CLI_TRUST_WORKSPACE=true or --skip-trust outside CI.
             url: https://geminicli.com/docs/cli/trusted-folders/
           - title: Keep auto memory off
             body:
-              - Leave experimental.autoMemory false; when enabled it mines ~/.gemini/tmp/<project>/chats and
-                proposes memory and skill updates that still need user approval.
+              - Set experimental.autoMemory to false in the system settings; when on, it drafts .patch
+                candidates from past sessions into a /memory inbox that the user must approve.
             url: https://geminicli.com/docs/cli/auto-memory/
-          - title: Fix the context file names
+          - title: Gate memory-file writes
             body:
-              - Set context.fileName in the system settings to the reviewed file names the organisation uses
-                and require folder trust so untrusted clones do not inject context.
-            url: https://geminicli.com/docs/cli/gemini-md/
-        evidence: []
+              - The agent saves memories by editing Markdown memory files with write_file or replace; add an
+                admin-tier rule for toolName ["write_file", "replace"] with an argsPattern matching those files
+                and decision ask_user or deny.
+            url: https://geminicli.com/docs/reference/policy-engine/
+          - title: Make edits revertible
+            body:
+              - Set general.checkpointing.enabled to true so a shadow Git snapshot is taken before each file
+                modification and /restore can roll it back.
+            url: https://geminicli.com/docs/cli/checkpointing/
         note: >-
-          The settings reference lists security.folderTrust.enabled as default true while the Trusted Folders
-          page says the feature is disabled by default; set it explicitly. The global ~/.gemini/GEMINI.md is
-          user-writable and no admin lock is documented.
-
-
-          [capabilitySystemPromptManagement] GEMINI_SYSTEM_MD replaces the entire built-in prompt from any
-          file and has no documented admin lock; project GEMINI.md files load from the workspace and any
-          directory a tool touches, subject only to folder trust.
+          Partial: agent-written memory can be switched off, its writes gated and reverted, but instruction
+          sources cannot be locked and no content is validated. ~/.gemini/GEMINI.md is user-writable; project
+          GEMINI.md files load from the workspace, its ancestors and, just in time, any directory a tool
+          touches, with @file imports; context.fileName fixes the file names, not their contents;
+          GEMINI_SYSTEM_MD replaces the whole built-in system prompt from any file (including through a trusted
+          project's .gemini/.env) with no admin lock. Project hooks are fingerprinted and re-prompt when their
+          command changes. The settings reference lists security.folderTrust.enabled as default true while the
+          Trusted Folders page says the feature is disabled by default, so set it explicitly. Session
+          transcripts persist under ~/.gemini/tmp; general.sessionRetention.* bounds them.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMemoryProtection
@@ -555,30 +702,42 @@ tools:
                   url: https://geminicli.com/docs/cli/gemini-md/
               verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          ${VAR} substitution in settings for MCP headers and env; automatic redaction of secret-named
-          inherited variables
+          Sign in with Google (cached, refreshable OAuth) forced with security.auth.enforcedType; $VAR / ${VAR}
+          substitution in settings; admin-required MCP servers with google_credentials or
+          service_account_impersonation; the system keychain only for extension settings marked sensitive
         steps:
-          - title: Reference secrets, do not inline them
+          - title: Refuse static keys
             body:
-              - Use "$VAR_NAME" / "${VAR_NAME}" substitution in mcpServers env and headers so the system
-                settings file carries no literal tokens.
+              - Set security.auth.enforcedType to "oauth-personal" in the system settings.json so users on an
+                API key or other method are prompted to switch to Google sign-in and non-interactive runs exit.
+            url: https://geminicli.com/docs/cli/enterprise/
+          - title: Keep literals out of settings
+            body:
+              - Reference secrets as $VAR_NAME or ${VAR_NAME} in mcpServers env and headers so no settings file
+                carries a literal token.
             url: https://geminicli.com/docs/reference/configuration/
-        evidence: []
+          - title: Use Google credentials for corporate servers
+            body:
+              - Define Required MCP Servers with authProviderType google_credentials or
+                service_account_impersonation (targetServiceAccount) instead of static headers.
+            url: https://geminicli.com/docs/admin/enterprise-controls/
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] API keys are read from GEMINI_API_KEY / GOOGLE_API_KEY, shell profiles
-          or a plaintext .gemini/.env; nothing vaults them, and variables declared explicitly in a server's
-          env block (or by an extension) are trusted and skip the automatic redaction. Prefer Sign in with
-          Google (cached OAuth) or Vertex ADC over long-lived keys.
+          Partial: one credential path can be forced and it is short-lived, but storage is not hardened. The
+          authentication page says Google sign-in credentials are cached locally without naming a keychain; MCP
+          OAuth tokens sit in ~/.gemini/mcp-oauth-tokens.json; GEMINI_API_KEY, GOOGLE_API_KEY and
+          service-account key paths come from the environment, shell profiles or plaintext .gemini/.env files.
+          Only extension settings marked sensitive go to the system keychain. enforcedType is a local file
+          setting with the bypasses listed under D3-MFA. Secret-named variables are withheld from stdio MCP
+          servers by default and from shell commands when security.environmentVariableRedaction.enabled is on,
+          which keeps them out of tool output the model reads; values declared in a server's env block pass
+          through. The Required MCP Servers console location could not be verified.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -598,33 +757,40 @@ tools:
                   url: https://geminicli.com/docs/reference/configuration/
               verified: 2026-09-10
       - mitigation: cap-mcp-tool-integrity
-        coverage: native
+        coverage: partial
         mechanism: >-
-          mcp.allowed / mcp.excluded, the Management Console MCP allowlist and required servers, the
-          extensions toggle
-        note: >-
-          Rated native on the same rule as Copilot CLI, Codex and Cowork: mcp.allowed / mcp.excluded and the
-          Management Console allowlist admit servers by name and URL. Admission is not integrity — no
-          content-hash pinning or tool-definition scanning is documented. v0.59.0 fixed SSRF in MCP OAuth
-          metadata discovery.
-        steps: &a1
-          - title: Allowlist servers centrally
+          mcp.allowed / mcp.excluded with system-defined mcpServers (admin-owned command arrays) and per-server
+          includeTools / excludeTools; the Management Console MCP allowlist; security.allowedExtensions and
+          security.blockGitExtensions for extension-bundled servers
+        steps:
+          - title: Allowlist and define servers centrally
             body:
-              - Define mcpServers and mcp.allowed in the system settings; the enterprise page warns that mcpServers
-                without mcp.allowed still lets users add their own.
+              - In the system settings define each approved server in mcpServers, with the package version
+                written into the command for stdio servers, and list the names in mcp.allowed; without
+                mcp.allowed users can add their own servers.
             url: https://geminicli.com/docs/cli/enterprise/
           - title: Use the console allowlist where available
             body:
-              - The Management Console MCP allowlist ignores unlisted local servers and clears command / args / env / cwd,
-                so only the listed remote servers connect; Required MCP Servers inject corporate servers with
-                their own auth.
+              - The Management Console MCP Servers allowlist ignores unlisted local servers, takes url, type and
+                trust from the admin entry and clears local command, args, env and cwd, so only listed remote
+                servers connect.
             url: https://geminicli.com/docs/admin/enterprise-controls/
-          - title: Bound extensions
+          - title: Bound extension-bundled servers
             body:
-              - Extensions bundle MCP servers, hooks, commands and skills from any GitHub URL; disable extension
-                installation with the console Extensions control, or review each with gemini extensions list.
-            url: https://geminicli.com/docs/extensions/
-        verified: 2026-09-10
+              - Set security.allowedExtensions to regex patterns for approved extension sources, or
+                security.blockGitExtensions to true, in the system settings.
+            url: https://geminicli.com/docs/reference/configuration/
+        note: >-
+          Partial on the rule applied to every vendor: an allowlist admits servers but pins nothing they serve.
+          Gemini CLI does no tool-definition scanning, content hashing or re-verification after an update; its
+          schema processing only strips properties for API compatibility. Because the system file's
+          same-named definition wins, the admin's command array is authoritative, which pins a version for stdio
+          servers only when the admin writes one into the command; remote servers, including everything on the
+          console allowlist, are unpinned. Enforced by the CLI on the device, with the settings-file bypasses
+          under AML.M0028; the console Extensions and MCP toggles switch whole features off. The console's
+          location could not be verified (goo.gle/manage-gemini-cli resolves to the geminicli.com home page).
+          v0.59.0 fixed an SSRF in MCP OAuth metadata discovery.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMcpToolSecurity
@@ -640,27 +806,58 @@ tools:
                 the Management Console allowlist admit servers by name and URL. Admission is not integrity —
                 no content-hash pinning or tool-definition scanning is documented. v0.59.0 fixed SSRF in MCP
                 OAuth metadata discovery.
-              steps: *a1
+              steps:
+                - title: Allowlist servers centrally
+                  body:
+                    - Define mcpServers and mcp.allowed in the system settings; the enterprise page warns that
+                      mcpServers without mcp.allowed still lets users add their own.
+                  url: https://geminicli.com/docs/cli/enterprise/
+                - title: Use the console allowlist where available
+                  body:
+                    - The Management Console MCP allowlist ignores unlisted local servers and clears command /
+                      args / env / cwd, so only the listed remote servers connect; Required MCP Servers inject
+                      corporate servers with their own auth.
+                  url: https://geminicli.com/docs/admin/enterprise-controls/
+                - title: Bound extensions
+                  body:
+                    - Extensions bundle MCP servers, hooks, commands and skills from any GitHub URL; disable
+                      extension installation with the console Extensions control, or review each with gemini
+                      extensions list.
+                  url: https://geminicli.com/docs/extensions/
               verified: 2026-09-10
       - mitigation: AML.M0029
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          ask_user default policy on write tools; security.disableYoloMode, security.disableAlwaysAllow;
-          Strict Mode in the console
+          ask_user decisions in admin-tier policy TOML; tools.confirmationRequired; security.disableYoloMode,
+          security.disableAlwaysAllow and security.enablePermanentToolApproval false in the system settings;
+          Management Console Strict Mode
         steps:
+          - title: Require approval on named actions
+            body:
+              - Add admin-tier rules with decision "ask_user" for consequential shell prefixes (commandPrefix),
+                write tools and MCP tools (mcpName) in the system policies directory.
+            url: https://geminicli.com/docs/reference/policy-engine/
           - title: Remove the bypasses
             body:
-              - Set security.disableYoloMode true (blocks --yolo even when flagged) and
-                security.disableAlwaysAllow true (removes "Always allow" from confirmations) in the system
-                settings; leave security.enablePermanentToolApproval false.
+              - In the system settings set security.disableYoloMode and security.disableAlwaysAllow to true, keep
+                security.enablePermanentToolApproval false, and list consequential tools in
+                tools.confirmationRequired, which takes precedence over allowed tools and tools.core.
             url: https://geminicli.com/docs/reference/configuration/
           - title: Strict Mode
             body:
-              - Where the Management Console is in use, Strict Mode prevents yolo mode globally and cannot be
-                overridden locally.
+              - Where the Management Console is in use, Strict Mode (enabled by default) prevents yolo mode and
+                cannot be overridden locally.
             url: https://geminicli.com/docs/admin/enterprise-controls/
-        evidence: []
+        note: >-
+          Native: a present person approves each gated call in a confirmation dialog, an administrator can
+          force ask_user on named actions, and yolo, "Always allow" and permanent approvals can be removed; in
+          headless runs ask_user is treated as deny, so nothing is approved silently. Residual paths: auto_edit
+          mode auto-approves edit tools unless an admin ask_user rule for write_file / replace outranks it; an
+          MCP server with trust true skips confirmations (required servers default to trust true, and only
+          system-defined or console servers put that flag under the administrator's control); --allowed-tools
+          skips the dialog for listed tools but yields to tools.confirmationRequired. Approval is per call and
+          has no expiry or identity binding beyond the local session.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -688,17 +885,26 @@ tools:
         coverage: partial
         mechanism: >-
           Central mcpServers plus mcp.allowed in the system settings; Management Console MCP allowlist and
-          required servers
-        note: >-
-          The admin allowlist is the only approved-server record and covers MCP servers only; extensions,
-          sub-agents and skills have no registry beyond the on/off toggles.
-        steps: &a1
+          required servers; security.allowedExtensions for extension sources
+        steps:
           - title: Treat the allowlist as the record
             body:
               - Keep the mcpServers / mcp.allowed block (or the console allowlist) under change control as the
                 authoritative list of approved tool servers.
             url: https://geminicli.com/docs/cli/enterprise/
-        verified: 2026-09-10
+          - title: Restrict extension sources
+            body:
+              - Set security.allowedExtensions in the system settings to regex patterns for the organisation's
+                approved extension sources; extensions that match none are refused.
+            url: https://geminicli.com/docs/reference/configuration/
+        note: >-
+          Partial by the rule: a settings allowlist enforced by the CLI, with no owner, version or approval
+          record, covering MCP servers by name. Extensions are bounded only by source pattern or on/off
+          (security.allowedExtensions, security.blockGitExtensions, the console Extensions control); skills
+          and sub-agents by switches (skills.disabled, the console's Unmanaged Capabilities) and admin deny
+          rules on the sub-agent name. experimental.extensionRegistryURI feeds an explore UI, not an enforced
+          registry. Reconciliation against discovered installs is the governance platform's job.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -712,19 +918,32 @@ tools:
               note: >-
                 The admin allowlist is the only approved-server record and covers MCP servers only;
                 extensions, sub-agents and skills have no registry beyond the on/off toggles.
-              steps: *a1
+              steps:
+                - title: Treat the allowlist as the record
+                  body:
+                    - Keep the mcpServers / mcp.allowed block (or the console allowlist) under change control as
+                      the authoritative list of approved tool servers.
+                  url: https://geminicli.com/docs/cli/enterprise/
               verified: 2026-09-10
       - mitigation: cap-shadow-ai-discovery
         coverage: external
-        mechanism: Not offered
+        mechanism: >-
+          EDR / MDM software inventory and SSE/CASB; the CLI's User-Agent and install footprint are the
+          integration points
+        evidence:
+          - title: Telemetry reference, client identification (GeminiCLI User-Agent prefix and surface tag)
+            url: https://geminicli.com/docs/cli/telemetry/
+          - title: Control network access with user domain restrictions (X-GeminiCodeAssist-Allowed-Domains)
+            url: https://docs.cloud.google.com/gemini/docs/codeassist/network-access
         note: >-
-          Discover installs with software inventory or EDR: the npm package @google/gemini-cli, the gemini
-          binary, ~/.gemini and the Docker image ghcr.io/google/gemini-cli. An enforced auth type makes
-          personal API-key use a detectable settings mismatch.
-        evidence: &a1
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://geminicli.com/docs/
-        verified: 2026-09-10
+          External: Google offers no discovery of unmanaged Gemini CLI use; Code Assist usage metrics count
+          active users in the organisation's own projects only. Find installs with EDR or MDM inventory: the npm
+          package @google/gemini-cli, the gemini binary, ~/.gemini and the sandbox image
+          ghcr.io/google/gemini-cli. On the network, SSE/CASB can match the User-Agent prefix GeminiCLI with its
+          surface tag (terminal, vscode, zed). Prevention, credited here only: X-GeminiCodeAssist-Allowed-Domains
+          and X-GoogApps-Allowed-Domains at the proxy refuse non-organisation Google accounts, and
+          security.auth.enforcedType turns a personal API key into a settings mismatch.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityShadowAiDiscovery
@@ -737,39 +956,50 @@ tools:
                 Discover installs with software inventory or EDR: the npm package @google/gemini-cli, the
                 gemini binary, ~/.gemini and the Docker image ghcr.io/google/gemini-cli. An enforced auth type
                 makes personal API-key use a detectable settings mismatch.
-              evidence: *a1
+              evidence:
+                - title: Vendor docs index, reviewed for the integration point (2026-09-10)
+                  url: https://geminicli.com/docs/
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          OpenTelemetry export to Google Cloud Logging / Trace / Monitoring via telemetry.target gcp; Code
-          Assist admin logging to a Cloud Logging bucket
+          OpenTelemetry export from the CLI (telemetry.enabled, target, otlpEndpoint, logPrompts in the system
+          settings); Code Assist logging to Cloud Logging (Admin for Gemini > Settings); Cloud Audit Logs Data
+          Access entries for cloudaicompanion.googleapis.com
         steps:
           - title: Export telemetry centrally
             body:
-              - In the system settings set telemetry.enabled true, telemetry.target "gcp" and decide
-                telemetry.logPrompts explicitly (the enterprise page recommends false); a "Gemini CLI
-                Monitoring" dashboard template exists in Cloud Monitoring.
+              - In the system settings set telemetry.enabled true, telemetry.target "gcp" or an otlpEndpoint for
+                the organisation's collector, and telemetry.logPrompts explicitly; gemini_cli.tool_call events
+                carry function_name, function_args and decision, with session.id and user.email on every record.
             url: https://geminicli.com/docs/cli/telemetry/
           - title: Turn on Code Assist logging
             body:
-              - In Admin for Gemini > Settings enable "Logging for Code Assist metadata" and "Logging for Code
-                Assist prompts and responses" (both off by default) so Standard/Enterprise requests land in
-                Cloud Logging; CLI entries carry client_name cloudcode_cli.
+              - In the Google Cloud console open Admin for Gemini > Settings and enable Logging for Code Assist
+                metadata and Logging for Code Assist prompts and responses (loggingSettings API log_metadata and
+                log_prompts_and_responses).
             url: https://docs.cloud.google.com/gemini/docs/configure-logging
-        evidence: []
+          - title: Enable Data Access audit logs
+            body:
+              - Enable Data Access audit logs for the cloudaicompanion API so TaskCompletionService.CompleteTask
+                calls are recorded under protoPayload.serviceName="cloudaicompanion.googleapis.com".
+            url: https://docs.cloud.google.com/gemini/docs/audit-logging
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Telemetry is emitted by the client, so it is only as tamper-resistant as
-          the system settings that turn it on; the Gemini for Google Cloud audit-logging page does not say
-          whether CLI requests appear in Cloud Audit Logs, and Data Access logs must be enabled.
+          Partial: the per-event export has the right content (tool calls with arguments and decision, approval
+          mode switches, hook calls, ConSeca verdicts, correlated by session.id) but the user can turn it off:
+          the telemetry page says environment variables override settings, and GEMINI_TELEMETRY_ENABLED set to
+          anything but true or 1 disables it; GEMINI_TELEMETRY_OTLP_ENDPOINT and GEMINI_TELEMETRY_LOG_PROMPTS
+          override likewise. The server-side records cannot be switched off by the user but cover only the
+          Code Assist sign-in path and model traffic, not local tool decisions; the Code Assist logging pages
+          state that recording is limited to interactions within an IDE while their sample entries carry
+          client_name cloudcode_cli, so CLI coverage is unconfirmed. Capture only: tamper resistance comes from
+          the sink. telemetry.logPrompts defaults to true on the telemetry page;
+          privacy.usageStatisticsEnabled is Google's own usage stream, not the organisation's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: partial
@@ -797,20 +1027,32 @@ tools:
       - mitigation: cap-agent-kill-switch
         coverage: partial
         mechanism: >-
-          Licence and IAM revocation on the Google Cloud project; console MCP / extensions toggles; system
-          settings tools.core
-        note: >-
-          Removing the Code Assist licence or project IAM stops Sign in with Google sessions, but a developer
-          with a Gemini API key keeps working unless security.auth.enforcedType and network egress rules deny
-          that path.
-        steps: &a1
+          Unassign the Code Assist licence (Admin for Gemini > Manage Gemini Code Assist > Manage Subscription >
+          License Management) and remove the Gemini for Google Cloud User role; security.auth.enforcedType to
+          close the API-key path
+        steps:
           - title: Cut the licensed path
             body:
-              - In Admin for Gemini > Manage Gemini Code Assist > Manage Subscription > License Management select the user
-                and Unassign License (needs consumerprocurement.licensePools.unassign), or remove the IAM
-                binding on the Google Cloud project the CLI authenticates against.
+              - In Admin for Gemini select Manage Gemini Code Assist > Manage Subscription > License Management >
+                Manage Automatic License Assignment, select the user and Unassign License (needs
+                consumerprocurement.licensePools.unassign on the billing account); with automatic assignment on,
+                remove the user's Gemini for Google Cloud User role on the project instead.
             url: https://docs.cloud.google.com/gemini/docs/codeassist/manage-licenses
-        verified: 2026-09-10
+          - title: Close the unlicensed paths
+            body:
+              - Set security.auth.enforcedType in the system settings so an API key cannot replace the revoked
+                licence.
+            url: https://geminicli.com/docs/cli/enterprise/
+        note: >-
+          Partial: an administrator can block new work from the Google control plane, but nothing documented
+          stops a running session. Unassigning the licence or removing IAM fails later Code Assist calls; the
+          delay is not documented, and cached OAuth tokens and in-flight turns are not addressed. With automatic
+          licence assignment on, individual licences cannot be removed and a user with the required roles is
+          reassigned on next use, so the IAM role is the lever. Management Console toggles (MCP, Extensions,
+          Strict Mode) block features, not sessions; Turn off Code Assist only stops subscription renewal.
+          API-key and Vertex paths are outside the licence. An EDR kill of the gemini process is the external
+          complement.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -825,27 +1067,38 @@ tools:
                 Removing the Code Assist licence or project IAM stops Sign in with Google sessions, but a
                 developer with a Gemini API key keeps working unless security.auth.enforcedType and network
                 egress rules deny that path.
-              steps: *a1
+              steps:
+                - title: Cut the licensed path
+                  body:
+                    - In Admin for Gemini > Manage Gemini Code Assist > Manage Subscription > License Management
+                      select the user and Unassign License (needs consumerprocurement.licensePools.unassign), or
+                      remove the IAM binding on the Google Cloud project the CLI authenticates against.
+                  url: https://docs.cloud.google.com/gemini/docs/codeassist/manage-licenses
               verified: 2026-09-10
       - mitigation: D3-PA
-        coverage: unknown
-        mechanism: EDR around the process; BeforeTool hooks as the pre-tool-call integration point
-        steps: []
+        coverage: external
+        mechanism: >-
+          EDR on the endpoint; the gemini process tree, the sandbox container or sandbox-exec wrapper and the
+          OTel tool-call events are the integration points
         evidence:
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://geminicli.com/docs/
+          - title: Telemetry reference, gemini_cli.tool_call events (function_name, function_args, decision)
+            url: https://geminicli.com/docs/cli/telemetry/
+          - title: Sandboxing, container and sandbox-exec process model
+            url: https://geminicli.com/docs/cli/sandbox/
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEdr] Hooks in the system settings can call an endpoint agent before every tool call and
-          deny on its verdict; otherwise watch for the sandbox container, writes under ~/.gemini and child
-          processes of the gemini binary.
+          External: Gemini CLI does no process analysis of its own; EDR is the product class. EDR sees the node
+          process running the npm package @google/gemini-cli (binary gemini), the shells it spawns for
+          run_shell_command, stdio MCP server processes and, when sandboxed, the docker or podman container from
+          ghcr.io/google/gemini-cli or the sandbox-exec wrapper. There is no processWrapper or launcher key; the
+          enterprise page's wrapper script on PATH is the nearest launcher point. Correlate EDR events with the
+          OTel gemini_cli.tool_call records (command text in function_args, session.id, user.email). A
+          hooks.BeforeTool command can call a local EDR agent and deny on its verdict, an attach point that the
+          user can disable.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEdr
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityEdr
               coverage: external
@@ -861,25 +1114,40 @@ tools:
       - mitigation: cap-agent-egress-control
         coverage: partial
         mechanism: >-
-          GOOGLE_GEMINI_BASE_URL / GOOGLE_VERTEX_BASE_URL proxy overrides; tools.sandboxNetworkAccess;
-          *-proxied Seatbelt profiles
-        note: >-
-          Model traffic can be pointed at an organisation gateway and sandboxed tools can be denied network or
-          forced through a proxy, but web-fetch, MCP servers outside the sandbox and the CLI process itself
-          are bounded only by the host network policy; Code Assist supports VPC Service Controls on the
-          service side.
-        steps: &a1
-          - title: Route the model calls
-            body:
-              - Set GOOGLE_GEMINI_BASE_URL or GOOGLE_VERTEX_BASE_URL to the organisation's AI gateway and deny direct
-                egress to the Google endpoints.
-            url: https://geminicli.com/docs/reference/configuration/
+          tools.sandboxNetworkAccess (on/off); *-proxied SEATBELT_PROFILE with GEMINI_SANDBOX_PROXY_COMMAND for
+          an organisation-written domain allowlist; agents.browser.allowedDomains for the browser agent;
+          GOOGLE_GEMINI_BASE_URL / GOOGLE_VERTEX_BASE_URL for model traffic
+        steps:
           - title: Deny sandbox network
             body:
-              - On macOS set SEATBELT_PROFILE to a *-proxied profile so tool traffic exits through the proxy only; for
-                containers keep tools.sandboxNetworkAccess at its default false (settings reference).
+              - Keep tools.sandboxNetworkAccess false (the default) in the system settings.
+            url: https://geminicli.com/docs/reference/configuration/
+          - title: Proxy the macOS sandbox
+            body:
+              - Set SEATBELT_PROFILE to a *-proxied profile (permissive-proxied, restrictive-proxied or
+                strict-proxied) so sandboxed network traffic goes through a proxy.
             url: https://geminicli.com/docs/cli/sandbox/
-        verified: 2026-09-10
+          - title: Allowlist destinations in the proxy
+            body:
+              - Point GEMINI_SANDBOX_PROXY_COMMAND at a proxy script that admits only the AI gateway, the
+                package mirror and approved hosts; the example admits HTTPS to listed domains and declines the
+                rest.
+            url: https://geminicli.com/docs/examples/proxy-script/
+          - title: Route the model calls
+            body:
+              - Set GOOGLE_GEMINI_BASE_URL (API-key auth) or GOOGLE_VERTEX_BASE_URL (Vertex auth) to the
+                organisation's AI gateway and deny direct egress to the Google endpoints.
+            url: https://geminicli.com/docs/reference/configuration/
+        note: >-
+          Partial: the sandbox has network on/off, and a domain allowlist exists only as an
+          organisation-written proxy script or for the browser agent (agents.browser.allowedDomains). None of it
+          is admin-lockable: SEATBELT_PROFILE, GEMINI_SANDBOX_PROXY_COMMAND and GEMINI_SANDBOX are environment
+          variables and the sandbox yields to them (see D3-EI). Bypasses: unsandboxed runs, remote MCP servers,
+          web_fetch (it blocks private and internal addresses and asks for confirmation, but retrieves through
+          the Gemini API's urlContext) and the CLI's own API traffic; the base-URL overrides cover API-key and
+          Vertex auth only. The endpoint egress allowlist enforced by device management is the control the
+          drawing pins; Code Assist supports VPC Service Controls on the service side.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -895,34 +1163,46 @@ tools:
                 network or forced through a proxy, but web-fetch, MCP servers outside the sandbox and the CLI
                 process itself are bounded only by the host network policy; Code Assist supports VPC Service
                 Controls on the service side.
-              steps: *a1
+              steps:
+                - title: Route the model calls
+                  body:
+                    - Set GOOGLE_GEMINI_BASE_URL or GOOGLE_VERTEX_BASE_URL to the organisation's AI gateway and
+                      deny direct egress to the Google endpoints.
+                  url: https://geminicli.com/docs/reference/configuration/
+                - title: Deny sandbox network
+                  body:
+                    - On macOS set SEATBELT_PROFILE to a *-proxied profile so tool traffic exits through the proxy
+                      only; for containers keep tools.sandboxNetworkAccess at its default false (settings
+                      reference).
+                  url: https://geminicli.com/docs/cli/sandbox/
               verified: 2026-09-10
       - mitigation: D3-FA
-        coverage: unknown
-        mechanism: Not applicable
-        steps: []
+        coverage: external
+        mechanism: >-
+          Package mirror / artifact repository with malware scanning; integration points are
+          security.allowedExtensions for extension sources and the sandbox image and proxy for installs
         evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://geminicli.com/docs/
+          - title: Settings reference, security.allowedExtensions and security.blockGitExtensions
+            url: https://geminicli.com/docs/reference/configuration/
+          - title: Extension reference, gemini extensions install (GitHub URL or local path, --ref)
+            url: https://geminicli.com/docs/extensions/reference/
+          - title: Sandboxing, custom sandbox image and proxied profiles
+            url: https://geminicli.com/docs/cli/sandbox/
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityModelScanning] No model artifacts are loaded locally; every auth path is a remote Google
-          endpoint.
-
-
-          [capabilityAiBom] Checked 2026-09-15 against the npm registry: @google/gemini-cli 0.60.0 carries npm
-          registry signatures (dist.signatures) but no provenance attestation (no dist.attestations), and
-          nothing manifests the extensions and MCP servers a session loads. Registry signatures prove the
-          registry served the tarball, not who built it. Record the CLI, extension and MCP server versions
-          yourself.
+          External: Gemini CLI scans nothing it downloads or installs. Extensions are copied from a GitHub URL or
+          local path (optionally pinned with --ref), stdio MCP servers commonly launch through npx, and agent
+          commands install packages at will. Integration points for the package mirror: security.allowedExtensions
+          restricted to the organisation's git mirror (or security.blockGitExtensions), a tools.sandbox image
+          from the organisation's registry whose package-manager configuration points at the mirror, and
+          *-proxied profiles with GEMINI_SANDBOX_PROXY_COMMAND to force installs through it. No model files are
+          loaded locally. Checked 2026-09-25 on the npm registry: @google/gemini-cli 0.61.0 carries registry
+          signatures but no provenance attestation.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityModelScanning
             - capabilityAiBom
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityModelScanning
               coverage: notApplicable

@@ -111,6 +111,17 @@ remainder are in `docs/VALIDATION-2026-09-10-TOOLING.md`. `toolOpenclaw` and `to
 personal agent the "admin" is the user who runs it, so `native` means the user can set it in the
 product's own config, and the grid's band says so.
 
+Re-verified 2026-09-25 against the MITRE capability definitions, for the thirteen entities on the
+third-party coding & desktop agent and coding & desktop session runtime drawings: the 65 rows left
+`unknown` by the capability migration were rewritten, the 10 missing rows (Credential Hardening on
+every hosted entity, four more on `toolClaudeCoworkCloud`) added, and every other row re-checked
+against the vendor page it cites. 40 `native` ratings came down, mostly by five rules now written into
+the rows: an MCP allowlist admits servers but pins nothing they serve; an AI reviewer is not human
+approval and a merge gate approves only the output; a sandbox a user can step out of (an approved
+escalation, an unlockable exclusion list) is not a required boundary; a kill switch that only blocks
+new sessions is partial unless the stop of a running one is documented; a path exclusion is
+minimisation, not detection.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.

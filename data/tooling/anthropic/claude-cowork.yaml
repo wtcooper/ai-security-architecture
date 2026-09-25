@@ -4,6 +4,15 @@
 # the cloud sessions run on a different runtime with a different drawing, so since 2026-09-17
 # they are a second entity (toolClaudeCoworkCloud, archHostedAgentSessions) below; the desktop
 # entity keeps the device MDM keys that reach only local sessions.
+# Standard (claude.ai) deployments document only the device keys on the Help Center "Enterprise
+# configuration for Claude Desktop" page; the wider key set on claude.com/docs/third-party/claude-desktop/
+# configuration (coworkEgressAllowedHosts, disabledBuiltinTools, disableBypassPermissionsMode, ...) is
+# documented for Claude Desktop on 3P, and rows name it as 3P only.
+# 2026-09-25: re-verified toolClaudeCowork and toolClaudeCoworkCloud against the MITRE capability rules;
+# every cited URL answered 200 with no redirect (support.claude.com did not wall curl or WebFetch);
+# trust.anthropic.com renders client-side and was read in a browser; the Cowork Enterprise Admin Guide
+# (claude.com/resources/tutorials/claude-cowork-enterprise-administrator-guide) redirects to
+# academy.claude.com/tutorials/claude-cowork-enterprise-administrator-guide and is not cited.
 vendor: anthropic
 family: Claude Cowork
 tools:
@@ -21,12 +30,15 @@ tools:
         url: >-
           https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile
         note: >-
-          Announced 7 July 2026 (beta, Max first). "Run Cowork in the cloud" is on by default on Team; on
-          Enterprise it turns on by default starting 10 September 2026 unless an owner already turned it off.
-          Device managed settings do not reach these sessions.
+          Announced 7 July 2026 (beta, Max first). "Run Cowork in the cloud" is on by default on Team and off
+          by default on Enterprise, where an owner turns it on and grants the "Cowork in the cloud" capability
+          through custom roles. Device managed settings do not reach these sessions.
       - name: Dispatch (background tasks) and scheduled tasks
         class: cloudAgent
         url: https://claude.com/docs/cowork/guide/dispatch
+        note: >-
+          Dispatch runs its tasks on the desktop (Pro and Max, not offered to new users); scheduled tasks run
+          in the cloud with no device online.
     architecture: archCodingAgentThirdParty
     status: ga
     asOf: "2026-09"
@@ -35,10 +47,10 @@ tools:
         Cowork is Anthropic's agentic workspace for non-developers: the Claude Code architecture inside Claude
         Desktop, working on the user's own files, connectors, skills and plugins, with sub-agents, browser use
         (Claude in Chrome or a built-in browser) and computer use. Local sessions run shell and document tools
-        in a hardened VM on the device with file access scoped to connected folders and web fetches to an
-        egress allowlist; cloud sessions (web, mobile, Chrome side panel) run on Anthropic's servers, save
-        sessions and files to the account, keep working with every device offline, and can only touch local
-        folders while the desktop app is open. Inference is the Anthropic API on first-party plans, or the
+        in a hardened VM on the device with file access scoped to connected folders and shell traffic held to
+        the organisation's egress policy; cloud sessions (web, mobile, Chrome side panel) run on Anthropic's
+        servers, save sessions and files to the account, keep working with every device offline, and can only
+        touch local folders while the desktop app is open. Inference is the Anthropic API on first-party plans, or the
         organisation's provider on Claude Desktop on 3P.
       - >-
         Modelled as a third-party coding and desktop agent: it is the Claude Code runtime inside a vendor
@@ -50,9 +62,12 @@ tools:
         built-in browser toggle, "Allow 'Automatically approve' mode", "Allow 'Always allow' for connector
         tools", an OTLP collector for session events, and curated plugin marketplaces (Installed by default /
         Available / Required / Not available), with role-based access on Enterprise; on the device, Claude
-        Desktop's managed configuration (com.anthropic.claudefordesktop, HKLM\SOFTWARE\Policies\Claude) adds
-        allowedWorkspaceFolders, coworkEgressAllowedHosts, disabledBuiltinTools, disableBypassPermissionsMode
-        and coworkTabEnabled. Cowork sessions never fetch Claude Code server-managed settings. No behavioural
+        Desktop's enterprise policy (com.anthropic.claudefordesktop, HKLM\SOFTWARE\Policies\Claude) adds
+        allowedWorkspaceFolders, secureVmFeaturesEnabled, isLocalDevMcpEnabled, isDesktopExtensionEnabled and
+        forceLoginOrgUUID, and local sessions read Claude Code managed settings deployed on the device; the
+        wider key set (coworkEgressAllowedHosts, disabledBuiltinTools, disableBypassPermissionsMode,
+        coworkTabEnabled) is documented for Claude Desktop on 3P. Cowork sessions never fetch Claude Code
+        server-managed settings. No behavioural
         baseline or drift detection is offered; the OTLP event stream is the raw material if one is built.
     facts:
       - label: Plans
@@ -89,9 +104,10 @@ tools:
         url: https://support.claude.com/en/articles/14782391-claude-enterprise-consumption-guide
       - label: Network path
         value: >-
-          TLS to the provider; egressProxyUrl / egressProxyPacUrl in Claude Desktop managed configuration
-          route app and agent traffic; HTTPS_PROXY, NODE_EXTRA_CA_CERTS and CLAUDE_CODE_CLIENT_CERT/KEY are
-          read from managed and user settings only in app-managed sessions, never from repository settings.
+          TLS to the provider; on Claude Desktop on 3P, egressProxyUrl / egressProxyPacUrl in managed
+          configuration route app and agent traffic; HTTPS_PROXY, NODE_EXTRA_CA_CERTS and
+          CLAUDE_CODE_CLIENT_CERT/KEY are read from managed and user settings only in app-managed sessions, never
+          from repository settings.
         url: https://code.claude.com/docs/en/network-config
       - label: Docs index
         value: claude.com/docs/cowork plus the Help Center Cowork on Team and Enterprise article
@@ -100,49 +116,57 @@ tools:
       - risk: riskPromptInjection
         note: >-
           Cowork reads documents, web pages (via the built-in browser or Claude in Chrome) and connector
-          results as instructions with "Automatically approve" on by default; the egress allowlist and
-          connector tool approvals are the containment.
+          results as instructions, with the "Automatically approve" mode offered to members by default on Team
+          and Enterprise; the egress policy and connector tool approvals are the containment.
       - risk: riskRogueActions
         note: >-
           "Always allow" for connector tools is off by default because it removes the per-tool prompt; bypass
-          permissions mode can be removed with disableBypassPermissionsMode in managed configuration.
+          ("Skip all approvals") can be removed with disableBypassPermissionsMode only on Claude Desktop on 3P.
       - risk: riskSensitiveDataDisclosure
         note: >-
-          Users can attach home folders, Documents, AppData and whole drives (September 2026);
-          allowedWorkspaceFolders in managed configuration is the fence. OTLP export carries only metadata by
-          default; an admin can opt in to prompt, response and tool-argument content via otlpContentCapture on
-          the Team/Enterprise console integration.
+          Users can attach home folders, Documents, AppData and whole drives (4 September 2026; SSH keys and
+          cloud credentials inside them stay off-limits); allowedWorkspaceFolders in the enterprise policy is
+          the fence. The Help Center says OTLP events include prompt content by default, while the Cowork
+          monitoring reference says metadata only unless content capture is enabled; filter at the collector.
       - risk: riskShadowAndUnknownAgents
         note: >-
-          Cloud sessions, Dispatch and scheduled tasks run unattended without a device; the Enterprise console
-          can enable cloud capability per group, and the Compliance API lists remote Cowork sessions including
+          Cloud sessions and scheduled tasks run unattended without a device; the Enterprise console can enable
+          cloud capability per group, and the Compliance API lists remote Cowork sessions including
           agent-owned scheduled runs.
       - risk: riskToolSourceProvenance
         note: >-
-          Users can add plugin marketplaces by URL and upload plugins; admins curate marketplaces (Installed
-          by default, Available, Required, Not available) and can disable user marketplaces and uploads.
+          Users can add plugin marketplaces and upload plugins; admins curate marketplaces (Installed by
+          default, Available, Required, Not available), claude.ai applies the admin console's
+          strictKnownMarketplaces and blockedMarketplaces to marketplaces added from Cowork, and turning off
+          user marketplaces and uploads is a Claude Desktop on 3P key.
     controls:
       - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
-          Auto-mode classifier ("Automatically approve"), browser safety classifiers, egress allowlist;
-          Enterprise Inference hooks govern Cowork prompts
-        steps: &a1
-          - title: Keep tool approvals in the loop
+          Anthropic's content classifiers scan untrusted content entering Claude's context (no administrator
+          setting); Inference hooks (Enterprise, beta) hold every governed Cowork prompt and returned tool result
+          for an allow or deny verdict from the organisation's AI security server
+        steps:
+          - title: Put an inspector on returned tool content (Enterprise, beta)
             body:
-              - Leave "Allow 'Always allow' for connector tools" off and consider turning off "Allow 'Automatically
-                approve' mode" under Organization settings > Cowork > Permissions for sensitive teams.
-            url: >-
-              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
-          - title: Inspect prompts inline (Enterprise, beta)
+              - At Organization settings > Data and privacy > Inference hooks turn on "Allow for your
+                organization", register your AI security server, set Failure handling to "Block the request" and
+                turn on "Enforce verdicts" so Cowork prompts and tool results wait for its verdict.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Know what the vendor screening covers
             body:
-              - Inference hooks send every governed Cowork prompt, including tool results, to your AI security server for
-                an allow/deny verdict before inference.
-            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+              - The Cowork safety page states that content classifiers scan all untrusted content entering
+                Claude's context and flag potential injections; there is no setting, threshold or event export
+                for them.
+            url: https://support.claude.com/en/articles/13364135-use-claude-cowork-safely
         note: >-
-          The auto-mode and browser classifiers screen proposed actions; the egress allowlist contains.
-          Document and connector content is not classified for injected instructions.
-        verified: 2026-09-10
+          Partial on the rule applied to every vendor: vendor-internal screening that is not admin-configurable,
+          plus an inline hook that is an attach point until the organisation's server does the classifying.
+          Inference hooks govern Cowork on web, desktop and mobile, including tool results, but return only allow
+          or deny (no strip or quarantine), are an Enterprise beta, never send system prompts or tool
+          definitions, and are not available on Bedrock or Google Cloud deployments. The "Automatically approve"
+          safety check judges proposed actions, which is action policy, not input screening.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -153,7 +177,18 @@ tools:
               mechanism: >-
                 Auto-mode classifier ("Automatically approve"), browser safety classifiers, egress allowlist;
                 Enterprise Inference hooks govern Cowork prompts
-              steps: *a1
+              steps:
+                - title: Keep tool approvals in the loop
+                  body:
+                    - Leave "Allow 'Always allow' for connector tools" off and consider turning off "Allow 'Automatically
+                      approve' mode" under Organization settings > Cowork > Permissions for sensitive teams.
+                  url: >-
+                    https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+                - title: Inspect prompts inline (Enterprise, beta)
+                  body:
+                    - Inference hooks send every governed Cowork prompt, including tool results, to your AI security server for
+                      an allow/deny verdict before inference.
+                  url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
               note: >-
                 The auto-mode and browser classifiers screen proposed actions; the egress allowlist contains.
                 Document and connector content is not classified for injected instructions.
@@ -161,20 +196,36 @@ tools:
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
-          allowedWorkspaceFolders and Read deny rules limit what can be read; connector write permissions can
-          be removed; Inference hooks (Enterprise) inspect prompts inline; coworkEgressAllowedHosts limits
-          where data can go
-        steps: &a1
-          - title: Fence data paths
+          Inference hooks (Enterprise, beta) hand every governed Cowork prompt, tool result and uploaded file
+          text to the organisation's DLP server for allow or deny; allowedWorkspaceFolders, the built-in
+          exclusion of credential locations and a Blocked or read-only connector tool policy minimise what can be
+          read
+        steps:
+          - title: Inspect prompts and tool results inline (Enterprise, beta)
             body:
-              - Combine allowedWorkspaceFolders, disabledBuiltinTools Read rules for secret paths and connector read-only
-                permissions; add Inference hooks for inline DLP on Enterprise.
-            url: https://claude.com/docs/third-party/claude-desktop/configuration
+              - At Organization settings > Data and privacy > Inference hooks connect your DLP or AI security
+                server and turn on "Enforce verdicts"; it denies requests carrying regulated content, since
+                rewriting or redacting a prompt is not supported.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Fence the folders Cowork can mount
+            body:
+              - Set allowedWorkspaceFolders in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude to
+                the folders users may connect (unset is unrestricted).
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Keep sensitive connectors read-only
+            body:
+              - Set write tools to Blocked at Organization settings > Connectors, or per custom role on the
+                Connectors tab under Organization settings > Roles (Enterprise).
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
         note: >-
-          Folder scoping, deny rules and the egress allowlist restrict paths; Inference hooks are the only
-          content-inspection path and only for prompts the organisation's server governs. File contents read
-          inside the VM are not scanned.
-        verified: 2026-09-10
+          Partial by the rule: an inline hook that can block is an attach point, and nothing in the product
+          masks or tokenises a value. Folder allowlists, the exclusion of SSH keys, AWS and Google Cloud
+          credentials and shell profiles from attached home folders (changelog, 4 September 2026) and read-only
+          connector policy are data minimisation, not detection. Hooks see what reaches the model (browser pages
+          and file contents only as far as they enter the conversation); the Compliance API supports DLP after
+          the fact.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -186,42 +237,54 @@ tools:
                 allowedWorkspaceFolders and Read deny rules limit what can be read; connector write
                 permissions can be removed; Inference hooks (Enterprise) inspect prompts inline;
                 coworkEgressAllowedHosts limits where data can go
-              steps: *a1
+              steps:
+                - title: Fence data paths
+                  body:
+                    - Combine allowedWorkspaceFolders, disabledBuiltinTools Read rules for secret paths and connector read-only
+                      permissions; add Inference hooks for inline DLP on Enterprise.
+                  url: https://claude.com/docs/third-party/claude-desktop/configuration
               note: >-
                 Folder scoping, deny rules and the egress allowlist restrict paths; Inference hooks are the
                 only content-inspection path and only for prompts the organisation's server governs. File
                 contents read inside the VM are not scanned.
               verified: 2026-09-10
       - mitigation: D3-MFA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          "Enable for your organization" toggle at Organization settings > Cowork; Enterprise custom roles and
-          groups gate Cowork and cloud capability; SSO/SCIM at the organisation; forceLoginOrgUUID in Claude
-          Desktop managed configuration
+          "Require SSO for Claude" (Organization settings > Organization and access > Authentication) sends
+          every interactive sign-in through the IdP, whose MFA policy applies; forceLoginOrgUUID pins Claude
+          Desktop to the organisation; "Shortened session length" bounds how long a sign-in lasts (Enterprise)
         steps:
-          - title: Enable Cowork for the right people
+          - title: Enforce SSO
             body:
-              - Turn on "Enable for your organization" at Organization settings > Cowork and, on Enterprise,
-                grant Cowork and cloud sessions to specific groups through custom roles.
-            url: >-
-              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+              - After domain verification and IdP setup, toggle on "Require SSO for Claude" under Organization
+                settings > Organization and access > Authentication, and require MFA in the IdP.
+            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
           - title: Pin the desktop app to your organisation
             body:
-              - Deploy forceLoginOrgUUID in the com.anthropic.claudefordesktop profile or
-                HKLM\SOFTWARE\Policies\Claude so the app only accepts your organisation's logins.
+              - Deploy forceLoginOrgUUID in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude; login
+                fails for any account outside the listed organisations.
             url: >-
               https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
-        evidence: []
+          - title: Bound session lifetime (Enterprise)
+            body:
+              - At Organization settings > Organization and access > Session security enable "Shortened session
+                length" (1, 7, 14 or 28 days) so users sign in, and meet the IdP's MFA, again.
+            url: https://support.claude.com/en/articles/13163631-configuring-session-security-settings
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial by the rule: MFA is configured in the IdP, not in Claude, which documents no second-factor
+          requirement of its own. Paths that skip a fresh challenge: the desktop's signed-in session (kept while
+          the user stays active unless Shortened session length is set), cloud sessions and scheduled tasks that
+          keep running on that sign-in with no device present (the architecture overview describes a
+          trusted-device and recent-sign-in requirement for cloud sessions without naming the toggle), and
+          personal accounts on unmanaged devices, which the tenant-restriction header or Enterprise domain
+          capture address. Claude Desktop on 3P has no Anthropic identity; sign-in is the provider's or the
+          organisation's IdP.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -246,24 +309,28 @@ tools:
       - mitigation: cap-ai-vendor-assessment
         coverage: external
         mechanism: >-
-          Help Center "Claude Cowork architecture overview" (execution models, per-session cloud sandbox,
-          session-scoped tokens) and the Trust Center "Claude Cowork desktop security architecture overview"
-          plus certifications feed the buyer's TPRM platform; cadence and reassessment live in the
-          organisation's own tooling
-        steps: &a1
-          - title: Attach the Cowork architecture evidence
-            body:
-              - Record the architecture overview (a sandbox per cloud session, a mandatory egress proxy, connector tokens
-                never entering the sandbox) and request the desktop security architecture overview it points
-                to on the Trust Center.
+          The Anthropic Trust Center (SOC 2 Type 2 and CSA STAR L2 report, ISO 27001 and ISO 42001
+          certificates, 2025 annual penetration testing reports, SIG Lite and CAIQ questionnaires, "Claude Cowork
+          Desktop Security Architecture Overview" and "Claude Cowork Security Best Practices") and the Help
+          Center architecture overview feed the organisation's TPRM platform
+        evidence:
+          - title: Anthropic Trust Center (compliance scope table and resources, read 2026-09-25)
+            url: https://trust.anthropic.com/
+          - title: Claude Cowork architecture overview (execution modes, isolation, admin controls)
             url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
-          - title: Collect certifications and the 3P data path
-            body:
-              - Pull the certifications and compliance reports from the Trust Center; for Claude Desktop on 3P the legal
-                page states conversation content goes only to the configured inference endpoint and the
-                compliance posture follows that provider.
+          - title: What Certifications has Anthropic obtained?
+            url: https://support.claude.com/en/articles/10015870-what-certifications-has-anthropic-obtained
+          - title: Legal and compliance (Claude Desktop on 3P)
             url: https://claude.com/docs/third-party/claude-desktop/legal
-        verified: 2026-09-10
+        note: >-
+          External by the rule applied to every vendor: the questionnaire, evidence expiry and reassessment
+          trigger live in the organisation's TPRM platform. The Trust Center lists SOC 2 Type II, ISO
+          27001:2022, ISO/IEC 42001:2023, HIPAA and CSA STAR against Claude Enterprise and Claude Team, and most
+          documents are behind a request-access form. Reassess when the defaults move: cloud sessions on by
+          default for Team, the built-in browser and Claude in Chrome on by default for Enterprise from 10
+          September 2026, skill and plugin scanning on by default for Enterprise from 2 October 2026. On Claude
+          Desktop on 3P the compliance posture follows the configured inference provider.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiTprm
@@ -276,25 +343,54 @@ tools:
                 sandbox, session-scoped tokens) and the Trust Center "Claude Cowork desktop security
                 architecture overview" plus certifications feed the buyer's TPRM platform; cadence and
                 reassessment live in the organisation's own tooling
-              steps: *a1
+              steps:
+                - title: Attach the Cowork architecture evidence
+                  body:
+                    - Record the architecture overview (a sandbox per cloud session, a mandatory egress proxy, connector tokens
+                      never entering the sandbox) and request the desktop security architecture overview it points
+                      to on the Trust Center.
+                  url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+                - title: Collect certifications and the 3P data path
+                  body:
+                    - Pull the certifications and compliance reports from the Trust Center; for Claude Desktop on 3P the legal
+                      page states conversation content goes only to the configured inference endpoint and the
+                      compliance posture follows that provider.
+                  url: https://claude.com/docs/third-party/claude-desktop/legal
               verified: 2026-09-10
       - mitigation: cap-agent-action-policy-enforcement
         coverage: partial
         mechanism: >-
-          Managed configuration disabledBuiltinTools (tool or argument-scoped rules such as Read(**/.env)) and
-          builtinToolPolicy (ask / allow per tool); Claude Code managed deny rules apply to Cowork's
-          mcp__workspace__bash and web_fetch tools in local sessions
-        steps: &a1
-          - title: Deny tools by policy on the device
+          Organisation-wide connector tool policy and custom-role grants (Always allow / Needs approval /
+          Blocked per connector or tool) enforced on Anthropic's servers for local and cloud sessions; Claude
+          Code managed settings on the device (permissions.deny / ask, allowManagedPermissionRulesOnly) for
+          local sessions; the "Automatically approve" safety check is a classifier
+        steps:
+          - title: Set the connector tool policy
             body:
-              - Set disabledBuiltinTools (for example Bash, Read(**/.env)) and builtinToolPolicy ask entries in Claude
-                Desktop managed configuration; managed Bash and WebFetch deny rules in Claude Code policy also
-                stop Cowork's workspace tools.
-            url: https://claude.com/docs/third-party/claude-desktop/configuration
+              - At Organization settings > Connectors set each connector's tools to Always allow, Needs approval or
+                Blocked, and on Enterprise narrow them per role on the Connectors tab under Organization settings >
+                Roles.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Deny tools in local sessions from device policy
+            body:
+              - Deploy permissions.deny rules in Claude Code managed settings (MDM or managed-settings.json); a
+                whole-tool Bash or WebFetch deny also stops Cowork's mcp__workspace__bash and
+                mcp__workspace__web_fetch, but allow rules and argument-scoped Bash rules do not carry over.
+            url: https://code.claude.com/docs/en/permissions
+          - title: Know which sessions read device policy
+            body:
+              - Local Cowork sessions read the MDM policy and managed-settings file on the device and never fetch
+                server-managed settings; cloud sessions read neither.
+            url: https://code.claude.com/docs/en/managed-settings
         note: >-
-          Cloud sessions do not read device policy; only the console toggles and connector tool settings reach
-          them.
-        verified: 2026-09-10
+          Partial by the rule: deterministic rules exist, but connector tools are matched by name only (no
+          arguments or target), shell commands in local sessions only as a whole tool, and cloud sessions get
+          the connector policy and console toggles alone. The Automatically approve check is a model, not a
+          policy decision point. Browser actions follow the site allowlist and blocklist at Organization
+          settings > Claude in Chrome. Decisions reach the OTLP export as tool_decision events (source "config").
+          Claude Desktop on 3P adds disabledBuiltinTools and builtinToolPolicy with argument-scoped rules, of
+          which Cowork's own sandboxed shell honours bare tool names only.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRuntimeEnforcement
@@ -306,49 +402,55 @@ tools:
                 Managed configuration disabledBuiltinTools (tool or argument-scoped rules such as
                 Read(**/.env)) and builtinToolPolicy (ask / allow per tool); Claude Code managed deny rules
                 apply to Cowork's mcp__workspace__bash and web_fetch tools in local sessions
-              steps: *a1
+              steps:
+                - title: Deny tools by policy on the device
+                  body:
+                    - Set disabledBuiltinTools (for example Bash, Read(**/.env)) and builtinToolPolicy ask entries in Claude
+                      Desktop managed configuration; managed Bash and WebFetch deny rules in Claude Code policy also
+                      stop Cowork's workspace tools.
+                  url: https://claude.com/docs/third-party/claude-desktop/configuration
               note: >-
                 Cloud sessions do not read device policy; only the console toggles and connector tool settings
                 reach them.
               verified: 2026-09-10
       - mitigation: AML.M0031
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          desktopSessionCleanupPeriodDays for local transcripts; cloud sessions deletable by users; Compliance
-          API retention follows custom periods; skills and memory managed in Customize
+          Account memory is off by default on Team and Enterprise and turned on at Organization settings >
+          Capabilities (local sessions do not use it); skills and plugins locked to reviewed sources at
+          Organization settings > Plugins & skills > Policy; organisation instructions;
+          desktopSessionCleanupPeriodDays for local transcripts; folder and project instructions have no admin
+          control
         steps:
+          - title: Decide on memory
+            body:
+              - Leave memory off or turn it on at Organization settings > Capabilities (and grant the Memory
+                capability per role on Enterprise); users can view, edit and delete what is saved.
+            url: >-
+              https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context
+          - title: Lock instruction sources to reviewed skills and plugins
+            body:
+              - At Organization settings > Plugins & skills > Policy turn off "User-created skills" and set
+                Publishing to "Requires review", and deliver standing skills in plugins set to Required.
+            url: https://support.claude.com/en/articles/13119606-provision-and-manage-skills-for-your-organization
+          - title: Set organisation instructions
+            body:
+              - Enter them under Organization settings > Organization and access > Organization instructions (up
+                to 3,000 characters, up to an hour to apply); they are prompt-level guidance, not enforcement.
+            url: https://support.claude.com/en/articles/14546867-set-organization-instructions
           - title: Bound local transcripts
             body:
-              - Set desktopSessionCleanupPeriodDays in managed settings; Desktop and Cowork transcripts are
-                otherwise exempt from cleanupPeriodDays.
+              - Set desktopSessionCleanupPeriodDays in Claude Code managed settings on the device; Desktop and
+                Cowork transcripts are otherwise kept at any age.
             url: https://code.claude.com/docs/en/settings-reference
-          - title: Append organisation instructions
-            body:
-              - Set organizationInstructions in the com.anthropic.claudefordesktop profile or
-                HKLM\SOFTWARE\Policies\Claude; the docs state it is guidance the model follows, not an
-                enforced control.
-            url: https://claude.com/docs/third-party/claude-desktop/configuration
-          - title: Lock instruction sources to admin-provisioned plugins
-            body:
-              - Set skillCreationEnabled, userPluginMarketplacesEnabled and userPluginUploadsEnabled false and
-                deliver skills and hooks through allowedPluginMarketplaces or org-plugins/ so only reviewed
-                instructions load.
-            url: https://claude.com/docs/third-party/claude-desktop/extensions
-          - title: Scan skills and plugins (Enterprise)
-            body:
-              - Turn on skill scanning so skills and plugins are checked for malicious content; classifiers
-                separately flag injections in untrusted content entering context.
-            url: https://support.claude.com/en/articles/13364135-use-claude-cowork-safely
-        evidence: []
         note: >-
-          Retention only: cleanup periods and deletion bound how long transcripts and memory persist. Nothing
-          validates memory writes or restores a known-good state.
-
-
-          [capabilitySystemPromptManagement] Cowork does not read the Claude Code CLI's ~/.claude directory,
-          and whether a managed claudeMd policy reaches Cowork sessions is not documented; Cowork project
-          instructions live on the device and are not admin-controlled.
+          Partial by the rule: memory can be disabled and instruction sources partly locked, but nothing
+          validates what is written. Folder instructions, which Claude "can also update on its own during a
+          session", and project instructions and project memory have no admin control ("owners cannot restrict
+          project creation"). Local conversation history sits outside standard retention and cannot be deleted
+          centrally. Claude Desktop on 3P adds coworkSessionRetentionDays, which deletes idle local tasks but
+          keeps memory.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMemoryProtection
@@ -401,29 +503,31 @@ tools:
               verified: 2026-09-10
       - mitigation: D3-EI
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          Local tools run in the hardened Cowork VM with file access scoped to connected folders
-          (allowedWorkspaceFolders) and web fetches to coworkEgressAllowedHosts; cloud sessions run on
-          Anthropic-managed servers; requireCoworkFullVmSandbox is deprecated
+          Shell commands and code run in a dedicated Linux VM isolated by the hypervisor (Apple
+          Virtualization.framework, Hyper-V) with its own egress filtering, syscall restrictions and per-session
+          user isolation, with no user switch to turn it off; allowedWorkspaceFolders limits what the VM mounts;
+          requireCoworkFullVmSandbox (3P) is deprecated
         steps:
           - title: Restrict which folders Cowork can mount
             body:
-              - Set allowedWorkspaceFolders in Claude Desktop managed configuration (unset means
-                unrestricted); September 2026 builds let users attach home folders and whole drives otherwise.
+              - Set allowedWorkspaceFolders in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude
+                (unset is unrestricted; home folders and whole drives can be attached since 4 September 2026).
             url: >-
               https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
-          - title: Note the VM policy gap
+          - title: Keep host-side MCP servers off where not needed
             body:
-              - In a full VM sandbox the device's MDM policy and managed-settings.json are not present, and
-                Cowork never fetches server-managed settings; deliver Cowork controls through Claude Desktop
-                managed configuration instead.
-            url: https://code.claude.com/docs/en/managed-settings
-        evidence: []
+              - Set isLocalDevMcpEnabled and isDesktopExtensionEnabled false on managed devices, because
+                plugin-bundled MCP servers and desktop extensions run on the host outside the VM.
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
         note: >-
-          Inside the boundary: local tools in the Cowork VM, scoped to connected folders. Outside: connector
-          calls, which run through Anthropic's MCP proxy, and cloud sessions, which run on Anthropic-managed
-          servers under Anthropic's isolation.
+          Native: the VM is not a user option, and when it cannot start, shell commands and code execution
+          report "workspace unavailable" instead of running on the host. Outside it: the agent loop itself, file
+          reads and writes in connected folders and web fetches (host-side, gated by an application-layer
+          permission system), plugin MCP servers and desktop extensions (the user's own permissions), the
+          built-in browser and Claude in Chrome, and computer use (Pro and Max beta, no sandbox). Cloud sessions
+          run in Anthropic's per-session sandbox (toolClaudeCoworkCloud).
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -455,30 +559,44 @@ tools:
                 Anthropic-managed servers under Anthropic's isolation.
               verified: 2026-09-10
       - mitigation: AML.M0028
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          Connector tool permissions (read vs write) set org-wide at Organization settings > Connectors;
-          "Allow 'Always allow' for connector tools" off by default; disabledBuiltinTools and
-          builtinToolPolicy on the device; browser toggles
+          Connector tool policy per connector and tool (Always allow / Needs approval / Blocked), organisation-wide
+          and per custom role, enforced on Anthropic's servers; "Allow 'Automatically approve' mode" and the
+          built-in browser and Claude in Chrome toggles; Claude Code managed Read / Edit rules reach local
+          sessions
         steps:
-          - title: Limit connector actions organisation-wide
+          - title: Scope connector tools by role
             body:
-              - At Organization settings > Connectors restrict each connector's tools (for example search but
-                not send) and keep "Allow 'Always allow' for connector tools" off so each call still prompts.
+              - Set the organisation ceiling per tool at Organization settings > Connectors and narrow it per group
+                on the Connectors tab of each custom role under Organization settings > Roles (Enterprise).
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Remove the classifier mode where needed
+            body:
+              - Turn off "Allow 'Automatically approve' mode" under Organization settings > Cowork > Permissions so
+                the mode disappears from members' selector.
             url: >-
-              https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
+              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
           - title: Decide on browsers
             body:
-              - Toggle the built-in browser at Organization settings > Cowork and Claude in Chrome at
-                Organization settings > Claude in Chrome (both turn on by default on Enterprise starting 10
-                September 2026 unless already turned off).
+              - Toggle the built-in browser at Organization settings > Cowork, and Claude in Chrome with its site
+                allowlist and blocklist at Organization settings > Claude in Chrome.
             url: >-
               https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
-        evidence: []
+          - title: Path-scope local file tools
+            body:
+              - Deploy Read and Edit allow and deny rules with allowManagedPermissionRulesOnly in Claude Code
+                managed settings on the device; local Cowork sessions honour them.
+            url: https://code.claude.com/docs/en/managed-settings
         note: >-
-          Connector read/write restrictions and disabledBuiltinTools hide or limit tools; builtinToolPolicy
-          pre-approves. Device policy does not reach cloud sessions, which follow the console settings only.
+          Partial by the rule applied to every vendor: connector tools are allowed or denied by name with no
+          argument or resource scoping, shell commands only as a whole tool, and the "Skip all approvals" mode has
+          no documented console switch on Team. The 3P feature table says neither Automatically approve nor Skip
+          is offered to Claude Enterprise, while the Help Center documents the Automatically approve setting as
+          on by default for Team and Enterprise, so set it explicitly. Device rules never reach cloud sessions.
+          Claude Desktop on 3P adds argument-scoped disabledBuiltinTools and builtinToolPolicy and removes bypass
+          with disableBypassPermissionsMode.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -511,32 +629,44 @@ tools:
                 console settings only.
               verified: 2026-09-10
       - mitigation: D3-CTS
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Enterprise-managed connector authorisation through the IdP with per-role permission scoping;
-          otherwise Claude acts with the user's own connector and browser sessions
+          Connector tokens stay on Anthropic's servers and never enter the VM; the VM sees only connected
+          folders, and Claude's own configuration, SSH keys, AWS and Google Cloud credentials and shell profiles
+          stay off-limits inside attached folders; Enterprise-managed connector authorisation issues IdP-scoped
+          grants; Claude in Chrome acts in the user's signed-in browser
         steps:
-          - title: Provision connectors centrally with scoped permissions
+          - title: Fence the folders Cowork can mount
             body:
-              - Use managed authorisation (Organization settings > Connectors > Configuration) to grant
-                connectors by role through Okta with admin-chosen permission scopes rather than personal OAuth
-                grants.
+              - Set allowedWorkspaceFolders in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude so
+                home folders and whole drives cannot be attached.
             url: >-
-              https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
-        evidence: []
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Issue connector access through the IdP
+            body:
+              - At Organization settings > Connectors open a connector, select "Set up" next to Managed
+                authorization on the Configuration tab, choose Applied roles and Scopes; deprovisioning in the
+                IdP removes the access.
+            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+          - title: Keep Claude out of signed-in browsers where not needed
+            body:
+              - Turn off Claude in Chrome at Organization settings > Claude in Chrome and use the built-in browser,
+                which does not see users' logins unless they import them.
+            url: >-
+              https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] Enterprise-managed connector authorisation scopes what a connector
-          may reach per role; otherwise Claude acts with the user's own connector and browser sessions, and
-          files in connected folders are readable in the VM. No on-behalf-of exchange — the connector call
-          carries the user's authority.
+          Partial by the rule: the credential-location exclusion is built in (changelog, 4 September 2026) but
+          its enforcement layer is not documented, and file tools on the host are gated by an application-layer
+          permission system rather than the OS. What the agent still acts with: the user's full connector OAuth
+          grant (no on-behalf-of exchange; managed authorisation narrows scopes for the listed connectors, Okta
+          only), the user's Chrome sessions through Claude in Chrome, and plugin MCP servers running with the
+          user's own permissions. On Claude Desktop on 3P, Bedrock and Vertex credential files are written into
+          the session working directory mounted into the VM.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: partial
@@ -558,29 +688,34 @@ tools:
                 carries the user's authority.
               verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Connector OAuth tokens held by the platform; inferenceCredentialHelper and credential-helper TTLs on
-          3P deployments; OTLP headers encrypted at rest on Anthropic servers
+          Standard deployments hold no static keys: the claude.ai sign-in follows the IdP and "Shortened session
+          length", connector OAuth tokens stay on Anthropic's servers (lifetime set by the connector's
+          authorisation server under managed authorisation) and OTLP headers are encrypted at rest; on 3P,
+          inferenceCredentialHelper with inferenceCredentialHelperTtlSec, OAuth tokens in Keychain or DPAPI
         steps:
+          - title: Bound the sign-in lifetime (Enterprise)
+            body:
+              - Enable "Shortened session length" under Organization settings > Organization and access > Session
+                security.
+            url: https://support.claude.com/en/articles/13163631-configuring-session-security-settings
           - title: Use a credential helper on third-party deployments
             body:
-              - Set inferenceCredentialHelper (with inferenceCredentialHelperTtlSec) instead of a static
-                inferenceAnthropicApiKey / inferenceGatewayApiKey in managed configuration.
+              - Set inferenceCredentialHelper with inferenceCredentialHelperTtlSec instead of a static
+                inferenceAnthropicApiKey or inferenceGatewayApiKey in Claude Desktop on 3P managed configuration.
             url: https://claude.com/docs/third-party/claude-desktop/configuration
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Connector tokens stay on the platform; files in connected folders,
-          including any .env the user connected, are readable by tools in the VM and so by the model.
-          Credential-helper TTLs on third-party deployments are the only ephemeral issuance.
+          Partial by the rule: custody of the desktop app's own claude.ai sign-in token is not documented for
+          standard deployments (the 3P data-storage page documents Keychain or DPAPI for OAuth tokens and
+          owner-only transient credential files), and on 3P nothing forbids a static managed key. Secrets out of
+          model context: credential locations inside attached folders are excluded, but any other secret file in
+          a connected folder is readable by the model.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -599,30 +734,42 @@ tools:
                 third-party deployments are the only ephemeral issuance.
               verified: 2026-09-10
       - mitigation: cap-mcp-tool-integrity
-        coverage: native
+        coverage: partial
         mechanism: >-
-          Org-enabled connectors only (Organization settings > Connectors), desktop extension allowlist,
-          isLocalDevMcpEnabled, managedMcpServers, admin-curated plugin marketplaces (Installed by default /
-          Available / Required / Not available), userPluginMarketplacesEnabled and userPluginUploadsEnabled
-        steps: &a1
-          - title: Curate plugins and marketplaces
+          Admission only: Owners alone add connectors (Organization settings > Connectors), the desktop extension
+          allowlist, isLocalDevMcpEnabled and isDesktopExtensionEnabled on the device, curated plugin marketplaces
+          and the admin console's strictKnownMarketplaces / blockedMarketplaces; skill and plugin scanning does
+          not cover MCP servers; 3P can pin plugin content by commit SHA or manifestSha256
+        steps:
+          - title: Admit connectors and extensions by allowlist
             body:
-              - Configure organisation plugin marketplaces with installation tiers under Organization settings and, on the
-                device, set userPluginMarketplacesEnabled and userPluginUploadsEnabled false to stop users
-                adding sources.
-            url: >-
-              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
-          - title: Control local MCP and extensions
-            body:
-              - Set isLocalDevMcpEnabled false and turn on the desktop extension allowlist (Organization settings >
-                Connectors > Desktop) so only approved .mcpb extensions load.
+              - Keep connectors owner-added at Organization settings > Connectors and turn on Allowlist on its
+                Desktop tab so only approved .mcpb extensions install.
             url: >-
               https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
+          - title: Stop host-side MCP servers on managed devices
+            body:
+              - Set isLocalDevMcpEnabled false (plugin-bundled and locally configured servers) and
+                isDesktopExtensionEnabled false in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude.
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Restrict marketplace sources
+            body:
+              - Set strictKnownMarketplaces and blockedMarketplaces in the admin console's Claude Code managed
+                settings; claude.ai applies them when anyone adds a marketplace from Customize in Cowork.
+            url: https://code.claude.com/docs/en/managed-settings
+          - title: Pin plugin content (Claude Desktop on 3P)
+            body:
+              - In allowedPluginMarketplaces set ref to a 40-character commit SHA, or manifestSha256 with a sha256 per
+                archive, and set isDesktopExtensionSignatureRequired true.
+            url: https://claude.com/docs/third-party/claude-desktop/extensions
         note: >-
-          Admission by source: connectors the organisation enables, extensions on the allowlist and plugins
-          from curated marketplaces. Admission is not integrity — nothing pins the tool descriptions a
-          connector returns or detects a changed implementation.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: an allowlist admits servers but pins nothing they serve.
+          Remote connectors' tool definitions are neither hashed nor re-gated when they change; the extension
+          allowlist "does not guard against individuals tampering with local MCP file contents after
+          installation"; skill and plugin scanning excludes MCP servers and hooks. Digest pinning exists only on
+          Claude Desktop on 3P and covers plugin content, not remote servers.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMcpToolSecurity
@@ -635,25 +782,53 @@ tools:
                 isLocalDevMcpEnabled, managedMcpServers, admin-curated plugin marketplaces (Installed by
                 default / Available / Required / Not available), userPluginMarketplacesEnabled and
                 userPluginUploadsEnabled
-              steps: *a1
+              steps:
+                - title: Curate plugins and marketplaces
+                  body:
+                    - Configure organisation plugin marketplaces with installation tiers under Organization settings and, on the
+                      device, set userPluginMarketplacesEnabled and userPluginUploadsEnabled false to stop users
+                      adding sources.
+                  url: >-
+                    https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+                - title: Control local MCP and extensions
+                  body:
+                    - Set isLocalDevMcpEnabled false and turn on the desktop extension allowlist (Organization settings >
+                      Connectors > Desktop) so only approved .mcpb extensions load.
+                  url: >-
+                    https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
               note: >-
                 Admission by source: connectors the organisation enables, extensions on the allowlist and
                 plugins from curated marketplaces. Admission is not integrity — nothing pins the tool
                 descriptions a connector returns or detects a changed implementation.
               verified: 2026-09-10
       - mitigation: AML.M0029
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          Per-tool approval prompts for connector tools, "Automatically approve" (classifier) and manual
-          modes, browser Manually approve mode, disableBypassPermissionsMode on the device
+          Manually approve mode; connector tools capped at "Needs approval" ask before every call and lose "Always
+          allow"; "Allow 'Always allow' for connector tools" (off by default) keeps write-capable connector tools
+          on per-task approval; "Allow 'Automatically approve' mode" removes the classifier mode; permanent file
+          deletion always asks
         steps:
-          - title: Remove bypass and keep prompts
+          - title: Force approval on named connector tools
             body:
-              - Set disableBypassPermissionsMode true in Claude Desktop managed configuration and leave "Allow
-                'Always allow' for connector tools" off in the console.
-            url: https://claude.com/docs/third-party/claude-desktop/configuration
-        evidence: []
+              - Set the tools to Needs approval at Organization settings > Connectors or on a custom role's
+                Connectors tab; members then confirm each call and cannot choose Always allow.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Keep persistent approval and the classifier mode off
+            body:
+              - Leave "Allow 'Always allow' for connector tools" off and turn off "Allow 'Automatically approve'
+                mode" under Organization settings > Cowork > Permissions.
+            url: >-
+              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+        note: >-
+          Partial by the rule: a present person approves connector actions with the tool in front of them and an
+          admin can force that for named tools, but with "Always allow" off write tools are approved per task,
+          not per call, unless capped at Needs approval; "Skip all approvals" has no documented console switch on
+          Team (disableBypassPermissionsMode is a 3P key); shell commands in the VM are not individually approved
+          ("you shouldn't expect to validate every individual command"); and scheduled tasks run with an
+          approval mode chosen at creation and nobody present. The Automatically approve reviewer is a model and
+          never counts as human approval.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -672,37 +847,38 @@ tools:
                   url: https://claude.com/docs/third-party/claude-desktop/configuration
               verified: 2026-09-10
       - mitigation: AML.M0024
-        coverage: unknown
+        coverage: native
         mechanism: >-
-          OpenTelemetry export configured at Admin settings > Cowork (OTLP endpoint, protocol, headers) with
-          user_prompt, tool_result (decision_type, decision_source), api_request and tool_decision events
-          carrying user.email by default (metadata only unless otlpContentCapture is enabled); Compliance API
-          local and remote Cowork session transcripts (Enterprise)
+          OpenTelemetry export set by an Owner at Organization settings > Cowork (OTLP endpoint, protocol,
+          headers) for local and cloud sessions: user_prompt, assistant_response, tool_result (tool_name,
+          decision_type, decision_source, tool_parameters), tool_decision, api_request and api_error events
+          correlated by prompt.id and session.id; Compliance API local (cowork) and remote (cowork_remote)
+          session transcripts on Enterprise
         steps:
           - title: Stream Cowork events to the SIEM
             body:
-              - At Admin settings > Cowork set the OTLP endpoint, protocol and headers; events carry metadata
-                only until otlpContentCapture is enabled for userPrompts, assistantResponses or toolDetails,
-                so turn those on deliberately rather than assuming prompt content is already flowing.
-            url: https://claude.com/docs/cowork/monitoring
-          - title: Retrieve transcripts after the fact
+              - At Organization settings > Cowork enter the OTLP endpoint, protocol and headers; new sessions export
+                events, and the headers are encrypted at rest on Anthropic's servers.
+            url: >-
+              https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry
+          - title: Retrieve transcripts after the fact (Enterprise)
             body:
-              - Enterprise Compliance Access Keys with read:compliance_user_data list cowork and cowork_remote
-                sessions and return prompts, responses, tool calls and results.
+              - Use a Compliance Access Key with read:compliance_user_data on /v1/compliance/apps/sessions/local and
+                /v1/compliance/apps/sessions/remote for prompts, responses, tool calls and results.
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityAuditLogging] Native event emission to the organisation's OTLP endpoint; retention,
-          integrity and tamper evidence are what that endpoint provides. Content is metadata only unless
-          content capture is enabled.
+          Native: capture is set by an administrator, carries tool calls and permission decisions to a sink the
+          organisation runs, and no user off switch is documented. The privacy control is contested: the Help
+          Center says prompt content is included by default and to filter at the collector, while the Cowork
+          monitoring reference says events are metadata only unless otlpContentCapture (a 3P key) adds prompts,
+          responses or tool details; check a test session. user.email is always present on standard deployments.
+          Settings load at session start. Integrity and retention are the collector's; audit logs record no
+          Cowork session events, and the Compliance API skips local sessions in HIPAA-ready organisations.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: native
@@ -730,22 +906,37 @@ tools:
                 enabled.
               verified: 2026-09-10
       - mitigation: cap-agent-kill-switch
-        coverage: native
+        coverage: partial
         mechanism: >-
-          Org toggle off, "Run Cowork in the cloud" off, role removal, coworkTabEnabled /
-          secureVmFeaturesEnabled false on the device, connector disable revokes access for everyone
-        steps: &a1
-          - title: Disable Cowork or its cloud variant
+          "Enable for your organization" off at Organization settings > Cowork, the Claude Cowork capability
+          removed from a custom role (up to 15 minutes), secureVmFeaturesEnabled false on managed devices;
+          Inference hooks can deny an account's next request (Enterprise, beta); no administrator stop of a
+          running session is documented
+        steps:
+          - title: Switch Cowork off
             body:
-              - Turn off "Enable for your organization" or "Run Cowork in the cloud" at Organization settings > Cowork; on
-                managed devices set coworkTabEnabled false.
+              - Turn off "Enable for your organization" at Organization settings > Cowork, or remove the Claude
+                Cowork capability from the member's custom role (role changes take up to 15 minutes).
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Remove Cowork from managed devices
+            body:
+              - Set secureVmFeaturesEnabled false in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude.
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Refuse inference for an account (Enterprise, beta)
+            body:
+              - With Inference hooks enforcing, have your AI security server deny that user's requests; turning
+                enforcement on or off reaches every Anthropic server in about a minute.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
         note: >-
-          The organisation toggle applies at the next request; a task already running in the local VM
-          completes. Seat removal alone leaves credentials valid until they expire, as for Claude Code; the
-          docs state no propagation delay, so measure it.
-        verified: 2026-09-10
+          Partial by the rule: the console blocks new use, but whether a running session stops is not documented
+          (delay not documented for the organisation toggle; up to 15 minutes for role changes), network changes
+          apply only to new sessions, and an Inference hooks deny refuses the next request without terminating
+          the session or its scheduled runs. Cloud sessions and scheduled tasks keep running with every device
+          offline, so an EDR process kill, the external complement, reaches only local sessions, and host EDR
+          cannot see inside the VM. Pausing another member's scheduled task is not an admin action.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -756,24 +947,44 @@ tools:
               mechanism: >-
                 Org toggle off, "Run Cowork in the cloud" off, role removal, coworkTabEnabled /
                 secureVmFeaturesEnabled false on the device, connector disable revokes access for everyone
-              steps: *a1
+              steps:
+                - title: Disable Cowork or its cloud variant
+                  body:
+                    - Turn off "Enable for your organization" or "Run Cowork in the cloud" at Organization settings > Cowork; on
+                      managed devices set coworkTabEnabled false.
+                  url: >-
+                    https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
               note: >-
                 The organisation toggle applies at the next request; a task already running in the local VM
                 completes. Seat removal alone leaves credentials valid until they expire, as for Claude Code;
                 the docs state no propagation delay, so measure it.
               verified: 2026-09-10
       - mitigation: cap-shadow-ai-discovery
-        coverage: external
+        coverage: partial
         mechanism: >-
-          Tenant-restriction header on claude.ai traffic; Compliance API session listing shows who is running
-          Cowork; MDM inventory of Claude Desktop
-        steps: &a1
-          - title: Block personal-account Cowork on the corporate network
+          Enterprise domain claiming lists every personal Free, Pro and Max account on the verified domain and
+          "Migrate accounts using your domain" moves or closes them; the anthropic-allowed-org-ids tenant
+          restriction header and forceLoginOrgUUID prevent personal-account use
+        steps:
+          - title: Review personal accounts on your domain (Enterprise)
             body:
-              - Inject anthropic-allowed-org-ids at the TLS-inspecting proxy for claude.ai and api.anthropic.com.
+              - After domain verification and SSO enforcement, review the personal accounts on the domain (email,
+                plan, created, last active; CSV export) and turn on "Migrate accounts using your domain" under
+                Organization settings > Organization and access > Security.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+          - title: Block personal accounts on the corporate network
+            body:
+              - Inject anthropic-allowed-org-ids at the TLS-inspecting proxy for claude.ai, api.anthropic.com,
+                claude.com and anthropic.com.
             url: >-
               https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
-        verified: 2026-09-10
+        note: >-
+          Partial by the rule: the vendor discovers personal accounts on the verified domain, not what they run
+          (Cowork or chat), accounts on personal addresses, Claude Desktop installs or local plugins and MCP
+          servers, which remain for EDR or MDM inventory and SSE/CASB. Team plans can verify a domain and block
+          new personal accounts but not list or claim existing ones. The header and forceLoginOrgUUID prevent
+          rather than discover.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityShadowAiDiscovery
@@ -784,24 +995,43 @@ tools:
               mechanism: >-
                 Tenant-restriction header on claude.ai traffic; Compliance API session listing shows who is
                 running Cowork; MDM inventory of Claude Desktop
-              steps: *a1
+              steps:
+                - title: Block personal-account Cowork on the corporate network
+                  body:
+                    - Inject anthropic-allowed-org-ids at the TLS-inspecting proxy for claude.ai and api.anthropic.com.
+                  url: >-
+                    https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
               verified: 2026-09-10
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-
-          Compliance API remote session list identifies user-owned and agent-owned (scheduled) Cowork
-          sessions; admin console shows enabled connectors, plugins and roles
-        steps: &a1
-          - title: List unattended sessions
+          Organization settings > Plugins & skills > Inventory lists every governed skill and plugin with source,
+          version, capabilities, audience and 30-day use; only Owners add connectors; the desktop extension
+          allowlist; the Compliance API lists agent-owned scheduled sessions (agent_id, started_by_user)
+        steps:
+          - title: Use the plugin and skill inventory
             body:
-              - Query /v1/compliance/apps/sessions/remote; agent-owned sessions carry agent_id and started_by_user for
-                scheduled tasks.
+              - Review Organization settings > Plugins & skills > Inventory, and approve submissions on its
+                Requests tab with Publishing set to "Requires review".
+            url: https://support.claude.com/en/articles/13837433-manage-plugins-for-your-organization
+          - title: Keep connectors owner-added
+            body:
+              - Only Owners add custom connectors, at Organization settings > Connectors; members can connect only
+                what is listed there.
+            url: >-
+              https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp
+          - title: List unattended runs
+            body:
+              - Query /v1/compliance/apps/sessions/remote; agent-owned sessions carry agent_id and started_by_user
+                for scheduled tasks.
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
         note: >-
-          The session list shows what ran and the console shows what is approved; neither is a register with
-          owners, approval state and reconciliation of actual use against it — keep that in the organisation's
-          inventory.
-        verified: 2026-09-10
+          Partial by the rule: the inventory and the connector list are enforced registers for what the
+          organisation distributes, but members can still upload plugins saved locally to their own desktop and
+          run their MCP servers unless isLocalDevMcpEnabled is false, connectors carry no owner or approval
+          record, scheduled tasks are visible only after they run, and group plugin overrides resolve to the most
+          permissive setting.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -812,36 +1042,43 @@ tools:
               mechanism: >-
                 Compliance API remote session list identifies user-owned and agent-owned (scheduled) Cowork
                 sessions; admin console shows enabled connectors, plugins and roles
-              steps: *a1
+              steps:
+                - title: List unattended sessions
+                  body:
+                    - Query /v1/compliance/apps/sessions/remote; agent-owned sessions carry agent_id and started_by_user for
+                      scheduled tasks.
+                  url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
               note: >-
                 The session list shows what ran and the console shows what is approved; neither is a register
                 with owners, approval state and reconciliation of actual use against it — keep that in the
                 organisation's inventory.
               verified: 2026-09-10
       - mitigation: D3-PA
-        coverage: unknown
+        coverage: external
         mechanism: >-
-          Claude Desktop is an MDM-deployed app (PKG / MSIX); the Cowork VM is opaque to host sensors; OTLP
-          tool_result events carry file paths and commands for the SIEM
-        steps:
-          - title: Use the OTLP feed as the endpoint signal
-            body:
-              - Enable toolDetails content capture so tool_input (paths, commands, URLs) reaches the
-                collector, since host EDR cannot see inside the Cowork VM.
-            url: https://claude.com/docs/cowork/monitoring
-        evidence: []
+          Host EDR sees Claude Desktop and the MCP servers and extensions it starts, not the inside of the Cowork
+          VM, and cloud sessions run off the endpoint; OTLP tool_result events (tool_name, tool_parameters, file
+          paths) are the correlation feed
+        evidence:
+          - title: Claude Cowork architecture overview (EDR cannot inspect the VM or cloud sessions)
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: Monitor Claude Cowork activity with OpenTelemetry
+            url: >-
+              https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry
+          - title: Enterprise configuration for Claude Desktop
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityEdr] Sensor scope: the host sees the Claude Desktop process and files it writes; the
-          Cowork VM is a guest the host sensor cannot see into, so tool events from OTLP are the only view of
-          what ran inside it.
+          External (EDR) by the rule: Cowork analyses no process behaviour. Integration points: the Claude Desktop
+          app deployed through MDM, plugin MCP servers and desktop extensions running as host processes the EDR
+          can see, the VM that "is isolated from host-based security tools by design", and the OTLP stream of
+          tool names, parameters and file paths to correlate with EDR telemetry in the SIEM. Cloud sessions are
+          outside every endpoint sensor.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEdr
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityEdr
               coverage: external
@@ -862,18 +1099,34 @@ tools:
       - mitigation: cap-agent-egress-control
         coverage: native
         mechanism: >-
-          coworkEgressAllowedHosts (managed configuration) and the Admin settings > Capabilities > Network
-          egress allowlist; the OTLP collector host is added automatically; egressProxyUrl for the app
-        steps: &a1
-          - title: Allowlist Cowork egress
+          The organisation's network egress policy (Organization settings > Capabilities, Code execution and file
+          creation, "Allow network egress" off / package managers only / package managers and specific domains /
+          all domains) enforced by the VM's egress filtering; the OTLP collector host is added automatically;
+          coworkEgressAllowedHosts on Claude Desktop on 3P
+        steps:
+          - title: Set the egress policy before rollout
             body:
-              - Set coworkEgressAllowedHosts in Claude Desktop managed configuration (and the Network egress allowlist in
-                admin settings) so agent tools reach only named hosts.
+              - At Organization settings > Capabilities turn "Allow network egress" off or choose package managers
+                and specific domains, listing only the hosts agent tools need.
+            url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
+          - title: Know when Cowork picks it up
+            body:
+              - Cowork applies the setting when a session is created, so changes reach new sessions only.
+            url: >-
+              https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Allowlist hosts on third-party deployments
+            body:
+              - Set coworkEgressAllowedHosts in Claude Desktop on 3P managed configuration.
             url: https://claude.com/docs/third-party/claude-desktop/configuration
         note: >-
-          The allowlist bounds fetches from tools in the VM; connector traffic goes through Anthropic's MCP
-          proxy and cloud sessions egress from Anthropic's servers, neither of which the allowlist covers.
-        verified: 2026-09-10
+          Native by the rule: an admin-set domain allowlist members cannot change, enforced around the commands
+          the agent executes. Outside it: web fetch and web search (server-side; turn web search off at
+          Organization settings > Capabilities), connectors and MCP servers including Claude in Chrome, plugin MCP
+          servers on the host, the built-in browser (the device's network; site lists at Organization settings >
+          Claude in Chrome) and the inference API. Every allowlist preset keeps public package managers unless
+          egress is off. The architecture overview says the agent loop's web fetches follow the setting while the
+          Team and Enterprise article says web fetch is exempt; treat it as outside.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -885,44 +1138,52 @@ tools:
                 coworkEgressAllowedHosts (managed configuration) and the Admin settings > Capabilities >
                 Network egress allowlist; the OTLP collector host is added automatically; egressProxyUrl for
                 the app
-              steps: *a1
+              steps:
+                - title: Allowlist Cowork egress
+                  body:
+                    - Set coworkEgressAllowedHosts in Claude Desktop managed configuration (and the Network egress allowlist in
+                      admin settings) so agent tools reach only named hosts.
+                  url: https://claude.com/docs/third-party/claude-desktop/configuration
               note: >-
                 The allowlist bounds fetches from tools in the VM; connector traffic goes through Anthropic's
                 MCP proxy and cloud sessions egress from Anthropic's servers, neither of which the allowlist
                 covers.
               verified: 2026-09-10
       - mitigation: D3-FA
-        coverage: unknown
+        coverage: partial
+        mechanism: >-
+          Skill and plugin scanning (Enterprise) checks third-party skills and plugins on upload or edit and
+          blocks a fail; package installs in the VM follow the organisation's egress policy; on 3P,
+          isDesktopExtensionSignatureRequired and digest-pinned allowedPluginMarketplaces
         steps:
-          - title: Pin the plugin manifest the fleet loads
+          - title: Turn on skill and plugin scanning (Enterprise)
             body:
-              - In allowedPluginMarketplaces set ref to a 40-character commit SHA, or for a url source set
-                manifestSha256 and a sha256 on every archive; Claude Desktop verifies the digest before
-                unpacking.
-            url: https://claude.com/docs/third-party/claude-desktop/extensions
-          - title: Require signed extensions
+              - At Organization settings > Plugins & skills > Policy turn on "Skill and plugin security scanning"
+                (on by default for Enterprise organisations that have not set it from 2 October 2026).
+            url: https://support.claude.com/en/articles/15927065-get-started-with-skill-and-plugin-scanning
+          - title: Send package installs to your mirror
             body:
-              - Set isDesktopExtensionSignatureRequired true so unsigned .mcpb extensions are rejected.
+              - Choose package managers and specific domains under "Allow network egress" at Organization settings >
+                Capabilities and list the artifact repository's host.
+            url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
+          - title: Require signed extensions and pinned plugins (Claude Desktop on 3P)
+            body:
+              - Set isDesktopExtensionSignatureRequired true and pin allowedPluginMarketplaces to a commit SHA or
+                manifestSha256.
             url: https://claude.com/docs/third-party/claude-desktop/extensions
-        evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://claude.com/docs/cowork/overview
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityModelScanning] Not applicable: no model artifacts run locally; inference is remote.
-
-
-          [capabilityAiBom] First-party (claude.ai) marketplaces are curated in the console with installation
-          tiers but no digest pin is documented; the model, bundled skills and server-side connectors have no
-          published manifest.
+          Partial by the rule: the product scans the skills and plugins it installs, within stated bounds (not
+          items present before scanning was turned on, skills shared through MCP servers, MCP servers or hooks,
+          or organisations with CMEK, ZDR or HIPAA); a pass is not a safety guarantee. Package and dependency
+          files remain for an artifact repository with malware scanning, and because every egress preset keeps
+          public package managers reachable, the mirror cannot be the only path unless egress is off. No model
+          files run locally.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityModelScanning
             - capabilityAiBom
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityModelScanning
               coverage: notApplicable
@@ -989,6 +1250,14 @@ tools:
         url: https://claude.com/docs/third-party/claude-desktop/legal
       - title: Anthropic Trust Center
         url: https://trust.anthropic.com
+      - title: Manage custom roles on Enterprise plans (capabilities and connector tool policy)
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+      - title: Create and edit files with Claude (network egress settings)
+        url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
+      - title: Configure Inference hooks
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+      - title: Features (Claude Enterprise versus Claude Desktop on 3P)
+        url: https://claude.com/docs/third-party/claude-desktop/feature-matrix
 
   - id: toolClaudeCoworkCloud
     name: Claude Cowork in the cloud
@@ -1002,10 +1271,12 @@ tools:
       - name: Cowork in Claude Desktop with "Cloud" selected
         class: cloudAgent
         url: https://claude.com/docs/cowork/overview
-      - name: Dispatch (background tasks) and scheduled tasks
+      - name: Scheduled tasks
         class: cloudAgent
-        url: https://claude.com/docs/cowork/guide/dispatch
-        note: Unattended runs on the same cloud runtime, owned by the person who scheduled them.
+        url: https://support.claude.com/en/articles/13854387-schedule-recurring-tasks-in-claude-cowork
+        note: >-
+          Unattended runs on the same cloud runtime, owned by the person who scheduled them. Dispatch, listed
+          here before 2026-09-25, runs its tasks on the desktop and belongs to the desktop entity.
     architecture: archHostedAgentSessions
     status: beta
     asOf: "2026-09"
@@ -1020,7 +1291,7 @@ tools:
         sandbox — calls are made server-side.
       - >-
         Modelled as a vendor-hosted agent session because the loop has left the machine: the doors are the web
-        and mobile apps, the desktop app's Cloud option, Dispatch and the scheduler, and the admin plane is
+        and mobile apps, the Chrome side panel, the desktop app and the scheduler, and the admin plane is
         the claude.ai console only — device managed configuration (allowedWorkspaceFolders,
         coworkEgressAllowedHosts, disabledBuiltinTools) reaches local sessions and not these. Organisation
         settings > Cowork carries "Run Cowork in the cloud" (Team on by default; Enterprise off by default and
@@ -1081,35 +1352,50 @@ tools:
           approve" removes the per-tool prompt.
       - risk: riskShadowAndUnknownAgents
         note: >-
-          Dispatch and scheduled tasks run with no device and no person present; the Compliance API's list of
-          remote sessions, including agent-owned scheduled runs, is the inventory.
+          Scheduled tasks run with no device and no person present; the Compliance API's list of remote
+          sessions, including agent-owned scheduled runs, is the inventory.
       - risk: riskSensitiveDataDisclosure
         note: >-
           Sessions and their files are saved to the account and retained for years unless deleted; the session
           can reach a device's folders whenever the desktop app is open there.
     controls:
       - mitigation: D3-APA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          "Run Cowork in the cloud" per custom role; trusted-device enrolment; SSO at the account layer
+          "Run Cowork in the cloud" at Organization settings > Cowork plus the "Cowork in the cloud (beta)"
+          custom-role capability on Enterprise; only the signed-in account owner starts or steers a session; a
+          trusted-device and recent-sign-in requirement for cloud sessions; the built-in browser and Claude in
+          Chrome toggles govern the reach-back into devices
         steps:
           - title: Gate cloud sessions by role
             body:
-              - On Enterprise the cloud toggle is off by default and granted through custom roles; Team turns
-                it on by default, so turn it off there deliberately.
+              - On Enterprise turn on "Run Cowork in the cloud" at Organization settings > Cowork and grant the
+                Cowork in the cloud capability to groups through custom roles; on Team it is on by default, so
+                turn it off there deliberately.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
-        evidence: []
+          - title: Require trusted devices for cloud sessions
+            body:
+              - In the organisation's cloud-session controls require trusted-device enrollment and a recent
+                sign-in; it then applies to every cloud session in the organisation.
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: Decide the reach-back into devices
+            body:
+              - Toggle the built-in browser at Organization settings > Cowork and Claude in Chrome at Organization
+                settings > Claude in Chrome.
+            url: >-
+              https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga]
+          Partial by the rule: enablement is per role on Enterprise (organisation-wide only on Team) and there is
+          no repository, bot or channel trigger, but the trigger condition is fixed by the vendor (the account
+          owner, from any of their devices), scheduled tasks, which start sessions with nobody present, have no
+          switch of their own on standard deployments (scheduledTasksEnabled is a 3P key), and the trusted-device
+          requirement is described without a named toggle. Sessions cannot be shared with other members.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: native
@@ -1125,19 +1411,23 @@ tools:
               verified: 2026-09-17
       - mitigation: D3-EI
         coverage: native
-        verified: "2026-09-17"
-        mechanism: Per-session ephemeral sandbox on Anthropic servers; always on, no toggle
+        mechanism: >-
+          An isolated, temporary sandbox per session on Anthropic-managed infrastructure, created when the
+          session starts and destroyed when it ends, sharing no state with other sessions or organisations and
+          unable to reach private, internal, link-local or cloud-metadata addresses; always on
         steps:
-          - title: Read the architecture overview
+          - title: Record the isolation claim
             body:
-              - Each cloud session runs in its own ephemeral sandbox with no access to the organisation's
-                network by default; local folders are reachable only through the desktop app's brokered
-                connection.
+              - The architecture overview states one sandbox per session, destroyed at the end, with no state
+                shared across sessions or organisations; there is no setting to change.
             url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
-        evidence: []
         note: >-
-          Vendor-internal isolation with no administrator setting; the architecture overview is the claim,
-          assurance is the evidence.
+          Native by the rule: one sandbox per session, reclaimed after it, documented by the vendor, with
+          assurance through assessment rather than a setting. Outside it: the reach-back to a member's device
+          (local files, the built-in browser and Claude in Chrome run there, only while the desktop app is
+          online and only for connected folders), connector calls and web fetch or web search, which run on
+          Anthropic's servers.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -1159,16 +1449,28 @@ tools:
               verified: 2026-09-17
       - mitigation: cap-agent-egress-control
         coverage: native
-        mechanism: Organisation network-access policy enforced by a mandatory sandbox proxy
-        note: >-
-          The policy is set at Organization settings > Capabilities and applies to every cloud session; device
-          egress keys do not apply.
-        steps: &a2
+        mechanism: >-
+          The organisation's network-access policy (Organization settings > Capabilities, Code execution and file
+          creation, "Allow network egress") enforced by a mandatory proxy outside the sandbox that it cannot
+          reconfigure or bypass; no network access by default on Enterprise; applied when a session is created
+        steps:
           - title: Choose the network-access level
             body:
-              - Enterprise defaults to no access; widen to an allowlist only for the groups whose sessions need the web.
+              - At Organization settings > Capabilities keep "Allow network egress" off or choose package managers
+                and specific domains, listing only the hosts sessions need.
+            url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
+          - title: Confirm cloud sessions inherit it
+            body:
+              - Cloud sessions use the same network-access setting as local Cowork and chat, enforced by the
+                mandatory egress proxy.
             url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
-        verified: 2026-09-17
+        note: >-
+          Native by the rule: an admin-authored allowlist members cannot change, enforced around the sandbox.
+          The setup and agent phases are not separated, every allowlist preset keeps public package managers,
+          and changes reach new sessions only. Outside it: connector calls and web fetch or web search (server
+          side; web search can be turned off at Organization settings > Capabilities), the built-in browser and
+          Claude in Chrome on the member's device, and the inference API. Device egress keys do not apply.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -1180,28 +1482,40 @@ tools:
               note: >-
                 The policy is set at Organization settings > Capabilities and applies to every cloud session;
                 device egress keys do not apply.
-              steps: *a2
+              steps:
+                - title: Choose the network-access level
+                  body:
+                    - Enterprise defaults to no access; widen to an allowlist only for the groups whose sessions need the web.
+                  url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
               verified: 2026-09-17
       - mitigation: D3-CTS
-        coverage: unknown
-        mechanism: Connector tokens held server-side; never present in the sandbox
+        coverage: native
+        mechanism: >-
+          Connector authorisation tokens never enter the sandbox and connector calls are made on the server
+          side; the sandbox holds only session-scoped tokens that expire within hours; there is no repository
+          credential
         steps:
-          - title: Confirm connector calls are server-side
+          - title: Record the credential boundary
             body:
-              - The architecture overview states connector tokens never enter sandboxes and calls are made
-                server-side; no per-session credential is exposed to the model.
+              - The architecture overview states the sandbox holds only session-scoped tokens that expire within
+                hours and that connector tokens never enter it; nothing is configured.
             url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
-        evidence: []
+          - title: Narrow what connector grants reach
+            body:
+              - At Organization settings > Connectors set up Managed authorization for supported connectors with
+                chosen Scopes and Applied roles, so the IdP issues and revokes the grant.
+            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation]
+          Native by the rule: the credentials that matter stay outside the sandbox and what is inside is
+          session-scoped and short-lived. What remains in the member's authority: connector calls carry the
+          member's full grant (no on-behalf-of exchange; managed authorisation narrows scopes for the listed
+          connectors, Okta only), a session that reaches the member's desktop acts in their Chrome sessions
+          through Claude in Chrome, and files saved to the account, secrets included, are readable by the model.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: native
@@ -1215,19 +1529,29 @@ tools:
               verified: 2026-09-17
       - mitigation: AML.M0029
         coverage: partial
-        verified: "2026-09-17"
-        mechanism: '"Automatically approve" and "Always allow for connector tools" toggles'
+        mechanism: >-
+          Manually approve mode and connector tools capped at "Needs approval" ask the owner before each call;
+          "Allow 'Always allow' for connector tools" (off by default) and "Allow 'Automatically approve' mode"
+          at Organization settings > Cowork > Permissions
         steps:
-          - title: Keep connector approvals in the loop
+          - title: Force approval on named connector tools
             body:
-              - Leave "Allow 'Always allow' for connector tools" off and consider turning off "Allow
-                'Automatically approve' mode" for sensitive groups.
+              - Set the tools to Needs approval at Organization settings > Connectors or on a custom role's
+                Connectors tab; members confirm each call and lose the Always allow option.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Keep persistent approval and the classifier mode off
+            body:
+              - Leave "Allow 'Always allow' for connector tools" off and turn off "Allow 'Automatically approve'
+                mode" for sensitive groups under Organization settings > Cowork > Permissions.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
-        evidence: []
         note: >-
-          The toggles govern per-tool prompts in attended sessions; Dispatch and scheduled runs have no prompt
-          to answer, and there is no merge-style gate on their output.
+          Partial by the rule: the owner approves connector calls before they run and an admin can force that for
+          named tools, but scheduled tasks run with an approval mode chosen at creation and nobody present (runs
+          are reviewed afterwards on the Scheduled page), code in the sandbox is not approved per command, "Skip
+          all approvals" has no documented console switch on Team, and the Automatically approve reviewer is a
+          model that never counts. There is no merge-style gate on output.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -1248,18 +1572,29 @@ tools:
                     https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
               verified: 2026-09-17
       - mitigation: AML.M0028
-        coverage: native
-        verified: "2026-09-17"
+        coverage: partial
         mechanism: >-
-          Connector enablement per organisation; curated plugin marketplaces; built-in browser toggle
+          Connector tool policy per tool (Always allow / Needs approval / Blocked), organisation-wide and per
+          custom role, enforced on Anthropic's servers for cloud sessions; the network-access level; code
+          execution, web search, built-in browser and Claude in Chrome toggles; the Automatically approve toggle
         steps:
-          - title: Curate what a cloud session may call
+          - title: Scope connector tools by role
             body:
-              - Connectors and plugin marketplaces are admitted at Organization settings > Cowork; the
-                built-in browser can be disabled for the organisation.
+              - Set each tool's ceiling at Organization settings > Connectors and narrow it per group on the
+                Connectors tab of each custom role under Organization settings > Roles (Enterprise).
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+          - title: Switch off built-in tools a session does not need
+            body:
+              - Turn off web search at Organization settings > Capabilities and the built-in browser at
+                Organization settings > Cowork.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
-        evidence: []
+        note: >-
+          Partial by the rule applied to every vendor: tools are allowed or denied by name with no argument or
+          resource scoping, "Skip all approvals" has no documented console switch on Team, and device managed
+          settings never reach cloud sessions. No repository token exists, so the branch and repository scoping
+          half of the pin does not apply.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -1279,17 +1614,25 @@ tools:
               verified: 2026-09-17
       - mitigation: cap-agent-tool-registry
         coverage: partial
-        mechanism: Compliance API listing of remote Cowork sessions, including scheduled runs
-        note: >-
-          A list of sessions, not a registry with owners and approval; scheduled tasks are owned by whoever
-          created them.
-        steps: &a2
+        mechanism: >-
+          The Compliance API remote session list, with agent-owned scheduled runs (agent_id, started_by_user);
+          Organization settings > Plugins & skills > Inventory for distributed skills and plugins; owner-added
+          connectors
+        steps:
           - title: Export the session list
             body:
-              - Remote Cowork sessions, including agent-owned scheduled runs, are available through the Compliance API
-                sessions endpoint.
+              - Query /v1/compliance/apps/sessions/remote; agent-owned sessions carry agent_id and started_by_user.
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
-        verified: 2026-09-17
+          - title: Review the plugin and skill inventory
+            body:
+              - Organization settings > Plugins & skills > Inventory lists source, version, capabilities, audience
+                and 30-day use for each governed item.
+            url: https://support.claude.com/en/articles/13837433-manage-plugins-for-your-organization
+        note: >-
+          Partial by the rule: there is no admin view of members' scheduled tasks and no way to deny one, runs
+          appear only after they happen, and each task is owned by whoever created it; the inventory covers what
+          the organisation distributes, not what members build for themselves.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -1301,23 +1644,42 @@ tools:
               note: >-
                 A list of sessions, not a registry with owners and approval; scheduled tasks are owned by
                 whoever created them.
-              steps: *a2
+              steps:
+                - title: Export the session list
+                  body:
+                    - Remote Cowork sessions, including agent-owned scheduled runs, are available through the Compliance API
+                      sessions endpoint.
+                  url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
               verified: 2026-09-17
       - mitigation: AML.M0031
         coverage: partial
-        verified: "2026-09-17"
         mechanism: >-
-          Account-level session and file retention; deletion by the user or through the Compliance API
+          Account memory shared with chat, off by default on Team and Enterprise (Organization settings >
+          Capabilities and the Memory role capability); project memory scoped to each project; sessions and
+          files saved to the account; organisation instructions; admin-curated skills and plugins
         steps:
+          - title: Decide on memory
+            body:
+              - Leave memory off or turn it on at Organization settings > Capabilities (per role with the Memory
+                capability on Enterprise); members can view, edit and delete entries.
+            url: >-
+              https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context
+          - title: Lock instruction sources to reviewed skills and plugins
+            body:
+              - At Organization settings > Plugins & skills > Policy turn off "User-created skills" and set
+                Publishing to "Requires review".
+            url: https://support.claude.com/en/articles/13119606-provision-and-manage-skills-for-your-organization
           - title: Set the retention decision
             body:
-              - Remote transcripts are retained for 6 years unless deleted; decide the deletion policy before
-                enabling cloud sessions.
+              - Remote transcripts are kept 6 years unless the member deletes the session, and the Compliance API
+                cannot delete them, so decide the deletion process before enabling cloud sessions.
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
-        evidence: []
         note: >-
-          Retention is administered, not scoped; what a later session may read from an earlier one is not a
-          setting.
+          Partial by the rule: memory can be kept off and instruction sources partly locked, but memory writes
+          are not validated (members review and edit their own), project instructions and project memory have no
+          admin control, and projects can be shared under the Share projects capability. Sessions cannot be
+          shared. A deleted task leaves history immediately and backend storage within 30 days.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMemoryProtection
@@ -1339,18 +1701,30 @@ tools:
               verified: 2026-09-17
       - mitigation: cap-agent-kill-switch
         coverage: partial
-        mechanism: Turning off "Run Cowork in the cloud" or the organisation toggle
-        note: >-
-          Prevents new cloud sessions; the delay before a running Dispatch or scheduled task stops is not
-          documented.
-        steps: &a2
+        mechanism: >-
+          "Run Cowork in the cloud" or "Enable for your organization" off at Organization settings > Cowork, the
+          Cowork in the cloud capability removed from a role (up to 15 minutes), an Inference hooks deny for an
+          account (Enterprise, beta); the owner stops, pauses or deletes their own tasks
+        steps:
           - title: Disable cloud sessions
             body:
-              - Organization settings > Cowork > "Run Cowork in the cloud" off, or "Enable for your organization" off for
-                the whole product.
+              - Turn off "Run Cowork in the cloud", or "Enable for your organization" for the whole product, at
+                Organization settings > Cowork.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
-        verified: 2026-09-17
+          - title: Refuse inference for an account (Enterprise, beta)
+            body:
+              - With Inference hooks enforcing, have your AI security server deny that user's requests; turning
+                enforcement on or off reaches every Anthropic server in about a minute.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+        note: >-
+          Partial by the rule: whether switching cloud sessions off stops a running session or a scheduled task
+          is not documented (delay not documented; role changes take up to 15 minutes; network changes reach new
+          sessions only). Only the owner can stop a task or pause and delete a scheduled one. An Inference hooks
+          deny refuses the next request without terminating the session or cancelling queued runs, and setting a
+          group's pooled budget to $0 freezes its usage on usage-based Enterprise. No EDR complement exists,
+          because the sessions run off every endpoint.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -1362,22 +1736,43 @@ tools:
               note: >-
                 Prevents new cloud sessions; the delay before a running Dispatch or scheduled task stops is
                 not documented.
-              steps: *a2
+              steps:
+                - title: Disable cloud sessions
+                  body:
+                    - Organization settings > Cowork > "Run Cowork in the cloud" off, or "Enable for your organization" off for
+                      the whole product.
+                  url: >-
+                    https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
               verified: 2026-09-17
       - mitigation: cap-agent-tracing
-        coverage: unknown
-        mechanism: Compliance API capture of cloud sessions; OTLP session events to the organisation's collector
+        coverage: native
+        mechanism: >-
+          Compliance API remote session endpoints (product_surface cowork_remote) return prompts, responses,
+          tool calls and tool results; the OTLP export set at Organization settings > Cowork covers cloud
+          sessions with events correlated by prompt.id and session.id
         steps:
-          - title: Stream session events
+          - title: Pull cloud-session transcripts (Enterprise)
             body:
-              - Configure the OTLP collector under Organization settings > Cowork; metadata by default,
-                content capture opt-in.
-            url: https://claude.com/docs/cowork/monitoring
-        evidence: []
+              - Use a Compliance Access Key with read:compliance_user_data on /v1/compliance/apps/sessions/remote
+                and its messages endpoint.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+          - title: Stream session events to your collector
+            body:
+              - At Organization settings > Cowork enter the OTLP endpoint, protocol and headers; the stream covers
+                cloud sessions as well as local ones.
+            url: >-
+              https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry
+        note: >-
+          Native by the rule: programmatic export covering this hosted surface. The OTLP push is the copy the
+          session cannot alter; the Compliance API pull is not, because a member's deletion removes a remote
+          session from it. Tool inputs and results are truncated to 10,000 bytes by default, thinking is left
+          out of the OTLP response event, the OTLP prompt-content default is documented both ways, and Team plans get OTLP only (the
+          Compliance API is Enterprise).
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAuditLogging
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityAuditLogging
               coverage: native
@@ -1389,6 +1784,131 @@ tools:
                       content capture opt-in.
                   url: https://claude.com/docs/cowork/monitoring
               verified: 2026-09-17
+      - mitigation: AML.M0036
+        coverage: native
+        mechanism: >-
+          Spend limits at Organization settings > Usage (organisation, group per-user, seat tier and individual)
+          and pooled monthly group budgets (Enterprise, beta) that pause every member when exhausted; Team
+          usage-credit spend limits
+        steps:
+          - title: Set group spend limits (Enterprise)
+            body:
+              - At Organization settings > Usage open the "By group/tier" tab, choose "Edit limits" on a group and
+                set a Member limit; individual limits override group limits.
+            url: >-
+              https://support.claude.com/en/articles/13799932-manage-groups-and-group-spend-limits-on-enterprise-plans
+          - title: Cap a team with a pooled budget (Enterprise, beta)
+            body:
+              - In the same "Edit limits" dialog set a Pooled monthly budget; when it runs out usage pauses for
+                every member of the group, and $0 freezes the group.
+            url: https://support.claude.com/en/articles/17005973-manage-pooled-group-budgets-on-enterprise-plans
+          - title: Cap usage credits (Team and seat-based Enterprise)
+            body:
+              - At Organization settings > Usage set the organisation-wide monthly spend limit and per-user limits
+                on usage credits.
+            url: >-
+              https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans
+        note: >-
+          Native by the rule: admin-set spend caps stop use when exhausted ("usage can go slightly over a limit
+          before it pauses"). Not offered: a per-session or per-task budget, session duration or concurrency
+          limits, or a cap on scheduled tasks; the pool is shared with chat and Claude Code, seat usage limits
+          are vendor-fixed, and pooled budgets cannot be managed through the Admin API.
+        verified: "2026-09-25"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          Anthropic's content classifiers scan untrusted content entering context (no administrator setting);
+          Inference hooks (Enterprise, beta) hold each governed prompt and returned tool result, connector calls
+          included, for an allow or deny verdict from the organisation's AI security server
+        steps:
+          - title: Put an inspector on returned tool content (Enterprise, beta)
+            body:
+              - At Organization settings > Data and privacy > Inference hooks turn on "Allow for your
+                organization", register your AI security server, choose Failure handling and turn on "Enforce
+                verdicts".
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Know what the vendor screening covers
+            body:
+              - Content classifiers scan all untrusted content entering Claude's context and flag potential
+                injections; there is no setting or event export for them.
+            url: https://support.claude.com/en/articles/13364135-use-claude-cowork-safely
+        note: >-
+          Partial on the rule applied to every vendor: vendor-internal screening that is not admin-configurable,
+          and an inline hook that is an attach point until the organisation's server classifies. Hook verdicts
+          are allow or deny only (no strip or quarantine) and system prompts and tool definitions are never sent.
+          Connector content returning through the organisation's AI gateway on the tunnel path can be
+          classified there as well.
+        verified: "2026-09-25"
+      - mitigation: cap-ai-vendor-assessment
+        coverage: external
+        mechanism: >-
+          The Anthropic Trust Center (SOC 2 Type 2 and CSA STAR L2 report, ISO 27001 and ISO 42001
+          certificates, 2025 annual penetration testing reports, SIG Lite and CAIQ questionnaires, Cowork
+          security documents) and the Help Center architecture overview of cloud sessions feed the
+          organisation's TPRM platform
+        evidence:
+          - title: Anthropic Trust Center (compliance scope table and resources, read 2026-09-25)
+            url: https://trust.anthropic.com/
+          - title: Claude Cowork architecture overview (cloud session architecture)
+            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: What Certifications has Anthropic obtained?
+            url: https://support.claude.com/en/articles/10015870-what-certifications-has-anthropic-obtained
+        note: >-
+          External by the rule applied to every vendor: the TPRM platform holds the questionnaire, evidence
+          expiry and reassessment trigger. The Trust Center lists SOC 2 Type II, ISO 27001:2022, ISO/IEC
+          42001:2023, HIPAA and CSA STAR for Claude Enterprise and Claude Team; its Cowork document is the
+          desktop security architecture, so request the cloud-sandbox, egress-proxy and tenant-isolation claims
+          explicitly. Reassess on the moving defaults: cloud sessions on by default for Team and the default
+          execution place where allowed, Cowork not covered by zero data retention, a beta surface.
+        verified: "2026-09-25"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          Sessions act under the member's own account and connector grants; scheduled runs are agent-owned
+          sessions with an agent_id (cagt_) and started_by_user in the Compliance API
+        steps:
+          - title: Inventory agent-owned runs
+            body:
+              - Query /v1/compliance/apps/sessions/remote without user_ids[], since that filter excludes agent-owned
+                sessions, and read agent_id and started_by_user.
+            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+          - title: Revoke through the member
+            body:
+              - Remove the Cowork in the cloud capability from the member's custom role at Organization settings >
+                Roles, or remove the member from the mapped IdP group so the next SCIM sync drops it.
+            url: https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
+        note: >-
+          Partial by the rule: the session authenticates as the member and carries attribution only; the agent
+          id on scheduled runs is an identifier in the transcript record with no documented separate issuance,
+          authorisation or revocation, so revoking the agent means removing the member's access or deleting the
+          task. Connector actions appear in the connected service as the member.
+        verified: "2026-09-25"
+      - mitigation: D3-CH
+        coverage: partial
+        mechanism: >-
+          Session-scoped sandbox tokens that expire within hours; connector tokens held server-side and, under
+          managed authorisation, issued and revoked by the IdP; MCP tunnels (Enterprise research preview) with a
+          rotatable, revocable tunnel token and a CA the organisation holds; no store for secrets a task needs
+        steps:
+          - title: Rotate and revoke the tunnel credentials
+            body:
+              - Revoke the Tunnels API key at Organization settings > Tunnels > Tunnels API after setup, rotate the
+                tunnel token by incrementing tunnel.tokenVersion (Helm) or --token-version (Compose), and archive
+                the tunnel to invalidate its token.
+            url: https://claude.com/docs/connectors/mcp-tunnels/setup
+          - title: Issue connector credentials through the IdP
+            body:
+              - Set up Managed authorization on supported connectors at Organization settings > Connectors so the
+                IdP sets token lifetime and deprovisioning revokes access.
+            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+        note: >-
+          Partial by the rule: a vendor tunnel exists and its credentials are scoped, rotatable and revocable
+          (outbound-only cloudflared plus proxy, inner TLS with a CA generated in your environment, a server
+          certificate valid 90 days and renewed locally, rotation that does not sever established connections),
+          and sandbox tokens are short-lived, but Cowork offers no encrypted, write-only store for secrets a
+          task needs, so anything a member pastes or saves to the account is readable by the model. Tunnels are
+          an Enterprise research preview by request, with Cloudflare as subprocessor.
+        verified: "2026-09-25"
     sources:
       - title: Use Claude Cowork on web, desktop and mobile
         url: >-
@@ -1402,3 +1922,13 @@ tools:
         url: https://claude.com/docs/cowork/monitoring
       - title: Compliance API — sessions
         url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+      - title: Create and edit files with Claude (network egress settings)
+        url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
+      - title: Manage pooled group budgets on Enterprise plans
+        url: https://support.claude.com/en/articles/17005973-manage-pooled-group-budgets-on-enterprise-plans
+      - title: Set up an MCP tunnel (token and certificate rotation)
+        url: https://claude.com/docs/connectors/mcp-tunnels/setup
+      - title: Configure Inference hooks
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+      - title: Anthropic Trust Center
+        url: https://trust.anthropic.com
