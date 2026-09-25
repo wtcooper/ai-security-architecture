@@ -1,0 +1,709 @@
+# vLLM — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: the offline `LLM` Python class (vLLM embedded as a library inside an application, not the served
+# runtime this drawing draws); vllm-project satellites that front or orchestrate the engine (production-stack
+# router, llm-d, semantic router) and vendor distributions of vLLM, which are separate products; `vllm bench`.
+# 2026-09-25: onboarded toolVllm on archSelfHostedInference against the MITRE capability rules; docs.vllm.ai
+# answers 200 at /en/latest/ (the developer preview; /en/stable/ pages cited); /llms.txt 404;
+# /en/stable/serving/distributed_serving/ 404 (multi-node now at serving/parallelism_scaling/);
+# examples/online_serving/opentelemetry/ 404 (now examples/observability/opentelemetry/);
+# contributing/vulnerability_management.html -> contributing/vulnerability_management/. Behaviour the docs do not
+# state (API bind to all interfaces when --host is unset, prefix caching on by default, dev-mode gating of /pause
+# and /update_weights, /v1/models fields, torch.load weights_only) was read in the GitHub source at tag v0.30.0.
+vendor: vllm
+family: vLLM
+tools:
+  - id: toolVllm
+    name: vLLM
+    surfaceClasses:
+      - selfHostedServer
+    variants:
+      - name: vllm serve (pip package, OpenAI-compatible server)
+        class: selfHostedServer
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        note: >-
+          `vllm serve <model>` starts the HTTP server on port 8000; every control in this entry is one of its flags
+          or an environment variable of the process. With --host unset the listener binds every interface (source:
+          `args.host or ""`; the docs' own logs show "Uvicorn running on http://0.0.0.0:8000").
+      - name: vllm/vllm-openai container image
+        class: selfHostedServer
+        url: https://docs.vllm.ai/en/stable/deployment/docker/
+        note: >-
+          The documented `docker run` publishes -p 8000:8000 on every host interface, passes HF_TOKEN in the
+          environment and mounts ~/.cache/huggingface; the Kubernetes guide's example deployment passes
+          --trust-remote-code, so review copied manifests.
+      - name: Multi-node serving (Ray or multiprocessing backend)
+        class: selfHostedServer
+        url: https://docs.vllm.ai/en/stable/serving/parallelism_scaling/
+        note: >-
+          Tensor and pipeline parallel across nodes over Ray (run_cluster.sh with VLLM_HOST_IP per node) or the mp
+          backend (--nnodes, --node-rank, --master-addr, --headless workers). Traffic between nodes is unencrypted
+          and unauthenticated; the page says to put VLLM_HOST_IP on a private network segment.
+    architecture: archSelfHostedInference
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Open-source (Apache-2.0) inference and serving engine from the vllm-project: `vllm serve` loads a model
+        from a Hugging Face Hub id or a local path onto the operator's accelerators and publishes an
+        OpenAI-compatible HTTP API (plus Anthropic /v1/messages, Cohere /v2 and a SageMaker /invocations route) on
+        port 8000, with continuous batching, automatic prefix caching, LoRA adapters and tensor, pipeline, data
+        and expert parallelism across GPUs and nodes. Current release v0.30.0 (2026-09-22).
+      - >-
+        Inference runs entirely on infrastructure the organisation operates; no prompt goes to the project.
+        Outbound traffic is model and tokenizer downloads from the Hub (HF_TOKEN for gated models), media URLs the
+        server fetches for multimodal requests, anonymous usage statistics (on by default; VLLM_NO_USAGE_STATS=1 or
+        DO_NOT_TRACK=1 turns them off), and whatever logs, metrics and OTLP traces the operator exports.
+      - >-
+        Every control is a `vllm serve` flag or an environment variable of the server process, and the security
+        guide states the trust model plainly: --api-key is opt-in and covers only the /v1, /v2, /inference and
+        /cohere prefixes, so /invocations, /pooling, /classify, /score, /rerank, /tokenize and the operational
+        routes stay unauthenticated; inter-node channels are "insecure by default"; and the recommended front is a
+        reverse proxy that allowlists endpoints.
+    facts:
+      - label: Plans
+        value: >-
+          Free and open source (Apache-2.0). No paid tier, licence key or vendor console — the operator runs and
+          configures everything.
+        url: https://github.com/vllm-project/vllm
+      - label: Inference & routing
+        value: >-
+          On accelerators the operator provisions. One base model per `vllm serve` process, under one or more
+          --served-model-name aliases, with named LoRA adapters beside it; spreading traffic across instances is a
+          router or gateway in front (the docs' Nginx example load-balances vllm0:8000 and vllm1:8000).
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+      - label: Data leaving the device
+        value: >-
+          Hub downloads of weights, tokenizer and (with --trust-remote-code) model code unless a local path is
+          served; media URLs fetched for multimodal requests (limit with --allowed-media-domains); anonymous usage
+          statistics — hardware, model architecture, vLLM version, parallelism and quantization settings — unless
+          VLLM_NO_USAGE_STATS=1, DO_NOT_TRACK=1 or ~/.config/vllm/do_not_track is set.
+        url: https://docs.vllm.ai/en/stable/usage/usage_stats/
+      - label: Retention & training
+        value: >-
+          No vendor retention or training: prompts never reach the project. Request logging is off by default
+          (--enable-log-requests); KV and prefix cache live in accelerator memory for the life of the process;
+          compile and asset caches persist under VLLM_CACHE_ROOT (~/.cache/vllm); usage statistics are also kept in
+          ~/.config/vllm/usage_stats.json.
+        url: https://docs.vllm.ai/en/stable/usage/usage_stats/
+      - label: Docs index
+        value: docs.vllm.ai/en/stable (no llms.txt; /en/latest is the developer preview)
+        url: https://docs.vllm.ai/en/stable/
+      - label: Security guide
+        value: >-
+          The product's own threat model: inter-node communication, firewall guidance, the --api-key path limits
+          and unauthenticated endpoint list, dynamic LoRA loading, endpoint plugins, gRPC, cache-directory trust,
+          FIPS, Ray environment propagation, prefix-cache salting and multimodal uuid collisions.
+        url: https://docs.vllm.ai/en/stable/usage/security/
+      - label: Vulnerability disclosure
+        value: >-
+          Private reports through the GitHub advisory form; CRITICAL and HIGH fixes are built in a private fork and
+          shared with a prenotification group of organisations that ship or run vLLM; a CVE is requested when the
+          patch merges and the advisory is published when the fix ships. 83 repository advisories were published
+          January 2025 – September 2026 (5 critical, 19 high).
+        url: https://github.com/vllm-project/vllm/security/policy
+      - label: Release cadence
+        value: >-
+          About every two weeks (v0.25.0 on 2026-07-11 through v0.30.0 on 2026-09-22), each with its own advisory
+          fixes; the container image vllm/vllm-openai tracks the releases.
+        url: https://github.com/vllm-project/vllm/releases
+    items:
+      - title: The reverse-proxy endpoint allowlist the security guide recommends
+        body:
+          - "vLLM cannot unpublish a route, and --api-key covers only /v1, /v2, /inference and /cohere, so the guide's
+            primary control is a reverse proxy (nginx, Envoy or a Kubernetes Gateway) that allowlists only the
+            endpoints end users need, blocks everything else — /invocations, /pooling, /classify, /score, /rerank,
+            /tokenize, /detokenize, /load, /metrics, /scale_elastic_ep and any operational route — and adds
+            authentication, rate limiting and logging."
+          - "Expose /metrics only to the monitoring network, and keep --grpc-port and the distributed ports off the
+            proxy entirely."
+        links:
+          - title: vLLM security guide — API key authentication limitations
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: vLLM — Using Nginx (upstream across vLLM containers)
+            url: https://docs.vllm.ai/en/stable/deployment/nginx/
+    riskNotes:
+      - risk: riskSensitiveDataDisclosure
+        note: >-
+          Prefix caching is on by default and shared by every request without a cache_salt, and time-to-first-token
+          reveals a prefix hit (CVE-2025-46570). Beyond the cache, CVE-2026-73558 showed an activation-kernel
+          integer overflow copying one user's output into another's response in the same batch (fixed 0.27.0), and
+          /invocations serves the same inference as /v1 without the API key.
+      - risk: riskMaliciousLoaderDeserialization
+        note: >-
+          The default --load-format auto falls back to PyTorch .bin files (torch.load with weights_only=True), and
+          trust_remote_code=False has been bypassed by model code three times in 2026 (auto_map dynamic modules,
+          hardcoded trust_remote_code=True, LlavaOnevision2). Cache directories are loaded without integrity checks
+          in formats that execute code, and client-supplied prompt_embeds were a deserialization path
+          (CVE-2025-62164).
+      - risk: riskAdapterPEFTInjection
+        note: >-
+          With --enable-lora and VLLM_ALLOW_RUNTIME_LORA_UPDATING=True, POST /v1/load_lora_adapter loads weights from
+          any lora_path the server can read and load_inplace swaps an adapter under an existing name; the
+          lora_hf_hub_resolver plugin loads adapters named in requests from the listed Hub repositories. All of it
+          skips storage promotion; the guide says not to enable it for untrusted clients.
+      - risk: riskModelDeploymentTampering
+        note: >-
+          /update_weights, /init_weight_transfer_engine and /pause are listed by the guide as unauthenticated routes
+          on any generating model (the v0.30.0 source registers them only in dev mode), and --revision pins did not
+          reach every nested artifact until 0.22.0 (CVE-2026-47155) and 0.28.0 (FunAudioChat, Tarsier2).
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          83 repository advisories in 2025–26, including critical RCEs over the multi-node and KV-transfer channels
+          (Mooncake, PyNcclPipe), in video processing (CVE-2026-22778) and an --api-key bypass through the Host
+          header (CVE-2026-48746); the image also carries PyTorch, CUDA and transformers with their own streams.
+      - risk: riskDenialOfMLService
+        note: >-
+          The request queue is unbounded unless --max-num-queued-reqs is set, n defaults to a 16384 ceiling, and
+          dozens of 2025–26 advisories are engine-killing requests or decompression bombs any API caller can send.
+      - risk: riskAcceleratorAndSystemSideChannels
+        note: >-
+          The guide documents the prefix-cache timing channel (ROC AUC 0.99 at 8-token prefixes) and offers
+          cache_salt for it; co-batching on shared accelerators has no engine-level partition.
+    controls:
+      - mitigation: AML.M0014
+        coverage: partial
+        mechanism: >-
+          --revision (with --code-revision and --tokenizer-revision) pins a Hugging Face Hub branch, tag or commit
+          for hub-sourced loads; no signature or digest is verified at load, and a local-path load checks nothing
+        steps:
+          - title: Pin hub loads to a reviewed commit
+            body:
+              - >-
+                Pass --revision <commit sha>, and set --code-revision and --tokenizer-revision to the same reviewed
+                commit rather than a branch name, so the Hub resolves the files of that commit.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Run a release that propagates the pin
+            body:
+              - >-
+                Run v0.28.0 or later: the pins reach dynamic modules, GGUF files, image processors, side weights and
+                subfolder artifacts only since 0.22.0 (CVE-2026-47155), and FunAudioChat and Tarsier2 since 0.28.0
+                (GHSA-hhv2-872h-628q).
+            url: https://github.com/vllm-project/vllm/security/advisories/GHSA-3ww4-5jv9-j5gm
+        note: >-
+          Partial on this drawing's rule — pinned revisions, no verification. A Hub commit fixes which files are
+          fetched, but vLLM checks no signature, promotion-record digest or OpenSSF Model Signing bundle before
+          loading. On this drawing the runtime loads from Storage by path (`vllm serve /models/<release>`), where the
+          revision flags do not apply and nothing is checked; the security guide adds that cache directories are
+          "loaded without cryptographic integrity verification, including formats that support arbitrary code
+          execution". Verify-at-load is external: an init container or admission step that runs the model-signing
+          verifier (or re-hashes against the promotion record) over the mounted path before `vllm serve` starts,
+          with the volume read-only to the server.
+        verified: "2026-09-25"
+      - mitigation: AML.M0023
+        coverage: partial
+        mechanism: >-
+          GET /v1/models (id, root = the hub id or path served, parent for LoRA adapters, max_model_len), GET
+          /version, the system_fingerprint on responses (--fingerprint-mode full by default) and the model_name
+          label on Prometheus /metrics; no revision, digest or format
+        steps:
+          - title: Collect the served models from each instance
+            body:
+              - >-
+                Have the inventory job call GET /v1/models on every instance (with the --api-key bearer) and record
+                id, root and, for adapters, parent — the LoRA page shows the response shape.
+            url: https://docs.vllm.ai/en/stable/features/lora/
+          - title: Record the engine build
+            body:
+              - >-
+                Keep --fingerprint-mode at its default full, so each response's system_fingerprint carries
+                vllm-<version>, the parallelism degrees and an 8-character config hash.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Scrape the model label
+            body:
+              - >-
+                Scrape /metrics, whose series carry model_name from --served-model-name (the first name when several
+                are given), so monitoring knows which name serves on which instance.
+            url: https://docs.vllm.ai/en/stable/usage/metrics/
+        note: >-
+          Partial on this drawing's rule: the engine exposes what is serving for an inventory to collect, but not
+          what an AI BOM needs — root is the hub id or path passed to `vllm serve`, with no commit, digest, format,
+          licence or scan result, and --served-model-name can present any alias. The revision and path live in the
+          deployment manifest; publisher, format and the scan that cleared the artifact come from the promotion
+          pipeline and a registry or AI-BOM tool (external). Calibrated against the local runtimes: toolOllama is
+          partial with digests, toolLmStudio external with neither digest nor source; vLLM names the source but no
+          digest. /server_info, which returns the full configuration, exists only under VLLM_SERVER_DEV_MODE=1.
+        verified: "2026-09-25"
+      - mitigation: AML.M0024
+        coverage: partial
+        mechanism: >-
+          --enable-log-requests (INFO: request id, parameters and LoRA request; DEBUG via VLLM_LOGGING_LEVEL: prompt
+          text and token ids), --enable-log-outputs (output text at INFO), --max-log-len truncation,
+          --otlp-traces-endpoint (a span per request with request id, token counts, sampling parameters and
+          latencies, no prompt text) and Prometheus /metrics; no redaction
+        steps:
+          - title: Turn on request logging at INFO
+            body:
+              - >-
+                Start with --enable-log-requests and VLLM_LOGGING_LEVEL=INFO, so each request's id, parameters and
+                LoRA adapter are logged without prompt text; DEBUG adds prompts and token ids.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Decide on completion capture
+            body:
+              - >-
+                Add --enable-log-outputs only where completions must be kept (it logs output text at INFO and needs
+                --enable-log-requests), and bound logged prompt text with --max-log-len.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Export traces
+            body:
+              - >-
+                Set --otlp-traces-endpoint, with OTEL_SERVICE_NAME and OTEL_EXPORTER_OTLP_TRACES_PROTOCOL, so the
+                server emits a span per request carrying metadata about it, in the caller's trace.
+            url: https://docs.vllm.ai/en/stable/examples/observability/opentelemetry/
+          - title: Return the request id
+            body:
+              - >-
+                Add --enable-request-id-headers so responses carry X-Request-Id for the gateway to join its record to
+                the engine's log line.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+        note: >-
+          Partial on this drawing's rule (native needs content capture with privacy controls; logging without
+          redaction is partial). Content capture is all-or-nothing by log level — prompts only at DEBUG, completions
+          as raw text with --enable-log-outputs, truncation the only privacy control — and logs go to the process's
+          stdout for the platform to ship; nothing makes them tamper-resistant. vLLM's own span carries request
+          metadata, not content (the OTel example records the prompt only in its client span). The engine records no
+          caller identity: --api-key admits a bearer without naming a tenant. The privacy-conscious record of every
+          request and completion belongs at the gateway, the crossing every caller shares; the engine's logs, spans
+          and metrics are the correlated inner half.
+        verified: "2026-09-25"
+      - mitigation: D3-FA
+        coverage: partial
+        mechanism: >-
+          --load-format safetensors limits loading to *.safetensors (the default auto falls back to PyTorch .bin, read
+          with torch.load weights_only=True); --trust-remote-code off by default; no content scanning
+        steps:
+          - title: Load safetensors only
+            body:
+              - >-
+                Set --load-format safetensors; the default auto "will try to load the weights in the safetensors
+                format and fall back to the pytorch bin format if safetensors format is not available".
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Keep remote code off
+            body:
+              - >-
+                Never pass --trust-remote-code (default False), and remove it from copied examples such as the
+                Kubernetes guide's deployment, so Python shipped in a model repository is not imported.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Run a release with the remote-code fixes
+            body:
+              - >-
+                Run v0.28.0 or later: model code bypassed trust_remote_code=False through auto_map (CVE-2026-22807,
+                fixed 0.14.0), hardcoded trust_remote_code=True (CVE-2026-27893, 0.18.0) and LlavaOnevision2
+                (CVE-2026-90553, 0.28.0).
+            url: https://github.com/vllm-project/vllm/security/advisories/GHSA-3c86-2m5g-59q7
+        note: >-
+          Partial on this drawing's rule — the engine refuses unsafe formats only when configured to. --load-format
+          safetensors and --trust-remote-code left off close the pickle and remote-code axes, but the default auto
+          falls back to .bin (loaded with weights_only=True, whose restricted unpickler was bypassable before PyTorch
+          2.6 — PyTorch's CVE-2025-32434, carried as vLLM advisory GHSA-ggpf-24jw-3fcw), and the pt and npcache
+          formats remain selectable. The
+          off switch itself was bypassed three times in 2026, and the chat template shipped with the model runs on
+          every request. Nothing inspects content: format and content scanning as a blocking gate on ingest is a
+          model scanner in the promotion pipeline (external), with vLLM serving only the scanned, promoted path.
+        verified: "2026-09-25"
+      - mitigation: AML.M0008
+        coverage: external
+        mechanism: >-
+          An evaluation or red-team harness run against the candidate on a staging `vllm serve` instance before
+          promotion; vLLM ships no safety or adversarial evaluation
+        evidence:
+          - title: vLLM documentation index (benchmarking measures throughput and latency; no model evaluation)
+            url: https://docs.vllm.ai/en/stable/
+          - title: vLLM serve CLI — OpenAI-compatible server flags for a staging instance
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+        note: >-
+          External: vLLM measures performance (`vllm bench`), not behaviour — nothing tests a model for backdoor
+          triggers, leakage or adversarial influence, and any path or hub id passed to `vllm serve` is servable.
+          Integration point: a staging instance started with the candidate's exact serving flags (load format, chat
+          template, LoRA set, quantization) behind the OpenAI-compatible /v1 API that evaluation harnesses call; the
+          approval record gates promotion in the pipeline, not in vLLM.
+        verified: "2026-09-25"
+      - mitigation: cap-staged-rollout-gate
+        coverage: external
+        mechanism: >-
+          An AI gateway's weighted route or the serving platform's traffic split between vLLM instances or adapter
+          names; vLLM serves one base model per process and has no split, gate or rollback
+        evidence:
+          - title: vLLM serve CLI — --served-model-name aliases, --enable-lora, --lora-modules, --max-loras
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: vLLM LoRA adapters — static --lora-modules, runtime loading behind VLLM_ALLOW_RUNTIME_LORA_UPDATING
+            url: https://docs.vllm.ai/en/stable/features/lora/
+          - title: vLLM — Using Nginx (the router in front of several vLLM containers)
+            url: https://docs.vllm.ai/en/stable/deployment/nginx/
+        note: >-
+          External on this drawing's rule. What vLLM offers: one base model per `vllm serve` process under one or
+          more --served-model-name aliases, and several named LoRA adapters beside it (--enable-lora --lora-modules
+          name=path), so a candidate and the previous version can serve side by side as separate instances or
+          adapter names. It has no promotion gate, weighting, canary or automatic rollback, and a new base version
+          means a new instance. The split is the gateway's weighted route or the platform's traffic split; rollback
+          is re-pointing the route at the instance still serving the previous promoted artifact. Runtime adapter
+          swaps (VLLM_ALLOW_RUNTIME_LORA_UPDATING, load_inplace) bypass any gate and stay off.
+        verified: "2026-09-25"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          --api-key / VLLM_API_KEY (one or more static bearer keys, checked only under /v1, /v2, /inference and
+          /cohere) and optional client-certificate TLS on the HTTP listener (--ssl-ca-certs with --ssl-cert-reqs 2);
+          no per-tenant identity
+        steps:
+          - title: Require a key on the API prefixes
+            body:
+              - >-
+                Set --api-key (or VLLM_API_KEY from a secret) to a key only the gateway holds; the flag accepts
+                several keys and admits any one of them.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Require the gateway's client certificate
+            body:
+              - >-
+                Serve TLS with --ssl-keyfile and --ssl-certfile and require client certificates with --ssl-ca-certs
+                <CA bundle> and --ssl-cert-reqs 2 (ssl.CERT_REQUIRED), so only workloads holding a certificate from
+                that CA complete the handshake on the HTTP port.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Run a release with the authentication fixes
+            body:
+              - >-
+                Run v0.22.0 or later: CVE-2026-48746 let a crafted Host header skip the --api-key check on direct
+                exposure, and CVE-2025-59425 (fixed 0.11.0) made the key comparison timing-dependent.
+            url: https://github.com/vllm-project/vllm/security/advisories/GHSA-94f4-hr76-p5j6
+        note: >-
+          Partial on this drawing's rule — a shared key is not per-tenant identity. The key authenticates a bearer,
+          not a tenant: nothing maps a key to a caller for quota, cache scope or attribution, and routes outside the
+          four prefixes (/invocations, /pooling, /classify, /score, /rerank, /tokenize and the operational routes)
+          ignore it. Client-certificate TLS authenticates the calling workload on every route of the HTTP port, but
+          any certificate the CA issued is admitted and vLLM authorises nothing per identity; the gRPC port
+          (--grpc-port) has no authentication or encryption at all. Workload identity per calling tenant is the
+          gateway's or service mesh's (external), with vLLM's key or client certificate authenticating the gateway.
+        verified: "2026-09-25"
+      - mitigation: AML.M0004
+        coverage: partial
+        mechanism: >-
+          Server-wide admission limits: --max-num-queued-reqs (in-flight cap, HTTP 503 beyond it; unbounded when
+          unset), --max-num-seqs and --max-num-batched-tokens per iteration, --max-model-len, VLLM_MAX_N_SEQUENCES
+          (n per request, default 16384) and the media size limits; --scheduling-policy priority; nothing per tenant
+        steps:
+          - title: Bound the queue
+            body:
+              - >-
+                Set --max-num-queued-reqs so requests beyond the in-flight limit are rejected with HTTP 503 instead of
+                joining an otherwise unbounded queue; size it about data_parallel_size × max_num_seqs plus the depth
+                you accept.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Cap per-request fan-out
+            body:
+              - >-
+                Set VLLM_MAX_N_SEQUENCES to what the workload needs (the guide suggests 64 or 128 for public-facing
+                deployments) instead of the 16384 default.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: Bound context and batch
+            body:
+              - >-
+                Set --max-model-len, --max-num-seqs and --max-num-batched-tokens explicitly for the accelerators
+                serving the model.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Let the gateway order tenants
+            body:
+              - >-
+                Start with --scheduling-policy priority, so requests are handled by the priority each carries (lower
+                first) instead of first-come-first-served, and have the gateway set it per tenant.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+        note: >-
+          Partial on this drawing's rule — engine-level limits, not per tenant. vLLM has no caller identity to meter,
+          so one tenant can fill the queue for all, and priority scheduling orders requests without capping anyone.
+          The guide itself points rate limiting and request-body validation at the reverse proxy. Per-tenant quotas
+          enforced at admission are the AI gateway's (external). The limits do not replace patching: dozens of
+          2025–26 advisories are requests that kill the engine or exhaust memory.
+        verified: "2026-09-25"
+      - mitigation: cap-output-guardrails
+        coverage: external
+        mechanism: >-
+          A guardrail service or AI gateway on both legs, optionally calling a guard model served by a second vLLM
+          instance; vLLM returns raw completions and ships no classifier
+        evidence:
+          - title: vLLM security guide (no content-safety or guardrail setting)
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: vLLM serve CLI — --middleware (deployer-written ASGI middleware by import path)
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+        note: >-
+          External on this drawing's rule (a guard model served beside the engine is external). vLLM has no
+          harm-category, denied-topic or injection classifier on either leg; structured outputs constrain format, not
+          content. --middleware loads deployer-written ASGI middleware into the API server — an in-process attach
+          point, not a shipped guardrail. Integration point: the gateway calls the guard model and the generator in
+          turn and blocks, substitutes or annotates on a fail, and the reverse proxy's endpoint allowlist keeps
+          callers off vLLM's own routes, including /invocations, which reaches the same inference.
+        verified: "2026-09-25"
+      - mitigation: AML.M0031
+        coverage: native
+        mechanism: >-
+          Per-request cache_salt, mixed into the hash of the first KV block so only requests with the same salt share
+          cached prefixes (chat completions, completions, responses, pooling and /v1/messages);
+          --no-enable-prefix-caching turns prefix sharing off entirely
+        steps:
+          - title: Salt every request per tenant
+            body:
+              - >-
+                Have the gateway set cache_salt on every request to a random per-tenant secret (the guide suggests
+                256 bits, e.g. 43 base64 characters), overwriting any value the caller sent.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: Or turn prefix caching off
+            body:
+              - >-
+                Start with --no-enable-prefix-caching where tenants must share no cache at all; prefix caching is on
+                by default for models that support it.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Keep collision-resistant block hashes
+            body:
+              - >-
+                Leave --prefix-caching-hash-algo at sha256 (or sha256_cbor) rather than the faster xxhash options.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Do not accept caller media ids
+            body:
+              - >-
+                Strip or regenerate the uuid field on multimodal content parts at the gateway, because two callers
+                presenting the same uuid share one processor and encoder cache entry.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+        note: >-
+          Native on this drawing's rule: a documented per-request salt the engine enforces in the prefix-cache block
+          hash — the tenant-scoped cache key the pin asks for. The boundary: the engine does not require it
+          ("cache_salt is opt-in and not passed by default"), so isolation holds only while the gateway salts every
+          request and callers cannot reach vLLM directly, and a tenant that learns another's salt shares its cache.
+          The salt covers prefix-cache blocks, not the multimodal processor and encoder caches keyed by
+          caller-supplied uuid. Salt handling had denial-of-service bugs (unbounded length, fixed 0.29.0; LMCache-MP
+          validation, fixed 0.30.0), and KV connectors (--kv-transfer-config) move cache beyond the process. The
+          in-batch leak CVE-2026-73558 sits outside the cache and is D3-HBPI's concern.
+        verified: "2026-09-25"
+      - mitigation: D3-HBPI
+        coverage: external
+        mechanism: >-
+          Dedicated GPU nodes or confidential-computing GPU instances chosen by the platform for the
+          highest-sensitivity tenants; vLLM documents no hardware isolation and batches every tenant of an instance
+          together
+        evidence:
+          - title: vLLM security guide (process-level isolation only — separate OS users or containers, /proc hidepid)
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: GHSA-7m6h-x95x-82q5 / CVE-2026-73558 — cross-user data leak within one inference batch
+            url: https://github.com/vllm-project/vllm/security/advisories/GHSA-7m6h-x95x-82q5
+        note: >-
+          External: vLLM runs on whatever hardware it is scheduled onto and documents no confidential-computing,
+          attestation or accelerator-partitioning mode. Within one instance, continuous batching puts every tenant's
+          requests through the same forward pass on the same accelerators, and CVE-2026-73558 showed a kernel
+          integer overflow copying one user's output into another's response in the same batch (fixed 0.27.0). The
+          guide's isolation advice is process-level (separate OS users or containers, /proc hidepid=2), not
+          hardware. Integration point: one `vllm serve` instance per sensitivity tier, scheduled by the platform onto
+          dedicated GPU nodes or confidential GPU VMs, with the gateway routing each high-sensitivity tenant only to
+          its instance.
+        verified: "2026-09-25"
+      - mitigation: D3-AVE
+        coverage: partial
+        mechanism: >-
+          GitHub repository security advisories with CVEs and patched version ranges, a prenotification group for
+          organisations that ship or run vLLM, releases about every two weeks, and GET /version plus the
+          system_fingerprint for enumerating running versions
+        steps:
+          - title: Ingest the advisory feed
+            body:
+              - >-
+                Feed the repository's security advisories (GHSA ids with CVEs and patched ranges for the pip package
+                vllm) into the vulnerability management tool, and track the release notes.
+            url: https://github.com/vllm-project/vllm/security/advisories
+          - title: Apply for prenotification
+            body:
+              - >-
+                If the organisation runs a substantial internal deployment or has an established security team,
+                email the vulnerability management team to join the group notified privately before CRITICAL, HIGH
+                or MODERATE fixes are released.
+            url: https://github.com/vllm-project/vllm/security/policy
+          - title: Enumerate running versions
+            body:
+              - >-
+                Collect GET /version from every instance (an unauthenticated utility endpoint) so each advisory maps
+                to the instances it affects.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+        note: >-
+          Partial on this drawing's rule — the project publishes the stream; tracking and patching are the operator's.
+          83 repository advisories were published January 2025 – September 2026 (5 critical, 19 high), with
+          patched version ranges; MODERATE and LOW fixes are developed as public pull requests before the advisory
+          appears. The feed does not cover PyTorch, CUDA, transformers and the other dependencies in the wheel and
+          the vllm/vllm-openai image (the Dockerfile itself had a dependency-confusion advisory, CVE-2026-54232).
+          Continuous posture over which versions and flags serve where is external vulnerability management or CSPM
+          scanning of the images and nodes.
+        verified: "2026-09-25"
+      - mitigation: AML.M0005
+        coverage: external
+        mechanism: >-
+          The storage platform's access control and encryption on the weights; vLLM opens the path, --download-dir,
+          Hub cache or object store it is given with whatever credentials its environment holds, and tensorizer can
+          decrypt weights serialized with an encryption keyfile
+        evidence:
+          - title: vLLM serve CLI — --load-format, --download-dir, --hf-token
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: vLLM Tensorizer loading (S3/HTTP sources, tensor encryption)
+            url: https://docs.vllm.ai/en/stable/models/extensions/tensorizer/
+          - title: vLLM security guide — Ray environment propagation (ray_non_carry_over_env_vars.json)
+            url: https://docs.vllm.ai/en/stable/usage/security/
+        note: >-
+          External on this drawing's rule: vLLM holds no access policy over stored weights; the files are protected
+          by the volume's permissions and the storage platform's IAM and encryption. Engine-side contributions:
+          --load-format tensorizer loads tensors serialized with encryption when given the keyfile, and loads from S3
+          or HTTP endpoints. With RayExecutorV2 every driver environment variable, HF_TOKEN and cloud storage keys
+          included, is copied to workers unless listed in $VLLM_CONFIG_ROOT/ray_non_carry_over_env_vars.json.
+          Nothing re-verifies weights at load (see AML.M0014). Same rule as toolLmStudio (external: neither
+          content-addressed nor digest-checked), not toolOllama's partial.
+        verified: "2026-09-25"
+      - mitigation: D3-ACH
+        coverage: partial
+        mechanism: >-
+          Safe defaults on the riskiest surfaces (VLLM_SERVER_DEV_MODE, VLLM_ALLOW_RUNTIME_LORA_UPDATING,
+          --trust-remote-code, --grpc-port, profiler, --enable-tokenizer-info-endpoint and endpoint plugins all off)
+          but unsafe defaults elsewhere (no --api-key, --allowed-origins *, all-interface bind, shared prefix cache,
+          unauthenticated /invocations and /scale_elastic_ep) and no flag that removes a route
+        steps:
+          - title: Keep the runtime-update surfaces off
+            body:
+              - >-
+                Never set VLLM_SERVER_DEV_MODE=1 (it adds /collective_rpc, /sleep, /reset_prefix_cache and
+                /server_info) and leave VLLM_ALLOW_RUNTIME_LORA_UPDATING unset so /v1/load_lora_adapter does not
+                exist; serve adapters with --lora-modules at start.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: Close the optional listeners
+            body:
+              - >-
+                Leave --grpc-port, --profiler-config and --enable-tokenizer-info-endpoint unset, and set VLLM_PLUGINS
+                to the exact reviewed plugin names so no endpoint plugin can shadow a /v1 route.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: Tighten the unsafe defaults
+            body:
+              - >-
+                Set --allowed-origins to exact origins (default ['*']), --disable-fastapi-docs,
+                --allowed-media-domains with VLLM_MEDIA_URL_ALLOW_REDIRECTS=0, and keep --allowed-local-media-path
+                empty.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Make the cache directory private
+            body:
+              - >-
+                Point VLLM_CACHE_ROOT at a directory only the service account can write and never mount it from
+                shared or untrusted storage, because compile and kernel caches load without integrity checks.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+        note: >-
+          Partial on this drawing's rule — the dangerous surfaces are opt-in, but several defaults are unsafe and
+          vLLM has no switch to unpublish a route: /invocations (the same inference as /v1), /pooling, /classify,
+          /score, /rerank, /tokenize and /scale_elastic_ep stay reachable without the key, so the guide's answer is a
+          reverse proxy that allowlists endpoints (external). The vendor's sources disagree on /pause, /resume,
+          /abort_requests, /update_weights and /init_weight_transfer_engine: the guide lists them as unauthenticated
+          whenever the model supports generation, while the v0.30.0 router registers them only under
+          VLLM_SERVER_DEV_MODE; treat them as reachable and block them at the proxy. The cache configuration is
+          exported as vllm:cache_config_info on /metrics for drift review.
+        verified: "2026-09-25"
+      - mitigation: D3-NI
+        coverage: external
+        mechanism: >-
+          Platform network policy or firewalls around the serving plane; vLLM's integration points are its documented
+          listeners — the API --host/--port (8000; all interfaces when --host is unset), --grpc-port, VLLM_HOST_IP,
+          --kv-ip/--kv-port (default 127.0.0.1:14579), data_parallel_master_ip/port (127.0.0.1:29500),
+          --data-parallel-address and --data-parallel-rpc-port, --master-addr for the mp backend, the Ray cluster,
+          and torch.distributed's TCPStore on all interfaces
+        evidence:
+          - title: vLLM security guide — inter-node communication; firewall configuration guidance
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: vLLM parallelism and scaling — multi-node over Ray or mp; VLLM_HOST_IP warning
+            url: https://docs.vllm.ai/en/stable/serving/parallelism_scaling/
+          - title: vLLM serve CLI — --host, --port, --data-parallel-address, --data-parallel-rpc-port
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+        note: >-
+          External on this drawing's rule (the recorded deviation absorbs it into platform network policy). The guide:
+          all inter-node communication is "insecure by default"; PyTorch Distributed has no authorisation, sends
+          messages unencrypted and accepts connections from anywhere; and the multi-node page warns the exchanged
+          format "can be exploited to execute arbitrary code" — the class behind CVE-2025-30165, CVE-2025-47277 and
+          CVE-2025-32444. vLLM can pin which address a channel uses but authenticates none, and the TCPStore listens
+          on every interface even on one host. Integration point: a dedicated serving-plane network or Kubernetes
+          NetworkPolicy admitting only the gateway to the API port and only peer pods to the distributed ports, Ray
+          client and dashboard ports never exposed, and an mTLS sidecar or IPsec where encryption in transit is
+          required.
+        verified: "2026-09-25"
+    advisories:
+      - title: >-
+          GHSA-hhv2-872h-628q — incomplete artifact pin propagation in FunAudioChat and Tarsier2 (fixed 0.28.0; no
+          CVE)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-hhv2-872h-628q
+        date: "2026-09"
+      - title: >-
+          GHSA-wpww-v874-ph2p — unbounded cache_salt length stalls the EngineCore scheduler thread (fixed 0.29.0; no
+          CVE)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-wpww-v874-ph2p
+        date: "2026-09"
+      - title: >-
+          CVE-2026-73558 — act_and_mul kernel integer overflow leaks one user's output into another's response in the
+          same batch (fixed 0.27.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-7m6h-x95x-82q5
+        date: "2026-08"
+      - title: >-
+          CVE-2026-90553 — LlavaOnevision2 processor loader executes model code with trust_remote_code=False (fixed
+          0.28.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-3c86-2m5g-59q7
+        date: "2026-08"
+      - title: >-
+          CVE-2026-47155 — artifact pin decay: --revision / --code-revision did not reach nested code, GGUF,
+          processor and side-weight loads (fixed 0.22.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-3ww4-5jv9-j5gm
+        date: "2026-06"
+      - title: >-
+          CVE-2026-48746 — OpenAI API authentication bypass through a crafted Host header (critical; fixed 0.22.0;
+          found by X41 D-Sec)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-94f4-hr76-p5j6
+        date: "2026-06"
+      - title: CVE-2026-27893 — hardcoded trust_remote_code=True in NemotronVL and KimiK25 (fixed 0.18.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-7972-pg2x-xr59
+        date: "2026-03"
+      - title: CVE-2026-22778 — remote code execution in video processing (critical; fixed 0.14.1)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-4r2x-xpjr-7cvv
+        date: "2026-02"
+      - title: CVE-2026-22807 — RCE via auto_map dynamic module loading during model initialization (fixed 0.14.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-2pc9-4j83-qjmr
+        date: "2026-01"
+      - title: CVE-2025-62164 — prompt_embeds deserialization allows DoS and potential RCE (fixed 0.11.1)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-mrw7-hf4f-83pf
+        date: "2025-11"
+      - title: CVE-2025-59425 — API key comparison vulnerable to a timing attack (fixed 0.11.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-wr9h-g72x-mwhm
+        date: "2025-10"
+      - title: CVE-2025-46570 — timing side channel in chunk-based prefix caching (fixed 0.9.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-4qjh-9fv9-r85r
+        date: "2025-05"
+      - title: CVE-2025-47277 — remote code execution via the PyNcclPipe communication service (critical; fixed 0.8.5)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-hjq4-87xh-g4fv
+        date: "2025-05"
+      - title: CVE-2025-30165 — remote code execution in multi-node cluster configuration (ZeroMQ)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-9pcc-gvx5-r5wm
+        date: "2025-05"
+      - title: CVE-2025-32444 — remote code execution via the Mooncake integration (critical)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-hj4w-hm2g-p6w5
+        date: "2025-04"
+      - title: CVE-2025-24357 — malicious model to RCE by torch.load in hf_model_weights_iterator (fixed 0.7.0)
+        url: https://github.com/vllm-project/vllm/security/advisories/GHSA-rh4j-5rhw-hr54
+        date: "2025-01"
+    sources:
+      - title: vLLM documentation (stable)
+        url: https://docs.vllm.ai/en/stable/
+      - title: vLLM security guide
+        url: https://docs.vllm.ai/en/stable/usage/security/
+      - title: vllm serve — CLI reference
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+      - title: vLLM LoRA adapters
+        url: https://docs.vllm.ai/en/stable/features/lora/
+      - title: vLLM Automatic Prefix Caching design (cache_salt)
+        url: https://docs.vllm.ai/en/stable/design/prefix_caching/
+      - title: vLLM parallelism and scaling (multi-node)
+        url: https://docs.vllm.ai/en/stable/serving/parallelism_scaling/
+      - title: vLLM production metrics
+        url: https://docs.vllm.ai/en/stable/usage/metrics/
+      - title: vLLM OpenTelemetry example
+        url: https://docs.vllm.ai/en/stable/examples/observability/opentelemetry/
+      - title: vLLM usage stats collection
+        url: https://docs.vllm.ai/en/stable/usage/usage_stats/
+      - title: vLLM security policy (SECURITY.md)
+        url: https://github.com/vllm-project/vllm/security/policy
+      - title: vLLM repository security advisories
+        url: https://github.com/vllm-project/vllm/security/advisories
+      - title: vLLM v0.30.0 API server router registration (dev-mode gating)
+        url: https://github.com/vllm-project/vllm/blob/v0.30.0/vllm/entrypoints/launchers/api_server/routers.py
+      - title: vLLM v0.30.0 CacheConfig (enable_prefix_caching default)
+        url: https://github.com/vllm-project/vllm/blob/v0.30.0/vllm/config/cache.py

@@ -1219,3 +1219,58 @@ tools:
         note: Not deployed. Unattended agents to authenticate as a dedicated GitHub App installation (--app-id,
           --app-installation-id, key file) on selected repositories with read-only permissions where possible;
           installations reviewed in organization settings; PATs not permitted for automation
+  - tool: toolVllm
+    available: false
+    note: Not in use. Inference is consumed from managed APIs; vLLM is the candidate serving engine if a model is
+      brought in-house, and each note below is the baseline the platform team would set before the first tenant.
+    capabilities:
+      EX-AML-M0014:
+        status: gap
+        note: Not deployed. vLLM verifies no signature or digest at load, so the baseline is an init container that
+          runs the model-signing verifier against the promoted path before `vllm serve` starts, a read-only model
+          volume, and --revision / --code-revision / --tokenizer-revision pinned to a commit for any hub load on
+          v0.28.0 or later (the release that closed the artifact-pin-decay advisories)
+      EX-AML-M0023:
+        status: gap
+        note: Not deployed. Baseline is the inventory job collecting GET /v1/models (id, root, parent for LoRA
+          adapters), GET /version and the system_fingerprint from every instance, joined to the deployment manifest
+          and promotion record, which hold the revision, digest and scan result vLLM does not expose
+      EX-AML-M0024:
+        status: gap
+        note: Not deployed. The privacy-conscious record of prompts and completions would be the AI gateway's; on the
+          engine, --enable-log-requests at VLLM_LOGGING_LEVEL=INFO (no prompt text), --enable-request-id-headers and
+          --otlp-traces-endpoint for metadata spans, with --enable-log-outputs left off because it logs raw output
+      EX-AML-M0008:
+        status: gap
+        note: Not deployed. vLLM evaluates nothing; baseline is the evaluation and red-team harness run against a
+          staging instance with the candidate's exact serving flags through /v1, with the approval recorded before
+          promotion
+      EX-STAGED-ROLLOUT-GATE:
+        status: gap
+        note: Not deployed. vLLM has no split or rollback; baseline is one instance per promoted version (or named
+          --lora-modules adapters), a weighted route at the AI gateway for the canary slice, and rollback by
+          re-pointing the route at the previous instance, with VLLM_ALLOW_RUNTIME_LORA_UPDATING left unset
+      EX-D3-AA:
+        status: gap
+        note: Not deployed. Tenant workload identity would be enforced at the AI gateway; vLLM would accept only the
+          gateway, by --api-key from the secrets manager plus client-certificate TLS (--ssl-ca-certs,
+          --ssl-cert-reqs 2), on v0.22.0 or later for the Host-header auth bypass fix
+      EX-AML-M0004:
+        status: gap
+        note: Not deployed. Per-tenant quotas would sit at the AI gateway because vLLM has no caller identity; the
+          engine would add --max-num-queued-reqs (503 beyond the cap), VLLM_MAX_N_SEQUENCES=64, explicit
+          --max-model-len and --max-num-seqs, and --scheduling-policy priority set per tenant by the gateway
+      EX-OUTPUT-GUARDRAILS:
+        status: gap
+        note: Not deployed. vLLM returns raw completions; baseline is the AI gateway's content classification on both
+          legs, with the reverse proxy allowlisting only the /v1 routes so /invocations cannot bypass it
+      EX-AML-M0031:
+        status: gap
+        note: Not deployed. Baseline is the gateway setting a random 256-bit cache_salt per tenant on every request and
+          overwriting caller values, stripping caller-supplied multimodal uuid fields, and
+          --prefix-caching-hash-algo sha256; --no-enable-prefix-caching for the highest-sensitivity instances
+      EX-D3-NI:
+        status: gap
+        note: Not deployed. The serving plane would run on its own network with a Kubernetes NetworkPolicy admitting
+          only the gateway to port 8000 and only peer pods to the torch.distributed, KV-transfer (14579) and
+          data-parallel (29500) ports; VLLM_HOST_IP pinned to the private interface and --grpc-port left unset
