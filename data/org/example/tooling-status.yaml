@@ -159,32 +159,37 @@ tools:
     capabilities:
       EX-D3-MFA:
         status: enabled
-        note: Console organisation on SSO; one workspace per team
+        note: Require SSO for Console on with MFA enforced at the IdP; API keys skip it, so each carries an
+          expiration and key creation is reviewed per workspace role
       EX-D3-AA:
         status: inProgress
-        note: Vault display_name mapped to the owning service; no lifecycle review yet
+        note: One workload-identity service account per calling service and one vault per end user
+          (metadata.external_user_id); no per-agent principal exists and no lifecycle review yet
       EX-D3-CH:
         status: inProgress
         note: Vault credentials with managed OAuth refresh for MCP; static bearer tokens still in two vaults
       EX-AGENT-TOOL-REGISTRY:
-        status: enabled
-        note: Agents are workspace resources with metadata naming the owner
+        status: inProgress
+        note: Agents carry metadata naming the owner; nothing in the product gates who may create or update a
+          definition, and agent_with_overrides can run an unversioned configuration
       EX-STAGED-ROLLOUT-GATE:
         status: inProgress
-        note: Agent versions bumped through the deployment pipeline and pinned per environment (versioning); no canary
-          exposure, and rollback to an earlier version has not been rehearsed
+        note: The deployment pipeline pins each session to agent id and version; the product has no alias or
+          canary, and rollback to an earlier version has not been rehearsed
       EX-AML-M0008:
         status: gap
         note: No release-gate evaluation before an agent version goes live
       EX-AML-M0028:
         status: inProgress
-        note: Toolsets default to enabled false; per-tool review in progress
+        note: The pipeline sets default_config.enabled false on every toolset (the vendor default is enabled);
+          per-tool review in progress
       EX-AML-M0029:
         status: enabled
         note: permission_policy always_ask on write tools
       EX-INPUT-GUARDRAILS:
-        status: inProgress
-        note: Read-only memory stores and limited networking; no inline classifier
+        status: gap
+        note: No classifier on the MCP path yet; read-only memory stores and limited networking contain but do not
+          screen
       EX-AI-VENDOR-ASSESSMENT:
         status: enabled
         note: Covered by the Anthropic TPRM assessment
@@ -202,8 +207,9 @@ tools:
         status: enabled
         note: Memory stores attached read_only except the agent's own
       EX-AGENT-KILL-SWITCH:
-        status: enabled
-        note: Agent archive and session delete runbook; on-call can interrupt a session
+        status: inProgress
+        note: Runbook sends user.interrupt then deletes the session; agent archive leaves running sessions alone and
+          the interrupt delay while tools run is untested
       EX-D3-EI:
         status: enabled
         note: Cloud environments only; no self-hosted sandbox yet
@@ -214,7 +220,8 @@ tools:
       EX-AGENT-ACTION-POLICY-ENFORCEMENT:
         status: enabled
         note: permission_policy always_ask on bash and on every MCP toolset; evaluated_permission kept from each tool
-          event in the SIEM
+          event in the SIEM. The product has no argument-level policy, so write targets are checked in our MCP
+          gateway
       EX-D3-CTS:
         status: inProgress
         note: Vault credentials substituted at egress; one shared vault per agent, so per-user vaults for tenant
@@ -360,3 +367,197 @@ tools:
         note: Runbook blocks the agent in Agents > All agents, sets connectors to No users and revokes sessions with
           Revoke-MgUserSignInSession; stopping in-flight Cowork or Researcher runs is untested and the delay
           unmeasured
+  - tool: toolBedrockAgentcore
+    available: false
+    note: Not in use. Assessed as a candidate managed agent runtime for the AWS estate; no harness, runtime or gateway
+      is approved. Each note below is the baseline the platform team would set before the first workload.
+    capabilities:
+      EX-D3-MFA:
+        status: gap
+        note: Not deployed. Baseline is IAM Identity Center MFA on "Every time they sign in (always-on)" and
+          aws:MultiFactorAuthPresent in the trust policy of the role holding CreateHarness, UpdateHarness,
+          UpdateGateway and credential-provider actions; front-end user MFA stays with the corporate IdP
+      EX-AGENT-TOOL-REGISTRY:
+        status: gap
+        note: Not deployed. Baseline is an organization-scoped AWS Agent Registry with auto-detection of Runtimes
+          and Gateways, auto-approval off, and CreateHarness / UpdateHarness / CreateAgentRuntime granted only to
+          the delivery pipeline role
+      EX-STAGED-ROLLOUT-GATE:
+        status: gap
+        note: Not deployed. Baseline is a production harness endpoint pinned by targetVersion with rollback by
+          UpdateHarnessEndpoint, and a 90/10 A/B test through the gateway with online evaluation before promote;
+          promotion stays a human decision because evaluations do not block
+      EX-AML-M0008:
+        status: gap
+        note: Not deployed. Online evaluation configurations (Builtin.GoalSuccessRate, Builtin.ToolSelectionAccuracy)
+          would score candidate versions; no adversarial evaluation exists in AgentCore, so red-team tests stay in
+          our own pipeline
+      EX-D3-AA:
+        status: gap
+        note: Not deployed. Baseline is one execution role per agent scoped to its own workload identity and
+          credential providers, list-workload-identities reviewed monthly, and GetWorkloadAccessTokenForUserId
+          denied
+      EX-D3-CTS:
+        status: gap
+        note: Not deployed. Baseline is tools only behind AgentCore Gateway with on-behalf-of outbound credentials,
+          customJWTAuthorizer on the harness (SigV4 loses per-user identity), and an SCP on
+          bedrock-agentcore:CredentialProviderType; remote_mcp headers not allowed
+      EX-AGENT-ACTION-POLICY-ENFORCEMENT:
+        status: gap
+        note: Not deployed. Baseline is a Cedar policy engine attached in ENFORCE on every gateway, an SCP requiring
+          bedrock-agentcore:PolicyEngineMode ENFORCE (to be tested, since one AWS page says no key protects the
+          mode), and a before_tool_call Lambda hook with failureMode deny for tools outside the gateway
+      EX-AML-M0031:
+        status: gap
+        note: Not deployed. Baseline is harness memory set to disabled unless a use case needs it, otherwise BYO memory
+          with a CMK, /actor/{actorId}/ namespaces, actorId bound to the JWT sub through the Memory connector's Cedar
+          policy, and eventExpiryDuration of 30 days
+      EX-AI-VENDOR-ASSESSMENT:
+        status: gap
+        note: AWS is assessed in the TPRM platform for the wider estate, but AgentCore itself has not been reviewed;
+          the review would take the Artifact SOC 2 and ISO reports, HIPAA eligibility, cross-region inference for
+          Memory and Policy, and any third-party model provider the harness calls
+      EX-D3-ORA:
+        status: gap
+        note: No AgentCore-specific risk assessment yet; it would follow the AWS TPRM record and add the 2026
+          bulletins (CVE-2026-18830 harness tool dispatch, CVE-2026-15737 prompts in spans)
+      EX-D3-EI:
+        status: gap
+        note: Not deployed. Baseline is microVM compute only (no Instances capacity providers), runtimeSessionId
+          derived server-side from the user, and lifecycleConfiguration idle 900 s / max 4 h
+      EX-AGENT-EGRESS-CONTROL:
+        status: gap
+        note: Not deployed. Baseline is networkMode VPC enforced by SCP on bedrock-agentcore:subnets, egress through
+          the cloud firewall's domain allowlist and Route 53 Resolver DNS Firewall, and Code Interpreter in Sandbox
+          or VPC mode; the harness actions are not covered by the subnet keys, so its VPC setting is reviewed in
+          the pipeline
+      EX-AML-M0028:
+        status: gap
+        note: Not deployed. Baseline is allowedTools naming each tool (shell excluded), MCP servers only as gateway
+          targets with a static mcpToolSchema, InvokeAgentRuntimeCommand granted to nobody, and the front end
+          stripping tools, allowedTools and skills from InvokeHarness calls
+      EX-D3-CH:
+        status: gap
+        note: Not deployed. Baseline is a CMK on the token vault, Private Key JWT on custom OAuth providers, and
+          GetResourceApiKey / GetSecretValue scoped to named ARNs; the vault is not write-only to the execution
+          role, so credentials stay on gateway targets
+      EX-AML-M0029:
+        status: gap
+        note: Not deployed. Consequential actions would be inline_function tools approved in our front end, with a
+          temporal gateway policy requiring a recorded approval; built-in and MCP tools have no ask mode
+      EX-INPUT-GUARDRAILS:
+        status: gap
+        note: Not deployed. Baseline is guardrail policies at the gateway (suppressOutput over tool output,
+          PromptAttack forbid over input) tuned in LOG_ONLY first; results of built-in tools, Browser and direct
+          remote MCP stay unscreened, so those tools are not enabled
+      EX-AGENT-TRACING:
+        status: gap
+        note: Not deployed. Baseline is CloudWatch Transaction Search on, agent log groups subscribed to the SIEM,
+          and CloudTrail data events for AgentCore into the logging account
+      EX-AML-M0024:
+        status: gap
+        note: Not deployed. Harness traces and CloudTrail data events would be retained in the logging account for
+          the standard 13 months
+      EX-AGENT-KILL-SWITCH:
+        status: gap
+        note: Not deployed. Runbook would be StopRuntimeSession on the session, a resource-based Deny on
+          InvokeAgentRuntime, Revoke active sessions on the execution role, credential-provider deletion and a
+          gateway rate of 0; stopping a harness session through its underlying agentRuntimeArn is to be proven in a drill
+  - tool: toolVertexAgentEngine
+    available: false
+    note: Not in use. No Google Cloud organisation is approved for agent workloads; Agent Runtime is assessed as a
+      candidate managed runtime. Each note below is the baseline the platform team would set before the first agent.
+    capabilities:
+      EX-D3-MFA:
+        status: gap
+        note: Not deployed. Baseline is 2-Step Verification Enforcement On (Admin console > Security > Authentication >
+          2-step verification) for the OU holding Agent Platform admins and the deploy pipeline's owners, Google Cloud
+          session control reauthentication by Security key, and iam.managed.disableServiceAccountKeyCreation; front-end
+          user MFA stays with the corporate IdP
+      EX-AGENT-TOOL-REGISTRY:
+        status: gap
+        note: Not deployed. Baseline is aiplatform.reasoningEngines.create / update / delete granted only to the
+          pipeline identity (no roles/aiplatform.user for developers), owner labels on every ReasoningEngine, Agent
+          Registry auto-registration plus manual registration of cross-project agents and MCP servers with toolspec.json
+      EX-STAGED-ROLLOUT-GATE:
+        status: gap
+        note: Not deployed. Baseline is trafficSplitManual set before every release so a new revision starts at 0%,
+          promotion after querying the revision path, rollback by setting the prior revision to 100%; revisions are
+          Preview and cannot be combined with Agent Gateway, so the gateway would win and releases would be in-place
+      EX-AML-M0008:
+        status: gap
+        note: Not deployed. The Evaluation Service (simulated users, multi-turn autoraters) and online monitors would
+          score candidate revisions; nothing blocks a split on the result and no adversarial suite ships, so red-team
+          tests stay in our pipeline
+      EX-D3-AA:
+        status: gap
+        note: Not deployed. Baseline is identity_type AGENT_IDENTITY on every agent (forced by the gateway binding),
+          roles bound to each principal:// identifier, baseline roles on the project principalSet, a Principal Access
+          Boundary on the agent principal set, and bindings removed when an agent is deleted
+      EX-D3-CTS:
+        status: gap
+        note: Not deployed. Third-party credentials would live in Agent Identity auth manager providers (3-legged OAuth
+          per user) with roles/agentidentity.user granted per agent; the token still reaches the agent's process, so
+          our MCP gateway keeps the grant for internal systems. Default Context-Aware Access token binding left on
+      EX-D3-CH:
+        status: gap
+        note: Not deployed. Baseline is auth manager and Secret Manager references (never literal env_vars), agent
+          identity instead of service-account keys, and change control on the PSC interface network attachment, since
+          Google offers no tunnel credential to rotate
+      EX-AGENT-ACTION-POLICY-ENFORCEMENT:
+        status: gap
+        note: Not deployed. Baseline is an Agent-to-Anywhere Agent Gateway with IAP access authorization, IAM Access
+          policies allowing named MCP tools and denying destructive ones, custom constraint
+          custom.allowlistedEgressAgentGatewaysForAgentEngine enforced on the project, and a Model Armor floor with
+          VERTEX_AI in INSPECT_AND_BLOCK
+      EX-AML-M0028:
+        status: gap
+        note: Not deployed. Tool permissions would be IAM Access policies on tool.name (destination.agent_registry.mcp_server)
+          per agent principal, plus IAM roles on specific resources for Google APIs; arguments are not in the
+          policy language, so argument limits stay at our MCP gateway
+      EX-AML-M0029:
+        status: gap
+        note: Not deployed. The runtime has no approval pause and ADK tool confirmation does not support Agent
+          Platform Sessions; approval for consequential writes would stay at our MCP gateway, surfaced through the
+          front end
+      EX-INPUT-GUARDRAILS:
+        status: gap
+        note: Not deployed. Baseline is Model Armor on the egress gateway (pi_and_jailbreak_filter_settings ENABLED,
+          INSPECT_AND_BLOCK) screening MCP tools/call responses, plus the project floor over Gemini generateContent;
+          SSE-streamed and non-MCP tool results would still need our gateway's classifier
+      EX-AI-VENDOR-ASSESSMENT:
+        status: gap
+        note: Not assessed. Would use the Compliance Reports Manager SOC 2 and ISO 27001 reports, the services-in-scope
+          and HIPAA lists (platform level only), Access Transparency coverage and the ZDR page; Pre-GA features
+          excluded from scope
+      EX-D3-ORA:
+        status: gap
+        note: Not assessed. Agent, revision and identity listings (reasoningEngines.list, spec.effectiveIdentity)
+          would feed the governance register once a project is approved
+      EX-AGENT-TRACING:
+        status: gap
+        note: Not deployed. Baseline is GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY with content capture to a Cloud
+          Storage bucket, Data Access audit logs on for aiplatform.googleapis.com, and a Log Router sink to the SIEM
+          project
+      EX-AML-M0024:
+        status: gap
+        note: Not deployed. OpenTelemetry spans and audit logs would be routed by Log Router sink to a separate
+          project the agent's project cannot alter
+      EX-AML-M0031:
+        status: gap
+        note: Not deployed. Baseline is per-user memory scope with IAM conditions on the memoryScope
+          attribute, ttl_config.default_ttl set (memories otherwise never expire), explicit session ttl, and memory
+          revisions kept for rollback
+      EX-AGENT-KILL-SWITCH:
+        status: gap
+        note: Not deployed. Runbook would be an IAM deny policy on the agent principal, removal of callers'
+          aiplatform.reasoningEngines.query, then client.runtimes.delete with force=True; no documented interrupt of a
+          running query, so the gateway deny is the fastest stop
+      EX-D3-EI:
+        status: gap
+        note: Not deployed. Model-written code would run only in Code Execution sandboxes (no network), one per session
+          with config.ttl and deleted at session end; untrusted workloads as separate agents and projects
+      EX-AGENT-EGRESS-CONTROL:
+        status: gap
+        note: Not deployed. Baseline is an Agent-to-Anywhere gateway binding on every agent with registered endpoints
+          and iap.resources.egressViaIAP per principal; VPC-SC plus PSC interface where the gateway cannot be used

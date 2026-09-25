@@ -5,6 +5,14 @@
 # self-hosted, lifecycle, security), tools (mcp, vaults, functions), observability, tracing,
 # your-data. Not verified: an MCP approval gate for this API (documented for Responses only),
 # trace retention, EU residency, sandbox isolation technology.
+# 2026-09-25: re-verified D3-EI, cap-agent-egress-control, D3-CTS, D3-CH, AML.M0028, AML.M0029, D3-AA,
+# cap-agent-tracing, cap-agent-kill-switch, cap-ai-vendor-assessment and added D3-MFA, cap-agent-tool-registry,
+# cap-staged-rollout-gate, cap-agent-action-policy-enforcement, AML.M0031, cap-input-guardrails against the
+# MITRE capability rules; every developers.openai.com Agents API guide 200 (read via the .md variants);
+# developers.openai.com/api/reference/* 200 to curl but 404 to WebFetch; openai.com/index/introducing-the-
+# agents-api and help.openai.com (MFA 7967234, SSO for API Platform 9641482, admin portal 12289294) 403.
+# Still not verified: trace retention, how trace export is enabled per organisation, the sandbox isolation
+# technology, and whether SSO or MFA can be required for platform.openai.com sign-in.
 vendor: openai
 family: OpenAI Agents API
 tools:
@@ -38,9 +46,11 @@ tools:
         to 100 exact hostnames, and expire after an hour idle; files under /workspace/outputs survive as
         artifacts.
       - >-
-        Governance is API-native and thin: allowed_tools per MCP server, vaults that hold MCP bearer tokens
-        and OAuth grants the agent never receives, a restricted executor key, a dashboard log and trace view
-        with no external exporter, and no policy language, session budget or per-agent principal. Sessions
+        Governance is API-native and thin: allowed_tools per MCP server, vaults that hold MCP bearer tokens,
+        OAuth grants and sandbox API secrets (substituted at egress for named hosts) the agent never receives,
+        a restricted executor key, a dashboard trace view with a pull-based OTLP JSON export per session, and
+        no policy language, approval mode for hosted tools, version history, session budget or per-agent
+        principal. Sessions
         persist until deleted; the API supports US data residency only and is not eligible for zero data
         retention, self-hosting included.
     facts:
@@ -91,8 +101,8 @@ tools:
           is enabled, so a fetched page is instruction until restricted.
       - risk: riskSensitiveDataDisclosure
         note: >-
-          Sessions and sandbox files persist on OpenAI's side until deleted, US-only, with no ZDR; environment
-          variables are readable by the model.
+          Sessions and published artifacts persist on OpenAI's side until deleted, US-only, with no ZDR; sandbox
+          files last while the sandbox does; environment variables are readable by the model.
       - risk: riskToolSourceProvenance
         note: >-
           Plugins, skills and MCP servers are named in the definition and fetched or connected by the harness;
@@ -100,19 +110,38 @@ tools:
     controls:
       - mitigation: D3-EI
         coverage: native
-        verified: "2026-09-17"
         mechanism: >-
-          OpenAI-hosted Linux sandbox per session (Python, Node, CLI tools) or a self-hosted executor
+          environment.type openai_hosted: one OpenAI-hosted Linux sandbox per session (its own /workspace,
+          shared by the root agent and its subagents, deleted on session delete or after an hour without
+          keep-alives); or environment.type self_hosted, where codex exec-server runs on compute you provide
         steps:
-          - title: Use one environment per trust boundary
+          - title: Give each session its own hosted sandbox
             body:
-              - Create separate environments for users or workloads that must not share data; hosted sandboxes
-                expire after one hour of inactivity and cannot be extended.
+              - Set environment.type openai_hosted; each session gets a separate workspace, and the sandbox can be
+                deleted after an hour without activity or keep-alives (not configurable) or when you delete the
+                session.
+            url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
+          - title: Separate trust boundaries by environment and project
+            body:
+              - Use separate environments for users or workloads that must not share data and a dedicated OpenAI
+                project for each application or workload, as the sandbox security guide says.
             url: https://developers.openai.com/api/docs/guides/agents-api/environments/security
-        evidence: []
+          - title: Harden self-hosted compute yourself
+            body:
+              - With environment.type self_hosted the executor runs on your container, laptop or partner sandbox;
+                isolate it by user or workload, because agents sharing an environment share its files and
+                credentials.
+            url: https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted
         note: >-
-          Isolation technology is not documented beyond "isolated compute environments"; the security guide
-          recommends separate environments per user or workload.
+          Native on the runtime rule: a per-session sandbox the vendor provisions and reclaims. Inside the
+          boundary: bash, apply-patch, file tools, packages, setup commands, and stdio or environment-origin MCP
+          servers. Outside: the harness, inference, web search and service-origin MCP connections, which run in
+          OpenAI's service. The isolation technology is not named beyond a "sandbox" billed at container rates,
+          subagents share the session's sandbox rather than getting their own, and physical cleanup after a
+          session delete may continue asynchronously. environment.type self_hosted moves the boundary to the
+          deployer (image, privileges and cleanup are yours; deleting the session does not stop that compute);
+          environment.type none removes the shell and file tools altogether.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -134,17 +163,36 @@ tools:
               verified: 2026-09-17
       - mitigation: cap-agent-egress-control
         coverage: native
-        mechanism: environment.network enabled (default) | disabled | restricted with allowed_domains
-        note: >-
-          Restricted lists up to 100 exact hostnames; hosted stdio MCP requires enabled; templates cannot be
-          broadened by a session.
-        steps: &a1
+        mechanism: >-
+          environment.network.access enabled | disabled | restricted with allowed_domains (1–100 exact
+          hostnames) on an openai_hosted environment or environment template; web_search mode and
+          allowed_domains bound the search tool separately
+        steps:
           - title: Restrict the hosted sandbox's network
             body:
-              - Set network to disabled or restricted on the environment template and list the hosts the setup commands
-                and tools genuinely need.
+              - Set environment.network.access to disabled, or to restricted with allowed_domains listing exact
+                hostnames (no wildcards, protocols, paths or ports; subdomains and redirect targets need their own
+                entries); enabled is the default.
             url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
-        verified: 2026-09-17
+          - title: Save the policy in an environment template
+            body:
+              - Put the network policy in an environment template and pass environment_template_id; a session's
+                network override cannot broaden the template's policy.
+            url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
+          - title: Bound web search on the tool
+            body:
+              - Leave web_search out of agent.tools or set mode disabled; where search is needed use cached mode
+                and an allowed_domains list of up to 100 domains.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/web-search
+        note: >-
+          Native on the runtime rule: an exact-host allowlist the vendor enforces around the hosted sandbox.
+          Paths it does not see: web search (its own mode and domain list), service-origin MCP connections
+          (the default connection_origin, made from OpenAI's service) and inference. Hosted stdio MCP servers
+          require enabled access, so an agent that uses one cannot run restricted. The policy belongs to whoever
+          creates the session — the template is optional — and the API reference gives the default as enabled
+          for beta requests but disabled for GA requests, so set it explicitly. A self-hosted executor's egress
+          is your firewall; it needs api.openai.com and wss://codex-cloud-environments.chatgpt.com.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -156,29 +204,51 @@ tools:
               note: >-
                 Restricted lists up to 100 exact hostnames; hosted stdio MCP requires enabled; templates
                 cannot be broadened by a session.
-              steps: *a1
+              steps:
+                - title: Restrict the hosted sandbox's network
+                  body:
+                    - Set network to disabled or restricted on the environment template and list the hosts the
+                      setup commands and tools genuinely need.
+                  url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
               verified: 2026-09-17
       - mitigation: D3-CTS
-        coverage: unknown
-        mechanism: Vaults for MCP credentials (service-originated connections only); restricted executor key
+        coverage: native
+        mechanism: >-
+          Vault credentials attached per session with vault_ids: static_bearer or mcp_oauth bound to an MCP
+          server URL and presented by OpenAI's service, and environment_variable credentials whose placeholder a
+          network proxy replaces only for the credential's allowed_hosts
         steps:
-          - title: Attach vaults instead of headers
+          - title: Substitute sandbox secrets at egress
             body:
-              - Store bearer tokens and OAuth grants in a vault bound to the MCP server URL and attach
-                vault_ids to the session; retrieving a vault never returns secret values.
+              - Create an environment_variable credential (auth.secret_name, auth.secret_value,
+                auth.networking.type limited, auth.networking.allowed_hosts) so hosted sandbox code sees a
+                placeholder and the proxy supplies the secret only to those hosts over HTTPS on 443 or 8443.
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
-        evidence: []
+          - title: Bind MCP credentials to their server
+            body:
+              - Store static_bearer or mcp_oauth credentials with mcp_server_url and set the MCP tool's
+                credential_id when several attached credentials match that URL.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
+          - title: Keep each user's grant in its own vault
+            body:
+              - Store the mcp_oauth grant from your own consent flow in a vault per end user or tenant and pass
+                only that vault in vault_ids for that user's sessions.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] Applies to MCP connections the harness makes; environment variables
-          you inject are visible inside the sandbox.
+          Native on the runtime rule: credentials are held outside the sandbox and injected per destination, and
+          per-user scoping is available by attaching per-user vaults. That is the application's arrangement, not
+          the default: a vault's credentials are presented for every session it is attached to, vaults are
+          project-scoped, and the docs do not say whether attaching one at session creation needs a vaults
+          permission. Not covered: self-hosted environments, environment-origin HTTP MCP and stdio MCP (inline
+          authorization or transport.env_vars, readable by code in the environment) and function tools (the
+          credential stays in your handler); the docs say to run your own trusted proxy there. The placeholder
+          only works in HTTPS request headers, and an environment credential is fixed when the session is
+          created, so a rotation reaches only new sessions.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: native
@@ -194,27 +264,49 @@ tools:
                   url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
               verified: 2026-09-17
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Environment env vars (reserved names rejected); vaults for MCP; executor-scoped CODEX_API_KEY
+          Write-only vault credentials; workload identity federation to a project service account for
+          short-lived API tokens; maximum API key lifetime, API Key Governance and IP allowlist in Platform
+          settings; a connect-only environment key for self-hosted executors; no vendor tunnel for this API
         steps:
-          - title: Keep the API key outside the sandbox
+          - title: Keep tool secrets in vaults
             body:
-              - The docs reject OPENAI_API_KEY, PATH and CODEX_* as environment names and tell you to keep the
-                key outside; executors use a key that can only connect environments.
-            url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
-        evidence: []
+              - Retrieving a vault or credential never returns its secret; replace a secret with POST
+                /v1/vaults/{vault_id}/credentials/{credential_id} and delete credentials or the vault when they are
+                no longer needed.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
+          - title: Replace stored API keys with federation
+            body:
+              - In Organization Settings > Security > Workload Identity Provider create a provider and a service
+                account mapping, narrowed by Permissions, so the application exchanges its own OIDC, SPIFFE or
+                X.509 identity for a short-lived OpenAI access token.
+            url: https://developers.openai.com/api/docs/guides/workload-identity-federation
+          - title: Bound the keys that remain
+            body:
+              - In Platform settings set a maximum API key lifetime for the organization or project and use API
+                Key Governance to allow only service-account keys; both apply to new keys only.
+            url: https://developers.openai.com/api/docs/guides/production-best-practices
+          - title: Pin keys to your egress addresses
+            body:
+              - Under Settings > Security > IP allowlist enable an organization or project allowlist so a leaked key
+                fails with ip_not_authorized from any other address.
+            url: https://developers.openai.com/api/docs/guides/ip-allowlist
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Vaulted MCP credentials are write-only; anything passed as an
-          environment variable is a stored secret readable by the model.
+          Partial by the runtime rule. The vault and federation halves hold: vault values are write-only, saved
+          agents store no credentials, inline MCP authorization is encrypted and omitted from the returned
+          session, and federation gives the application a short-lived token instead of a stored key. The tunnel
+          half does not: Secure MCP Tunnel documents ChatGPT, Codex and the Responses API (a tunnel_id on the
+          MCP tool) but this API's MCP tool has no tunnel field, so the private path is a self-hosted executor
+          dialling out on its environment key — limited to connecting environments, but readable by
+          agent-generated code in that environment and with no rotation procedure beyond "rotate or revoke it
+          when needed". Anything placed in environment.env or passed to a stdio MCP server is a secret the
+          agent's code can read.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -231,22 +323,37 @@ tools:
                   url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
               verified: 2026-09-17
       - mitigation: AML.M0028
-        coverage: native
-        verified: "2026-09-17"
+        coverage: partial
         mechanism: >-
-          allowed_tools per MCP server; tool enablement in the agent definition; template network policy
+          allowed_tools on each mcp entry in agent.tools; web_search mode (disabled | cached | live) and
+          allowed_domains; tools left out of agent.tools are off; environment.type none removes the built-in
+          shell and apply-patch tools
         steps:
-          - title: Allowlist tools per server
+          - title: Allowlist tools per MCP server
             body:
-              - Declare allowed_tools on each MCP server entry and keep secrets out of reusable agent
-                definitions, plugin archives and logs.
+              - Set allowed_tools on each mcp entry in agent.tools; every tool the server publishes is callable
+                when it is omitted.
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
-          - title: Pin servers and origins
+          - title: Leave web search out or narrow it
             body:
-              - Name servers by URL with allowed_tools; use connection_origin environment for servers
-                reachable only from your own network.
-            url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
-        evidence: []
+              - Omit web_search from agent.tools (or set mode disabled); where it is needed use cached mode and
+                allowed_domains.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/web-search
+          - title: Drop the built-in shell where it is not needed
+            body:
+              - Set environment.type none so the built-in Bash and apply-patch tools, workspace files and executor
+                MCPs are unavailable; with an environment attached they cannot be switched off one by one.
+            url: https://developers.openai.com/api/docs/guides/agents-api/architecture
+        note: >-
+          Partial by the runtime rule: per-tool on/off exists for MCP tools and web search has a domain list, but
+          no tool carries an approval mode or argument scoping, the built-in shell and file tools come with any
+          environment, subagents inherit the MCP tools, credentials and allowed tools, and programmatic tool
+          calling lets model-generated code call the same tools. It all lives in the definition, and the next
+          definition can undo it: the key that creates sessions (api.agents.write) can pass any inline agent,
+          and no tenant restriction on definition changes is documented for this API (project hosted-tool
+          permissions are documented for project workloads without naming the Agents API, so they are not
+          credited). allowed_tools admits tool names; nothing verifies what a declared server serves.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -275,22 +382,27 @@ tools:
                       reachable only from your own network.
                   url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
               verified: 2026-09-17
-        note: "[capabilityMcpToolSecurity] Admission is the definition; the harness verifies nothing about what a
-          declared server serves."
       - mitigation: AML.M0029
         coverage: partial
-        verified: "2026-09-17"
-        mechanism: Function-tool pause (agent.session.requires_action) answered by your code
+        mechanism: >-
+          Function tools: the session emits agent.session.requires_action listing the call's name and arguments
+          and waits until your application posts agent.session.input.tool_result with the same turn_id and
+          call_id
         steps:
           - title: Route consequential actions through function tools
             body:
-              - The session emits requires_action and idles until you return the tool result, which is where
-                an approval can be bound to the exact action.
+              - Define the action as a function in agent.tools; when required_actions lists the call, show a person
+                the function and its arguments and return the result (or success false with an error) only after
+                they decide.
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
-        evidence: []
         note: >-
-          A checkpoint for tools you execute; no MCP approval gate is documented for this API, so hosted tool
-          calls run without one.
+          Partial by the runtime rule: approval exists only for the tools the application executes. A function
+          call is bound to the exact call (turn_id, call_id, arguments) and the session waits for the result,
+          so a person can decide before anything runs; the approval UI, expiry and re-checking are the
+          application's. The runtime's own tools — shell, apply-patch, MCP, web search and subagent spawning —
+          run with no approval gate, this API's MCP tool schema has no approval field, and subagents cannot use
+          function tools.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -310,25 +422,36 @@ tools:
                   url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
               verified: 2026-09-17
       - mitigation: D3-AA
-        coverage: unknown
-        mechanism: Scoped API keys (api.agents.read/write, api.vaults.*); executor key
+        coverage: partial
+        mechanism: >-
+          Restricted project API keys (api.agents.read / write, api.vaults.*, api.responses.write), project
+          service accounts reached by workload identity federation, and a connect-only environment key per
+          self-hosted executor; a saved agent is project-scoped configuration with an id, not a principal
         steps:
-          - title: Scope the keys
+          - title: Give the application a workload identity
             body:
-              - Use keys carrying only the agents and vaults scopes for the application, and the restricted
-                executor key for self-hosted environments.
+              - Under Organization Settings > Security > Workload Identity Provider map your workload's OIDC, SPIFFE
+                or X.509 identity to a project service account, narrowing the mapping's Permissions to the scopes
+                it needs.
+            url: https://developers.openai.com/api/docs/guides/workload-identity-federation
+          - title: Separate application and executor credentials
+            body:
+              - Grant the application key api.agents.read, api.agents.write and api.responses.write (plus
+                api.vaults.* only where it manages vaults), and give each executor an environment key from the
+                Agents tab with every other permission set to None.
             url: https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] No per-agent principal; the caller's key is the identity.
+          Partial by the runtime rule: identities exist at project scope — keys, service accounts and environment
+          keys are inventoried and revocable — but the runtime mints no principal per agent. A saved agent's id
+          names a configuration; every session runs on whichever key or service account created it, and an MCP
+          server sees only the vault credential, so revoking one agent means finding the keys and vault entries
+          it used. The environment key must belong to the same organization, project and user or service account
+          as the session.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityNhiManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityNhiManagement
               coverage: partial
@@ -342,26 +465,37 @@ tools:
                   url: https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted
               verified: 2026-09-17
       - mitigation: cap-agent-tracing
-        coverage: partial
-        mechanism: Agents log view and tracing dashboard on the platform
-        note: >-
-          The public beta exposes no tracing configuration or external trace exporters; usage per turn is
-          best-effort.
-
-
-          [capabilityAuditLogging] Retrievable, not exported; retention period for events not documented.
+        coverage: native
+        mechanism: >-
+          GET /v1/agents/sessions/{session_id}/traces (OTLP JSON with agent, generation and tool spans); session
+          items, turns and subagent item endpoints; the event stream and session webhooks; Logs → Agents in the
+          dashboard
         steps:
-          - title: Read sessions in the dashboard
+          - title: Export each session's traces as OTLP
             body:
-              - Turns, tool calls, subagents and usage are shown per session under the Agents logs; there is
-                no export.
-            url: https://developers.openai.com/api/docs/guides/agents-api/observability
-          - title: Persist events on your side
+              - With trace export enabled for the organization and a project key holding api.traces.read (or
+                api.agents.read), page GET /v1/agents/sessions/{session_id}/traces and send the OTLP JSON to your
+                collector; list sessions by agent_id to export per agent.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tracing
+          - title: Archive items and turns
             body:
-              - Retrieve session items by API and subscribe to session webhooks (created, action_required,
-                in_progress, idle, failed) to keep your own record.
+              - List session items, turns and each subagent's items (order asc with the after cursor) to keep
+                messages, tool calls and results in your own store.
+            url: https://developers.openai.com/api/docs/guides/agents-api/sessions/events
+          - title: Pull on webhooks
+            body:
+              - Subscribe to agent.session.created, action_required, in_progress, idle and failed and collect
+                traces and items when a turn ends; session deletion has no webhook.
             url: https://developers.openai.com/api/docs/guides/agents-api/sessions/webhooks
-        verified: 2026-09-17
+        note: >-
+          Native on the runtime rule: programmatic export of each turn's model inputs and outputs and its tool
+          calls with arguments and results, MCP calls and subagent work included, as OTLP. Limits: export is
+          pull-only and "does not set up automatic delivery", traces are built after a turn ends, fields are
+          recorded "when available", trace export must be enabled for the organization (the page does not say
+          how), coordination items can omit inter-agent message content, command-output truncation is not
+          reported, and trace retention is not documented. The record the organisation can rely on is the one
+          it pulls.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentObservability
@@ -374,7 +508,7 @@ tools:
               note: >-
                 The public beta exposes no tracing configuration or external trace exporters; usage per turn
                 is best-effort.
-              steps: &a1
+              steps:
                 - title: Read sessions in the dashboard
                   body:
                     - Turns, tool calls, subagents and usage are shown per session under the Agents logs; there is no export.
@@ -393,17 +527,34 @@ tools:
               verified: 2026-09-17
       - mitigation: cap-agent-kill-switch
         coverage: partial
-        mechanism: Delete the session; revoke the API key
-        note: >-
-          Deleting a session neither stops its environment nor emits a deletion webhook; stop the environment
-          separately.
-        steps: &a1
-          - title: Stop the environment, not just the session
+        mechanism: >-
+          agent.session.input.cancel on the session events endpoint; DELETE the session; delete vault credentials
+          or the vault; revoke the project API key or environment key; stop self-hosted compute yourself
+        steps:
+          - title: Cancel the running turn
             body:
-              - The lifecycle guide says deleting a session does not stop its environment; stop or delete the environment
-                and revoke the key.
-            url: https://developers.openai.com/api/docs/guides/agents-api/environments/lifecycle
-        verified: 2026-09-17
+              - Send an agent.session.input.cancel event to the session; the turn ends as
+                agent.session.turn.cancelled and the session and its earlier work remain.
+            url: https://developers.openai.com/api/docs/guides/agents-api/sessions
+          - title: Delete the session
+            body:
+              - Delete the session to remove it from the API and request sandbox cleanup (physical cleanup can
+                continue asynchronously); stop self-hosted compute separately.
+            url: https://developers.openai.com/api/docs/guides/agents-api/sessions/manage
+          - title: Revoke what it held
+            body:
+              - Delete its vault credentials or vault, revoke those tokens with their providers, and revoke the
+                project API key or environment key its sessions used.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
+        note: >-
+          Partial by the runtime rule: a running turn can be cancelled by API, which stops active work though no
+          time bound is published, but revocation does not reach running work — the vault page says deleting
+          stored credentials neither revokes the provider tokens nor stops a running session — and there is no
+          per-agent disable: deleting a saved agent does not stop a key from starting a session with an inline
+          definition, so the only block on new sessions is revoking the key or its api.agents.write permission.
+          Deleting a session neither stops self-hosted compute nor emits a webhook, and whether cancel stops
+          running subagents or sandbox commands is not stated.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -415,23 +566,39 @@ tools:
               note: >-
                 Deleting a session neither stops its environment nor emits a deletion webhook; stop the
                 environment separately.
-              steps: *a1
+              steps:
+                - title: Stop the environment, not just the session
+                  body:
+                    - The lifecycle guide says deleting a session does not stop its environment; stop or delete the
+                      environment and revoke the key.
+                  url: https://developers.openai.com/api/docs/guides/agents-api/environments/lifecycle
               verified: 2026-09-17
       - mitigation: cap-ai-vendor-assessment
-        coverage: unknown
-        mechanism: Trust portal reports; no tenancy-configuration readback for this surface
-        steps:
-          - title: Review the trust portal
-            body:
-              - SOC 2 Type 2 and ISO 27001/27017/27018/27701 reports are on the trust portal.
+        coverage: external
+        mechanism: >-
+          OpenAI Trust Portal evidence and the API data-controls page, consumed by the organisation's TPRM
+          platform
+        evidence:
+          - title: OpenAI Trust Portal
             url: https://trust.openai.com/
-        evidence: []
-        note: "[capabilityVendorAssurance] An SSPM-class product would need an API to read agent, environment and
-          vault configuration; only list endpoints exist."
+          - title: Data controls in the OpenAI platform — /v1/agents retention and ZDR eligibility
+            url: https://developers.openai.com/api/docs/guides/your-data
+          - title: Agents API overview — US data residency only, no ZDR
+            url: https://developers.openai.com/api/docs/guides/agents-api/overview
+        note: >-
+          External: the assessment runs in the organisation's TPRM platform. The trust portal lists SOC 2 Type 2,
+          SOC 3, ISO/IEC 27001, 27017, 27018, 27701 and 42001, CSA STAR, PCI DSS, FedRAMP 20x, a pentest report
+          and a security whitepaper, scoped to OpenAI's API among other services; the Agents API is not named as
+          its own scope. Product-specific: /v1/agents keeps application state until deleted and is eligible
+          neither for Zero Data Retention nor for Private Retention with Private Safety Processing, data residency
+          is United States only, and a self-hosted sandbox changes neither; BAA eligibility for this API is not
+          stated. The API is in beta and the reference already lists different defaults for GA requests, so
+          re-assess when it goes GA.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityVendorAssurance
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityVendorAssurance
               coverage: external
@@ -444,6 +611,158 @@ tools:
                     - SOC 2 Type 2 and ISO 27001/27017/27018/27701 reports are on the trust portal.
                   url: https://trust.openai.com/
               verified: 2026-09-17
+      - mitigation: D3-MFA
+        coverage: partial
+        mechanism: >-
+          People who reach platform.openai.com (Agents tab, logs, environment keys, project settings) get MFA
+          from SAML SSO with MFA at the identity provider or from per-user account MFA; the API itself is driven
+          by keys and federated tokens that no MFA prompt covers
+        steps:
+          - title: Require MFA at the identity provider
+            body:
+              - The admin FAQ says users can enable account-level OpenAI MFA but there is no workspace-wide MFA
+                enforcement; require SSO with MFA in the identity provider and manage SSO in the Global Admin
+                Console.
+            url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
+          - title: Bound the key path that skips MFA
+            body:
+              - In Platform settings use API Key Governance to allow only service-account keys (or disable new key
+                creation) and set a maximum API key lifetime for the organization or project.
+            url: https://developers.openai.com/api/docs/guides/production-best-practices
+          - title: Pin keys to your network
+            body:
+              - Enable an IP allowlist under Settings > Security > IP allowlist so keys fail from other addresses;
+                it does not restrict platform.openai.com sign-in.
+            url: https://developers.openai.com/api/docs/guides/ip-allowlist
+        note: >-
+          Partial by the rule applied to every vendor: MFA lives in the identity provider, not in the product,
+          and the principals that change agent definitions and attach vaults on this runtime are API keys and
+          federated tokens, which no MFA prompt covers — key governance, lifetime and IP allowlisting bound that
+          path instead. The FAQ that states the MFA position is written for ChatGPT workspaces; the API Platform
+          SSO and MFA articles (help.openai.com) returned 403, so whether SSO can be required for
+          platform.openai.com sign-in is not verified. MFA for the end users a session runs for belongs to the
+          deployer's application front end.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-tool-registry
+        coverage: partial
+        mechanism: >-
+          Saved agents (POST /v1/agents: project-scoped, with name, metadata, created_at, updated_at) listed by
+          GET /v1/agents; environment templates, vaults and sessions (filterable by agent_id) listable; no
+          approval state, and nothing refuses an unsaved inline definition
+        steps:
+          - title: Register each definition as a saved agent
+            body:
+              - Create agents with a name and metadata (owner, change ticket, release), start sessions with
+                agent_id, and list, update or delete them through the agents endpoints.
+            url: https://developers.openai.com/api/docs/guides/agents-api/configuration
+          - title: Reconcile sessions against the registry
+            body:
+              - List sessions with the agent_id filter for each saved agent and treat sessions created from an
+                inline agent definition as unregistered.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tracing
+          - title: Keep one project per workload
+            body:
+              - Create a dedicated OpenAI project for each application or workload so its agents, sessions and
+                vaults list together and its keys reach nothing else.
+            url: https://developers.openai.com/api/docs/guides/agents-api/environments/security
+        note: >-
+          Partial by the runtime rule: a listable, project-scoped inventory with metadata exists, but nothing
+          gates it. Any key with api.agents.write — which every session-running application needs — can create,
+          update or delete a saved agent, or skip the registry by defining the agent inline at session creation;
+          there is no approval state, version history or owner field beyond metadata, and the RBAC permission
+          table lists no Agents API permission for user roles. MCP servers, skills and plugins are declared inside
+          definitions and templates rather than registered. Change-gating is the organisation's pipeline.
+        verified: "2026-09-25"
+      - mitigation: cap-staged-rollout-gate
+        coverage: none
+        mechanism: >-
+          None: a saved agent is updated in place (updated_at, no version field or history); each session copies
+          the saved configuration when it is created and keeps it
+        evidence:
+          - title: Configuring Agents — saved-agent updates apply only to new sessions
+            url: https://developers.openai.com/api/docs/guides/agents-api/configuration
+          - title: Create an agent — agent object fields
+            url: https://developers.openai.com/api/reference/resources/beta/subresources/agents/methods/create
+          - title: Evals platform deprecation notice
+            url: https://developers.openai.com/api/docs/guides/evals
+        note: >-
+          None: this API has no versions, aliases, traffic splitting, evaluation hook or rollback. What it
+          contributes is containment of change — saved-agent updates reach only new sessions, and a running
+          session cannot change its tools, instructions or multi_agent setting. What stands in is the
+          organisation's pipeline: the definition kept as code, a new saved agent per release, the application
+          choosing agent_id per request for a canary and switching back to roll back, and evaluation run before
+          the switch. OpenAI's Evals platform becomes read-only on 2026-10-31 and shuts down on 2026-11-30.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-action-policy-enforcement
+        coverage: external
+        mechanism: >-
+          No per-call policy engine, tenant floor or ask mode in the runtime; MCP calls can be routed through an
+          MCP gateway by server_url, and function-tool calls reach the application's handlers with their
+          arguments before they run
+        evidence:
+          - title: MCP connections — allowed_tools, connection_origin, server_url
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
+          - title: Functions — required_actions and tool results
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
+          - title: Configuring Agents — inline and saved definitions
+            url: https://developers.openai.com/api/docs/guides/agents-api/configuration
+        note: >-
+          External: nothing in the runtime evaluates a proposed call against rules. allowed_tools admits MCP
+          tool names, and no default-deny tool gateway, policy language, guardrail floor or per-tool ask mode is
+          documented. A product around it can take the decision for MCP traffic: point each mcp entry's
+          server_url at an MCP gateway (reachable from OpenAI's service, or from a self-hosted environment with
+          connection_origin environment) that evaluates tool, arguments and caller before forwarding. Function
+          tools reach the application unevaluated, so the same decision must exist in its handlers. The hosted
+          shell, apply-patch and web search have no decision point at all, bounded only by the environment's
+          network policy and by environment.type none.
+        verified: "2026-09-25"
+      - mitigation: AML.M0031
+        coverage: partial
+        mechanism: >-
+          No memory store; state is per session — conversation items, automatic compaction, the sandbox's
+          /workspace for its lifetime and published artifacts — held in the project until DELETE session or
+          artifact delete
+        steps:
+          - title: Keep one session per conversation and delete it when done
+            body:
+              - Store each session ID with the one user conversation it serves and delete the session when that
+                conversation ends; sessions persist until deleted.
+            url: https://developers.openai.com/api/docs/guides/agents-api/sessions/manage
+          - title: Delete published artifacts
+            body:
+              - Artifacts under /workspace/outputs survive sandbox expiry; delete each one through the session
+                Artifacts API when it is no longer needed.
+            url: https://developers.openai.com/api/docs/guides/agents-api/environments/files
+        note: >-
+          Partial: the runtime has no persistent memory feature, so the pin's shared-memory default does not
+          arise here; the state in scope is each session's conversation, its compaction and its sandbox files,
+          separated per session and deletable by API. Nothing validates what enters that state — a tool result or
+          fetched page stays in context and in compaction for later turns — and separation beyond the session is
+          the project, whose sessions are listed together. The root agent and its subagents share one sandbox.
+          Which user continues which session is the application's choice.
+        verified: "2026-09-25"
+      - mitigation: cap-input-guardrails
+        coverage: external
+        mechanism: >-
+          No injection screening in the runtime; MCP responses can be classified by a gateway named as the
+          server_url, and function-tool results by the application before it posts them
+        evidence:
+          - title: MCP connections — server_url and connection_origin
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
+          - title: Web search — mode and allowed_domains
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/web-search
+          - title: Misalignment monitoring — request coverage
+            url: https://developers.openai.com/api/docs/guides/safety-checks/misalignment-monitoring
+        note: >-
+          External by the rule applied to every vendor: no injection classifier is configurable over user input,
+          tool results or fetched content, and no hook lets the deployer screen a hosted tool's result before the
+          model reads it. Integration points: an AI or MCP gateway named as the MCP server_url that classifies
+          responses before returning them; function-tool results the application screens before posting
+          agent.session.input.tool_result; user input, which passes through the application first. Web search
+          results and shell output enter context unscreened — mode disabled or cached and allowed_domains reduce
+          exposure, they do not classify. The vendor's misalignment monitoring is documented for the Responses
+          API, not this API, and reviews actions asynchronously rather than screening input.
+        verified: "2026-09-25"
     sources:
       - title: Agents API overview
         url: https://developers.openai.com/api/docs/guides/agents-api/overview
@@ -457,5 +776,7 @@ tools:
         url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
       - title: Your data — retention, residency and ZDR eligibility
         url: https://developers.openai.com/api/docs/guides/your-data
+      - title: Agents API tracing and OTLP trace export
+        url: https://developers.openai.com/api/docs/guides/agents-api/tracing
       - title: Introducing the Agents API
         url: https://openai.com/index/introducing-the-agents-api/
