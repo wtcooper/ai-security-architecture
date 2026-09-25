@@ -1,0 +1,745 @@
+# MLflow — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: managed MLflow (Amazon SageMaker AI MLflow Apps and Tracking Servers, the Databricks workspace and
+# Unity Catalog registries) is a different custody and admin model and is not onboarded; it is named in a row's
+# note only where a control needs it. MLflow's model serving (`mlflow models serve`), AI Gateway, GenAI tracing and
+# prompt registry belong to other drawings (self-hosted inference, agent workflow) and are not rated here.
+# 2026-09-25: onboarded toolMlflowRegistry on archTrainingPipeline against the MITRE capability rules; every
+# mlflow.org/docs/latest page cited answered 200 with no redirect (the drawing's model-registry.html lands on
+# /docs/latest/model-registry/; the registry pages now live under /docs/latest/ml/); each page was also read
+# through its .md variant listed in /docs/latest/llms.txt. Behaviour the docs do not state (per-experiment checks
+# on proxied artifact paths, the dataset digest algorithm, the client-supplied run user) was read in the GitHub
+# source on master. Advisories from the GitHub Advisory Database API; huntr no longer takes MLflow reports.
+vendor: mlflow
+family: MLflow
+tools:
+  - id: toolMlflowRegistry
+    name: MLflow Tracking Server and Model Registry
+    surfaceClasses:
+      - selfHostedServer
+      - sdkFramework
+    variants:
+      - name: MLflow Tracking Server with Model Registry (`mlflow server`)
+        class: selfHostedServer
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        note: >-
+          One process serves the UI, the tracking and registry REST APIs and, by default, proxied artifact access
+          (--serve-artifacts with --artifacts-destination). Metadata goes to --backend-store-uri (SQLite mlflow.db by
+          default, PostgreSQL or MySQL in production); users and grants to a separate auth database. Listens on
+          127.0.0.1:5000 unless started with --host.
+      - name: MLflow Python client (mlflow, MlflowClient) in the training job and the promotion pipeline
+        class: sdkFramework
+        url: https://mlflow.org/docs/latest/ml/tracking/
+        note: >-
+          The library the job uses to log runs, datasets and models (MLFLOW_TRACKING_URI, MLFLOW_TRACKING_USERNAME /
+          MLFLOW_TRACKING_PASSWORD or MLFLOW_TRACKING_AUTH), and the promoter uses to copy versions and move aliases.
+          Everything it records is what the calling code chose to log.
+    architecture: archTrainingPipeline
+    status: ga
+    asOf: "2026-09"
+    summary:
+      - >-
+        Open-source (Apache-2.0) experiment tracking server and Model Registry, self-hosted by the organisation;
+        current release 3.16.1 (2026-09-16). It is the registry-and-promotion tier of this drawing: the training job
+        logs runs, input datasets and the candidate model to it, the registry holds numbered versions of each
+        registered model with aliases (champion), tags, descriptions, signatures and the link back to the run, and
+        consumers load `models:/<name>@<alias>`. Model stages (Staging/Production/Archived) are deprecated since 2.9.0
+        in favour of aliases and tags.
+      - >-
+        Nothing is trained or served here: inference runs wherever the model is loaded. Metadata stays in the
+        operator's database and artifact bytes in the operator's object store; what leaves is anonymised usage
+        telemetry to mlflow-telemetry.io (on by default since 3.2.0), webhook POSTs the operator configures, and, for
+        PEFT adapters, a base-model download from the Hugging Face hub at load time.
+      - >-
+        Every control is a server flag, environment variable or basic_auth.ini key the operator sets. Authentication
+        is off by default (`--app-name basic-auth` turns it on), the shipped default_permission is READ for every
+        authenticated user, and there is no approval workflow, signing or audit log in open-source MLflow; creating a
+        model version, moving an alias and transitioning a stage all need the same EDIT grant on the registered
+        model.
+    facts:
+      - label: Plans
+        value: >-
+          Free and open source (Apache-2.0) on PyPI as mlflow (3.16.1, 2026-09-16) and mlflow-skinny. Managed MLflow
+          is sold by Amazon SageMaker AI (MLflow Apps and Tracking Servers, MLflow 3.10 on Apps) and Databricks; those
+          are out of scope here.
+        url: https://pypi.org/project/mlflow/
+      - label: Inference & routing
+        value: >-
+          None in this role. Clients call the REST API at MLFLOW_TRACKING_URI; models registered here are loaded and
+          run by whatever consumes them (`mlflow.pyfunc.load_model("models:/<name>@<alias>")`, a serving tier).
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+      - label: Data leaving the device
+        value: >-
+          Self-hosted: run metadata to the backend store and artifacts to the artifact store the operator configures.
+          Anonymised usage telemetry (SDK and Python versions, event names, flavors; no parameters, models or
+          usernames) goes to mlflow-telemetry.io by default since 3.2.0; MLFLOW_DISABLE_TELEMETRY=true or
+          DO_NOT_TRACK=true on the server disables UI telemetry globally. Webhooks POST registry events to HTTPS
+          endpoints the operator lists.
+        url: https://mlflow.org/docs/latest/community/usage-tracking/
+      - label: Retention & training
+        value: >-
+          The vendor receives no training data or models. Deleted runs keep metadata and artifacts until `mlflow gc`
+          removes them; deleting a registered model or model version is irrevocable for the registry entry, but the
+          run's artifacts are not removed with it.
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+      - label: Docs index
+        value: mlflow.org/docs/latest (machine-readable index at /docs/latest/llms.txt; every page has a .md variant)
+        url: https://mlflow.org/docs/latest/llms.txt
+      - label: Network defaults
+        value: >-
+          Binds 127.0.0.1:5000. Since 3.5.0 the uvicorn server's security middleware validates Host
+          (--allowed-hosts / MLFLOW_SERVER_ALLOWED_HOSTS, default localhost and private IPs) and CORS origins
+          (--cors-allowed-origins, default localhost:*) and sets X-Frame-Options SAMEORIGIN; it does not run under
+          --gunicorn-opts or --waitress-opts. TLS is left to a reverse proxy.
+        url: https://mlflow.org/docs/latest/self-hosting/security/network/
+      - label: Authentication
+        value: >-
+          Built-in basic-auth app (username and password, 12-character minimum, no default admin password since the
+          GHSA-gq3w-7jj3-x7gr fix); role-based grants from 3.13.0 (per-resource legacy APIs removed). SSO through the
+          third-party mlflow-oidc-auth plugin or a reverse proxy; custom schemes through authorization_function.
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+      - label: Security reporting
+        value: >-
+          SECURITY.md: GitHub private vulnerability reporting only; reports through bounty platforms such as huntr
+          are no longer accepted. Only the latest version is supported; backports are at the maintainers' option.
+        url: https://github.com/mlflow/mlflow/blob/master/SECURITY.md
+    items:
+      - title: Baseline for a self-hosted registry server
+        body:
+          - "Run 3.15.0 or later (3.16.1 current): 35 GitHub advisories were published for mlflow in 2025–26, nine
+            critical, several of them authentication bypasses on servers with basic-auth enabled."
+          - "Start with `--app-name basic-auth`, MLFLOW_FLASK_SERVER_SECRET_KEY set to a stable secret, the admin
+            password from MLFLOW_AUTH_ADMIN_PASSWORD, and a basic_auth.ini (MLFLOW_AUTH_CONFIG_PATH) with
+            default_permission = NO_PERMISSIONS and database_uri on the central database."
+          - "Expose it only as `--host 0.0.0.0 --allowed-hosts <fqdn> --cors-allowed-origins <origin>` behind a
+            TLS-terminating reverse proxy; never set --disable-security-middleware."
+          - "Keep artifact access proxied (--artifacts-destination, no --default-artifact-root) so the storage
+            credential lives only on the server, set MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX to the
+            proxied prefix, set MLFLOW_DISABLE_TELEMETRY=true, and leave server job execution
+            (MLFLOW_SERVER_ENABLE_JOB_EXECUTION) off unless it is needed."
+          - "On every process that loads registered models set MLFLOW_ALLOW_PICKLE_DESERIALIZATION=false and log
+            scikit-learn and LightGBM models with serialization_format=\"skops\"."
+        links:
+          - title: MLflow Tracking Server — Secure Tracking Server, Model Version Source Validation
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+          - title: MLflow — Network security configuration
+            url: https://mlflow.org/docs/latest/self-hosting/security/network/
+          - title: MLflow — Authentication with username and password
+            url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+          - title: MLflow — Pickle-free models (MLFLOW_ALLOW_PICKLE_DESERIALIZATION)
+            url: https://mlflow.org/docs/latest/ml/tracking/pickle-free-models/
+    riskNotes:
+      - risk: riskAdapterPEFTInjection
+        note: >-
+          Anyone holding EDIT on a registered model can create a version in it, and any authenticated user can create
+          a new registered model and becomes its MANAGE owner, so which adapters are admitted is decided by which
+          registered model consumers load from. A PEFT adapter is logged with source_model_name and
+          source_model_revision (the Hugging Face repo and commit) and the base weights are downloaded on the fly at
+          load; nothing in the registry checks that the base is an approved one.
+      - risk: riskMaliciousLoaderDeserialization
+        note: >-
+          Many flavors save with pickle or cloudpickle and MLFLOW_ALLOW_PICKLE_DESERIALIZATION defaults to true, so
+          loading a registered model can execute code. The statsmodels flavor ignored the switch until 3.15.0
+          (GHSA-gqvg-gmmx-x4hm), and CVE-2025-15379 injected shell commands from a model's python_env.yaml when it was
+          served with env_manager=LOCAL (fixed 3.8.1).
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          The registry server has its own steady CVE stream: 35 GitHub Advisory Database entries published 2025–26,
+          nine critical — a hard-coded default admin password (CVE-2026-2635), unauthenticated directory-traversal RCE
+          in the artifact handler (CVE-2026-2033), FastAPI routes left outside basic-auth (CVE-2026-2652,
+          CVE-2026-0545) and a full-read SSRF through webhook redirects (CVE-2026-64849).
+      - risk: riskModelExfiltration
+        note: >-
+          With proxied artifact access the server holds one storage credential that is "an assumed role of access to
+          all artifacts", so anyone who reaches the server with a grant — or the bucket with that credential — reads
+          every candidate; the shipped default_permission is READ. Before 3.11.0rc1 the multipart-upload endpoints
+          skipped per-resource checks entirely (CVE-2026-2651), and S3 presigned download URLs (3.15.0+) work for
+          whoever holds them until they expire.
+      - risk: riskEvaluationBenchmarkManipulation
+        note: >-
+          Evaluation datasets and results are ordinary runs and datasets in an experiment; anyone with EDIT on that
+          experiment can log metrics to it or replace its datasets, so benchmark custody depends on keeping the
+          evaluation experiment out of the trainers' grants.
+      - risk: riskModelSourceTampering
+        note: >-
+          A model version records a source URI, not a signature; any caller with EDIT can register a version from any
+          source unless MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX restricts it (bypassed with a prompt tag
+          before 3.10.0, CVE-2026-2614), and a PEFT version pulls its base from the hub by commit at every load.
+    controls:
+      - mitigation: AML.M0007
+        coverage: notApplicable
+        mechanism: >-
+          Not applicable — MLflow records which dataset a run read (source, digest, schema, profile) but screens and
+          filters nothing; sanitisation belongs to the curation stage
+        evidence:
+          - title: MLflow Dataset Tracking (mlflow.data — source, digest, schema, profile; no screening)
+            url: https://mlflow.org/docs/latest/ml/dataset/
+          - title: MLflow documentation index (no dataset screening or filtering feature)
+            url: https://mlflow.org/docs/latest/llms.txt
+        note: >-
+          Not applicable: the objective belongs to the curation & filtering stage — the quality, safety and
+          sensitive-content filter jobs between the content origins and the versioned corpus — which the data
+          platform runs, not the registry. A dataset profile (row and element counts, column statistics) describes a
+          dataset; it detects no poisoned, mislabelled or restricted example, and neither the tracking server nor the
+          registry refuses a run or a version whose inputs were never screened. What MLflow can add downstream is
+          the record: the curation job logs its screened output with mlflow.log_input so runs cite that version
+          (AML.M0025).
+        verified: "2026-09-25"
+      - mitigation: AML.M0025
+        coverage: native
+        mechanism: >-
+          mlflow.data Dataset objects (source, digest, schema, profile) attached to runs with mlflow.log_input(dataset,
+          context="training" | "validation" | "evaluation"), stored by the tracking server and shown per run; a
+          MetaDataset records source and schema for data MLflow does not hold
+        steps:
+          - title: Log every input dataset on the run
+            body:
+              - >-
+                In the training job build each input with mlflow.data.from_pandas / from_huggingface / from_spark (or
+                MetaDataset for a remote corpus) and call mlflow.log_input(dataset, context="training"), repeating for
+                "validation" and "evaluation", so the run records the dataset's source, digest, schema and profile.
+            url: https://mlflow.org/docs/latest/ml/dataset/
+          - title: Point the source at an immutable version
+            body:
+              - >-
+                Pass source= as a versioned address — an object version, a Delta table version, a Hugging Face
+                revision — because mlflow.data.get_source() and a reload read whatever that address serves later.
+            url: https://mlflow.org/docs/latest/ml/dataset/
+          - title: Log the curation output the same way
+            body:
+              - >-
+                Have the curation job create its own run and log_input the assembled corpus version with
+                context="training", so the corpus version, its source and its digest exist before any training run
+                cites them.
+            url: https://mlflow.org/docs/latest/ml/dataset/
+        note: >-
+          Native on this drawing's rule (dataset tracking records source and digest per run). Boundary: dataset-level
+          and per run, written by the job's own client — the server stores what the job reports and requires nothing,
+          so a run with no logged inputs is accepted and can still be registered. Per-example source and licence at
+          ingest (the pin's curation-stage record) stays with the curation pipeline; MLflow holds a pointer and a
+          fingerprint. The digest is identification, not integrity: for pandas and numpy data it is a truncated MD5
+          over the first 10,000 rows plus shape and column names, and a MetaDataset's covers only name, source and
+          schema (mlflow/data source); CVE-2026-10803 (predictable collisions from deterministic sampling) is fixed in
+          3.10.1. Cryptographic integrity of the corpus and its modification history belong to the data store's
+          versioning.
+        verified: "2026-09-25"
+      - mitigation: cap-data-access-governance
+        coverage: partial
+        mechanism: >-
+          basic-auth app (`mlflow server --app-name basic-auth`) with role grants (3.13.0+) of READ / USE / EDIT /
+          MANAGE / NO_PERMISSIONS per experiment and registered model, enforced by the server on REST calls and on
+          proxied artifact reads; default_permission in basic_auth.ini sets the floor
+        steps:
+          - title: Turn authentication on
+            body:
+              - >-
+                Start the server with `--app-name basic-auth`, MLFLOW_FLASK_SERVER_SECRET_KEY set, the admin password
+                in MLFLOW_AUTH_ADMIN_PASSWORD, and database_uri in the file named by MLFLOW_AUTH_CONFIG_PATH pointing
+                at a central database.
+            url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+          - title: Deny by default
+            body:
+              - >-
+                Set default_permission = NO_PERMISSIONS in that basic_auth.ini; the shipped value READ lets every
+                authenticated user read every experiment, run artifact and registered model.
+            url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+          - title: Grant reads per experiment and model
+            body:
+              - >-
+                In /admin → Roles (or AuthServiceClient create_role, add_role_permission, assign_role) grant READ on
+                the specific experiment and registered model to the people and services that need the candidates,
+                never a (experiment, *, READ) wildcard.
+            url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
+          - title: Keep artifact bytes behind the server
+            body:
+              - >-
+                Run with --artifacts-destination and proxied access (the default --serve-artifacts, no
+                --default-artifact-root) and give the storage credential only to the server, so every artifact read
+                passes the per-experiment check.
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        note: >-
+          Partial on this drawing's rule: server-enforced read scoping per experiment and registered model exists but
+          is off by default, and neither pin sits wholly inside MLflow. Candidate store: with proxied access the
+          basic-auth app checks the experiment id in each /mlflow-artifacts path (list, download, upload, delete,
+          multipart) and model-version artifact downloads against the caller's grant (mlflow/server/auth source);
+          but the server's storage credential is "an assumed role of access to all artifacts", so anyone reaching
+          the bucket directly, or holding an S3 presigned URL (3.15.0+, MLFLOW_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS,
+          default 300), bypasses it, and with --no-serve-artifacts the storage IAM is the only control. Reads are not
+          logged per user (no audit log; AML.M0024), so the "logged" half is the storage access log or a proxy
+          (external). Corpus: MLflow holds dataset metadata, not the corpus, so who may read it is cloud IAM on the
+          corpus store. Identity is MLflow's own user store (or the mlflow-oidc-auth plugin or a reverse proxy) and is
+          not carried through to storage. Authorization gaps fixed recently: CVE-2026-2651 (multipart upload,
+          3.11.0rc1), CVE-2026-2734 (model-version enumeration, 3.10.0), CVE-2026-8147 (trace endpoints, 3.13.0).
+        verified: "2026-09-25"
+      - mitigation: D3-FA
+        coverage: external
+        mechanism: >-
+          A model-file scanner and a scanning package mirror (artifact repository / package firewall) in front of the
+          job; MLflow analyses no file. MLflow's integration points: MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX,
+          the model_version.created webhook, and MLFLOW_ALLOW_PICKLE_DESERIALIZATION=false at loaders
+        evidence:
+          - title: MLflow Tracking Server — Model Version Source Validation (regex on the source URI)
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+          - title: MLflow Webhooks — model_version.created (experimental, SQL backend only)
+            url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+          - title: MLflow — Pickle-free models (MLFLOW_ALLOW_PICKLE_DESERIALIZATION, default true)
+            url: https://mlflow.org/docs/latest/ml/tracking/pickle-free-models/
+        note: >-
+          External: the pin is format and content inspection gating admission of base checkpoints and dependencies to
+          the private mirror, and MLflow is neither the mirror nor a scanner. Integration points: have the scanner
+          write cleared artifacts to one prefix and set MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX on the
+          server so the registry refuses versions sourced elsewhere (a regex on the URI, not a check of the bytes;
+          CVE-2026-2614 bypassed it with a prompt tag before 3.10.0); the model_version.created webhook can start a
+          scan, but it fires after registration and asynchronously, so it can only tag or delete. At load time
+          MLFLOW_ALLOW_PICKLE_DESERIALIZATION=false refuses pickle and cloudpickle models (default true; ignored by
+          the statsmodels flavor before 3.15.0) — a loader format policy, not file analysis. A PEFT version downloads
+          its base weights from the Hugging Face hub at load unless that host is reachable only through the mirror.
+        verified: "2026-09-25"
+      - mitigation: AML.M0029
+        coverage: partial
+        mechanism: >-
+          Separate registered models per environment (dev.<team>.<model>, prod.<team>.<model>) with role grants, so
+          the run's user can create versions only in the candidate model and a different promoter user copies and
+          aliases in the release model; no approval step, and within one registered model creating a version, setting
+          an alias and transitioning a stage all require the same can_update (EDIT)
+        steps:
+          - title: Split candidate and release registered models
+            body:
+              - >-
+                In /admin → Roles grant the training job's user EDIT on its experiment and on dev.<team>.<model> only,
+                and a promoter group EDIT on prod.<team>.<model>; keep MANAGE on the release model with the registry
+                owners.
+            url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
+          - title: Promote by copy, as the promoter
+            body:
+              - >-
+                The promoter runs client.copy_model_version(src_model_uri="models:/dev.<team>.<model>@candidate",
+                dst_name="prod.<team>.<model>") and then set_registered_model_alias on the release model; the copy
+                needs READ on the source and EDIT on the destination.
+            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+          - title: Notify on every release alias
+            body:
+              - >-
+                Create a webhook for model_version_alias.created and model_version.created with a secret (HMAC
+                X-MLflow-Signature) pointed at the change-management or CI endpoint that records who promoted what.
+            url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+        note: >-
+          Partial on this drawing's rule: MLflow separates credentials by resource, not by action. On one registered
+          model "Create Model Version", "Set Registered Model Alias" and "Transition Model Version Stage" all require
+          can_update, so a job and its promoter are separated only when release lives in a registered model the job
+          has no grant on — the per-environment pattern the workflow page documents. Whoever holds EDIT on the release
+          model then promotes alone: no second approver, no approval record bound to the version and its evaluation,
+          and nothing stops that user being a CI service account rather than a person. Webhooks fire after the alias
+          is set (asynchronous, retried), so they notify, not gate; admins bypass every grant; any authenticated user
+          can create a new registered model, so consumers must load only from the named release model. The approval
+          itself needs a gate around the promoter credential (a CI job with required reviewers, a change ticket).
+          Managed variant: SageMaker AI IAM separates sagemaker-mlflow:CreateModelVersion from SetRegisteredModelAlias,
+          scoped to the whole tracking server, still without an approval step.
+        verified: "2026-09-25"
+      - mitigation: AML.M0013
+        coverage: external
+        mechanism: >-
+          OpenSSF Model Signing (`model_signing sign`, sigstore/model-transparency) run by the promotion pipeline under
+          an identity the job never holds, with the signature bundle stored outside the job's reach and referenced from
+          the release version's tags; MLflow signs and verifies nothing
+        evidence:
+          - title: MLflow model format — MLmodel fields (flavors, run_id, signature, input_example; no signature of the
+              artifact)
+            url: https://mlflow.org/docs/latest/ml/model/
+          - title: sigstore/model-transparency — model_signing sign / verify (Sigstore keyless, private key,
+              certificate, PKCS#11)
+            url: https://github.com/sigstore/model-transparency
+          - title: OpenSSF Model Signing
+            url: https://openssf.org/projects/model-signing/
+        note: >-
+          External: open-source MLflow has no artifact signing, no signature field on a model version and no
+          verification when `models:/` URIs are loaded (docs index; the MLmodel "signature" is the input/output
+          schema, not a cryptographic signature). Integration point: after copy_model_version to the release model,
+          the promotion pipeline downloads the version's artifacts, runs `model_signing sign <dir>` with a Sigstore
+          identity, key or PKCS#11 token the training job never holds, stores the bundle (model.sig) where the job
+          cannot write, and records its location and digest with set_model_version_tag. The serving tier must run
+          `model_signing verify` before loading, since MLflow's loaders will not. For a PEFT version the signature
+          covers the adapter only; the base weights fetched by source_model_revision need their own pinning.
+        verified: "2026-09-25"
+      - mitigation: AML.M0008
+        coverage: partial
+        mechanism: >-
+          mlflow.models.evaluate and mlflow.genai.evaluate (built-in and custom scorers, plugin evaluators such as
+          Giskard) logging results to a run, and mlflow.validate_evaluation_results(..., validation_thresholds=...)
+          raising ModelValidationFailedException in the deployer's pipeline; the server never blocks promotion on
+          results
+        steps:
+          - title: Evaluate the candidate in a protected experiment
+            body:
+              - >-
+                Run mlflow.models.evaluate(model=..., data=..., model_type=...) — or mlflow.genai.evaluate(data=...,
+                predict_fn=..., scorers=[Safety(), Correctness(), Guidelines(...)]) for a tuned LLM — logging to an
+                evaluation experiment on which the trainers hold no EDIT grant.
+            url: https://mlflow.org/docs/latest/ml/evaluation/
+          - title: Fail the pipeline on thresholds
+            body:
+              - >-
+                Call mlflow.validate_evaluation_results(candidate_result=..., baseline_result=...,
+                validation_thresholds={"<metric>": MetricThreshold(threshold=..., greater_is_better=True)}) and run
+                the promotion step only when no ModelValidationFailedException is raised.
+            url: https://mlflow.org/docs/latest/ml/evaluation/
+          - title: Add safety judges for tuned LLMs
+            body:
+              - >-
+                Pass the predefined LLM judges (Safety, Guidelines, Correctness, RetrievalGroundedness) as scorers
+                to mlflow.genai.evaluate; they need a judge model configured.
+            url: https://mlflow.org/docs/latest/genai/eval-monitor/scorers/llm-judge/predefined/
+        note: >-
+          Partial on this drawing's rule: the harness and a threshold check ship, but the check runs in the deployer's
+          pipeline and the registry accepts an alias on a version with no evaluation or a failed one — native would
+          need the server to block promotion on results. Backdoor probing (trigger-phrase hunting) and memorisation
+          or extraction testing are not built-in evaluators; they are custom metrics or scorers, or a plugin, the
+          deployer supplies. The GenAI judges are models grading a model. Benchmark custody depends on RBAC: anyone
+          with EDIT on the evaluation experiment can log metrics or swap its datasets. Validation moved out of
+          mlflow.models.evaluate into validate_evaluation_results in 2.18.0.
+        verified: "2026-09-25"
+      - mitigation: AML.M0012
+        coverage: external
+        mechanism: >-
+          Storage-side encryption with organisation-held keys (cloud KMS, bucket default encryption) under the
+          artifact store and the backend database; MLflow only passes MLFLOW_S3_UPLOAD_EXTRA_ARGS (for example
+          ServerSideEncryption aws:kms with SSEKMSKeyId) through to S3 uploads
+        evidence:
+          - title: MLflow Artifact Stores — Passing extra arguments to S3 upload (MLFLOW_S3_UPLOAD_EXTRA_ARGS), bucket
+              ownership verification
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+          - title: MLflow Tracking Server — Authentication and Encryption (TLS via reverse proxy)
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        note: >-
+          External: MLflow does not encrypt artifacts or metadata at rest and holds no keys. It passes
+          MLFLOW_S3_UPLOAD_EXTRA_ARGS='{"ServerSideEncryption": "aws:kms", "SSEKMSKeyId": "<key>"}' to S3 uploads made
+          by the process that sets it — the server with proxied access, every client without — so enforce it with the
+          bucket's default encryption and a bucket policy that denies other keys; MLFLOW_S3_EXPECTED_BUCKET_OWNER
+          guards against a recreated bucket. Checkpoints the job writes outside MLflow and the backend database
+          (PostgreSQL or MySQL) are encrypted by their own stores. In transit the server speaks plain HTTP and the
+          docs put TLS at a reverse proxy or VPN. Key custody, rotation and revocation are the KMS's.
+        verified: "2026-09-25"
+      - mitigation: AML.M0023
+        coverage: native
+        mechanism: >-
+          Model version records (run_id, source, logged-model id) plus the run's parameters, tags and input datasets
+          and the MLmodel file (flavors, signature, input_example, mlflow_version, time_created, run_id, with
+          requirements.txt, python_env.yaml and conda.yaml; source_model_name and source_model_revision for
+          transformers and PEFT models), written automatically when the job logs and registers the model
+        steps:
+          - title: Log and register from inside the run
+            body:
+              - >-
+                Log the candidate with mlflow.<flavor>.log_model(..., registered_model_name="dev.<team>.<model>") in
+                the same run that called log_input, so the version links to the run, its datasets and the MLmodel file.
+            url: https://mlflow.org/docs/latest/ml/model-registry/
+          - title: Record the base model for adapters
+            body:
+              - >-
+                Log PEFT adapters with mlflow.transformers.log_model so MLmodel carries source_model_name and
+                source_model_revision (the Hugging Face repository and commit hash) of the base.
+            url: https://mlflow.org/docs/latest/ml/deep-learning/transformers/tutorials/fine-tuning/transformers-peft/
+          - title: Accept versions only from tracked artifacts
+            body:
+              - >-
+                Set MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX="^mlflow-artifacts:/.*$" on the server so a
+                version cannot be registered from a path outside the tracked artifact store.
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+          - title: Walk lineage in both directions
+            body:
+              - >-
+                From a version read run_id and the run's dataset inputs; from a suspect run set find every version
+                with client.search_model_versions("run_id IN ('<id>', ...)").
+            url: https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html
+        note: >-
+          Native on this drawing's rule (versions linked to runs, datasets, signatures and source). Boundary: this is
+          MLflow's own lineage graph, not an exportable AI BOM — no CycloneDX or SPDX output. Everything in it is what
+          the job's client logged and nothing is signed (AML.M0013): the run's user comes from the client
+          (MLFLOW_TRACKING_USERNAME or the OS user), not the authenticated caller. A signature is optional in open
+          source (only Unity Catalog requires one); datasets hang off the run, not the version; the base of a full
+          fine-tune is recorded only if the job logs it (the transformers flavor records it); and a version can be
+          registered from a model saved outside MLflow unless the source regex forbids it.
+        verified: "2026-09-25"
+      - mitigation: AML.M0024
+        coverage: partial
+        mechanism: >-
+          Run records (parameters, metrics, tags, input datasets, start and end time, client-supplied user) and model
+          version records (creation time, run_id, source) in the backend store; no audit log of user actions in open
+          source — request-level records come from a reverse proxy in front
+        steps:
+          - title: Record the run completely
+            body:
+              - >-
+                In the job call mlflow.autolog() or log parameters, metrics, the code version tag and every input
+                dataset explicitly, so each run answers which data, which base and which code.
+            url: https://mlflow.org/docs/latest/ml/tracking/
+          - title: Keep the backend store central and durable
+            body:
+              - >-
+                Start the server with --backend-store-uri on a managed PostgreSQL or MySQL database (not the default
+                SQLite mlflow.db) with its own backup and access logging.
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+          - title: Keep deleted runs until reviewed
+            body:
+              - >-
+                Deleted runs stay restorable until `mlflow gc` purges them; restrict run deletion (can_delete needs
+                MANAGE) and who may run mlflow gc against the backend store.
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+        note: >-
+          Partial on this drawing's rule (native only with an audit log of user actions): open-source MLflow documents
+          none — not on the basic-auth, RBAC or tracking-server pages, though the last says proxying makes access
+          "easier to secure and audit". "Who ran what" is self-reported: the run's user is sent by the client
+          (MLFLOW_TRACKING_USERNAME or the OS user), not stamped from the authenticated caller; reads, downloads,
+          alias moves and permission changes leave no record beyond the entity's current state; admins and MANAGE
+          holders can delete runs and versions, and the records sit in a database the operator can edit — telemetry
+          is not tamper-resistance. An authenticating reverse proxy's access log shipped to the SIEM supplies the
+          action log (external). Managed variant: SageMaker AI MLflow Tracking Servers log data-plane calls (Mlflow*
+          event names) to CloudTrail with the IAM identity; MLflow Apps log them as CallMlflowApp data events, off by
+          default and without request bodies.
+        verified: "2026-09-25"
+      - mitigation: cap-model-documentation
+        coverage: partial
+        mechanism: >-
+          Registered-model and model-version descriptions (Markdown), tags (validation_status and the like), aliases,
+          the MLmodel signature and input example, and run lineage per version; no approval state enforced on
+          promotion and no model-card generation
+        steps:
+          - title: Describe the model and each version
+            body:
+              - >-
+                Set descriptions with client.update_registered_model(name, description=...) and
+                client.update_model_version(name, version, description=...), or edit them in the registry UI.
+            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+          - title: Log a signature and input example with every model
+            body:
+              - >-
+                Pass signature= or input_example= to mlflow.<flavor>.log_model so MLmodel records the input and output
+                schema that travels in the artifact directory.
+            url: https://mlflow.org/docs/latest/ml/model/signatures/
+          - title: Record approval state as a version tag
+            body:
+              - >-
+                Set client.set_model_version_tag(name, version, "validation_status", "approved") from the evaluation
+                pipeline — a label the promoter's pipeline must check, not a gate the server enforces.
+            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+        note: >-
+          Partial on this drawing's rule (documentation without a gate). The capability's gate — a version without a
+          current card and an approval record is not eligible for promotion — is not in open-source MLflow:
+          set_registered_model_alias accepts any version whatever its tags, description or signature, and a
+          signature is optional (only Unity Catalog requires it). There is no model-card generator. The MLmodel file
+          travels inside the artifact; descriptions, tags and approval labels live in the registry database and do
+          not follow the bytes when they are copied elsewhere. The gate is the promoter pipeline refusing to call
+          set_registered_model_alias without the tag and a current description; a model_version_alias.created webhook
+          can flag a release that skipped it, after the fact.
+        verified: "2026-09-25"
+      - mitigation: D3-NI
+        coverage: notApplicable
+        mechanism: >-
+          Not applicable — deny-by-default egress from the training job is the compute platform's network policy;
+          the tracking server is one destination on that allowlist
+        evidence:
+          - title: MLflow Tracking Server — proxied versus direct artifact access (what the job must reach)
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+          - title: MLflow Webhooks — URL validation and SSRF protection (the server's own egress)
+            url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+        note: >-
+          Not applicable: the pin bounds the training job and is absorbed by the compute platform (the drawing's
+          recorded deviation). MLflow's contribution is shaping the allowlist: with proxied artifact access (the
+          default) the job needs only the tracking server's URL, and with --no-serve-artifacts it also needs the
+          bucket. The server's own outbound traffic — webhooks (HTTPS only, private addresses refused unless
+          MLFLOW_WEBHOOK_ALLOW_PRIVATE_IPS=true; redirect bypass fixed in 3.15.0, CVE-2026-64849) and telemetry to
+          mlflow-telemetry.io (MLFLOW_DISABLE_TELEMETRY) — belongs to the egress policy of wherever the server runs.
+        verified: "2026-09-25"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          A dedicated MLflow user per training job (basic-auth, MLFLOW_TRACKING_USERNAME and MLFLOW_TRACKING_PASSWORD
+          in the job) whose role grants reach only its experiment and candidate model; or MLFLOW_TRACKING_AUTH=kubernetes
+          sending the pod's service-account token to a proxy or authorization_function that verifies it
+        steps:
+          - title: Create a user for the job identity
+            body:
+              - >-
+                Create the job's user in /admin → Users or with POST 2.0/mlflow/users/create, and hand its password to
+                the job as MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD from the secret store.
+            url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+          - title: Keep it away from the release model
+            body:
+              - >-
+                Assign that user a role holding only (experiment, <id>, EDIT) and EDIT on the candidate registered
+                model, with no grant on the release model the promoter uses.
+            url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
+          - title: Use the pod's workload identity instead of a password
+            body:
+              - >-
+                Set MLFLOW_TRACKING_AUTH=kubernetes in the job so each request carries the pod's service-account
+                token, with the server behind kube-rbac-proxy or a custom authorization_function that validates it.
+            url: https://mlflow.org/docs/latest/self-hosting/security/kubernetes/
+        note: >-
+          Partial on this drawing's rule: MLflow can hold separate users for run logging and promotion and enforces
+          their grants, but its own identity is a username and static password (12-character minimum; no token
+          issuance or expiry documented), shared by every run of the job unless rotated per run. The Kubernetes
+          provider only attaches the service-account token on the client — validating it (kube-rbac-proxy, a custom
+          authorization_function, the mlflow-oidc-auth plugin) happens outside MLflow. Scoping the run to the dataset
+          version an approved spec names is cloud IAM on the corpus store (external): MLflow does not mediate corpus
+          reads. Admin users bypass every grant. Managed variant: SageMaker AI authenticates callers with IAM roles.
+        verified: "2026-09-25"
+      - mitigation: cap-agent-kill-switch
+        coverage: native
+        mechanism: >-
+          Registry withdrawal: set_registered_model_alias back to the last good version, delete_registered_model_alias,
+          or delete_model_version (transition_model_version_stage to Archived is deprecated); consumers resolving
+          models:/<name>@<alias> or models:/<name>/<version> get the replacement or an error on their next load
+        steps:
+          - title: Roll the release alias back
+            body:
+              - >-
+                Point the alias at the last known-good version with
+                client.set_registered_model_alias("prod.<team>.<model>", "champion", <version>) (needs EDIT on the
+                release model).
+            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+          - title: Withdraw the version outright
+            body:
+              - >-
+                Remove it with client.delete_registered_model_alias(...) and client.delete_model_version(name,
+                version) — both need MANAGE, and deletion is irrevocable for the registry entry.
+            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+          - title: Find every version a bad run produced
+            body:
+              - >-
+                List them with client.search_model_versions("run_id IN ('<id>', ...)") before withdrawing, so a
+                poisoned dataset's runs map to every release that came from them.
+            url: https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html
+          - title: Tell the serving tier to reload
+            body:
+              - >-
+                Subscribe the deployment system to model_version_alias.deleted and model_version_alias.created webhooks
+                so it restarts or reloads the consumers that resolved the old version.
+            url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+        note: >-
+          Native on this drawing's rule (the registry's stage transition is the stop, at load time), with the
+          boundary stated: the withdrawal takes effect on each consumer's next resolution of the alias or version,
+          and already-loaded copies keep serving until the serving tier reloads — `mlflow models serve` resolves the
+          URI once at start, and no delay is documented. MLflow pushes nothing but the asynchronous, experimental
+          webhook. Consumers loading by runs:/ or models:/<model_id> URI, a storage path or a cached copy are
+          untouched, because deleting a version removes the registry entry, not the artifacts. "Fails load-time
+          verification everywhere" additionally needs signatures checked by the serving tier (AML.M0013); MLflow
+          verifies nothing and revokes no consumer credentials.
+        verified: "2026-09-25"
+      - mitigation: D3-EI
+        coverage: notApplicable
+        mechanism: >-
+          Not applicable — RL and agentic rollouts execute model output inside the training job's environment,
+          contained by the compute platform; MLflow runs none of it
+        evidence:
+          - title: MLflow documentation index (tracking, registry and evaluation; no rollout execution)
+            url: https://mlflow.org/docs/latest/llms.txt
+          - title: MLflow — Pickle-free models (the loader-side execution risk, rated under other drawings)
+            url: https://mlflow.org/docs/latest/ml/tracking/pickle-free-models/
+        note: >-
+          Not applicable: the pin bounds the training job's rollouts and is absorbed by the compute platform's
+          execution environment (the drawing's recorded deviation). MLflow's own code-execution surfaces — loading
+          pickle-based flavors, building a serving environment from a model's python_env.yaml (CVE-2025-15379) and
+          the server's optional job execution (MLFLOW_SERVER_ENABLE_JOB_EXECUTION, CVE-2026-0545) — sit with the
+          loaders and the server host, recorded in this entry's risk notes and items, not with this pin.
+        verified: "2026-09-25"
+    advisories:
+      - title: >-
+          CVE-2026-2635 — hard-coded default admin password (password1234) in basic_auth.ini allowed authentication
+          bypass; fixed 3.8.0rc0, and the password is now rejected at login
+        url: https://github.com/advisories/GHSA-gq3w-7jj3-x7gr
+        date: "2026-02"
+      - title: >-
+          CVE-2026-2033 — unauthenticated directory traversal in the tracking server's artifact handler leading to
+          remote code execution; fixed 3.8.0rc0
+        url: https://github.com/advisories/GHSA-q2r8-vmq7-fpx2
+        date: "2026-02"
+      - title: >-
+          CVE-2025-11201 — directory traversal in tracking-server model creation leading to remote code execution;
+          fixed 2.22.4 and 3.0.0
+        url: https://github.com/advisories/GHSA-5cvj-7rg6-jggj
+        date: "2025-10"
+      - title: CVE-2025-14279 — DNS rebinding through missing Origin validation; fixed 3.5.0 (security middleware)
+        url: https://github.com/advisories/GHSA-pgqp-8h46-6x4j
+        date: "2026-01"
+      - title: >-
+          CVE-2025-15379 — command injection from a model artifact's python_env.yaml when served with
+          env_manager=LOCAL (CVSS 10.0); fixed 3.8.1
+        url: https://github.com/advisories/GHSA-r23q-823p-vmf7
+        date: "2026-03"
+      - title: >-
+          CVE-2026-0545 — FastAPI job endpoints under /ajax-api/3.0/jobs/* not covered by basic-auth when job
+          execution is enabled
+        url: https://github.com/advisories/GHSA-7qhf-v65m-g5f3
+        date: "2026-04"
+      - title: >-
+          CVE-2026-2614 — unauthenticated arbitrary file read through CreateModelVersion with the mlflow.prompt.is_prompt
+          tag bypassing source validation; fixed 3.10.0
+        url: https://github.com/advisories/GHSA-42h5-h8qh-vv9v
+        date: "2026-05"
+      - title: >-
+          CVE-2026-2652 — FastAPI routes (Job API, OpenTelemetry trace ingestion) left unauthenticated under
+          basic-auth with uvicorn; fixed 3.11.0
+        url: https://github.com/advisories/GHSA-75cm-x2w3-8mgf
+        date: "2026-05"
+      - title: >-
+          CVE-2026-2734 — any authenticated user could enumerate every model version through SearchModelVersions;
+          fixed 3.10.0
+        url: https://github.com/advisories/GHSA-w5xq-c4pf-ghq7
+        date: "2026-05"
+      - title: >-
+          CVE-2026-2651 — multipart-upload endpoints skipped per-resource checks under --serve-artifacts, allowing
+          other users' artifacts to be overwritten; fixed 3.11.0rc1
+        url: https://github.com/advisories/GHSA-8c7q-86fq-vvmh
+        date: "2026-05"
+      - title: CVE-2026-10803 — deterministic sampling in the dataset digest enables predictable collisions; fixed 3.10.1
+        url: https://github.com/advisories/GHSA-5qmp-p3c4-72qj
+        date: "2026-06"
+      - title: CVE-2026-8147 — trace API endpoints lacked authorization validators under basic-auth; fixed 3.13.0rc0
+        url: https://github.com/advisories/GHSA-2cm6-r77w-6g96
+        date: "2026-07"
+      - title: >-
+          CVE-2026-64849 — unauthenticated full-read SSRF through webhook delivery following redirects past the URL
+          guard; fixed 3.15.0
+        url: https://github.com/advisories/GHSA-7gwp-5pfp-969j
+        date: "2026-08"
+      - title: >-
+          GHSA-gqvg-gmmx-x4hm (no CVE) — MLFLOW_ALLOW_PICKLE_DESERIALIZATION=false bypassed by the statsmodels flavor,
+          code execution on load; fixed 3.15.0
+        url: https://github.com/advisories/GHSA-gqvg-gmmx-x4hm
+        date: "2026-09"
+    sources:
+      - title: MLflow documentation index (llms.txt)
+        url: https://mlflow.org/docs/latest/llms.txt
+      - title: MLflow Model Registry
+        url: https://mlflow.org/docs/latest/ml/model-registry/
+      - title: MLflow Model Registry workflows (aliases, tags, copy_model_version, deprecated stages)
+        url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+      - title: MLflow Tracking Server
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+      - title: MLflow Artifact Stores
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+      - title: MLflow — Authentication with username and password
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+      - title: MLflow — Role-based access control
+        url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
+      - title: MLflow — Network security configuration
+        url: https://mlflow.org/docs/latest/self-hosting/security/network/
+      - title: MLflow — Kubernetes authentication
+        url: https://mlflow.org/docs/latest/self-hosting/security/kubernetes/
+      - title: MLflow Webhooks
+        url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+      - title: MLflow Dataset Tracking
+        url: https://mlflow.org/docs/latest/ml/dataset/
+      - title: MLflow Model Evaluation
+        url: https://mlflow.org/docs/latest/ml/evaluation/
+      - title: MLflow Model Signatures and Input Examples
+        url: https://mlflow.org/docs/latest/ml/model/signatures/
+      - title: MLflow usage tracking (telemetry)
+        url: https://mlflow.org/docs/latest/community/usage-tracking/
+      - title: mlflow/mlflow SECURITY.md
+        url: https://github.com/mlflow/mlflow/blob/master/SECURITY.md
+      - title: GitHub Advisory Database — mlflow (pip)
+        url: https://github.com/advisories?query=ecosystem%3Apip+mlflow
+      - title: Amazon SageMaker AI — managed MLflow (CloudTrail and IAM, for the managed-variant notes)
+        url: https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html

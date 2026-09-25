@@ -1274,3 +1274,63 @@ tools:
         note: Not deployed. The serving plane would run on its own network with a Kubernetes NetworkPolicy admitting
           only the gateway to port 8000 and only peer pods to the torch.distributed, KV-transfer (14579) and
           data-parallel (29500) ports; VLLM_HOST_IP pinned to the private interface and --grpc-port left unset
+  - tool: toolMlflowRegistry
+    available: false
+    note: Not deployed. No self-hosted model registry is approved yet; fine-tuned models would be promoted through MLflow
+      3.16 with basic-auth on, and each note below is the baseline the ML platform team would enforce before approving it.
+    capabilities:
+      EX-DATA-ACCESS-GOVERNANCE:
+        status: gap
+        note: Not deployed. Baseline is mlflow server --app-name basic-auth with default_permission = NO_PERMISSIONS in
+          basic_auth.ini, READ roles per experiment and registered model under /admin → Roles, and proxied artifacts
+          (--artifacts-destination) so the S3 credential sits only on the server; corpus reads stay with the bucket
+          policies, and per-user read logging comes from the reverse proxy because MLflow keeps no audit log
+      EX-AML-M0029:
+        status: gap
+        note: Not deployed. Baseline is separate dev and prod registered models, training users with EDIT on the dev model
+          only, and promotion by copy_model_version then set_registered_model_alias from a CI job with required reviewers;
+          MLflow has no approval step and one EDIT grant covers version, alias and stage on a single model
+      EX-AML-M0013:
+        status: gap
+        note: Not deployed. MLflow signs nothing; baseline is model_signing sign (OpenSSF Model Signing, Sigstore keyless
+          under the promotion pipeline's identity) after copy_model_version, the bundle kept in a bucket the training role
+          cannot write and referenced by a model version tag, and model_signing verify in the serving tier before load
+      EX-AML-M0008:
+        status: gap
+        note: Not deployed. Baseline is mlflow.models.evaluate or mlflow.genai.evaluate into an evaluation experiment the
+          trainers can only READ, with mlflow.validate_evaluation_results thresholds failing the promotion job; backdoor
+          and memorisation probes are custom scorers not yet written, and the registry will alias a failed version
+      EX-AML-M0012:
+        status: gap
+        note: Not deployed. MLflow holds no keys; baseline is SSE-KMS default encryption with an organisation-managed key
+          on the artifact bucket, a bucket policy denying other keys, MLFLOW_S3_UPLOAD_EXTRA_ARGS set to aws:kms with that
+          SSEKMSKeyId on the server, MLFLOW_S3_EXPECTED_BUCKET_OWNER pinned, and TLS at the reverse proxy
+      EX-AML-M0023:
+        status: gap
+        note: Not deployed. Baseline is log_model with registered_model_name inside the run that called log_input, the
+          transformers flavor for adapters so MLmodel records source_model_name and source_model_revision, and
+          MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX limited to mlflow-artifacts sources; the lineage stays
+          MLflow's own graph, with no CycloneDX or SPDX export
+      EX-AML-M0024:
+        status: gap
+        note: Not deployed. Run records (parameters, input datasets, code version) would sit in a PostgreSQL backend store;
+          MLflow has no audit log and the run's user is sent by the client, so who did what comes from the authenticating
+          reverse proxy's access log shipped to the SIEM
+      EX-D3-ORA:
+        status: gap
+        note: Not deployed. Model documentation baseline is registered-model and version descriptions, signature and
+          input_example on every log_model, and a validation_status=approved version tag set by the evaluation job and
+          checked by the promotion job before set_registered_model_alias; MLflow generates no model card and enforces no
+          approval state
+      EX-D3-AA:
+        status: gap
+        note: Not deployed. Baseline is one MLflow user per training job (MLFLOW_TRACKING_USERNAME and
+          MLFLOW_TRACKING_PASSWORD from the secrets manager) with role grants on its experiment and the dev registered
+          model only, moving to MLFLOW_TRACKING_AUTH=kubernetes behind kube-rbac-proxy; corpus access stays with the
+          job's cloud IAM role
+      EX-AGENT-KILL-SWITCH:
+        status: gap
+        note: Not deployed. Withdrawal runbook is search_model_versions by run_id to find affected versions, then
+          set_registered_model_alias back to the last good version or delete_registered_model_alias and
+          delete_model_version (MANAGE), with a model_version_alias.deleted webhook telling the deployment system to
+          reload; copies already loaded keep serving until reloaded
