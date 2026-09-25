@@ -7,7 +7,7 @@ export const SURFACE_CLASS_META: Record<ToolSurfaceClass, { label: string; short
   desktopApp: { label: "Desktop app", short: "Desktop" },
   browserExtension: { label: "Browser extension", short: "Browser" },
   cloudAgent: { label: "Cloud-hosted agent", short: "Cloud agent" },
-  managedRuntime: { label: "Managed agent runtime / SDK", short: "Runtime" },
+  managedRuntime: { label: "Managed agent runtime", short: "Runtime" },
   chatIntegration: { label: "Chat & connector integration", short: "Integration" },
   saasChat: { label: "Vendor chat (SaaS)", short: "Chat" },
   officeAddin: { label: "Office add-in", short: "Office" },

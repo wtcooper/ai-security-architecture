@@ -1,23 +1,29 @@
 # GitHub Copilot SDK — one entity per product × reference architecture. Facts are dated (asOf)
 # and cite the vendor's own documentation; re-verify before enforcing. Schema:
 # data/tooling/README.md.
+# 2026-09-25: re-verified toolCopilotSdk against the MITRE capability rules; every docs.github.com
+# copilot-sdk page cited answered 200 at its own path (hreflang checked, no silent redirect).
+# managedSettings, enableManagedSettings, sandboxConfig, connectionToken, mcpOAuthTokenStorage,
+# enableSessionStore and skipEmbeddingRetrieval are documented only in the github/copilot-sdk
+# repository (CHANGELOG, nodejs/README.md, TSDoc in nodejs/src), not on docs.github.com; the backend
+# guide still says there is no SDK–CLI auth while the Node.js README documents connectionToken.
 vendor: github
 family: GitHub Copilot SDK
 tools:
   - id: toolCopilotSdk
     name: GitHub Copilot SDK
     surfaceClasses:
-      - managedRuntime
+      - sdkFramework
     variants:
       - name: Copilot SDK (Node.js, Python, Go, .NET, Rust, Java; GA 2026-06-02)
-        class: managedRuntime
+        class: sdkFramework
         url: https://github.blog/changelog/2026-06-02-copilot-sdk-is-now-generally-available/
       - name: >-
           Headless Copilot CLI server (copilot --headless) for backend services and multi-tenant deployments
-        class: managedRuntime
+        class: sdkFramework
         url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
       - name: Cloud sessions (work runs on GitHub-hosted compute, published to github.com/copilot/tasks)
-        class: managedRuntime
+        class: sdkFramework
         url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/cloud-sessions
     architecture: archAgentWorkflow
     status: ga
@@ -33,13 +39,15 @@ tools:
         OpenAI-compatible endpoint, bypassing GitHub entirely. Session state lives on the host under
         COPILOT_HOME/session-state/{sessionId} (or an application-provided sessionFs); cloud sessions run on
         GitHub compute and appear in the agents panel."
-      - "The controls are code: onPermissionRequest (deny-by-default), onPreToolUse allow / deny / ask /
-        modify, mode \"empty\" with an explicit availableTools list, per-session gitHubToken,
-        sessionIdleTimeoutSeconds, and an OpenTelemetry TelemetryConfig with W3C trace propagation. The SDK
-        later added its own enterprise-permissions layer — enableManagedSettings and a managedSettings option
-        on session.create / session.resume (deny / ask / allow rules) — but this shipped after GA (v1.0.2,
-        v1.0.13) and the enterprise managed-settings client matrix still does not list the SDK, so central
-        managed-settings.json policy does not reach SDK sessions automatically."
+      - "The controls are code: onPermissionRequest (requests are not approved without it), onPreToolUse allow
+        / deny / ask / modify, mode \"empty\" with an explicit availableTools list, per-session gitHubToken or a
+        rotating gitHubTokenProvider, sessionLimits, and an OpenTelemetry TelemetryConfig with W3C trace
+        propagation. The SDK's own enterprise-permissions layer — enableManagedSettings (v1.0.7: the runtime
+        self-fetches the enterprise's managed policy with the session's token) and a host-injected
+        managedSettings option (v1.0.13: deny / ask / allow rules, re-supplied on every resume) — composes
+        with device-managed (MDM) policy on the runtime host, but the enterprise managed-settings client
+        matrix does not list the SDK, so server-managed policy reaches an SDK session only when the
+        application opts in."
     facts:
       - label: Plans
         value: >-
@@ -60,9 +68,10 @@ tools:
         url: https://docs.github.com/en/copilot/responsible-use/agents
       - label: Data retention / training
         value: >-
-          Session state persists on the host filesystem (or a shared volume) with a 30-minute idle timeout in
-          headless mode; GitHub-hosted models follow the Copilot ZDR terms (Claude Fable 5 / 5.1 retain by
-          default); BYOK providers apply their own retention.
+          Session state persists on the host filesystem (or a shared volume) until deleted — there is no idle
+          timeout by default (set sessionIdleTimeoutSeconds or --session-idle-timeout); GitHub-hosted models
+          follow the Copilot ZDR terms (Claude Fable 5 / 5.1 retain by default); BYOK providers apply their
+          own retention.
         url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
       - label: Docs index
         value: >-
@@ -79,8 +88,10 @@ tools:
             list the pitfalls plainly: default mode copilot-cli exposes the host filesystem, one shared GitHub
             token loses per-user authorisation, client-provided session IDs cannot be trusted."
           - "Deployment patterns: an isolated CLI per user (strongest; SOC 2 / HIPAA), a shared CLI with
-            per-session isolation, or shared collaborative sessions that need application locking. There is no
-            built-in auth between SDK and CLI — bind --headless to loopback or a private network."
+            per-session isolation, or shared collaborative sessions that need application locking. The backend
+            guide says there is no built-in auth between SDK and CLI; the Node.js README documents a
+            connectionToken shared secret for the runtime link (generated automatically when the SDK spawns a
+            TCP runtime) — set one and still bind --headless to loopback or a private network."
         links:
           - title: Multi-tenancy and server deployments
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
@@ -88,10 +99,13 @@ tools:
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
           - title: Backend services setup
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
+          - title: Copilot SDK for Node.js — README (connection options)
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
       - title: Hooks as the policy layer
         body:
-          - "onPermissionRequest is deny-by-default: file writes, shell commands and URL fetches fail unless
-            the application approves. onPreToolUse returns permissionDecision allow / deny / ask with
+          - "onPermissionRequest decides every file write, shell command and URL fetch; without it nothing is
+            approved (the compatibility guide calls this deny-by-default, the Node.js README says requests stay
+            pending until resolved). onPreToolUse returns permissionDecision allow / deny / ask with
             modifiedArgs, additionalContext and suppressOutput; onPostToolUse can redact secrets and audit;
             onUserPromptSubmitted / onUserPromptTransformed filter or replace prompts; onSessionStart / End
             and onErrorOccurred carry sessionId for correlation. All run inline in the turn."
@@ -108,12 +122,13 @@ tools:
           on session IDs are the vendor's answer.
       - risk: riskOrchestratorRouteHijacking
         note: >-
-          The SDK–CLI JSON-RPC link has no authentication; a headless CLI bound to 0.0.0.0 is an open agent
-          runtime with whatever token it was started with.
+          The SDK–CLI JSON-RPC link is authenticated only by an optional connectionToken shared secret; a
+          headless CLI bound to 0.0.0.0 without one is an open agent runtime with whatever token it was started
+          with, and anyone holding the secret can drive every session on it.
       - risk: riskEconomicDenialOfWallet
         note: >-
-          No built-in rate limiting or session cap: the SDK exposes quota and usage events but the application
-          must enforce limits and evict idle sessions.
+          The only built-in ceiling is a soft per-session AI-credit cap (sessionLimits.maxAiCredits); there is
+          no rate limiting or session cap, so the application must enforce limits and evict idle sessions.
       - risk: riskToolSourceProvenance
         note: >-
           MCP servers and custom tools are registered by the application; nothing verifies them, and the
@@ -121,21 +136,49 @@ tools:
     controls:
       - mitigation: AML.M0031
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          Per-session runtime state under COPILOT_HOME/session-state/{sessionId}, sessionFs to route state
-          into application storage, sessionIdleTimeoutSeconds, application-enforced ownership checks
+          Per-session state under COPILOT_HOME/session-state/{sessionId} or a per-session sessionFs provider;
+          baseDirectory per runtime; memory { enabled } and enableSessionStore (both off by default in mode
+          "empty"); "memory" permission requests through onPermissionRequest; sessionIdleTimeoutSeconds and
+          deleteSession
         steps:
-          - title: Isolate and expire session state
+          - title: Namespace state per tenant and run
             body:
-              - Encode tenant and user in session IDs, verify ownership before resume or delete, set
-                sessionIdleTimeoutSeconds (15–30 minutes for chat) and use baseDirectory / sessionFs to keep
-                state per process or in your own store.
+              - >-
+                Encode tenant and user in sessionId, check stored ownership before resumeSession or deleteSession,
+                give each runtime its own baseDirectory (COPILOT_HOME) and route state through a per-session
+                sessionFs provider when it must live in your own store.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
-        evidence: []
+          - title: Keep shared memory out of multi-tenant sessions
+            body:
+              - >-
+                Start the client in mode "empty", or pass memory: { enabled: false } and enableSessionStore: false
+                on createSession and resumeSession, so neither Copilot Memory nor the cross-session store is read
+                or written.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+          - title: Gate every memory write
+            body:
+              - >-
+                In onPermissionRequest, inspect requests of kind "memory" (subject, fact, citations) and reject any
+                fact your own validator does not accept.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/streaming-events
+          - title: Expire and delete state
+            body:
+              - >-
+                Set sessionIdleTimeoutSeconds (no default; sessions with running commands or background agents are
+                never idle-cleaned) and call deleteSession when a workflow ends to remove its history, planning
+                state and artifacts from disk.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/session-persistence
         note: >-
-          Isolation and retention are the application's: sessionFs decides where state lives, ownership checks
-          decide who reads it, and idle timeouts bound retention. Nothing validates or restores memory.
+          Partial by the rule for this drawing, as on the Claude Agent SDK: state is namespaced per session by
+          configuration and can be expired and deleted, but the only write control on memory is the host's own
+          permission handler (an attach point), and nothing validates on read what a step wrote — custom agents
+          and fleet-mode workers share the parent session's state. Enabled, Copilot Memory is
+          repository-scoped and shared by every user with access to that repository; GitHub checks repository
+          facts against their citations before use and deletes entries unused for 28 days, which is vendor-side
+          hygiene, not tenant separation. Enforcing actor: the runtime for storage paths, the application for
+          ownership checks and the memory decision.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMemoryProtection
@@ -160,17 +203,22 @@ tools:
                 memory.
               verified: 2026-09-10
       - mitigation: AML.M0008
-        coverage: none
-        verified: "2026-09-10"
-        mechanism: No evaluation harness in the SDK; GitHub evaluates hosted models vendor-side
-        steps: []
+        coverage: external
+        mechanism: >-
+          No evaluation harness or release gate in the SDK; sessions are scriptable and emit session events and
+          OpenTelemetry traces an evaluation platform can score
         evidence:
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+          - title: Copilot SDK how-to index, reviewed 2026-09-25 (no evaluation feature)
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
+          - title: OpenTelemetry instrumentation for Copilot SDK, reviewed 2026-09-25
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry
         note: >-
-          Rated none on the same rule as Copilot cloud's supplier evidence: GitHub's internal benchmarks and
-          red teaming are TPRM evidence, not a harness the application can run. Build evals in your own CI
-          against the SDK.
+          Rated external by the rule for this drawing: the SDK ships no harness that can gate a deploy, so an
+          AI evaluation / red-teaming platform run in the deployer's CI supplies it. Integration point: drive
+          createSession and send from the pipeline for every prompt, custom-agent, tool or model change and score
+          the session event stream and OTLP traces before release. GitHub's own model evaluations are supplier
+          evidence, not a gate the application controls.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityModelEvals
@@ -190,34 +238,41 @@ tools:
       - mitigation: cap-agent-tracing
         coverage: native
         mechanism: >-
-          TelemetryConfig (OTLP endpoint, protocol, exporter type, capture content, source name) on the
-          client; W3C traceparent / tracestate propagation between SDK, CLI and tool handlers; usage events
+          Client TelemetryConfig (otlpEndpoint, otlpProtocol, exporterType otlp-http or file, filePath,
+          sourceName, captureContent) exporting the runtime's traces, metrics and events; W3C traceparent into
+          tool handlers; subagent.* lifecycle events with toolCallId and agentId; permission.requested /
+          completed and assistant.usage session events
         steps:
-          - title: Configure OTLP export and trace propagation
+          - title: Export the runtime's traces
             body:
-              - "Create the client with telemetry: { otlpEndpoint, otlpProtocol, exporterType, captureContent
-                } — Python, Go and .NET inject trace context automatically, Node.js needs onGetTraceContext;
-                tool handlers receive traceparent for child spans."
+              - >-
+                Create the client with telemetry: { otlpEndpoint, otlpProtocol, exporterType, sourceName,
+                captureContent } (or exporterType "file" with filePath) so model calls and tool executions reach
+                your collector; enable captureContent only where that collector is cleared for prompts and tool
+                arguments.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry
-          - title: Capture usage per turn
+          - title: Reconstruct the delegation tree
             body:
-              - Subscribe to assistant.usage and session.usage_info events and call session.usage.getMetrics
-                for per-model totals.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing
-          - title: Log decisions from hooks
+              - >-
+                Persist subagent.selected / started / completed / failed events (toolCallId, agentName) and the
+                envelope agentId on sub-agent events, keyed by sessionId.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/custom-agents
+          - title: Record decisions and usage
             body:
-              - Record every permissionDecision and tool result in onPreToolUse / onPostToolUse, keyed by the
-                invocation's sessionId, alongside the OTLP export.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+              - >-
+                Store permission.requested and permission.completed (requestId, kind, result.kind) and
+                assistant.usage events next to the traces.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/streaming-events
         note: >-
-          Traces cover the SDK, CLI and tool handlers with W3C correlation; capture content is off by default.
-          Emission is not detection or an audit record.
-
-
-          [capabilityAiDetectionResponse] The traces and hook logs are the feed; detection logic and response
-          actions live in the SIEM. Required fields: session id, tool name, permission decision, integration
-          id.
-        verified: 2026-09-10
+          Native by the rule for this drawing: the runtime traces model calls and tool executions and exports
+          them over OTLP or to a file the deployer controls, sub-agent handoffs are correlated by toolCallId and
+          agentId, and W3C trace context links the application's own tool spans. Boundary: prompts, tool
+          arguments and results are captured only with captureContent (off by default); permission decisions and
+          sub-agent lifecycle arrive as session events the host must persist, not as documented spans; with the
+          in-process transport the telemetry option is rejected and must be set on the host process; cloud
+          sessions run on GitHub compute. Emission is not tamper resistance or detection — the collector's
+          retention and the SIEM supply those.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentObservability
@@ -231,7 +286,7 @@ tools:
                 TelemetryConfig (OTLP endpoint, protocol, exporter type, capture content, source name) on the
                 client; W3C traceparent / tracestate propagation between SDK, CLI and tool handlers; usage
                 events
-              steps: &a1
+              steps:
                 - title: Configure OTLP export and trace propagation
                   body:
                     - "Create the client with telemetry: { otlpEndpoint, otlpProtocol, exporterType, captureContent } — Python,
@@ -267,52 +322,35 @@ tools:
                 - title: Vendor docs index, reviewed for the integration point (2026-09-10)
                   url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
               verified: 2026-09-10
-        evidence:
-          - title: Vendor docs index, reviewed for the integration point (2026-09-10)
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
       - mitigation: D3-APA
-        coverage: unknown
+        coverage: external
         mechanism: >-
-          GitHub OAuth per user with gitHubToken set per session; service-to-server installation tokens for
-          services; application-level authentication and session ownership; Per-session gitHubToken makes
-          GitHub retrieval and content exclusion run as the requesting user; other data sources are the
-          application's tools
-        steps:
-          - title: Authenticate users, not the runtime
-            body:
-              - Pass each requesting user's GitHub token on the session (gitHubToken) so quota, content
-                exclusion and model policy resolve to that user; reserve service tokens for internal tools.
+          No inbound authorisation policy: the application authenticates users, owns session IDs and checks
+          ownership; a per-session gitHubToken / gitHubTokenProvider binds each session to the requesting user's
+          GitHub grant; an optional connectionToken shared secret guards the SDK–runtime link
+        evidence:
+          - title: Multi-tenancy and server deployments ("the application owns request routing and authorization")
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
-          - title: Choose the auth path per deployment
-            body:
-              - GitHub OAuth for user-facing apps, short-lived installation access tokens for
-                server-to-server, BYOK where GitHub auth is not wanted.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth
-          - title: Never retrieve as a shared principal
-            body:
-              - Set gitHubToken per session; for custom tools, pass the user's identity into the tool handler
-                rather than a service credential.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
-        evidence: []
+          - title: Backend services setup (loopback default; "No built-in auth between SDK and CLI")
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
+          - title: Copilot SDK for Node.js README (RuntimeConnection connectionToken)
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityIga] Rated partial on the same rule as the Claude Agent SDK and Codex SDK: OAuth per user
-          and installation tokens authenticate the runtime to GitHub; who may use the deployed application,
-          with what roles, and how they are provisioned and removed is the application's own identity layer,
-          which the SDK does not provide.
-
-
-          [capabilityDataAccessGovernance] Delegated for GitHub sources when the application passes a per-user
-          token; a shared token makes retrieval service-owned. Every other source is the application's tool,
-          enforcing whatever it enforces.
+          Rated external by the rule for this drawing, as the Claude Agent SDK leaves user authentication to the
+          deployer's gateway: nothing in the SDK decides who may start, resume, steer or delete a session — the
+          application's IdP and API gateway do. Integration points: pass the authenticated user's token per
+          session (gitHubToken, or a rotating gitHubTokenProvider) so the run carries that user's GitHub grant
+          for content exclusion, model policy and quota; check stored ownership before resumeSession and
+          deleteSession; set a connectionToken on the runtime link. That token is one shared secret — whoever
+          holds it can drive every session on the runtime — and the backend guide still says the link has no
+          auth. Cloud sessions are the exception: GitHub's cloud-agent entitlement and organisation policy can
+          refuse creation (policy_blocked).
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityIga
             - capabilityDataAccessGovernance
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityIga
               coverage: partial
@@ -354,28 +392,39 @@ tools:
                 whatever it enforces.
               verified: 2026-09-10
       - mitigation: D3-AA
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Server-to-server installation access tokens (short-lived) and GITHUB_COPILOT_INTEGRATION_ID stamping
-          requests with the product identity
+          One GitHub identity per session (gitHubToken / gitHubTokenProvider) shared by every agent in it;
+          per-agent mcpServers with their own headers or env; agentId on sub-agent events and typed message
+          sources (user, system, agent-<id>) as labels; clientInfo and GITHUB_COPILOT_INTEGRATION_ID attribute
+          the application
         steps:
-          - title: Stamp the integration identity
+          - title: Give each custom agent its own tool credentials
             body:
-              - Set GITHUB_COPILOT_INTEGRATION_ID on the runtime so requests are attributed and routed by
-                product.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
-        evidence: []
+              - >-
+                Configure mcpServers on each customAgents entry with that agent's own credential in headers
+                (remote) or env (local), and list only its tools, so its MCP calls authenticate as a distinct
+                principal.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/custom-agents
+          - title: Attribute the application
+            body:
+              - >-
+                Set clientInfo (applicationName, applicationVersion, integration fields) on the client and
+                GITHUB_COPILOT_INTEGRATION_ID on the runtime process so runtime telemetry and Mission Control
+                requests name your integration.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/client-info
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityNhiManagement] The agent's identity is the token's identity; there is no agent-specific
-          credential or registry. Rotate installation tokens and stamp the integration ID for attribution.
+          Partial by the rule for this drawing: credentials can be configured per custom agent for the MCP
+          servers it uses, but every agent and sub-agent in a session shares the session's GitHub identity for
+          model calls and GitHub access, and none is authenticated or revocable as its own principal. agentId and
+          the agent-<id> message source are correlation labels the application derives, not authentication. The
+          runtime's own credential — a GitHub App installation token or a user's OAuth token — authenticates the
+          deployment, not an agent.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityNhiManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityNhiManagement
               coverage: partial
@@ -393,34 +442,52 @@ tools:
                   url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
               verified: 2026-09-10
       - mitigation: D3-CH
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Provider keys via ProviderConfig.apiKey or Azure managed-identity bearer callbacks; platform secret
-          managers recommended; no vault integration in the SDK
+          gitHubTokenProvider (rotating session-scoped GitHub tokens with expiresIn, no fallback to ambient
+          auth); BYOK bearerTokenProvider (e.g. Azure managed identity); GitHub App installation tokens (one
+          hour); MCP OAuth tokens held in memory by default (mcpOAuthTokenStorage); storage in the deployer's
+          secret manager
         steps:
-          - title: Prefer managed identity over static keys
+          - title: Broker GitHub credentials per session
             body:
-              - Use the Azure managed identity setup so the SDK obtains bearer tokens through callbacks
-                instead of storing apiKey values.
+              - >-
+                Set gitHubTokenProvider on createSession instead of a static gitHubToken and return { kind:
+                "token", accessToken, expiresIn } from your broker; the runtime calls it for initial and refresh
+                acquisition and rejects the operation rather than falling back to ambient authentication.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/authenticate
+          - title: Replace static provider keys
+            body:
+              - >-
+                For BYOK set bearerTokenProvider so the runtime asks your identity library for a bearer token
+                before outbound provider requests instead of holding an apiKey.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/azure-managed-identity
-          - title: Keep keys in a secret manager
+          - title: Use short-lived app tokens for services
             body:
-              - The scaling guide's production checklist names Vault or Kubernetes Secrets for credentials and
+              - >-
+                Mint GitHub App installation access tokens with the Copilot Requests permission (they expire after
+                one hour) and restart or reconnect the runtime before expiry instead of a long-lived
+                COPILOT_GITHUB_TOKEN.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/server-to-server-tokens
+          - title: Keep secrets in a manager
+            body:
+              - >-
+                The scaling guide's production checklist names Vault or Kubernetes Secrets for credentials and
                 persistent volumes for session state.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilitySecretsManagement] Storage and issuance are the application's: managed-identity callbacks
-          give ephemeral provider tokens, a static apiKey does not. Whatever the application passes the CLI
-          process is readable by the tools that process runs.
+          Partial by the rule for this drawing: short-lived credentials are brokered only through callbacks the
+          deployer implements (helper hooks), per session rather than per step, and a secret manager or workload
+          identity supplies them. The runtime process holds whatever it receives and every tool in the session
+          acts with it; a static gitHubToken, apiKey or COPILOT_GITHUB_TOKEN on a headless server is long-lived.
+          MCP OAuth tokens are discarded at session end unless mcpOAuthTokenStorage is "persistent" (OS
+          keychain, shared across sessions). The repository README's FAQ still says BYOK is key-based only; the
+          BYOK and Azure managed identity guides document bearerTokenProvider — prefer the guides.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilitySecretsManagement
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilitySecretsManagement
               coverage: partial
@@ -446,35 +513,42 @@ tools:
       - mitigation: cap-agent-action-policy-enforcement
         coverage: native
         mechanism: >-
-          onPermissionRequest (deny-by-default) and onPreToolUse returning permissionDecision allow / deny /
-          ask with modifiedArgs; SDK-native enableManagedSettings / managedSettings enterprise-permissions
-          layer added post-GA
-        steps: &a1
-          - title: Implement the permission handler
+          Host-injected managedSettings.permissions (deny / ask / allow with Shell(), Read(), Edit(), Domain()
+          selectors; disableBypassPermissionsMode) on session create and resume; enableManagedSettings to
+          self-fetch the enterprise's managed policy; onPreToolUse deny / modifiedArgs; onPermissionRequest
+        steps:
+          - title: Inject the permission rules on every session
             body:
-              - Without an onPermissionRequest handler every file write, shell command and URL fetch is denied; implement
-                it as a policy decision, not approve_all.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
-          - title: Gate every tool call in onPreToolUse
+              - >-
+                Pass managedSettings: { permissions: { disableBypassPermissionsMode: "disable", deny: [...], ask:
+                [...], allow: [...] } } on createSession and on every resumeSession (omitting it on resume clears
+                the layer); rules use the managed-policy vocabulary such as Shell(git push *) and Read(**), and
+                need Copilot CLI 1.0.79-5 or later.
+            url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
+          - title: Apply the enterprise's own policy
             body:
-              - 'Return { permissionDecision: "deny", permissionDecisionReason } for disallowed tools or arguments,
-                constrain modifiedArgs (timeouts, allowed directories) and always return an explicit
-                decision.'
+              - >-
+                Set enableManagedSettings: true with a per-session gitHubToken so the runtime self-fetches the
+                enterprise's managed policy at bootstrap (session creation fails without the token); approveAll
+                then throws, so ship a real handler.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+          - title: Gate MCP and custom tools in onPreToolUse
+            body:
+              - >-
+                Return { permissionDecision: "deny", permissionDecisionReason } for disallowed tools or arguments
+                and constrain modifiedArgs; the managed selectors do not name MCP tools.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
-          - title: Check whether managed permissions reach your sessions
-            body:
-              - The SDK's own enableManagedSettings flag and managedSettings option on session.create / session.resume are
-                the SDK's enterprise-permissions layer, not the org-wide managed-settings.json feature; the
-                enterprise managed-settings client matrix still does not name the SDK, so wire
-                enableManagedSettings or managedSettings explicitly rather than assuming central policy
-                reaches SDK sessions.
-            url: >-
-              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
         note: >-
-          The hooks are an integration point; the deny-by-default onPermissionRequest is real only when the
-          application implements it. managedSettings brings enterprise permissions into the SDK, but the
-          application must enable it.
-        verified: 2026-09-10
+          Native by the rule applied to every vendor (Claude Agent SDK deny rules, Copilot CLI managed
+          permissions): a declarative deny / ask / allow engine over shell commands, file paths and network
+          domains, evaluated by the runtime before each call and composed restrictively with server-managed and
+          device-managed (MDM) layers. Boundary: the layer is startup-only and not persisted, so a resume without
+          it drops it; an older runtime may ignore the field (pin the CLI version); MCP and custom tools are
+          reachable only through the pre-tool hook, an attach point whose logic the deployer writes, and tools
+          registered with skipPermission skip the confirmation step. Sub-agent tool calls fire the same hooks
+          (fleet-mode guide). managedSettings and enableManagedSettings are documented in the SDK repository,
+          not on docs.github.com, and the enterprise managed-settings client matrix does not list the SDK.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRuntimeEnforcement
@@ -486,7 +560,30 @@ tools:
                 onPermissionRequest (deny-by-default) and onPreToolUse returning permissionDecision allow /
                 deny / ask with modifiedArgs; SDK-native enableManagedSettings / managedSettings
                 enterprise-permissions layer added post-GA
-              steps: *a1
+              steps:
+                - title: Implement the permission handler
+                  body:
+                    - >-
+                      Without an onPermissionRequest handler every file write, shell command and URL fetch is
+                      denied; implement it as a policy decision, not approve_all.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+                - title: Gate every tool call in onPreToolUse
+                  body:
+                    - >-
+                      Return { permissionDecision: "deny", permissionDecisionReason } for disallowed tools or
+                      arguments, constrain modifiedArgs (timeouts, allowed directories) and always return an
+                      explicit decision.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
+                - title: Check whether managed permissions reach your sessions
+                  body:
+                    - >-
+                      The SDK's own enableManagedSettings flag and managedSettings option on session.create /
+                      session.resume are the SDK's enterprise-permissions layer, not the org-wide
+                      managed-settings.json feature; the enterprise managed-settings client matrix still does
+                      not name the SDK, so wire enableManagedSettings or managedSettings explicitly rather than
+                      assuming central policy reaches SDK sessions.
+                  url: >-
+                    https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
               note: >-
                 The hooks are an integration point; the deny-by-default onPermissionRequest is real only when
                 the application implements it. managedSettings brings enterprise permissions into the SDK, but
@@ -495,19 +592,31 @@ tools:
       - mitigation: cap-data-access-governance
         coverage: partial
         mechanism: >-
-          Per-session gitHubToken makes GitHub retrieval and content exclusion run as the requesting user;
-          other data sources are the application's tools
-        steps: &a1
+          Per-session gitHubToken / gitHubTokenProvider makes GitHub retrieval and content exclusion run as the
+          requesting user; per-server MCP headers or OAuth for other sources; enableSessionStore and
+          skipEmbeddingRetrieval against cross-session leakage
+        steps:
           - title: Never retrieve as a shared principal
             body:
-              - Set gitHubToken per session; for custom tools, pass the user's identity into the tool handler rather than
-                a service credential.
+              - >-
+                Set gitHubToken or gitHubTokenProvider per session so the runtime resolves the requesting user's
+                identity for content exclusion, model routing and quota; for custom tools pass the user's identity
+                into the tool handler rather than a service credential.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
+          - title: Carry the user's grant to MCP data sources
+            body:
+              - >-
+                Put the requesting user's token in each remote MCP server's headers (or answer the server's OAuth
+                challenge with it) when the session is created, not a service credential.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
         note: >-
-          Delegated for GitHub sources when the application passes a per-user token; a shared token makes
-          retrieval service-owned. Every other source is the application's tool, enforcing whatever it
-          enforces.
-        verified: 2026-09-10
+          Partial by the rule for this drawing: identity passthrough is built in only for GitHub sources, when
+          the application passes a per-user token; a shared token makes retrieval service-owned. Every other
+          source gets the user's grant only if the application wires it into the MCP server's headers, OAuth
+          answer or tool handler — a per-call credential attach point. The runtime's cross-session store and
+          shared embedding cache can surface one session's content in another unless disabled (see the
+          retrieval row). Oversharing analysis of the repositories themselves is GitHub's and the data owners'.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityDataAccessGovernance
@@ -518,29 +627,58 @@ tools:
               mechanism: >-
                 Per-session gitHubToken makes GitHub retrieval and content exclusion run as the requesting
                 user; other data sources are the application's tools
-              steps: *a1
+              steps:
+                - title: Never retrieve as a shared principal
+                  body:
+                    - >-
+                      Set gitHubToken per session; for custom tools, pass the user's identity into the tool
+                      handler rather than a service credential.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
               note: >-
                 Delegated for GitHub sources when the application passes a per-user token; a shared token
                 makes retrieval service-owned. Every other source is the application's tool, enforcing
                 whatever it enforces.
               verified: 2026-09-10
       - mitigation: AML.M0028
-        coverage: native
-        verified: "2026-09-10"
+        coverage: partial
         mechanism: >-
-          mode "empty" plus an explicit availableTools allowlist (custom:*, mcp:name, builtin:*); MCP servers
-          chosen per session
+          mode "empty" plus availableTools / excludedTools (custom:*, mcp:name, builtin:*); per-agent tools and
+          mcpServers on customAgents and defaultAgent.excludedTools; per-server MCP tools lists;
+          managedSettings.permissions argument and path selectors
         steps:
           - title: Start from no tools
             body:
-              - 'Set mode: "empty" so CLI defaults and ambient OS tools are disabled, then list availableTools
-                explicitly; avoid builtin:* without review.'
+              - >-
+                Set mode: "empty" so CLI defaults and ambient OS tools are disabled, then list availableTools
+                explicitly and use excludedTools for exceptions; avoid builtin:* without review.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
-        evidence: []
+          - title: Narrow every custom agent
+            body:
+              - >-
+                Give each customAgents entry an explicit tools list and only the mcpServers it needs (tools omitted
+                or null inherits every session tool), and use defaultAgent.excludedTools to keep delegated tools
+                away from the main agent.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/custom-agents
+          - title: Scope arguments and paths
+            body:
+              - >-
+                Put Shell(...), Read(...), Edit(...) and Domain(...) selectors under managedSettings.permissions
+                deny and ask, with disableBypassPermissionsMode "disable".
+            url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
+          - title: List tools per MCP server
+            body:
+              - >-
+                Set tools on each mcpServers entry to the named tools the session needs ([] for none) rather than
+                ["*"].
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
         note: >-
-          Application integration required: mode empty plus availableTools hides everything not listed, and
-          hooks are the only argument limits. Nothing is enforced unless the application sets these per
-          session.
+          Partial on the rule applied to all three SDKs on this drawing (as toolClaudeAgentSdk): each delegation
+          hop should carry a narrower grant, and here a sub-agent narrows only by tool name — allowlists exist per
+          session, per custom agent and per MCP server, but the argument- and path-scoped deny / ask / allow rules
+          are session-wide, not per sub-agent. A custom agent without a tools list inherits every session tool;
+          MCP tools are scoped by name only; nothing is enforced unless the application sets these on each create
+          and resume.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -563,35 +701,44 @@ tools:
                 per session.
               verified: 2026-09-10
       - mitigation: D3-CTS
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          Per-session gitHubToken versus a single runtime service token; BYOK keys per session; loopback-only
-          headless binding
+          Per-session gitHubToken / gitHubTokenProvider per user; per-server MCP headers or env and per-agent
+          mcpServers; sandboxConfig.auth.git / auth.gh (default false) keeping GitHub credentials out of
+          sandboxed commands; no on-behalf-of exchange
         steps:
           - title: Scope GitHub auth to the requesting user
             body:
-              - Set gitHubToken per session; the docs warn that sharing one token across users breaks content
-                exclusion and quota attribution.
+              - >-
+                Set gitHubToken or gitHubTokenProvider per session; the docs warn that sharing one token across
+                users breaks content exclusion and quota attribution.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
-          - title: Protect the SDK–CLI link
+          - title: Scope tool credentials per server and agent
             body:
-              - There is no built-in auth between SDK and CLI; keep copilot --headless on loopback or inside a
-                private network.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
-        evidence: []
+              - >-
+                Put each MCP server's credential in its own headers or env and attach servers only to the
+                customAgents entries that need them.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
+          - title: Keep GitHub credentials out of agent-run commands
+            body:
+              - >-
+                When enabling the runtime sandbox through session.rpc.options.update({ sandboxConfig }), leave
+                auth.git and auth.gh false (the default) so no Git credential header or GH_TOKEN is injected into
+                sandboxed commands.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/rpc.ts
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityCredentialIsolation] Rated partial on the same rule as the Claude Agent SDK: a
-          per-session token, per-session BYOK keys and loopback binding are design choices the application
-          makes, not isolation the SDK enforces, and the token the session holds is readable by every tool in
-          it. No on-behalf-of exchange — the token's authority is the session's authority.
+          Partial by the rule for this drawing: credentials can be scoped per MCP server and, through per-agent
+          mcpServers, per custom agent, but every agent in a session shares its GitHub token and model credential,
+          and without the runtime sandbox (experimental and off by default in the SDK) shell commands inherit
+          the runtime process's environment. Rated below Copilot CLI's native because that rating rests on an
+          admin-required managed sandbox floor that no SDK guide documents for SDK sessions. No on-behalf-of
+          exchange: a sub-agent acts with the parent session's authority, and the per-session token crosses the
+          SDK–runtime link, which is unauthenticated unless a connectionToken is set.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityCredentialIsolation
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityCredentialIsolation
               coverage: partial
@@ -616,40 +763,43 @@ tools:
                 exchange — the token's authority is the session's authority.
               verified: 2026-09-10
       - mitigation: AML.M0036
-        coverage: unknown
+        coverage: partial
         mechanism: >-
-          sessionLimits.maxAiCredits per-session soft cap (SDK 1.0.5+), sessionIdleTimeoutSeconds, 30-minute
-          idle cleanup, recommended concurrent-session cap and eviction, account.getQuota; no account-wide or
-          concurrent-session rate limiting
+          sessionLimits.maxAiCredits soft per-session AI-credit cap with the exhausted-budget decision
+          (session_limits_exhausted.requested); per-server MCP timeout; sessionIdleTimeoutSeconds for idle
+          sessions only; experimental Node.js Agent Factories limits for factory sub-agents; account.getQuota
         steps:
           - title: Set a per-session credit cap
             body:
-              - "Pass sessionLimits: { maxAiCredits } when creating or resuming a session; the SDK forwards it
-                to the CLI, which triggers the exhausted-budget flow when the cap is hit."
+              - >-
+                Pass sessionLimits: { maxAiCredits } on createSession and resumeSession, and answer
+                session_limits_exhausted.requested with "cancel" unless an operator raises the cap.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/session-limits
+          - title: Time-box tool servers
+            body:
+              - >-
+                Set timeout (milliseconds) on each mcpServers entry so a hung server cannot hold a turn open.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
           - title: Cap and evict sessions
             body:
-              - Limit concurrent active sessions (the guide suggests 50), evict the oldest idle ones, set
-                sessionIdleTimeoutSeconds and delete expired sessions.
+              - >-
+                Limit concurrent active sessions per runtime (the guide's pool uses 50), evict the oldest idle
+                ones, set sessionIdleTimeoutSeconds and delete completed sessions.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
-          - title: Watch quota
-            body:
-              - Poll account.getQuota for remaining entitlement and reset dates, and meter assistant.usage per
-                turn.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing
-        evidence: []
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityRateLimiting] maxAiCredits is a soft cap checked after each model call, so one response
-          can exceed it before the next call is blocked; quota beyond that is visible, not enforced, so the
-          application must still cap concurrent sessions and total spend.
+          Partial by the rule for this drawing: the only built-in ceiling on the stable surface is a soft credit
+          budget per session — usage is checked after each model call returns, so one response can overrun it,
+          and at the cap the session asks the host for a decision instead of ending. No turn, iteration or
+          wall-clock limit ships for sessions; idle cleanup never touches a session with running commands or
+          background agents; fleet-mode fan-out has no configured bound, and whether sub-agent spend counts
+          toward the session cap is not stated. The experimental Node.js Agent Factories API declares
+          concurrency, total, time and (soft) credit ceilings for factory sub-agents and their descendants — the
+          only documented child bound, in one language. Account-wide spend is Copilot billing's.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityRateLimiting
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityRateLimiting
               coverage: partial
@@ -681,18 +831,28 @@ tools:
       - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
-          onUserPromptSubmitted / onUserPromptTransformed hooks to filter or rewrite prompts and onPreToolUse
-          to gate resulting tool calls; no built-in classifier
-        steps: &a1
-          - title: Screen prompts and tool outputs in hooks
+          onUserPromptSubmitted (modifiedPrompt, additionalContext) and onUserPromptTransformed on the way in,
+          onPostToolUse modifiedResult on tool results, onPreToolUse deny on the resulting calls; no built-in
+          classifier
+        steps:
+          - title: Screen prompts and tool results in hooks
             body:
-              - Filter or annotate prompts in onUserPromptSubmitted, inspect model-facing content in
-                onUserPromptTransformed, and deny suspicious tool calls in onPreToolUse.
+              - >-
+                Call your classifier in onUserPromptSubmitted and replace a flagged prompt with modifiedPrompt,
+                and in onPostToolUse replace a flagged tool result with modifiedResult before the model reads it.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+          - title: Deny the calls a flagged turn proposes
+            body:
+              - >-
+                Return permissionDecision "deny" from onPreToolUse for tool calls that follow flagged content.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
         note: >-
-          The hooks are an attach point, not a detector: nothing is classified until the application supplies
-          the logic.
-        verified: 2026-09-10
+          Partial by the rule for this drawing: the hooks are attach points that can transform both the
+          initiator's request and returned tool content before it enters context, but nothing is classified until
+          the deployer attaches a detector, and the prompt hook "cannot reject a prompt or enforce policy" on its
+          own — only replace it. Typed message sources (user, system, agent-<id>) let the runtime tell agent
+          input from human authorisation; that is labelling, not screening.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -703,7 +863,12 @@ tools:
               mechanism: >-
                 onUserPromptSubmitted / onUserPromptTransformed hooks to filter or rewrite prompts and
                 onPreToolUse to gate resulting tool calls; no built-in classifier
-              steps: *a1
+              steps:
+                - title: Screen prompts and tool outputs in hooks
+                  body:
+                    - Filter or annotate prompts in onUserPromptSubmitted, inspect model-facing content in
+                      onUserPromptTransformed, and deny suspicious tool calls in onPreToolUse.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
               note: >-
                 The hooks are an attach point, not a detector: nothing is classified until the application
                 supplies the logic.
@@ -711,18 +876,28 @@ tools:
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
-          onPostToolUse redaction, captureContent=false in telemetry, per-user token so content exclusion
-          applies; no inspection of the prompt stream by the vendor
-        steps: &a1
-          - title: Redact in onPostToolUse and keep content out of traces
+          onPostToolUse modifiedResult and onUserPromptSubmitted modifiedPrompt as redaction attach points;
+          TelemetryConfig captureContent off; per-user token so content exclusion applies; no vendor inspection
+          of the prompt stream
+        steps:
+          - title: Redact in hooks
             body:
-              - Use onPostToolUse to redact secrets from tool results before they reach the model; leave TelemetryConfig
-                captureContent off in production.
+              - >-
+                Run your detector in onPostToolUse and return modifiedResult with secrets masked before the model
+                sees them, and replace prompts that carry credentials in onUserPromptSubmitted.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+          - title: Keep content out of traces
+            body:
+              - >-
+                Leave TelemetryConfig captureContent off in production so exported traces carry no prompts, tool
+                arguments or results.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry
         note: >-
-          Redaction in onPostToolUse is code the application writes; the SDK ships no scanner, so content
-          inspection exists only where the application attaches one.
-        verified: 2026-09-10
+          Partial by the rule applied to every vendor: the hooks can mask a span inline, but the SDK ships no
+          scanner, so content is inspected only where the deployer attaches one; captureContent=false and
+          content exclusion are minimisation, not detection. Model responses and what the runtime journals under
+          session-state are not covered by any hook.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAiDlp
@@ -733,21 +908,44 @@ tools:
               mechanism: >-
                 onPostToolUse redaction, captureContent=false in telemetry, per-user token so content
                 exclusion applies; no inspection of the prompt stream by the vendor
-              steps: *a1
+              steps:
+                - title: Redact in onPostToolUse and keep content out of traces
+                  body:
+                    - >-
+                      Use onPostToolUse to redact secrets from tool results before they reach the model; leave
+                      TelemetryConfig captureContent off in production.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
               note: >-
                 Redaction in onPostToolUse is code the application writes; the SDK ships no scanner, so
                 content inspection exists only where the application attaches one.
               verified: 2026-09-10
       - mitigation: cap-retrieval-grounding-checks
-        coverage: notApplicable
-        mechanism: No retrieval store in the SDK; any corpus is the application's own tool or MCP server
+        coverage: partial
+        mechanism: >-
+          Runtime cross-session store (enableSessionStore, on by default in "copilot-cli" mode) and
+          embedding-based retrieval with a shared cache (skipEmbeddingRetrieval, embeddingCacheStorage); no
+          ingest screening or grounding verification
+        steps:
+          - title: Keep retrieval inside the run
+            body:
+              - >-
+                Use mode "empty" or pass enableSessionStore: false so session content is neither written to nor
+                read from the cross-session store.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+          - title: Stop cross-session leakage through embeddings
+            body:
+              - >-
+                In multi-tenant deployments set skipEmbeddingRetrieval: true, or embeddingCacheStorage:
+                "in-memory" so the embedding cache is discarded when the session ends.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/types.ts
         note: >-
-          Conditional: no retrieval store ships in the SDK; any corpus is the application's own tool or MCP
-          server, and that application owns provenance, trust tiering and access scoping for it.
-        evidence: &a1
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
-        verified: 2026-09-10
+          Partial by the rule for this drawing: the runtime has retrieval of its own — a cross-session store for
+          search across sessions and an embedding cache shared across sessions and restarts unless configured
+          otherwise — and both can be scoped to the run. Nothing screens what enters those stores, trust-tiers
+          sources or checks a response against retrieved content (enableCitations only asks supported models to
+          cite). A corpus behind the application's own tools or MCP servers is that application's control. Both
+          switches are documented only in the SDK repository.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityRagSecurity
@@ -759,25 +957,50 @@ tools:
               note: >-
                 Conditional: no retrieval store ships in the SDK; any corpus is the application's own tool or
                 MCP server, and that application owns provenance, trust tiering and access scoping for it.
-              evidence: *a1
+              evidence:
+                - title: Vendor docs index, reviewed for applicability (2026-09-10)
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
               verified: 2026-09-10
       - mitigation: AML.M0029
         coverage: native
-        verified: "2026-09-10"
         mechanism: >-
-          onPermissionRequest approvals and onPreToolUse "ask" decisions routed to the application's own
-          approval UI
+          permission.requested with requestId, toolCallId and the exact action (fullCommandText, fileName and
+          diff, MCP args, url) answered through onPermissionRequest or the pending-permission RPC; managed ask
+          rules mark requests managedApprovalRequired; onPreToolUse "ask"
         steps:
-          - title: Route privileged actions to a human
+          - title: Route each request to a person
             body:
-              - Return permissionDecision "ask" (interactive) or hold the onPermissionRequest promise until an
-                operator approves for shell, write and network operations.
+              - >-
+                Handle permission.requested: show the operator the exact command, diff or arguments and answer
+                that requestId with approve-once or reject; the call waits until it is answered.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/streaming-events
+          - title: Make approval mandatory for risky operations
+            body:
+              - >-
+                Put Shell(...), Edit(...) and Domain(...) selectors under managedSettings.permissions.ask on
+                every create and resume so matching calls always need an explicit decision.
+            url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
+          - title: Send managed asks to a person
+            body:
+              - >-
+                In onPermissionRequest, route requests flagged managedApprovalRequired to your confirmation UI
+                instead of approving them automatically; approveAll leaves them pending.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+          - title: Escalate from policy code
+            body:
+              - >-
+                Return permissionDecision "ask" from onPreToolUse for calls your rules cannot decide.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
-        evidence: []
         note: >-
-          The SDK routes the decision to the application; the application must implement an authenticated
-          human approver and fail closed on timeout, so the control is complete only in the deployed
-          application.
+          Native by the rule for this drawing, as the Claude Agent SDK's canUseTool: the runtime suspends the call
+          and resumes only on a decision for that requestId, which carries the tool call id and the exact
+          arguments; the deployer supplies the UI and the approver. Boundary: the SDK cannot tell whether a person
+          or code answered — approveAll, setApproveAll, skipPermission tools, approve-for-session / location /
+          permanently scopes and a model-backed handler all satisfy it, and an AI reviewer never counts as human
+          approval; only managed ask rules (managedApprovalRequired, which approveAll refuses) force a fresh
+          decision per call. Without a handler nothing is approved (deny-by-default per the compatibility guide;
+          pending until resolved per the Node.js README); fail closed on timeout in the host.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityHitlControls
@@ -801,26 +1024,41 @@ tools:
               verified: 2026-09-10
       - mitigation: D3-EI
         coverage: partial
-        verified: "2026-09-10"
         mechanism: >-
-          Inherits Copilot CLI's local sandbox (MXC) and permission model; isolated CLI per user; cloud
-          sessions on GitHub compute
+          Runtime sandbox via session.rpc.options.update({ sandboxConfig }) (enabled, userPolicy.filesystem,
+          sandboxMcpServers, allowBypass default false; experimental, off by default); isolated CLI per user;
+          cloud sessions on GitHub compute; in-process transport runs the runtime inside the application
         steps:
           - title: Isolate the runtime per tenant
             body:
-              - Run one CLI server per user on its own port for compliance-grade isolation; a shared CLI gives
-                only session-level separation.
+              - >-
+                Run one CLI server per user on its own port and baseDirectory for compliance-grade isolation; a
+                shared CLI gives only session-level separation.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
+          - title: Turn on the runtime sandbox for each session
+            body:
+              - >-
+                Call session.rpc.options.update({ sandboxConfig: { enabled: true, userPolicy: { filesystem: {
+                readwritePaths, deniedPaths } } } }), leaving allowBypass unset (false) and sandboxMcpServers
+                true; session.rpc.sandbox.getEnforcementStatus reports whether managed policy already requires it.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/rpc.ts
           - title: Offload risky work to cloud sessions
             body:
-              - Create sessions with the cloud option so execution happens on GitHub-hosted compute and is
-                visible at github.com/copilot/tasks/{sessionId}; requires cloud-agent entitlement and
-                organisation policies permitting remote control.
+              - >-
+                Create sessions with cloud: { repository } so execution runs on GitHub-hosted compute and appears
+                at github.com/copilot/tasks/{sessionId}; cloud-agent entitlement and organisation policy can
+                refuse creation (policy_blocked).
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/cloud-sessions
-        evidence: []
         note: >-
-          The SDK docs do not describe enabling the local sandbox from the SDK; the CLI's sandbox.* managed
-          settings and OS isolation of the host process are the containment.
+          Partial by core rule 3 and the rule for this drawing: the SDK can put agent-run commands and local MCP
+          servers in the Copilot CLI's OS sandbox with bypass off by default, but the sandbox is optional, set
+          per session by the application through an experimental RPC no SDK guide documents, and off unless
+          set. getEnforcementStatus reports whether managed policy requires the sandbox, which suggests the
+          CLI's device-managed floor (sandbox.enabled, failIfUnavailable, allowBypass=false) applies on the
+          runtime host — unverified for SDK sessions. Outside the boundary: the runtime process, its built-in
+          file tools (software check), remote MCP servers and the application itself; the in-process transport
+          puts the runtime on the orchestration tier. Cloud sessions are GitHub's isolation.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -848,16 +1086,24 @@ tools:
                   url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/cloud-sessions
               verified: 2026-09-10
       - mitigation: cap-agent-tool-registry
-        coverage: none
+        coverage: external
         mechanism: >-
-          No registry; tools, MCP servers and agents are whatever the application registers per session
-        note: >-
-          Keep the availableTools list and MCP configuration in version control and stamp
-          GITHUB_COPILOT_INTEGRATION_ID so GitHub can attribute the integration.
-        evidence: &a1
-          - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+          No registry; agents, tools, MCP servers and plugin directories are whatever the application passes
+          per session (customAgents, availableTools, mcpServers, disabledMcpServers); clientInfo and
+          GITHUB_COPILOT_INTEGRATION_ID attribute the integration
+        evidence:
+          - title: Copilot SDK how-to index, reviewed 2026-09-25 (no registry feature)
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
-        verified: 2026-09-10
+          - title: Plugin directories (trusted host-bundled plugin directories), reviewed 2026-09-25
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/plugin-directories
+        note: >-
+          Rated external by the rule for this drawing: nothing in the SDK records owner, version or approval state
+          for an agent or tool, and the host-injected managedSettings layer is permissions-only, so an
+          allowedMcpServers list cannot be injected. An AI governance platform or an MCP gateway's registry
+          supplies it; the integration point is the application's session configuration — generate customAgents,
+          availableTools and mcpServers from the registry at session creation and set clientInfo so runtime
+          telemetry names the integration.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentRegistry
@@ -870,23 +1116,43 @@ tools:
               note: >-
                 Keep the availableTools list and MCP configuration in version control and stamp
                 GITHUB_COPILOT_INTEGRATION_ID so GitHub can attribute the integration.
-              evidence: *a1
+              evidence:
+                - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
               verified: 2026-09-10
       - mitigation: cap-agent-kill-switch
         coverage: partial
         mechanism: >-
-          deleteSession and session eviction, revoking the session's GitHub token or installation, stopping
-          the headless CLI; no enterprise policy names the SDK
-        note: >-
-          The Copilot CLI policy gates the underlying runtime for enterprise seats; the SDK docs do not name a
-          policy of their own.
-        steps: &a1
-          - title: Terminate sessions and drain servers
+          session.abort() for the current turn; tasks.cancel for a background task; client.forceStop() to kill
+          the runtime; deleteSession to remove stored state; revoking the session's token or app installation
+        steps:
+          - title: Stop the running turn
             body:
-              - Call deleteSession for the affected sessions, drain active sessions before stopping the CLI server, and
-                revoke the token or app installation the runtime uses.
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
-        verified: 2026-09-10
+              - >-
+                Call session.abort() to abort the message the session is processing; an abort event records the
+                reason on the session stream.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+          - title: Kill the runtime
+            body:
+              - >-
+                Call client.forceStop() (or stop the headless server) when a run must end regardless of state;
+                every session on that runtime stops with it.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+          - title: Decommission the session
+            body:
+              - >-
+                Call deleteSession to permanently remove the session's history, planning state and artifacts,
+                and revoke the token or GitHub App installation it used.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/session-persistence
+        note: >-
+          Partial by core rule 4 and the rule for this drawing: the application can abort a turn mid-flight and
+          kill the runtime process (host-owned tool callbacks are cancelled when the session terminates), but
+          whether abort also stops running sub-agents, fleet workers and commands already started is not
+          documented, background tasks need their own session.rpc.tasks.cancel (generated RPC), and forceStop
+          takes down every session on a shared runtime. Token revocation only fails the next
+          credential-consuming call; delay not documented. No enterprise policy names the SDK — the Copilot CLI
+          policy gates the runtime for enterprise seats; cloud sessions run on GitHub compute.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityKillSwitch
@@ -900,23 +1166,38 @@ tools:
               note: >-
                 The Copilot CLI policy gates the underlying runtime for enterprise seats; the SDK docs do not
                 name a policy of their own.
-              steps: *a1
+              steps:
+                - title: Terminate sessions and drain servers
+                  body:
+                    - >-
+                      Call deleteSession for the affected sessions, drain active sessions before stopping the
+                      CLI server, and revoke the token or app installation the runtime uses.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/scaling
               verified: 2026-09-10
       - mitigation: cap-mcp-tool-integrity
         coverage: partial
         mechanism: >-
-          MCP servers run as separate processes and are selected per session; availableTools mcp:* patterns;
-          no verification or pinning
-        steps: &a1
-          - title: Choose MCP servers per session and name their tools
+          mcpServers chosen per session and per custom agent with per-server tools lists; disabledMcpServers;
+          availableTools mcp: patterns; sandboxConfig.sandboxMcpServers for local servers; no verification or
+          pinning
+        steps:
+          - title: Admit only named servers and tools
             body:
-              - Register only trusted servers per session and allowlist their tools with mcp:tool patterns; the
+              - >-
+                Register only reviewed servers per session, set each server's tools list to named tools, and list
+                any configured server that must not start in disabledMcpServers.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
+          - title: Pin what you launch
+            body:
+              - >-
+                Point local servers at a pinned package version or binary path in command and args; the
                 application card places responsibility for server trustworthiness on the developer.
             url: https://docs.github.com/en/copilot/responsible-use/agents
         note: >-
-          The application decides which servers a session gets; availableTools patterns filter by name. No
-          admission policy is enforced by the SDK, and nothing verifies or pins what a server serves.
-        verified: 2026-09-10
+          Partial by core rule 1: the application decides which servers and tools a session gets, but admission
+          is not integrity — nothing hashes or pins the tool descriptions a server returns, or re-checks them
+          when they change.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityMcpToolSecurity
@@ -927,7 +1208,14 @@ tools:
               mechanism: >-
                 MCP servers run as separate processes and are selected per session; availableTools mcp:*
                 patterns; no verification or pinning
-              steps: *a1
+              steps:
+                - title: Choose MCP servers per session and name their tools
+                  body:
+                    - >-
+                      Register only trusted servers per session and allowlist their tools with mcp:tool
+                      patterns; the application card places responsibility for server trustworthiness on the
+                      developer.
+                  url: https://docs.github.com/en/copilot/responsible-use/agents
               note: >-
                 The application decides which servers a session gets; availableTools patterns filter by name.
                 No admission policy is enforced by the SDK, and nothing verifies or pins what a server serves.
@@ -935,18 +1223,35 @@ tools:
       - mitigation: cap-agent-egress-control
         coverage: partial
         mechanism: >-
-          BYOK baseUrl pins the model endpoint; headless CLI bound to loopback; network egress is the host's
-          responsibility
-        steps: &a1
+          sandboxConfig.userPolicy.network allowedHosts / blockedHosts / allowOutbound / allowLocalNetwork via
+          session.rpc.options.update (experimental, off by default); Domain() rules in managedSettings.permissions
+          for URL fetches; loopback-bound headless runtime; BYOK baseUrl
+        steps:
+          - title: Allow-list sandboxed traffic
+            body:
+              - >-
+                With sandboxConfig.enabled set, list userPolicy.network.allowedHosts (a non-empty list denies
+                every unmatched host through the built-in proxy) and blockedHosts, and set allowLocalNetwork false.
+            url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/rpc.ts
+          - title: Restrict fetches by domain
+            body:
+              - >-
+                Put Domain(...) selectors under managedSettings.permissions deny and allow for the URL fetch tool.
+            url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
           - title: Bind the runtime privately
             body:
-              - Run copilot --headless on loopback (default) or a private host; expose it through your application, never
-                directly.
+              - >-
+                Run copilot --headless on loopback (the default) or a private host and expose it only through
+                your application.
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
         note: >-
-          baseUrl pins the model endpoint only; commands, MCP servers and the host process egress under the
-          host's network policy, which the deployer builds.
-        verified: 2026-09-10
+          Partial by the rule for this drawing: the Copilot CLI's sandbox allowlist exists for SDK sessions but
+          only through an experimental RPC the application must call per session, off by default and documented
+          in no SDK guide (Windows host filtering needs a recent build). It bounds sandboxed commands and
+          sandboxed MCP servers; the runtime process's own traffic — model calls, GitHub API, anything when the
+          sandbox is off — leaves under the host network policy the deployer builds. baseUrl pins only the model
+          endpoint.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityEgressControl
@@ -957,36 +1262,41 @@ tools:
               mechanism: >-
                 BYOK baseUrl pins the model endpoint; headless CLI bound to loopback; network egress is the
                 host's responsibility
-              steps: *a1
+              steps:
+                - title: Bind the runtime privately
+                  body:
+                    - >-
+                      Run copilot --headless on loopback (default) or a private host; expose it through your
+                      application, never directly.
+                  url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
               note: >-
                 baseUrl pins the model endpoint only; commands, MCP servers and the host process egress under
                 the host's network policy, which the deployer builds.
               verified: 2026-09-10
       - mitigation: D3-FA
-        coverage: unknown
+        coverage: external
         mechanism: >-
-          Not applicable to hosted models; BYOK local models (Ollama, OpenAI-compatible) are the deployer's
-          artefacts
-        steps: []
+          No scanning of the plugin directories, skill directories, MCP server packages or custom agents a
+          session loads; the runtime ships pinned per SDK package version
         evidence:
-          - title: Vendor docs index, reviewed for applicability (2026-09-10)
-            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
+          - title: Plugin directories, reviewed 2026-09-25 (no scanning or signature check)
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/plugin-directories
+          - title: MCP servers (local servers launched from command and args), reviewed 2026-09-25
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
+          - title: Application card — MCP server trust is the developer's (SDK), reviewed 2026-09-25
+            url: https://docs.github.com/en/copilot/responsible-use/agents
         note: >-
-          Capability scope changed: reassess this function. Retained configuration and evidence describe the
-          former capability, not verified coverage of every replacement.
-
-
-          [capabilityModelScanning] The SDK loads no weights; hosted models are the vendor's. BYOK local
-          models (Ollama, OpenAI-compatible) are a separate server the deployer runs and scans.
-
-
-          [capabilityAiBom] Pin the SDK and CLI versions in your dependency manifest; the bundled-CLI path
-          updates the runtime with the SDK package.
+          Rated external by the rule for this drawing: the SDK loads whatever plugin, skill or MCP package the
+          host points it at (npx command lines included) without scanning it. Admission scanning belongs to a
+          package firewall or artifact-repository mirror that installs resolve through; the SDK's integration
+          points are the plugin and skill directories and MCP command lines the host controls. Inventory of the
+          SDK and its bundled runtime is the dependency manifest.
+        verified: "2026-09-25"
         migration:
           from:
             - capabilityModelScanning
             - capabilityAiBom
-          reviewRequired: true
+          reviewRequired: false
           original:
             - capability: capabilityModelScanning
               coverage: notApplicable
@@ -1025,3 +1335,5 @@ tools:
         url: https://docs.github.com/en/copilot/concepts/enterprise/opentelemetry
       - title: Bring your own key for GitHub Copilot
         url: https://docs.github.com/en/copilot/concepts/models/bring-your-own-key
+      - title: github/copilot-sdk CHANGELOG (managedSettings, enableManagedSettings, sandbox, credential providers)
+        url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
