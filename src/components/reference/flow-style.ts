@@ -5,7 +5,23 @@
  */
 import { bandFor, type BandId } from "@/lib/bands";
 import { componentById } from "@/lib/data";
-import type { ArchBlock, BlockKind, PathClass, Phase } from "@/lib/types";
+import { STATUS_STYLE } from "@/components/StatusPill";
+import type { ArchBlock, BlockKind, DisplayStatus, PathClass, Phase } from "@/lib/types";
+
+/**
+ * A numbered chip's colours. With org data on it takes the capability's status in the
+ * Capabilities matrix tints, with a full-strength ring so it reads at canvas size; otherwise
+ * the reference blue.
+ */
+export function chipColors(status?: DisplayStatus) {
+  const s = status ? STATUS_STYLE[status] : undefined;
+  return {
+    background: s?.bg ?? "var(--paper, #fff)",
+    borderColor: s?.text ?? "var(--chip, #4a5fd0)",
+    borderStyle: s?.dashed ? "dashed" : "solid",
+    color: s?.text ?? "var(--chip, #4a5fd0)",
+  } as const;
+}
 
 /** Stroke and dash per connector class. One green for everything inside the system. */
 export const PATH_STYLE: Record<PathClass, { stroke: string; dash?: string; label: string }> = {

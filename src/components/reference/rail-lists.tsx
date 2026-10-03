@@ -15,6 +15,7 @@ import { useOrgOverlay } from "@/components/tooling/overlay";
 import { StatusPill } from "@/components/StatusPill";
 import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
+import { chipColors } from "./flow-style";
 
 /** The organisation's own identifiers for a pinned entity, linked into the Frameworks tab. */
 /** With status shown, what the organisation has on this surface for the mitigation. */
@@ -147,6 +148,7 @@ export function MitigationList({
   onHighlight: (h: Highlight | null) => void;
   columns?: 1 | 2;
 }) {
+  const overlay = useOrgOverlay();
   // Control first, method second: the numbered chips read under the CoSAI control group they serve.
   const numbered = archetype.mitigations.map((id, i) => ({ id, i, mitigation: mitigationById.get(id) }));
   const groups = controlCategories
@@ -170,9 +172,18 @@ export function MitigationList({
                 active ? "border-introduced bg-introduced-soft" : "border-transparent hover:bg-mist"
               }`}
             >
-              <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-introduced bg-introduced-soft text-[10.5px] font-bold text-introduced">
-                {i + 1}
-              </span>
+              {overlay ? (
+                <span
+                  className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border text-[10.5px] font-bold"
+                  style={chipColors(orgSurfaceStatusFor(id, archetype.surface))}
+                >
+                  {i + 1}
+                </span>
+              ) : (
+                <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-introduced bg-introduced-soft text-[10.5px] font-bold text-introduced">
+                  {i + 1}
+                </span>
+              )}
               <span className="text-[12.5px] leading-tight text-ink">{mitigation?.title ?? id}</span>
               <span className="ident ml-auto shrink-0 text-[10px] text-ink-3">{id}</span>
             </button>

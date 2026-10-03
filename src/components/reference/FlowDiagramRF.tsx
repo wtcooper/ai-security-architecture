@@ -27,13 +27,14 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { mitigationById, riskById, riskCode } from "@/lib/data";
+import { mitigationById, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { chipSpots, flowBadgeSpots, itemCells, placeTags, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
-import type { ArchBlock, Archetype, Scenario } from "@/lib/types";
+import { STATUS_META } from "@/components/StatusPill";
+import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
-import { blockTab, BLOCK_STYLE, OVERLAY_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
+import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
 
@@ -45,15 +46,19 @@ interface HoverCard {
 }
 
 /**
- * A pin's hover text: its note, then the organisation's own identifiers that reach the same
- * CoSAI entity, so a reader sees their control number next to the chip without leaving the
- * drawing. Rendered pre-line, so the org line stays its own line.
+ * A pin's hover text: its note, then, for a chip with org data on, the capability status its
+ * colour shows, then the organisation's own identifiers that reach the same CoSAI entity, so a
+ * reader sees their control number next to the chip without leaving the drawing. Rendered
+ * pre-line, so each org line stays its own line.
  */
-function pinBody(note: string | undefined, kind: EntityKind, id: string, show: boolean): string | undefined {
+function pinBody(note: string | undefined, kind: EntityKind, id: string, show: boolean, status?: DisplayStatus): string | undefined {
   const own = show ? orgEntriesFor(kind, id) : [];
-  if (!own.length) return note;
-  const line = `Org capabilities: ${own.map((o) => `${o.label} (${o.id})`).join(" · ")}`;
-  return note ? `${note}\n${line}` : line;
+  const lines = [
+    note,
+    status && `Capability support: ${STATUS_META[status].label}`,
+    own.length ? `Org capabilities: ${own.map((o) => `${o.label} (${o.id})`).join(" · ")}` : undefined,
+  ].filter(Boolean);
+  return lines.length ? lines.join("\n") : undefined;
 }
 
 type BlockNodeData = {
@@ -63,6 +68,8 @@ type BlockNodeData = {
   dim: boolean;
   /** Mitigation id -> chip number, so an item can show what it implements. */
   capNumber?: Map<string, number>;
+  /** With org data on, mitigation id -> its status on the drawing's surface, which colours the chip. */
+  capStatus?: Map<string, DisplayStatus>;
   /**
    * Mitigations pinned directly on a governance call-out. They join the call-out's own chip
    * row instead of hanging off a border the call-out no longer draws.
@@ -250,9 +257,8 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                     width: 16,
                     height: 16,
                     borderRadius: 8,
-                    background: "var(--paper, #fff)",
-                    border: "1.3px solid var(--chip, #4a5fd0)",
-                    color: "var(--chip, #4a5fd0)",
+                    borderWidth: 1.3,
+                    ...chipColors(data.capStatus?.get(id)),
                     font: "700 9.5px/14px var(--font-mono, monospace)",
                     textAlign: "center",
                   }}
@@ -301,9 +307,8 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                         width: 14,
                         height: 14,
                         borderRadius: 7,
-                        background: "var(--paper, #fff)",
-                        border: "1.2px solid var(--chip, #4a5fd0)",
-                        color: "var(--chip, #4a5fd0)",
+                        borderWidth: 1.2,
+                        ...chipColors(data.capStatus?.get(id)),
                         font: "700 8.5px/12px var(--font-mono, monospace)",
                         textAlign: "center",
                       }}
@@ -366,16 +371,15 @@ function ZoneNode({
   );
 }
 
-function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean }>>) {
+function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean; status?: DisplayStatus }>>) {
   return (
     <div
       style={{
         width: 18,
         height: 18,
         borderRadius: 9,
-        background: "var(--paper, #fff)",
-        border: "1.5px solid var(--chip, #4a5fd0)",
-        color: "var(--chip, #4a5fd0)",
+        borderWidth: 1.5,
+        ...chipColors(data.status),
         font: "700 10px/15px var(--font-mono, monospace)",
         textAlign: "center",
         opacity: data.dim ? 0 : data.faint ? 0.2 : 1,
@@ -416,6 +420,8 @@ interface EdgePin {
   n?: number;
   code?: string;
   w?: number;
+  /** With org data on, a chip's capability status. */
+  status?: DisplayStatus;
   title: string;
   body?: string;
 }
@@ -485,9 +491,8 @@ function BuildPathEdge(props: EdgeProps) {
                       width: 18,
                       height: 18,
                       borderRadius: 9,
-                      background: "var(--paper, #fff)",
-                      border: "1.5px solid var(--chip, #4a5fd0)",
-                      color: "var(--chip, #4a5fd0)",
+                      borderWidth: 1.5,
+                      ...chipColors(pin.status),
                       font: "700 10px/15px var(--font-mono, monospace)",
                       textAlign: "center",
                       opacity: pinOpacity(pin),
@@ -595,6 +600,9 @@ export function FlowDiagramRF({
     }
     const rects = layout.blocks;
     const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
+    const capStatus = orgOverlay
+      ? new Map(archetype.mitigations.map((id) => [id, orgSurfaceStatusFor(id, archetype.surface)]))
+      : undefined;
 
     const nodes: Node[] = [];
 
@@ -669,6 +677,7 @@ export function FlowDiagramRF({
           dim: false,
           onItemEnter: cardAt,
           capNumber,
+          capStatus,
           pinnedCaps:
             block.kind === "governance"
               ? archetype.pins.mitigations.filter((p) => p.at === id).map((p) => p.mitigation)
@@ -711,8 +720,9 @@ export function FlowDiagramRF({
           data: {
             n,
             dim: false,
+            status: capStatus?.get(pin.mitigation),
             title: `${n} · ${cap?.title ?? pin.mitigation} · ${pin.mitigation}`,
-            body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay),
+            body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)),
           },
           draggable: false,
           selectable: false,
@@ -812,6 +822,9 @@ export function FlowDiagramRF({
 
     // Edge-anchored pins, as offsets from the build midpoint.
     const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
+    const capStatus = orgOverlay
+      ? new Map(archetype.mitigations.map((id) => [id, orgSurfaceStatusFor(id, archetype.surface)]))
+      : undefined;
     const pinsByEdge = new Map<string, EdgePin[]>();
     const chipGroups = new Map<string, { mitigation: string; note?: string }[]>();
     for (const pin of archetype.pins.mitigations) {
@@ -835,8 +848,9 @@ export function FlowDiagramRF({
           dx: spot.x - geo.midX,
           dy: spot.y - geo.midY,
           n,
+          status: capStatus?.get(pin.mitigation),
           title: `${n} · ${cap?.title ?? pin.mitigation} · ${pin.mitigation}`,
-          body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay),
+          body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)),
         });
       });
       pinsByEdge.set(at, list);
