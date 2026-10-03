@@ -21,7 +21,7 @@ export const STATUS_STYLE: Record<DisplayStatus, { bg: string; border: string; t
   unmapped: { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675", dashed: true },
   notAssessed: { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675" },
   enabled: { bg: "#e8f6ef", border: "#a7dcc4", text: "#06845a" },
-  inProgress: { bg: "#fdf3e4", border: "#eecfa3", text: "#b45309" },
+  inProgress: { bg: "#fef8dc", border: "#ecd58a", text: "#a16207" },
   gap: { bg: "#fdeadf", border: "#f0c1a3", text: "#c2410c", dashed: true },
 };
 
