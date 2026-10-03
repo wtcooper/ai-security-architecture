@@ -170,16 +170,16 @@ export function FlowSequence({
             const dir = x2 > x1 ? 1 : -1;
             const start = x1 + dir * 11;
             const end = x2 - dir * 4;
-            // Every arrow carries the edge's label. A bidirectional edge may author it as
-            // "call / return", and the leg that runs against the authored direction shows
+            // Every arrow carries the edge's label. A bidirectional or outbound edge may author
+            // it as "call / return", and the leg that runs against the authored direction shows
             // the return half.
             // A step may carry its own label — what this arrow carries, on this walk — and
             // falls back to the edge's label, split "call / return" by direction on a
-            // bidirectional edge.
+            // bidirectional or outbound edge.
             const authored = archetype.edges.some((e) => e.from === from && e.to === to);
             const halves = edge?.label?.split(" / ") ?? [];
             const label =
-              st.label ?? (edge?.bidir && halves.length === 2 ? halves[authored ? 0 : 1] : edge?.label);
+              st.label ?? ((edge?.bidir || edge?.outbound) && halves.length === 2 ? halves[authored ? 0 : 1] : edge?.label);
             return (
               <g key={`${st.follow}-${step}`}>
                 <title>{`${step + 1}. ${titleOf(from)} → ${titleOf(to)}${st.note ? ` — ${st.note}` : ""}`}</title>

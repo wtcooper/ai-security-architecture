@@ -152,8 +152,9 @@ nesting, an optional `cosaiComponent` anchor, a `note`, and `items`.
 
 ### `edges`
 The paths. `from`, `to`, `path` (`primary` = a path we own, `external` = crossing outward,
-`governance` = a control-plane relationship), `bidir`, `label`, `note`, and an optional `route`
-hint for collision avoidance.
+`governance` = a control-plane relationship), `bidir` or `outbound` (only `from` opens it; the
+reply rides it, one arrowhead), `label`, `note`, and an optional `route` hint for collision
+avoidance. An edge between our bands and the external band is never `bidir`.
 
 ### `pins`
 `risks` and `capabilities`, each anchored `at` a block id or an `a->b` edge ref.
@@ -199,7 +200,8 @@ denylist both fail the build. An inline capability pinned on an edge must have a
 component, or a recorded deviation saying why it was absorbed.
 
 **Walks are real.** Every architecture has a walkthrough with a `moves` line. Every step of
-every walk follows an edge that exists (reversing one requires `bidir: true`). Every edge
+every walk follows an edge that exists (reversing one requires `bidir: true`, or `outbound:
+true` for the reply). Every edge
 carrying a risk pin is visited by some walk.
 
 **The drawing is legible.** No two blocks share a grid cell. No edge passes through a block. No

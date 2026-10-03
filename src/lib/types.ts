@@ -452,6 +452,12 @@ export interface ArchEdge {
   /** Drawn with arrowheads at both ends. */
   bidir?: boolean;
   /**
+   * Only `from` opens this connection, and what comes back rides it: drawn with one arrowhead,
+   * at `to`, and a walk may follow it in reverse as the reply. Every edge from our side to a
+   * party outside any agreement is drawn this way — nothing external reaches back in.
+   */
+  outbound?: boolean;
+  /**
    * For diagonal connections only: leave the source horizontally then turn (`hv`, the default),
    * or vertically then turn (`vh`). Authored when the default leg would cross another block —
    * the router is simple on purpose, and the fix for a collision is this hint or a better grid.

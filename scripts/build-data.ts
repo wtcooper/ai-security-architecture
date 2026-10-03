@@ -390,7 +390,7 @@ async function main() {
     const arch = archetypes.find((a) => a.id === inc.archetype);
     const archBlocks = new Set(arch?.blocks.map((b) => b.id) ?? []);
     const archEdges = new Set(arch?.edges.map((e) => `${e.from}->${e.to}`) ?? []);
-    const archBidir = new Set(arch?.edges.filter((e) => e.bidir).map((e) => `${e.from}->${e.to}`) ?? []);
+    const archBidir = new Set(arch?.edges.filter((e) => e.bidir || e.outbound).map((e) => `${e.from}->${e.to}`) ?? []);
     const parentOf = new Map(arch?.blocks.map((b) => [b.id, b.parent]) ?? []);
     const lineage = (id: string) => {
       const out = [id];
@@ -414,7 +414,7 @@ async function main() {
         }
         const [a, b] = ref.split("->");
         if (!archEdges.has(ref) && !archBidir.has(`${b}->${a}`)) {
-          fail(`${at}: path edge "${ref}" is not an edge of ${inc.archetype} (reverse needs bidir: true)`);
+          fail(`${at}: path edge "${ref}" is not an edge of ${inc.archetype} (reverse needs bidir: true or outbound: true)`);
           continue;
         }
         const ends = [...lineage(a), ...lineage(b)];
@@ -606,8 +606,9 @@ function checkMitigations(
  *     something the drawing does not show.
  *   - A pinned mitigation must apply on the architecture's surface per mitigations.yaml, which
  *     is what stops this tab and the Mitigations tab drifting into contradiction.
- *   - Scenario steps walk real edges. A step may follow a bidirectional edge in reverse; a
- *     one-way edge walked backwards is a wrong diagram, not a wrong scenario.
+ *   - Scenario steps walk real edges. A step may follow a bidirectional edge in reverse, or
+ *     an outbound one back as its reply; a one-way edge walked backwards is a wrong diagram,
+ *     not a wrong scenario.
  */
 const BLOCK_KINDS = new Set(["actor", "service", "provider", "external", "governance", "boundary", "origin"]);
 const PATH_CLASSES = new Set(["primary", "external"]);
@@ -742,7 +743,9 @@ function checkArchetypes(
       const at = `${where} edge ${key}`;
       if (edgeKeys.has(key)) fail(`${at}: duplicate edge`);
       edgeKeys.add(key);
-      if (edge.bidir) bidir.add(key);
+      // Reverse is legal on a bidirectional edge, and on an outbound one as the reply it carries.
+      if (edge.bidir || edge.outbound) bidir.add(key);
+      if (edge.bidir && edge.outbound) fail(`${at}: bidir and outbound are exclusive — outbound means only ${edge.from} opens it`);
       if (edge.from === edge.to) fail(`${at}: loops back on itself`);
       if (!blockIds.has(edge.from)) fail(`${at}: unknown source block ${edge.from}`);
       if (!blockIds.has(edge.to)) fail(`${at}: unknown target block ${edge.to}`);
@@ -755,7 +758,7 @@ function checkArchetypes(
     }
 
     // --- Pins ----------------------------------------------------------------
-    // A pin may name a bidirectional edge from either end; it is stored under the authored
+    // A pin may name a bidirectional or outbound edge from either end; it is stored under the authored
     // direction, because every renderer looks edges up by that key and would drop the pin.
     const resolvePin = (at: string, ref: string): string => {
       if (blockIds.has(ref) || edgeKeys.has(ref)) return ref;
@@ -821,7 +824,7 @@ function checkArchetypes(
       (walk.steps ?? []).forEach((step, i) => {
         const [a, b] = (step.follow ?? "").split("->");
         if (!edgeKeys.has(step.follow) && !(a && b && bidir.has(`${b}->${a}`))) {
-          fail(`${at}: step "${step.follow}" follows no edge (reverse needs bidir: true)`);
+          fail(`${at}: step "${step.follow}" follows no edge (reverse needs bidir: true or outbound: true)`);
         }
         // A step label sits on a sequence arrow between two lifelines; past ~40 characters it
         // collides with its neighbours.
@@ -943,6 +946,26 @@ function checkArchetypes(
         uncontrolledCrossings.push(
           `${where}: ${e.from}->${e.to} leaves the ${from} band for ${to} without an inline control pinned at either end`,
         );
+      }
+
+      // Nothing outside an agreement reaches back in. Between a band we operate and the
+      // external band, an edge is a call our side opens (`outbound`, one arrowhead, the reply
+      // riding it) or a one-way pull of content into a mirror or store. Two-way would draw the
+      // outsider connecting into our systems; a party we let do that holds an agreement and
+      // belongs in the vendor band.
+      const parentOf = new Map(arch.blocks.map((b) => [b.id, b.parent]));
+      const bandOf = (id: string) => {
+        let b: string | undefined = id;
+        while (b && !ownerOf.get(b)) b = parentOf.get(b);
+        return b ? ownerOf.get(b) : undefined;
+      };
+      for (const e of arch.edges) {
+        const ends = [bandOf(e.from), bandOf(e.to)];
+        if (!ends.includes("external") || !ends.some((o) => OURS.has(o ?? ""))) continue;
+        if (e.bidir)
+          fail(`${where}: ${e.from}->${e.to} is two-way between our band and the external band — draw it outbound from our side, or move a party we hold an agreement with to the vendor band`);
+        if (e.outbound && ends[0] === "external")
+          fail(`${where}: ${e.from}->${e.to} is outbound from the external band — an outbound edge starts on our side`);
       }
     }
     // A risk nobody walks past is the defect worth catching. The blunt version of this rule
@@ -1090,6 +1113,7 @@ type PatternLeg = {
   toBand?: string;
   path?: string;
   bidir?: boolean;
+  outbound?: boolean;
   route?: string;
   label?: string;
 };
@@ -1164,6 +1188,7 @@ function checkPatterns(
         // the same chain, so enforcing it would set the registry against the collision checker.
         if (leg.path && found.path !== leg.path) drift.push(`path ${found.path} (pattern says ${leg.path})`);
         if (leg.bidir && !found.bidir) drift.push("not bidirectional (pattern is)");
+        if (leg.outbound && !found.outbound) drift.push("not outbound (pattern is)");
         if (leg.label && found.label !== leg.label)
           drift.push(`label "${found.label ?? ""}" (pattern says "${leg.label}")`);
         return drift.length

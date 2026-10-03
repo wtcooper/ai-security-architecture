@@ -171,6 +171,18 @@ band gutter beneath them, and spaces the call-outs across it in authored (`row`,
 their `col` orders them and nothing more. A governance call-out is drawn without a component
 box (title, icon, chip numbers only), because it is a control, not a component.
 
+### Nothing external reaches back in
+
+Between a band we operate (`endpoint`, `cloud`) and `external`, an edge is either a call our
+side opens or a one-way pull of content into a mirror or store. A call we open is drawn
+`outbound: true` from our side: one arrowhead, pointing out, and the reply rides it, so a walk
+may follow it back. It is never `bidir`. An outsider that may connect to us — a tool, a peer
+agent, a relay — holds an agreement, and so sits in the vendor band; the vendor reaches our
+systems only through the AI gateway, over the tunnel. The build fails a two-way edge across
+this boundary, and an outbound edge that starts on the external side. *(Failed as: two-headed
+arrows between the AI gateway and external Tool services on seven drawings, read as public
+tools connecting into our gateway.)*
+
 ### Bands are locations, not a pipeline
 
 A band says who operates an environment. It does **not** imply an ordering that traffic must
@@ -432,7 +444,8 @@ to any architecture can be checked against them without reading the whole docume
    Egress control blocks invented across four architectures to satisfy the crossing rule this
    rule replaced.)*
 13. **Flow integrity.** Flow ids match `^F\d+$` and are unique; every path step follows a real
-   edge (reverse legal on bidirectional edges); every `moves` statement is present; every
+   edge (reverse legal on bidirectional edges, and on outbound edges as the reply); every
+   `moves` statement is present; every
    mitigation a flow claims is pinned on the drawing.
 
 ### Families that must stay in step
