@@ -672,13 +672,13 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-16 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+17 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
 | Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
-| Third-party SaaS | 4 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime |
+| Third-party SaaS | 5 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents |
 
 ### 4a. Risks no architecture pins — 2 of 36
 
@@ -974,16 +974,27 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Policy & authorization | governance | (none) |
 | API/SDK managed agent runtime | Supply-chain assurance | governance | (none) |
 | API/SDK managed agent runtime | Observability & response | governance | (none) |
+| Persistent managed agents | Vendor service | provider | `componentApplication` |
+| Persistent managed agents | Managed runtime | provider | `componentReasoningCore` |
+| Persistent managed agents | Native tools | provider | `componentTools` |
+| Persistent managed agents | Tool services | service | `componentTools` |
+| Persistent managed agents | Downstream services | external | `componentDataSources` |
+| Persistent managed agents | Downstream services | external | `componentDataSources` |
+| Persistent managed agents | Identity services | governance | (none) |
+| Persistent managed agents | Secrets & key management | governance | (none) |
+| Persistent managed agents | Policy & authorization | governance | (none) |
+| Persistent managed agents | Supply-chain assurance | governance | (none) |
+| Persistent managed agents | Observability & response | governance | (none) |
 
 ## 5. Controls-guidance coverage
 
-15 of 16 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
+16 of 17 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | Browser AI agents & extensions |
 | Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
-| Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime | — |
+| Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents | — |
 
 ### 5a. Documents
 
@@ -1004,6 +1015,7 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
 | API/SDK managed agent runtime | hybrid | draft | 9 | Execution Isolation, Agent Egress Control |
+| Persistent managed agents | use | draft | 7 | _none_ |
 
 ### 5b. AI tooling registry
 
@@ -1025,7 +1037,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Cline | cline | First-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
-| Grok Bot | cursor | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
+| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/13 | Multi-factor Authentication |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
@@ -1040,12 +1052,13 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | MLflow Tracking Server and Model Registry | mlflow | Fine-tuning and model registry pipeline | 2026-09 | 15/15 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | Ollama | ollama | Local model runtime | 2026-09 | 11/11 | _none_ |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ |  |
 | OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 19/19 | _none_ |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 15/15 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
+| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/13 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 16/16 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | opencode | opencode | First-party coding & desktop agents | 2026-09 | 19/19 | _none_ |  |

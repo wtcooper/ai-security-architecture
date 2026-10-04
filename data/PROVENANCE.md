@@ -248,7 +248,18 @@ with the reason. A disabled architecture returns to the app only by an explicit 
 reactivate it.
 
 Named products appear only in each architecture's `exemplars`, each carrying a source and an
-`asOf` date, and are rendered as dated illustration. This is a deliberate departure from the
+`asOf` date, and are rendered with a short explanation above the diagram. The same exemplar
+records supply the page and architecture search; do not duplicate product lists into summary
+prose. Prefer two to four recognizable, established products or frameworks whose selected
+execution mode fits the reference. Newly launched products from mainstream providers may be
+included with their beta/preview status stated; inclusion does not assert market share or
+complete implementation of the reference controls. Use fewer examples when the category is
+still emerging rather than fill the list with niche products.
+
+Recheck primary product documentation each quarter and when a launch, retirement or hosting
+change affects the architecture. Update the example's name, mode, note, URL and `asOf` together;
+an updated date means the example was checked, not every tooling control reverified. Keep
+tooling mappings and dated evidence aligned with the selected mode. This is a deliberate departure from the
 vendor-neutral discipline of `mitigations.yaml`: a reference architecture is not usable without
 knowing what it is a reference to, and this is a domain where names moved fast enough during 2026
 that an undated one becomes a wrong claim. The architectures themselves name no products.

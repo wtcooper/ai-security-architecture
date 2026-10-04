@@ -2,8 +2,8 @@
 
 /**
  * The prose below the diagram. The diagram and the rail carry the security content — this panel
- * carries the reading: how the architecture works, why it is its own archetype, what it looks
- * like in the wild, and where the claims come from. Collapsed by default except the narrative,
+ * carries the reading: how the architecture works, why it is its own archetype, and where
+ * the claims come from. Product examples sit above the drawing. Collapsed except the narrative,
  * because the earlier version of this tab taught that showing everything at once reads as noise.
  */
 import { useState, type ReactNode } from "react";
@@ -21,35 +21,6 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
       {archetype.distinguishedBy?.length ? (
         <Section title="Why this is its own archetype" count={null}>
           <Prose blocks={archetype.distinguishedBy} size="sm" />
-        </Section>
-      ) : null}
-
-      {archetype.exemplars?.length ? (
-        <Section title="Real-world instances" count={archetype.exemplars.length}>
-          <p className="mb-3 text-[12px] leading-snug text-ink-3">
-            Dated illustrations, not the taxonomy — the architecture itself stays vendor-neutral.
-          </p>
-          <div className="space-y-3">
-            {archetype.exemplars.map((ex) => (
-              <div key={ex.name}>
-                <p className="text-[13.5px] font-semibold text-ink">
-                  {ex.url ? (
-                    <a href={ex.url} target="_blank" rel="noreferrer" className="hover:underline">
-                      {ex.name}
-                    </a>
-                  ) : (
-                    ex.name
-                  )}
-                  {ex.asOf && (
-                    <span className="ident ml-2 text-[10.5px] font-medium text-ink-3">
-                      as of {ex.asOf}
-                    </span>
-                  )}
-                </p>
-                <p className="mt-0.5 text-[13px] leading-snug text-ink-2">{ex.note}</p>
-              </div>
-            ))}
-          </div>
         </Section>
       ) : null}
 

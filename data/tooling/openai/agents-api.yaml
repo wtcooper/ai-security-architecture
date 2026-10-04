@@ -1,7 +1,6 @@
 # OpenAI Agents API — one entity per product × reference architecture. Facts are dated (asOf)
 # and cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
-# Added 2026-09-17: public beta announced 2026-09-10 (date from secondary coverage; the
-# announcement page shows none). Fetched overview, architecture, environments (openai-hosted,
+# Added 2026-09-17: public beta announced 2026-09-10. Fetched overview, architecture, environments (openai-hosted,
 # self-hosted, lifecycle, security), tools (mcp, vaults, functions), observability, tracing,
 # your-data. Not verified: an MCP approval gate for this API (documented for Responses only),
 # trace retention, EU residency, sandbox isolation technology.
@@ -13,6 +12,8 @@
 # agents-api and help.openai.com (MFA 7967234, SSO for API Platform 9641482, admin portal 12289294) 403.
 # Still not verified: trace retention, how trace export is enabled per organisation, the sandbox isolation
 # technology, and whether SSO or MFA can be required for platform.openai.com sign-in.
+# 2026-10-03: refreshed browser approval scope after September 29 computer-use announcement;
+# other rows retain their own verification dates.
 vendor: openai
 family: OpenAI Agents API
 tools:
@@ -34,25 +35,26 @@ tools:
           Outbound-only connection; the executor key can only connect environments.
     architecture: archManagedAgentRuntime
     status: beta
-    asOf: "2026-09"
+    asOf: "2026-10"
     summary:
       - >-
         OpenAI's managed Codex harness behind an API (header OpenAI-Beta agents=v1): you define an agent
-        (model, instructions, tools, MCP servers, skills, plugins), optionally an environment (OpenAI-hosted
-        Linux sandbox, or none, or a self-hosted executor), and run sessions that stream events; the vendor
-        runs the loop, compaction, recovery, subagents and the sandbox. Function tools invert the loop — the
-        session pauses with requires_action until your code returns the result — which is the general
-        human-approval checkpoint. Hosted sandboxes have network enabled by default, a "restricted" mode of up
-        to 100 exact hostnames, and expire after an hour idle; files under /workspace/outputs survive as
-        artifacts.
+        (model, instructions, tools, MCP servers, skills, plugins), optionally an environment
+        (OpenAI-hosted Linux sandbox, or none, or a self-hosted executor), and run sessions that stream
+        events; the vendor runs the loop, compaction, recovery, subagents and the sandbox. Function tools
+        invert the loop — the session pauses with requires_action until your code returns the result —
+        where the application can enforce human approval for its functions. Hosted sandboxes have network
+        enabled by default, a "restricted" mode of up to 100 exact hostnames, and expire after an hour
+        idle; files under /workspace/outputs survive as artifacts.
       - >-
-        Governance is API-native and thin: allowed_tools per MCP server, vaults that hold MCP bearer tokens,
-        OAuth grants and sandbox API secrets (substituted at egress for named hosts) the agent never receives,
-        a restricted executor key, a dashboard trace view with a pull-based OTLP JSON export per session, and
-        no policy language, approval mode for hosted tools, version history, session budget or per-agent
-        principal. Sessions
-        persist until deleted; the API supports US data residency only and is not eligible for zero data
-        retention, self-hosting included.
+        Governance is API-native and thin: allowed_tools per MCP server, vaults that hold MCP bearer
+        tokens, OAuth grants and sandbox API secrets (substituted at egress for named hosts) the agent
+        never receives, a restricted executor key, a dashboard trace view with a pull-based OTLP JSON
+        export per session, and no general per-action policy language or per-agent principal. Hosted
+        browser use exposes origin and sign-in approval requests to the application; this does not
+        establish approval for every browser action or for other hosted tools. Sessions persist until
+        deleted; the API supports US data residency only and is not eligible for zero data retention,
+        self-hosting included.
     facts:
       - label: Plans
         value: >-
@@ -81,19 +83,29 @@ tools:
     items:
       - title: Choose the network mode per environment template
         body:
-          - Hosted sandboxes default to network enabled. Set restricted with an explicit allowed_domains list
-            (exact hostnames, no wildcards) in the environment template; session overrides cannot broaden a
-            template's policy.
+          - Hosted sandboxes default to network enabled. Set restricted with an explicit allowed_domains
+            list (exact hostnames, no wildcards) in the environment template; session overrides cannot
+            broaden a template's policy.
         links:
           - title: OpenAI-hosted environments
             url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
       - title: Keep credentials in vaults and out of the sandbox
         body:
           - Attach vaults for MCP bearer tokens and OAuth grants; keep the API key outside the sandbox
-            (reserved environment names are rejected) and give executors only the restricted environment key.
+            (reserved environment names are rejected) and give executors only the restricted environment
+            key.
         links:
           - title: Vaults
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
+      - title: Bind browser approvals to the caller and pending request
+        body:
+          - When computer use is enabled, handle origin-access and sign-in requests in the application.
+            Verify caller/session ownership and the current request_id before returning a decision;
+            remove obsolete approval controls. Origin admission is not approval of every later action.
+            Cancelling a request does not stop the task.
+        links:
+          - title: Computer use
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
     riskNotes:
       - risk: riskPromptInjection
         note: >-
@@ -346,7 +358,8 @@ tools:
             url: https://developers.openai.com/api/docs/guides/agents-api/architecture
         note: >-
           Partial by the runtime rule: per-tool on/off exists for MCP tools and web search has a domain list, but
-          no tool carries an approval mode or argument scoping, the built-in shell and file tools come with any
+          MCP tool-name admission does not establish argument-level authorization. Browser origin/sign-in
+          approvals have a separate, narrower scope. The built-in shell and file tools come with any
           environment, subagents inherit the MCP tools, credentials and allowed tools, and programmatic tool
           calling lets model-generated code call the same tools. It all lives in the definition, and the next
           definition can undo it: the key that creates sessions (api.agents.write) can pass any inline agent,
@@ -385,24 +398,27 @@ tools:
       - mitigation: AML.M0029
         coverage: partial
         mechanism: >-
-          Function tools: the session emits agent.session.requires_action listing the call's name and arguments
-          and waits until your application posts agent.session.input.tool_result with the same turn_id and
-          call_id
+          Application-executed function tools pause for results; hosted computer use also exposes
+          origin-access and browser-authentication approval requests
         steps:
-          - title: Route consequential actions through function tools
+          - title: Gate consequential custom actions before execution
             body:
-              - Define the action as a function in agent.tools; when required_actions lists the call, show a person
-                the function and its arguments and return the result (or success false with an error) only after
-                they decide.
+              - Require an authenticated human decision in the function handler before executing the
+                requested effect. Bind the decision to the caller, session, function arguments and
+                pending call.
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
+          - title: Handle browser consent at its documented scope
+            body:
+              - Present origin and sign-in requests to the authorized user and answer the current
+                request_id. Treat origin admission and login consent separately from approval of later
+                destructive or external effects.
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
         note: >-
-          Partial by the runtime rule: approval exists only for the tools the application executes. A function
-          call is bound to the exact call (turn_id, call_id, arguments) and the session waits for the result,
-          so a person can decide before anything runs; the approval UI, expiry and re-checking are the
-          application's. The runtime's own tools — shell, apply-patch, MCP, web search and subagent spawning —
-          run with no approval gate, this API's MCP tool schema has no approval field, and subagents cannot use
-          function tools.
-        verified: "2026-09-25"
+          Partial: the application supplies authenticated approval handling and expiry. Browser
+          origin/sign-in consent does not prove an approval gate for each subsequent action. Other hosted
+          tools need their own documented restrictions; a function-tool checkpoint does not cover bypass
+          routes.
+        verified: "2026-10-03"
         migration:
           from:
             - capabilityHitlControls
@@ -696,9 +712,8 @@ tools:
       - mitigation: cap-agent-action-policy-enforcement
         coverage: external
         mechanism: >-
-          No per-call policy engine, tenant floor or ask mode in the runtime; MCP calls can be routed through an
-          MCP gateway by server_url, and function-tool calls reach the application's handlers with their
-          arguments before they run
+          Customer MCP gateways and function handlers can enforce caller, tool, argument and resource
+          policy; browser origin/sign-in approval is a narrower native mechanism
         evidence:
           - title: MCP connections — allowed_tools, connection_origin, server_url
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
@@ -706,16 +721,14 @@ tools:
             url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
           - title: Configuring Agents — inline and saved definitions
             url: https://developers.openai.com/api/docs/guides/agents-api/configuration
+          - title: "Computer use: bounded browser approvals"
+            url: https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
         note: >-
-          External: nothing in the runtime evaluates a proposed call against rules. allowed_tools admits MCP
-          tool names, and no default-deny tool gateway, policy language, guardrail floor or per-tool ask mode is
-          documented. A product around it can take the decision for MCP traffic: point each mcp entry's
-          server_url at an MCP gateway (reachable from OpenAI's service, or from a self-hosted environment with
-          connection_origin environment) that evaluates tool, arguments and caller before forwarding. Function
-          tools reach the application unevaluated, so the same decision must exist in its handlers. The hosted
-          shell, apply-patch and web search have no decision point at all, bounded only by the environment's
-          network policy and by environment.type none.
-        verified: "2026-09-25"
+          External for general action policy: evaluate permitted effects in the gateway or application
+          handler before dispatch. MCP tool-name admission and browser origin consent do not supply
+          argument/resource authorization for every operation. Do not assume that browser approval
+          support also gates hosted shell, file tools, web search or delegation.
+        verified: "2026-10-03"
       - mitigation: AML.M0031
         coverage: partial
         mechanism: >-
@@ -780,3 +793,5 @@ tools:
         url: https://developers.openai.com/api/docs/guides/agents-api/tracing
       - title: Introducing the Agents API
         url: https://openai.com/index/introducing-the-agents-api/
+      - title: Computer use — browser approval requests
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use

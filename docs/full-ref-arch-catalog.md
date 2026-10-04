@@ -10,7 +10,7 @@ re-run `npm run data`).
 Most of the parked entries fell to one test: *is this a distinct architecture, or an agent
 workflow with a different tool set, a single node, or a control drawn as a place?*
 
-## Active — 16
+## Active — 17
 
 ### Endpoint (5)
 
@@ -98,7 +98,7 @@ workflow with a different tool set, a single node, or a control drawn as a place
   pipeline draws external on the left because it is an ingest pipeline, and self-hosted
   inference is the local model runtime with an AI gateway in front of it.
 
-### Third-party SaaS (4)
+### Third-party SaaS (5)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
@@ -106,6 +106,14 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 2 | UI/low-code managed agent runtime | `archLowCodeAgentBuilder` | `saas-low-code-agent-builder.yaml` |
 | 3 | Coding & desktop session managed agent runtime | `archHostedAgentSessions` | `saas-hosted-agent-sessions.yaml` |
 | 4 | API/SDK managed agent runtime | `archManagedAgentRuntime` | `saas-managed-agent-runtime.yaml` |
+| 5 | Persistent managed agents | `archPersistentManagedAgents` | `saas-persistent-managed-agents.yaml` |
+
+- **Persistent managed agents** (added 2026-10-03) covers continuing vendor-hosted agents
+  such as OpenAI Dots and Grok Bot. Durable context, standing permissions, browser sessions,
+  recurring work and recovery span individual tasks. The entry UI may be the same as enterprise
+  chat, but the execution paths and lifecycle need their own reference. Reuses standard component
+  roles; optional local access and delegated coding have separate deployment requirements.
+  Ending a task does not imply revoking its grants or deleting retained state.
 
 - The managed agent runtime moved from Cloud & hosted to SaaS — it is a vendor-operated
   runtime the customer configures — and split by author surface: **UI/low-code** (builder UIs:

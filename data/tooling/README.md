@@ -4,8 +4,9 @@ Named products, one entity per **product × reference architecture**, under
 `<vendor>/<family>.yaml`. The registry answers the question the taxonomy cannot: *for the tool we
 actually run, which of the reference controls does the vendor let us switch on, and where?*
 
-This is the only layer of the repository that names vendors, so the exemplar rule applies to
-every entry: dated (`asOf`), sourced from the vendor's own documentation, and every operator step
+Detailed product controls live here; architecture `exemplars` provide the short product
+introductions shown above each diagram. The exemplar rule applies to every entry: dated
+(`asOf`), sourced from the vendor's own documentation, and every operator step
 linking to the page that documents it. Nothing is recalled from memory. `npm run audit` flags
 entries older than six months and lists the pinned mitigations each tool does not yet address.
 
@@ -101,11 +102,18 @@ Applied by the `tooling-onboard` skill under `.claude/skills/`:
 3. Choose the architecture by surface class (coding shells → third-party coding agent;
    vendor-hosted coding sessions started from a local harness, the vendor's web or chat surfaces,
    a repository event or a schedule → coding & desktop session managed agent runtime;
-   programmatic API/SDK runtimes → API/SDK managed agent runtime; chat and add-ins → enterprise AI chat; autonomous
-   personal agents → personal agent), and write `controls[]` only for its pins.
+   programmatic API/SDK runtimes → API/SDK managed agent runtime; chat and add-ins → enterprise AI chat;
+   persistent vendor-hosted agents with continuing authority → persistent managed agents;
+   self-operated personal agents → personal agent). Classify by execution and authority,
+   not the launcher's UI; write `controls[]` only for that reference's pins.
 4. Record `asOf`, a `verified` date per control, advisories from 2025–26, and the docs index.
 
 ## Coverage status
+
+The October 2026 architecture exemplar refresh updates the short, sourced product examples
+shown above diagrams. It does not reverify every historical control row in this registry.
+New or changed control evidence carries its own `verified` date. Products may illustrate more
+than one architecture; a control assessment applies only to its recorded product × architecture.
 
 Verified 2026-09-10 for Anthropic, OpenAI, Cursor and GitHub: every entity addresses every
 mitigation pinned on its architecture. A second pass the same day re-opened every URL against the
@@ -136,6 +144,13 @@ a draft grant type and a class of platforms, not products.
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.
+
+- October 2026 example-only additions — Google ADK, Atlassian Rovo A2A Gateway, NVIDIA NIM
+  and Hugging Face Transformers, plus Gemini Enterprise app/Workflow Builder, Amazon Quick
+  Automate and ChatGPT Work Cloud, have sourced architecture examples but no detailed control
+  assessment yet. Their examples explain the implementation role; they do not claim product
+  control coverage. Existing example-only exclusions below remain in effect. See
+  `docs/refarch-review/2026-10-03/exemplar-refresh-notes.md` for selection and mode details.
 
 - Architecture exemplars not onboarded (scope decision 2026-09-25: existing entities plus one or two mainstream products per drawing) — Perplexity Comet, Dia, Microsoft Edge Copilot Mode, Gemini in Chrome (browser AI); Goose (first-party coding); llama.cpp server (local runtime); Zapier Agents (low-code); Sierra (single agent); Intercom Fin, Decagon (chat agent); Atlassian Remote MCP Server, Cloudflare remote MCP hosting (remote MCP); KServe, SGLang (self-hosted inference); Axolotl, Hugging Face PEFT (training); Temporal, LangGraph, Microsoft Agent Framework (multi-agent workflow); the A2A specification, A2A-enabled agent platforms and the identity-assertion grant (federation).
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.

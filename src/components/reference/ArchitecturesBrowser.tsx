@@ -26,7 +26,7 @@ const flat = (blocks?: Paragraph[]) =>
 const haystack = new Map([
   ...archetypesInOrder.map((a): [string, string] => [
     a.id,
-    `${a.title} ${a.abbrev ?? ""} ${flat(a.summary)} ${flat(a.description)}`.toLowerCase(),
+    `${a.title} ${a.abbrev ?? ""} ${flat(a.summary)} ${flat(a.description)} ${(a.exemplars ?? []).map((ex) => `${ex.name} ${ex.note}`).join(" ")}`.toLowerCase(),
   ]),
   ...landscape.views.map((v): [string, string] => [v.id, `${v.title} ${v.basis} ${v.description} enterprise landscape`.toLowerCase()]),
 ]);
