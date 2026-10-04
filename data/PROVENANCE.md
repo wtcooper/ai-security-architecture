@@ -248,8 +248,9 @@ with the reason. A disabled architecture returns to the app only by an explicit 
 reactivate it.
 
 Named products appear only in each architecture's `exemplars`, each carrying a source and an
-`asOf` date, and are rendered with a short explanation above the diagram. The same exemplar
-records supply the page and architecture search; do not duplicate product lists into summary
+`asOf` date for maintenance. Product names render as one introductory sentence in the description
+above the diagram, without dates or a separate examples section. The same exemplar records
+supply that sentence and architecture search; do not duplicate product lists in authored summary
 prose. Prefer two to four recognizable, established products or frameworks whose selected
 execution mode fits the reference. Newly launched products from mainstream providers may be
 included with their beta/preview status stated; inclusion does not assert market share or

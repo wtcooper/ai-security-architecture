@@ -110,6 +110,9 @@ export function ArchitecturesBrowser() {
   };
 
   const summary = typeof archetype.summary[0] === "string" ? archetype.summary[0] : "";
+  const examples = new Intl.ListFormat("en", { type: "conjunction" }).format(
+    (archetype.exemplars ?? []).map((example) => example.name),
+  );
 
   return (
     <>
@@ -179,7 +182,9 @@ export function ArchitecturesBrowser() {
                 {archetype.title}
               </h2>
             </div>
-            <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">{summary}</p>
+            <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">
+              {examples && `Examples include ${examples}. `}{summary}
+            </p>
             <p className="mt-2 flex flex-wrap gap-x-3 text-[11.5px] text-ink-3">
               <span>{archetype.blocks.length} blocks</span>
               <span>{archetype.mitigations.length} mitigations</span>

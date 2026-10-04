@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * One architecture on the page: product examples, the drawing at full width, then one tab
+ * One architecture on the page: the drawing at full width, then one tab
  * strip beneath it — overview, sequence flows, tools, controls (with the guidance folded in), risks. One panel is
  * visible at a time and nothing is expanded by default, so the page never shows two lists
  * and a sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
@@ -85,26 +85,6 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
 
   return (
     <div className="mt-3">
-      {archetype.exemplars?.length ? (
-        <section aria-label="Product examples" className="mb-5 rounded-xl border border-line bg-paper px-4 py-3">
-          <h3 className="eyebrow">Examples of this architecture</h3>
-          <ul className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            {archetype.exemplars.map((ex) => (
-              <li key={ex.name} className="text-[13px] leading-snug">
-                {ex.url ? (
-                  <a href={ex.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:underline">
-                    {ex.name}
-                  </a>
-                ) : (
-                  <span className="font-semibold text-ink">{ex.name}</span>
-                )}
-                {ex.asOf && <span className="ml-2 text-[11px] text-ink-3">as of {ex.asOf}</span>}
-                <p className="mt-0.5 text-ink-2">{ex.note}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
       {narrow && (
         <button
           type="button"

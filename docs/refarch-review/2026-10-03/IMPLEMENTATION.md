@@ -1,5 +1,9 @@
 # Architecture examples and persistent agents — implemented 2026-10-03
 
+**Presentation update, 2026-10-04:** product names now appear as a single opening sentence in
+the description. The separate examples section and visible dates were removed; source dates
+remain in the maintained data. The checks below record the original October 3 presentation.
+
 ## Result
 
 All **17 reference architectures** now show their examples above the diagram, beneath the architecture summary. The catalogue contains **53 dated examples**, sourced from official provider/project documentation and checked for October 2026. Each entry names the relevant execution mode and briefly explains the fit. Architecture search includes example names and notes.
