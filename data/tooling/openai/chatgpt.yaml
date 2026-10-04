@@ -103,10 +103,10 @@ tools:
           - title: OpenAI Compliance Platform for Enterprise and Edu customers
             url: https://help.openai.com/en/articles/9261474-openai-compliance-platform-for-enterprise-and-edu-customers
     riskNotes:
-      - risk: riskSensitiveDataDisclosure
+      - risk: riskExcessiveDataHandlingDuringInference
         note: >-
-          Shared connections use the connected account's permissions, which the vendor warns may be broader
-          than the individual user's; Work Local ships file excerpts and screenshots.
+          Work Local ships file excerpts and screenshots to the service, and shared connections retrieve with the
+          connected account's permissions, which the vendor warns may be broader than the individual user's.
       - risk: riskPromptInjection
         note: >-
           The hosted and built-in browsers and connected apps feed arbitrary content to the model; OpenAI's
@@ -122,79 +122,6 @@ tools:
           unless pinned to a commit; custom MCP apps stay on the admin-approved tool snapshot until an admin
           refreshes and republishes them.
     controls:
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          Admin Console > Global settings > Access > Single Sign-On with the ChatGPT sign-in policy set to
-          Required, verified domains under Access > Domains; MFA itself is enforced by the organisation's IdP
-        steps:
-          - title: Require SSO for the workspace
-            body:
-              - >-
-                In Admin Console (admin.openai.com) open Global settings > Access > Single Sign-On and, after
-                testing the connection, set the ChatGPT product policy (or the workspace override) to Required;
-                Required applies to members whose email is on a verified domain the policy covers.
-            url: https://help.openai.com/en/articles/9534785-single-sign-on-sso-setup-for-openai-products
-          - title: Verify every sign-in domain
-            body:
-              - >-
-                Under Global settings > Access > Domains add each exact domain and subdomain, publish the DNS TXT
-                record, select Check Domain, then use Manage eligibility to scope it to the intended workspaces.
-            url: https://help.openai.com/en/articles/8871611-verifying-your-domain-for-openai-identity
-          - title: Enforce MFA in the identity provider
-            body:
-              - >-
-                ChatGPT doesn't provide workspace-wide MFA enforcement, so require MFA and conditional access on
-                the IdP application behind the SSO connection.
-            url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
-          - title: Bound the token paths that skip the IdP
-            body:
-              - >-
-                In Workspace settings > Permissions & roles set Access token expiration limit and grant token
-                creation only to named owners; revoke tokens at chatgpt.com/admin/access-tokens.
-            url: https://learn.chatgpt.com/docs/enterprise/access-tokens
-        note: >-
-          Partial by the rule applied to every vendor on this drawing: the product can enforce SSO-only sign-in
-          for verified-domain members (policy Required), so the IdP's MFA governs each interactive login, but MFA
-          lives in the IdP — the MFA article says MFA "cannot currently be enforced at the ChatGPT workspace"
-          level, and the Work admin FAQ says the same. Paths that skip the IdP prompt: invited members from other
-          domains may still use another permitted sign-in method (turning off Allow External Domain Invites stops
-          only new invitations); personal accounts, which the allowed-workspace header rather than SSO keeps off
-          managed networks (see D3-OTF); Codex and Workspace Agent access tokens and service-account tokens (the
-          expiration limit applies to new tokens only); workspace Admin keys, whose expiry can be Never; and
-          existing sessions — switching the policy to Required can sign affected users out, but session lifetime
-          is not documented and a user's Log out of all devices takes up to 30 minutes. Domain claiming (a
-          separate request to OpenAI) also blocks corporate app connections from personal or other workspaces.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                SCIM provisioning, workspace roles and custom roles (Permissions & roles), access-token
-                expiration limit
-              note: >-
-                SAML/OIDC setup lives in the Help Center, which returned 403 today; the roles model is
-                verified.
-              steps:
-                - title: Provision from the IdP
-                  body:
-                    - SCIM provisions membership and groups (manually managed or IdP managed); group
-                      membership alone grants no feature permission.
-                  url: https://learn.chatgpt.com/docs/enterprise/groups-and-provisioning
-                - title: Assign roles with deny-wins semantics
-                  body:
-                    - Owner, Admin, Member, Analytics Viewer and custom roles carry Default / On / Off per
-                      feature; an explicit Off in any role blocks access.
-                  url: https://learn.chatgpt.com/docs/enterprise/roles-and-workspace-permissions
-                - title: Bound token lifetime
-                  body:
-                    - Owners set "Access token expiration limit" in Permissions & roles.
-                  url: https://learn.chatgpt.com/docs/enterprise/access-tokens
-              verified: 2026-09-10
       - mitigation: D3-APA
         coverage: native
         mechanism: >-
@@ -224,6 +151,19 @@ tools:
                 domain-wide delegation for administrator-managed sync), or turn off the actions whose scopes you
                 will not grant.
             url: https://help.openai.com/en/articles/11509118-admin-controls-security-and-compliance-for-plugins-and-apps
+          - title: Require SSO for the workspace
+            body:
+              - >-
+                In Admin Console (admin.openai.com) open Global settings > Access > Single Sign-On and, after
+                testing the connection, set the ChatGPT product policy (or the workspace override) to Required;
+                Required applies to members whose email is on a verified domain the policy covers.
+            url: https://help.openai.com/en/articles/9534785-single-sign-on-sso-setup-for-openai-products
+          - title: Verify every sign-in domain
+            body:
+              - >-
+                Under Global settings > Access > Domains add each exact domain and subdomain, publish the DNS TXT
+                record, select Check Domain, then use Manage eligibility to scope it to the intended workspaces.
+            url: https://help.openai.com/en/articles/8871611-verifying-your-domain-for-openai-identity
         note: >-
           Native by the rule applied to every vendor: the console administers role- and group-based
           authorisation over connectors, agents and features (deny-wins custom roles on SCIM-synced groups), and
@@ -234,6 +174,9 @@ tools:
           Slack, GitHub organisation approval); OpenAI does not publish the Entra app ID, so confirm the app
           identity on the consent screen. Custom roles are Enterprise, Edu and Healthcare only and take about five
           minutes to apply. Policy administration is not the runtime decision, which OpenAI makes per request.
+          Required SSO sends verified-domain members through the IdP, but invited members from other domains may
+          still use another permitted sign-in method; domain claiming (a separate request to OpenAI) also blocks
+          corporate app connections from personal or other workspaces.
         verified: "2026-09-25"
         migration:
           from:
@@ -630,68 +573,6 @@ tools:
                       Always-allowed apps.
                   url: https://learn.chatgpt.com/docs/computer-use
               verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          App Disable in Admin > Plugins (ends every grant to an app), APP_AUTH_LOG link and unlink events in the
-          Compliance Logs Platform, the admin agent list, and Codex service accounts; per-grant disconnect is the
-          user's action
-        steps:
-          - title: Build the grant inventory from the log
-            body:
-              - >-
-                Pull APP_AUTH_LOG (link or unlink, link_id, actor) from the Compliance Logs Platform with an Admin
-                key holding the Apps Auth log scope and keep the grant inventory in the identity-governance tool.
-            url: https://chatgpt.com/public/admin/api-reference
-          - title: End every grant to an app
-            body:
-              - >-
-                In Admin > Plugins select Disable on the app or remove its role access; the vendor lists an
-                administrator toggling an app off as a trigger for token revocation and deletion.
-            url: https://help.openai.com/en/articles/11509118-admin-controls-security-and-compliance-for-plugins-and-apps
-          - title: Give automation its own identity
-            body:
-              - >-
-                Create a Codex service account per workflow with a finite token ttl under one year; disabling or
-                deleting the account revokes all of its tokens.
-            url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-        note: >-
-          Partial by the rule applied to every vendor: connector grants are per-user OAuth links, or an
-          agent-owned shared connection in a Workspace Agent, held by OpenAI; the admin can end all grants to an
-          app by disabling it and sees link and unlink events, but neither the console nor the Admin API lists
-          each user's live grants with a per-grant revoke — disconnecting an individual account is the user's
-          action — and no admin-set grant expiry exists (per the App security whitepaper, refresh credentials
-          last until user deletion, an app toggled off or lost upstream permission). The user-lifecycle guide
-          tells admins to review connected apps separately after removing someone, so deprovisioning alone is not
-          the documented revocation. Agent-owned connections act with the connected account's permissions for
-          everyone who runs the agent; the admin console lists agents with their connected apps. Codex service
-          accounts are the only first-class non-human principals; Chat and Work actions carry the member's
-          identity.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: native
-              mechanism: Service accounts and workload identity federation
-              steps:
-                - title: Create service accounts for automation
-                  body:
-                    - Owners and admins create them; roles User / Configure / Manager; SCIM userType
-                      "ServiceAccount".
-                  url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-                - title: Federate short-lived tokens
-                  body:
-                    - OIDC or SPIFFE tokens exchange for workspace tokens capped at one hour; disabling a rule
-                      revokes issued tokens.
-                  url: https://learn.chatgpt.com/docs/enterprise/workload-identity
-              note: >-
-                Service accounts and federated workload identities are principals for automation against the
-                workspace APIs; chat and agent actions on a member's behalf carry the member's identity, not a
-                distinct agent principal.
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: partial
         mechanism: >-
@@ -961,6 +842,12 @@ tools:
                 For each connected service record the business owner, approved actions, authentication method and
                 removal contact, as the Plugin controls guide instructs.
             url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
+          - title: Build the grant inventory from the log
+            body:
+              - >-
+                Pull APP_AUTH_LOG (link or unlink, link_id, actor) from the Compliance Logs Platform with an Admin
+                key holding the Apps Auth log scope and keep the grant inventory in the identity-governance tool.
+            url: https://chatgpt.com/public/admin/api-reference
         note: >-
           Partial by the rule applied to every vendor: enforcement exists — apps are off by default on Enterprise
           and Edu (new workspaces start with a vendor-selected set enabled), only admins publish custom MCP apps
@@ -971,7 +858,9 @@ tools:
           Workspace Agents and custom GPTs carry an owner and a publication status but no admin approval — a
           member holding the building and publishing permissions ships one without review. Draft-only agents are
           absent from the API list, and nothing reconciles connectors found outside the workspace. Custom GPTs
-          retire for Enterprise on 2026-12-11.
+          retire for Enterprise on 2026-12-11. Connector grants are per-user OAuth links held by OpenAI: no
+          console or API lists each user's live grants, so that inventory is rebuilt from APP_AUTH_LOG link and
+          unlink events.
         verified: "2026-09-25"
         migration:
           from:

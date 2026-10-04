@@ -7,8 +7,8 @@ abbrev: Multi-agent
 summary:
   - >
     A hosted agent system doing real work over business records: requests, schedules and events
-    start it, a durable orchestration layer plans and delegates across subagents, and every tool
-    call leaves through one governed gateway. The shape agent deployments converge on once the work outlives
+    start it, a durable orchestration layer plans and delegates across subagents, and every network
+    tool call leaves through one governed gateway. The shape agent deployments converge on once the work outlives
     a single request.
 
 description:
@@ -16,7 +16,7 @@ description:
     The spine is a trigger path: requests, schedules and events start the process, and it runs
     through supervisor agent, subagents, AI gateway, tool services and downstream systems —
     there is no user interface, because nobody is conversing with it. The architecture's security posture lives almost entirely
-    in one decision — that agents do not hold credentials or reach tools directly. Every
+    in one decision — that agents do not hold credentials for, or reach, network tools directly. Every
     network tool call, model call and connector call leaves through the gateway, which brokers short-lived
     credentials, enforces policy per call, applies rate and budget limits, and writes the audit
     trail as a tap rather than a favour asked of the agent.
@@ -86,7 +86,7 @@ zones:
     note: >
       Everything we operate: the surface the request arrives on, what triggers the workflow
       when nobody sends one, the supervisor and its specialists, the durable state beneath
-      them, the crossing every call leaves through, and our own tool servers and data.
+      them, the crossing every brokered call leaves through, and our own tool servers and data.
   - id: zoneExternal
     owner: external
     note: Outside the company — the model provider, third-party tool servers, and where effects land.
@@ -148,10 +148,11 @@ blocks:
           MCP brokerage, to remote servers.
     note: >
       One runtime, not a fleet of services. A supervisor and its specialists are objects in the
-      same process, dispatched by the graph's own scheduler — no service boundary, no network
-      hop, no separate identity, unless somebody deliberately introduces one. Drawing them
-      nested says that, where drawing them side by side implied a deployment that does not
-      exist.
+      same process, dispatched by the graph's own scheduler — no service boundary and no network
+      hop. Each agent is a logical principal the scheduler assigns, with its own gateway-minted
+      grant; the process is one trust boundary, so a compromise of it is a compromise of all of
+      them. Drawing them nested says that, where drawing them side by side implied a deployment
+      that does not exist.
 
   - id: localTools
     kind: service
@@ -222,7 +223,7 @@ blocks:
       - id: specialists
         label: Specialist agents
         icon: agent
-        note: Each runs the same loop as the single agent workflow, under its own workload identity.
+        note: Each runs the same loop as the single agent workflow, as its own logical principal.
       - id: messages
         label: Inter-agent messages
         icon: chat
@@ -262,9 +263,10 @@ blocks:
     col: 3
     row: 2
     note: >
-      The one door for everything that leaves over the network. Agents hold no credentials and
-      reach nothing directly; every network model and tool call is brokered, policy-checked,
-      rate-limited and logged here — the in-process tool set is the drawn exception. Its items
+      The one door for every brokered call that leaves over the network. Agents hold no
+      credentials for those calls and reach no remote tool directly; every network model and
+      tool call is brokered, policy-checked, rate-limited and logged here — the in-process tool
+      set is the drawn exception. Its items
       are the traffic classes it brokers — the checks it runs are the numbered pins on this
       block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
@@ -375,9 +377,9 @@ blocks:
     row: 5
     mitigations: [ D3-APA, D3-AA ]
     note: >
-      One workload identity per agent, so a supervisor and its specialists are distinguishable
-      in the audit and revocable separately. A graph of agents sharing one identity is a graph
-      with no accountability in it.
+      One logical principal per agent, so a supervisor and its specialists are distinguishable
+      in the audit and revocable separately, though they share one process. A graph of agents
+      sharing one identity is a graph with no accountability in it.
 
   - id: govSecrets
     kind: governance
@@ -505,7 +507,9 @@ edges:
     path: primary
     bidir: true
     label: inference, MCP & skills
-    note: Every network call the agents make crosses here on a brokered, step-scoped credential.
+    note: >
+      Every brokered call the agents make — inference, MCP, skills and APIs — crosses here on a
+      brokered, step-scoped credential. The in-process handlers' own calls do not.
   - from: localTools
     to: registry
     path: primary
@@ -585,7 +589,7 @@ pins:
       at: gateway->provider
       note: >
         The completion decides the next delegation and the next tool call, and it is
-        unauthenticated content — the provider return is where it enters the graph.
+        untrusted output — the provider return is where it enters the graph.
     - risk: riskAgenticDelegationConfusedDeputy
       at: orchestration->subagents
       note: A subagent that inherits its parent's full authority is privilege distribution, not delegation.
@@ -605,8 +609,8 @@ pins:
       at: localTools
       note: >
         Handlers compiled into the harness's process hold whatever the process holds and cross
-        no chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
-        control.
+        no chokepoint — the gateway never sees a vulnerable or malicious in-process tool, and the
+        workload's network policy is the drawn bound on where it can reach.
     - risk: riskSensitiveDataDisclosure
       at: state
       note: >
@@ -622,7 +626,7 @@ pins:
       at: harness
       note: >
         The loop materializes here — agents re-planning against each other can run for as long
-        as nobody notices; the gateway's ceilings are the brake, not the site.
+        as nobody notices; the gateway's ceilings brake only what crosses it.
     - risk: riskPromptInjection
       at: state
       note: >
@@ -643,9 +647,10 @@ pins:
     - risk: riskToolSourceProvenance
       at: registry
       note: >
-        What the sandbox installs is code the agent chose, on a name it read in a task or a tool
-        result; the mirror decides which build answers to that name, and whoever can write to
-        the mirror programs every sandbox that pulls from it.
+        Skill and tool packages reach the harness from the community hubs through this mirror,
+        and their manifests and descriptions become tool metadata every agent selects from.
+        Admitted without verifying the publisher and the signature, a deceptive description or a
+        shadowed tool name enters here.
   mitigations:
     - mitigation: AML.M0031
       at: state
@@ -695,12 +700,16 @@ pins:
         supervisor's credentials — delegation that does not narrow is privilege distribution.
     - mitigation: AML.M0036
       at: gateway
-      note: Rate and budget ceilings on the crossing that end loops the agents cannot end themselves.
+      note: >-
+        Rate and budget ceilings on the crossing: every model and remote tool call any agent makes counts
+        against the run's budget, so a loop that keeps re-planning hits the ceiling. Work that never crosses —
+        in the sandbox or in process — is not metered here.
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
-        Returned record content — and the initiator's own request text on its way in — is classified at the
-        crossing before it reaches any agent's context.
+        Returned record and third-party content is classified at the crossing before it reaches any agent's
+        context, and the initiator's request text on its first crossing, before the model reads it.
+        Inter-agent messages and shared-memory reads never cross here.
     - mitigation: cap-sensitive-data-redaction
       at: state
       note: >-
@@ -723,10 +732,10 @@ pins:
         Reads scoped to the workflow's grant rather than the service's reach — the same entitlement filter the
         siblings enforce on this edge.
     - mitigation: D3-EI
-      at: internalTools
+      at: localTools
       note: >-
-        Generated code and browsing run in an isolated runtime with its own filesystem and network — never on
-        the orchestration tier.
+        Generated code runs only in the sandbox — an isolated runtime with its own filesystem and network, torn
+        down per task — never in the harness's own process beside the agents.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
       note: >-
@@ -737,16 +746,18 @@ pins:
       at: govObservability
       note: A stop that works mid-flight, because these processes run for days.
     - mitigation: cap-mcp-tool-integrity
-      at: govSupplyChain
+      at: harness->gateway
       note: >-
-        Admission is change-time; the rug-pull is a tool whose definition changes after admission.
-        Content-hash pinning of admitted tool descriptions is what catches it.
+        Tool definitions reach the harness's MCP client through the gateway's brokerage, and each is checked
+        against the content hash pinned at admission before any agent's model is offered it — a definition
+        changed after admission, the rug-pull, is refused, and the check repeats after every update.
     - mitigation: cap-agent-egress-control
       at: localTools
       note: >-
-        The sandbox's network policy: the only routes out are the AI gateway and the package mirror. Shell
-        commands, fetches and anything else a tool emits are bounded here — not at the gateway, which brokers
-        model, MCP and API calls and sees nothing else.
+        Network policy on the whole harness workload, not just the sandbox: the sandbox reaches only the AI
+        gateway and the package mirror, and the in-process handlers' own calls reach a named allowlist. Shell
+        commands, fetches and handler calls are bounded here — not at the gateway, which brokers model, MCP and
+        API calls and sees nothing else.
     - mitigation: D3-FA
       at: sources->registry
       note: >-
@@ -778,7 +789,7 @@ walkthrough:
       label: plan request
       note: >
         The supervisor's first call is for a plan — nothing is delegated before the goal is
-        decomposed — and every network call any agent makes funnels through this one door.
+        decomposed — and every brokered call any agent makes funnels through this one door.
     - follow: gateway->provider
       label: inference
       note: Inference on brokered credentials, limits applied.
@@ -787,7 +798,7 @@ walkthrough:
       note: The decomposition comes back across the crossing.
     - follow: gateway->harness
       label: plan into supervisor
-      note: Into the supervisor as a plan — unauthenticated content, now the work breakdown.
+      note: Into the supervisor as a plan — untrusted output, now the work breakdown.
     - follow: orchestration->subagents
       label: delegate narrowed task
       note: >
@@ -797,11 +808,12 @@ walkthrough:
       label: shared memory read
       note: >
         The specialist reads shared memory and the retrieval context through the tool handlers —
-        state another specialist, or an earlier run, wrote.
+        state this run's other steps wrote.
     - follow: state->localTools
-      label: context, unattributed
+      label: context, attributed
       note: >
-        It comes back as context, with nothing marking whose it was.
+        It comes back as context labelled with the step that wrote it, and is read as untrusted
+        input.
     - follow: harness->gateway
       label: specialist's calls
       note: A specialist's model and tool calls leave through the same door, on its own grant.
@@ -819,6 +831,12 @@ walkthrough:
     - follow: internalTools->gateway
       label: result
       note: The result crosses back through the same door.
+    - follow: gateway->harness
+      label: result to specialist
+      note: It lands with the specialist that asked, which decides its next call.
+    - follow: harness->gateway
+      label: next call, third party
+      note: The specialist's next call is for a third party, through the same door.
     - follow: gateway->extTools
       label: third-party call
       note: Work reaches third parties through the same crossing.
@@ -826,8 +844,8 @@ walkthrough:
       label: classified return
       note: What returns is classified before any agent reads it, because one confused agent propagates.
     - follow: gateway->harness
-      label: results to specialist
-      note: Results land with the specialist that asked.
+      label: classified result to specialist
+      note: The classified result lands with the specialist that asked.
     - follow: subagents->orchestration
       label: slice reported
       note: >
@@ -837,8 +855,8 @@ walkthrough:
     - follow: orchestration->state
       label: final checkpoint
       note: >
-        The final checkpoint. The result is delivered the way anything leaves here — a tool
-        call to whatever channel asked — possibly days after the request.
+        The final checkpoint: the run is complete and durable, possibly days after the
+        request.
 
 scenarios:
   - title: A step replays after a crash
@@ -947,13 +965,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: The gateway's Skills catalogue item has no drawn supply path
-    reason: >
-      The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
-      it whole because the tier brokers skills traffic in deployments that use skills. The
-      supply chain behind the item — a private package registry and its signing pipeline — is
-      deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
-      pull path.
   - subject: Subagents are drawn as one block
     reason: >
       There are several, with different contexts and tools. They share one block because the

@@ -100,83 +100,18 @@ tools:
           CamoLeak (2025) turned hidden PR-description comments into silent exfiltration through GitHub's own
           Camo image proxy; the fix was to stop rendering images in chat. Chat still reads every issue and PR
           the user can see, and can now act through the GitHub MCP server.
-      - risk: riskSensitiveDataDisclosure
-        note: >-
-          Retention moves from 28 days to life-of-account no earlier than 2026-09-28; Spaces accept uploads and
-          free text that are then shareable to organisation members or publicly.
       - risk: riskExcessiveDataHandlingDuringInference
         note: >-
           Web search and image/PDF attachments widen the inference input beyond repository data; both are
-          policy-controlled (web search) or user-controlled (attachments) rather than inspected.
+          policy-controlled (web search) or user-controlled (attachments) rather than inspected. Retention moves
+          from 28 days to life-of-account no earlier than 2026-09-28, and Spaces accept uploads and free text that
+          are then shareable to organisation members or publicly.
       - risk: riskRetrievalVectorStorePoisoning
         note: >-
           Spaces and the repositories themselves are the retrieval stores (a repository is indexed
           automatically once a chat has its context); anyone with editor access to an organisation Space, or
           push access to a repository, can shape what the model reads.
     controls:
-      - mitigation: D3-MFA
-        coverage: native
-        mechanism: >-
-          GitHub's own second-factor requirement (Enterprise > Settings > Authentication security > "Require
-          two-factor authentication for the enterprise and all of its organizations", optionally "Only allow
-          secure two-factor methods"); with Enterprise Managed Users the IdP's MFA instead (OIDC with Entra ID
-          Conditional Access)
-        steps:
-          - title: Require two-factor authentication for every organization
-            body:
-              - >-
-                Enterprise > Settings > Authentication security: select "Require two-factor authentication for
-                the enterprise and all of its organizations" and "Only allow secure two-factor methods"
-                (passkeys, security keys, authenticator apps, GitHub Mobile); members without it cannot reach
-                organization resources until they enable it.
-            url: >-
-              https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-security-settings-in-your-enterprise
-          - title: With Enterprise Managed Users, put MFA in Entra ID
-            body:
-              - >-
-                The 2FA policy is not available to managed users; use OIDC SSO so GitHub applies the Entra ID
-                Conditional Access Policy, knowing GitHub enforces its IP conditions but MFA only at IdP
-                sign-in.
-            url: >-
-              https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/configuring-authentication-for-enterprise-managed-users/about-support-for-your-idps-conditional-access-policy
-        note: >-
-          Native by the D3-MFA rule applied to every vendor on this drawing: GitHub's identity layer requires a
-          second factor for every organization member, enforced server-side, and the same account signs in to
-          Chat on github.com and GitHub Mobile. Boundary: the requirement covers organization members, billing
-          managers and outside collaborators; the page does not say whether it binds a user licensed directly by
-          the enterprise (user or enterprise-team assignment) who belongs to no organization. It is unavailable
-          under Enterprise Managed Users, where MFA is the IdP's and, per GitHub, enforced only at IdP sign-in
-          (CAP IP conditions are re-checked on web use and token authentication, web-session protection in
-          preview; device compliance is not enforced). What skips a fresh second factor: a signed-in session —
-          SAML SSO re-authentication is every 24 hours unless the IdP sets otherwise, and the GitHub Mobile
-          session lifetime is not documented on the pages fetched. A personal account is not an organization member, so personal-plan Copilot is outside
-          the requirement; keeping people in the corporate account is the D3-OTF header's job.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                Copilot seat assignment (enterprise teams, IdP-synced under EMU), Copilot in GitHub.com
-                policy, SAML SSO
-              steps:
-                - title: Assign seats and enable the feature
-                  body:
-                    - Grant licences from Enterprise > Billing and licensing > Licensing > Copilot (users,
-                      enterprise teams or organisations); enable Copilot in GitHub.com under AI controls >
-                      Copilot > Configure features & clients.
-                  url: >-
-                    https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-access/grant-access
-                - title: Confirm the unified policy before 2026-09-28
-                  body:
-                    - Review the single policy replacing Copilot Chat on github.com, Chat in Mobile and the
-                      cloud agent; opting out removes chat on github.com and Mobile.
-                  url: >-
-                    https://github.blog/changelog/2026-08-28-upcoming-changes-to-github-copilot-policies-and-billing/
-              verified: 2026-09-10
       - mitigation: D3-APA
         coverage: partial
         mechanism: >-
@@ -570,42 +505,6 @@ tools:
                   body:
                     - Chat can create branches or merge PRs on request and can start cloud agent sessions;
                       branch protections, rulesets and workflow approval remain the enforced approvals.
-                  url: https://docs.github.com/en/copilot/concepts/chat
-              verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: notApplicable
-        mechanism: >-
-          No agent identity and no connector grant: Chat on github.com and GitHub Mobile act in the signed-in
-          user's session, and the built-in GitHub MCP skills run "on your behalf"
-        evidence:
-          - title: Using the GitHub MCP Server from Copilot Chat (skills act on the user's behalf)
-            url: >-
-              https://docs.github.com/en/copilot/how-tos/copilot-on-github/copilot-for-github-tasks/using-the-github-mcp-server-from-copilot-chat
-          - title: About Copilot Chat (context passed to cloud agent sessions)
-            url: https://docs.github.com/en/copilot/concepts/chat
-          - title: Granting access in an enterprise (licences follow enterprise-team membership)
-            url: >-
-              https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-access/grant-access
-        note: >-
-          Not applicable: the product issues no non-human identity and holds no user-authorised connector grant
-          that could outlive its owner. The GitHub MCP skills act for the user inside their own session, Spaces
-          read sources with the viewer's own permissions, and removing the user or their licence ends access (the
-          kill-switch row has the timing). The agent identity in this flow belongs to the Copilot cloud agent,
-          which a chat can start; its D3-AA row is on toolCopilotCloudAgent. The person's own sign-in is D3-MFA.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: none
-              mechanism: Chat acts as the signed-in user; there is no separate agent identity to manage
-              note: >-
-                Actions taken through chat's GitHub MCP server are the user's own; attribution is the user
-                account.
-              evidence:
-                - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://docs.github.com/en/copilot/concepts/chat
               verified: 2026-09-10
       - mitigation: D3-DI

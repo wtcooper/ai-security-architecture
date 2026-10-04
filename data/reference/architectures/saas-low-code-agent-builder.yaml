@@ -87,8 +87,10 @@ zones:
   - id: zoneGovernance
     owner: governance
     note: >
-      Governance covers the agent population and its changes. Use supported deployment pipelines,
-      publication review and environment policy to keep maker access separate from production use.
+      Governance covers the agent population and its changes. Where the platform offers
+      deployment pipelines, publication review and environment policy, use them to keep maker
+      access separate from production use; they are optional, so population controls remain
+      the baseline.
 
 blocks:
   - id: builder
@@ -165,9 +167,9 @@ blocks:
     row: 2
     pack: toolServicesRemote
     note: >
-      Our own MCP servers and connectors. The platform's MCP path is not a policy bypass — the
-      same data policies that regulate its connectors regulate its MCP tools — reached through
-      the tunnel and our gateway, never exposed to the platform directly.
+      Our own APIs and MCP servers, reached only through our gateway and never exposed to the
+      platform directly. The platform's data policies regulate its MCP tools the same way they
+      regulate its connectors.
 
   - id: dataGateway
     kind: service
@@ -179,11 +181,12 @@ blocks:
     note: >
       The platform's on-premises data gateway, or its private-network equivalent: vendor-supplied
       software on a host we run that dials out, so nothing is opened inbound, and relays the
-      platform's connector and MCP calls to our gateway — the same component, and the same
-      chain, as on every SaaS sibling. It does not run agents and does not authenticate for
-      us, and its hard payload limits make it a query path rather than a bulk one. The
-      connection credentials it caches sit on this host, which is why the secrets pin lands
-      here.
+      platform's connector calls to our gateway — the same chain as on every SaaS sibling. It
+      does not run agents, and its payload limits make it a query path rather than a bulk one.
+      It connects with the credentials stored for each connection, whoever invoked the agent,
+      so the invoker's identity does not reach the far side — the confused-deputy path this
+      archetype turns on. Those stored credentials sit on this host, which is why the secrets
+      pin lands here.
     items:
       - id: outbound
         label: Outbound connector
@@ -211,14 +214,9 @@ blocks:
     row: 0
     pack: modelProvider
     note: >
-      The vendor's model, called by the vendor — for the platforms whose model is their own it
-      sits under the same agreement, and this band is external only for the
-      bring-your-own-provider variant. We neither broker it nor hold the key, which is
-      why our own gateway carries no inference on this page. Two variants worth noting in
-      assessment: some platforms run the model entirely inside their own boundary (then this
-      block collapses into the platform and is assured, not drawn), and some let the customer
-      bring a model key — zone-2 configuration that changes whose terms the grounding content
-      leaves under.
+      The model service the platform calls each turn, on the vendor's agreement with its
+      provider rather than ours. We neither broker the call nor hold the key, which is why our
+      own gateway carries no inference on this page.
 
   - id: extTools
     kind: service
@@ -239,12 +237,12 @@ blocks:
     row: 5
     mitigations: [ D3-APA, D3-AA ]
     note: >
-      Whose credentials a published agent runs on, which on this platform is a configuration
-      choice with four answers. End-user credentials are the default and the safe one. Maker
-      credentials are the ambient-authority case: every consumer of that agent transitively
-      inherits the maker's access to the backend. The platform's own inventory records which
-      mode each connector uses, and that field is the single most useful thing an administrator
-      can query here.
+      Whose credentials a published agent runs on, which on these platforms is a configuration
+      choice. Require end-user credentials; which mode is the default differs by platform and
+      connector. Maker credentials are the ambient-authority case: every consumer of that agent
+      transitively inherits the maker's access to the backend. Where the platform's inventory
+      records which mode each connector uses, that field is the most useful thing an
+      administrator can query here.
 
   - id: govSecrets
     kind: governance
@@ -267,9 +265,9 @@ blocks:
     row: 5
     mitigations: [ AML.M0028, cap-data-access-governance ]
     note: >
-      The platform's data policies classify every connector and forbid mixing groups across the
-      boundary — and unusually for this catalogue, they have teeth: a violation greys out the
-      publish button outright. Exemptions were removed, so every agent is subject to them.
+      Data policies that classify every connector, forbid mixing groups across the boundary and
+      block publication of a violating agent. Whether a platform enforces them by default, and
+      which agents they exempt, differs by platform.
 
   - id: govSupplyChain
     kind: governance
@@ -303,8 +301,9 @@ edges:
     bidir: true
     label: authors & publishes
     note: >
-      Built and shipped inside the vendor's surface. No pipeline is involved, so there is no
-      place to insert a review that the platform does not itself provide.
+      Built and shipped inside the vendor's surface. The platform's environments and deployment
+      pipelines can put a review here, but they are optional and many makers publish straight
+      from the builder.
   - from: consumer
     to: platform
     path: external
@@ -392,11 +391,13 @@ pins:
     - risk: riskSensitiveDataDisclosure
       at: dataGateway
       note: >
-        The tunnel reaches into systems that were never meant to be internet-adjacent, and the
-        credentials it caches sit on a host somebody has to patch.
+        The relay reads with each connection's stored credential whoever is asking, so an agent
+        can answer with records the person invoking it could never open.
     - risk: riskExcessiveDataHandlingDuringInference
       at: platform->provider
-      note: Grounding content leaves for a model we do not broker and hold no key for.
+      note: >
+        Grounding content sent to a model we do not broker — more than the turn needs, or kept
+        and used outside the terms the vendor agreed with its provider.
 
     - risk: riskSensitiveDataDisclosure
       at: consumer->platform
@@ -412,27 +413,21 @@ pins:
     - risk: riskSensitiveDataDisclosure
       at: builder->platform
       note: >
-        Bulk knowledge upload — folders pushed into the platform as grounding by someone not
-        thinking of it as data movement.
+        Knowledge a maker uploads is answered to everyone who can use the agent, whatever the
+        source file's permissions — the agent discloses what its audience could never open.
   mitigations:
-    - mitigation: cap-sensitive-data-redaction
-      at: builder->platform
-      note: >-
-        Classification before knowledge is attached: a maker uploads whole folders as grounding, and this is
-        the only point where what leaves can still be read.
     - mitigation: D3-APA
       at: consumer->platform
       note: >-
-        Whose credentials a published agent runs on, and who may run it at all: end-user credentials by
-        default, maker credentials as a deliberate, reviewed exception, and authentication on for every
+        Whose credentials a published agent runs on, and who may run it at all: end-user credentials
+        required, maker credentials as a deliberate, reviewed exception, and authentication on for every
         channel an agent is published to — an agent published with authentication off answers anyone with the
         URL.
     - mitigation: D3-AA
       at: platform
       note: >-
-        A directory principal minted per published agent, so conditional access, revocation and ownership
-        transfer attach to one agent — the grants live in the platform's connection store, and our gateway
-        sees only the slice it issued.
+        Each published agent signs in as its own directory principal; the identity provider verifies that
+        credential and conditional access can refuse it, per agent rather than for the whole population.
     - mitigation: cap-agent-tool-registry
       at: platform
       note: >-
@@ -441,14 +436,9 @@ pins:
     - mitigation: cap-staged-rollout-gate
       at: platform
       note: >-
-        The publication gate: review between an author and an audience, a limited audience first, versioned
-        agents and unpublish as rollback. Frequently off by default, and the nearest thing this platform has
-        to code review.
-    - mitigation: cap-input-guardrails
-      at: platform
-      note: >-
-        The platform's own grounding and connector-output classification, configured as zone 2 — theirs to
-        implement, ours to switch on and verify, because nothing of ours sits on the connector paths.
+        Versioned agents promoted through the platform's environments or pipelines with a named approver, a
+        limited first audience where offered, and rollback by re-activating or redeploying the previous
+        version. Optional on these platforms and often unused by makers; unpublish alone is the weaker response.
     - mitigation: cap-ai-vendor-assessment
       at: platform
       note: >-
@@ -459,8 +449,8 @@ pins:
       at: platform->extTools
       note: >-
         Connector policy authored centrally in the tenant: every connector classified, a confidential source
-        never paired with a path that sends data out, unclassified connectors blocked — and enforced, so a
-        violating agent cannot be published. The only control on a path that never touches our network.
+        never paired with a path that sends data out, unclassified connectors blocked — enforced at
+        publication where the platform supports it. The only control on a path that never touches our network.
     - mitigation: D3-CH
       at: dataGateway
       note: >-
@@ -479,13 +469,15 @@ pins:
       at: orgData
       note: >-
         What a maker may attach as grounding: sources with governed write access only, classified before they
-        are attachable, and every read scoped to the invoker's entitlement. The default connector set is the
-        real policy, and a permissive default is a decision nobody remembers making.
+        are attachable, and every read scoped to the invoker's entitlement and refused when no invoker comes
+        with it. The default connector set is the real policy, and a permissive default is a decision nobody
+        remembers making.
     - mitigation: cap-agent-tracing
       at: govObservability
       note: >-
-        Run history per agent and per consumer, and maker activity, exported where we can query it rather than
-        left in their console — the baseline that shows which agent's connector mix or run pattern moved.
+        Each run's steps — tool and connector calls, retrieval and hand-offs — correlated by session and
+        exported where we can query them. Platforms differ: some capture steps org-wide, others leave
+        step-level capture to a per-agent maker setting.
     - mitigation: cap-agent-kill-switch
       at: govObservability
       note: >-
@@ -501,9 +493,9 @@ walkthrough:
     - follow: builder->platform
       label: build & publish
       note: >
-        Built and published inside the vendor's surface by someone who is not an engineer. No
-        pipeline is involved, so the platform's own publish gate is the only review there is —
-        and governance here is population management rather than change review.
+        Built and published inside the vendor's surface, often straight from the builder:
+        deployment pipelines exist but are optional and commonly unused, so population
+        management rather than change review is the baseline.
     - follow: consumer->platform
       label: colleague runs it
       note: >
@@ -512,8 +504,8 @@ walkthrough:
     - follow: platform->provider
       label: vendor's model call
       note: >
-        Now the model is called — the vendor's own, on its own key, for the running turn. We
-        are not on this path, which is why our gateway carries tools and data only.
+        Now the model is called — on the vendor's key, for the running turn. We are not on
+        this path, which is why our gateway carries tools and data only.
     - follow: provider->platform
       label: completion
       note: The completion comes back into their runtime as the turn's plan.
@@ -541,6 +533,12 @@ walkthrough:
     - follow: dataGateway->platform
       label: tool result
       note: And up the tunnel to their runtime as a tool result.
+    - follow: platform->provider
+      label: grounded model call
+      note: The records go to the model with the turn, on the vendor's key.
+    - follow: provider->platform
+      label: grounded completion
+      note: The answer is composed from what the records said.
     - follow: platform->consumer
       label: reply
       note: The reply returns to the colleague who ran it, grounded on everything the walk touched.
@@ -619,20 +617,25 @@ scenarios:
       - follow: consumer->platform
         label: stranger's question
         note: >
-          A maker publishes to a public channel and leaves authentication off; the "consumer"
-          is now anyone who finds the URL, and recon tooling finds them by the thousands.
+          A failure variant: a maker publishes to a public channel and leaves authentication
+          off. The "consumer" is now anyone who finds the URL, and recon tooling finds them by
+          the thousands.
       - follow: platform->dataGateway
         label: down the tunnel
         note: The stranger's question comes back into us through the tunnel.
       - follow: dataGateway->aiGateway
         label: agent's own grants
-        note: It reaches our crossing on the agent's own grants.
+        note: It reaches our crossing on the agent's stored credential, with no invoker identity behind it.
       - follow: aiGateway->internalTools
         label: admitted like any run
-        note: Admitted like any run of this agent — the catalogue does not know who is asking.
+        note: >
+          Admitted like any run of this agent. With no invoker to check, the invoker-scoped read
+          is bypassed rather than enforced.
       - follow: internalTools->orgData
         label: grounding for a stranger
-        note: The grounding answers a stranger. Inventory and publication gating are what would have caught it.
+        note: >
+          The grounding answers a stranger. Authentication on every channel, and refusing reads
+          that carry no invoker, are what would have stopped it.
 
 deviations:
   - subject: The vendor band is drawn before our cloud band
@@ -663,10 +666,10 @@ deviations:
       pattern says so. Here it is not: the vendor calls its own model, on its own key, and our
       gateway exists only to admit a published agent to our tools and data. Drawing an
       inference leg out of our gateway would assert a broker we do not operate. The model edge
-      is therefore vendor to provider — a property this drawing shares with its two SaaS
-      siblings and the MCP publisher, each recording it the same way. It is drawn with its own items rather than the registered
-      aiGatewayTraffic pack for the same reason: no model proxy, because there is no model
-      traffic to proxy.
+      is therefore vendor to provider; the SaaS siblings absorb the model into the vendor block
+      instead, with the same gateway-without-inference result. The gateway is drawn with its
+      own items rather than the registered aiGatewayTraffic pack for the same reason: no model
+      proxy, because there is no model traffic to proxy.
   - subject: The vendor platform is a single block despite containing an orchestrator, a harness and a sandbox
     reason: >
       The three-zone responsibility rule forbids drawing vendor internals we cannot inspect. On

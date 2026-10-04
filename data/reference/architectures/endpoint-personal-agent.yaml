@@ -150,7 +150,7 @@ blocks:
       between them. Egress leaves through a host-side proxy whose allowlist ships with broad
       wildcards worth pruning. The target state runs local MCP servers inside this boundary
       with the rest of the tool surface; the common state runs them on the host with host
-      privileges — the gap every implementation shares, carried as the risk pinned on the
+      privileges — the gap common implementations share, carried as the risk pinned on the
       native tools.
       What earns the boundary its keep: the model credential is injected into request headers
       by that host-side proxy, so the key never enters the sandbox and an agent that can
@@ -398,7 +398,7 @@ blocks:
     note: >
       The IdP and the non-human identity plane: one workload identity per agent, bound to its
       owner and device, the pairing admission the bridges enforce, and the revocation that
-      ends every path at once.
+      ends every brokered path at once.
 
   - id: govSecrets
     kind: governance
@@ -593,7 +593,7 @@ edges:
     to: relay
     route: vh
     path: primary
-    bidir: true
+    outbound: true
     label: outbound only
     note: >
       The endpoint dials the relay; the relay holds the platform credentials. No inbound port
@@ -696,10 +696,9 @@ pins:
     - risk: riskInsecureIntegratedComponent
       at: toolPlane
       note: >
-        The target draws MCP servers inside the boundary; every current implementation runs
-        them on the host with host privileges, and browser control drives the host browser
-        outright — true of Docker Sandboxes, OpenClaw and Hermes
-        alike. Until an implementation closes that gap, third-party code in this surface has
+        The target draws MCP servers inside the boundary; common implementations run them on
+        the host with host privileges, and browser control drives the host browser outright.
+        Until an implementation closes that gap, third-party code in this surface has
         the user's full authority, and the containment the drawing shows is the requirement,
         not the shipped state.
     - risk: riskPromptInjection
@@ -734,12 +733,6 @@ pins:
         interface instead of loopback is the exposure the scans keep finding, and the loopback
         dashboard is a documented token-exfiltration surface even when the bind is right — the
         owner's own browser defeats "localhost is not reachable" from inside.
-    - risk: riskStaleAgentIdentityBinding
-      at: relay->bridges
-      note: >
-        Pairing records outlive devices and people, and this is the hop where they are the only
-        thing distinguishing the owner's message from anybody else's arriving off the same
-        platform.
     - risk: riskRunawayAgentToolLoops
       at: harness
       note: The heartbeat restarts the loop unattended, and nothing bounds what a bad turn spends.
@@ -791,9 +784,9 @@ pins:
     - mitigation: D3-APA
       at: bridges
       note: >-
-        One admission decision for every channel — directory-bound pairing, re-checked, and enforced
-        identically per bridge rather than reimplemented per platform. Identity is the whole of the admission
-        on this surface.
+        One pairing policy for every channel — directory-bound, re-checked, and administered centrally rather
+        than reimplemented per platform; each adapter enforces it on every inbound message. Identity is the
+        whole of the admission on this surface.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
       note: >-
@@ -803,18 +796,23 @@ pins:
     - mitigation: D3-MAN
       at: harness
       note: >-
-        Loopback binding, authenticated dashboard transport with origin checks, and an outbound-only relay —
-        so the endpoint never listens, and the browser next door is treated as hostile.
+        The daemon's control socket accepts only messages from an authenticated client — a per-client token
+        checked on every WebSocket message, replays refused, origin checked at the handshake — so a page in the
+        owner's browser can neither drive the loop nor read the token. Loopback binding and the outbound-only
+        relay are configuration around it, not the authentication.
     - mitigation: AML.M0031
       at: toolPlane->memory
-      note: Treat memory as untrusted input on read; scan what is written; scope what is kept.
+      note: >-
+        Scope writes to the agent's own memory files, with the bootstrap rules read-only to it; record which
+        message or tool result each write came from; snapshot memory so a poisoned entry can be rolled back; and
+        treat what is read back as untrusted input.
     - mitigation: D3-EI
       at: sandbox
       note: >-
         The boundary itself, with its own kernel, filesystem and network — the operator owns the spec and the
         agent cannot edit it. Note what this buys beyond containment: with the model credential injected at
-        the host-side proxy, the key never enters the boundary, so an agent that can exfiltrate has nothing to
-        exfiltrate.
+        the host-side proxy, the key never enters the boundary, so an agent that can exfiltrate cannot take it
+        — though memory, workspace content and tool results can still leave through the allowed routes.
     - mitigation: AML.M0028
       at: toolPlane
       note: >-
@@ -823,9 +821,10 @@ pins:
     - mitigation: D3-CTS
       at: gateway->remoteTools
       note: >-
-        On-behalf-of exchange at the crossing: each remote call carries a token narrowed to the task, never
-        the owner's standing grants — the bounded delegation that answers the confused deputy pinned beside
-        it.
+        On-behalf-of exchange at the crossing: each remote call carries a token whose audience is that one tool
+        server and whose scope is the task — never the owner's standing grants, never a token passed through —
+        and the server refuses a token minted for anyone else. That bounds the delegation; whether the
+        instruction came from the owner is still the pairing and approval pins' question.
     - mitigation: D3-CH
       at: gateway
       note: >-
@@ -855,13 +854,16 @@ pins:
     - mitigation: AML.M0024
       at: gateway
       note: >-
-        One correlated trace per message — prompt, tool calls, effects — captured at the crossing every call
-        already passes, and written where the agent cannot amend it.
+        One correlated trace per brokered call — prompt, tool calls, effects — captured at the crossing and
+        written where the agent cannot amend it. Chat replies and local tool work never cross here, so the
+        relay's log and the endpoint telemetry are joined to it.
     - mitigation: cap-agent-kill-switch
       at: gateway
       note: >-
-        Revoking the agent's identity denies every flow at the crossing within seconds, without a deploy —
-        which is why the crossing is where the stop is enforced.
+        Revoking the agent's identity cuts off every model and tool call at the crossing within seconds,
+        without a deploy. The rest of the stop is enforced from outside the sandbox — the daemon and its
+        children ended, the heartbeat and queued turns cancelled, the relay pairing expired — because the relay
+        path, the mirror and local tools never cross the gateway.
     - mitigation: cap-shadow-ai-discovery
       at: harness
       note: Find the installs nobody registered, derived from the device rather than self-reported.
@@ -930,8 +932,8 @@ walkthrough:
     - follow: workspace->toolPlane
       label: diff on private clone
       note: >
-        An edit comes back as a reviewable diff on a private clone rather than a host write, and
-        the result lands in the loop.
+        Edits land in the sandbox's private clone of the read-only mount and come back as a
+        reviewable diff, not a host write; the result lands in the loop.
     - follow: harness->gateway
       label: action on brokered crossing
       note: >
@@ -953,6 +955,12 @@ walkthrough:
     - follow: internalTools->gateway
       label: result, logged
       note: Through the crossing again, where it is logged against the call that caused it.
+    - follow: gateway->harness
+      label: result into loop
+      note: The result returns to the loop, which decides the next call — the gateway does not.
+    - follow: harness->gateway
+      label: next tool call
+      note: The loop's next call leaves on the same crossing.
     - follow: gateway->remoteTools
       label: tool call on owner's accounts
       note: A tool call on the owner's own accounts, on a grant we scoped rather than one they pasted.
@@ -1058,9 +1066,11 @@ deviations:
       controls with it; that posture is recorded here rather than drawn as a second topology.
   - subject: The kill switch is cited from Identity services and pinned at the gateway
     reason: >
-      Revocation-as-stop: killing the agent's identity denies every flow at the crossing
-      within seconds, so the enforcement point is the gateway while the implementing service
-      is the identity plane. Deliberate, not drift.
+      Revoking the agent's identity ends every brokered flow at the crossing within seconds,
+      so that part of the stop is enforced at the gateway while the implementing service is
+      the identity plane. It is not the whole stop: the daemon, its heartbeat and queued turns
+      are ended from outside the sandbox and the relay pairing is expired at the relay, because
+      those paths never cross the gateway. Deliberate, not drift.
   - subject: The local session is drawn as its own path
     reason: >
       A terminal on the machine and a phone across town are not the same admission problem:
@@ -1082,13 +1092,6 @@ deviations:
       agents' Remote relay — never over the messaging relay, which carries chat and nothing
       else. The tunnel is not drawn here because the messaging path is this drawing's remote
       surface; the local API server item and its pins carry the exposure either way.
-  - subject: Stale agent identity binding is read as a stale pairing
-    reason: >
-      The catalogue defines the risk as credentials persisting across an artifact swap. On the
-      relay-to-bridges hop the mechanism is the same shape one layer up — a pairing record
-      that outlives the device or person it was issued to. The third-party coding agent reads
-      the tag the same way on its remote-steering edge.
-
 sources:
   - title: "OpenClaw documentation — gateway architecture and channel model"
     url: https://docs.openclaw.ai/concepts/architecture

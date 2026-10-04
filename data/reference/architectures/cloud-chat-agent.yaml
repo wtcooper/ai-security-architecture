@@ -76,7 +76,7 @@ zones:
     owner: cloud
     note: >
       Everything we operate: the chat surface that establishes identity, the loop, its state,
-      the crossing every call leaves through, and our own tool servers and systems of record.
+      the crossing every brokered call leaves through, and our own tool servers and systems of record.
       The whole workload is ours, which is what distinguishes this from the endpoint agents.
   - id: zoneExternal
     owner: external
@@ -111,9 +111,10 @@ blocks:
     row: 0
     note: >
       Chat agents run unattended too now — scheduled digests, triggered follow-ups, jobs a
-      conversation set up and walked away from. Drawn because it quietly removes the control
-      this whole architecture leans on: a run nobody started has no human in the thread to
-      approve it, which makes it the single-agent workflow wearing a chat interface.
+      conversation set up and walked away from. Drawn because a run nobody started has no human
+      in the thread to approve it: its read-only tools run, and a mutating action suspends at
+      the gateway until the user approves it in the thread. A scheduler that carries its own
+      approval would make it the single-agent workflow wearing a chat interface.
     items:
       - id: schedules
         label: Schedules & events
@@ -159,8 +160,10 @@ blocks:
       not a hop: decorated functions running in the loop's own process, under its identity,
       with its egress and its secrets, and the sandbox the loop's generated code runs in. This
       is the default way a tool gets attached, and the reason it is drawn: the in-process tool
-      set is invisible to any gateway. What these tools reach is drawn — memory and retrieval
-      through their handlers, and the package mirror through the sandbox's package manager.
+      set is invisible to any gateway, so nothing on the crossing authorizes or meters it — the
+      handlers' own checks and the workload's network policy are its bounds. What these tools
+      reach is drawn — memory and retrieval through their handlers, and the package mirror
+      through the sandbox's package manager.
     items:
       - id: inProcess
         label: Tool handlers
@@ -238,7 +241,7 @@ blocks:
     note: >
       The one crossing every network-brokered model and tool call leaves through — the
       in-process tool set is the drawn exception. The agent tier holds no standing
-      credentials; the gateway brokers them per call, meters spend and writes the audit trail
+      credentials for these calls; the gateway brokers them per call, meters spend and writes the audit trail
       as a tap on the crossing. Its items are the traffic classes it brokers — the checks it
       runs are the numbered pins on this block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
@@ -362,7 +365,7 @@ blocks:
     col: 1
     row: 5
     mitigations: [ D3-CH, D3-CTS ]
-    note: Short-lived, user-scoped credentials minted per call, so the agent tier holds no standing keys.
+    note: Short-lived, user-scoped credentials minted per call, so the agent tier holds no standing keys for brokered calls.
 
   - id: govPolicy
     kind: governance
@@ -434,8 +437,8 @@ edges:
     path: primary
     label: scheduled run
     note: >
-      The same loop, with nobody reading the reply. Every control on this page that assumes an
-      in-thread approval is absent on this path.
+      The same loop, with nobody reading the reply: reads proceed, and a mutating action waits
+      for the in-thread approval this path cannot supply.
   - from: entry
     to: agent
     label: turn / reply & proposal
@@ -459,8 +462,8 @@ edges:
     bidir: true
     label: inference, MCP & skills
     note: >
-      Every network call out of the loop crosses here on a brokered credential scoped to the
-      conversing user. The agent holds no standing keys of its own.
+      Every brokered call out of the loop — inference, MCP, skills and APIs — crosses here on a
+      credential scoped to the conversing user. The in-process handlers' own calls do not.
   - from: localTools
     to: registry
     path: primary
@@ -479,7 +482,7 @@ edges:
     outbound: true
     note: >
       Inference on the brokered credential. The completion proposes the reply and the tool
-      calls — content the human will read, and unauthenticated input all the same.
+      calls — content the human will read, and untrusted output all the same.
   - from: gateway
     to: internalTools
     path: primary
@@ -547,7 +550,7 @@ pins:
         as trusted context with the asking user's permissions.
     - risk: riskInsecureModelOutput
       at: gateway->provider
-      note: The completion proposes the tool calls, and it is unauthenticated content.
+      note: The completion proposes the tool calls, and it is untrusted output.
     - risk: riskRogueActions
       at: internalTools->orgData
       note: >
@@ -556,8 +559,9 @@ pins:
     - risk: riskRogueActions
       at: events->agent
       note: >
-        A scheduled run is a consequential action with the approval gate structurally absent —
-        the control this whole page leans on does not exist on this path.
+        A scheduled run has nobody in the thread to approve its proposals, so the action policy
+        must stop its writes; a scheduler holding a standing approval, or an auto-approve
+        setting, turns it into an unattended write.
     - risk: riskRunawayAgentToolLoops
       at: agent
       note: >
@@ -575,8 +579,8 @@ pins:
       at: localTools
       note: >
         Handlers compiled into the loop's process hold whatever the process holds and cross no
-        chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
-        control.
+        chokepoint — the gateway never sees a vulnerable or malicious in-process tool, and the
+        workload's network policy is the drawn bound on where it can reach.
     - risk: riskAgenticDelegationConfusedDeputy
       at: agent
       note: >
@@ -594,9 +598,10 @@ pins:
     - risk: riskToolSourceProvenance
       at: registry
       note: >
-        What the sandbox installs is code the agent chose, on a name it read in a task or a tool
-        result; the mirror decides which build answers to that name, and whoever can write to
-        the mirror programs every sandbox that pulls from it.
+        Skill and tool packages reach the harness from the community hubs through this mirror,
+        and their manifests and descriptions become tool metadata the agent selects from.
+        Admitted without verifying the publisher and the signature, a deceptive description or a
+        shadowed tool name enters here.
   mitigations:
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
@@ -624,7 +629,7 @@ pins:
       note: A distinct workload identity for the agent tier, kept separate from the user grants it carries.
     - mitigation: D3-CH
       at: agent->gateway
-      note: Brokered, per-call, user-scoped credentials; the loop holds no standing keys.
+      note: Brokered, per-call, user-scoped credentials; the loop holds no standing keys for brokered calls.
     - mitigation: AML.M0031
       at: memory
       note: Conversation-scoped memory with hard boundaries — no cross-session reads, ever.
@@ -636,8 +641,9 @@ pins:
     - mitigation: cap-retrieval-grounding-checks
       at: memory
       note: >-
-        Grounding retrieved with the asking user's permissions, not the service's — otherwise the index
-        becomes a way to read what the conversation's owner cannot.
+        Ingest trust on what enters the indexed sources and per-tenant isolation inside the index — the answer
+        to a poisoned index, distinct from scoping what a read may return: an entitled document can still be a
+        malicious one.
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
@@ -667,8 +673,8 @@ pins:
       at: gateway
       note: >-
         Mutating actions are refused unless the call carries an approval bound to this action, its arguments
-        and this session; read-only actions pass on the user's grant. This is the decision the in-thread
-        approval exists to feed.
+        and this session — a scheduled run's included; read-only actions pass on the user's grant. This is the
+        decision the in-thread approval exists to feed.
     - mitigation: AML.M0036
       at: gateway
       note: >-
@@ -680,16 +686,18 @@ pins:
         User grant, agent workload identity and session scope intersect on every call; the gateway exchanges
         the user's token for a narrowed one and never forwards it.
     - mitigation: cap-mcp-tool-integrity
-      at: govSupplyChain
+      at: agent->gateway
       note: >-
-        Admission is change-time; the rug-pull is a tool whose definition changes after admission.
-        Content-hash pinning of admitted tool descriptions is what catches it.
+        Tool definitions reach the harness's MCP client through the gateway's brokerage, and each is checked
+        against the content hash pinned at admission before the model is offered it — a definition changed
+        after admission, the rug-pull, is refused, and the check repeats after every update.
     - mitigation: cap-agent-egress-control
       at: localTools
       note: >-
-        The sandbox's network policy: the only routes out are the AI gateway and the package mirror. Shell
-        commands, fetches and anything else a tool emits are bounded here — not at the gateway, which brokers
-        model, MCP and API calls and sees nothing else.
+        Network policy on the whole harness workload, not just the sandbox: the sandbox reaches only the AI
+        gateway and the package mirror, and the in-process handlers' own calls reach a named allowlist. Shell
+        commands, fetches and handler calls are bounded here — not at the gateway, which brokers model, MCP and
+        API calls and sees nothing else.
     - mitigation: D3-FA
       at: sources->registry
       note: >-
@@ -725,7 +733,7 @@ walkthrough:
       note: The completion comes back across the crossing.
     - follow: gateway->agent
       label: pending proposal
-      note: And into the loop — unauthenticated content, now a pending proposal.
+      note: And into the loop — untrusted output, now a pending proposal.
     - follow: agent->entry
       label: proposal to render
       note: The proposal travels to the surface to be rendered, nothing yet executed.
@@ -805,26 +813,29 @@ scenarios:
       - follow: events->agent
         label: scheduled job wakes
         note: >
-          The job a conversation configured wakes with nobody reading the reply — the approval
-          gate this whole page leans on is structurally absent.
+          The job a conversation configured wakes with the thread closed — nobody is there to
+          approve anything it proposes.
       - follow: agent->gateway
         label: unattended context
         note: The run crosses on the same brokered credential an attended turn would.
       - follow: gateway->provider
         label: inference, unread
-        note: The model proposes actions no one will read before they run.
+        note: The model proposes a write no one is reading.
       - follow: provider->gateway
-        label: proposal, unread
-        note: The proposal comes back with nobody reading it.
-      - follow: gateway->internalTools
-        label: bounded by catalogue
-        note: What executes is bounded by the catalogue and the scoped grant alone.
-      - follow: internalTools->orgData
-        label: unattended write
+        label: proposed write
+        note: The proposal comes back across the crossing.
+      - follow: gateway->agent
+        label: proposal into the loop
+        note: Into the loop, which dispatches it like any action.
+      - follow: agent->gateway
+        label: write, no approval bound
+        note: The write leaves the loop carrying no approval — there was nobody to give one.
+      - follow: gateway->agent
+        label: refused; run suspends
         note: >
-          The write lands unattended. The single agent workflow's controls — catalogue,
-          threshold, compensating transaction — are what must hold here, and its page is the
-          one to read.
+          The action policy refuses a mutating call with no approval bound to this action, its
+          arguments and a session. The run suspends and the proposal waits in the thread for the
+          user's return: the reads ran, nothing was written.
   - title: The session outlives the topic
     steps:
       - follow: user->entry
@@ -894,13 +905,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: The gateway's Skills catalogue item has no drawn supply path
-    reason: >
-      The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
-      it whole because the tier brokers skills traffic in deployments that use skills. The
-      supply chain behind the item — a private package registry and its signing pipeline — is
-      deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
-      pull path.
   - subject: Memory poisoning is pinned as prompt injection
     reason: >
       OWASP's agentic taxonomy names memory poisoning as a distinct threat; CoSAI's risk set

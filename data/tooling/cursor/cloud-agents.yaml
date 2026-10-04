@@ -7,6 +7,7 @@
 # docs read through the .md variants). Moved: Protected Git Scopes is documented on
 # enterprise/model-and-integration-management, not security-hardening; automations' "Team Owned" is now Run as → Service
 # account; the hooks page lists beforeMCPExecution as not available in cloud agents.
+# 2026-10-04: removed the D3-AA row and the cross-tenant risk note after the hosted-sessions drawing pruned those pins (review HS-01); OIDC scoping stays on D3-CTS.
 vendor: cursor
 family: Cursor Cloud Agents
 tools:
@@ -155,11 +156,6 @@ tools:
           only reach repositories the triggering user could, but Automations run under the `cursor` account or
           a service account and Approval Agents can approve PRs on their own criteria — a machine identity
           approving machine-authored changes unless you keep approvals off.
-      - risk: riskCrossTenantCredentialPropagation
-        note: >-
-          OIDC tokens identify the whole run (cloud_agent_id, team_id, repo_urls) and any process on the VM
-          can mint one from the local socket; scope IAM trust policies on aud and sub, not on the token
-          existing. Egress IPs are shared across Cursor clusters, not per customer.
       - risk: riskSensitiveDataDisclosure
         note: >-
           Agent summaries and diffs are posted into Slack, GitHub and Linear by default; conversation state
@@ -238,66 +234,6 @@ tools:
                     - Under Cursor Dashboard → Cloud Agents → Self-Hosted enable or disable Remote Control for
                       members; enabling it also enables the team's self-hosted worker access.
                   url: https://cursor.com/docs/cloud-agent/mobile
-              verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Per-run OIDC tokens (issuer https://api.cursor.com, 5-minute RS256, sub user:<id> or
-          service_account:<id>); Enterprise service accounts under Dashboard → Settings → API Keys → Service
-          Accounts; automation Run as → Service account; the Cursor GitHub App installation
-        steps:
-          - title: Give unattended work its own principal
-            body:
-              - Create Enterprise service accounts under Dashboard → Settings → API Keys → Service Accounts; keys
-                are shown once, Rotate invalidates the old key immediately, Archive revokes every key, and runs a
-                service account starts are visible to all team admins.
-            url: https://cursor.com/docs/account/enterprise/service-accounts
-          - title: Move automations off personal identities
-            body:
-              - Set an automation's Run as to Service account (team admins only) so it runs under its own
-                automation-<id> service account instead of its creator's auth.
-            url: https://cursor.com/docs/cloud-agent/automations
-          - title: Authorize federated calls on the run's claims
-            body:
-              - Trust the issuer https://api.cursor.com, require your aud, and pin sub (user:<id>,
-                service_account:<id>, or team_id via sub_claim) plus cloud_agent_id and repo_urls in the trust
-                policy.
-            url: https://cursor.com/docs/cloud-agent/identity
-        note: >-
-          Rated partial on the hosted rule. An interactive run acts as its triggering user: the OIDC sub is
-          user:<id> by default, runs set to Run as Me open pull requests as the user's GitHub account, and the
-          GitHub App reaches only what that user can. A distinct principal that is inventoried and revocable
-          separately exists only for Enterprise service accounts (API runs and automations set to Run as Service
-          account). The per-run OIDC token is a real workload credential bound to cloud_agent_id, but any process
-          on the VM can mint it and nothing revokes it beyond its five-minute life. Issuance is Cursor's control
-          plane, authorization your IAM trust policy, revocation archiving the service account or removing the
-          member.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: native
-              mechanism: >-
-                OIDC federation (issuer https://api.cursor.com, discovery /.well-known/openid-configuration,
-                keys /keys); Enterprise service accounts
-              steps:
-                - title: Federate agent identity instead of storing keys
-                  body:
-                    - Create an IAM OIDC provider (or GCP WIF, Azure federated credential, Vault JWT auth)
-                      trusting https://api.cursor.com; agents mint 5-minute RS256 tokens from the VM socket
-                      with claims sub (user:<id> or service_account:<id>), aud, cloud_agent_id, team_id,
-                      repo_urls and agent_runtime=managed.
-                  url: https://cursor.com/docs/cloud-agent/identity
-                - title: Give automation its own identity
-                  body:
-                    - Create Enterprise service accounts under Dashboard → Settings → API Keys → Service
-                      Accounts; keys are shown once, can be rotated, and archiving the account revokes them;
-                      runs are visible to all team admins.
-                  url: https://cursor.com/docs/account/enterprise/service-accounts
-              note: The token identifies the run, not a process — any process with socket access can mint one.
               verified: 2026-09-10
       - mitigation: cap-agent-tool-registry
         coverage: partial

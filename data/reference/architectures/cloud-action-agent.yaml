@@ -85,7 +85,7 @@ zones:
     owner: cloud
     note: >
       Everything we operate: the queues, webhooks and timers that start the loop, the loop
-      itself, its state, the crossing every call leaves through, and our own tool servers and
+      itself, its state, the crossing every brokered call leaves through, and our own tool servers and
       systems of record.
   - id: zoneExternal
     owner: external
@@ -132,8 +132,10 @@ blocks:
       not a hop: decorated functions running in the loop's own process, under its identity,
       with its egress and its secrets, and the sandbox the loop's generated code runs in. This
       is the default way a tool gets attached, and the reason it is drawn: the in-process tool
-      set is invisible to any gateway. What these tools reach is drawn — memory and retrieval
-      through their handlers, and the package mirror through the sandbox's package manager.
+      set is invisible to any gateway, so nothing on the crossing authorizes or meters it — the
+      handlers' own checks and the workload's network policy are its bounds. What these tools
+      reach is drawn — memory and retrieval through their handlers, and the package mirror
+      through the sandbox's package manager.
     items:
       - id: inProcess
         label: Tool handlers
@@ -210,7 +212,7 @@ blocks:
     note: >
       The one crossing every network-brokered model and tool call leaves through — the
       in-process tool set is the drawn exception. The agent tier holds no standing
-      credentials; the gateway brokers them per call, meters spend and writes the audit trail
+      credentials for these calls; the gateway brokers them per call, meters spend and writes the audit trail
       as a tap on the crossing. Its items are the traffic classes it brokers — the checks it
       runs are the numbered pins on this block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
@@ -335,8 +337,8 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 5
-    mitigations: [ D3-CH, D3-CTS ]
-    note: Short-lived credentials minted per call, so a loop running with nobody watching holds no standing keys.
+    mitigations: [ D3-CH ]
+    note: Short-lived credentials minted per call, so a loop running with nobody watching holds no standing keys for brokered calls.
 
   - id: govPolicy
     kind: governance
@@ -448,8 +450,8 @@ edges:
     bidir: true
     label: inference, MCP & skills
     note: >
-      Every network call out of the loop crosses here on a brokered credential. The agent tier
-      holds no standing keys of its own.
+      Every brokered call out of the loop — inference, MCP, skills and APIs — crosses here on a
+      brokered credential. The in-process handlers' own calls do not.
   - from: localTools
     to: registry
     path: primary
@@ -528,7 +530,7 @@ pins:
         records compound here.
     - risk: riskInsecureModelOutput
       at: gateway->provider
-      note: The completion names an action and its parameters, and it is unauthenticated content.
+      note: The completion names an action and its parameters, and it is untrusted output.
     - risk: riskAgenticDelegationConfusedDeputy
       at: planner
       note: >
@@ -555,8 +557,8 @@ pins:
       at: localTools
       note: >
         Handlers compiled into the loop's process hold whatever the process holds and cross no
-        chokepoint — a vulnerable or malicious in-process tool is invisible to every drawn
-        control.
+        chokepoint — the gateway never sees a vulnerable or malicious in-process tool, and the
+        workload's network policy is the drawn bound on where it can reach.
     - risk: riskPromptInjection
       at: gateway->extTools
       note: >
@@ -572,9 +574,10 @@ pins:
     - risk: riskToolSourceProvenance
       at: registry
       note: >
-        What the sandbox installs is code the agent chose, on a name it read in a task or a tool
-        result; the mirror decides which build answers to that name, and whoever can write to
-        the mirror programs every sandbox that pulls from it.
+        Skill and tool packages reach the harness from the community hubs through this mirror,
+        and their manifests and descriptions become tool metadata the agent selects from.
+        Admitted without verifying the publisher and the signature, a deceptive description or a
+        shadowed tool name enters here.
   mitigations:
     - mitigation: D3-APA
       at: events->planner
@@ -602,14 +605,15 @@ pins:
       at: internalTools->orgData
       note: >-
         An approval gate keyed to irreversibility and value, rare enough to be read; below it, reversal rather
-        than review. The approver is the operator on the drawing, reached over the front end — never the
+        than review. The approver is the operator on the drawing, reached through the approval channel — never the
         requester, because the beneficiary approving their own remedy is no gate at all. The escalation
         scenario walks the round trip.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
       note: >-
         A per-invocation policy decision — this action, this record, this value, now — rather than a
-        session-time grant.
+        session-time grant, made on the intersection of the requester's grant and the agent's own identity,
+        never the union, which is what a confused deputy runs on.
     - mitigation: D3-AA
       at: planner
       note: >-
@@ -627,26 +631,22 @@ pins:
       note: Case-scoped memory with hard boundaries — no cross-case reads, ever.
     - mitigation: D3-CH
       at: planner->gateway
-      note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing key.
+      note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing model key.
     - mitigation: AML.M0036
       at: gateway
       note: Quotas and cost ceilings on the crossing, before token spend and action volume are committed.
     - mitigation: cap-agent-egress-control
       at: localTools
       note: >-
-        The sandbox's network policy: the only routes out are the AI gateway and the package mirror. Shell
-        commands, fetches and anything else a tool emits are bounded here — not at the gateway, which brokers
-        model, MCP and API calls and sees nothing else.
+        Network policy on the whole harness workload, not just the sandbox: the sandbox reaches only the AI
+        gateway and the package mirror, and the in-process handlers' own calls reach a named allowlist. Shell
+        commands, fetches and handler calls are bounded here — not at the gateway, which brokers model, MCP and
+        API calls and sees nothing else.
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
         Returned record and external content is classified at the crossing before it re-enters the loop's
         context — the harder injection path gets the same treatment the request text does.
-    - mitigation: D3-CTS
-      at: gateway->internalTools
-      note: >-
-        Effective authority is the intersection of the requester's grant, the agent's identity, the action
-        policy and the target record — never the union, which is what a confused deputy runs on.
     - mitigation: cap-agent-tracing
       at: govObservability
       note: >-
@@ -660,10 +660,11 @@ pins:
         Ingest trust on what enters the case index and per-tenant isolation inside it — the answer to a
         poisoned index, distinct from scoping what a read may return.
     - mitigation: cap-mcp-tool-integrity
-      at: govSupplyChain
+      at: planner->gateway
       note: >-
-        Admission is change-time; the rug-pull is a tool whose definition changes after admission.
-        Content-hash pinning of admitted tool descriptions is what catches it.
+        Tool definitions reach the harness's MCP client through the gateway's brokerage, and each is checked
+        against the content hash pinned at admission before the model is offered it — a definition changed
+        after admission, the rug-pull, is refused, and the check repeats after every update.
     - mitigation: D3-FA
       at: sources->registry
       note: >-
@@ -699,10 +700,16 @@ walkthrough:
       note: The model proposes an action and parameters from the catalogue.
     - follow: provider->gateway
       label: proposed action
-      note: The proposal comes back across the crossing — unauthenticated content, now the plan.
+      note: The proposal comes back across the crossing — untrusted output, not yet a decision.
+    - follow: gateway->planner
+      label: proposal into the loop
+      note: Into the loop, which checks that it names a catalogue action and decides to dispatch it.
+    - follow: planner->gateway
+      label: action dispatched
+      note: The loop dispatches the action as a tool call through the crossing.
     - follow: gateway->internalTools
       label: validated action
-      note: The proposal is validated — well-formed, in policy, under the value threshold.
+      note: The call is validated — well-formed, in policy, under the value threshold.
     - follow: internalTools->orgData
       label: refund executes
       note: The refund executes, with its compensating transaction on file.
@@ -713,10 +720,10 @@ walkthrough:
       label: result, logged
       note: The result crosses back, logged against the call that caused it.
     - follow: gateway->planner
-      label: outcome posted back
+      label: outcome closes the case
       note: >
-        The loop closes its plan with the outcome and posts it back on the channel the request
-        came from — within seconds, and the audit holds the reasoning.
+        The loop closes the case with the outcome — within seconds, and the audit holds the
+        decision.
 
 scenarios:
   - title: The payload is the attack
@@ -735,7 +742,13 @@ scenarios:
         note: A steered model proposes the most generous action available.
       - follow: provider->gateway
         label: steered proposal
-        note: The steered proposal comes back as the plan.
+        note: The steered proposal comes back across the crossing.
+      - follow: gateway->planner
+        label: steered plan in the loop
+        note: The loop takes it as its plan.
+      - follow: planner->gateway
+        label: steered action dispatched
+        note: And dispatches it as an ordinary tool call.
       - follow: gateway->internalTools
         label: catalogue bounds it
         note: The catalogue does not care what steered the model — parameters and policy bounds hold.
@@ -758,6 +771,12 @@ scenarios:
       - follow: provider->gateway
         label: proposal, nobody reading
         note: The proposal comes back with nobody to read it.
+      - follow: gateway->planner
+        label: into the loop
+        note: The loop takes it as its plan.
+      - follow: planner->gateway
+        label: outbound action dispatched
+        note: And dispatches the action through the crossing.
       - follow: gateway->extTools
         label: outbound action
         note: The action reaches outward, admitted by the same catalogue and egress allowlist.
@@ -772,8 +791,8 @@ scenarios:
       - follow: planner->gateway
         label: lookup for a record
         note: >
-          The loop needs a customer record — and crosses first, because nothing on the agent
-          tier reaches a tool surface directly.
+          The loop needs a customer record — and crosses first, because the record sits behind
+          our tool services, reached only through the crossing.
       - follow: gateway->internalTools
         label: admitted lookup
         note: The lookup is admitted against the catalogue and narrowed to this case.
@@ -798,6 +817,12 @@ scenarios:
       - follow: provider->gateway
         label: attacker's proposal
         note: The proposal it produces is the attacker's, in the model's voice.
+      - follow: gateway->planner
+        label: attacker's plan in the loop
+        note: The loop takes it as its plan.
+      - follow: planner->gateway
+        label: action dispatched
+        note: And dispatches it.
       - follow: gateway->internalTools
         label: catalogue & policy hold
         note: The catalogue and the per-call policy are the controls that were built for exactly this turn.
@@ -860,13 +885,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: The gateway's Skills catalogue item has no drawn supply path
-    reason: >
-      The aiGatewayTraffic pack is byte-identical across the catalogue, and this drawing keeps
-      it whole because the tier brokers skills traffic in deployments that use skills. The
-      supply chain behind the item — a private package registry and its signing pipeline — is
-      deliberately outside this runtime drawing's scope; the endpoint personal agent draws the
-      pull path.
   - subject: The trigger ingress absorbs inbound classification
     reason: >
       Input screening (cap-input-guardrails) is embodied by the AI gateway, but a payload is

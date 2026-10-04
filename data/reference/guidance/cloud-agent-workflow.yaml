@@ -27,15 +27,18 @@ overview:
     transactions) still apply inside every subagent and get their own guidance.
 
 items:
-  - title: Route every tool call through one governed gateway
-    mitigations: [AML.M0028, cap-agent-tool-registry, cap-mcp-tool-integrity]
+  - title: Route every network tool call through one governed gateway
+    mitigations: [AML.M0028, cap-agent-tool-registry, cap-mcp-tool-integrity, cap-agent-egress-control]
     body:
       - >-
-        Require a single choke point between agents and tools: one gateway that owns the
-        tool catalogue, scopes each agent to the least set of tools its job needs, and is
-        the only path — a subagent with its own side-channel to a connector is the design
-        smell to reject in review. The registry behind the gateway is the inventory of
-        record: which agents exist, which tools each may call, and who approved the pairing.
+        Require a single choke point between agents and remote tools: one gateway that owns
+        the tool catalogue, scopes each agent to the least set of tools its job needs, and is
+        the only network path to a connector — a subagent with its own side-channel to a
+        connector is the design smell to reject in review. The in-process tool handlers are the
+        one exception: they run inside the harness, so the gateway never sees them, and their
+        own checks plus the workload's network policy are what bound them. The registry behind
+        the gateway is the inventory of record: which agents exist, which tools each may call,
+        and who approved the pairing.
 
   - title: Give agents their own identity and short-lived credentials
     mitigations: [ D3-AA, cap-agent-kill-switch, D3-APA, D3-CH ]
@@ -69,10 +72,13 @@ items:
     body:
       - >-
         Everything the connectors return — documents, records, messages — enters the context
-        window as unauthenticated content that can steer the loop. Require injection
-        screening on retrieved content and on inter-agent messages, and data-loss inspection
-        on what flows out through responses and tool calls, at the gateway where both
-        directions already pass.
+        window as untrusted content that can steer the loop. Require injection screening at the
+        gateway on what it carries back — tool results and third-party returns — before any
+        agent reads them, and redaction on what steps journal, because the journal outlives
+        the process. Inter-agent messages and shared-memory reads never cross the gateway:
+        they are model output becoming model input inside one process, so the design treats
+        them as untrusted input — a specialist's output is data for the supervisor, never an
+        instruction it obeys.
 
   - title: Scope durable state, and keep secrets out of the journal
     mitigations: [ AML.M0031, D3-CTS ]
@@ -104,7 +110,8 @@ items:
         unbounded egress gives a steered agent all the time it needs to find the exit. Agents
         write code; only the sandbox runs it: an isolated runtime with its own filesystem and
         network, admitted through the registry like any tool, torn down per task so nothing
-        accumulates between runs.
+        accumulates between runs. What the sandbox installs is file-analysed at the mirror
+        before admission — malware and typosquat scanning, not just a digest match.
 
   - title: Log for reconstruction, and build the stop before you need it
     mitigations: [cap-agent-tracing, cap-agent-kill-switch]

@@ -239,11 +239,36 @@ tools:
           vetting on users), and the GGUF parser is itself native code. Format and content inspection at
           quarantine is an external model scanner in the artifact repository or promotion pipeline.
         verified: "2026-09-25"
-      - mitigation: D3-MFA
-        coverage: external
+      - mitigation: D3-AA
+        coverage: partial
         mechanism: >-
-          No human sign-in on the local server; API tokens (Require Authentication) and a loopback bind are the
-          integration points for an authenticating reverse proxy / IdP
+          Require Authentication with named API tokens (off by default) as caller identity; loopback bind by default
+          (Serve on Local Network; lms server start --bind, LMS_SERVER_HOST) and Enable CORS (off by default) around
+          it; no Host or Origin validation documented; per-user app settings with no managed channel except the bind
+        steps:
+          - title: Require API tokens
+            body:
+              - >-
+                In Developer > Server Settings turn on Require Authentication and create tokens under Manage
+                Tokens; every REST, SDK and /v1/messages request then needs Authorization: Bearer or x-api-key.
+            url: https://lmstudio.ai/docs/developer/core/authentication
+          - title: Pin the bind to loopback from device management
+            body:
+              - >-
+                Leave Serve on Local Network off, and launch managed servers with lms server start --bind
+                127.0.0.1 or set LMS_SERVER_HOST=127.0.0.1, the only non-GUI channel for these settings.
+            url: https://lmstudio.ai/docs/cli/serve/server-start
+          - title: Keep CORS and the MCP switches off
+            body:
+              - >-
+                Leave Enable CORS off (never pass --cors) and keep Allow per-request MCPs and Allow calling
+                servers from mcp.json off unless an authenticated application needs them.
+            url: https://lmstudio.ai/docs/developer/core/server/settings
+          - title: Turn off LM Link where the machine serves only itself
+            body:
+              - >-
+                Set Settings > LM Link > Enable LM Link off in the app, or run lms link disable for llmster.
+            url: https://lmstudio.ai/docs/lmlink/basics/faq
         evidence:
           - title: LM Studio docs — Authentication (API tokens, off by default)
             url: https://lmstudio.ai/docs/developer/core/authentication
@@ -252,15 +277,21 @@ tools:
           - title: LM Link FAQ (account-linked devices use each other's models)
             url: https://lmstudio.ai/docs/lmlink/basics/faq
         note: >-
-          External on the drawing's rule: the runtime has no human sign-in to put a second factor on. The API
-          accepts a static bearer token (Developer > Server Settings > Require Authentication; tokens from Manage
-          Tokens; Authorization: Bearer or x-api-key) — one factor, held by software. Caller identity with MFA
-          comes from an authenticating reverse proxy or IdP-aware gateway in front: keep the server on
-          127.0.0.1 (lms server start --bind 127.0.0.1 or LMS_SERVER_HOST), give the proxy the only token, and
-          publish only the proxy. The LM Studio account sign-in (lms login, used for LM Link and the Hub) is
-          not a gate on the local API and documents no second-factor requirement; LM Link lets devices on the
-          same account reach this machine's models, and whether Require Authentication applies to them is not
-          documented, so turn LM Link off where the proxy must be the only path.
+          Partial by the drawing's rule: callers can be authenticated, but not in a way the organisation can require.
+          Require Authentication makes every REST, SDK and Anthropic-compatible request carry a bearer token
+          (Developer > Server Settings; tokens from Manage Tokens; Authorization: Bearer or x-api-key), so one named
+          token per application identifies the caller; it has been off by default since it arrived in 0.4.0, tokens
+          have editable permissions whose names are not documented, and the docs do not say /v1 OpenAI-compatible
+          calls are covered. Loopback default: yes — --bind defaults to 127.0.0.1 and the docs warn that any other
+          bind needs authentication. Host and Origin validation: not documented — CORS off only stops a page reading
+          replies, and DNS rebinding is not addressed. Delivery is the weak point: Require Authentication, CORS and
+          Serve on Local Network are per-user app toggles with no documented managed or locked settings file, so the
+          device's user can undo them and device management can only pin the bind and detect drift. Where the token
+          must be the only path, put an authenticating reverse proxy or gateway in front, give it the only token and
+          publish only the proxy. The LM Studio account sign-in (lms login, used for LM Link and the Hub) is not a
+          gate on the local API; LM Link lets devices on the same account reach this machine's models over Tailscale,
+          and whether Require Authentication applies to them is not documented, so turn LM Link off where the proxy
+          must be the only path. lms ls / load / ps --host operate any instance they can reach.
         verified: "2026-09-25"
       - mitigation: cap-output-guardrails
         coverage: external
@@ -312,48 +343,6 @@ tools:
           process or a device: one caller can hold every slot. With JIT loading on, any caller can force a model
           load; LM Link adds the account's other devices as callers. Per-caller rates and quotas are gateway rate
           limiting in front of a loopback-bound server (external).
-        verified: "2026-09-25"
-      - mitigation: D3-MAN
-        coverage: partial
-        mechanism: >-
-          Loopback bind by default (Serve on Local Network; lms server start --bind, LMS_SERVER_HOST), Require
-          Authentication with API tokens (off by default), Enable CORS (off by default); no Host or Origin
-          validation documented; per-user app settings with no managed channel except the bind
-        steps:
-          - title: Require API tokens
-            body:
-              - >-
-                In Developer > Server Settings turn on Require Authentication and create tokens under Manage
-                Tokens; every REST, SDK and /v1/messages request then needs Authorization: Bearer or x-api-key.
-            url: https://lmstudio.ai/docs/developer/core/authentication
-          - title: Pin the bind to loopback from device management
-            body:
-              - >-
-                Leave Serve on Local Network off, and launch managed servers with lms server start --bind
-                127.0.0.1 or set LMS_SERVER_HOST=127.0.0.1, the only non-GUI channel for these settings.
-            url: https://lmstudio.ai/docs/cli/serve/server-start
-          - title: Keep CORS and the MCP switches off
-            body:
-              - >-
-                Leave Enable CORS off (never pass --cors) and keep Allow per-request MCPs and Allow calling
-                servers from mcp.json off unless an authenticated application needs them.
-            url: https://lmstudio.ai/docs/developer/core/server/settings
-          - title: Turn off LM Link where the machine serves only itself
-            body:
-              - >-
-                Set Settings > LM Link > Enable LM Link off in the app, or run lms link disable for llmster.
-            url: https://lmstudio.ai/docs/lmlink/basics/faq
-        note: >-
-          Partial by the drawing's rule (native needs a loopback default, an auth option and Host/Origin
-          validation, all configurable). Loopback default: yes — --bind defaults to 127.0.0.1 and the docs warn
-          that any other bind needs authentication. Auth option: yes, off by default since it arrived in 0.4.0;
-          tokens have editable permissions whose names are not documented, and the docs name REST, SDK and
-          Anthropic-compatible requests as covered without saying so for /v1 OpenAI-compatible calls. Host and
-          Origin validation: not documented — CORS off only stops a page reading replies, and DNS rebinding is
-          not addressed. Delivery is the weak point: Require Authentication, CORS and Serve on Local Network are
-          per-user app toggles with no documented managed or locked settings file, so the device's user can
-          undo them and device management can only pin the bind and detect drift. LM Link is a second
-          reachability path over Tailscale, and lms ls / load / ps --host operate any instance they can reach.
         verified: "2026-09-25"
       - mitigation: AML.M0005
         coverage: external

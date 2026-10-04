@@ -2,6 +2,7 @@
 # and cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
 # 2026-09-15: added sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched environments, cloud-sandboxes-reference, self-hosted-sandboxes-security, permission-policies, mcp-connector, vaults, tools (all 200).
 # 2026-09-25: re-verified all 16 rows (D3-MFA, D3-AA, D3-CH, D3-CTS, D3-EI, AML.M0028, AML.M0029, AML.M0031, cap-agent-tool-registry, cap-staged-rollout-gate, cap-agent-action-policy-enforcement, cap-input-guardrails, cap-ai-vendor-assessment, cap-agent-tracing, cap-agent-kill-switch, cap-agent-egress-control) against the MITRE capability rules; every platform.claude.com and support.claude.com page cited answered 200 with no redirect (read as .md via llms.txt); trust.anthropic.com renders client-side and was read in a browser; the Console login article confirms no Console-native MFA.
+# 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the workspace-scoped vault note is retagged as confused deputy.
 vendor: anthropic
 family: Claude Managed Agents
 tools:
@@ -68,11 +69,11 @@ tools:
         value: platform.claude.com/docs/en/managed-agents (overview through reference)
         url: https://platform.claude.com/docs/en/managed-agents/overview
     riskNotes:
-      - risk: riskCrossTenantCredentialPropagation
+      - risk: riskAgenticDelegationConfusedDeputy
         note: >-
-          Vaults and credentials are workspace-scoped: any API key with workspace access can reference them at
-          session creation, and the docs recommend separate workspaces and environments per trust boundary for
-          self-hosted sandboxes.
+          Vaults and credentials are workspace-scoped: any API key with workspace access can reference any
+          user's vault at session creation, so a session can act on a grant its caller does not own. The docs
+          recommend separate workspaces and environments per trust boundary for self-hosted sandboxes.
       - risk: riskPromptInjection
         note: >-
           Memory stores attach read_write by default and the docs warn a successful injection can write
@@ -94,123 +95,6 @@ tools:
           exchanges performed inside the sandbox return tokens unredacted, so perform exchanges outside and
           store the result in the vault.
     controls:
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          Require SSO for Console (Authentication section of Identity and access at
-          platform.claude.com/settings/identity) sends every interactive Console login to the IdP, whose MFA
-          policy supplies the second factor for the people who can change agents, environments, vaults, keys,
-          tunnels and federation rules; API key expirations and Workload Identity Federation narrow the
-          non-interactive path around that login
-        steps:
-          - title: Require SSO for the Console
-            body:
-              - >-
-                After verifying your domain on Identity and access (platform.claude.com/settings/identity),
-                turn on Require SSO for Console in the Authentication section and enforce MFA on the Claude
-                app in your IdP.
-            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Shrink the key path around the login
-            body:
-              - >-
-                Create API keys linked to a service account with a short expiration (an organisation maximum
-                expiration policy removes Never), and move production callers to Workload Identity Federation,
-                because a key acts without any interactive login.
-            url: https://platform.claude.com/docs/en/manage-claude/authentication
-        note: >-
-          Partial on the MFA rule applied to every vendor (as on toolClaudeCode): the Console has no second
-          factor of its own — login is Google, an emailed link or SSO, and no Console password exists (support
-          article 13371040) — so MFA is the IdP's, reached only through Require SSO for Console, and that page
-          appears only after SSO is enabled through Sales or an organisation merge. Paths around it: personal,
-          service-account, legacy workspace and Admin API keys, and federated tokens, act without an
-          interactive login, and any Workspace Developer or Limited Developer can create a key, so a key
-          holder changes agents, vaults and environments with no MFA. End-user MFA at the front end, which
-          decides whom a session runs for, is the deployer's application.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                Claude Console organisation and workspace membership, roles, SSO/SCIM and API-key or workload
-                identity federation credentials gate who can create agents and sessions
-              steps:
-                - title: Scope operators by workspace
-                  body:
-                    - Create agents, environments and vaults in a dedicated Console workspace and issue keys
-                      (or a WIF service account) scoped to it; Console SSO and SCIM govern the humans.
-                  url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
-              verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          No per-agent principal: agent ids and versions identify configuration. The calling application
-          authenticates as a service account (svac_) through Workload Identity Federation or a service-account
-          key; outbound MCP and API calls carry whatever credential the session's vaults map (vault
-          display_name and metadata name the end user); a self-hosted worker holds an environment key and a
-          per-session secret
-        steps:
-          - title: Give each calling application its own service account
-            body:
-              - >-
-                In Settings → Workload identity run Connect workload to create an issuer, a service account
-                and a federation rule scoped to the agent's workspace, so the application that drives the
-                agent holds short-lived tokens tied to a named non-human identity.
-            url: https://platform.claude.com/docs/en/manage-claude/workload-identity-federation
-          - title: Map each vault to one end user
-            body:
-              - >-
-                Create one vault per end user with metadata external_user_id and pass only that vault in
-                vault_ids at session creation, so the credential an MCP server sees is that user's.
-            url: https://platform.claude.com/docs/en/managed-agents/vaults
-          - title: Protect self-hosted worker credentials
-            body:
-              - >-
-                Store ANTHROPIC_ENVIRONMENT_KEY in a secrets manager, pass the per-session secret only into
-                the sandbox serving that session, and revoke the key on suspicion; revocation is validated on
-                every request.
-            url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
-        note: >-
-          Partial by the agent-identity rule: the runtime mints no identity per agent. What authenticates is
-          layered — the application's service account or API key to Anthropic (inventoried under Settings →
-          Service accounts and API keys, revocable apart from people), the vault credential to each MCP
-          server, and the environment key for a self-hosted worker — and none is bound to an agent id, so
-          revoking an agent means archiving it and finding every vault its sessions attached. Any key with
-          workspace access can attach any vault, and in a multiagent session every thread uses the session's
-          vaults. No agent identity is presented to third parties, and the MCP tunnel does not authenticate to
-          the upstream.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: >-
-                Agent resources with ids and versions; per-session vault identity (display_name and metadata
-                mapping to your user); environment service keys and per-session secrets for self-hosted
-                workers; no cryptographic agent identity presented to third parties
-              steps:
-                - title: Bind each session to an end-user vault
-                  body:
-                    - Create one vault per end user (metadata external_user_id) and pass vault_ids at session
-                      creation so actions on MCP servers are attributable to that user's credentials.
-                  url: https://platform.claude.com/docs/en/managed-agents/vaults
-                - title: Protect the environment key
-                  body:
-                    - Store ANTHROPIC_ENVIRONMENT_KEY in a secrets manager, pass the per-session secret only
-                      into the sandbox serving that session, and revoke on suspicion (validated on every
-                      request).
-                  url: https://platform.claude.com/docs/en/managed-agents/self-hosted-sandboxes-security
-              note: >-
-                The agent id and version identify a configuration, not a principal third parties authenticate;
-                vault credentials carry the authority for outbound calls, so the identity a tool sees is
-                whatever credential the vault mapped — inventory those as the non-human identities.
-              verified: 2026-09-10
       - mitigation: D3-CH
         coverage: native
         mechanism: >-

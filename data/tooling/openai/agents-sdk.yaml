@@ -337,7 +337,10 @@ tools:
           recorded only as a guardrail span. Not covered: handoffs, Agent.as_tool, hosted tools (WebSearchTool,
           FileSearchTool, HostedMCPTool, CodeInterpreterTool, ImageGenerationTool) and built-in execution tools
           (ComputerTool, ShellTool, ApplyPatchTool, LocalShellTool), which bypass the guardrail pipeline. A
-          hosted MCP server can be pointed at an MCP gateway that decides per call.
+          hosted MCP server can be pointed at an MCP gateway that decides per call. The intersection of
+          requester grant and agent identity is the application's to compute: an MCP server receives whatever
+          token the application put in its headers, function tools run with the process's credentials, and the
+          app context is shared by every agent in a run, nested Agent.as_tool runs included.
         verified: "2026-09-25"
       - mitigation: D3-AA
         coverage: partial
@@ -479,7 +482,8 @@ tools:
         mechanism: >-
           OPENAI_API_KEY by default, or set_default_openai_key / set_default_openai_client; a short-lived access
           token from workload identity federation passed to the client; set_tracing_export_api_key for a separate
-          tracing key; UnixLocalSandboxClient inherit_host_environment=False
+          tracing key; UnixLocalSandboxClient inherit_host_environment=False; credentials scoped per MCP server
+          (headers), per HostedMCPTool (authorization) and per hosted-shell domain (network_policy.domain_secrets)
         steps:
           - title: Replace the standing key with federation
             body:
@@ -500,6 +504,18 @@ tools:
                 Create UnixLocalSandboxClient(inherit_host_environment=False) with a host_environment_allowlist, so
                 commands do not inherit the process's keys.
             url: https://openai.github.io/openai-agents-python/sandbox/clients/
+          - title: Scope each tool credential to one server
+            body:
+              - >-
+                Put each tool credential in that MCP server's headers (an Authorization header, never the URL)
+                rather than the process environment.
+            url: https://openai.github.io/openai-agents-python/mcp/
+          - title: Bind sandbox secrets to their domain
+            body:
+              - >-
+                In a hosted-shell allowlist use network_policy.domain_secrets so a secret is injected only for its
+                domain.
+            url: https://openai.github.io/openai-agents-python/tools/
         note: >-
           Partial by this drawing's rule: the SDK takes whatever key or client the application gives it — by
           default a standing OPENAI_API_KEY from the environment — and brokers nothing per workload or per step.
@@ -573,38 +589,6 @@ tools:
           sandboxes are on or off, Unix-local adds no network isolation, and the hosted sandbox provider clients
           document no allowlist. In-process function tools (the local tools this pin sits on), local MCP servers
           and local ShellTool leave through the host network, which is the deployer's to restrict.
-        verified: "2026-09-25"
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          Credentials scoped per MCP server (headers), per HostedMCPTool (authorization), per agent model client
-          and per hosted-shell domain (network_policy.domain_secrets); per-user tokens in the run context for
-          function tools; no on-behalf-of exchange or passthrough guard
-        steps:
-          - title: Scope each credential to one server
-            body:
-              - >-
-                Put each tool credential in that MCP server's headers (an Authorization header, never the URL)
-                rather than the process environment.
-            url: https://openai.github.io/openai-agents-python/mcp/
-          - title: Bind sandbox secrets to their domain
-            body:
-              - >-
-                In a hosted-shell allowlist use network_policy.domain_secrets so a secret is injected only for its
-                domain.
-            url: https://openai.github.io/openai-agents-python/tools/
-          - title: Keep the host environment out of commands
-            body:
-              - >-
-                Set inherit_host_environment=False with an explicit host_environment_allowlist on
-                UnixLocalSandboxClient.
-            url: https://openai.github.io/openai-agents-python/sandbox/clients/
-        note: >-
-          Partial by this drawing's rule (per-tool credential context). The intersection of requester grant,
-          agent identity, policy and record is the application's: the SDK does not compute it, an MCP server
-          receives whatever token the application put in its headers (no audience check or passthrough guard),
-          function tools run with the process's credentials, and the app context is shared by every agent in a
-          run, nested Agent.as_tool runs included.
         verified: "2026-09-25"
       - mitigation: cap-agent-tracing
         coverage: native

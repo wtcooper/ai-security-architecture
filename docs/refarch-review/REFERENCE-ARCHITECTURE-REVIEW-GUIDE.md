@@ -56,9 +56,7 @@ These are stated in full in [`data/ONTOLOGY.md`](../../data/ONTOLOGY.md). The sh
 4. **Reuse before you create.** Every block title and item label must already be registered in
    [`data/reference/vocabulary.yaml`](../../data/reference/vocabulary.yaml), or be registered in
    the same change with a reason. Every build prints a census of distinct names; the registry
-   is meant only to shrink. Currently 60 block titles and 101 item labels are in use across
-   sixteen drawings (the 2026-09 remediation revived several registered names the drawings
-   had wrongly dropped).
+   is meant only to shrink; the build's census prints the current counts.
 
 5. **The three-zone responsibility rule.** What a vendor runs inside their own boundary is never
    drawn — it is assured by assessment (`capabilityAiTprm`) and recorded as one block. Drawing a
@@ -151,8 +149,8 @@ nesting, an optional `cosaiComponent` anchor, a `note`, and `items`.
   the place to concentrate review effort.
 
 ### `edges`
-The paths. `from`, `to`, `path` (`primary` = a path we own, `external` = crossing outward,
-`governance` = a control-plane relationship), `bidir` or `outbound` (only `from` opens it; the
+The paths. `from`, `to`, `path` (`primary` = a path we own, `external` = crossing outward),
+`bidir` or `outbound` (only `from` opens it; the
 reply rides it, one arrowhead), `label`, `note`, and an optional `route` hint for collision
 avoidance. An edge between our bands and the external band is never `bidir`.
 
@@ -211,8 +209,9 @@ capability chip, risk tag or step badge lands on a block or runs off the canvas.
 mode, carry attribution, and cite only capabilities pinned on the drawing. Ranks are unique
 within a surface. Deviations have reasons. The SAIF and CoSAI cross-checks pass.
 
-Two known-open items, both intentional and both reported by `npm run audit`: **2 risks and 23
-capabilities are not pinned on any architecture**. The risks were judged correctly absent in
+Two known-open items, both intentional and both counted by `npm run audit`: **some risks and
+capabilities are not pinned on any architecture**. They are not a backlog to fill: a pin is added
+only where a drawing needs a distinct enforcer that fits the definition. The risks were judged correctly absent in
 the 2026-09 remediation (`refarch-review/recommendations/cross-catalogue.md`). Most of the
 capabilities are the 2026-09-18 migration's fan-out twins, collapsed on 2026-09-24 so each
 drawing pins one mitigation per control concept (Credential Revocation beside Agent

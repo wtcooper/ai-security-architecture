@@ -431,52 +431,12 @@ tools:
           turn and blocks, substitutes or annotates on a fail, and the reverse proxy's endpoint allowlist keeps
           callers off vLLM's own routes, including /invocations, which reaches the same inference.
         verified: "2026-09-25"
-      - mitigation: AML.M0031
-        coverage: native
-        mechanism: >-
-          Per-request cache_salt, mixed into the hash of the first KV block so only requests with the same salt share
-          cached prefixes (chat completions, completions, responses, pooling and /v1/messages);
-          --no-enable-prefix-caching turns prefix sharing off entirely
-        steps:
-          - title: Salt every request per tenant
-            body:
-              - >-
-                Have the gateway set cache_salt on every request to a random per-tenant secret (the guide suggests
-                256 bits, e.g. 43 base64 characters), overwriting any value the caller sent.
-            url: https://docs.vllm.ai/en/stable/usage/security/
-          - title: Or turn prefix caching off
-            body:
-              - >-
-                Start with --no-enable-prefix-caching where tenants must share no cache at all; prefix caching is on
-                by default for models that support it.
-            url: https://docs.vllm.ai/en/stable/cli/serve/
-          - title: Keep collision-resistant block hashes
-            body:
-              - >-
-                Leave --prefix-caching-hash-algo at sha256 (or sha256_cbor) rather than the faster xxhash options.
-            url: https://docs.vllm.ai/en/stable/cli/serve/
-          - title: Do not accept caller media ids
-            body:
-              - >-
-                Strip or regenerate the uuid field on multimodal content parts at the gateway, because two callers
-                presenting the same uuid share one processor and encoder cache entry.
-            url: https://docs.vllm.ai/en/stable/usage/security/
-        note: >-
-          Native on this drawing's rule: a documented per-request salt the engine enforces in the prefix-cache block
-          hash — the tenant-scoped cache key the pin asks for. The boundary: the engine does not require it
-          ("cache_salt is opt-in and not passed by default"), so isolation holds only while the gateway salts every
-          request and callers cannot reach vLLM directly, and a tenant that learns another's salt shares its cache.
-          The salt covers prefix-cache blocks, not the multimodal processor and encoder caches keyed by
-          caller-supplied uuid. Salt handling had denial-of-service bugs (unbounded length, fixed 0.29.0; LMCache-MP
-          validation, fixed 0.30.0), and KV connectors (--kv-transfer-config) move cache beyond the process. The
-          in-batch leak CVE-2026-73558 sits outside the cache and is D3-HBPI's concern.
-        verified: "2026-09-25"
       - mitigation: D3-HBPI
         coverage: external
         mechanism: >-
-          Dedicated GPU nodes or confidential-computing GPU instances chosen by the platform for the
-          highest-sensitivity tenants; vLLM documents no hardware isolation and batches every tenant of an instance
-          together
+          Platform process isolation between serving instances (separate OS users or containers per instance, the
+          guide's advice), with hardware-enforced memory protection from the host; vLLM documents no hardware
+          isolation of its own and batches every tenant of an instance together
         evidence:
           - title: vLLM security guide (process-level isolation only — separate OS users or containers, /proc hidepid)
             url: https://docs.vllm.ai/en/stable/usage/security/
@@ -488,9 +448,9 @@ tools:
           requests through the same forward pass on the same accelerators, and CVE-2026-73558 showed a kernel
           integer overflow copying one user's output into another's response in the same batch (fixed 0.27.0). The
           guide's isolation advice is process-level (separate OS users or containers, /proc hidepid=2), not
-          hardware. Integration point: one `vllm serve` instance per sensitivity tier, scheduled by the platform onto
-          dedicated GPU nodes or confidential GPU VMs, with the gateway routing each high-sensitivity tenant only to
-          its instance.
+          hardware. Integration point: one `vllm serve` instance per sensitivity tier in its own process boundary, with
+          the gateway routing each tenant only to its instance. Process isolation separates memory, not accelerator
+          timing; dedicated GPU nodes or confidential GPU VMs for a tier are a separate deployment decision.
         verified: "2026-09-25"
       - mitigation: D3-AVE
         coverage: partial
@@ -555,7 +515,9 @@ tools:
           Safe defaults on the riskiest surfaces (VLLM_SERVER_DEV_MODE, VLLM_ALLOW_RUNTIME_LORA_UPDATING,
           --trust-remote-code, --grpc-port, profiler, --enable-tokenizer-info-endpoint and endpoint plugins all off)
           but unsafe defaults elsewhere (no --api-key, --allowed-origins *, all-interface bind, shared prefix cache,
-          unauthenticated /invocations and /scale_elastic_ep) and no flag that removes a route
+          unauthenticated /invocations and /scale_elastic_ep) and no flag that removes a route; per-request
+          cache_salt, mixed into the hash of the first KV block so only requests with the same salt share cached
+          prefixes, or --no-enable-prefix-caching
         steps:
           - title: Keep the runtime-update surfaces off
             body:
@@ -583,6 +545,24 @@ tools:
                 Point VLLM_CACHE_ROOT at a directory only the service account can write and never mount it from
                 shared or untrusted storage, because compile and kernel caches load without integrity checks.
             url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: Salt every request per tenant
+            body:
+              - >-
+                Have the gateway set cache_salt on every request to a random per-tenant secret (the guide suggests
+                256 bits, e.g. 43 base64 characters), overwriting any value the caller sent; or start with
+                --no-enable-prefix-caching where tenants must share no cache at all.
+            url: https://docs.vllm.ai/en/stable/usage/security/
+          - title: Keep collision-resistant block hashes
+            body:
+              - >-
+                Leave --prefix-caching-hash-algo at sha256 (or sha256_cbor) rather than the faster xxhash options.
+            url: https://docs.vllm.ai/en/stable/cli/serve/
+          - title: Do not accept caller media ids
+            body:
+              - >-
+                Strip or regenerate the uuid field on multimodal content parts at the gateway, because two callers
+                presenting the same uuid share one processor and encoder cache entry.
+            url: https://docs.vllm.ai/en/stable/usage/security/
         note: >-
           Partial on this drawing's rule — the dangerous surfaces are opt-in, but several defaults are unsafe and
           vLLM has no switch to unpublish a route: /invocations (the same inference as /v1), /pooling, /classify,
@@ -590,8 +570,11 @@ tools:
           reverse proxy that allowlists endpoints (external). The vendor's sources disagree on /pause, /resume,
           /abort_requests, /update_weights and /init_weight_transfer_engine: the guide lists them as unauthenticated
           whenever the model supports generation, while the v0.30.0 router registers them only under
-          VLLM_SERVER_DEV_MODE; treat them as reachable and block them at the proxy. The cache configuration is
-          exported as vllm:cache_config_info on /metrics for drift review.
+          VLLM_SERVER_DEV_MODE; treat them as reachable and block them at the proxy. Cache isolation is a salt the
+          engine enforces but does not require ("cache_salt is opt-in and not passed by default"): it holds only
+          while the gateway salts every request and callers cannot reach vLLM directly, a tenant that learns
+          another's salt shares its cache, and it does not cover the multimodal caches keyed by caller-supplied
+          uuid. The cache configuration is exported as vllm:cache_config_info on /metrics for drift review.
         verified: "2026-09-25"
       - mitigation: D3-NI
         coverage: external

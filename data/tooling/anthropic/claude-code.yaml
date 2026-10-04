@@ -546,9 +546,13 @@ tools:
       - mitigation: D3-EI
         coverage: partial
         mechanism: >-
-          sandbox.enabled with failIfUnavailable and allowUnsandboxedCommands false (Seatbelt on macOS,
-          bubblewrap on Linux and WSL2), filesystem and network lists locked with allowManagedReadPathsOnly
-          and allowManagedDomainsOnly; sandbox.excludedCommands has no managed-only lock
+          sandbox.enabled with failIfUnavailable and allowUnsandboxedCommands false (Seatbelt on macOS, bubblewrap on
+          Linux and WSL2), filesystem and network lists locked with allowManagedReadPathsOnly and
+          allowManagedDomainsOnly; sandbox.excludedCommands has no managed-only lock. Credential paths:
+          sandbox.credentials files and envVars entries (deny hides the credential; mask substitutes it at the proxy
+          only for allowed hosts), sandbox.filesystem.denyRead, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB in the managed env
+          block, and Unix sockets blocked in the sandbox by default; a Claude apps gateway keeps the upstream model
+          credential off the device
         steps:
           - title: Require the sandbox fleet-wide
             body:
@@ -570,18 +574,53 @@ tools:
                 sandbox.network.allowAllUnixSockets to false in managed settings; Boolean sandbox keys take
                 the managed value.
             url: https://code.claude.com/docs/en/settings-reference
+          - title: Deny credential paths to agent commands
+            body:
+              - >-
+                In managed settings add sandbox.credentials.files entries such as ~/.ssh and
+                ~/.aws/credentials and envVars entries such as GITHUB_TOKEN with mode "deny"; no other
+                settings scope can remove a deny entry.
+            url: https://code.claude.com/docs/en/sandboxing
+          - title: Inject credentials only for named hosts
+            body:
+              - >-
+                Use mode "mask" with sandbox.network.tlsTerminate so sandboxed commands hold a placeholder and
+                the proxy substitutes the secret only on requests to allowed hosts;
+                sandbox.credentials.awsPairs re-signs AWS requests.
+            url: https://code.claude.com/docs/en/sandboxing
+          - title: Scrub credentials from every subprocess
+            body:
+              - >-
+                Set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 in the managed env block to strip Anthropic,
+                cloud-provider and other recognised credentials from Bash, hook and stdio MCP server
+                environments.
+            url: https://code.claude.com/docs/en/env-vars
+          - title: Keep the model credential off the device
+            body:
+              - >-
+                Route through a Claude apps gateway so the upstream API or cloud credential stays in your
+                infrastructure and developers hold only short-lived gateway tokens.
+            url: https://code.claude.com/docs/en/claude-apps-gateway
         note: >-
           Partial on the fall-back test: sandbox.excludedCommands merges from every settings scope with no
-          managed-only lock, so a developer, or a repository's .claude/settings.json, can append commands that
-          run outside the sandbox (still through the permission prompt); the vendor states this plainly.
-          Inside: Bash, PowerShell and Monitor commands and their children on macOS, Linux and WSL2; native
-          Windows and WSL1 have no sandbox. Outside: built-in file tools (bounded by permission rules), MCP
-          servers and hooks, the CLI process itself, and commands a developer types at the ! prompt. The proxy
-          allows by client-supplied hostname without TLS inspection, and the sandbox shares the host kernel.
+          managed-only lock, so a developer, or a repository's .claude/settings.json, can append commands that run
+          outside the sandbox (still through the permission prompt); the vendor states this plainly. Inside: Bash,
+          PowerShell and Monitor commands and their children on macOS, Linux and WSL2; native Windows and WSL1 have no
+          sandbox. Outside: built-in file tools (bounded by permission rules), MCP servers and hooks, the CLI process
+          itself, and commands a developer types at the ! prompt. The proxy allows by client-supplied hostname without
+          TLS inspection, and the sandbox shares the host kernel. Credential paths: Partial: the scoping is
+          OS-enforced and admin-deliverable but lives in the Bash sandbox, which a developer can widen with
+          sandbox.excludedCommands (no managed lock), and it covers only the paths and variables you list — there is
+          no built-in deny list, so by default agent commands can read ~/.ssh, ~/.aws, git credential helpers, gh and
+          cloud CLI config and browser profiles. The environment scrub reaches hooks and stdio MCP servers; credential
+          files don't. File masking substitutes on Linux and WSL2 only (macOS blocks the file), mask needs the
+          experimental tlsTerminate, and native Windows has no sandbox. Git, cloud CLIs and MCP servers still act as
+          the developer; there is no on-behalf-of exchange.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -616,56 +655,6 @@ tools:
                 — native Windows has no sandbox, so failIfUnavailable decides whether commands run unsandboxed
                 there.
               verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          sandbox.credentials files and envVars entries (deny hides the credential; mask substitutes it at the
-          proxy only for allowed hosts), sandbox.filesystem.denyRead, CLAUDE_CODE_SUBPROCESS_ENV_SCRUB in the
-          managed env block, and Unix sockets blocked in the sandbox by default; a Claude apps gateway keeps
-          the upstream model credential off the device
-        steps:
-          - title: Deny credential paths to agent commands
-            body:
-              - >-
-                In managed settings add sandbox.credentials.files entries such as ~/.ssh and
-                ~/.aws/credentials and envVars entries such as GITHUB_TOKEN with mode "deny"; no other
-                settings scope can remove a deny entry.
-            url: https://code.claude.com/docs/en/sandboxing
-          - title: Inject credentials only for named hosts
-            body:
-              - >-
-                Use mode "mask" with sandbox.network.tlsTerminate so sandboxed commands hold a placeholder and
-                the proxy substitutes the secret only on requests to allowed hosts;
-                sandbox.credentials.awsPairs re-signs AWS requests.
-            url: https://code.claude.com/docs/en/sandboxing
-          - title: Scrub credentials from every subprocess
-            body:
-              - >-
-                Set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 in the managed env block to strip Anthropic,
-                cloud-provider and other recognised credentials from Bash, hook and stdio MCP server
-                environments.
-            url: https://code.claude.com/docs/en/env-vars
-          - title: Keep the model credential off the device
-            body:
-              - >-
-                Route through a Claude apps gateway so the upstream API or cloud credential stays in your
-                infrastructure and developers hold only short-lived gateway tokens.
-            url: https://code.claude.com/docs/en/claude-apps-gateway
-        note: >-
-          Partial: the scoping is OS-enforced and admin-deliverable but lives in the Bash sandbox, which a
-          developer can widen with sandbox.excludedCommands (no managed lock), and it covers only the paths
-          and variables you list — there is no built-in deny list, so by default agent commands can read
-          ~/.ssh, ~/.aws, git credential helpers, gh and cloud CLI config and browser profiles. The
-          environment scrub reaches hooks and stdio MCP servers; credential files don't. File masking
-          substitutes on Linux and WSL2 only (macOS blocks the file), mask needs the experimental
-          tlsTerminate, and native Windows has no sandbox. Git, cloud CLIs and MCP servers still act as the
-          developer; there is no on-behalf-of exchange.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
             - capability: capabilityCredentialIsolation
               coverage: partial
               mechanism: >-
@@ -1680,63 +1669,6 @@ tools:
                     - Owners turn "Code in the web", the allow_remote_sessions policy, Remote Control and
                       Quick web setup on or off at claude.ai/admin-settings/claude-code.
                   url: https://code.claude.com/docs/en/desktop
-              verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Anthropic-hosted sessions act as the creator's claude.ai account and GitHub grant (the Claude GitHub
-          App authorisation or a /web-setup gh token the GitHub proxy holds), attributed by Claude-Session
-          trailers and labelled replies; self-hosted sessions carry a signed per-session JWT
-          (CLAUDE_CODE_SESSION_ACCESS_TOKEN) with an RFC 8693 act chain; routine API triggers use per-routine
-          bearer tokens
-        steps:
-          - title: Verify session identity in self-hosted environments
-            body:
-              - >-
-                Have internal services verify CLAUDE_CODE_SESSION_ACCESS_TOKEN against the published JWKS,
-                check aud against your ccpool_ environment ID, and key on act.sub and ccr:session_id.
-            url: https://code.claude.com/docs/en/self-hosted-environments-identity
-          - title: Revoke a member's GitHub grant
-            body:
-              - >-
-                Disconnect GitHub at claude.ai/customize/connectors, and revoke the token on GitHub, to stop
-                cloud sessions acting through that member's GitHub identity.
-            url: https://code.claude.com/docs/en/web-quickstart
-          - title: Rotate routine trigger tokens
-            body:
-              - >-
-                Use Regenerate or Revoke in a routine's API trigger modal; each token can fire only that
-                routine.
-            url: https://code.claude.com/docs/en/routines
-        note: >-
-          Partial by the rule: sessions run on the user's own identity and GitHub grant with attribution only
-          — commits and PR bodies carry the session URL, review replies are labelled as Claude Code, and
-          routine actions appear as the routine's owner. Revocation is the user's GitHub disconnect or the
-          seat, not a separate agent identity an admin inventories; the organisation's service identity exists
-          only for Claude Tag channel sessions (toolClaudeTag). The self-hosted session JWT lasts four hours
-          by default, eight at most, and can't be revoked early: Anthropic publishes no revocation feed.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: >-
-                Sessions run under the user's account with proxy-issued scoped git credentials; self-hosted
-                runners register with an environment key and receive runner tokens; Claude Tag channel
-                sessions run under an agent identity
-              steps:
-                - title: Treat the environment key as a workload credential
-                  body:
-                    - The environment secret shown once at creation authenticates every runner; store it in a
-                      secrets manager and rotate it from the Cloud environments admin page.
-                  url: https://code.claude.com/docs/en/self-hosted-environments
-              note: >-
-                Anthropic-hosted sessions have no distinct agent identity: GitHub actions appear as the user
-                (or the Claude GitHub App). Session identity can be verified by your own services in
-                self-hosted environments.
               verified: 2026-09-10
       - mitigation: cap-agent-tool-registry
         coverage: partial

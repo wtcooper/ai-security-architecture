@@ -44,33 +44,36 @@ items:
       - >-
         Weights reach the runtime only through the promotion pipeline: format policy and
         scanning as a blocking gate, per-version evaluation because a new checkpoint is a new
-        model, and a digest verified at load so the gate cannot be bypassed by writing to
-        storage directly. Weights at rest get encryption, access control and integrity
-        digests — the artifact is expensive to reproduce and trivial to copy.
+        model, and verification at load against the approved digest recorded at promotion —
+        a record the serving identity cannot alter — so the gate cannot be bypassed by writing
+        to storage directly. Weights at rest get scoped access control: the artifact is
+        expensive to reproduce and trivial to copy.
 
   - title: Tenancy is a configuration review, not a default
-    mitigations: [D3-ACH, AML.M0031, D3-HBPI]
+    mitigations: [D3-ACH, D3-HBPI]
     body:
       - >-
         Continuous batching mixes tenants in one forward pass; the KV and prefix caches hold
-        their live context. Require tenant-scoped cache keys — published attacks reconstruct
-        other tenants' prompts from cache-hit timing alone, so cross-tenant prefix sharing is
-        off unless a review explicitly accepts it. For the highest-sensitivity tenants,
-        hardware-backed isolation on the accelerators is the answer where shared silicon is
-        not acceptable. Assessment probe: read the serving configuration and name which flags
-        a tenant boundary depends on; anyone who cannot has not reviewed it.
+        their live context. Require a secret per-tenant cache salt that the gateway sets on
+        every request, overwriting any the caller sent — published attacks reconstruct other
+        tenants' prompts from cache-hit timing alone — or turn prefix sharing off. Keep serving
+        instances in separate processes; that isolates their memory, not the accelerator side
+        channels, so where shared silicon is unacceptable for a tenant the answer is dedicated
+        accelerators, a deployment decision with its residual risk stated. Assessment probe:
+        send identical prefixes from two tenants and read the serving configuration for the
+        settings a tenant boundary depends on.
 
   - title: Own the patch stream and the posture, including the gateway's
     mitigations: [D3-AVE, cap-output-guardrails]
     body:
       - >-
         The serving stack is fast-moving third-party code with a live CVE stream, and nobody
-        upstream patches it on your behalf — track it like any other exposed tier, and treat
-        the gateway itself as supply chain: it is third-party code holding every tenant's
-        credentials, an incident class with recent precedent. Posture management watches
-        serving configuration for drift — versions, cache flags, bindings — and the guardrail
-        checks a provider would have run are deployed at the gateway on both legs, because
-        the output side is the half most often omitted.
+        upstream patches it on your behalf — enumerate the versions running against the
+        advisory feed so each advisory maps to the instances it affects, patch on your own
+        schedule, and treat the gateway itself as supply chain: it is third-party code holding
+        every tenant's credentials, an incident class with recent precedent. The content-policy
+        checks a provider would have run are deployed at the gateway on both legs, because the
+        output side is the half most often omitted.
 
   - title: Keep the lineage, the identities and a privacy-conscious record
     mitigations: [ AML.M0023, AML.M0014, D3-AA, AML.M0024 ]

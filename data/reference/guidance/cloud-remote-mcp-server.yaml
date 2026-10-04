@@ -30,7 +30,7 @@ overview:
 
 items:
   - title: Front the endpoint, and decide the three identity flows before any tool code is written
-    mitigations: [ AML.M0004, D3-APA, D3-AA, cap-agent-kill-switch ]
+    mitigations: [ AML.M0004, D3-APA, D3-AA, D3-CR ]
     body:
       - >-
         Require a gateway tier in front of the service: WAF, per-client and per-tenant rate
@@ -45,7 +45,8 @@ items:
         on the response, and a consent screen that names the client and its redirect host.
         Autonomous workloads: `client_credentials` with `private_key_jwt` under the workload's
         own registered identity, with scopes narrower than any user's. Dynamic client
-        registration is deprecated and fails review. Evidence: the gateway config, the IdP's
+        registration is deprecated by the protocol, kept only for compatibility, and fails this
+        reference's review. Evidence: the gateway config, the IdP's
         app-registry entry for this server, the authorization-server metadata showing the
         grant profiles, and one token per flow from a test client showing audience, expiry
         and scopes.
@@ -66,7 +67,7 @@ items:
         confirm a single 403 challenge names every scope the write needs.
 
   - title: Build stateless; a state handle is a name, not a capability
-    mitigations: [ D3-MAN ]
+    mitigations: [ AML.M0028 ]
     body:
       - >-
         The current protocol has no sessions: every request is self-contained, which is what
@@ -110,9 +111,10 @@ items:
         from, with versions pinned, so a definition that changes after approval is detectable
         by the people trusting it. Make consequential handlers return `input_required` and
         execute only on the retry that carries the confirmation — annotations are hints a
-        client must treat as untrusted, so elicitation is the lever the server actually holds
-        — and keep results bounded in size, because output lands in someone else's context
-        window.
+        client must treat as untrusted, so elicitation is the lever the server actually holds,
+        though a confirmation proves only that the client answered, not that a person reviewed
+        the action — and keep results bounded in size, because output lands in someone else's
+        context window.
 
   - title: Test it like the published application it is
     mitigations: [ D3-SYSVA, D3-AVE ]
@@ -125,7 +127,7 @@ items:
         is just MCP" skipped it for the one application whose caller is a machine that retries.
 
   - title: Audit per call, and design revocation before launch
-    mitigations: [AML.M0024, AML.M0028, cap-agent-kill-switch]
+    mitigations: [AML.M0024, AML.M0028, D3-CR]
     body:
       - >-
         The audit record is per tool call — client, user, tenant, tool, arguments, result,
@@ -136,7 +138,9 @@ items:
         must work at three grains without a deploy: a user (at the IdP — a group removal ends
         every new ID-JAG at once), a client (at the authorization server), and a tool (at the
         definition layer) — and it must reach tokens already issued, which is what
-        introspection, short access-token lifetimes and rotating refresh tokens buy.
+        introspection, short access-token lifetimes and revoking refresh tokens with the grant
+        buy; a group removal at the IdP reaches issued tokens only through a revocation signal
+        or their expiry.
         Assessment probe: remove a test user from the granting group and confirm the agent's
         next call fails within one token lifetime, and that its refresh and re-exchange both
         fail.

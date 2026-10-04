@@ -15,8 +15,8 @@ overview:
     individually reasonable connector grants, a file-upload path no connector governance
     sees, and a consumer version of the same product one session cookie away. The controls
     split cleanly into two halves — the vendor tenant you configure, and the edge and browser
-    telemetry you own — and the second half matters more, because it covers the two paths the
-    vendor's console cannot see.
+    telemetry you own — and the second half matters more, because it covers the consumer
+    product the vendor's console cannot see and the upload path before anything leaves.
   - >-
     One material change to re-review against: these products are agents now. The same
     standing grants that powered retrieval also carry write actions — mail sent, files
@@ -26,7 +26,7 @@ overview:
 
 items:
   - title: Restrict the tenant at the edge, or the enterprise terms are optional
-    mitigations: [D3-OTF, D3-MFA, D3-APA, cap-data-access-governance, D3-DI]
+    mitigations: [D3-OTF, D3-APA, cap-data-access-governance, D3-DI]
     body:
       - >-
         Everything the enterprise agreement promises — retention, training opt-out, audit
@@ -34,20 +34,22 @@ items:
         enforced at the secure edge is what stops the consumer product being an alternative;
         without it, the crossing simply succeeds and corporate data leaves under consumer
         terms, invisibly. Identity establishes who is licensed and which tenant they may
-        reach; the edge blocks or logs everything else.
+        reach; the edge blocks or logs everything else. A hostname allowlist cannot tell the
+        two tenants apart at the same host — that takes the vendor's tenant-restriction
+        header, injected by a proxy that inspects TLS for the client in use, or a managed
+        browser. Test a personal session to the same host.
 
   - title: Inspect the upload path, because nothing else can
     mitigations: [cap-sensitive-data-redaction]
     body:
       - >-
-        A pasted document crosses the boundary with no connector, no grant and no record —
-        every control that watches connectors misses it entirely. Be precise about where
-        inspection can actually happen: the pinned TLS session to the approved vendor is not
-        readable at the network, so content inspection lives in the managed browser or the
-        endpoint DLP agent, before the material leaves the client, while the network edge
-        contributes destination and tenant restriction only. Those browser-side records are
-        the only ones this path will ever produce; weight them accordingly — they carry more
-        of the archetype's real control than the vendor's admin surface does.
+        A pasted or uploaded document crosses the boundary with no connector and no grant —
+        every control that watches connectors misses it entirely. Inspect it at submission:
+        endpoint or managed-browser DLP that blocks or masks a hit before the request is sent.
+        Whether the network edge can also read it depends on the client and on TLS inspection
+        being supported for it, so test the client you deploy with pasted text and uploaded
+        files. The vendor's audit export may record the exchange afterwards, with coverage and
+        retention that vary by plan; the endpoint record is the one you control.
 
   - title: Gate the agent modes and write-capable connectors deliberately
     mitigations: [cap-ai-vendor-assessment, AML.M0029, cap-input-guardrails]
@@ -57,18 +59,22 @@ items:
         connector or an agent capability — the default for new ones is rarely off. Write
         actions get the strictest treatment the vendor offers: admin-gated per app and per
         action, with confirmation required on writes; the vendor ships the toggles, and
-        leaving them at default is the decision not to use them. Treat connector-retrieved
-        content as untrusted in policy and user guidance — the vendor's guardrails are the
-        only inline control, and the zero-click incident record says they are not sufficient
-        alone.
+        leaving them at default is the decision not to use them. On our own tools, the gateway
+        refuses a write without approval bound to the exact action; that approval is relayed
+        through the vendor's client, so confirm per client that it is supported, and fail
+        closed where it is not. Treat connector-retrieved content as untrusted in policy and
+        user guidance: the vendor's own guardrails are assured, not configured, and the
+        zero-click incident record says they are not sufficient alone; records returning
+        through our gateway are screened there.
 
-  - title: Treat grants as identities, and classify before connecting
-    mitigations: [D3-AA, cap-agent-kill-switch, cap-data-access-governance, D3-APA, D3-DI, cap-input-guardrails]
+  - title: Inventory and revoke standing grants, and classify before connecting
+    mitigations: [cap-agent-tool-registry, cap-agent-kill-switch, cap-data-access-governance, D3-APA, D3-DI]
     body:
       - >-
-        Standing OAuth grants are non-human identities: inventoried, expiring, revoked when
-        the employee or project goes — the broker keeps calling on grants issued for projects
-        that ended. Govern by classification which systems may be connected at all, so
+        Standing OAuth grants authorize the vendor's client on a person's behalf and can
+        outlive that person: inventory them, expire them where the vendor allows, and revoke
+        them when the employee or project goes — the broker keeps calling on grants issued for
+        projects that ended. Govern by classification which systems may be connected at all, so
         individual consent cannot outrun policy, and know what sensitive data sits inside
         connector reach before the grants aggregate it — an assistant makes pre-existing
         oversharing instantly discoverable.
@@ -97,11 +103,12 @@ items:
     mitigations: [AML.M0024, cap-shadow-ai-discovery, cap-agent-kill-switch]
     body:
       - >-
-        The vendor's export covers the managed tenant; your edge and browser telemetry cover
-        the uploads and the consumer product it will never see — only the fused record
-        answers what actually left. Run discovery for personal-account and competitor traffic
-        independently of the vendor: it is usually the larger flow, and it is the population
-        the sanctioned tenant exists to absorb.
+        The vendor's export covers the managed tenant, as far as its fields and
+        retention go; your edge and browser telemetry cover the consumer product it will
+        never see and the uploads before they leave — only the fused record answers what
+        actually left. Run discovery for personal-account and competitor traffic
+        independently of the vendor: it is usually the larger flow, and it is the
+        population the sanctioned tenant exists to absorb.
 
 sources:
   - title: "EchoLeak (CVE-2025-32711) — zero-click prompt-injection exfiltration through an enterprise copilot"

@@ -271,8 +271,9 @@ blocks:
         label: Installed skills
         icon: gear
         note: >
-          Packaged instructions and helpers pulled through the crossing's skills broker —
-          content that executes as instruction, versioned and pinned like code.
+          Packaged instructions and helpers, admitted by the gateway's skills catalogue and
+          pulled from the mirror — content that executes as instruction, versioned and pinned
+          like code.
       - id: computerUse
         label: Computer use
         icon: eye
@@ -361,7 +362,7 @@ blocks:
     kind: provider
     title: Vendor service
     zone: zoneVendor
-    col: 5
+    col: 6
     row: 0
     note: >
       The vendor's backend and the published surfaces of its control plane — outside the
@@ -385,12 +386,30 @@ blocks:
           drawing (coding & desktop session managed agent runtime) where this item lands as a
           runtime.
 
+  - id: tunnel
+    kind: service
+    title: Tunnel connector
+    cosaiComponent: componentAgentUserQuery
+    zone: zoneCloud
+    col: 5
+    row: 2
+    note: >
+      Vendor-published software we run inside our own network so the vendor's hosted and
+      scheduled sessions can reach our tools without an inbound rule: it dials out, holds the
+      connection open and carries the vendor's tool requests in. Transport only — it hands
+      every request to the AI gateway, never to a server or the data.
+    items:
+      - id: tunnelClient
+        label: Outbound connector
+        icon: plug
+        note: Dials out to the vendor's edge; opens nothing inbound.
+
   - id: extTools
     kind: service
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneExternal
-    col: 6
+    col: 7
     row: 2
     note: >
       Third-party servers and connectors — the same component again, out where nobody we
@@ -411,7 +430,7 @@ blocks:
     title: Model provider
     cosaiComponent: componentModelServing
     zone: zoneExternal
-    col: 6
+    col: 7
     row: 0
     note: >
       The inference API behind the vendor's service. For a vendor that is also the model
@@ -429,7 +448,7 @@ blocks:
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 6
+    col: 7
     row: 3
     note: >
       What the native tools reach on the open internet — the web, and third-party SaaS the
@@ -450,7 +469,7 @@ blocks:
     kind: external
     title: Public package sources
     zone: zoneExternal
-    col: 6
+    col: 7
     row: 4
     note: >
       Where the mirror gets what it serves: the public package registries and the skill and
@@ -485,10 +504,10 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 5
-    mitigations: [ D3-CH, D3-CTS ]
+    mitigations: [ D3-CH ]
     note: >
-      Vaulted, short-lived, connector-scoped grants on our own keys — and keeping the
-      developer's own keys and sessions out of the agent's reach.
+      Vaulted, short-lived, connector-scoped grants on our own keys, so neither the endpoint
+      nor the vendor's cloud holds a standing org credential.
 
   - id: govPolicy
     kind: governance
@@ -614,18 +633,27 @@ edges:
       here on the gateway's registry of destinations and on credentials it injects. Package
       installs go to the mirror, and the direct path below is the one this brokerage exists
       to replace.
-  - from: aiGateway
+  - from: tunnel
     to: vendorService
     route: hv
     path: external
-    bidir: true
-    label: to the approved vendor
+    outbound: true
+    label: outbound-only tunnel
     note: >
-      The reach-back path: the vendor's cloud and scheduled sessions are admitted to our tool
-      surface here, on grants the gateway issues rather than anything the vendor holds. The
-      destination is in the allowlist because an assessment cleared it, and the agreement
-      governs the data once it
-      arrives.
+      The reach-back path, opened from our side: the tunnel dials the vendor, and the vendor's
+      cloud and scheduled sessions send their tool requests down it, so nothing of ours faces
+      the internet. The destination is in the allowlist because an assessment cleared it, and
+      the agreement governs the data once it arrives.
+  - from: tunnel
+    to: aiGateway
+    route: vh
+    path: primary
+    bidir: true
+    label: tool call / result
+    note: >
+      The tunnel hands each request to the gateway, which admits it to our tool surface on
+      grants it issues rather than anything the vendor holds — the vendor's identity admits
+      the caller; it authorises nothing.
   - from: aiGateway
     to: provider
     route: hv
@@ -734,18 +762,12 @@ pins:
         Code, documents and screenshots leave the company on the SSO session — the path most
         users are actually on — usually more than the developer pictured sharing, and with
         nothing of ours on the hop to see how much.
-    - risk: riskStaleAgentIdentityBinding
-      at: remoteDevice->vendorService
-      note: >
-        A remote channel is only as good as the account and device binding behind it, and this
-        one is bound by the vendor rather than by us. A stale login steering a machine full of
-        credentials is an account-compromise blast radius, and nothing we operate is on the
-        path to notice it.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: aiGateway->vendorService
+      at: tunnel->aiGateway
       note: >
-        A hosted session arriving with a connector grant is the vendor's infrastructure
-        exercising our authority — the grant is what bounds it, and our gateway issues it.
+        A hosted session raised by whoever the vendor's channel admits — an @-mention, a
+        schedule — calls our tools as the deputy. Unless the gateway checks the initiating
+        user's own authority on each call, the session's grant does what that caller could not.
     - risk: riskSensitiveDataDisclosure
       at: toolPlane->aiGateway
       note: >
@@ -808,24 +830,26 @@ pins:
     - mitigation: D3-MFA
       at: vendorService
       note: >-
-        Federated login enforced in the vendor's account layer — Zone-2 configuration, because the phone never
-        touches our network and the account binding is the only lever. An unfederated vendor login is the
-        finding.
+        MFA enforced at our IdP behind the federated vendor login — SSO alone is not MFA — so the harness's
+        session and the phone's inherit a multi-factor sign-in. Zone-2 configuration, because the phone never
+        touches our network and the account binding is the only lever; an unfederated vendor login, or SSO
+        without MFA at the IdP, is the finding.
     - mitigation: cap-agent-action-policy-enforcement
-      at: harness->aiGateway
+      at: aiGateway
       note: >-
-        Session admission and per-call policy evaluated at the edge, outside the application being governed.
+        Per-call policy on every brokered tool call — from the harness, the native tools and the vendor's
+        hosted sessions alike — evaluated at the gateway, outside the application being governed.
     - mitigation: cap-ai-vendor-assessment
       at: vendorService
       note: >-
         The assessment behind the allowlist entry, pinned on the vendor itself: their controls, retention
-        terms and tenancy are the substance of the review, because once the destination is approved and named,
-        the session is not something we inspect.
+        terms and tenancy are the substance of the review, because this reference admits the vendor session by
+        allowlist rather than decrypting it.
     - mitigation: cap-sensitive-data-redaction
       at: toolPlane->aiGateway
       note: >-
-        Inspection belongs on the brokered tool path, where the agent's calls carry repository content out to
-        servers we did not write — not on the pinned vendor session.
+        DLP on the brokered tool path, where the agent's calls carry repository content out to servers we did
+        not write — the vendor session is admitted by allowlist rather than decrypted, by choice.
     - mitigation: AML.M0028
       at: toolPlane
       note: >-
@@ -834,20 +858,22 @@ pins:
     - mitigation: D3-EI
       at: toolPlane
       note: >-
-        Make sandboxed tools the default path for commands and computer use, so the approval gate fires only
+        Make sandboxed tools the default path for commands and computer use, with SSH keys, cloud credentials
+        and browser profiles outside the filesystem the sandbox can reach — so the approval gate fires only
         for actions that leave the box.
-    - mitigation: D3-CTS
-      at: toolPlane
-      note: Keep SSH keys, cloud credentials and browser profiles outside the agent's reachable filesystem.
     - mitigation: AML.M0031
       at: toolPlane->memory
       note: >-
-        Treat memory and rules as untrusted input on read. Instruction files, hooks and settings are
-        configuration managed as code: reviewed on change, diffed on clone, never executed from a package a
-        dependency dropped in — a repo-committed rules change is a code change.
+        Scope writes: the agent writes its own memory files and nothing else. Rules, hooks and settings are
+        configuration managed as code — reviewed on change, diffed on clone, never executed from a package a
+        dependency dropped in. Keep memory under version history so a poisoned note can be traced to the
+        session that wrote it and rolled back, and treat everything read back as untrusted input.
     - mitigation: cap-input-guardrails
-      at: hostedTools->orgData
-      note: Treat repository and document content as untrusted; it cannot be authenticated, only bounded.
+      at: aiGateway
+      note: >-
+        Classify tool results and retrieved documents for injection at the gateway, before anything returns to
+        the endpoint. Working-tree files never cross here; they stay untrusted input, bounded by the tool
+        permissions rather than screened.
     - mitigation: D3-CH
       at: aiGateway
       note: >-
@@ -869,21 +895,22 @@ pins:
     - mitigation: AML.M0024
       at: aiGateway
       note: >-
-        Our own session record, fused with the vendor's export — only the combination covers what the vendor's
-        console cannot see.
+        Our gateway record, fused with the vendor's export and endpoint telemetry — only the combination covers
+        local tool work and what the vendor's console cannot see.
     - mitigation: cap-shadow-ai-discovery
       at: harness
       note: Find the installs that never enrolled, because this archetype spreads one developer at a time.
     - mitigation: cap-agent-kill-switch
       at: govObservability
       note: >-
-        Unattended modes need a stop: sessions switchable off from the vendor control plane, and the gateway
-        able to revoke the grants a scheduled run rides on — without waiting for the owner to notice.
+        Unattended modes need a stop: sessions switchable off from the vendor control plane, the gateway able
+        to revoke the grants a scheduled run rides on, and device management to end a local harness and its
+        child processes — without waiting for the owner to notice.
     - mitigation: D3-PA
       at: harness
       note: >-
-        The device tooling that sees what no crossing can: which harnesses are installed, what their processes
-        execute, and the containment that isolates a machine whose agent has been steered.
+        The device tooling that sees what no crossing can: which harness processes run and what their child
+        processes execute.
     - mitigation: cap-agent-action-policy-enforcement
       at: vendorService
       note: >-
@@ -936,11 +963,12 @@ walkthrough:
       label: approved (bound)
       note: Approved — this action, these arguments, not a blanket yes.
     - follow: toolPlane->aiGateway
-      label: edits, commands; brokered calls
+      label: brokered tool call
       note: >
-        Edits and commands execute inside the application's native tools, with whatever scope
-        the permission model granted. Anything a local tool sends to a remote server or
-        connector crosses our tier here — brokered, on a credential the gateway injects.
+        Edits and commands run locally in the native tools, on the working tree, with whatever
+        scope the permission model granted — they never touch this tier. What crosses here is a
+        local tool's call to a remote server or connector, brokered on a credential the gateway
+        injects.
     - follow: aiGateway->extTools
       label: admitted third-party server
       note: >
@@ -977,7 +1005,7 @@ scenarios:
         note: The developer types the instruction on a phone or web app, away from the machine.
       - follow: remoteDevice->vendorService
         label: to vendor account
-        note: Out to the vendor, authenticated by the vendor's account and nothing of ours.
+        note: Out to the vendor on the account session — signed in through our IdP, but nothing of ours is on the hop.
       - follow: vendorService->harness
         label: down the SSO session
         note: >
@@ -1011,7 +1039,7 @@ scenarios:
         note: The content comes back as a tool result.
       - follow: hostedTools->aiGateway
         label: back across crossing
-        note: Across the crossing, where inspection is possible and rarely configured.
+        note: Across the crossing, where the injection screen runs — and a well-phrased instruction passes it.
       - follow: aiGateway->harness
         label: into context
         note: And into context, where the loop cannot tell the instruction from the task.
@@ -1035,9 +1063,15 @@ scenarios:
           control standing, and on the common install there is none.
   - title: A hosted session reaches back
     steps:
-      - follow: vendorService->aiGateway
+      - follow: vendorService->tunnel
         label: hosted session asks for data
-        note: A cloud or scheduled session asks for org data; nobody's laptop is involved.
+        note: >
+          A cloud or scheduled session of the same engine, running on the vendor's compute (its
+          own drawing covers the session), asks for org data — down the connection our tunnel
+          opened, so nothing of ours is exposed inbound.
+      - follow: tunnel->aiGateway
+        label: handed to the gateway
+        note: The tunnel hands the request to the gateway, never to a server or the data.
       - follow: aiGateway->hostedTools
         label: admitted to our tools
         note: >
@@ -1075,10 +1109,13 @@ deviations:
       the subscription seats.
   - subject: The vendor's own path is admitted, not inspected
     reason: >
-      A pinned TLS session to an approved vendor cannot be inspected without breaking the
-      product, and drawing an inspection point on it would assert a control nobody operates.
-      What governs that path is the assessment behind the allowlist entry, the tenant binding
-      in managed settings, and the agreement — pinned as vendor assurance rather than drawn.
+      Leaving the vendor session uninspected is a policy choice, not an impossibility:
+      enterprise TLS-inspection proxies work once the client trusts the enterprise root, and
+      the major CLIs document that configuration. This reference admits the session by
+      allowlist instead, and does not draw an inspection point that would assert a control
+      nobody operates by default. What governs that path is the assessment behind the
+      allowlist entry, the tenant binding in managed settings, and the agreement — pinned as
+      vendor assurance rather than drawn.
       Note the contrast worth carrying into product selection: not every vendor in this
       category offers a path that removes them from inference. One major competitor routes
       every request through its own backend by design, including when the customer supplies
@@ -1090,14 +1127,6 @@ deviations:
       is contained — conditionally, when isolation is on. A boundary frame would claim a
       containment the drawing's own notes deny. The personal agent, whose whole loop lives
       inside the container, draws the frame; here the item form is the honest one.
-
-  - subject: Stale agent identity binding is read as a stale account binding
-    reason: >
-      The catalogue defines the risk as credentials persisting across an artifact swap. On the
-      remote-steering path the mechanism that matters is the same shape one layer up — a
-      login or pairing that outlives the person or device it was issued to and keeps driving
-      a machine full of credentials. The tag is kept because it is the nearest coded risk; the
-      personal agent reads it the same way on its relay-to-bridges edge.
 
 sources:
   - title: "Claude Code — security model and permission system"

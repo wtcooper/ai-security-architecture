@@ -226,7 +226,7 @@ blocks:
     col: 2
     row: 1
     note: >
-      A stateless HTTP application — in practice an ASGI app, mounted on its own or inside an
+      A stateless HTTP application — an ASGI app, for example, mounted on its own or inside an
       existing API. Stateless is not a style choice: sticky sessions do not work reliably with MCP
       clients, so horizontal scale requires it. The 2026-07 revision removed protocol sessions
       entirely, which moved a security property with it: there is nothing to validate once and trust
@@ -252,7 +252,8 @@ blocks:
           Ordinary application code behind the protocol, and ordinary attack surface. A
           consequential handler returns `input_required` and executes only on the retry that
           carries the caller's confirmation — tool annotations are hints the client must treat
-          as untrusted, so this is the confirmation lever the server actually holds.
+          as untrusted, so this is the confirmation lever the server actually holds. The
+          confirmation proves the client answered, not that a person reviewed the action.
       - id: resourceMeta
         label: Resource metadata
         icon: doc
@@ -271,8 +272,8 @@ blocks:
     note: >
       Names, descriptions and schemas. Versioned content that executes as instruction inside a
       caller's model, which makes a wording change a release rather than a copy edit. The spec
-      gives no integrity mechanism and no tool-level version field, so pinning by hash at the
-      gateway is something we build rather than something we get.
+      gives no integrity mechanism and no tool-level version field, so pinning by hash where the
+      service loads them is something we build rather than something we get.
     items:
       - id: descriptions
         label: Tool descriptions
@@ -345,7 +346,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 3
-    mitigations: [ AML.M0004, AML.M0028, D3-MAN, cap-agent-egress-control ]
+    mitigations: [ AML.M0004, AML.M0028, cap-agent-egress-control ]
     note: >
       Per-tenant limits sized for callers that retry, loop and parallelise — limits tuned for
       human clients are not limits here — plus origin validation against DNS rebinding and the
@@ -372,7 +373,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 3
-    mitigations: [ AML.M0024, cap-agent-kill-switch, D3-AVE ]
+    mitigations: [ AML.M0024, D3-CR, D3-AVE ]
     note: >
       Per-call audit attributable to a tenant and a delegation, and revocation that reaches
       tokens already minted rather than only future ones.
@@ -471,11 +472,6 @@ pins:
         A changed description changes somebody else's agent behaviour. The protocol offers no
         integrity mechanism and no version field, so an unnoticed edit is a silent change to a
         system we do not run.
-    - risk: riskCrossTenantCredentialPropagation
-      at: service->orgData
-      note: >
-        The protocol has no notion of a tenant. Every isolation guarantee here is application
-        code we wrote, and the failure is one caller reaching another's records.
     - risk: riskAgenticDelegationConfusedDeputy
       at: authServer
       note: >
@@ -491,23 +487,30 @@ pins:
     - risk: riskSensitiveDataDisclosure
       at: service->downstream
       note: >
-        Our credential, not theirs. Whatever we reach outward, we reach with our own authority
-        regardless of who asked, and the audit trail downstream shows us rather than them.
+        Where a handler falls back to our own service credential, whatever it reaches outward it
+        reaches with our authority regardless of who asked, and the upstream's audit shows us
+        rather than them; where it exchanges on the caller's behalf, a scope wider than the tool
+        needs exports more than the caller asked for.
     - risk: riskEconomicDenialOfWallet
       at: callers->gateway
       note: >
-        The spec has no quotas and no back-pressure. A looping agent will hammer a tool until
-        the backend behind it falls over, and nothing in the protocol slows it down.
+        A looping agent calling a tool whose handler does billed work — a paid upstream API, a
+        heavy query — runs up our bill with every retry, and the spec has no quotas or
+        back-pressure to slow it.
     - risk: riskMCPTransportHijacking
-      at: service
+      at: callers->gateway
       note: >
-        With protocol sessions gone, cross-call state is server-minted handles carried as
-        arguments — a handle that is guessable, unexpiring or unbound to its principal is the
-        session-hijacking risk reborn in application code, where it is the most likely thing
-        to get wrong.
+        Interception, replay and DNS rebinding on the inbound leg: a bearer lifted from a plain-HTTP
+        or downgraded connection is replayed, or a browser page rebinds DNS to reach the endpoint.
+        HTTPS throughout and `Origin` validated on every request are the defence; a state handle's
+        binding to its principal is a separate check in the service.
     - risk: riskZombieShadowMCPServers
       at: service
-      note: A published server that outlives the team that wrote it, still holding live grants into org data.
+      note: >
+        A retired server still answering at an address callers discovered — a stale DNS name,
+        registry entry or load-balancer route — keeps receiving tool calls, and whoever claims that
+        address receives them; one that outlives its team keeps its live grants too.
+        Decommissioning removes all of them.
 
     - risk: riskInsecureIntegratedComponent
       at: gateway->service
@@ -520,18 +523,6 @@ pins:
       note: >
         A LiteLLM-class tier with its own CVE stream and its own release channel — the
         backdoored gateway release is this component, fronting everything we publish.
-    - risk: riskStaleAgentIdentityBinding
-      at: service->authServer
-      note: >
-        A token issued a minute before the IdP removed the user is still cryptographically valid;
-        local JWT validation would honour it until expiry. Introspection, short lifetimes and
-        rotating refresh tokens are what make revocation real for a running agent.
-    - risk: riskAgenticDelegationConfusedDeputy
-      at: callers->authServer
-      note: >
-        The mix-up: a client that talks to many authorization servers can be steered into redeeming
-        an honest code at an attacker's token endpoint. Recording the issuer before redirecting and
-        checking `iss` in the response is the mitigation; PKCE alone does not stop it.
   mitigations:
     - mitigation: D3-CTS
       at: authServer
@@ -540,15 +531,13 @@ pins:
         audience is asserted at issuance and checked on every request. The Protected Resource Metadata that
         names our authorization server is integrity-protected like code, because a client trusts whatever it
         says. Under the enterprise-managed profile the consuming organisation's own policy decides issuance,
-        which is what makes revocation immediate and central.
+        which makes revocation central: a policy change stops new tokens at once, and reaches tokens already
+        issued through introspection or expiry.
     - mitigation: AML.M0004
       at: callers->gateway
       note: >-
         Per-client and per-tenant, sized for callers that retry and parallelise. This is ours to build
         entirely — the protocol provides no quota mechanism at all.
-    - mitigation: D3-MAN
-      at: callers->gateway
-      note: HTTPS throughout, and `Origin` validated against DNS rebinding on the inbound leg.
     - mitigation: AML.M0028
       at: gateway->service
       note: >-
@@ -558,8 +547,10 @@ pins:
     - mitigation: cap-mcp-tool-integrity
       at: toolDefs->service
       note: >-
-        Pin definitions by hash and alert on any change between sessions. The spec gives no integrity
-        mechanism, so this is built at the gateway or it does not exist.
+        The service loads only the reviewed release of its definitions: each is checked against the hash
+        recorded at review and refused on mismatch, so an edit that skipped the pipeline never serves. The spec
+        gives no integrity mechanism, so this is built here or it does not exist. Consuming clients pin what
+        they receive on their side — their check, not one this server can enforce.
     - mitigation: D3-SYSVA
       at: service
       note: >-
@@ -580,14 +571,18 @@ pins:
       note: >-
         Every invocation with its parameters, its tenant and its delegation, retained where an incident can
         query it.
-    - mitigation: cap-agent-kill-switch
+    - mitigation: D3-CR
       at: govObservability
-      note: Revocation that reaches tokens already issued, not merely future ones.
+      note: >-
+        Revocation that reaches tokens already issued, not merely future ones — introspection, short lifetimes
+        and refresh tokens revoked with the grant — with the delay until they stop working measured, not
+        assumed. A call already executing completes.
     - mitigation: D3-AVE
       at: govObservability
       note: >-
-        The SDK, the gateway and the handlers behind them tracked as a patch stream with an owner and a clock;
-        a published server ages like any other application.
+        The SDK, the gateway and the handlers' dependencies enumerated against vulnerability feeds and
+        prioritised by exposure — a published server ages like any other application; the fix itself ships
+        through the release gate.
     - mitigation: D3-APA
       at: callers->idp
       note: >-
@@ -993,8 +988,9 @@ scenarios:
       - follow: callers->gateway
         label: call after revocation
         note: >
-          An agent mid-task calls again with a token issued a minute ago — and in that minute the user
-          left the group that grants this server, or an administrator pulled the client.
+          An agent mid-task calls again with a token issued a minute ago — and in that minute an
+          administrator revoked the client's grant at the authorization server, and the user left the
+          group that grants this server.
       - follow: gateway->service
         label: routed
         note: >
@@ -1002,8 +998,9 @@ scenarios:
       - follow: service->authServer
         label: introspection
         note: >
-          Introspection, not local validation: the authorization server knows the grant was revoked,
-          because revocation at the IdP propagated to it — the reason introspection was the choice here.
+          Introspection, not local validation: the authorization server revoked the grant itself, so it
+          knows at once. The group change at the IdP reaches it only through a revocation signal, where
+          one is wired, or at the next exchange.
       - follow: authServer->service
         label: revoked
         note: >
@@ -1011,7 +1008,7 @@ scenarios:
       - follow: service->gateway
         label: "401"
         note: >
-          A 401. Nothing the agent holds works any more, including the refresh token.
+          A 401. The refresh token was revoked with the grant, so it fails too.
       - follow: gateway->callers
         label: recovery attempt
         note: >
@@ -1019,26 +1016,29 @@ scenarios:
       - follow: callers->idp
         label: fresh exchange
         note: >
-          A fresh token exchange — and the IdP's policy, which is the source of truth, says no.
+          A fresh token exchange — and the IdP's policy, the source of truth for membership, says no.
       - follow: idp->callers
         label: denied
         note: >
-          Denied. The revocation was one change in one place and it reached every client of every
-          server within one token lifetime, which is the argument for lifetimes measured in minutes.
+          Denied. Each grain stopped where it lives: the grant at the authorization server at once,
+          the membership at the IdP on the next exchange — within one token lifetime, which is the
+          argument for lifetimes measured in minutes.
   - title: A description edit ships
     steps:
       - follow: toolDefs->service
-        label: wording change deployed
-        note: A wording change is deployed like any other content change.
+        label: reviewed wording change loads
+        note: >
+          A reviewed wording change ships as a release: the loader accepts its new hash. An edit
+          that skipped review would be refused here.
       - follow: service->gateway
         label: tools/list carries it
-        note: The next tools/list response carries it outward, past the hash pin that should notice.
+        note: The next tools/list response carries it outward.
       - follow: gateway->callers
         label: lands as instruction
         note: >
           And it lands in every consuming agent's context as instruction. Nothing in the
-          protocol versions this, which is why the pin is a hash we hold rather than a field we
-          read.
+          protocol versions this: a client that pinned the old hash notices and re-admits it —
+          their check, which a release of ours cannot make for them.
   - title: One tenant's agent asks for another tenant's record
     steps:
       - follow: callers->gateway
@@ -1144,8 +1144,8 @@ deviations:
     reason: >
       Tool and MCP server integrity is a management capability, and the supply-chain call-out
       cites it — but the hash pin is checked where definitions load and serve, so the chip
-      sits on the toolDefs edge. The locus departure is deliberate: built at the gateway or it
-      does not exist.
+      sits on the toolDefs edge. The locus departure is deliberate: the service's loader is where
+      a definition that skipped review can be refused.
   - subject: The authorization server's metadata fetch path is not drawn
     reason: >
       Fetching a client metadata document is a single outbound HTTP request to a URL the
@@ -1154,8 +1154,9 @@ deviations:
   - subject: Sessions are gone because the protocol removed them
     reason: >
       The current protocol revision deleted sessions and the initialize handshake; cross-call
-      state is explicit server-minted handles carried as arguments. The old session-hijacking
-      risk is drawn as state-handle hijacking on the service instead.
+      state is explicit server-minted handles carried as arguments. Transport hijacking stays on
+      the inbound leg; a handle's binding to its principal is an ordinary authorization check in
+      the service.
 
 sources:
   - title: "Model Context Protocol — authorization (2026-07-28)"

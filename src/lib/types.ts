@@ -370,9 +370,9 @@ export interface ArchBlockItem {
 }
 
 /**
- * An ownership zone (data/ONTOLOGY.md §4a). Zones are drawn as labelled
- * background bands and carry the crossing rule — nothing in an `endpoint` zone may reach an
- * band without terminating at a component the vocabulary marks as a crossing.
+ * An ownership zone (data/ONTOLOGY.md §4a), drawn as a labelled background band. A band says who
+ * operates an environment, not a step in a pipeline; nothing in the external band connects into
+ * an endpoint or cloud band (the build checks it).
  */
 export interface ArchZone {
   id: string;

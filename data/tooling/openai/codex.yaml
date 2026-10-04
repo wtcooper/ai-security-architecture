@@ -511,7 +511,9 @@ tools:
         mechanism: >-
           OS sandbox around spawned commands (Seatbelt / bubblewrap plus seccomp / native Windows sandbox), required
           by [allowed_permission_profiles] without ":danger-full-access" or allowed_sandbox_modes, with
-          windows.allowed_sandbox_implementations = ["elevated"]
+          windows.allowed_sandbox_implementations = ["elevated"]. Credential paths: requirements.toml
+          [permissions.filesystem] deny_read for credential paths (OS-enforced for sandboxed commands),
+          shell_environment_policy as a managed default, and mcp_servers.<id>.env_vars allowlists
         steps:
           - title: Remove the escape hatch
             body:
@@ -533,25 +535,50 @@ tools:
               - Package bwrap on every Linux host; without it Codex falls back to a bundled helper that needs
                 unprivileged user namespaces, and surfaces a startup warning when neither works.
             url: https://learn.chatgpt.com/docs/sandboxing
+          - title: Deny the credential paths
+            body:
+              - Set [permissions.filesystem] deny_read for ~/.ssh, cloud CLI and git-credential files and "/**/*.env";
+                while deny rules exist the runtime rejects full access and keeps commands sandboxed.
+            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
+          - title: Strip secrets from spawned commands
+            body:
+              - Set [shell_environment_policy] inherit = "core", ignore_default_excludes = false and filters such as
+                "AWS_*" = "exclude", shipped to every client as a managed default.
+            url: https://learn.chatgpt.com/docs/config-file/config-advanced
+          - title: Pass MCP servers only the variables they need
+            body:
+              - List each stdio server's variables in mcp_servers.<id>.env_vars instead of letting it inherit the
+                developer's environment.
+            url: https://learn.chatgpt.com/docs/config-file/config-reference
         note: >-
           Partial on the rule applied to every vendor (Cursor, Claude Code): the sandbox can be required but is not
-          fail-closed, because under on-request approval a command that needs to go beyond the boundary is run
-          outside it once the user approves the escalation. The only admin-pinnable way to refuse escalations is
+          fail-closed, because under on-request approval a command that needs to go beyond the boundary is run outside
+          it once the user approves the escalation. The only admin-pinnable way to refuse escalations is
           allowed_approval_policies = ["never"], which also removes human approval; the granular policy's
-          sandbox_approval = false rejects them while keeping other prompts, but requirements.toml is not
-          documented to pin it. Inside the boundary: the OS sandbox wraps every command the agent spawns and their
-          children, and requirements.toml stops users choosing full access; in workspace-write, .git, .agents and .codex under writable roots stay
-          read-only and network is off by default. Platforms: Seatbelt on macOS, bwrap plus seccomp on Linux and
-          WSL2 (fail-closed behaviour without bwrap or user namespaces is not documented), elevated or unelevated
-          sandbox on native Windows; inside Docker the sandbox may not start and the vendor tells users to make the
-          container the boundary. Outside the boundary: the Codex process itself, MCP servers, hooks, web search and
-          browser or Computer Use, which have their own controls; [[remote_sandbox_config]] can widen modes on
-          matching hosts. Three 2026 escapes (git show allowlist, Docker socket, ProgramData config trust) are in
-          advisories.
+          sandbox_approval = false rejects them while keeping other prompts, but requirements.toml is not documented
+          to pin it. Inside the boundary: the OS sandbox wraps every command the agent spawns and their children, and
+          requirements.toml stops users choosing full access; in workspace-write, .git, .agents and .codex under
+          writable roots stay read-only and network is off by default. Platforms: Seatbelt on macOS, bwrap plus
+          seccomp on Linux and WSL2 (fail-closed behaviour without bwrap or user namespaces is not documented),
+          elevated or unelevated sandbox on native Windows; inside Docker the sandbox may not start and the vendor
+          tells users to make the container the boundary. Outside the boundary: the Codex process itself, MCP servers,
+          hooks, web search and browser or Computer Use, which have their own controls; [[remote_sandbox_config]] can
+          widen modes on matching hosts. Three 2026 escapes (git show allowlist, Docker socket, ProgramData config
+          trust) are in advisories. Credential paths: Partial by the rule applied to every vendor: read-denies are
+          admin-locked and OS-enforced for sandboxed commands on macOS and Linux, but on native Windows managed
+          deny_read applies to direct file tools only, not shell subprocess reads. Environment stripping is a managed
+          default users can change during a run, and by default (ignore_default_excludes = true) variables named KEY,
+          SECRET or TOKEN pass through; ship the policy in managed_config.toml or MDM config_toml_base64. Nothing
+          holds credentials outside the agent and injects them per destination: commands still inherit whatever the
+          developer's account reaches that no rule names — the git credential helper, cloud CLI config, the ssh-agent
+          socket (Unix sockets are allowlist-only when the managed network proxy is active; otherwise not documented)
+          — and Computer Use or the Chrome extension act in signed-in browser sessions. A dev container or secretless
+          credential broker is the external fix.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -577,44 +604,6 @@ tools:
                       --yolo are unavailable.
                   url: https://learn.chatgpt.com/docs/agent-approvals-security
               verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          requirements.toml [permissions.filesystem] deny_read for credential paths (OS-enforced for sandboxed
-          commands), shell_environment_policy as a managed default, and mcp_servers.<id>.env_vars allowlists
-        steps:
-          - title: Deny the credential paths
-            body:
-              - Set [permissions.filesystem] deny_read for ~/.ssh, cloud CLI and git-credential files and "/**/*.env";
-                while deny rules exist the runtime rejects full access and keeps commands sandboxed.
-            url: https://learn.chatgpt.com/docs/enterprise/managed-configuration
-          - title: Strip secrets from spawned commands
-            body:
-              - Set [shell_environment_policy] inherit = "core", ignore_default_excludes = false and filters such as
-                "AWS_*" = "exclude", shipped to every client as a managed default.
-            url: https://learn.chatgpt.com/docs/config-file/config-advanced
-          - title: Pass MCP servers only the variables they need
-            body:
-              - List each stdio server's variables in mcp_servers.<id>.env_vars instead of letting it inherit the
-                developer's environment.
-            url: https://learn.chatgpt.com/docs/config-file/config-reference
-        note: >-
-          Partial by the rule applied to every vendor: read-denies are admin-locked and OS-enforced for sandboxed
-          commands on macOS and Linux, but on native Windows managed deny_read applies to direct file tools only, not
-          shell subprocess reads. Environment stripping is a managed default users can change during a run, and by
-          default (ignore_default_excludes = true) variables named KEY, SECRET or TOKEN pass through; ship the policy in
-          managed_config.toml or MDM config_toml_base64. Nothing holds
-          credentials outside the agent and injects them per destination: commands still inherit whatever the
-          developer's account reaches that no rule names — the git credential helper, cloud CLI config, the
-          ssh-agent socket (Unix sockets are allowlist-only when the managed network proxy is active; otherwise not
-          documented) — and Computer Use or the Chrome extension act in signed-in browser sessions. A dev container
-          or secretless credential broker is the external fix.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
             - capability: capabilityCredentialIsolation
               coverage: partial
               mechanism: cli_auth_credentials_store, scoped access tokens and service accounts
@@ -1367,7 +1356,7 @@ tools:
         note: >-
           Output is a diff or PR, but automatic reviews and Slack posting act without a prompt; scope the
           GitHub app and the "post answers" toggle.
-      - risk: riskToolSourceProvenance
+      - risk: riskInsecureIntegratedComponent
         note: >-
           Environments and setup scripts are editable by anyone with access; they run with internet on.
     controls:
@@ -1426,51 +1415,6 @@ tools:
                     - SCIM provisions membership and group assignment; groups need explicit role grants and an
                       Off in any role denies.
                   url: https://learn.chatgpt.com/docs/enterprise/groups-and-provisioning
-              verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Sessions act as the requesting ChatGPT user through that user's GitHub or GitLab connection; self-managed
-          and Dedicated GitLab can use an admin-managed "ChatGPT Codex Connector" service account
-        steps:
-          - title: Give self-managed GitLab its own connector identity
-            body:
-              - In Codex Cloud > Settings > Connectors choose Set up service account > Create a service account with
-                Selected groups or Selected projects only; admins revoke the token and generate a new one there.
-            url: https://learn.chatgpt.com/docs/third-party/gitlab
-          - title: Limit what the GitHub connection reaches
-            body:
-              - When connecting GitHub, choose only the repositories Codex can access.
-            url: https://learn.chatgpt.com/docs/cloud
-        note: >-
-          Partial: a cloud session runs on the requesting user's workspace identity and that user's source-system
-          connection, so attribution is to the user rather than to an inventoried agent identity. Service accounts
-          and access tokens are documented for local headless automation (CODEX_ACCESS_TOKEN), not for cloud
-          sessions. The self-managed or Dedicated GitLab path adds a distinct connector service account that an admin
-          can revoke and regenerate, but it is shared by every user of the connection and holds an api-scoped token
-          with Developer access. The identity and credential GitHub sees for a cloud session is not documented on the
-          pages fetched.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: Service accounts (SCIM userType ServiceAccount) and the GitLab service-account token
-              note: Runs attribute to a service account; the GitHub App identity itself is vendor-owned.
-              steps:
-                - title: Create a non-human workspace identity
-                  body:
-                    - Owners and admins create service accounts with their own plugins, role and tokens;
-                      disabling the account revokes every token.
-                  url: https://learn.chatgpt.com/docs/enterprise/service-accounts
-                - title: Scope the GitLab connector
-                  body:
-                    - Use an existing service account with Developer access to selected groups or projects;
-                      admins can revoke and regenerate its token in Codex Cloud settings.
-                  url: https://learn.chatgpt.com/docs/third-party/gitlab
               verified: 2026-09-10
       - mitigation: cap-agent-tool-registry
         coverage: partial

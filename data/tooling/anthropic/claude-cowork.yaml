@@ -505,9 +505,13 @@ tools:
         coverage: native
         mechanism: >-
           Shell commands and code run in a dedicated Linux VM isolated by the hypervisor (Apple
-          Virtualization.framework, Hyper-V) with its own egress filtering, syscall restrictions and per-session
-          user isolation, with no user switch to turn it off; allowedWorkspaceFolders limits what the VM mounts;
-          requireCoworkFullVmSandbox (3P) is deprecated
+          Virtualization.framework, Hyper-V) with its own egress filtering, syscall restrictions and per-session user
+          isolation, with no user switch to turn it off; allowedWorkspaceFolders limits what the VM mounts;
+          requireCoworkFullVmSandbox (3P) is deprecated. Credential paths: Connector tokens stay on Anthropic's
+          servers and never enter the VM; the VM sees only connected folders, and Claude's own configuration, SSH
+          keys, AWS and Google Cloud credentials and shell profiles stay off-limits inside attached folders;
+          Enterprise-managed connector authorisation issues IdP-scoped grants; Claude in Chrome acts in the user's
+          signed-in browser
         steps:
           - title: Restrict which folders Cowork can mount
             body:
@@ -520,17 +524,42 @@ tools:
               - Set isLocalDevMcpEnabled and isDesktopExtensionEnabled false on managed devices, because
                 plugin-bundled MCP servers and desktop extensions run on the host outside the VM.
             url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+          - title: Fence the folders Cowork can mount
+            body:
+              - Set allowedWorkspaceFolders in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude so
+                home folders and whole drives cannot be attached.
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Issue connector access through the IdP
+            body:
+              - At Organization settings > Connectors open a connector, select "Set up" next to Managed
+                authorization on the Configuration tab, choose Applied roles and Scopes; deprovisioning in the
+                IdP removes the access.
+            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+          - title: Keep Claude out of signed-in browsers where not needed
+            body:
+              - Turn off Claude in Chrome at Organization settings > Claude in Chrome and use the built-in browser,
+                which does not see users' logins unless they import them.
+            url: >-
+              https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
         note: >-
-          Native: the VM is not a user option, and when it cannot start, shell commands and code execution
-          report "workspace unavailable" instead of running on the host. Outside it: the agent loop itself, file
-          reads and writes in connected folders and web fetches (host-side, gated by an application-layer
-          permission system), plugin MCP servers and desktop extensions (the user's own permissions), the
-          built-in browser and Claude in Chrome, and computer use (Pro and Max beta, no sandbox). Cloud sessions
-          run in Anthropic's per-session sandbox (toolClaudeCoworkCloud).
+          Native: the VM is not a user option, and when it cannot start, shell commands and code execution report
+          "workspace unavailable" instead of running on the host. Outside it: the agent loop itself, file reads and
+          writes in connected folders and web fetches (host-side, gated by an application-layer permission system),
+          plugin MCP servers and desktop extensions (the user's own permissions), the built-in browser and Claude in
+          Chrome, and computer use (Pro and Max beta, no sandbox). Cloud sessions run in Anthropic's per-session
+          sandbox (toolClaudeCoworkCloud). Credential paths: Partial by the rule: the credential-location exclusion is
+          built in (changelog, 4 September 2026) but its enforcement layer is not documented, and file tools on the
+          host are gated by an application-layer permission system rather than the OS. What the agent still acts with:
+          the user's full connector OAuth grant (no on-behalf-of exchange; managed authorisation narrows scopes for
+          the listed connectors, Okta only), the user's Chrome sessions through Claude in Chrome, and plugin MCP
+          servers running with the user's own permissions. On Claude Desktop on 3P, Bedrock and Vertex credential
+          files are written into the session working directory mounted into the VM.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -557,6 +586,25 @@ tools:
                 Inside the boundary: local tools in the Cowork VM, scoped to connected folders. Outside:
                 connector calls, which run through Anthropic's MCP proxy, and cloud sessions, which run on
                 Anthropic-managed servers under Anthropic's isolation.
+              verified: 2026-09-10
+            - capability: capabilityCredentialIsolation
+              coverage: partial
+              mechanism: >-
+                Enterprise-managed connector authorisation through the IdP with per-role permission scoping;
+                otherwise Claude acts with the user's own connector and browser sessions
+              steps:
+                - title: Provision connectors centrally with scoped permissions
+                  body:
+                    - Use managed authorisation (Organization settings > Connectors > Configuration) to grant
+                      connectors by role through Okta with admin-chosen permission scopes rather than personal
+                      OAuth grants.
+                  url: >-
+                    https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+              note: >-
+                Enterprise-managed connector authorisation scopes what a connector may reach per role;
+                otherwise Claude acts with the user's own connector and browser sessions, and files in
+                connected folders are readable in the VM. No on-behalf-of exchange — the connector call
+                carries the user's authority.
               verified: 2026-09-10
       - mitigation: AML.M0028
         coverage: partial
@@ -627,65 +675,6 @@ tools:
                 Connector read/write restrictions and disabledBuiltinTools hide or limit tools;
                 builtinToolPolicy pre-approves. Device policy does not reach cloud sessions, which follow the
                 console settings only.
-              verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          Connector tokens stay on Anthropic's servers and never enter the VM; the VM sees only connected
-          folders, and Claude's own configuration, SSH keys, AWS and Google Cloud credentials and shell profiles
-          stay off-limits inside attached folders; Enterprise-managed connector authorisation issues IdP-scoped
-          grants; Claude in Chrome acts in the user's signed-in browser
-        steps:
-          - title: Fence the folders Cowork can mount
-            body:
-              - Set allowedWorkspaceFolders in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude so
-                home folders and whole drives cannot be attached.
-            url: >-
-              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
-          - title: Issue connector access through the IdP
-            body:
-              - At Organization settings > Connectors open a connector, select "Set up" next to Managed
-                authorization on the Configuration tab, choose Applied roles and Scopes; deprovisioning in the
-                IdP removes the access.
-            url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
-          - title: Keep Claude out of signed-in browsers where not needed
-            body:
-              - Turn off Claude in Chrome at Organization settings > Claude in Chrome and use the built-in browser,
-                which does not see users' logins unless they import them.
-            url: >-
-              https://support.claude.com/en/articles/16635803-set-up-browser-use-in-claude-cowork-for-team-and-enterprise-plans
-        note: >-
-          Partial by the rule: the credential-location exclusion is built in (changelog, 4 September 2026) but
-          its enforcement layer is not documented, and file tools on the host are gated by an application-layer
-          permission system rather than the OS. What the agent still acts with: the user's full connector OAuth
-          grant (no on-behalf-of exchange; managed authorisation narrows scopes for the listed connectors, Okta
-          only), the user's Chrome sessions through Claude in Chrome, and plugin MCP servers running with the
-          user's own permissions. On Claude Desktop on 3P, Bedrock and Vertex credential files are written into
-          the session working directory mounted into the VM.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
-            - capability: capabilityCredentialIsolation
-              coverage: partial
-              mechanism: >-
-                Enterprise-managed connector authorisation through the IdP with per-role permission scoping;
-                otherwise Claude acts with the user's own connector and browser sessions
-              steps:
-                - title: Provision connectors centrally with scoped permissions
-                  body:
-                    - Use managed authorisation (Organization settings > Connectors > Configuration) to grant
-                      connectors by role through Okta with admin-chosen permission scopes rather than personal
-                      OAuth grants.
-                  url: >-
-                    https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
-              note: >-
-                Enterprise-managed connector authorisation scopes what a connector may reach per role;
-                otherwise Claude acts with the user's own connector and browser sessions, and files in
-                connected folders are readable in the VM. No on-behalf-of exchange — the connector call
-                carries the user's authority.
               verified: 2026-09-10
       - mitigation: D3-CH
         coverage: partial
@@ -1860,28 +1849,6 @@ tools:
           desktop security architecture, so request the cloud-sandbox, egress-proxy and tenant-isolation claims
           explicitly. Reassess on the moving defaults: cloud sessions on by default for Team and the default
           execution place where allowed, Cowork not covered by zero data retention, a beta surface.
-        verified: "2026-09-25"
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Sessions act under the member's own account and connector grants; scheduled runs are agent-owned
-          sessions with an agent_id (cagt_) and started_by_user in the Compliance API
-        steps:
-          - title: Inventory agent-owned runs
-            body:
-              - Query /v1/compliance/apps/sessions/remote without user_ids[], since that filter excludes agent-owned
-                sessions, and read agent_id and started_by_user.
-            url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
-          - title: Revoke through the member
-            body:
-              - Remove the Cowork in the cloud capability from the member's custom role at Organization settings >
-                Roles, or remove the member from the mapped IdP group so the next SCIM sync drops it.
-            url: https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
-        note: >-
-          Partial by the rule: the session authenticates as the member and carries attribution only; the agent
-          id on scheduled runs is an identifier in the transcript record with no documented separate issuance,
-          authorisation or revocation, so revoking the agent means removing the member's access or deleting the
-          task. Connector actions appear in the connected service as the member.
         verified: "2026-09-25"
       - mitigation: D3-CH
         coverage: partial

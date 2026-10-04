@@ -15,6 +15,7 @@
 # list_amazonbedrockagentcore.html lands on the reference index (the page is list_bedrock-agentcore.html);
 # release-note links devguide/gateway-guardrails.html and devguide/web-search.html land on the dev guide
 # root. beyondtrust.com research returned 403 (not cited).
+# 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the token-passthrough note merged into the confused-deputy note.
 vendor: aws
 family: Amazon Bedrock AgentCore
 tools:
@@ -151,8 +152,6 @@ tools:
         note: >-
           SigV4 callers carry no per-user identity into downstream tools, the gateway service role is shared by
           every GATEWAY_IAM_ROLE target, and GetWorkloadAccessTokenForUserId trusts a caller-supplied userId.
-      - risk: riskCrossTenantCredentialPropagation
-        note: >-
           Token passthrough forwards the caller's inbound token to a gateway target unmodified, and invocation
           is authorised against the runtime ARN, not the session: a shared backend principal can route one
           user's request into another user's runtimeSessionId, and the credentials it holds, unless the
@@ -172,36 +171,6 @@ tools:
           tool catalog until SynchronizeGatewayTargets or pin it with mcpToolSchema, which is the re-gating
           point for definition changes.
     controls:
-      - mitigation: D3-MFA
-        coverage: native
-        mechanism: >-
-          IAM Identity Center MFA (Settings > Authentication > Multi-factor authentication, "Every time they sign
-          in (always-on)") for the people who reach the AgentCore console and control plane; aws:MultiFactorAuthPresent
-          in role trust policies or on bedrock-agentcore write actions for IAM users
-        steps:
-          - title: Require MFA at every workforce sign-in
-            body:
-              - >-
-                In the IAM Identity Center console choose Settings > Authentication > Multi-factor
-                authentication > Configure and set Prompt users for MFA to Every time they sign in
-                (always-on), the default.
-            url: https://docs.aws.amazon.com/singlesignon/latest/userguide/mfa-getting-started.html
-          - title: Refuse definition changes without MFA
-            body:
-              - >-
-                Require aws:MultiFactorAuthPresent true in the trust policy of the role that holds
-                CreateHarness, UpdateHarness, UpdateAgentRuntime, UpdateGateway and credential-provider actions,
-                or deny those actions to IAM users with BoolIfExists false, which also refuses long-term access
-                keys (they never carry the key).
-            url: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_mfa_configure-api-require.html
-        note: >-
-          Rated on console and account access that can change harness, runtime, gateway, policy and credential
-          definitions, per the architecture rule. Native where the identity source is the Identity Center
-          directory, AWS Managed Microsoft AD or AD Connector; with an external IdP the MFA section is not
-          available and MFA is the IdP's, so an organisation federating that way is at partial. Workloads call
-          InvokeHarness and InvokeAgentRuntime with SigV4 role credentials or a JWT from the configured discovery
-          URL; end-user MFA is the deployer's front end or the IdP behind CUSTOM_JWT.
-        verified: "2026-09-25"
       - mitigation: cap-agent-tool-registry
         coverage: native
         mechanism: >-
@@ -274,39 +243,6 @@ tools:
           ID); A/B walkthroughs use Runtime endpoints, and a front end that calls InvokeHarness on DEFAULT gets
           every update at once. Rated native on the architecture rule because versions, endpoints, weighted
           traffic and an evaluation step all exist, which the first-party runtimes do not offer.
-        verified: "2026-09-25"
-      - mitigation: D3-AA
-        coverage: native
-        mechanism: >-
-          A workload identity minted per agent by Runtime and Gateway (arn ...:workload-identity-directory/default/
-          workload-identity/<name>, harness_<agentName>-* for harnesses), listed by ListWorkloadIdentities and
-          removed by DeleteWorkloadIdentity; a per-agent IAM execution role; workload access tokens binding user and
-          agent (GetWorkloadAccessTokenForJWT)
-        steps:
-          - title: Inventory the agent identity directory
-            body:
-              - >-
-                Run aws bedrock-agentcore-control list-workload-identities and review creation source, owner tags
-                and unused identities; the directory is one per account and Region.
-            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agent-identity-directory.html
-          - title: Give each agent its own role and providers
-            body:
-              - >-
-                Create one execution role per agent whose GetResourceOauth2Token / GetResourceApiKey statements name
-                only that workload identity's ARN and its credential providers, never "*".
-            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/scope-credential-provider-access.html
-          - title: Refuse unverifiable user binding
-            body:
-              - >-
-                Deny bedrock-agentcore:GetWorkloadAccessTokenForUserId where a JWT is available so every workload
-                token is minted by GetWorkloadAccessTokenForJWT from a verified issuer and subject.
-            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/get-workload-access-token.html
-        note: >-
-          The platform mints and inventories a principal per agent, which the pin says to select for. Separation
-          is IAM's: the service enforces no binding between workload identities and credential providers in the
-          same account, so agents sharing an execution role share reach. Runtime- and Gateway-managed identities
-          cannot fetch workload tokens directly. The workload identity authenticates to AgentCore services only;
-          a third-party tool sees whatever credential the provider issued.
         verified: "2026-09-25"
       - mitigation: D3-CTS
         coverage: native

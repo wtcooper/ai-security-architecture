@@ -90,8 +90,8 @@ zones:
     owner: cloud
     note: >
       Infrastructure we operate — the AI gateway that brokers every model and remote call, and
-      the systems and data it admits the agent into. With no vendor column, this band is the
-      only place a control can live.
+      the systems and data it admits the agent into. With no vendor column, this band holds
+      every control the developer running the agent cannot override.
   - id: zoneExternal
     owner: external
     note: Outside the company with no agreement — package registries, the open web, third-party SaaS.
@@ -281,13 +281,13 @@ blocks:
     col: 4
     row: 2
     note: >
-      The organisation-operated crossing that replaces the missing vendor column, and the only
-      component in this drawing that can hold a control at all: the vault for the key the
-      developer would otherwise paste, the registry of MCP servers, APIs and connectors it will
-      broker, and the admission decision for the remote surface. Which build of the agent runs is the
-      mirror's decision, reached by the native tools directly. Its items are the traffic classes
-      it brokers; the checks are the numbered pins on this block and its edges, and the
-      call-outs beneath.
+      The organisation-operated crossing that replaces the missing vendor column, and the tier
+      that holds the controls the developer cannot edit: the vault for the key the developer
+      would otherwise paste, the registry of MCP servers, APIs and connectors it will broker,
+      per-call policy and the screening of what comes back. Remote steering does not pass
+      through it, and which build of the agent runs is the mirror's decision, reached by the
+      native tools directly. Its items are the traffic classes it brokers; the checks are the
+      numbered pins on this block and its edges, and the call-outs beneath.
     pack: aiGatewayTraffic
 
   - id: hostedTools
@@ -457,10 +457,10 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 6
-    mitigations: [ D3-CH, D3-CTS ]
+    mitigations: [ D3-CH ]
     note: >
-      Vaulted, short-lived, connector-scoped grants on our own keys — and keeping the
-      developer's own keys and sessions out of the agent's reach.
+      Vaulted, short-lived, connector-scoped grants on our own keys, so no standing provider
+      key sits in a dotfile the agent can read.
 
   - id: govPolicy
     kind: governance
@@ -497,8 +497,8 @@ blocks:
     row: 6
     mitigations: [ AML.M0024, cap-shadow-ai-discovery, cap-agent-kill-switch ]
     note: >
-      Our gateway tap is the only session record there is — no vendor export exists to fuse
-      with it — plus the discovery that finds the installs which never enrolled.
+      Our gateway tap joined to endpoint telemetry — no vendor export exists to fuse with
+      either — plus the discovery that finds the installs which never enrolled, and the stop.
 
 
 edges:
@@ -534,9 +534,10 @@ edges:
     label: dialled-out tunnel
     note: >
       The tunnel and bridge shapes: a relay the harness dialled out to, or a chat bridge
-      forwarding platform messages. Admission is a bearer secret at best — never an
-      owner-bound account, and never our firewall, because a phone on a cell network reaches
-      the machine without passing through the corporate network at all. The third shape — a
+      forwarding platform messages. Unless the tunnel service signs the phone in through our
+      IdP, admission is a bearer secret at best — never an owner-bound account, and never our
+      firewall, because a phone on a cell network reaches the machine without passing through
+      the corporate network at all. The third shape — a
       direct connection to the listening port with no relay anywhere — traverses nothing
       drawable at all, and is carried as the exposure risk pinned on the harness.
   - from: toolPlane
@@ -672,12 +673,6 @@ pins:
         Code, documents and screenshots leave the company here — usually more than the
         developer pictured sharing, and with no vendor tenancy in between, whatever the
         provider's default retention happens to be is the retention policy.
-    - risk: riskStaleAgentIdentityBinding
-      at: remoteDevice->relay
-      note: >
-        A remote channel is only as good as the account and device binding behind it; a stale
-        login steering a machine full of credentials is an account-compromise blast radius —
-        and here admission is a bearer secret at best, never an owner-bound account.
     - risk: riskInsecureIntegratedComponent
       at: toolPlane->registry
       note: >
@@ -724,8 +719,9 @@ pins:
     - risk: riskRunawayAgentToolLoops
       at: harness
       note: >
-        A scheduled or hosted session has no human to notice it looping; seat metering is the
-        only meter, and the stop is the credential.
+        A scheduled or unattended run has no human to notice it looping; the gateway's spend
+        ceiling bounds the brokered calls, and local iterations run until something stops the
+        process.
     - risk: riskInsecureIntegratedComponent
       at: memory
       note: >
@@ -743,20 +739,21 @@ pins:
     - mitigation: D3-MFA
       at: relay
       note: >-
-        Bind the remote surface to a named user on a managed device by contracting the relay: a zero-trust
-        tunnel tied to our directory is the only way this path acquires an identity we govern. Nothing in this
-        category does it on its own — a serve port takes a shared secret, a chat bridge takes whoever the
-        platform admits — and an uncontracted community relay leaves the path uncontrolled, which is then the
+        Where remote steering is allowed at all, the tunnel service signs the phone in through our IdP, which
+        enforces MFA — SSO alone is not MFA — and the steering session inherits that sign-in. Nothing in this
+        category does it on its own: a serve port takes a shared secret and a chat bridge takes whoever the
+        platform admits, so a relay without the IdP step leaves the path uncontrolled, which is then the
         finding.
     - mitigation: cap-agent-action-policy-enforcement
-      at: harness->aiGateway
+      at: aiGateway
       note: >-
-        Session admission and per-call policy evaluated at the edge, outside the application being governed.
+        Per-call policy on every brokered tool call — from the harness and from the native tools alike —
+        evaluated at the gateway, outside the application being governed.
     - mitigation: cap-sensitive-data-redaction
       at: toolPlane->aiGateway
       note: >-
-        Inspection belongs on the brokered tool path, where the agent's calls carry repository content out to
-        servers we did not write — not on the pinned vendor session.
+        DLP on the brokered tool path, where the agent's calls carry repository content out to servers we did
+        not write.
     - mitigation: AML.M0036
       at: harness->aiGateway
       note: >-
@@ -770,20 +767,22 @@ pins:
     - mitigation: D3-EI
       at: toolPlane
       note: >-
-        Make sandboxed tools the default path for commands and computer use, so the approval gate fires only
+        Make sandboxed tools the default path for commands and computer use, with SSH keys, cloud credentials
+        and browser profiles outside the filesystem the sandbox can reach — so the approval gate fires only
         for actions that leave the box.
-    - mitigation: D3-CTS
-      at: toolPlane
-      note: Keep SSH keys, cloud credentials and browser profiles outside the agent's reachable filesystem.
     - mitigation: AML.M0031
       at: toolPlane->memory
       note: >-
-        Treat memory and rules as untrusted input on read. Instruction files, hooks and settings are
-        configuration managed as code: reviewed on change, diffed on clone, never executed from a package a
-        dependency dropped in — a repo-committed rules change is a code change.
+        Scope writes: the agent writes its own memory files and nothing else. Rules, hooks and settings are
+        configuration managed as code — reviewed on change, diffed on clone, never executed from a package a
+        dependency dropped in. Keep memory under version history so a poisoned note can be traced to the
+        session that wrote it and rolled back, and treat everything read back as untrusted input.
     - mitigation: cap-input-guardrails
-      at: hostedTools->orgData
-      note: Treat repository and document content as untrusted; it cannot be authenticated, only bounded.
+      at: aiGateway
+      note: >-
+        Classify tool results and retrieved documents for injection at the gateway, before anything returns to
+        the endpoint. Working-tree files never cross here; they stay untrusted input, bounded by the tool
+        permissions rather than screened.
     - mitigation: D3-CH
       at: aiGateway
       note: >-
@@ -806,28 +805,22 @@ pins:
     - mitigation: AML.M0024
       at: aiGateway
       note: >-
-        The gateway tap is the whole record: with no vendor console anywhere, what does not cross here was
-        never logged at all.
+        The gateway tap records every brokered call. With no vendor console anywhere, local tool work, direct
+        egress and the relay are on record only through the endpoint telemetry joined to it.
     - mitigation: cap-shadow-ai-discovery
       at: harness
       note: Find the installs that never enrolled, because this archetype spreads one developer at a time.
     - mitigation: D3-PA
       at: harness
       note: >-
-        The device tooling that sees what no crossing can: which harnesses are installed, which ports they
-        listen on, what their processes execute — and the containment that isolates a machine whose agent has
-        been steered.
-    - mitigation: cap-agent-action-policy-enforcement
-      at: harness->relay
-      note: >-
-        Admission of a remote instruction: the relay's identity headers and the harness's shared secret decide
-        whether a steering message is executed — absorbed by the harness and the contracted relay, recorded as
-        a deviation.
+        The device tooling that sees what no crossing can: which harness processes run, which ports they listen
+        on and what their child processes execute.
     - mitigation: cap-agent-kill-switch
       at: govObservability
       note: >-
-        Revoke the brokered credential and block the port from device management — the only stop, because no
-        vendor console exists.
+        The stop is enforced from outside the agent: device management ends the harness and its child processes
+        and closes the relay tunnel, and the gateway revokes the brokered credential — there is no vendor
+        console to do either.
     - mitigation: cap-agent-egress-control
       at: toolPlane
       note: >-
@@ -873,11 +866,12 @@ walkthrough:
       label: approved (bound)
       note: Approved — this action, these arguments, not a blanket yes.
     - follow: toolPlane->aiGateway
-      label: edits, commands; brokered calls
+      label: brokered tool call
       note: >
-        Edits and commands execute inside the application's native tools, with whatever scope
-        the permission model granted. Anything a local tool sends to a remote server or
-        connector crosses our tier here — brokered, on a credential the gateway injects.
+        Edits and commands run locally in the native tools, on the working tree, with whatever
+        scope the permission model granted — they never touch this tier. What crosses here is a
+        local tool's call to a remote server or connector, brokered on a credential the gateway
+        injects.
     - follow: aiGateway->extTools
       label: admitted third-party server
       note: A third-party server or connector, admitted by the catalogue on a scoped credential.
@@ -918,9 +912,10 @@ scenarios:
       - follow: relay->harness
         label: down dialled-out tunnel
         note: >
-          The relay hands the instruction down a connection the harness dialled out. Admission
-          is a bearer secret at best; with no relay at all the phone connects straight to a
-          listening port and admission is whatever that port checks, which is often nothing.
+          The relay hands the instruction down a connection the harness dialled out. Without the
+          IdP sign-in on the tunnel, admission is a bearer secret at best; with no relay at all the
+          phone connects straight to a listening port and admission is whatever that port checks,
+          which is often nothing.
       - follow: harness->relay
         label: result up the tunnel
         note: The result goes back up the same dialled-out connection.
@@ -946,7 +941,7 @@ scenarios:
         note: The content comes back as a tool result.
       - follow: hostedTools->aiGateway
         label: back across crossing
-        note: Across the crossing, where inspection is possible and rarely configured.
+        note: Across the crossing, where the injection screen runs — and a well-phrased instruction passes it.
       - follow: aiGateway->harness
         label: into context
         note: And into context, where the loop cannot tell the instruction from the task.
@@ -999,9 +994,9 @@ deviations:
   - subject: The AI gateway is drawn although the common install lacks it
     reason: >
       This catalogue draws target states. The gateway is the organisation's replacement for
-      the missing vendor column — key vault, egress policy, audit, and the admission decision
-      for the remote surface — and the common state, a pasted key calling the provider
-      directly, is recorded here rather than drawn as a second model path.
+      the missing vendor column — key vault, egress policy, per-call policy and audit — and the
+      common state, a pasted key calling the provider directly, is recorded here rather than
+      drawn as a second model path.
   - subject: The private package registry is drawn in the enterprise band, not as a tool source
     reason: >
       In this archetype the registry delivers the agent itself, not merely what the agent
@@ -1017,14 +1012,13 @@ deviations:
       containment the drawing's own notes deny. The personal agent, whose whole loop lives
       inside the container, draws the frame; here the item form is the honest one.
 
-  - subject: Identity governance and remote admission are absorbed by the relay and the harness
+  - subject: Remote MFA is absorbed by the relay's tunnel service
     reason: >
-      Two inline pins sit on components that are not their registered embodiment. Identity
-      governance on the relay is delivered by contracting a zero-trust tunnel tied to our
-      directory — an uncontracted community relay leaves the pin unmet, which is then the
-      finding. Runtime enforcement on the relay-to-harness hop is the harness's own shared
-      secret and loopback bind plus the relay's identity headers; nothing else on this path
-      can hold it.
+      The MFA pin sits on a component that is not its registered embodiment: on the remote
+      path the only place a phone can be made to sign in through our IdP is the tunnel service
+      in front of the harness. A relay without that step — a community relay, a bare serve
+      port, a chat bridge — leaves the pin unmet, which is then the finding. No per-call
+      policy is claimed on this hop: nothing on it evaluates what a steering message asks for.
 
 sources:
   - title: "opencode — server mode, web UI and remote access"

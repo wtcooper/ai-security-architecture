@@ -13,7 +13,7 @@ summary:
 
 description:
   - >
-    A2A is thin on purpose. It defines how agents discover each other (a signed Agent Card),
+    A2A is thin on purpose. It defines how agents discover each other (an Agent Card),
     how they exchange work (tasks, messages, artifacts, over gRPC, HTTP+JSON or JSON-RPC) and
     which authentication schemes a peer accepts — and it stops there. Credentials are obtained
     out of band; the identity that authenticates is the calling agent, not the user it works
@@ -23,7 +23,7 @@ description:
     identities for agents, identity assertions for users, an authorization server that mints
     and exchanges, and a gateway that admits cards and enforces scopes per skill.
   - >
-    Two identities travel on every task and must never be confused. The agent's identity says
+    Two identities travel on every task a user starts, and must never be confused. The agent's identity says
     which workload is calling — our harness registered as a client in the peer's platform, the
     peer's agent registered in ours — authenticated with a private key or mutual TLS, never a
     shared secret. The user's identity says on whose behalf, and it travels as an identity
@@ -87,7 +87,7 @@ exemplars:
     note: >
       A vendor-operated peer that accepts goals from external A2A clients to work across Jira and
       Confluence. Illustrates the remote peer side of federation.
-    url: https://www.atlassian.com/platform/rovo-mcp
+    url: https://developer.atlassian.com/cloud/rovo-a2a/
     asOf: "2026-10"
 
 zones:
@@ -365,7 +365,7 @@ blocks:
         icon: doc
         note: >
           Signed with JWS over the canonical card, verified against a published key, pinned by
-          hash in our registry. Skills, `securitySchemes`, `security`, `supportedInterfaces`,
+          hash in our registry. Skills, `securitySchemes`, `securityRequirements`, `supportedInterfaces`,
           `capabilities` including whether the card has an authenticated extended form.
       - id: task
         label: Task endpoint
@@ -443,7 +443,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 4
-    mitigations: [ cap-agent-action-policy-enforcement, AML.M0029, AML.M0004 ]
+    mitigations: [ cap-agent-action-policy-enforcement, AML.M0004 ]
   - id: govSupplyChain
     kind: governance
     title: Supply-chain assurance
@@ -581,15 +581,8 @@ pins:
       note: >
         Artifacts, status messages and the card's own descriptions are content composed by a
         model we do not operate, and they land in our agent's context as instruction. The
-        classification at the crossing is the only control between a partner's output and our
-        agent's next action.
-    - risk: riskStaleAgentIdentityBinding
-      at: authServer
-      note: >
-        A peer agent deregistered at the platform, or a partner whose card key rotated, still
-        holds tokens until they expire and still matches a pinned card until it is re-verified.
-        Short lifetimes, introspection and re-verification on card change are what make the
-        binding current.
+        classification at the crossing screens them before the harness reads them; what survives
+        is bounded by the action policy, not trusted.
     - risk: riskShadowAndUnknownAgents
       at: gateway
       note: >
@@ -617,8 +610,8 @@ pins:
       at: harness
       note: >
         Our agent acting on a peer's artifact as if it were the user's instruction — the
-        confused agent, one organisation removed. Consequential actions still stop for the
-        person, however many agents recommended them.
+        confused agent, one organisation removed. The action policy at the crossing decides what
+        it may do, however many agents recommended it.
   mitigations:
     - mitigation: D3-AA
       at: authServer
@@ -636,9 +629,10 @@ pins:
       at: gateway->authServer
       note: >-
         Every hop gets its own token: user assertion → peer-bound token outbound; peer token → downstream
-        token inbound, sender-constrained or over mutual TLS so a token lifted from a log cannot be replayed.
-        The exchange is the delegation record, and nothing crosses a boundary on the credential it arrived
-        with.
+        token inbound. Where the peer supports it the token is sender-constrained — certificate-bound (RFC
+        8705) or DPoP — so one lifted from a log cannot be replayed without the bound key; a plain bearer stays
+        replayable until it expires. The exchange is the delegation record, and nothing crosses a boundary on
+        the credential it arrived with.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
       note: >-
@@ -646,27 +640,27 @@ pins:
         and security schemes reviewed — and the registry of our own published cards. An agent not in it is not
         a peer.
     - mitigation: cap-input-guardrails
-      at: gateway->partner
+      at: gateway
       note: >-
-        Inbound artifacts and status messages classified before the harness reads them, with the peer's
-        identity attached so a steering artifact is attributable to the agent that sent it.
+        Every inbound artifact, status message, card description and inbound task — from the vendor's peer and
+        the partner's alike — classified before the harness reads it, with the peer's identity attached so a
+        steering artifact is attributable to the agent that sent it.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
       note: >-
         Per-skill authorization on both directions — which peer may invoke which of our skills, which of a
         peer's skills our agent may invoke for which users — enforced at the crossing because the protocol
-        only says it SHOULD be.
+        leaves authorization to the implementation. A2A has no standard skill selector, so inbound requests
+        name the skill in `metadata` — this profile's dispatch convention — and the gateway dispatches to that
+        skill, never to whatever the message text asks for.
     - mitigation: cap-sensitive-data-redaction
-      at: gateway->peerVendor
-      note: Inspect the outbound task payload and the returned artifacts as the boundary crossings they are.
+      at: gateway
+      note: >-
+        Every outbound task payload and every artifact we return — to the vendor's peer and the partner's
+        alike — inspected and redacted as the boundary crossing it is.
     - mitigation: AML.M0004
       at: gateway->partner
       note: Per peer, per task and per skill, sized for agents that stream, retry and fan out.
-    - mitigation: AML.M0029
-      at: entry->harness
-      note: >-
-        The auth-required and input-required task states surface to the person here: a peer that needs their
-        consent gets it from them, in their own session, never from our agent on their behalf.
     - mitigation: cap-ai-vendor-assessment
       at: peerVendor
       note: >-
@@ -681,16 +675,18 @@ pins:
     - mitigation: cap-agent-kill-switch
       at: govObservability
       note: >-
-        Revoke a peer at the registry and the authorization server in one action, and let introspection make
-        it real for tokens already issued.
+        Cut a peer off in one action: revoke its registration and keys at the authorization server, drop its
+        card from the registry so the gateway refuses it, and cancel the tasks we delegated to it (`POST
+        /tasks/{id}:cancel`). Introspection makes the revocation real for tokens already issued; whether the
+        peer's own process stops is the peer's to honour and confirm.
     - mitigation: AML.M0031
       at: localTools->memory
       note: Artifacts stored only after classification, scoped to the task that received them.
     - mitigation: cap-mcp-tool-integrity
-      at: gateway->peerVendor
+      at: gateway
       note: >-
-        The peer's card treated as a dependency: signature verified against a published key at admission and
-        on every task, hash pinned, a change a decision rather than a surprise.
+        Each peer's card — the vendor's and the partner's — treated as a dependency: signature verified against
+        the key pinned at admission and on every task, hash pinned, a change a decision rather than a surprise.
 
 walkthrough:
   title: A user's task crosses to a federated peer platform
@@ -736,13 +732,13 @@ walkthrough:
     - follow: gateway->peerVendor
       label: GET agent card; verify
       note: >
-        Discovery, once per admission and re-checked per task: `GET /.well-known/agent-card`. The
+        Discovery, once per admission and re-checked per task: `GET /.well-known/agent-card.json`. The
         gateway verifies `signatures[]` — a JWS over the JCS-canonical card with `signatures` removed,
         the key fetched from the `jku` in the protected header and matched to the key pinned at
         admission — then compares the card's hash to the pinned one. It reads `supportedInterfaces`
         (`protocolBinding`, `protocolVersion`), `capabilities` (`streaming`, `pushNotifications`,
-        `extendedAgentCard`), `securitySchemes` and the requested skill's own `security`
-        requirement. A card that fails the signature or differs from the pin stops the task here.
+        `extendedAgentCard`), `securitySchemes` and the requested skill's own
+        `securityRequirements`. A card that fails the signature or differs from the pin stops the task here.
     - follow: peerVendor->gateway
       label: "card: schemes, binding"
       note: >
@@ -755,25 +751,28 @@ walkthrough:
       note: >
         Two credentials for one task. Our agent's: a `client_assertion` signed with the private key
         registered in the peer's platform (`client_assertion_type` JWT-bearer), or the mutual-TLS
-        certificate the platform pinned. The user's: RFC 8693 token exchange — `subject_token` = the
-        ID token, `subject_token_type` = `id_token`, `audience` = the platform's authorization-server
-        issuer, `resource` = the peer agent's URL from its card, `scope` = this one skill. The
+        certificate the platform pinned. The user's: an RFC 8693 exchange for an identity-assertion
+        grant — `requested_token_type` = `urn:ietf:params:oauth:token-type:id-jag`, `subject_token` =
+        the ID token, `subject_token_type` = `urn:ietf:params:oauth:token-type:id_token`, `audience` =
+        the platform's authorization-server issuer, `resource` = the peer agent's URL from its card,
+        `scope` = this one skill. The
         identity provider's registry decides whether this platform may be told about this user; a
         denial here means the task will stop later for the person's own consent instead.
     - follow: authServer->gateway
       label: identity assertion
       note: >
-        A signed identity assertion — `iss` us, `sub` the user, `aud` the platform's authorization
-        server, `scope` the skill, `exp` minutes away, `jti` single-use — and the client assertion.
+        A signed ID-JAG (`typ: oauth-id-jag+jwt`) — `iss` us, `sub` the user, `aud` the platform's
+        authorization server, `client_id` our harness's registration there, `scope` the skill, `exp`
+        minutes away, `jti` single-use — and the client assertion.
         Neither is a token the peer could replay elsewhere.
     - follow: gateway->peerVendor
-      label: token at peer; message/send
+      label: token at peer; message:send
       note: >
         At the platform's `tokenUrl`: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`,
         `assertion` = the user assertion, `scope` = the skill, plus our client authentication. The
         platform validates our issuer and keys, maps `sub` to its tenant, and returns an access token
         bound to its agent and this skill — sender-constrained (DPoP or mTLS) where it supports it.
-        Then `POST /message/send` with `Authorization: Bearer`, `A2A-Version`, `traceparent`, the
+        Then `POST /message:send` with `Authorization: Bearer`, `A2A-Version`, `traceparent`, the
         `tenant` the card's interface named, and a `Message` (`role: ROLE_USER`, `parts`, `contextId`,
         `messageId`) whose text the gateway inspected for what it carries out of the organisation.
     - follow: peerVendor->gateway
@@ -782,7 +781,7 @@ walkthrough:
         The peer's agent works — on our user's identity in its tenant, and on its own identity for
         anything it delegates onward, since the token it holds is audience-bound to it and cannot
         travel a hop further. A `Task` comes back with a `taskId`, then status updates and
-        `artifacts` — by `message/stream`, by `GET /tasks/{id}`, or by the push webhook configured
+        `artifacts` — by `POST /message:stream`, by `GET /tasks/{id}`, or by the push webhook configured
         on the task. Every part is classified before the harness sees it: model-composed content from
         another organisation is instruction until proven otherwise.
     - follow: gateway->harness
@@ -810,8 +809,8 @@ scenarios:
       - follow: peerVendor->gateway
         label: card fetch; token request
         note: >
-          The vendor platform's agent fetches our signed card at `/.well-known/agent-card`, verifies our
-          signature, and reads the skill's `security` requirement: `oauth2`, `clientCredentials`,
+          The vendor platform's agent fetches our signed card at `/.well-known/agent-card.json`, verifies our
+          signature, and reads the skill's `securityRequirements`: `oauth2`, `clientCredentials`,
           `tokenUrl` = our authorization server, `scopes` naming the skill. It asks for a token there.
       - follow: gateway->authServer
         label: client_credentials (assertion)
@@ -826,15 +825,16 @@ scenarios:
         note: >
           An access token whose `aud` is our agent, whose `sub` is the peer's agent identity, minutes
           long. The gateway validates it on every request that follows — signature or introspection,
-          audience, expiry — and enforces the skill scope per call against the skill `id` in the
-          request, the per-skill authorization the protocol says SHOULD exist.
+          audience, expiry — and enforces the skill scope per call against the skill the request names
+          in `metadata`. That is this profile's dispatch convention: a `SendMessageRequest` carries only
+          `tenant`, `message`, `configuration` and `metadata`, and A2A defines no skill selector.
       - follow: gateway->harness
-        label: message/send (A2A-Version)
+        label: message:send (A2A-Version)
         note: >
-          `POST /message/send` arrives with `A2A-Version`, `traceparent` and a `Message`; the gateway
-          checks the version, the `tenant` against our interface, and passes the task to our agent as a
-          request from a named peer with no human behind it — autonomous-caller policy, and nothing in
-          `parts` is an instruction.
+          `POST /message:send` arrives with `A2A-Version`, `traceparent` and a `Message`; the gateway
+          checks the version, the `tenant` against our interface, and dispatches to the skill named in
+          `metadata` — not to whatever the text asks for — as a request from a named peer with no human
+          behind it: autonomous-caller policy, and nothing in `parts` is an instruction.
       - follow: harness->gateway
         label: needs our record
         note: >
@@ -927,7 +927,7 @@ scenarios:
       - follow: harness->gateway
         label: "resume: same taskId"
         note: >
-          `POST /message/send` with the same `taskId` and `contextId` — the way an interrupted task is
+          `POST /message:send` with the same `taskId` and `contextId` — the way an interrupted task is
           continued — on our agent's token as before.
       - follow: gateway->partner
         label: working on user's grant
@@ -954,7 +954,8 @@ scenarios:
         label: "webhook: status/artifact"
         note: >
           Hours later the peer's agent calls the webhook: `Authorization: Bearer` on its identity, the
-          task `token` echoed, a `TaskStatusUpdateEvent` or `TaskArtifactUpdateEvent` in the body.
+          task `token` echoed, and a `StreamResponse` in the body carrying a `statusUpdate` or an
+          `artifactUpdate`.
       - follow: gateway->authServer
         label: validate webhook caller
         note: >
@@ -974,15 +975,16 @@ scenarios:
   - title: A valid token for one skill invokes another
     steps:
       - follow: peerVendor->gateway
-        label: message/send for other skill
+        label: message:send for other skill
         note: >
-          The vendor platform's agent holds a token scoped to skill `lookup` and sends `POST /message/send` for
-          skill `update` — a syntactically perfect request on a valid token.
+          The vendor platform's agent holds a token scoped to skill `lookup` and sends `POST /message:send`
+          whose `metadata` names skill `update` — a syntactically perfect request on a valid token.
       - follow: gateway->authServer
         label: "validate: scope short"
         note: >
           Validation: signature good, audience our agent, not expired — and the `scope` does not cover
-          the skill named in the request. The card promised per-skill `security`; the gateway keeps it.
+          the skill named in the request's `metadata`. The card promised per-skill
+          `securityRequirements`; the gateway keeps it.
       - follow: authServer->gateway
         label: insufficient
         note: >
@@ -997,7 +999,7 @@ scenarios:
       - follow: gateway->peerVendor
         label: GET agent card; verify
         note: >
-          A routine task begins with the card check every task begins with: `GET /.well-known/agent-card`
+          A routine task begins with the card check every task begins with: `GET /.well-known/agent-card.json`
           and verification of `signatures[]` against the pinned key.
       - follow: peerVendor->gateway
         label: hash differs
@@ -1029,7 +1031,8 @@ scenarios:
         note: >
           Classification at the crossing marks it; what reaches the loop is content with a provenance
           label — peer identity, `taskId` — not a plan. What survives still stands beside the system
-          instruction, which is why consequential actions stop for the person regardless.
+          instruction, which is why the action policy at the crossing, not the artifact, decides what
+          our agent does next.
       - follow: localTools->memory
         label: stored after classification
         note: >
@@ -1048,7 +1051,7 @@ scenarios:
         label: call after revocation
         note: >
           An agent whose registration was revoked an hour ago — the agreement ended, or its key was
-          reported compromised — calls `POST /message/send` with a token issued before the revocation.
+          reported compromised — calls `POST /message:send` with a token issued before the revocation.
       - follow: gateway->authServer
         label: introspection
         note: >

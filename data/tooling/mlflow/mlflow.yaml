@@ -223,7 +223,7 @@ tools:
           3.10.1. Cryptographic integrity of the corpus and its modification history belong to the data store's
           versioning.
         verified: "2026-09-25"
-      - mitigation: cap-data-access-governance
+      - mitigation: AML.M0005
         coverage: partial
         mechanism: >-
           basic-auth app (`mlflow server --app-name basic-auth`) with role grants (3.13.0+) of READ / USE / EDIT /
@@ -265,7 +265,7 @@ tools:
           but the server's storage credential is "an assumed role of access to all artifacts", so anyone reaching
           the bucket directly, or holding an S3 presigned URL (3.15.0+, MLFLOW_PRESIGNED_DOWNLOAD_URL_TTL_SECONDS,
           default 300), bypasses it, and with --no-serve-artifacts the storage IAM is the only control. Reads are not
-          logged per user (no audit log; AML.M0024), so the "logged" half is the storage access log or a proxy
+          logged per user (open source has no audit log); the storage access log or a proxy records them
           (external). Corpus: MLflow holds dataset metadata, not the corpus, so who may read it is cloud IAM on the
           corpus store. Identity is MLflow's own user store (or the mlflow-oidc-auth plugin or a reverse proxy) and is
           not carried through to storage. Authorization gaps fixed recently: CVE-2026-2651 (multipart upload,
@@ -295,47 +295,6 @@ tools:
           the statsmodels flavor before 3.15.0) — a loader format policy, not file analysis. A PEFT version downloads
           its base weights from the Hugging Face hub at load unless that host is reachable only through the mirror.
         verified: "2026-09-25"
-      - mitigation: AML.M0029
-        coverage: partial
-        mechanism: >-
-          Separate registered models per environment (dev.<team>.<model>, prod.<team>.<model>) with role grants, so
-          the run's user can create versions only in the candidate model and a different promoter user copies and
-          aliases in the release model; no approval step, and within one registered model creating a version, setting
-          an alias and transitioning a stage all require the same can_update (EDIT)
-        steps:
-          - title: Split candidate and release registered models
-            body:
-              - >-
-                In /admin → Roles grant the training job's user EDIT on its experiment and on dev.<team>.<model> only,
-                and a promoter group EDIT on prod.<team>.<model>; keep MANAGE on the release model with the registry
-                owners.
-            url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
-          - title: Promote by copy, as the promoter
-            body:
-              - >-
-                The promoter runs client.copy_model_version(src_model_uri="models:/dev.<team>.<model>@candidate",
-                dst_name="prod.<team>.<model>") and then set_registered_model_alias on the release model; the copy
-                needs READ on the source and EDIT on the destination.
-            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
-          - title: Notify on every release alias
-            body:
-              - >-
-                Create a webhook for model_version_alias.created and model_version.created with a secret (HMAC
-                X-MLflow-Signature) pointed at the change-management or CI endpoint that records who promoted what.
-            url: https://mlflow.org/docs/latest/self-hosting/webhooks/
-        note: >-
-          Partial on this drawing's rule: MLflow separates credentials by resource, not by action. On one registered
-          model "Create Model Version", "Set Registered Model Alias" and "Transition Model Version Stage" all require
-          can_update, so a job and its promoter are separated only when release lives in a registered model the job
-          has no grant on — the per-environment pattern the workflow page documents. Whoever holds EDIT on the release
-          model then promotes alone: no second approver, no approval record bound to the version and its evaluation,
-          and nothing stops that user being a CI service account rather than a person. Webhooks fire after the alias
-          is set (asynchronous, retried), so they notify, not gate; admins bypass every grant; any authenticated user
-          can create a new registered model, so consumers must load only from the named release model. The approval
-          itself needs a gate around the promoter credential (a CI job with required reviewers, a change ticket).
-          Managed variant: SageMaker AI IAM separates sagemaker-mlflow:CreateModelVersion from SetRegisteredModelAlias,
-          scoped to the whole tracking server, still without an approval step.
-        verified: "2026-09-25"
       - mitigation: AML.M0013
         coverage: external
         mechanism: >-
@@ -351,6 +310,20 @@ tools:
             url: https://github.com/sigstore/model-transparency
           - title: OpenSSF Model Signing
             url: https://openssf.org/projects/model-signing/
+        steps:
+          - title: Split candidate and release registered models
+            body:
+              - >-
+                In /admin → Roles grant the training job's user EDIT on its experiment and on dev.<team>.<model> only,
+                and a promoter group EDIT on prod.<team>.<model>, so the job can never write the model that is signed.
+            url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
+          - title: Promote by copy, as the promoter
+            body:
+              - >-
+                The promoter runs client.copy_model_version(src_model_uri="models:/dev.<team>.<model>@candidate",
+                dst_name="prod.<team>.<model>"), then signs the copied version; the copy needs READ on the source and
+                EDIT on the destination.
+            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
         note: >-
           External: open-source MLflow has no artifact signing, no signature field on a model version and no
           verification when `models:/` URIs are loaded (docs index; the MLmodel "signature" is the input/output
@@ -359,7 +332,12 @@ tools:
           identity, key or PKCS#11 token the training job never holds, stores the bundle (model.sig) where the job
           cannot write, and records its location and digest with set_model_version_tag. The serving tier must run
           `model_signing verify` before loading, since MLflow's loaders will not. For a PEFT version the signature
-          covers the adapter only; the base weights fetched by source_model_revision need their own pinning.
+          covers the adapter only; the base weights fetched by source_model_revision need their own pinning. MLflow
+          separates credentials by resource, not action — creating a version, setting an alias and transitioning a
+          stage all need EDIT on one registered model — so the job is kept from the release only by the split above,
+          and there is no approval step: the human decision needs a gate around the promoter credential (a CI job
+          with required reviewers, a change ticket). Sign the digest the evaluator tested, and check it matches the
+          copied version's bytes before signing.
         verified: "2026-09-25"
       - mitigation: AML.M0008
         coverage: partial
@@ -451,6 +429,13 @@ tools:
                 From a version read run_id and the run's dataset inputs; from a suspect run set find every version
                 with client.search_model_versions("run_id IN ('<id>', ...)").
             url: https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html
+          - title: Keep the backend store central and durable
+            body:
+              - >-
+                Start the server with --backend-store-uri on a managed PostgreSQL or MySQL database (not the default
+                SQLite mlflow.db) with its own backup and access logging, and restrict run deletion (can_delete needs
+                MANAGE) and who may run mlflow gc.
+            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
         note: >-
           Native on this drawing's rule (versions linked to runs, datasets, signatures and source). Boundary: this is
           MLflow's own lineage graph, not an exportable AI BOM — no CycloneDX or SPDX output. Everything in it is what
@@ -458,44 +443,10 @@ tools:
           (MLFLOW_TRACKING_USERNAME or the OS user), not the authenticated caller. A signature is optional in open
           source (only Unity Catalog requires one); datasets hang off the run, not the version; the base of a full
           fine-tune is recorded only if the job logs it (the transformers flavor records it); and a version can be
-          registered from a model saved outside MLflow unless the source regex forbids it.
-        verified: "2026-09-25"
-      - mitigation: AML.M0024
-        coverage: partial
-        mechanism: >-
-          Run records (parameters, metrics, tags, input datasets, start and end time, client-supplied user) and model
-          version records (creation time, run_id, source) in the backend store; no audit log of user actions in open
-          source — request-level records come from a reverse proxy in front
-        steps:
-          - title: Record the run completely
-            body:
-              - >-
-                In the job call mlflow.autolog() or log parameters, metrics, the code version tag and every input
-                dataset explicitly, so each run answers which data, which base and which code.
-            url: https://mlflow.org/docs/latest/ml/tracking/
-          - title: Keep the backend store central and durable
-            body:
-              - >-
-                Start the server with --backend-store-uri on a managed PostgreSQL or MySQL database (not the default
-                SQLite mlflow.db) with its own backup and access logging.
-            url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
-          - title: Keep deleted runs until reviewed
-            body:
-              - >-
-                Deleted runs stay restorable until `mlflow gc` purges them; restrict run deletion (can_delete needs
-                MANAGE) and who may run mlflow gc against the backend store.
-            url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
-        note: >-
-          Partial on this drawing's rule (native only with an audit log of user actions): open-source MLflow documents
-          none — not on the basic-auth, RBAC or tracking-server pages, though the last says proxying makes access
-          "easier to secure and audit". "Who ran what" is self-reported: the run's user is sent by the client
-          (MLFLOW_TRACKING_USERNAME or the OS user), not stamped from the authenticated caller; reads, downloads,
-          alias moves and permission changes leave no record beyond the entity's current state; admins and MANAGE
-          holders can delete runs and versions, and the records sit in a database the operator can edit — telemetry
-          is not tamper-resistance. An authenticating reverse proxy's access log shipped to the SIEM supplies the
-          action log (external). Managed variant: SageMaker AI MLflow Tracking Servers log data-plane calls (Mlflow*
-          event names) to CloudTrail with the IAM identity; MLflow Apps log them as CallMlflowApp data events, off by
-          default and without request bodies.
+          registered from a model saved outside MLflow unless the source regex forbids it. Open source keeps no audit
+          log of user actions, so who promoted or withdrew what comes from an authenticating proxy's access log.
+          Withdrawing a version a lineage query names (alias rollback, delete_model_version) takes effect on each
+          consumer's next resolution only; copies already loaded keep serving until the serving tier reloads them.
         verified: "2026-09-25"
       - mitigation: cap-model-documentation
         coverage: partial
@@ -583,48 +534,6 @@ tools:
           authorization_function, the mlflow-oidc-auth plugin) happens outside MLflow. Scoping the run to the dataset
           version an approved spec names is cloud IAM on the corpus store (external): MLflow does not mediate corpus
           reads. Admin users bypass every grant. Managed variant: SageMaker AI authenticates callers with IAM roles.
-        verified: "2026-09-25"
-      - mitigation: cap-agent-kill-switch
-        coverage: native
-        mechanism: >-
-          Registry withdrawal: set_registered_model_alias back to the last good version, delete_registered_model_alias,
-          or delete_model_version (transition_model_version_stage to Archived is deprecated); consumers resolving
-          models:/<name>@<alias> or models:/<name>/<version> get the replacement or an error on their next load
-        steps:
-          - title: Roll the release alias back
-            body:
-              - >-
-                Point the alias at the last known-good version with
-                client.set_registered_model_alias("prod.<team>.<model>", "champion", <version>) (needs EDIT on the
-                release model).
-            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
-          - title: Withdraw the version outright
-            body:
-              - >-
-                Remove it with client.delete_registered_model_alias(...) and client.delete_model_version(name,
-                version) — both need MANAGE, and deletion is irrevocable for the registry entry.
-            url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
-          - title: Find every version a bad run produced
-            body:
-              - >-
-                List them with client.search_model_versions("run_id IN ('<id>', ...)") before withdrawing, so a
-                poisoned dataset's runs map to every release that came from them.
-            url: https://mlflow.org/docs/latest/api_reference/python_api/mlflow.client.html
-          - title: Tell the serving tier to reload
-            body:
-              - >-
-                Subscribe the deployment system to model_version_alias.deleted and model_version_alias.created webhooks
-                so it restarts or reloads the consumers that resolved the old version.
-            url: https://mlflow.org/docs/latest/self-hosting/webhooks/
-        note: >-
-          Native on this drawing's rule (the registry's stage transition is the stop, at load time), with the
-          boundary stated: the withdrawal takes effect on each consumer's next resolution of the alias or version,
-          and already-loaded copies keep serving until the serving tier reloads — `mlflow models serve` resolves the
-          URI once at start, and no delay is documented. MLflow pushes nothing but the asynchronous, experimental
-          webhook. Consumers loading by runs:/ or models:/<model_id> URI, a storage path or a cached copy are
-          untouched, because deleting a version removes the registry entry, not the artifacts. "Fails load-time
-          verification everywhere" additionally needs signatures checked by the serving tier (AML.M0013); MLflow
-          verifies nothing and revokes no consumer credentials.
         verified: "2026-09-25"
       - mitigation: D3-EI
         coverage: notApplicable

@@ -31,8 +31,9 @@ description:
     Multi-tenancy inside the runtime has no equivalent elsewhere in this catalogue. Continuous
     batching mixes tenants' requests in one forward pass on shared accelerators, the KV cache
     holds their context, and prefix caching across tenants is a performance feature that is also
-    a disclosure path. Whether cache entries may be shared across tenants is a serving
-    configuration flag with data-protection consequences, and it rarely reaches a review.
+    a disclosure path. Whether cache entries are shared across tenants is a serving setting
+    with data-protection consequences — in vLLM, a secret salt the gateway must set on every
+    request — and it rarely reaches a review.
   - >
     Availability is a security property here in a way it is not with a managed API. Capacity is
     finite and expensive, admission control at the gateway is what stops one caller becoming
@@ -171,7 +172,7 @@ blocks:
         icon: db
         note: >
           Tenants' live context, held to avoid recomputing it. Sharing prefixes across tenants
-          is a performance feature and a disclosure path in the same flag.
+          is a performance feature and a disclosure path in the same setting.
 
   - id: storage
     kind: external
@@ -181,9 +182,9 @@ blocks:
     row: 1
     cosaiComponent: componentModelStorage
     note: >
-      Versioned weight artifacts with provenance and a promotion state — expensive to reproduce,
-      trivial to copy. Nothing serves that was not promoted, provided the load path verifies the
-      digest.
+      Versioned weight artifacts — expensive to reproduce, trivial to copy. Promotion binds a
+      release to an immutable approved digest recorded outside this store's write path, so
+      replacing a file and the digest beside it does not make it loadable.
     items:
       - id: files
         label: Model files
@@ -287,7 +288,9 @@ blocks:
       - id: releases
         label: Signed releases
         icon: shield
-        note: Signature and lineage are the admission evidence; withdrawal here is refusal at load everywhere.
+        note: >
+          Signature and lineage are the admission evidence. Withdrawal stops future loads only where
+          the loader checks current release status; instances already serving keep running until stopped.
 
 edges:
   - from: consumers
@@ -327,10 +330,9 @@ edges:
     path: external
     label: weights in
     note: >
-      Artifacts arrive in storage — fetched from the hub by the ingest tooling, or published
-      by the fine-tuning pipeline's registry. The serving runtime holds no source-fetch
-      credentials; provenance establishes who made the artifact and nothing about what it
-      does on load.
+      Hub artifacts arrive in storage, fetched by the ingest tooling. The serving runtime holds
+      no source-fetch credentials; provenance establishes who made the artifact and nothing
+      about what it does on load.
   - from: storage
     to: runtime
     path: primary
@@ -372,7 +374,10 @@ pins:
         chain incident class with recent precedent.
     - risk: riskAcceleratorAndSystemSideChannels
       at: runtime
-      note: Shared accelerators are a physical substrate common to every tenant, below every namespace boundary.
+      note: >
+        Shared accelerators are a physical substrate common to every tenant, below every namespace
+        boundary. Process isolation does not close this channel; dedicated accelerators per
+        sensitivity tier are the deployment choice where the residual is unacceptable.
     - risk: riskSensitiveDataDisclosure
       at: runtime
       note: >
@@ -460,32 +465,29 @@ pins:
     - mitigation: cap-output-guardrails
       at: gateway
       note: >-
-        Content and injection classification on both legs, because no provider is applying policy for you.
-    - mitigation: AML.M0031
-      at: runtime
-      note: Tenant-scoped cache keys, so a prefix hit can never cross a tenant boundary.
+        Content-policy classification of request and response, because no provider is applying policy for you.
     - mitigation: D3-HBPI
       at: runtime
       note: >-
-        Hardware-backed isolation for the highest-sensitivity tenants where shared accelerators are not
-        acceptable.
+        Hardware-enforced process isolation between serving instances, so one tier's process cannot read or
+        write another's memory. It does not close accelerator side channels.
     - mitigation: D3-AVE
       at: govObservability
       note: >-
-        Track and patch the serving stack's CVE stream on your own schedule, because nobody upstream will.
-        Continuous posture over which versions serve where and at what configuration, catching drift before an
-        incident does.
+        Enumerate the known vulnerabilities in the serving stack and the gateway against the versions actually
+        running, so every advisory maps to the instances it affects. Patching them is the owner's job.
     - mitigation: AML.M0005
       at: storage
       note: >-
-        Encryption, access control and integrity digests on weights at rest, matched by verification at load.
+        Access control on weights at rest: only the promotion pipeline writes, and only the serving identity reads.
     - mitigation: D3-ACH
       at: api
       note: >-
         Runtime weight and adapter updating disabled, the control endpoints outside the versioned API
-        unreachable from any tenant, and the serving configuration — batching, cache sharing, tenancy flags —
-        reviewed as security settings rather than tuning knobs. The serving stack's own security guide says as
-        much.
+        unreachable from any tenant, and the serving configuration reviewed as security settings rather than
+        tuning knobs. Cache isolation is part of it: the gateway sets a secret per-tenant cache salt on every
+        request, overwriting any the caller sent, or prefix sharing is off; and the compile and kernel cache
+        directory is private to the serving identity, never shared or tenant-writable.
     - mitigation: D3-NI
       at: runtime
       note: >-
@@ -500,13 +502,13 @@ walkthrough:
       label: request with workload identity
       note: The workload identity on the request decides its quota and its cache scope.
     - follow: gateway->api
-      label: admitted; input guardrail
-      note: Admitted within quota, with the input-side guardrail applied at the crossing.
+      label: admitted; request policy check
+      note: Admitted within quota, with the content-policy check applied to the request at the crossing.
     - follow: api->runtime
-      label: batched, tenant-scoped cache
+      label: batched, tenant-salted cache
       note: >
-        Scheduled into a batch alongside other tenants' traffic; tenant-scoped cache keys are
-        what keep the prefix lookup safe.
+        Scheduled into a batch alongside other tenants' traffic; the per-tenant cache salt the
+        gateway set keeps the prefix lookup inside this tenant.
     - follow: runtime->api
       label: raw completion
       note: The completion leaves the batch — raw model output, nothing yet between it and the caller.
@@ -526,10 +528,10 @@ scenarios:
           A hub artifact arrives with provenance recorded. Scanning and per-version evaluation
           gate its promotion here — blocking, or it is not a gate.
       - follow: registry->storage
-        label: signed release
+        label: or a signed release
         note: >
-          A release from our own pipeline arrives already gated: its signature and lineage are
-          verified, and nothing is evaluated twice.
+          The other input, separately: a release from our own pipeline arrives already gated —
+          its signature and lineage are verified, and nothing is evaluated twice.
       - follow: storage->runtime
         label: digest-verified load
         note: >
@@ -556,9 +558,10 @@ scenarios:
       - follow: api->runtime
         label: timing reveals cache
         note: >
-          Time to first token says whether the prefix was already cached by someone else.
-          Tenant-scoped cache keys make the answer always no — the drawing's sharpest risk,
-          closed by one configuration flag or open by default.
+          Time to first token says whether the prefix was already cached by someone else. A
+          secret per-tenant salt, set by the gateway on every request, keeps other tenants'
+          entries out of reach; the common serving stack leaves the salt opt-in, so without it
+          the channel is open.
 
 deviations:
   - subject: No separate GPU or cache blocks are drawn
@@ -566,18 +569,12 @@ deviations:
       The accelerators, the batch and the KV cache are internals of the inference runtime — the
       same block the endpoint architecture draws — so they appear as items inside it rather than
       as blocks, and the multi-tenancy risks pin to the runtime and its serving path.
-  - subject: The model registry is folded into Storage and the promotion gate
-    reason: >
-      Registry semantics — versioning, provenance, promotion state — live in the storage block
-      and the governance plane's gate over it; drawing a separate registry service duplicated
-      the storage block it fronted. The training pipeline draws the registry in full; this
-      drawing consumes it.
   - subject: Admission scanning and per-version evaluation are absorbed by the promotion gate
     reason: >
-      Admission scanning (D3-FA) is embodied by the private package registry and evaluation is a
-      block on the training drawing; here both duties run inside the promotion gate over
-      Storage, pinned on the ingest edge — one gate, two checks, on the only path an artifact
-      can take to the runtime. Evaluation inline on an artifact path is the ontology's own
+      Hub artifacts have no scanning or evaluation block of their own here; both duties run in
+      the promotion gate over Storage — scanning (D3-FA) pinned on the store, evaluation
+      (AML.M0008) on the hub ingest edge. Releases from the model registry arrive already
+      evaluated and signed. Evaluation inline on an artifact path is the ontology's own
       canonical exception.
   - subject: The AI gateway carries inference only
     reason: >

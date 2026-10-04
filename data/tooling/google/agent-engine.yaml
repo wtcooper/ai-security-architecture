@@ -15,6 +15,7 @@
 # ?hl= locale, so read with hl=en; vertex-ai/docs/general/custom-constraints and .../scale/runtime/quotas 404. Pages
 # disagree on Agent Gateway with VPC-SC (manage-agent-access: unsupported; 2026-09-09 release note: supported for
 # gateways created after 2026-09-08).
+# 2026-10-04: removed the D3-MFA and D3-AA rows and the stale-binding risk note after the managed-runtime drawing pruned those pins (review MR-02); the orphaned-grant fact moved to the shadow-agents note.
 vendor: google
 family: Gemini Enterprise Agent Platform (Vertex AI Agent Engine)
 tools:
@@ -133,15 +134,12 @@ tools:
           Without agent identity every agent in a project runs as the shared AI Platform Reasoning Engine
           Service Agent; Unit 42 (2026-03) and XM Cyber (2026-01) showed agent code reading that identity's
           token from the metadata server to reach buckets, sessions and memories beyond the agent's own.
-      - risk: riskStaleAgentIdentityBinding
-        note: >-
-          Deleting an agent leaves every binding to its principal in IAM policies, and a redeployed agent gets
-          a new principal, so delete-and-recreate pipelines leave orphaned grants and silently lose access.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Agent Registry auto-registers Agent Runtime agents only in their own project; agents in other
           projects need manual registration, and a non-A2A agent registers without endpoint, identity or
-          skills.
+          skills. Deleting an agent leaves every binding to its principal in IAM policies, so
+          delete-and-recreate pipelines leave orphaned grants.
       - risk: riskPromptInjection
         note: >-
           Memory Bank writes LLM-extracted memories from conversation events and feeds them into later
@@ -162,46 +160,6 @@ tools:
           environment variables, and content capture writes prompts, responses and user.id to Cloud Logging or
           Cloud Storage.
     controls:
-      - mitigation: D3-MFA
-        coverage: native
-        mechanism: >-
-          Google Workspace / Cloud Identity 2-Step Verification enforcement (Admin console > Security >
-          Authentication > 2-step verification > Enforcement) on the accounts that can deploy or change
-          agents, gateways, Model Armor floors and IAM; Google Cloud session control reauthentication with a
-          security key; Google Cloud's own 2SV requirement for the console
-        steps:
-          - title: Enforce 2-Step Verification on agent administrators
-            body:
-              - >-
-                In the Admin console go to Security > Authentication > 2-step verification, select the
-                organizational unit or group holding Agent Platform administrators and deploying identities,
-                check Allow users to turn on 2-Step Verification and set Enforcement to On.
-            url: https://knowledge.workspace.google.com/admin/security/deploy-2-step-verification
-          - title: Require security-key reauthentication for Google Cloud
-            body:
-              - >-
-                Admin console > Security > Access and data control > Google Cloud session control: Require
-                reauthentication at 1 to 24 hours with Reauthentication method Security key; it applies to the
-                console and the gcloud CLI.
-            url: https://knowledge.workspace.google.com/admin/security/set-session-length-for-google-cloud-services
-          - title: Close the key path
-            body:
-              - >-
-                Enforce iam.managed.disableServiceAccountKeyCreation so no one mints long-lived
-                service-account keys that can update a ReasoningEngine without a second factor.
-            url: https://docs.cloud.google.com/organization-policy/restrict-service-accounts
-        note: >-
-          Rated native on the MFA rule applied to every vendor (as on toolBedrockAgentcore): Google's own
-          account layer can require a second factor for everyone who can deploy, update or delete an agent or
-          change its IAM, gateway or Model Armor floor. That holds for Google-managed Workspace and Cloud
-          Identity accounts; where the organisation federates to a third-party IdP (SSO or Workforce Identity
-          Federation) the factor is the IdP's, which is partial for that organisation. Google Cloud's own 2SV
-          requirement covers the console only (Cloud Identity accounts from 2026-10-20, federated accounts to
-          be announced); gcloud asks for the factor only once the account has 2SV. Paths around it:
-          service-account keys, federated workload tokens and any CI identity holding
-          aiplatform.reasoningEngines.update. End-user MFA — which of our people a session runs for — is our
-          front end's; Agent Runtime authenticates the calling workload.
-        verified: "2026-09-25"
       - mitigation: cap-agent-tool-registry
         coverage: native
         mechanism: >-
@@ -282,45 +240,6 @@ tools:
           revision queries bypass the split, and an agent bound to Agent Gateway cannot use revisions, so an
           organisation chooses between the gateway's policy and canary releases. IAM grants, gateway policies
           and Model Armor templates are not versioned with the agent.
-        verified: "2026-09-25"
-      - mitigation: D3-AA
-        coverage: native
-        mechanism: >-
-          identity_type AGENT_IDENTITY mints a SPIFFE principal per ReasoningEngine
-          (principal://agents.global.org-ORG_ID.system.id.goog/resources/aiplatform/projects/N/locations/L/reasoningEngines/ID)
-          with an auto-rotated 24-hour X.509 certificate and certificate-bound tokens under a Google-managed
-          Context-Aware Access policy; listed as spec.effectiveIdentity
-        steps:
-          - title: Deploy every agent with its own identity
-            body:
-              - >-
-                Set identity_type AGENT_IDENTITY in client.runtimes.create (".agent_engine_config.json" for
-                adk deploy, agents-cli deploy --agent-identity, identity_type in
-                google_vertex_ai_reasoning_engine); it cannot be patched onto an existing engine.
-            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
-          - title: Grant, deny and bound per principal
-            body:
-              - >-
-                Bind roles to the agent's principal:// identifier, baseline roles to the project principalSet,
-                and cap it with an IAM deny policy or a Principal Access Boundary (gcloud iam
-                principal-access-boundary-policies bindings create).
-            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
-          - title: Inventory the identities
-            body:
-              - >-
-                Read spec.effectiveIdentity (gcloud ai reasoning-engines describe ID --format
-                "value(spec.effectiveIdentity)") or the Identity column on Deployments, and leave
-                GOOGLE_API_PREVENT_AGENT_TOKEN_SHARING_FOR_GCP_SERVICES at its default so tokens stay bound.
-            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
-        note: >-
-          Native on the architecture rule: the platform mints, inventories and lets us revoke a principal per
-          agent, separate from users and from the project's service accounts — the layer the pin says to
-          select for. It is opt-in: without identity_type an agent runs as the shared AI Platform Reasoning
-          Engine Service Agent (service-N@gcp-sa-aiplatform-re) or a custom service account, and
-          manage-agent-access still labels agent identity Preview (a gateway binding forces it). Revocation is
-          IAM's: deleting an agent leaves its bindings, and a redeploy gets a new principal. The identity
-          authenticates to Google APIs and through Agent Gateway; a third-party tool sees whatever credential
-          the auth manager issued. The Managed Agents API documents no per-agent principal.
         verified: "2026-09-25"
       - mitigation: D3-CTS
         coverage: partial

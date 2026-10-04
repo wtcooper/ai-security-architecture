@@ -71,89 +71,15 @@ tools:
           third-party platforms)
         url: https://claude.com/docs/office-agents/overview
     riskNotes:
-      - risk: riskSensitiveDataDisclosure
-        note: >-
-          A gateway token or API key configured centrally is distributed unencrypted to every user's browser
-          profile and included in data exports; shared OS accounts share uploaded skills and connector
-          registrations.
       - risk: riskExcessiveDataHandlingDuringInference
         note: >-
           The add-in sends the open document, workbook or thread content the user asks about; Outlook requires
           Graph consent, and cross-app mode links context across Excel, PowerPoint, Word and Outlook sessions.
-      - risk: riskStaleAgentIdentityBinding
-        note: >-
-          History is keyed to a Claude account or a hashed Entra object ID; Office builds without nested app
-          authentication fall back to a per-installation identifier shared by everyone on the device.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Add-ins can be installed from AppSource by users unless the M365 Admin Center restricts them;
           activity is absent from Enterprise audit logs and exports.
     controls:
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          Require SSO for Claude (claude.ai/admin-settings/organization, Authentication) governs the add-in's
-          claude.ai sign-in and Migrate accounts using your domain sends new domain accounts through SSO; the
-          Outlook Graph token and the Entra-based third-party paths sign in with Microsoft Entra ID through
-          nested app authentication, governed by Conditional Access on the Claude for Office enterprise app or
-          on your own app registration (graph_client_id)
-        steps:
-          - title: Require SSO so the IdP's MFA governs the add-in sign-in
-            body:
-              - >-
-                After verifying your domain, turn on Require SSO for Claude in the Authentication section at
-                claude.ai/admin-settings/organization and enforce MFA on the Claude application in your IdP;
-                the add-in's Log in button completes that claude.ai sign-in in a browser window.
-            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Consolidate accounts on your domain
-            body:
-              - >-
-                On Enterprise, turn on Migrate accounts using your domain under Organization settings >
-                Organization and access > Security, so new accounts on the domain go straight through SSO into
-                the workspace instead of becoming personal accounts.
-            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
-          - title: Put Conditional Access on the Entra sign-in
-            body:
-              - >-
-                Target an MFA Conditional Access policy at the Claude for Office enterprise application
-                (c2995f31-11e7-4882-b7a7-ef9def0a0266), or at your own single-tenant app set with
-                graph_client_id, which governs the Outlook Graph token and Entra sign-in on Bedrock direct,
-                keyless Foundry and gateway_auth_source=entra deployments.
-            url: https://claude.com/docs/office-agents/outlook
-        note: >-
-          Partial on the MFA rule applied to every vendor: Anthropic has no organisation "require 2FA" switch of
-          its own, so the second factor is whatever the IdP enforces — behind Require SSO on the Claude-account
-          path, and Entra Conditional Access for the Graph token and the Entra-based third-party paths. Paths
-          with no interactive factor: a static gateway token or Foundry API key delivered in the manifest,
-          Entra extension attributes or a bootstrap response authenticates inference with no login, and Vertex
-          AI direct relies on the user's Google account. The Claude-account access and refresh tokens sit in
-          the webview's localStorage; no session lifetime is documented, so a sign-in lasts until the user
-          signs out or the profile's storage is cleared. Personal Pro and Max accounts can sign in to the same
-          AppSource add-in: domain capture covers only verified domains, and the tenant-restriction header at
-          the proxy is the network-side backstop.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                Claude account sign-in (SSO/SCIM at the organisation) plus Microsoft 365 Admin Center add-in
-                assignment; Entra ID identity in third-party mode
-              steps:
-                - title: Assign the add-ins to users
-                  body:
-                    - Manage member access to the Excel, PowerPoint, Word and Outlook add-ins through the
-                      Microsoft 365 Admin Center and grant the one-time Microsoft Graph consent for Outlook.
-                  url: https://claude.com/docs/office-agents/overview
-                - title: Enforce the Claude organisation
-                  body:
-                    - Require SSO for Claude and use domain capture so the add-in sign-in lands in the managed
-                      organisation.
-                  url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-              verified: 2026-09-10
       - mitigation: D3-APA
         coverage: native
         mechanism: >-
@@ -193,6 +119,21 @@ tools:
                 extension attributes, or access_policies statements through the manifest or a bootstrap
                 endpoint, so features vary by user.
             url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Consolidate accounts on your domain
+            body:
+              - >-
+                On Enterprise, turn on Migrate accounts using your domain under Organization settings >
+                Organization and access > Security, so new accounts on the domain go straight through SSO into
+                the workspace instead of becoming personal accounts.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+          - title: Put Conditional Access on the Entra sign-in
+            body:
+              - >-
+                Target an MFA Conditional Access policy at the Claude for Office enterprise application
+                (c2995f31-11e7-4882-b7a7-ef9def0a0266), or at your own single-tenant app set with
+                graph_client_id, which governs the Outlook Graph token and Entra sign-in on Bedrock direct,
+                keyless Foundry and gateway_auth_source=entra deployments.
+            url: https://claude.com/docs/office-agents/outlook
         note: >-
           Native by the rule, with the add-in's authorization plane split across two consoles. The Microsoft
           side decides who may run the add-in (group assignment; unassigned users are blocked only once the
@@ -204,7 +145,8 @@ tools:
           tenant's own control. The claude.ai side is coarse: Organization settings > Office agents switches
           cross-app mode for everyone, Enterprise custom roles do not list the add-ins, and model access
           follows the member's role. Per-user feature policy exists only where configuration keys are
-          delivered, which the docs describe for third-party-platform deployments.
+          delivered, which the docs describe for third-party-platform deployments. Personal Pro and Max accounts
+          can sign in to the same AppSource add-in; domain capture covers only verified domains.
         verified: "2026-09-25"
         migration:
           from:
@@ -556,53 +498,6 @@ tools:
                       approval setting for add-in actions.
                   url: https://claude.com/docs/office-agents/overview
               verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Microsoft Graph access runs on one tenant-wide admin-consented delegated grant to the Claude for
-          Office enterprise app (or your own app), listed and revocable at Entra ID > Enterprise apps > All
-          applications > Claude for Office > Permissions, with per-user tokens issued by Entra through nested
-          app authentication; MCP connector authorisations are per user and per device, held in the add-in's
-          browser storage, with no admin listing or revoke
-        steps:
-          - title: Review and revoke the Graph grant
-            body:
-              - >-
-                In Entra ID > Enterprise apps > All applications open Claude for Office
-                (c2995f31-11e7-4882-b7a7-ef9def0a0266), review Permissions > Admin consent, and revoke there or
-                with Remove-MgOauth2PermissionGrant.
-            url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions
-          - title: Issue connector credentials from your own endpoint
-            body:
-              - >-
-                In custom-manifest deployments provision connectors per user with mcp_servers from a bootstrap
-                endpoint, so the credential is one your endpoint issues and expires rather than a user's OAuth
-                grant on the device.
-            url: https://claude.com/docs/office-agents/third-party-platforms
-        note: >-
-          Partial by the rule: the Graph grant is inventoried and revocable in Entra and new tokens stop when
-          the Entra account is disabled, but it is one grant for every user, and a revoke stops new token
-          issuance only — access tokens already cached in each user's MSAL store run to their expiry. Connector
-          grants are the gap: the add-in keeps connector client registrations (claude-mcp-gateways, scoped to
-          the connector's address rather than the user, so shared by anyone on the same OS account) and their
-          tokens in local storage on each device; nothing in the claude.ai console or the Compliance API lists
-          them, only the user (or the connector's own IdP) can revoke them, no expiry is documented, and
-          removing a Claude seat leaves them on disk.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: none
-              note: >-
-                The add-in runs entirely as the signed-in user; there is no workload or agent identity to
-                govern.
-              evidence:
-                - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
-                  url: https://claude.com/docs/office-agents/overview
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: external
         mechanism: >-
@@ -680,6 +575,13 @@ tools:
                 mcp_servers after # in the manifest URL; the add-in ignores them in the query string from
                 October 19, 2026.
             url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Issue connector credentials from your own endpoint
+            body:
+              - >-
+                In custom-manifest deployments provision connectors per user with mcp_servers from a bootstrap
+                endpoint, so the credential is one your endpoint issues and expires rather than a user's OAuth
+                grant on the device.
+            url: https://claude.com/docs/office-agents/third-party-platforms
         note: >-
           Partial by the rule: the administrator can bound lifetime and rotation for the gateway credential
           (Entra or bootstrap), but the Claude-account access and refresh tokens and MCP connector tokens are
@@ -688,7 +590,8 @@ tools:
           device, held until changed and copied into data exports. Custody is otherwise sound where documented:
           the Graph token stays in the MSAL cache and goes only to graph.microsoft.com, and the redirect
           through pivot.claude.ai carries only a code or a consent outcome. Anthropic offers no tunnel for the
-          add-ins; admin-attached mcp_servers are called directly from the user's browser.
+          add-ins; admin-attached mcp_servers are called directly from the user's browser. Shared OS accounts
+          share uploaded skills and connector registrations.
         verified: "2026-09-25"
         migration:
           from:
@@ -944,7 +847,9 @@ tools:
           can suppress them — telemetry, not tamper resistance; they omit assistant response text, record
           connector tools as mcp_tool, and on third-party platforms carry no user identity (correlate
           session.id with Entra or gateway logs). On the third-party path the organisation's gateway log is the
-          record to fuse with.
+          record to fuse with. History is keyed to a Claude account or a hashed Entra object ID; Office builds
+          without nested app authentication fall back to a per-installation identifier shared by everyone on the
+          device.
         verified: "2026-09-25"
         migration:
           from:
@@ -991,6 +896,13 @@ tools:
                 to No, which prevents all tokens being issued for the app, and revoke its admin-consented
                 permissions.
             url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/disable-user-sign-in-portal
+          - title: Review and revoke the Graph grant
+            body:
+              - >-
+                In Entra ID > Enterprise apps > All applications open Claude for Office
+                (c2995f31-11e7-4882-b7a7-ef9def0a0266), review Permissions > Admin consent, and revoke there or
+                with Remove-MgOauth2PermissionGrant.
+            url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/manage-application-permissions
         note: >-
           Partial by the rule: each stop blocks the next load or the next token, not a task pane already
           running, and the delay is not documented (Microsoft gives 24 to 72 hours for deployments to appear;

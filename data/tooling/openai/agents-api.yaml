@@ -14,6 +14,7 @@
 # technology, and whether SSO or MFA can be required for platform.openai.com sign-in.
 # 2026-10-03: refreshed browser approval scope after September 29 computer-use announcement;
 # other rows retain their own verification dates.
+# 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02).
 vendor: openai
 family: OpenAI Agents API
 tools:
@@ -437,49 +438,6 @@ tools:
                       where an approval can be bound to the exact action.
                   url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
               verified: 2026-09-17
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Restricted project API keys (api.agents.read / write, api.vaults.*, api.responses.write), project
-          service accounts reached by workload identity federation, and a connect-only environment key per
-          self-hosted executor; a saved agent is project-scoped configuration with an id, not a principal
-        steps:
-          - title: Give the application a workload identity
-            body:
-              - Under Organization Settings > Security > Workload Identity Provider map your workload's OIDC, SPIFFE
-                or X.509 identity to a project service account, narrowing the mapping's Permissions to the scopes
-                it needs.
-            url: https://developers.openai.com/api/docs/guides/workload-identity-federation
-          - title: Separate application and executor credentials
-            body:
-              - Grant the application key api.agents.read, api.agents.write and api.responses.write (plus
-                api.vaults.* only where it manages vaults), and give each executor an environment key from the
-                Agents tab with every other permission set to None.
-            url: https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted
-        note: >-
-          Partial by the runtime rule: identities exist at project scope — keys, service accounts and environment
-          keys are inventoried and revocable — but the runtime mints no principal per agent. A saved agent's id
-          names a configuration; every session runs on whichever key or service account created it, and an MCP
-          server sees only the vault credential, so revoking one agent means finding the keys and vault entries
-          it used. The environment key must belong to the same organization, project and user or service account
-          as the session.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: Scoped API keys (api.agents.read/write, api.vaults.*); executor key
-              note: No per-agent principal; the caller's key is the identity.
-              steps:
-                - title: Scope the keys
-                  body:
-                    - Use keys carrying only the agents and vaults scopes for the application, and the
-                      restricted executor key for self-hosted environments.
-                  url: https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted
-              verified: 2026-09-17
       - mitigation: cap-agent-tracing
         coverage: native
         mechanism: >-
@@ -627,38 +585,6 @@ tools:
                     - SOC 2 Type 2 and ISO 27001/27017/27018/27701 reports are on the trust portal.
                   url: https://trust.openai.com/
               verified: 2026-09-17
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          People who reach platform.openai.com (Agents tab, logs, environment keys, project settings) get MFA
-          from SAML SSO with MFA at the identity provider or from per-user account MFA; the API itself is driven
-          by keys and federated tokens that no MFA prompt covers
-        steps:
-          - title: Require MFA at the identity provider
-            body:
-              - The admin FAQ says users can enable account-level OpenAI MFA but there is no workspace-wide MFA
-                enforcement; require SSO with MFA in the identity provider and manage SSO in the Global Admin
-                Console.
-            url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
-          - title: Bound the key path that skips MFA
-            body:
-              - In Platform settings use API Key Governance to allow only service-account keys (or disable new key
-                creation) and set a maximum API key lifetime for the organization or project.
-            url: https://developers.openai.com/api/docs/guides/production-best-practices
-          - title: Pin keys to your network
-            body:
-              - Enable an IP allowlist under Settings > Security > IP allowlist so keys fail from other addresses;
-                it does not restrict platform.openai.com sign-in.
-            url: https://developers.openai.com/api/docs/guides/ip-allowlist
-        note: >-
-          Partial by the rule applied to every vendor: MFA lives in the identity provider, not in the product,
-          and the principals that change agent definitions and attach vaults on this runtime are API keys and
-          federated tokens, which no MFA prompt covers — key governance, lifetime and IP allowlisting bound that
-          path instead. The FAQ that states the MFA position is written for ChatGPT workspaces; the API Platform
-          SSO and MFA articles (help.openai.com) returned 403, so whether SSO can be required for
-          platform.openai.com sign-in is not verified. MFA for the end users a session runs for belongs to the
-          deployer's application front end.
-        verified: "2026-09-25"
       - mitigation: cap-agent-tool-registry
         coverage: partial
         mechanism: >-

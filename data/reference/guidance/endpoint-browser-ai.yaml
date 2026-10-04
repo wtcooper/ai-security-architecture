@@ -1,0 +1,130 @@
+# Controls guidance for the browser AI agents & extensions archetype — browsers with a built-in
+# agent and model vendors' browser extensions, which share one harness and one policy story.
+# Audience: admins, architects and security teams. Every item cites capabilities pinned on the
+# architecture; product facts live in tools.yaml entries, dated.
+archetype: archAgenticBrowser
+mode: use
+status: draft
+attribution: >-
+  Authored in this repository. Vendor and product facts are confined to the dated tool
+  entries and their cited documentation, verified at authoring time.
+
+overview:
+  - >-
+    A browser agent acts inside sessions that are already signed in, and every page it reads is
+    untrusted input. The organisation does not build it — a browser ships it or a store installs
+    it — so the leverage is three tiers the organisation already runs: browser policy over the
+    profile and its extensions, the secure web gateway every session leaves through, and the
+    vendor's admin console.
+  - >-
+    The controls that hold up constrain what the session can reach rather than what the model may
+    say. Scope comes first, because no later control can narrow the set of signed-in origins a
+    hostile page can act on once the profile holds them. Vendor features such as injection
+    classifiers and action screening are credited through the vendor assessment, not counted as
+    screens the organisation operates.
+
+items:
+  - title: Scope the profile before anything else
+    mitigations: [D3-CTS, AML.M0028]
+    tools: [toolClaudeChrome]
+    body:
+      - >-
+        Run the agent in a dedicated, managed browser profile signed into the few origins it
+        needs, with no saved passwords or autofill — the vendors' own safety guidance asks for
+        exactly this. A profile is a scope decision, not an OS boundary: it limits which
+        sessions a steered agent can use, and nothing more.
+      - >-
+        Set site-level permissions — act, read only, no access — from the vendor console so they
+        override the user's own grants, and start from an allowlist of origins rather than a
+        blocklist.
+
+  - title: Admit extensions and agentic browsers by policy, and pin their updates
+    mitigations: [cap-agent-tool-registry, cap-shadow-ai-discovery]
+    tools: [toolClaudeChrome]
+    body:
+      - >-
+        Use browser policy to allow extensions by identifier, block by requested permission, and
+        pin reviewed versions where the browser supports it, so an update is a decision rather
+        than an event. The store's review is the only review an extension otherwise gets.
+      - >-
+        Inventory the extensions and assistant panels nobody enrolled, from the device and from
+        the edge, and reconcile them against the approved list — this archetype spreads one click
+        at a time, and assistant panels ship enabled to installed bases nobody chose.
+
+  - title: Confirm consequential actions, and enforce the action policy from the console
+    mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+    tools: [toolClaudeChrome]
+    body:
+      - >-
+        Define the confirmation set by consequence — payments, sends, publishing, permission
+        changes, credential entry — and require that action, on that site, to be approved before
+        it runs. Remove the mode that skips approvals wherever the admin tier can; where it
+        cannot pin the mode, record that as a gap rather than a setting.
+      - >-
+        Managed settings make the site lists, blocked action classes and approval mode
+        non-overridable on the device. Check per product and plan which of these the console
+        actually enforces; defaults differ and change.
+
+  - title: Inspect what leaves at the edge
+    mitigations: [cap-sensitive-data-redaction, cap-agent-egress-control]
+    body:
+      - >-
+        The managed browser trusts the enterprise root and sends every session through the
+        secure web gateway, so the inference hop to the vendor can be inspected: classify and
+        redact authenticated page content before it leaves. The control holds only where the
+        gateway can parse the agent's payload — test with representative traffic, and block a
+        payload it cannot parse rather than passing it.
+      - >-
+        Allowlist where the agent may browse, at the gateway and in managed browser policy on the
+        agent's profile, so the rule applies to the agent's browsing and not the user's. An
+        allowed destination is still an exfiltration path; the allowlist narrows it.
+
+  - title: Screen page content, and govern what the agent remembers
+    mitigations: [cap-input-guardrails, AML.M0031]
+    body:
+      - >-
+        Strip hidden and off-screen content at page extraction and classify what remains before
+        it becomes context. This bounds injection; it does not prevent it, which is why scope and
+        confirmation come first.
+      - >-
+        Limit which origins may be remembered, keep sensitive ones out, record the page each
+        memory came from so memories can be deleted or rolled back by origin, and treat memory as
+        untrusted on every read — a page read once can otherwise steer every later task.
+
+  - title: Bind the account, keep the record, and rehearse the stop
+    mitigations: [D3-MFA, AML.M0024, D3-WSAA, cap-agent-kill-switch]
+    tools: [toolClaudeChrome]
+    body:
+      - >-
+        Federate the vendor account to the IdP with MFA enforced there — SSO alone is not MFA — and
+        bind the extension to the organisation's tenant so it cannot sign into a personal account.
+      - >-
+        Fuse the gateway's session record with the vendor's audit export, and add in-browser
+        telemetry of what the agent read and clicked, compared against its normal pattern per
+        origin; only that vantage point sees both.
+      - >-
+        Decide the stop before it is needed: force-remove the extension by browser policy, disable
+        the agent in the vendor console and revoke the profile's sessions — then confirm that
+        running and queued tasks actually stopped, in every browser shape the fleet runs.
+
+  - title: Assess the vendor for what it keeps
+    mitigations: [cap-ai-vendor-assessment]
+    body:
+      - >-
+        Whole pages, screenshots and synced memories go to the vendor. Review retention, memory
+        sync, subprocessors and the managed-settings surface per product and plan; a claim that
+        holds for one vendor's enterprise tier is not a property of the category.
+
+sources:
+  - title: "Claude in Chrome — use Claude in Chrome safely"
+    url: https://support.claude.com/en/articles/12902428-use-claude-in-chrome-safely
+  - title: "Claude in Chrome — admin controls"
+    url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+  - title: "Chrome Enterprise — managing extensions: allow, block, block by permission, force install"
+    url: https://support.google.com/chrome/a/answer/9296680
+  - title: "Chrome Enterprise — pin Chrome app or extension updates"
+    url: https://support.google.com/chrome/a/answer/11190170
+  - title: "Microsoft Edge browser policy documentation"
+    url: https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies
+  - title: "OWASP Top 10 for Agentic Applications 2026"
+    url: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/

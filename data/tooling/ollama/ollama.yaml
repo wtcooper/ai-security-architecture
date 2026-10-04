@@ -211,24 +211,60 @@ tools:
           parser. A model scanner at a quarantine directory or a scanning registry mirror (external) is the missing
           half.
         verified: "2026-09-25"
-      - mitigation: D3-MFA
+      - mitigation: D3-AA
         coverage: external
         mechanism: >-
-          An authenticating reverse proxy or identity-aware proxy, backed by the IdP's MFA, in front of an Ollama
-          left bound to 127.0.0.1:11434; the local API has no sign-in
+          No caller authentication on the local API; an authenticating reverse proxy in front of an Ollama pinned to
+          127.0.0.1:11434 is the integration point, with OLLAMA_HOST (default 127.0.0.1:11434), OLLAMA_ORIGINS (a
+          disallowed Origin is refused with 403) and Host validation while bound to loopback as the configuration
+          around it
+        steps:
+          - title: Pin the bind to loopback
+            body:
+              - >-
+                Set OLLAMA_HOST=127.0.0.1:11434 explicitly in the server environment (Environment= in
+                /etc/systemd/system/ollama.service.d/override.conf on Linux, launchctl setenv on macOS, a system
+                variable on Windows) rather than relying on the default.
+            url: https://docs.ollama.com/faq
+          - title: Keep the desktop app's network exposure off
+            body:
+              - >-
+                Leave Settings → "Expose Ollama to the network" off on macOS and Windows: when on, the app starts the
+                server with OLLAMA_HOST=0.0.0.0, overriding the variable you set; it is a per-user setting, so verify
+                the listener with a compliance check.
+            url: https://github.com/ollama/ollama/blob/main/app/server/server.go
+          - title: Allow only named browser origins
+            body:
+              - >-
+                Leave OLLAMA_ORIGINS unset or list exact origins, never * or the chrome-extension://* style wildcards
+                the FAQ shows; the defaults already admit localhost, 127.0.0.1 and 0.0.0.0 on any port.
+            url: https://docs.ollama.com/faq
+          - title: Publish the container port on loopback
+            body:
+              - >-
+                Run the ollama/ollama image with -p 127.0.0.1:11434:11434, not the documented -p 11434:11434, because
+                the image sets OLLAMA_HOST=0.0.0.0:11434 and Docker then publishes on every host interface.
+            url: https://docs.ollama.com/docker
         evidence:
           - title: Ollama API — Authentication ("The local API at http://localhost:11434 does not require authentication")
             url: https://docs.ollama.com/api/authentication
           - title: Ollama FAQ — How can I use Ollama with a proxy server? (Nginx, Host localhost:11434)
             url: https://docs.ollama.com/faq
         note: >-
-          External on this drawing's rule: the runtime has no human sign-in on its API, so a second factor can only
-          come from a proxy that authenticates callers against the IdP. Integration point: keep OLLAMA_HOST on
+          External on this drawing's rule: "The local API at http://localhost:11434 does not require authentication",
+          so any local process is a full caller (pull, create, copy, delete, push), and caller identity can only come
+          from a proxy that authenticates each calling application. Integration point: keep OLLAMA_HOST on
           127.0.0.1:11434 so only the proxy on the same host reaches it, with the proxy setting Host localhost:11434
-          as in the FAQ's Nginx example; any local process that calls the port directly still bypasses the proxy.
-          `ollama signin` and ollama.com API keys authenticate this machine to Ollama's cloud (cloud models, private
-          pulls, push), not callers of the local port, and an ollama.com second factor is not documented. The
-          OLLAMA_AUTH variable only makes the CLI sign its own requests; the server code checks no caller credential.
+          as in the FAQ's Nginx example; any local process that calls the port directly still bypasses the proxy, and
+          a host firewall on 11434 is the backstop. `ollama signin` and ollama.com API keys authenticate this machine
+          to Ollama's cloud (cloud models, private pulls, push), not callers of the local port, and the OLLAMA_AUTH
+          variable only makes the CLI sign its own requests; the server code checks no caller credential. The built-in
+          configuration around it: Host validation (the DNS-rebinding fix for CVE-2024-28224) runs only while bound to
+          loopback and accepts the machine's hostname, *.localhost, *.local and *.internal names and private IP
+          literals; a routable bind skips it. The origin check applies only to requests that carry an Origin header,
+          and the default list (per source) also admits file://*, app://*, tauri://*, vscode-webview://* and
+          vscode-file://*. Only the Linux systemd override is out of the user's reach; launchctl values are overridden
+          by the app's Expose toggle and Windows user variables are user-writable.
         verified: "2026-09-25"
       - mitigation: cap-output-guardrails
         coverage: external
@@ -279,50 +315,6 @@ tools:
           disagree on that default (FAQ: 4096 tokens; Context length page: 4k, 32k or 256k by VRAM), so set it. Per-
           caller or per-key quotas need an AI or API gateway in front (external). Plan concurrency limits and
           Enterprise budgets on ollama.com apply to cloud models only.
-        verified: "2026-09-25"
-      - mitigation: D3-MAN
-        coverage: partial
-        mechanism: >-
-          OLLAMA_HOST (default 127.0.0.1:11434), OLLAMA_ORIGINS (a disallowed Origin is refused with 403) and Host
-          validation while bound to loopback; the local API has no authentication option
-        steps:
-          - title: Pin the bind to loopback
-            body:
-              - >-
-                Set OLLAMA_HOST=127.0.0.1:11434 explicitly in the server environment (Environment= in
-                /etc/systemd/system/ollama.service.d/override.conf on Linux, launchctl setenv on macOS, a system
-                variable on Windows) rather than relying on the default.
-            url: https://docs.ollama.com/faq
-          - title: Keep the desktop app's network exposure off
-            body:
-              - >-
-                Leave Settings → "Expose Ollama to the network" off on macOS and Windows: when on, the app starts the
-                server with OLLAMA_HOST=0.0.0.0, overriding the variable you set; it is a per-user setting, so verify
-                the listener with a compliance check.
-            url: https://github.com/ollama/ollama/blob/main/app/server/server.go
-          - title: Allow only named browser origins
-            body:
-              - >-
-                Leave OLLAMA_ORIGINS unset or list exact origins, never * or the chrome-extension://* style wildcards
-                the FAQ shows; the defaults already admit localhost, 127.0.0.1 and 0.0.0.0 on any port.
-            url: https://docs.ollama.com/faq
-          - title: Publish the container port on loopback
-            body:
-              - >-
-                Run the ollama/ollama image with -p 127.0.0.1:11434:11434, not the documented -p 11434:11434, because
-                the image sets OLLAMA_HOST=0.0.0.0:11434 and Docker then publishes on every host interface.
-            url: https://docs.ollama.com/docker
-        note: >-
-          Partial on this drawing's rule: loopback bind by default plus Origin and Host validation, all built in, but
-          no authentication — "The local API at http://localhost:11434 does not require authentication", so any
-          local process is a full caller (pull, create, copy, delete, push). Host validation (the DNS-rebinding fix
-          for CVE-2024-28224) runs only while bound to loopback and accepts the machine's hostname, *.localhost,
-          *.local and *.internal names and private IP literals; a routable bind skips it. The origin check applies
-          only to requests that carry an Origin header, and the default list (per source) also admits file://*,
-          app://*, tauri://*, vscode-webview://* and vscode-file://*. Only the Linux systemd override is out of the
-          user's reach; launchctl values are overridden by the app's Expose toggle and Windows user variables are
-          user-writable. Authenticated transport needs a proxy (external), and a host firewall on 11434 is the
-          backstop.
         verified: "2026-09-25"
       - mitigation: AML.M0005
         coverage: partial

@@ -26,6 +26,13 @@ drawings. It contains:
 So MV-01–04, MV-06 and GROK-01–06 are done, and every other finding is still open. The
 verdicts below stand unchanged.
 
+**Implemented 2026-10-04.** Every Agree and Partly verdict below is applied as its note
+describes, and every stretched pin is removed rather than reworded. That takes the catalogue
+from 518 to 485 pins. The browser guidance was added. Shared tooling and org example records
+were merged or re-keyed to match. The audit now counts 4 risks pinned nowhere: the stale-binding
+and cross-tenant risks were only ever pinned as stretches. PLAT-03, CC-04, the challenge in
+CC-05, and CA-24 (which adds requirements rather than fixing a false claim) were not applied.
+
 ## Owner direction, 2026-10-04 (supersedes the roll-back list below)
 
 - **Examples.** Give a couple of predominant, mainstream products per architecture, not a

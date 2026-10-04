@@ -507,9 +507,12 @@ tools:
       - mitigation: D3-EI
         coverage: native
         mechanism: >-
-          Managed sandbox floor: sandbox.enabled, failIfUnavailable, allowBypass, sandboxMcpServers,
-          sandboxLspServers and userPolicy.filesystem / network rules (MXC: Seatbelt, bubblewrap, BaseContainer;
-          public preview); Cloud sandbox access policy for GitHub-hosted sessions
+          Managed sandbox floor: sandbox.enabled, failIfUnavailable, allowBypass, sandboxMcpServers, sandboxLspServers
+          and userPolicy.filesystem / network rules (MXC: Seatbelt, bubblewrap, BaseContainer; public preview); Cloud
+          sandbox access policy for GitHub-hosted sessions. Credential paths: deny-by-default sandbox filesystem with
+          managed sandbox.auth.git / sandbox.auth.gh=false (renamed from gitAuth / ghAuth), allowDevToolAccess=false,
+          userPolicy.filesystem.deniedPaths and seatbelt.keychainAccess=false; managed Read() denies for built-in
+          tools
         steps:
           - title: Make the local sandbox mandatory
             body:
@@ -534,19 +537,51 @@ tools:
                 enable (opt-in) or Enabled by default for all organizations (opt-out).
             url: >-
               https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/enabling-or-disabling-cloud-sandboxes-for-your-organization
+          - title: Stop token injection into sandboxed commands
+            body:
+              - >-
+                In the managed sandbox floor set auth.git=false and auth.gh=false so no Git or GitHub CLI
+                credentials are injected into the sandbox; disabled credential injection cannot be re-enabled by
+                the user.
+            url: >-
+              https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+          - title: Keep credential stores unreachable
+            body:
+              - >-
+                Set sandbox.allowDevToolAccess=false (package-registry tokens), add the SSH, cloud-CLI and
+                browser-profile directories to sandbox.userPolicy.filesystem.deniedPaths, and keep
+                sandbox.userPolicy.seatbelt.keychainAccess=false on macOS.
+            url: >-
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Use narrow tokens for headless runs
+            body:
+              - >-
+                For CI or scripted use pass a fine-grained PAT with only the Copilot Requests account permission
+                in COPILOT_GITHUB_TOKEN rather than the developer's OAuth token.
+            url: >-
+              https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli
         note: >-
           Native by the rule applied to every vendor: an administrator can require an OS-enforced sandbox around
-          agent-run shell commands, searches and local MCP/LSP servers, covering filesystem and network, that the
-          user cannot turn off and that fails closed. Public preview; macOS 15+ (Seatbelt), Linux with
-          bubblewrap 0.5+, and Windows only on builds that supply BaseContainer (the how-to pages say a Windows
-          Insiders build), where deniedPaths and the proxy are unavailable. Outside the OS boundary: the CLI
-          process itself, its built-in file tools (a software-only policy check), remote MCP servers and
-          detached background commands, which cannot be sandboxed. The GitHub Copilot app honours the same
-          managed sandbox key.
+          agent-run shell commands, searches and local MCP/LSP servers, covering filesystem and network, that the user
+          cannot turn off and that fails closed. Public preview; macOS 15+ (Seatbelt), Linux with bubblewrap 0.5+, and
+          Windows only on builds that supply BaseContainer (the how-to pages say a Windows Insiders build), where
+          deniedPaths and the proxy are unavailable. Outside the OS boundary: the CLI process itself, its built-in
+          file tools (a software-only policy check), remote MCP servers and detached background commands, which cannot
+          be sandboxed. The GitHub Copilot app honours the same managed sandbox key. Credential paths: with the
+          managed sandbox required, credential paths are OS-denied to agent commands — the filesystem policy is
+          deny-by-default, gh's stored credentials and the keychain are blocked, and token injection can be locked
+          off. The managed-settings reference still names the injection keys gitAuth / ghAuth; the CLI configuration
+          reference says they were renamed to auth.git / auth.gh and the old keys are ignored — confirm with /sandbox
+          policy. Still inherited: environment variables (unless the user passes --secret-env-vars), the unsandboxed
+          CLI process with its own GitHub token and MCP OAuth tokens, remote MCP servers' credentials, built-in file
+          tools (software check only), and whatever a bypassed or detached command reaches; ssh-agent socket access is
+          not documented. On Windows deniedPaths cannot be used. No on-behalf-of exchange: the CLI acts as the
+          signed-in developer.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -580,53 +615,6 @@ tools:
                   url: >-
                     https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/enabling-or-disabling-cloud-sandboxes-for-your-organization
               verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: native
-        mechanism: >-
-          Deny-by-default sandbox filesystem with managed sandbox.auth.git / sandbox.auth.gh=false (renamed from
-          gitAuth / ghAuth), allowDevToolAccess=false, userPolicy.filesystem.deniedPaths and
-          seatbelt.keychainAccess=false; managed Read() denies for built-in tools
-        steps:
-          - title: Stop token injection into sandboxed commands
-            body:
-              - >-
-                In the managed sandbox floor set auth.git=false and auth.gh=false so no Git or GitHub CLI
-                credentials are injected into the sandbox; disabled credential injection cannot be re-enabled by
-                the user.
-            url: >-
-              https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
-          - title: Keep credential stores unreachable
-            body:
-              - >-
-                Set sandbox.allowDevToolAccess=false (package-registry tokens), add the SSH, cloud-CLI and
-                browser-profile directories to sandbox.userPolicy.filesystem.deniedPaths, and keep
-                sandbox.userPolicy.seatbelt.keychainAccess=false on macOS.
-            url: >-
-              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
-          - title: Use narrow tokens for headless runs
-            body:
-              - >-
-                For CI or scripted use pass a fine-grained PAT with only the Copilot Requests account permission
-                in COPILOT_GITHUB_TOKEN rather than the developer's OAuth token.
-            url: >-
-              https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli
-        note: >-
-          Native by the rule applied to every vendor: with the managed sandbox required, credential paths are
-          OS-denied to agent commands — the filesystem policy is deny-by-default, gh's stored credentials and
-          the keychain are blocked, and token injection can be locked off. The managed-settings reference still
-          names the injection keys gitAuth / ghAuth; the CLI configuration reference says they were renamed to
-          auth.git / auth.gh and the old keys are ignored — confirm with /sandbox policy. Still inherited:
-          environment variables (unless the user passes --secret-env-vars), the unsandboxed CLI process with its
-          own GitHub token and MCP OAuth tokens, remote MCP servers' credentials, built-in file tools (software
-          check only), and whatever a bypassed or detached command reaches; ssh-agent socket access is not
-          documented. On Windows deniedPaths cannot be used. No on-behalf-of exchange: the CLI acts as the
-          signed-in developer.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
             - capability: capabilityCredentialIsolation
               coverage: native
               mechanism: >-

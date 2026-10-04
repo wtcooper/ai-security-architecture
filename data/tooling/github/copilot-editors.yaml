@@ -563,9 +563,12 @@ tools:
         coverage: partial
         mechanism: >-
           VS Code ChatAgentSandboxEnabled with ChatAgentSandboxAllowUnsandboxedCommands and
-          ChatAgentSandboxAllowNetwork (terminal commands; macOS, Linux, WSL2 Preview); Agent Host SDK-shell
-          sandbox (chat.agentHost.sdkSandbox.enabled, Experimental); JetBrains enterprise-managed sandbox
-          (preview); per-server stdio MCP sandbox in mcp.json
+          ChatAgentSandboxAllowNetwork (terminal commands; macOS, Linux, WSL2 Preview); Agent Host SDK-shell sandbox
+          (chat.agentHost.sdkSandbox.enabled, Experimental); JetBrains enterprise-managed sandbox (preview);
+          per-server stdio MCP sandbox in mcp.json. Credential paths: the VS Code terminal sandbox keeps sensitive
+          home-directory locations away from sandboxed commands by default, with extra denyRead rules in
+          chat.agent.sandbox.fileSystem.mac / .linux; managed Read(...) denies in Agent Host sessions; otherwise the
+          agent holds the developer's credentials
         steps:
           - title: Require the VS Code terminal sandbox and close its exits
             body:
@@ -594,23 +597,51 @@ tools:
                 In a server entry set "sandboxEnabled": true with sandbox allowWrite paths and allowedDomains
                 (macOS and Linux); this is a user or workspace mcp.json setting, not a policy.
             url: https://code.visualstudio.com/docs/agent-customization/mcp-servers
+          - title: Require the sandbox so credential paths stay unreadable
+            body:
+              - >-
+                Set ChatAgentSandboxEnabled=on and ChatAgentSandboxAllowUnsandboxedCommands=false so terminal
+                commands cannot leave the sandbox after a confirmation.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Deny credential directories explicitly
+            body:
+              - >-
+                Add denyRead entries for the SSH, cloud-CLI and browser-profile directories to
+                chat.agent.sandbox.fileSystem.mac and chat.agent.sandbox.fileSystem.linux; these are user
+                settings with no enterprise policy.
+            url: https://code.visualstudio.com/docs/agents/run/agent-sandboxing
+          - title: Deny credential reads in Agent Host sessions
+            body:
+              - >-
+                Put Read(~/.ssh/**) and similar selectors under permissions.deny in the managed file; VS Code
+                applies them to Copilot sessions that use Agent Host.
+            url: >-
+              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
         note: >-
           Partial by the rule applied to every vendor: the sandbox exists but is platform-limited and only partly
-          admin-requirable. VS Code can require it by policy for Local sessions and the Agent Host custom
-          terminal tool on macOS, Linux and WSL2 (Preview), disables the session toggle when a managed setting
-          requires it without a bypass, and does not fall back unsandboxed when its dependencies are missing;
-          the Agent Host's default SDK shell and Windows sandboxes are Experimental,
-          enabled by settings the policy reference does not list. The boundary is terminal commands only:
-          built-in file tools, extension tools, remote MCP servers, the extension host and the Agent Host process
-          run outside it, and chat.agent.sandbox.retryWithAllowNetworkRequests (no policy) lets a user retry a
-          blocked command with open network. Copilot's managed sandbox key is not supported in VS Code, and
-          GitHub's managed-settings reference marks it unsupported in JetBrains too, while the 2026-09-08
-          changelog announces a JetBrains managed sandbox in preview. Visual Studio, Xcode and Eclipse have no
-          sandbox; a dev container or VM supplies one.
+          admin-requirable. VS Code can require it by policy for Local sessions and the Agent Host custom terminal
+          tool on macOS, Linux and WSL2 (Preview), disables the session toggle when a managed setting requires it
+          without a bypass, and does not fall back unsandboxed when its dependencies are missing; the Agent Host's
+          default SDK shell and Windows sandboxes are Experimental, enabled by settings the policy reference does not
+          list. The boundary is terminal commands only: built-in file tools, extension tools, remote MCP servers, the
+          extension host and the Agent Host process run outside it, and
+          chat.agent.sandbox.retryWithAllowNetworkRequests (no policy) lets a user retry a blocked command with open
+          network. Copilot's managed sandbox key is not supported in VS Code, and GitHub's managed-settings reference
+          marks it unsupported in JetBrains too, while the 2026-09-08 changelog announces a JetBrains managed sandbox
+          in preview. Visual Studio, Xcode and Eclipse have no sandbox; a dev container or VM supplies one. Credential
+          paths: VS Code's sandbox makes "sensitive locations in your home directory" unreadable to sandboxed terminal
+          commands by default and can be required by policy on macOS, Linux and WSL2 (Preview), but the path rules are
+          user settings, the Agent Host's default SDK shell sandbox and the Windows sandbox are Experimental, and
+          built-in file tools, MCP servers and extensions sit outside the terminal sandbox. Not documented: whether
+          environment variables, the ssh-agent socket or the git credential helper reach sandboxed commands. Tool
+          calls carry the signed-in user's GitHub authority with no on-behalf-of exchange. JetBrains' managed sandbox
+          (preview) adds Keychain and developer-tool access switches; Visual Studio, Xcode and Eclipse run with the
+          developer's full credential set, where a dev container or VM is the external fix.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -647,49 +678,6 @@ tools:
                   url: >-
                     https://github.blog/changelog/2026-09-08-enterprise-managed-sandbox-in-copilot-for-jetbrains/
               verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          VS Code terminal sandbox (ChatAgentSandboxEnabled) keeps sensitive home-directory locations away from
-          sandboxed commands by default, with extra denyRead rules in chat.agent.sandbox.fileSystem.mac / .linux;
-          managed Read(...) denies in Agent Host sessions; otherwise the agent holds the developer's credentials
-        steps:
-          - title: Require the sandbox so credential paths stay unreadable
-            body:
-              - >-
-                Set ChatAgentSandboxEnabled=on and ChatAgentSandboxAllowUnsandboxedCommands=false so terminal
-                commands cannot leave the sandbox after a confirmation.
-            url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Deny credential directories explicitly
-            body:
-              - >-
-                Add denyRead entries for the SSH, cloud-CLI and browser-profile directories to
-                chat.agent.sandbox.fileSystem.mac and chat.agent.sandbox.fileSystem.linux; these are user
-                settings with no enterprise policy.
-            url: https://code.visualstudio.com/docs/agents/run/agent-sandboxing
-          - title: Deny credential reads in Agent Host sessions
-            body:
-              - >-
-                Put Read(~/.ssh/**) and similar selectors under permissions.deny in the managed file; VS Code
-                applies them to Copilot sessions that use Agent Host.
-            url: >-
-              https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
-        note: >-
-          Partial by the rule applied to every vendor. VS Code's sandbox makes "sensitive locations in your home
-          directory" unreadable to sandboxed terminal commands by default and can be required by policy on
-          macOS, Linux and WSL2 (Preview), but the path rules are user settings, the Agent Host's default SDK
-          shell sandbox and the Windows sandbox are Experimental, and built-in file tools, MCP servers and
-          extensions sit outside the terminal sandbox. Not documented: whether environment variables, the
-          ssh-agent socket or the git credential helper reach sandboxed commands. Tool calls carry the signed-in
-          user's GitHub authority with no on-behalf-of exchange. JetBrains' managed sandbox (preview) adds
-          Keychain and developer-tool access switches; Visual Studio, Xcode and Eclipse run with the
-          developer's full credential set, where a dev container or VM is the external fix.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
             - capability: capabilityCredentialIsolation
               coverage: partial
               mechanism: >-

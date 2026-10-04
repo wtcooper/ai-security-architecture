@@ -12,14 +12,14 @@ attribution: >-
 
 overview:
   - >-
-    A2A defines discovery (a signed Agent Card), work (tasks, messages, artifacts) and which
+    A2A defines discovery (an Agent Card), work (tasks, messages, artifacts) and which
     authentication schemes a peer accepts, and deliberately stops there: credentials are
     obtained out of band, the authenticated identity is the calling agent rather than its
     user, card signing is optional, and per-skill authorization is left to whatever sits in
     front of the agent. Every requirement below is that missing identity layer, made
     mandatory by our policy rather than by the protocol.
   - >-
-    Two identities travel on every task and are never confused: the agent's (a registered
+    Two identities travel on every task a user starts, and are never confused: the agent's (a registered
     client with a private key or a mutual-TLS certificate, one per relationship) and the
     user's (an identity assertion the peer's platform can verify because it federates with
     our identity provider — or nothing, and the person is asked). Authority never propagates:
@@ -36,13 +36,15 @@ items:
         never a human's session — with the key held by the secrets service and rotated. Require
         the same of every peer agent we admit: a registered client with a key, scopes limited
         to the skills it was admitted for, an owner and a decommission date. Inside a trust
-        boundary, mutual TLS; across one, OAuth 2.0 with sender-constrained tokens where the
-        peer supports them, so a bearer lifted from a log cannot be replayed. Evidence: the
+        boundary, mutual TLS; across one, OAuth 2.0 with sender-constrained tokens —
+        certificate-bound (RFC 8705) or DPoP — where the peer supports them, so a token lifted
+        from a log cannot be replayed without the bound key; where it does not, a lifted bearer
+        stays replayable until it expires, so keep lifetimes short. Evidence: the
         registration record on each side, a token from a test task showing agent identity,
         audience and skill scope, and the key rotation log.
 
   - title: Let the user's identity travel only where it is honoured, and never further
-    mitigations: [ D3-APA, D3-CTS, AML.M0029 ]
+    mitigations: [ D3-APA, D3-CTS ]
     body:
       - >-
         Decide federation per peer platform in the identity provider's registry: which peers
@@ -78,21 +80,24 @@ items:
         The protocol says scopes SHOULD grant access to some skills and not others and leaves
         enforcement to us. Require the gateway to enforce it: which peer may invoke which of our
         skills, which of a peer's skills our agent may invoke for which users, decided per task
-        against the token's scope. Meter per peer, per task and per skill, because a peer's
+        against the token's scope. A2A has no standard skill selector, so name the skill in
+        the request's `metadata` as this profile's dispatch convention and dispatch to that
+        skill, never to what the message text asks for. Meter per peer, per task and per skill, because a peer's
         agent that retries or fans out is another organisation's loop spending our budget. Inspect
-        the outbound task payload and the inbound artifacts as the boundary crossings they are.
+        every outbound task payload and every inbound artifact, for both peers, as the boundary
+        crossings they are.
         Assessment probe: a valid peer token for skill A invoking skill B, and a task payload
         carrying a record the user may not export.
 
   - title: Treat everything a peer returns as content, and store nothing unclassified
-    mitigations: [cap-input-guardrails, AML.M0031]
+    mitigations: [cap-input-guardrails, AML.M0031, cap-agent-action-policy-enforcement]
     body:
       - >-
         Artifacts, status messages and card descriptions are text composed by a model another
         organisation runs; they land in our agent's context as instruction. Classify at the
         crossing with the peer's identity attached, write to memory only after classification
-        and scoped to the task, and keep consequential actions behind the person regardless of
-        how many agents recommended them. Assessment probe: an artifact containing an
+        and scoped to the task, and let the action policy at the crossing — not the artifact —
+        decide what our agent does next, however many agents recommended it. Assessment probe: an artifact containing an
         instruction to call a third agent, and confirmation that the loop surfaced it rather
         than acted on it.
 
@@ -105,7 +110,8 @@ items:
         as one — the delegation-chain opacity OWASP names is otherwise exactly this. Log every
         task in and out with peer, user, skill, scope and outcome. Revocation is one action at
         the registry and the authorization server, made real for issued tokens by introspection
-        and short lifetimes. Assessment probe: revoke a test peer and confirm its next call fails
+        and short lifetimes, with the tasks we delegated to the peer cancelled; whether its own
+        running work stops is the peer's to honour. Assessment probe: revoke a test peer and confirm its next call fails
         within one token lifetime and its card is no longer served as a peer's.
 
 sources:

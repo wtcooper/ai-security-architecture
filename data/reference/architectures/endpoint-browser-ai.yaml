@@ -40,10 +40,11 @@ description:
     feature. Site-level permissions — act, read only, no access — enforced from the vendor's
     admin console and the browser's policy tier decide where the agent may act before any page
     is read; confirmation before consequential actions is what remains for the pages the
-    allowlist admits. On the network, the browser is the one agent client whose traffic the
-    organisation can actually see: it trusts the enterprise root, so the secure service edge
-    inspects what leaves for the vendor and classifies what comes back from the web — the
-    inspection point the coding agents' pinned sessions deny us.
+    allowlist admits. On the network, the managed browser sends every session through our edge
+    and trusts the enterprise root, so the secure service edge can inspect what leaves for the
+    vendor and classify what comes back from the web, wherever it can parse the payload. The
+    coding agents' drawings leave their vendor sessions uninspected by choice; here inspection
+    is the baseline.
   - >
     What the vendor supplies is a managed-settings tier — an organisation toggle, site allow and
     block lists that override user permissions, an audit export — and, inside the product,
@@ -99,7 +100,8 @@ zones:
     note: >
       The managed device, running the browser: the profile whose sessions the agent acts with,
       the agent itself, and the memory it keeps between sessions. Ours to manage, theirs to
-      build — and, uniquely on this surface, ours to see, because the browser trusts our root.
+      build — and ours to see, because the managed browser trusts our root and leaves through
+      our edge.
   - id: zoneCloud
     owner: cloud
     note: >
@@ -114,8 +116,10 @@ zones:
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company with no agreement — the signed-in web applications the session
-      reaches, the open web the agent reads, and the stores the extension updates from.
+      Reached across the open network with nothing of ours brokering it — the signed-in web
+      applications the session reaches, our own internal applications' web front ends among
+      them, the open web the agent reads, and the stores the extension updates from. The
+      third-party sites hold no agreement with us.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -273,8 +277,8 @@ blocks:
       The organisation's secure service edge, which every session from the managed profile
       leaves through: the agent's inference calls to the vendor, and the browsing it causes.
       Because the browser trusts the enterprise root, this tier can inspect what leaves for the
-      vendor and classify what comes back from the web — the one agent client on the endpoint
-      surface where that is true. Its item is the traffic class it carries; the checks it runs
+      vendor and classify what comes back from the web, wherever it can parse the payload. Its
+      item is the traffic class it carries; the checks it runs
       — inspection, allowlisting, the record — are the numbered pins on this block and its
       edges. It brokers no model or MCP traffic here: the vendor's agent calls its own model.
     items:
@@ -369,8 +373,9 @@ blocks:
         label: Org data
         icon: db
         note: >
-          Internal applications reached through the browser on the SSO session — org data via
-          the web, with no connector, no gateway grant and no record of ours beyond the edge.
+          Our own internal applications, reached the way the browser reaches any site — through
+          their web front ends on the SSO session, with no connector, no gateway grant and no
+          record of ours beyond the edge.
 
   - id: govIdentity
     kind: governance
@@ -486,8 +491,8 @@ edges:
     bidir: true
     label: to the approved vendor
     note: >
-      Admitted by the allowlist an assessment put it on, and — unlike the coding agents' pinned
-      sessions — inspectable, because the browser trusts the enterprise root. What crosses is
+      Admitted by the allowlist an assessment put it on, and inspected, because the browser
+      trusts the enterprise root and the edge can parse the inference payload. What crosses is
       the user's pages and the plan that comes back.
   - from: vendorService
     to: provider
@@ -570,11 +575,6 @@ pins:
       note: >
         An agent that retries a click, reloads and retries again, with no meter but the vendor's
         and a human who has switched tabs — each iteration a real request on a real session.
-    - risk: riskCrossTenantCredentialPropagation
-      at: browser
-      note: >
-        Every authenticated origin in the profile is in scope for every page the agent reads —
-        authority pooled in one cookie jar, read here as pooled session authority.
     - risk: riskPromptInjection
       at: memory
       note: >
@@ -619,18 +619,21 @@ pins:
       at: harness
       note: >-
         Strip hidden and off-screen content at page extraction and classify what remains before it becomes
-        context. Bounds the injection rather than preventing it; the vendor's classifiers run here and are
-        assured rather than drawn.
+        context. Bounds the injection rather than preventing it. What we configure is the extraction policy
+        and the site scope; the vendor's own classifiers also run here, credited through the assessment rather
+        than as a screen we operate.
     - mitigation: AML.M0031
       at: toolPlane->memory
       note: >-
-        Treat browser memories as untrusted on read; scope which origins may be remembered at all, and keep
-        the sensitive ones out.
+        Scope which origins may be remembered at all and keep the sensitive ones out; record the page each
+        memory came from, so memories can be deleted or rolled back by origin; and treat what is read back as
+        untrusted input.
     - mitigation: D3-WSAA
       at: browser
       note: >-
-        In-browser telemetry of what the agent read and clicked — the only vantage point that sees either, and
-        often the only telemetry available.
+        In-browser telemetry of what the agent read and clicked — the only vantage point that sees either —
+        compared against the agent's normal pattern per origin, so a read on one site followed by a form
+        submission to another raises an alert.
     - mitigation: cap-agent-tool-registry
       at: browser
       note: >-
@@ -652,7 +655,8 @@ pins:
       at: harness->aiGateway
       note: >-
         Classify and redact what page content may leave for inference, on the hop where the browser's trust in
-        our root makes inspection real — because the pages are authenticated ones.
+        our root lets the secure web gateway decrypt and parse the agent's payload — because the pages are
+        authenticated ones. A payload the gateway cannot parse is blocked, not passed.
     - mitigation: cap-agent-egress-control
       at: aiGateway->openWeb
       note: >-
@@ -662,9 +666,10 @@ pins:
     - mitigation: D3-MFA
       at: vendorService
       note: >-
-        Federated login on the agent's vendor account, and the tenant binding that keeps the extension from
-        signing into a personal account — Zone-2 configuration, because the account layer is the only lever on
-        this path.
+        MFA enforced at our IdP on the federated sign-in to the agent's vendor account — SSO alone is not MFA —
+        so the agent's vendor session inherits a multi-factor login. Zone-2 configuration, because the account layer
+        is the only lever on this path; the tenant binding that keeps the extension from signing into a
+        personal account is separate configuration in the same tier.
     - mitigation: cap-agent-action-policy-enforcement
       at: vendorService
       note: >-
@@ -921,14 +926,15 @@ deviations:
       of egress control; what it does here is admission, inspection and the record, which are
       the pins on it and on its two edges. A
       reader comparing this to the coding agents should see the same block doing a narrower job.
-  - subject: The vendor's path is inspected here, unlike the coding agents' pinned sessions
+  - subject: The vendor's path is inspected here, unlike the coding agents' vendor sessions
     reason: >
-      The sibling drawings admit the vendor session by allowlist and refuse to draw inspection
-      on it, because a CLI's pinned TLS session cannot be inspected without breaking the
-      product. A browser is different in a way that matters: extensions and built-in agents use
-      the browser's network stack, which trusts the enterprise root, so the secure service edge
-      genuinely sees what leaves for the vendor. AI DLP is pinned on that hop for that reason,
-      and nowhere else on the endpoint surface.
+      The sibling coding drawings admit the vendor session by allowlist and leave it
+      uninspected — a policy choice, not an impossibility, since enterprise TLS-inspection
+      proxies work for CLIs that trust the enterprise root. Here inspection is the baseline:
+      extensions and built-in agents use the browser's network stack, which trusts the root
+      and already leaves through the secure service edge, so AI DLP is pinned on the vendor
+      hop. It holds only where the edge can parse the agent's payload; where it cannot, the
+      hop is blocked rather than passed uninspected.
   - subject: Injection defence is absorbed by the harness's page extraction
     reason: >
       The registered embodiment is the AI gateway, but the point where hidden and off-screen
@@ -951,13 +957,6 @@ deviations:
       decision — which extensions may install, at which versions — is browser policy enforced at
       the extension host, and the edge from the store to the host is where that decision and the
       provenance risk are pinned.
-  - subject: Cross-tenant credential propagation is read as pooled session authority
-    reason: >
-      The catalogue defines the risk as one tenant's credentials reaching another. On this
-      drawing the mechanism is the same shape inside one user: every signed-in origin's session
-      sits in one cookie jar, and a page from any of them — or from nowhere — can cause a request
-      on all of them. The tag is kept because it is the nearest coded risk; the profile's
-      scope is the answer to both readings.
 
 sources:
   - title: "Claude in Chrome — use Claude in Chrome safely: prompt injection, blocked categories, confirmed actions, separate profile"

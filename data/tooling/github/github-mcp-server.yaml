@@ -12,7 +12,7 @@
 # --listen-host default, no Origin check and CORS *, --log-file / --enable-command-logging, job-log downloads) was
 # read in the source on main (v1.12.2, commit 85598ba). docs.github.com's enterprise
 # configuration page says an unprefixed GHES host "defaults to http://"; the README and source refuse scheme-less and
-# non-HTTPS hosts — both recorded on D3-MAN.
+# non-HTTPS hosts — both recorded on the riskMCPTransportHijacking note.
 vendor: github
 family: GitHub MCP server
 tools:
@@ -151,12 +151,10 @@ tools:
         note: >-
           The caller's GitHub token is relayed to GitHub's API and any valid GitHub token is accepted, so a token minted
           for one host app works through the server for every tool its scopes allow; the delegation is the full
-          user's, bounded only by token scope, SSO authorization and organization approvals.
-      - risk: riskCrossTenantCredentialPropagation
-        note: >-
-          CVE-2026-48529: in self-hosted HTTP mode with lockdown on, the repository-access cache was a process-wide
-          singleton holding the first user's GraphQL client, so later users' access checks ran on that user's
-          credentials (fixed 1.1.2). A multi-user HTTP deployment is exactly where per-caller isolation lives in code.
+          user's, bounded only by token scope, SSO authorization and organization approvals. CVE-2026-48529: in
+          self-hosted HTTP mode with lockdown on, the repository-access cache was a process-wide singleton holding the
+          first user's GraphQL client, so later users' access checks ran on that user's credentials (fixed 1.1.2) — a
+          multi-user HTTP deployment is exactly where per-caller isolation lives in code.
       - risk: riskEconomicDenialOfWallet
         note: >-
           Quotas are GitHub's per-identity API limits, shared by every app and token acting for the same user, so one
@@ -164,18 +162,20 @@ tools:
           request crash a self-hosted server (fixed 1.1.0).
       - risk: riskMCPTransportHijacking
         note: >-
-          The self-hosted `http` command serves plain HTTP and binds every interface unless --listen-host is set, with
-          CORS open to any origin by design; the delete_repository confirmation is carried as client-held state sealed
-          with GITHUB_MCP_SERVER_MRTR_STATE_KEY, which must stay secret and identical across replicas.
+          The remote endpoint is HTTPS with a bearer token on every request, but no Origin is validated (cross-origin
+          protection deliberately off, CORS *, on the reasoning that bearer tokens leave nothing ambient for a
+          rebinding page to ride) and no replay protection beyond token lifetime is documented. The self-hosted `http`
+          command serves plain HTTP and binds every interface unless --listen-host is set: start it with --listen-host
+          127.0.0.1 behind a TLS-terminating proxy advertised with --base-url, write GITHUB_HOST / --gh-host with an
+          explicit https:// scheme (docs.github.com says an unprefixed GHES host defaults to http://; the README and
+          source refuse it), and publish the container's OAuth callback to 127.0.0.1 only. The delete_repository
+          confirmation is carried as client-held state sealed with GITHUB_MCP_SERVER_MRTR_STATE_KEY, which must stay
+          secret and identical across replicas.
       - risk: riskZombieShadowMCPServers
         note: >-
           Anyone with a PAT can run the local server or point any host at the remote one; GitHub lists "Real-time list
           of active MCP connections" among governance features not yet available, so long-lived PATs and approved host
           apps are the grants to inventory.
-      - risk: riskStaleAgentIdentityBinding
-        note: >-
-          Classic PATs carry no expiry unless a lifetime policy is set, and revoking an SSO authorization or a
-          fine-grained PAT's organization access leaves the token valid on public and personal resources.
     controls:
       - mitigation: D3-CTS
         coverage: partial
@@ -248,42 +248,6 @@ tools:
           budget, so one agent can starve the person's other tools; secondary limits "are subject to change without
           notice". Remote-side throttling of the MCP endpoint itself is not documented. Per-client and per-tool quotas
           in front of a self-hosted HTTP deployment are an MCP or API gateway's job.
-        verified: "2026-09-25"
-      - mitigation: D3-MAN
-        coverage: partial
-        mechanism: >-
-          HTTPS to api.githubcopilot.com/mcp; --gh-host / GITHUB_HOST must carry an https:// scheme (non-HTTPS refused
-          except loopback); bearer token on every request; no Origin validation (cross-origin protection deliberately
-          off, CORS *); self-hosted `http` command serves plain HTTP on :8082 on all interfaces unless --listen-host
-        steps:
-          - title: Set the GitHub host with an explicit https:// scheme
-            body:
-              - >-
-                Set GITHUB_HOST / --gh-host to https://<GHES host> or https://<subdomain>.ghe.com; the README says
-                non-HTTPS hosts are refused, while docs.github.com says an unprefixed host "defaults to http://", so
-                always write the scheme.
-            url: https://github.com/github/github-mcp-server
-          - title: Bind the HTTP server to loopback or behind a TLS proxy
-            body:
-              - >-
-                Start `github-mcp-server http --listen-host 127.0.0.1` (empty binds all interfaces) and terminate TLS at
-                a reverse proxy, advertising the HTTPS URL with --base-url.
-            url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
-          - title: Publish the container's OAuth callback to loopback only
-            body:
-              - >-
-                Run the container with -p 127.0.0.1:8085:8085 and GITHUB_OAUTH_CALLBACK_PORT=8085, never -p 8085:8085,
-                which would expose the authorization code to the network.
-            url: https://github.com/github/github-mcp-server/blob/main/docs/oauth-login.md
-        note: >-
-          Partial by the D3-MAN rule on this drawing (HTTPS without Origin validation): the remote endpoint is HTTPS and
-          each request carries a bearer token GitHub validates, so the sender is authenticated per message; no replay
-          protection beyond token lifetime is documented. The server validates no Origin: the HTTP handler leaves
-          cross-origin protection unset and answers CORS with * on the reasoning that bearer tokens, not cookies,
-          leave nothing ambient for a rebinding page to ride. Local stdio has no listener except the OAuth loopback
-          callback (random port, or a fixed port that must be published to 127.0.0.1). The self-hosted `http` command
-          has no TLS option and binds every interface by default. The GHES scheme conflict between docs.github.com and
-          the README is recorded in the step; current source refuses both scheme-less and http:// hosts.
         verified: "2026-09-25"
       - mitigation: AML.M0028
         coverage: native
@@ -558,7 +522,7 @@ tools:
           GitHub's side and exports none of it; Copilot Usage Records Streaming is not documented as covering this
           server. Capture is not tamper resistance.
         verified: "2026-09-25"
-      - mitigation: cap-agent-kill-switch
+      - mitigation: D3-CR
         coverage: native
         mechanism: >-
           Revocation that reaches issued tokens: Authentication security > revoke SSO authorizations (per user, per
@@ -594,7 +558,7 @@ tools:
                 remote and local, in the Copilot hosts it governs (not third-party hosts).
             url: https://github.com/github/github-mcp-server/blob/main/docs/policies-and-governance.md
         note: >-
-          Native by the kill-switch rule on this drawing: revocation reaches tokens already issued — the server is
+          Native by the D3-CR rule on this drawing: revocation reaches tokens already issued — the server is
           stateless and GitHub authorizes every call, so a revoked SSO authorization, fine-grained PAT, OAuth app
           approval or GitHub App installation fails the next tool call in every host, remote or local; no time bound is
           published. Boundaries: GitHub says there is no single toggle for all GitHub MCP server traffic; "MCP servers

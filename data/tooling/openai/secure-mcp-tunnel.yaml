@@ -62,56 +62,11 @@ tools:
         value: developers.openai.com/api/docs/guides/secure-mcp-tunnels
         url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
     riskNotes:
-      - risk: riskCrossTenantCredentialPropagation
-        note: >-
-          A tunnel can be associated with several organisations or workspaces; every association is a tenant
-          that can reach the private server.
       - risk: riskAgenticDelegationConfusedDeputy
         note: >-
           The tunnel presents one runtime key; per-user authorization has to happen in the MCP server or the
           app's auth flow.
-      - risk: riskStaleAgentIdentityBinding
-        note: >-
-          The runtime key is a Platform API key that expires only if it was created with an expiry or the
-          organisation enforces a maximum key lifetime; a forgotten tunnel keeps polling until its key is
-          revoked or the tunnel is deleted.
     controls:
-      - mitigation: D3-MFA
-        coverage: notApplicable
-        mechanism: >-
-          Not applicable — the tunnel has no human sign-in; the people who manage and attach it sign in to the
-          OpenAI Platform organisation and the ChatGPT workspace
-        evidence:
-          - title: Secure MCP Tunnel — Permissions and access (checked 2026-09-25)
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-          - title: Manage permissions in the OpenAI platform (roles, groups, SCIM)
-            url: https://developers.openai.com/api/docs/guides/rbac
-        note: >-
-          tunnel-client authenticates as a workload (runtime API key, optional control-plane mTLS; see D3-CH
-          and D3-AA), never as a person, so there is no login to put a second factor on. The pin's objective —
-          an employee landing in the corporate tenant — is the ChatGPT workspace's sign-in (toolChatgptDesktop).
-          The humans who create tunnels, mint runtime keys and attach tunnels to apps sign in to the OpenAI
-          Platform organisation and the ChatGPT workspace; require MFA there (the Platform's groups can be
-          SCIM-synced from the IdP). Nothing binds a tunnel to the corporate organisation: the guide supports
-          tunnels in personal Platform organisations, which is a discovery question (cap-shadow-ai-discovery).
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                Organisation-level Platform permissions Tunnels Read, Read + Manage, Read + Use;
-                developer-mode grant in the ChatGPT workspace
-              steps:
-                - title: Separate managing from using
-                  body:
-                    - Read + Manage creates, edits and deletes tunnels; Read + Use runs tunnel-client or
-                      selects the tunnel in a connector.
-                  url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
-              verified: 2026-09-10
       - mitigation: D3-APA
         coverage: partial
         mechanism: >-
@@ -390,73 +345,6 @@ tools:
                 - title: Vendor docs index, reviewed for applicability (2026-09-10)
                   url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
               verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          tunnel_id plus a Restricted runtime API key (Tunnels Read + Use) authenticating tunnel-client to the
-          control plane, optionally bound to a client certificate with a CEL filter; tunnels and keys listed
-          and revoked in Platform settings and the Admin API; optional MCP-side mTLS toward our server
-        steps:
-          - title: Give each deployment its own runtime identity
-            body:
-              - >-
-                On the Platform API keys page create a Restricted key with Tunnels Read + Use for each
-                tunnel-client deployment, owned by a principal in the tunnel-runtime group, and never run the
-                daemon on an admin key or an All key.
-            url: https://github.com/openai/tunnel-client/blob/master/docs/permissions.md
-          - title: Require a certificate from the workload
-            body:
-              - >-
-                Upload and activate a trust anchor at Organization settings > Security > Mutual TLS for the
-                key's organisation or project, optionally with a CEL filter on subject or SAN, and set
-                control_plane.client_cert and client_key so tunnel-client polls mtls.api.openai.com.
-            url: https://developers.openai.com/api/docs/guides/mutual-tls
-          - title: Inventory and expire the identities
-            body:
-              - >-
-                List tunnels with GET /v1/tunnels (tunnel-client admin tunnels list, admin key) and project API
-                keys through the Admin API, and set a maximum API key lifetime in Platform settings so new
-                runtime keys must expire.
-            url: https://developers.openai.com/api/docs/guides/production-best-practices
-          - title: Authenticate the tunnel to our server
-            body:
-              - >-
-                Where the MCP server should see the tunnel as a caller, set MCP_CLIENT_CERT and MCP_CLIENT_KEY
-                (MCP-side mTLS, HTTP bindings only) — a static credential that identifies the tunnel, not the
-                user.
-            url: https://github.com/openai/tunnel-client/blob/master/docs/configuration.md
-        note: >-
-          Partial by the rule: the tunnel's own workload identity is authenticated (runtime key, optionally a
-          certificate OpenAI verifies), inventoried, expirable and revocable, but the pin's subject — each user's
-          connector grant through the tunnel — is a ChatGPT app authorisation administered in ChatGPT
-          (toolChatgptDesktop) and at the MCP server's authorisation server; the tunnel only forwards the
-          connector's Authorization header to the configured MCP origin. By default the tunnel does not
-          authenticate to our MCP server at all; MCP-side mTLS or a static MCP_EXTRA_HEADERS value are opt-in
-          and static. Binding a user-owned runtime key to its owner's lifecycle rests on the RBAC rule that a
-          key's permissions must also be held by its user (role and SCIM group changes propagate within 30
-          minutes) — not documented for tunnels specifically; the tunnel-client permissions guide, checked by
-          the vendor on 2026-04-24, also names a predefined per-tunnel User role.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: tunnel_id identity, runtime API key and optional control-plane client certificate
-              steps:
-                - title: Give each server its own tunnel
-                  body:
-                    - Initialise with tunnel-client init --tunnel-id tunnel_... and CONTROL_PLANE_API_KEY;
-                      present --control-plane.client-cert / client-key when mTLS is required.
-                  url: https://github.com/openai/tunnel-client
-              note: >-
-                tunnel_id is an identifier and the runtime API key authenticates the tunnel to OpenAI's
-                control plane; neither is a principal the MCP server behind the tunnel authenticates, and the
-                tunnel carries traffic without authenticating to that server. The identity that authorises
-                tool calls is the ChatGPT user's or workspace's, on the other side.
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: notApplicable
         mechanism: Not applicable — no data store in the tunnel
@@ -519,6 +407,20 @@ tools:
                 organisation or project and give tunnel-client control_plane.client_cert and client_key; a
                 request with the key but no accepted certificate fails with certificate_required.
             url: https://developers.openai.com/api/docs/guides/mutual-tls
+          - title: Give each deployment its own runtime identity
+            body:
+              - >-
+                On the Platform API keys page create a Restricted key with Tunnels Read + Use for each
+                tunnel-client deployment, owned by a principal in the tunnel-runtime group, and never run the
+                daemon on an admin key or an All key.
+            url: https://github.com/openai/tunnel-client/blob/master/docs/permissions.md
+          - title: Authenticate the tunnel to our server
+            body:
+              - >-
+                Where the MCP server should see the tunnel as a caller, set MCP_CLIENT_CERT and MCP_CLIENT_KEY
+                (MCP-side mTLS, HTTP bindings only) — a static credential that identifies the tunnel, not the
+                user.
+            url: https://github.com/openai/tunnel-client/blob/master/docs/configuration.md
         note: >-
           Native by the drawing rule for a tunnel credential: it is scoped (a Restricted key with Tunnels Read +
           Use), held as a reference to the host's secret store rather than in the profile, rotatable under an
@@ -533,7 +435,10 @@ tools:
           a revocation is not documented. Other credentials on the path: a connector-forwarded Authorization
           bearer crosses OpenAI (strict-local-auth is unsupported), while MCP_EXTRA_HEADERS and MCP-side mTLS
           keep a backend credential on the final hop. The same rule reads Anthropic's MCP tunnel credentials
-          (tokenVersion rotation, Tunnels API key revoked after setup) as meeting the tunnel test.
+          (tokenVersion rotation, Tunnels API key revoked after setup) as meeting the tunnel test. A key created
+          without an expiry, under no enforced maximum, lives until revoked, so a forgotten tunnel keeps polling
+          until its key is revoked or the tunnel is deleted. By default the tunnel does not authenticate to our
+          MCP server at all; MCP-side mTLS or a static MCP_EXTRA_HEADERS value are opt-in and static.
         verified: "2026-09-25"
         migration:
           from:
@@ -676,7 +581,9 @@ tools:
           construction, but it records only name, description and associations (owner is the audit-log actor,
           and there is no approval state), and it registers the tunnel, not the MCP server or tools behind it.
           The ChatGPT apps built on a tunnel are listed in ChatGPT (toolChatgptDesktop). Tunnels created in a
-          personal Platform organisation never appear in the corporate list (cap-shadow-ai-discovery).
+          personal Platform organisation never appear in the corporate list (cap-shadow-ai-discovery). A tunnel
+          can be associated with several organisations or workspaces, and every association can reach the private
+          server, so review associations as part of the register.
         verified: "2026-09-25"
         migration:
           from:

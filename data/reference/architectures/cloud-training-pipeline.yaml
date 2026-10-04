@@ -21,11 +21,12 @@ description:
     review — what went into the training set and how the result behaves are the only two things
     anyone can actually examine.
   - >
-    Poisoning is therefore the primary risk and it is durable. A poisoned example influences
-    every inference the model ever makes, survives redeployment, and is not removable without
-    retraining — and the dose is small: published results show a near-constant few hundred
-    poisoned documents backdoor models regardless of scale, so poisoning needs a foothold, not
-    a percentage. A targeted poisoning that only activates on a trigger phrase is invisible to
+    Poisoning is therefore the primary risk and it is durable: what a poisoned example taught
+    is in the weights, ships with every deployment of the artifact, and cannot be deleted from
+    it the way a bad row is deleted from a table. The dose can be small: published results
+    found a near-constant few hundred poisoned documents implanted a trigger backdoor across
+    the model sizes tested, so poisoning needs a foothold, not a percentage. A targeted
+    poisoning that only activates on a trigger phrase is invisible to
     accuracy metrics and to any evaluation that does not know what to look for — which is why
     curation is the last place a bad example can be removed rather than baked in, and why
     lineage from every promoted model back to its exact dataset is what makes a discovered
@@ -260,7 +261,9 @@ blocks:
       a block here and a governance item on the agent drawings. With an artifact that cannot
       be read, how the result behaves is one of only two things anyone can examine; the
       benchmarks themselves are custody-controlled, because a gate whose answer key the
-      candidate's authors can edit gates nothing.
+      candidate's authors can edit gates nothing. It loads untrusted candidates, so it runs
+      isolated, reads the store with a read-only identity, and holds no signing or
+      registry-write credential.
     items:
       - id: capabilityEvals
         label: Capability & safety evals
@@ -323,7 +326,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 3
-    mitigations: [ cap-data-access-governance, AML.M0029 ]
+    mitigations: [ AML.M0005 ]
     note: >
       Who may read the dataset and who may authorise a run against it. The dataset is the
       sensitive asset here, not the model.
@@ -345,7 +348,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 3
-    mitigations: [ AML.M0024, cap-model-documentation, cap-agent-kill-switch ]
+    mitigations: [ cap-model-documentation ]
     note: >
       The lineage record and the documentation that travel with an artifact — the only reason a
       question asked long after the run has an answer.
@@ -417,7 +420,9 @@ edges:
     label: artifact digest
     note: >
       The registry records the digest of the bytes the store holds; the signed release points
-      at exactly that artifact and nothing else.
+      at exactly that artifact and nothing else. Candidates are immutable once written, and
+      promotion signs only the digest the evaluator tested, so a candidate replaced after
+      evaluation fails the match.
   - from: evaluation
     to: registry
     path: primary
@@ -440,8 +445,9 @@ pins:
     - risk: riskExcessiveDataHandling
       at: corpus
       note: >
-        The most sensitive artifact in the drawing, mounted by every worker in the job. Its
-        access control matters more than anything else on this page.
+        More collected and kept than the run needs — whole tables where a field would do, and
+        dataset versions retained past the deletion and retention terms that bind the source
+        records.
     - risk: riskModelSourceTampering
       at: upstreamArtifacts->pkgRegistry
       note: >
@@ -464,7 +470,7 @@ pins:
         A gate whose benchmarks the candidate's authors can read or edit gates nothing — and a
         targeted poisoning is invisible to any evaluation that does not know what to look for.
         Benchmark custody is the control the gate itself depends on.
-    - risk: riskInferredSensitiveData
+    - risk: riskSensitiveDataDisclosure
       at: evaluation
       note: >
         Memorised examples can be extracted from the artifact afterwards, so restricted corpus
@@ -497,7 +503,7 @@ pins:
       at: curation
       note: >-
         Where every example came from, recorded at ingest, because it cannot be reconstructed after training.
-    - mitigation: cap-data-access-governance
+    - mitigation: AML.M0005
       at: corpus
       note: Who may read the set, enforced at the store rather than trusted to the job.
     - mitigation: D3-FA
@@ -505,27 +511,22 @@ pins:
       note: >-
         Format and content inspection gating admission to the mirror — before any loader in the job opens the
         file, and independent of the job it protects.
-    - mitigation: AML.M0029
-      at: evaluation->registry
-      note: >-
-        Promotion is a separated human decision — a different person, and a different credential, from
-        anything the run itself held.
     - mitigation: AML.M0013
       at: evaluation->registry
       note: >-
         Sign at promotion, with the OpenSSF Model Signing spec and a Sigstore bundle, using an identity the
-        training job never possesses — so a signature proves the gate was passed, not merely that a job
-        finished.
+        training job never possesses and only on a separated human decision — so a signature proves the gate
+        was passed, not merely that a job finished.
     - mitigation: AML.M0008
       at: evaluation
       note: >-
         The behavioural half of what substitutes for code review: capability, safety, backdoor and
         memorisation checks, blocking promotion rather than advising it.
-    - mitigation: cap-data-access-governance
+    - mitigation: AML.M0005
       at: storage
       note: >-
-        Reads from the candidate store are scoped and logged like corpus reads — the answering control for
-        exfiltration of an artifact small enough to walk out unnoticed.
+        Reads from the candidate store are scoped like corpus reads — the answering control for exfiltration
+        of an artifact small enough to walk out unnoticed.
     - mitigation: AML.M0012
       at: govSecrets
       note: >-
@@ -534,9 +535,6 @@ pins:
     - mitigation: AML.M0023
       at: govSupplyChain
       note: The record tying this artifact to this data, this base and this run.
-    - mitigation: AML.M0024
-      at: govObservability
-      note: Who ran what against which data, retained long enough to answer a question nobody has asked yet.
     - mitigation: cap-model-documentation
       at: govObservability
       note: >-
@@ -549,14 +547,9 @@ pins:
     - mitigation: D3-AA
       at: corpus->trainJob
       note: >-
-        The run's own workload identity, scoped to the dataset version an approved run specification names and
-        denied the promotion identity — the separation the whole drawing rests on. The approval is on the
-        spec, and the identity enforces it.
-    - mitigation: cap-agent-kill-switch
-      at: registry
-      note: >-
-        A release withdrawn here fails load-time verification everywhere it serves — the lineage query names
-        the artifacts, and the registry's stage transition is the stop.
+        The corpus store authenticates the run's own workload credential on every read and rejects any other —
+        an identity scoped to the dataset version an approved run specification names and denied the
+        promotion identity, the separation the whole drawing rests on.
     - mitigation: D3-EI
       at: trainJob
       note: >-
@@ -615,7 +608,10 @@ scenarios:
         note: Including the ones that passed the gate — a behavioural backdoor is what the probes may have missed.
       - follow: evaluation->registry
         label: promoted artifacts withdrawn
-        note: The lineage metadata identifies every artifact those runs promoted, and they are withdrawn.
+        note: >
+          The lineage metadata identifies every artifact those runs promoted, and they are
+          withdrawn — which stops future loads where the serving tier checks release status.
+          Instances already serving them are stopped by the serving tier.
   - title: The base checkpoint is the attack
     steps:
       - follow: upstreamArtifacts->pkgRegistry
@@ -678,7 +674,7 @@ deviations:
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning, LLM04 supply chain"
     url: https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/
-  - title: "Anthropic — a small, near-constant number of samples poisons models of any size"
+  - title: "Anthropic — a near-constant number of poisoned samples backdoored every model size tested (600M–13B)"
     url: https://www.anthropic.com/research/small-samples-poison
   - title: "OpenSSF Model Signing — standardised signing and provenance for model artifacts"
     url: https://openssf.org/projects/model-signing/

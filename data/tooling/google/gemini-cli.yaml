@@ -500,7 +500,10 @@ tools:
         coverage: partial
         mechanism: >-
           tools.sandbox (docker / podman / runsc / lxc / sandbox-exec) or security.toolSandboxing in the system
-          settings; SEATBELT_PROFILE on macOS; tools.sandboxNetworkAccess and tools.sandboxAllowedPaths
+          settings; SEATBELT_PROFILE on macOS; tools.sandboxNetworkAccess and tools.sandboxAllowedPaths. Credential
+          paths: the same sandbox confining agent commands to the workspace; default redaction of secret-named
+          variables for stdio MCP servers; security.environmentVariableRedaction for shell commands; GEMINI_CLI_HOME
+          for shared runners
         steps:
           - title: Set a container sandbox
             body:
@@ -518,22 +521,52 @@ tools:
               - Leave tools.sandboxNetworkAccess false and tools.sandboxAllowedPaths empty in the system
                 settings.
             url: https://geminicli.com/docs/reference/configuration/
+          - title: Keep credential paths outside the sandbox
+            body:
+              - Run tools in the sandbox (by default it only has access to the current project workspace) and do
+                not mount ~/.ssh, cloud CLI configuration or browser profiles through SANDBOX_MOUNTS; on macOS
+                use a strict-* SEATBELT_PROFILE, which restricts reads as well as writes.
+            url: https://geminicli.com/docs/cli/sandbox/
+          - title: Redact secrets from shell environments
+            body:
+              - Set security.environmentVariableRedaction.enabled to true in the system settings (off by
+                default) and list extra names under security.environmentVariableRedaction.blocked.
+            url: https://geminicli.com/docs/reference/configuration/
+          - title: Scope what MCP servers receive
+            body:
+              - Stdio MCP servers get secret-named host variables (*TOKEN*, *SECRET*, *KEY*, *CREDENTIAL*)
+                stripped by default; declare in each server's env block only the variables it needs, because
+                declared variables skip redaction.
+            url: https://geminicli.com/docs/tools/mcp-server/
+          - title: Isolate shared runners
+            body:
+              - Set GEMINI_CLI_HOME per job so credentials, trust decisions and history do not leak between
+                users on a shared machine.
+            url: https://geminicli.com/docs/cli/enterprise/
         note: >-
-          Partial: the sandbox is OS- or container-enforced but an administrator cannot require it. The sandbox
-          page ranks the -s flag and the GEMINI_SANDBOX environment variable above the settings file, and
-          GEMINI_SANDBOX accepts false, so a user can run unsandboxed; sandbox expansion requests let the user
-          widen filesystem or network access per command; the Management Console has no sandbox control. A
-          wrapper that exports GEMINI_SANDBOX and SEATBELT_PROFILE (the pattern the enterprise page uses for
-          the settings path) raises the bar but is not enforcement. Inside the boundary in full-process mode:
-          the CLI and the tools it spawns, with the workspace mounted at the same path. With
-          security.toolSandboxing only individual tool executions are isolated and the CLI process stays on the
-          host. Outside: remote MCP servers, the model endpoint and every unsandboxed run. Docker or Podman
-          must be installed on each machine; Seatbelt is macOS-only, gVisor and LXC Linux-only, and the Windows
-          native sandbox leaves persistent Low integrity labels.
+          Partial: the sandbox is OS- or container-enforced but an administrator cannot require it. The sandbox page
+          ranks the -s flag and the GEMINI_SANDBOX environment variable above the settings file, and GEMINI_SANDBOX
+          accepts false, so a user can run unsandboxed; sandbox expansion requests let the user widen filesystem or
+          network access per command; the Management Console has no sandbox control. A wrapper that exports
+          GEMINI_SANDBOX and SEATBELT_PROFILE (the pattern the enterprise page uses for the settings path) raises the
+          bar but is not enforcement. Inside the boundary in full-process mode: the CLI and the tools it spawns, with
+          the workspace mounted at the same path. With security.toolSandboxing only individual tool executions are
+          isolated and the CLI process stays on the host. Outside: remote MCP servers, the model endpoint and every
+          unsandboxed run. Docker or Podman must be installed on each machine; Seatbelt is macOS-only, gVisor and LXC
+          Linux-only, and the Windows native sandbox leaves persistent Low integrity labels. Credential paths: the
+          product can keep credential paths out of sandboxed commands and strip secrets from child environments, but
+          none of it is admin-requirable (the sandbox yields to -s and GEMINI_SANDBOX, as above) and there is no
+          credential broker. Unsandboxed, run_shell_command inherits the developer's full credential set: the
+          ssh-agent socket, the git credential helper, gcloud application-default credentials, ~/.aws, kube
+          configurations and browser profiles; environment redaction removes variables, not files or sockets. Required
+          MCP servers can authenticate with google_credentials or service_account_impersonation instead of a user
+          token. The configuration reference names the redaction keys both security.environmentVariableRedaction.* and
+          security.allowedEnvironmentVariables / blockedEnvironmentVariables; the settings table uses the former.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -558,51 +591,6 @@ tools:
                 profile. Outside: remote MCP servers and the model endpoint. Docker and podman need the
                 runtime installed on every developer machine; Seatbelt is macOS only.
               verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          Container or Seatbelt sandbox confining agent commands to the workspace; default redaction of
-          secret-named variables for stdio MCP servers; security.environmentVariableRedaction for shell
-          commands; GEMINI_CLI_HOME for shared runners
-        steps:
-          - title: Keep credential paths outside the sandbox
-            body:
-              - Run tools in the sandbox (by default it only has access to the current project workspace) and do
-                not mount ~/.ssh, cloud CLI configuration or browser profiles through SANDBOX_MOUNTS; on macOS
-                use a strict-* SEATBELT_PROFILE, which restricts reads as well as writes.
-            url: https://geminicli.com/docs/cli/sandbox/
-          - title: Redact secrets from shell environments
-            body:
-              - Set security.environmentVariableRedaction.enabled to true in the system settings (off by
-                default) and list extra names under security.environmentVariableRedaction.blocked.
-            url: https://geminicli.com/docs/reference/configuration/
-          - title: Scope what MCP servers receive
-            body:
-              - Stdio MCP servers get secret-named host variables (*TOKEN*, *SECRET*, *KEY*, *CREDENTIAL*)
-                stripped by default; declare in each server's env block only the variables it needs, because
-                declared variables skip redaction.
-            url: https://geminicli.com/docs/tools/mcp-server/
-          - title: Isolate shared runners
-            body:
-              - Set GEMINI_CLI_HOME per job so credentials, trust decisions and history do not leak between
-                users on a shared machine.
-            url: https://geminicli.com/docs/cli/enterprise/
-        note: >-
-          Partial: the product can keep credential paths out of sandboxed commands and strip secrets from child
-          environments, but none of it is admin-requirable (the sandbox yields to -s and GEMINI_SANDBOX; see
-          D3-EI) and there is no credential broker. Unsandboxed, run_shell_command inherits the developer's
-          full credential set: the ssh-agent socket, the git credential helper, gcloud application-default
-          credentials, ~/.aws, kube configurations and browser profiles; environment redaction removes
-          variables, not files or sockets. Required MCP servers can authenticate with google_credentials or
-          service_account_impersonation instead of a user token. The configuration reference names the
-          redaction keys both security.environmentVariableRedaction.* and security.allowedEnvironmentVariables /
-          blockedEnvironmentVariables; the settings table uses the former.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
             - capability: capabilityCredentialIsolation
               coverage: partial
               mechanism: >-

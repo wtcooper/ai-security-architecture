@@ -140,7 +140,7 @@ tools:
           - title: Compliance API
             url: https://platform.claude.com/docs/en/manage-claude/compliance-api
     riskNotes:
-      - risk: riskSensitiveDataDisclosure
+      - risk: riskExcessiveDataHandlingDuringInference
         note: >-
           Chat and project retention is indefinite until an Owner sets a period; uploads, connector results
           and artifacts persist with the chat. Custom retention and the Compliance API delete endpoints are
@@ -160,79 +160,6 @@ tools:
           Personal accounts on the corporate network are blocked only by tenant restrictions or IP
           allowlisting; domain capture and SSO enforcement pull verified-domain users into the organisation.
     controls:
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          "Require SSO for Claude" (claude.ai/admin-settings/organization, Authentication) sends every
-          interactive web, desktop and mobile sign-in through the IdP, whose MFA policy applies; "Shortened
-          session length" (Enterprise) forces a fresh sign-in; forceLoginOrgUUID pins Claude Desktop to the
-          organisation; Enterprise domain capture ("Migrate accounts using your domain") leaves no personal
-          account on a verified domain
-        steps:
-          - title: Require SSO so the IdP's MFA governs every login
-            body:
-              - >-
-                After verifying your domains at claude.ai/admin-settings/organization, set up SSO through
-                WorkOS, turn on Require SSO for Claude in the Authentication section, and enforce MFA on the
-                Claude app in your IdP.
-            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Bound how long a sign-in lasts (Enterprise)
-            body:
-              - >-
-                At Organization settings > Organization and access > Session security click Enable next to
-                Shortened session length and choose 1, 7, 14 or 28 days; older sessions expire at once.
-            url: https://support.claude.com/en/articles/13163631-configuring-session-security-settings
-          - title: Pin the desktop app to your organisation
-            body:
-              - >-
-                Deploy forceLoginOrgUUID in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude;
-                login fails for any account outside the listed organisations.
-            url: >-
-              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
-          - title: Pull personal accounts on your domain into the tenant (Enterprise)
-            body:
-              - >-
-                With Restrict organization creation, SSO enforcement and JIT or SCIM in place, turn on Migrate
-                accounts using your domain under Organization settings > Organization and access > Security.
-            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
-        note: >-
-          Partial on the MFA rule applied to every vendor: Claude documents no second-factor requirement of its
-          own, so the factor is whatever the IdP enforces behind Require SSO. Paths that skip a fresh challenge:
-          a signed-in web, desktop or mobile session stays active while the user stays active unless Shortened
-          session length is set (Enterprise only); Compliance Access Keys, which never expire on their own, and
-          Admin API keys; personal accounts on other addresses, which only the tenant-restriction header blocks;
-          and Team plans, which can verify a domain and Restrict organization creation but not claim existing
-          accounts or shorten sessions. Claude Desktop on 3P has no Anthropic identity; sign-in is the inference
-          provider's or the organisation's IdP.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                SSO (SAML/OIDC) with Require SSO for Claude, domain verification and capture, JIT or SCIM
-                provisioning with group-to-role mapping, custom roles and groups (Enterprise)
-              steps:
-                - title: Enforce SSO
-                  body:
-                    - Verify domains at claude.ai/admin-settings/organization, configure the IdP through
-                      WorkOS, then toggle "Require SSO for Claude" in Authentication settings.
-                  url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-                - title: Provision and deprovision from the directory
-                  body:
-                    - Enable SCIM with group-to-role mapping (Enterprise / Console); users removed from all
-                      mapped groups are removed at the next sync.
-                  url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
-                - title: Gate features by role
-                  body:
-                    - Create custom roles and groups at Organization settings > Roles and Groups to gate
-                      Claude Code, Cowork, Chrome, connectors, Claude Tag, models and admin scopes.
-                  url: >-
-                    https://support.claude.com/en/articles/13930458-set-up-role-based-permissions-on-enterprise-plans
-              verified: 2026-09-10
       - mitigation: D3-APA
         coverage: native
         mechanism: >-
@@ -262,6 +189,19 @@ tools:
                 In admin.google.com under Security > Access and data control > API controls > Manage
                 third-party app access, set Claude to Trusted, or leave it blocked.
             url: https://support.claude.com/en/articles/10166901-use-google-workspace-connectors
+          - title: Pin the desktop app to your organisation
+            body:
+              - >-
+                Deploy forceLoginOrgUUID in com.anthropic.claudefordesktop or HKLM\SOFTWARE\Policies\Claude;
+                login fails for any account outside the listed organisations.
+            url: >-
+              https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Pull personal accounts on your domain into the tenant (Enterprise)
+            body:
+              - >-
+                With Restrict organization creation, SSO enforcement and JIT or SCIM in place, turn on Migrate
+                accounts using your domain under Organization settings > Organization and access > Security.
+            url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
         note: >-
           Native on Enterprise by the rule: the console administers role and group authorisation over
           connectors, tools and features, enforced on Anthropic's servers and failing toward deny, and the
@@ -269,7 +209,8 @@ tools:
           connector and tool policy only, which is partial. Connector permissions apply only to members on the
           Custom role (User, Admin and Owner see every organisation connector under the organisation-wide
           policy), grants are additive across roles, and role changes take up to 15 minutes. The consent itself
-          is the target tenant's control, not Anthropic's.
+          is the target tenant's control, not Anthropic's. Domain capture (Enterprise) and forceLoginOrgUUID keep
+          employees in the corporate tenant; Team plans can verify a domain but not claim existing accounts.
         verified: "2026-09-25"
         migration:
           from:
@@ -632,62 +573,6 @@ tools:
                   url: >-
                     https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities
               verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Enterprise-managed authorisation (Organization settings > Connectors > connector > Configuration >
-          Managed authorization) issues connector grants from the IdP by role and removes them on IdP
-          deprovisioning; the Activity Feed records integration_user_connected, integration_user_disconnected and
-          mcp_server_managed_auth_token_exchanged per member; member removal ends access immediately
-        steps:
-          - title: Issue connector grants from the IdP
-            body:
-              - >-
-                On a supported connector click Set up next to Managed authorization, confirm the Okta connection,
-                choose the roles and the scopes Claude may request, then Save & turn on.
-            url: >-
-              https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
-          - title: Inventory grants from the Activity Feed (Enterprise)
-            body:
-              - >-
-                Query /v1/compliance/activities with activity_types[] integration_user_connected and
-                integration_user_disconnected to keep a per-member register of connector grants.
-            url: https://platform.claude.com/docs/en/api/compliance/activities/list
-          - title: End grants with the person
-            body:
-              - >-
-                Use SCIM directory sync so members removed from the IdP app are removed from the organisation,
-                which ends their access immediately.
-            url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
-        note: >-
-          Partial by the rule: no console page or API lists each member's live connector grants with a revoke
-          action, so the register is the organisation's, rebuilt from Activity Feed events; per-grant revocation
-          is the member's (Customize > Connectors) or the source's (Entra, Google), and Owners can only remove a
-          connector for everyone. Managed authorisation binds grants to the IdP lifecycle, with token lifetime set
-          by the connector's authorisation server, but covers ten listed connectors and Okta only; individually
-          authorised grants live as long as the source allows (Microsoft 365 refresh tokens lapse after 90 days of
-          inactivity by default). Chat has no agent identity of its own: connector actions carry the member's.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: partial
-              mechanism: >-
-                Compliance Access Keys and Admin API keys with scopes; connector service identities via
-                enterprise-managed authorisation; no per-agent identity for chat
-              steps:
-                - title: Scope machine credentials
-                  body:
-                    - Create a Compliance Access Key with only the scopes needed (read:compliance_activities,
-                      read:compliance_user_data) rather than an Owner's session.
-                  url: https://platform.claude.com/docs/en/manage-claude/compliance-api
-              note: >-
-                The scoped API keys identify automation reading the organisation, not an agent acting for
-                users; connector service identities are the vendor's; chat actions carry the user's identity.
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: partial
         mechanism: >-
@@ -946,12 +831,19 @@ tools:
                 Review the Inventory and approve or deny member submissions on the Requests tab of Organization
                 settings > Plugins & skills.
             url: https://claude.com/docs/plugins/admin
+          - title: Inventory grants from the Activity Feed (Enterprise)
+            body:
+              - >-
+                Query /v1/compliance/activities with activity_types[] integration_user_connected and
+                integration_user_disconnected to keep a per-member register of connector grants.
+            url: https://platform.claude.com/docs/en/api/compliance/activities/list
         note: >-
           Partial by the rule: the connector list and extension allowlist are enforced registers, but they carry
           no owner or approval record per connector, the allowlist ships off, local MCP servers configured in
           claude_desktop_config.json appear nowhere unless isLocalDevMcpEnabled removes them, and members with
           the Create skills capability add their own skills. Reconciliation against actual use is the
-          organisation's inventory.
+          organisation's inventory; no console page or API lists each member's live connector grants, so that
+          register is rebuilt from Activity Feed events.
         verified: "2026-09-25"
         migration:
           from:
@@ -1117,6 +1009,19 @@ tools:
                 HKLM\SOFTWARE\Policies\Claude.
             url: >-
               https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+          - title: Issue connector grants from the IdP
+            body:
+              - >-
+                On a supported connector click Set up next to Managed authorization, confirm the Okta connection,
+                choose the roles and the scopes Claude may request, then Save & turn on.
+            url: >-
+              https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+          - title: End grants with the person
+            body:
+              - >-
+                Use SCIM directory sync so members removed from the IdP app are removed from the organisation,
+                which ends their access immediately.
+            url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
         note: >-
           Partial by the rule: there is no organisation-wide switch for claude.ai chat (the Chat capability can be
           turned off only on custom roles, and built-in roles keep it); removing a connector disables it for every
@@ -1124,7 +1029,9 @@ tools:
           effect of either on a research run or tool loop already in progress is not documented (delay not
           documented; role changes up to 15 minutes). Member removal is documented as immediate. An Inference
           hooks deny refuses the next inference request, which halts a running tool loop at its next step, but
-          only on Enterprise and only while the hook is enforcing.
+          only on Enterprise and only while the hook is enforcing. Managed authorisation binds connector grants to
+          the IdP lifecycle but covers ten listed connectors and Okta only; individually authorised grants live as
+          long as the source allows.
         verified: "2026-09-25"
         migration:
           from:

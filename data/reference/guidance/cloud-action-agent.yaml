@@ -48,13 +48,14 @@ items:
         cell below the threshold fails the review.
 
   - title: Give the agent an identity, and broker every credential
-    mitigations: [ D3-AA, cap-agent-kill-switch, D3-CH, D3-CTS ]
+    mitigations: [ D3-AA, cap-agent-kill-switch, D3-CH, cap-agent-action-policy-enforcement ]
     body:
       - >-
         A distinct, revocable workload identity per agent — actions taken as a shared service
         account are neither attributable nor separately revocable, and turn every incident
-        response into a full-service outage. The agent tier holds no standing keys: model and
-        tool credentials are brokered at the gateway per call, short-lived and scoped.
+        response into a full-service outage. The agent tier holds no standing keys for brokered
+        calls: model and tool credentials are brokered at the gateway per call, short-lived and
+        scoped; whatever the in-process handlers hold is the exception to keep small.
         Effective authority on any call is the intersection of the grant the trigger carried, the
         agent's identity, the action policy and the target record — never the union.
         Assessment probe: revoke the agent's identity and confirm the loop stops without
@@ -80,7 +81,8 @@ items:
         message. It is the identity every downstream action is taken on behalf of, and the
         thing that bounds the reachable set. There is no front end to bind it anywhere else. The
         catalogue itself changes only out of band: actions exist because the registry admitted
-        them, through a review the loop cannot invoke — admission, not discovery. Assessment
+        them, through a review the loop cannot invoke — admission, not discovery — and a
+        definition whose hash changed after admission is refused where the harness loads it. Assessment
         probe: have the model name a plausible action that was never admitted, and confirm the
         gateway refuses it.
 
@@ -91,7 +93,10 @@ items:
         With nobody watching a run, there is no later opportunity to notice a change was
         wrong: every model, prompt or catalogue change ships through a behavioural evaluation
         gate first. The system instruction is versioned and owned like the catalogue it
-        governs — a prompt edit is a behaviour change and gets the same review.
+        governs — a prompt edit is a behaviour change and gets the same review. Behavioural
+        evaluation says nothing about the packages underneath: what the sandbox can install is
+        file-analysed at the mirror before admission — malware and typosquat scanning, not just
+        a digest match.
 
   - title: Bound the spend, the destinations, and the time to stop
     mitigations: [AML.M0036, cap-agent-egress-control, cap-agent-tracing, cap-agent-kill-switch]
@@ -99,7 +104,9 @@ items:
       - >-
         Rate and budget ceilings sit at the gateway, sized for a loop that retries in seconds;
         the write path reaches named destinations only, because unbounded egress is the
-        exfiltration channel a steered agent looks for. The decision audit records action,
+        exfiltration channel a steered agent looks for — and that includes the in-process
+        handlers and the sandbox, whose calls never cross the gateway and are bounded by the
+        workload's network policy instead. The decision audit records action,
         reasoning, inputs and identity where the agent can append and cannot amend — the basis
         for reversal and dispute. And the stop must halt the agent and revoke its identity
         without a deploy, because the loop acts faster than a pipeline ships.

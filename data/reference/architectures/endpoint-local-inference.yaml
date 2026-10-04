@@ -8,12 +8,14 @@ summary:
   - >
     An open-weights model served on the user's own machine, listening on a local port so other
     local processes can call it. Chosen to keep data off a vendor's infrastructure, which succeeds
-    — and moves every control the vendor was providing onto the device.
+    once the runtime's own cloud features are switched off — and moves every control the vendor
+    was providing onto the device.
 
 description:
   - >
-    The reason people run this is sound: prompts and documents never leave the machine, there is
-    no per-token cost, and it works offline. The architectural consequence is that the guardrails,
+    The reason people run this is sound: prompts and documents can stay on the machine — provided
+    the runtime's own cloud models and web search are switched off — there is no per-token cost,
+    and it works offline. The architectural consequence is that the guardrails,
     rate limiting, abuse monitoring and content policy a hosted API applies on the way in and out
     are simply absent, and nothing replaces them by default. Guardrails here are a control the
     device owner deploys on the request path, not a component the runtime ships — in the common
@@ -137,8 +139,9 @@ blocks:
     note: >
       In the target state this is an authenticated policy wrapper: the raw runtime endpoint —
       unauthenticated by design in the flagship runtimes, whose vendors point at VPNs and
-      reverse proxies rather than shipping auth — sits private behind it, and caller identity,
-      per-caller ceilings and origin policy are enforced here. Which interface it binds and
+      reverse proxies rather than shipping auth — sits behind it on a socket or port only the
+      wrapper's service account can reach, and caller identity, per-caller ceilings and origin
+      policy are enforced here. Which interface it binds and
       who may call it are this architecture's admission decisions, and exposure scans keep
       finding the installs that made neither.
     items:
@@ -214,8 +217,8 @@ blocks:
     row: 4
     mitigations: [ D3-FA, AML.M0023 ]
     note: >
-      The whole governance story of this archetype, and the reason the scan sits in front of
-      the fetch rather than after it: the runtime is the thing doing the fetching, and for
+      The whole governance story of this archetype, and the reason the scan sits after the
+      fetch and before the load: the artifact lands in quarantine unopened, because for
       several formats opening the file is the execution event.
 
   - id: govObservability
@@ -263,10 +266,11 @@ edges:
     bidir: true
     label: completion request
     note: >
-      Local software calls the local API the way it would a hosted one — usually assuming a safety
-      floor that is not there. The same unauthenticated request, on the same port, whether it came
-      from the editor the runtime was installed for or from a web page driving the browser.
-      Locality is standing in for authorization.
+      Local software calls the local API the way it would a hosted one. In the target state each
+      application presents its own token and the wrapper refuses disallowed origins and unknown
+      Host names; in the common install it is the same unauthenticated request on the same port,
+      whether it came from the editor the runtime was installed for or from a web page driving
+      the browser — locality standing in for authorization.
   - from: api
     to: runtime
     label: request / completion
@@ -329,14 +333,16 @@ pins:
     - risk: riskModelEvasion
       at: runtime
       note: >
-        With no provider-side safety layer, whatever refusal behaviour the weights carry is the
-        whole of the defence, and it is removable by fine-tune.
+        With no provider-side safety layer, a crafted prompt the weights misread — an
+        adversarial suffix, an obfuscated or encoded request — meets only the refusal behaviour
+        the weights carry, unless the wrapper's classification catches it first.
 
     - risk: riskExcessiveDataHandlingDuringInference
       at: runtime
       note: >
         A model-name suffix or a search flag routes the prompt to the vendor's cloud through the
-        same local API, and nothing on the drawing governs the runtime process's own egress.
+        same local API — unless the runtime's local-only switch is on and the device firewall
+        denies the runtime process outbound traffic, as the target state requires.
     - risk: riskModelDeploymentTampering
       at: weights->runtime
       note: >
@@ -354,11 +360,14 @@ pins:
       note: >-
         Format and content inspection at quarantine, before promotion — a scan that runs after the runtime
         opens the file has documented an incident, not prevented one.
-    - mitigation: D3-MFA
+    - mitigation: D3-AA
       at: api
       note: >-
-        Caller identity at the wrapper rather than locality as authorization — a browser tab is local too.
-        Absorbed by the API wrapper per the recorded deviation.
+        Caller identity at the wrapper rather than locality as authorization: each local application presents
+        its own token, because a browser tab is local too. The raw runtime is reachable only by the wrapper's
+        service account, and the wrapper's bind (loopback only) and Host and Origin validation are set by
+        device management rather than hoped from defaults. Absorbed by the API wrapper per the recorded
+        deviation.
     - mitigation: cap-output-guardrails
       at: api->runtime
       note: >-
@@ -367,30 +376,29 @@ pins:
     - mitigation: AML.M0004
       at: api
       note: Bound what any single caller can consume, because the callers share one unmetered port.
-    - mitigation: D3-MAN
-      at: api
-      note: >-
-        The bind, the origin policy and the auth flag treated as security settings with a reviewed baseline —
-        loopback only, Host and Origin validated, authenticated transport on — enforced by device management
-        rather than hoped from defaults.
     - mitigation: AML.M0005
       at: weights
-      note: Restrictive file permissions and integrity checks on the artifacts, so a swap is detectable.
+      note: >-
+        Restrictive permissions on the model store: only the promotion step writes approved files and only the
+        runtime's service account reads them, so no other process running as the user can swap a model or copy
+        the organisation's adapters.
     - mitigation: D3-ORA
       at: govObservability
       note: >-
-        The system of record for whether local inference may run at all, from which sources, on which machines
-        — the policy the device-level settings enforce.
+        The risk assessment behind the posture: whether local inference may run at all, on which runtimes, from
+        which sources and on which machines — weighed against the exposure, supply-chain and data-handling risks
+        on this page, recorded, and re-run when a runtime CVE or a new source changes them.
     - mitigation: D3-PA
       at: runtime
       note: >-
-        Endpoint telemetry over the serving process: vulnerable-version discovery, port and process
-        visibility, and the containment that isolates a machine serving something it should not.
+        Endpoint telemetry over the serving process: what it executes, which ports it listens on and which
+        interfaces it binds.
     - mitigation: AML.M0023
       at: govSupplyChain
       note: >-
-        Which models, at which versions, from which sources, on which machines — the precondition for every
-        response.
+        A bill of materials for every promoted artifact — model file and digest, format, publisher and source,
+        version, base model and adapters — the record every response to a bad release or a parser CVE starts
+        from.
     - mitigation: cap-shadow-ai-discovery
       at: runtime
       note: Find the runtimes nobody registered, derived from the machine rather than self-reported.
@@ -410,22 +418,23 @@ walkthrough:
       note: The person asks their editor, agent or chat window for something that needs a model.
     - follow: localApps->api
       label: completion request
-      note: A local tool calls the OpenAI-compatible endpoint as if it were hosted.
+      note: A local tool calls the OpenAI-compatible endpoint as if it were hosted, presenting its own token.
     - follow: api->runtime
       label: to runtime
       note: >
-        The request crosses whatever classification the owner deployed — often none — and the
-        model serves the completion with whatever behaviour the weights carry.
+        The wrapper has authenticated the caller, checked its origin and its quota, and
+        classified the prompt; the runtime serves the completion with whatever behaviour the
+        weights carry.
     - follow: runtime->api
-      label: raw completion
-      note: The completion leaves the runtime — raw model output, nothing between it and the caller.
+      label: completion to the wrapper
+      note: The raw completion returns to the wrapper, where output classification runs before anything reaches the caller.
     - follow: api->localApps
-      label: response, no floor
-      note: The response returns with no provider floor under it.
+      label: screened response
+      note: The response returns to the authenticated caller, screened — the floor a hosted API would have supplied, deployed here.
 
     - follow: localApps->developer
       label: answer
-      note: The answer reaches the person with nothing between the raw completion and them but the application that asked.
+      note: The answer reaches the person through the application that asked.
 
 scenarios:
   - title: A poisoned checkpoint
@@ -447,14 +456,16 @@ scenarios:
       - follow: localApps->api
         label: cross-origin POST
         note: >
-          A visited web page fires a simple-request POST at the local endpoint through the
-          browser; the server acts on it whether or not the origin is allowed, and a rebinding
-          page reads the answer too. The caller is local software; nobody chose to serve it.
+          A failure scenario: the wrapper is missing or misconfigured — no caller token, a
+          permissive origin policy, no Host check against DNS rebinding — and the port is
+          reachable. A visited web page fires a simple-request POST at the local endpoint
+          through the browser, the unauthenticated server acts on it, and a rebinding page reads
+          the answer too. The caller is local software; nobody chose to serve it.
       - follow: api->runtime
         label: local inference for a page
         note: >
-          Nothing distinguishes this caller from the intended ones. The page now drives local
-          inference — for free, and invisibly to the user.
+          With those checks off, nothing distinguishes this caller from the intended ones. The
+          page now drives local inference — for free, and invisibly to the user.
 
 deviations:
   - subject: Quarantine, scanning and rate limiting are absorbed rather than drawn
@@ -470,8 +481,10 @@ deviations:
       insecure-component risk note names, but a single outbound updater hop that a standing
       edge would overstate. The same process's cloud-model offload and web-search calls ride
       the same undrawn egress. An organisation that mirrors the runtime binary through its
-      package registry closes the first at the mirror; the device firewall closes the rest
-      in the target state.
+      package registry closes the first at the mirror. In the target state the runtime's
+      local-only switch disables its cloud models and web search and the device firewall
+      denies the runtime process any outbound destination, so local means local; model
+      acquisition stays the separate fetch to quarantine.
   - subject: Guardrails are a control on the request path, not a block
     reason: >
       Input and output classification is something the device owner deploys, not a component of

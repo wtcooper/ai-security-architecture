@@ -89,83 +89,16 @@ tools:
           Claude reads whole threads and can respond without being tagged; guests' and other members' messages
           become instructions and transcript content. Auto-mode allow rules pre-approve actions per scope, and
           there is no per-thread deny list.
-      - risk: riskSensitiveDataDisclosure
+      - risk: riskExcessiveDataHandlingDuringInference
         note: >-
           Public-channel memory is shared workspace-wide and survives a channel going private; Claude can
           keyword-search public channels without being added to them; artifacts are readable by anyone with
           access to the source channel.
-      - risk: riskCrossTenantCredentialPropagation
-        note: >-
-          On an Enterprise Grid paired to several Claude organisations, one organisation's access settings
-          govern the whole grid; bundle isolation comes from where a bundle is attached, not from the bundle
-          itself.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Routines and channel watches run unattended with the channel's credentials and are created by any
           channel member; the Audit page's Scheduled work tab is the inventory.
     controls:
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          Slack's own sign-in authenticates each invoker; "Restrict to roles with Claude Tag access" (Enterprise)
-          or "Restrict to your organization" (Team) at claude.ai/admin-settings/claude-tag > Where Claude Tag
-          works > Member access limits use to Slack users linked to an account in the Claude organisation, whose
-          sign-in goes through "Require SSO for Claude"; "Restrict to your verified domains" limits who can link
-        steps:
-          - title: Require a linked organisation account to use Claude
-            body:
-              - >-
-                At claude.ai/admin-settings/claude-tag under Where Claude Tag works click Manage next to Member
-                access and turn on Restrict to roles with Claude Tag access (Enterprise) or Restrict to your
-                organization (Team); it covers channels and DMs.
-            url: https://claude.com/docs/claude-tag/admins/restrict-access
-          - title: Send the Claude sign-in through the IdP
-            body:
-              - >-
-                Turn on Require SSO for Claude in the Authentication section at
-                claude.ai/admin-settings/organization and enforce MFA on the Claude app in your IdP.
-            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
-          - title: Limit account linking to your domains (Enterprise)
-            body:
-              - >-
-                In the same Manage dialog turn on Restrict to your verified domains so Slack users whose profile
-                email is off your verified domains cannot link a Claude account.
-            url: https://claude.com/docs/claude-tag/admins/restrict-access
-        note: >-
-          Partial on the MFA rule: by default anyone in a paired Slack workspace can use Claude even without a
-          Claude account, so the only authentication is Slack's, whose SSO and two-factor settings are the Slack
-          administrator's. With the restriction toggle on, the linked Claude account met the IdP's MFA when it
-          signed in, but each later request is authenticated by the member's Slack session, not by a fresh
-          Claude sign-in. Channel sessions then act under the agent identity whoever asked; members removed from
-          the Claude organisation lose access within minutes. On an Enterprise Grid paired to several Claude
-          organisations, one organisation's access settings govern the whole grid.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityIga
-          reviewRequired: false
-          original:
-            - capability: capabilityIga
-              coverage: native
-              mechanism: >-
-                Owner-only setup and configuration; "Restrict to roles with Claude Tag access" (Enterprise
-                custom roles with the Claude Tag in Slack capability) or "Restrict to your organization"
-                (Team); "Restrict to your verified domains" for account linking; channel managers via custom
-                roles
-              steps:
-                - title: Restrict who can invoke Claude
-                  body:
-                    - At claude.ai/admin-settings/claude-tag > Where Claude Tag works > Member access, turn on
-                      "Restrict to roles with Claude Tag access" (Enterprise) or "Restrict to your
-                      organization" (Team); the toggle covers channels and DMs.
-                  url: https://claude.com/docs/claude-tag/admins/restrict-access
-                - title: Gate by custom role
-                  body:
-                    - Create groups at claude.ai/admin-settings/groups and a custom role at
-                      claude.ai/admin-settings/roles with the "Claude Tag in Slack" capability; built-in roles
-                      always grant it.
-                  url: https://claude.com/docs/claude-tag/admins/restrict-access
-              verified: 2026-09-10
       - mitigation: D3-APA
         coverage: native
         mechanism: >-
@@ -195,6 +128,13 @@ tools:
                 At claude.ai/admin-settings/github link or install the Claude GitHub App; a Needs permissions
                 status sends an owner to github.com to approve the request.
             url: https://claude.com/docs/claude-tag/admins/configure-github
+          - title: Limit account linking to your domains (Enterprise)
+            body:
+              - >-
+                In the Member access dialog at claude.ai/admin-settings/claude-tag turn on Restrict to your
+                verified domains so Slack users whose profile email is off your verified domains cannot link a
+                Claude account, and turn on Require SSO for Claude at claude.ai/admin-settings/organization.
+            url: https://claude.com/docs/claude-tag/admins/restrict-access
         note: >-
           Native on Enterprise by the rule: the console administers role- and group-based authorisation over
           who may use Claude Tag and who may configure which channel, enforced by Anthropic (a restricted member's
@@ -202,7 +142,9 @@ tools:
           target-tenant approval for its Slack and GitHub apps. Team plans have the organisation-wide toggle only,
           which is partial. Built-in roles always grant the capability, and any grant wins across roles. The Slack
           and GitHub approvals are those tenants' controls, and Enterprise Grid pairings to several Claude
-          organisations are governed by one organisation's settings.
+          organisations are governed by one organisation's settings. Without the restriction toggle anyone in a
+          paired Slack workspace can use Claude even without a Claude account, authenticated only by Slack; with
+          it, each request is still authenticated by the member's Slack session.
         verified: "2026-09-25"
         migration:
           from:
@@ -551,67 +493,6 @@ tools:
                 There is no per-action approval prompt in a channel; the classifier and deny-by-egress are the
                 gates.
               verified: 2026-09-10
-      - mitigation: D3-AA
-        coverage: native
-        mechanism: >-
-          Channel sessions act as an Owner-provisioned agent identity: the Claude app in Slack, the Claude
-          GitHub App, a dedicated service account per connected tool, or a federated identity whose
-          Anthropic-signed 10-minute token names the organisation and agent; the Access bundles page lists every
-          connection with its status and last use, with Rotate secret and Delete; the Activity Feed records
-          ccr_agent_* and Agent Proxy credential events
-        steps:
-          - title: Provision a dedicated identity per tool
-            body:
-              - >-
-                Create a service account or a claude@ mailbox in each tool with the narrowest role, add its
-                credential to an Access bundle, and never connect a person's login.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-          - title: Prefer federated identity tokens
-            body:
-              - >-
-                Under Federated cloud access connect a gateway, AWS role, Google Cloud identity or authorisation
-                server that checks the token's subject against your organisation's Subject prefix.
-            url: https://claude.com/docs/claude-tag/admins/federated-access/overview
-          - title: Review and prune the inventory
-            body:
-              - >-
-                Expand each bundle on the Access bundles page, check Active, Not active, Approval needed and
-                Used or Never used, and delete connections nobody uses.
-            url: https://claude.com/docs/claude-tag/admins/add-connections
-        note: >-
-          Native by the rule: each connector grant is a non-human identity with its own lifecycle, provisioned by
-          an Owner in the organisation's own tools, inventoried with last use in the tenant's console and revoked
-          there; federated connections expire by design (tokens last 10 minutes, a removed gateway stops at once
-          and a removed cloud role or authorisation server within about a minute; exchanged AWS credentials live
-          up to an hour). Compare a vendor-owned agent identity, rated partial. Static credentials such as API
-          keys have no expiry in the product, so their lifetime is the issuing tool's; channel managers can add,
-          rotate and delete credentials in their channel's bundle. DMs and personal connectors act as the member
-          and end when the member leaves the organisation or selects Disconnect in the app's Home tab.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityNhiManagement
-          reviewRequired: false
-          original:
-            - capability: capabilityNhiManagement
-              coverage: native
-              mechanism: >-
-                Claude acts under provisioned service accounts (Slack app, Claude GitHub App, one dedicated
-                account per connected tool) so actions are attributable in each tool's audit log; DMs use the
-                member's identity
-              steps:
-                - title: Provision a dedicated identity per tool
-                  body:
-                    - Create a mailbox such as claude@yourcompany, add it to each tool with the narrowest
-                      role, and paste that account's API key on the setup page; rotate or delete from the
-                      bundle's Credentials tab.
-                  url: https://claude.com/docs/claude-tag/admins/setup-overview
-              note: >-
-                Compared with Copilot cloud: the service accounts are provisioned in the organisation's own
-                tools, so the organisation owns their scopes and can revoke them there — which is why this is
-                native while a vendor-owned app identity is partial. Actions in connected tools carry the
-                service account's authority; DMs carry the member's.
-              verified: 2026-09-10
       - mitigation: D3-DI
         coverage: partial
         mechanism: >-
@@ -860,7 +741,9 @@ tools:
           credentials, but they carry no owner field, and routines, which run unattended with the channel's
           credentials, are created by any channel member without approval and appear only after creation.
           Personal connectors used in DMs and channel tasks are the member's and are not listed; a Claude app
-          installed in another Slack workspace is found in Slack's app management.
+          installed in another Slack workspace is found in Slack's app management. Channel sessions act as an
+          Owner-provisioned identity per tool — a dedicated service account, the Claude Slack or GitHub app, or a
+          federated identity — so the register lists non-human principals rather than people's logins.
         verified: "2026-09-25"
         migration:
           from:

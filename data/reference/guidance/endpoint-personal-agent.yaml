@@ -17,8 +17,8 @@ overview:
     and making the unsanctioned way visibly out of policy.
   - >-
     The archetype's exposure is concentrated in two places: the runtime (what the agent can
-    execute, read and reach) and the control plane (the gateway that admits instructions and
-    holds the operator's authority). Both have hardened configurations that exist today; the
+    execute, read and reach) and the control plane (the daemon's local control API, which
+    admits instructions and holds the operator's authority). Both have hardened configurations that exist today; the
     controls below are about making those configurations the required path.
 
 items:
@@ -55,8 +55,9 @@ items:
     tools: [toolOpenclaw]
     body:
       - >-
-        The gateway is the operator's authority; treat its exposure as the incident. Require
-        loopback-only binding with token authentication, and set a version floor at the
+        The daemon's local control API — the product calls it its gateway; it is not the AI
+        gateway on the drawing — is the operator's authority; treat its exposure as the
+        incident. Require loopback-only binding with token authentication, and set a version floor at the
         release that closed the control-plane token-exfiltration CVE — the exposed-instance
         scans that followed it are the case for making this a hard requirement rather than a
         recommendation.
@@ -79,8 +80,8 @@ items:
         etiquette.
       - >-
         Decide the quarantine path before the first incident: who can stop a personal agent,
-        what stopping means (revoking the gateway token, killing the daemon, expiring its
-        channel pairings), and how a compromised agent's standing access is enumerated
+        what stopping means (revoking the daemon's control token and its AI-gateway
+        credentials, killing the daemon and its heartbeat, expiring its channel pairings), and how a compromised agent's standing access is enumerated
         afterwards.
 
   - title: Govern what the agent loads and what it remembers
@@ -91,7 +92,8 @@ items:
         registries, and they keep long-lived memory. Both are injection surfaces: a fetched
         skill is unreviewed code admitted into the operator's session, and ambient-message
         instructions can write durable state into memory that outlives the message. Require
-        vetting before third-party skills or tool servers are admitted, and treat memory as
+        vetting before third-party skills or tool servers are admitted, keep memory under
+        snapshots so a poisoned entry can be traced and rolled back, and treat memory as
         contaminated-by-default when the agent ingests content from senders who are not the
         operator.
 
@@ -99,21 +101,24 @@ items:
     mitigations: [ D3-MAN, D3-APA ]
     body:
       - >-
-        The bridges bind to loopback, the dashboard transport is authenticated with origin
-        checks — localhost is not a boundary against the owner's own browser, which is the
-        documented token-exfiltration path — and the remote dashboard rides the relay's
-        authenticated tunnel, never a port on the device. Pairing records bind each channel to
-        a directory identity, re-checked rather than trusted from enrolment day.
+        The control socket authenticates every message from its client, with origin checks at
+        the handshake — localhost is not a boundary against the owner's own browser, which is
+        the documented token-exfiltration path — and the bridges bind to loopback; the remote
+        dashboard rides an identity-bound tunnel, never a port on the device. Pairing records
+        bind each channel to a directory identity under one centrally administered policy,
+        which every adapter enforces per message rather than trusting enrolment day.
 
   - title: Broker delegation, bound the spend, and keep the record
     mitigations: [ D3-CTS, AML.M0036, AML.M0024 ]
     body:
       - >-
-        Remote calls carry on-behalf-of tokens narrowed to the task, exchanged at the
-        crossing — never the owner's standing grants riding a loop nobody watches. Spend and
+        Remote calls carry on-behalf-of tokens exchanged at the crossing, each with one tool
+        server as its audience and the task as its scope — never the owner's standing grants
+        riding a loop nobody watches. Spend and
         iteration ceilings are sized for a heartbeat that wakes the loop with no human to
-        notice a runaway. And one correlated trace per message — prompt, tool calls, effects —
-        is written where the agent cannot amend it, because the thread is not the audit trail.
+        notice a runaway. And one correlated trace per brokered call — prompt, tool calls,
+        effects — is written where the agent cannot amend it and joined to the relay's and the
+        endpoint's records, because the thread is not the audit trail.
 
   - title: Police the model boundary, and find what nobody registered
     mitigations: [cap-output-guardrails, cap-shadow-ai-discovery, D3-PA, cap-agent-tool-registry]

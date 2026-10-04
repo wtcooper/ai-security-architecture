@@ -477,9 +477,12 @@ tools:
       - mitigation: D3-EI
         coverage: partial
         mechanism: >-
-          OS sandbox for agent terminal commands (macOS Seatbelt; Linux Landlock + seccomp) shaped by
-          sandbox.json with a team-admin layer local files cannot weaken; Agent Sandbox Mode enforceable
-          org-wide on Enterprise; per-server sandbox for stdio MCP servers
+          OS sandbox for agent terminal commands (macOS Seatbelt; Linux Landlock + seccomp) shaped by sandbox.json
+          with a team-admin layer local files cannot weaken; Agent Sandbox Mode enforceable org-wide on Enterprise;
+          per-server sandbox for stdio MCP servers. Credential paths: read-denies on the agent's own file tools
+          (beforeReadFile hooks, .cursorignore / Enterprise Cursor Ignore Configuration, CLI Read() denies) and the
+          sandbox's filesystem limits on sandboxed commands; nothing holds credentials outside the agent or scopes
+          them per destination
         steps:
           - title: Enforce sandboxing org-wide
             body:
@@ -503,22 +506,52 @@ tools:
                 cursor-sandbox-apparmor package for the CLI and remote environments; otherwise Cursor falls back
                 to approval prompts.
             url: https://cursor.com/docs/agent/security/run-modes
+          - title: Deny the agent's file tools on credential paths
+            body:
+              - Distribute a beforeReadFile hook with failClosed true that denies reads of cloud CLI config,
+                kubeconfig, SSH keys, .env and key files by file_path.
+            url: https://cursor.com/docs/hooks
+          - title: Hide them from context
+            body:
+              - List the same patterns in .cursorignore or the global ignore list in user settings; Agent, Tab,
+                Inline Edit and @-mentions honour them, terminal and MCP tools do not.
+            url: https://cursor.com/docs/reference/ignore-file
+          - title: Keep the sandbox's read set narrow
+            body:
+              - Do not add credential directories to additionalReadonlyPaths or additionalReadwritePaths in any
+                sandbox policy, knowing ~/.ssh and SSL certificate paths are always readable.
+            url: https://cursor.com/docs/reference/sandbox
+          - title: Deny them in the CLI
+            body:
+              - Add Read() denies such as Read(.env*) and absolute credential paths to permissions.deny in
+                ~/.cursor/cli-config.json.
+            url: https://cursor.com/docs/cli/reference/permissions
         note: >-
           Partial by the rule applied to every vendor: the sandbox is OS-enforced and Enterprise can enforce it
           org-wide, but it does not fail closed. Commands that need full system access run outside it after an
-          approval, and in Auto-review the classifier rather than a person can clear them; no documented admin
-          setting forbids that escalation, and Linux without Landlock v3 falls back to approval prompts. The
-          Run Modes page documents macOS and Linux only (Cursor's engineering blog says Windows runs the Linux
-          sandbox inside WSL2). Inside: sandboxed terminal commands, workspace write, protected paths
-          (.git/hooks, .git/config, .cursor/*.json, .claude/*.json, .vscode, .cursorignore) write-denied,
-          ~/.ssh always readable. Outside: MCP tool calls (the deployment page says they do not run in the
-          local sandbox; a stdio server process gets only its per-server mode, and No sandbox removes it), the
-          extension host, the Cursor process itself, and CLI runs with --sandbox disabled or agent sandbox
-          disable. Six sandbox-escape advisories Feb–Jul 2026 were fixed by 3.1.2; keep the fleet current.
+          approval, and in Auto-review the classifier rather than a person can clear them; no documented admin setting
+          forbids that escalation, and Linux without Landlock v3 falls back to approval prompts. The Run Modes page
+          documents macOS and Linux only (Cursor's engineering blog says Windows runs the Linux sandbox inside WSL2).
+          Inside: sandboxed terminal commands, workspace write, protected paths (.git/hooks, .git/config,
+          .cursor/*.json, .claude/*.json, .vscode, .cursorignore) write-denied, ~/.ssh always readable. Outside: MCP
+          tool calls (the deployment page says they do not run in the local sandbox; a stdio server process gets only
+          its per-server mode, and No sandbox removes it), the extension host, the Cursor process itself, and CLI runs
+          with --sandbox disabled or agent sandbox disable. Six sandbox-escape advisories Feb–Jul 2026 were fixed by
+          3.1.2; keep the fleet current. Credential paths: the read-denies bind Cursor's own Read tool, not the shell
+          (the docs say terminal and MCP tools cannot honour .cursorignore), and nothing holds credentials outside the
+          agent or injects them only for named destinations. The sandbox's additionalReadonlyPaths field implies reads
+          outside the workspace are otherwise limited, but the docs do not list which home-directory paths sandboxed
+          commands can read, and ~/.ssh is always readable. What the agent still inherits: ~/.ssh inside the sandbox,
+          and for commands run outside it, MCP servers and the extension host the developer's ssh-agent, git
+          credential helper, cloud CLI configuration and browser profiles; the docs say "there is no security boundary
+          between agents and your user account". Remote Control keeps credentials on the machine by design. The
+          stronger fix is a named product class: a dev container or VM (Cursor's own advice is Cloud Agents in a
+          separate VM) or a secretless broker such as 1Password Environments wired through a hook.
         verified: "2026-09-25"
         migration:
           from:
             - capabilityAgentSandboxing
+            - capabilityCredentialIsolation
           reviewRequired: false
           original:
             - capability: capabilityAgentSandboxing
@@ -553,51 +586,6 @@ tools:
                 servers set to No sandbox, Browser Controls and the IDE process itself; Run Everything
                 bypasses it entirely unless the team policy removes that mode.
               verified: 2026-09-10
-      - mitigation: D3-CTS
-        coverage: partial
-        mechanism: >-
-          Read-denies on the agent's own file tools (beforeReadFile hooks, .cursorignore / Enterprise Cursor
-          Ignore Configuration, CLI Read() denies) and the sandbox's filesystem limits on sandboxed commands;
-          nothing holds credentials outside the agent or scopes them per destination
-        steps:
-          - title: Deny the agent's file tools on credential paths
-            body:
-              - Distribute a beforeReadFile hook with failClosed true that denies reads of cloud CLI config,
-                kubeconfig, SSH keys, .env and key files by file_path.
-            url: https://cursor.com/docs/hooks
-          - title: Hide them from context
-            body:
-              - List the same patterns in .cursorignore or the global ignore list in user settings; Agent, Tab,
-                Inline Edit and @-mentions honour them, terminal and MCP tools do not.
-            url: https://cursor.com/docs/reference/ignore-file
-          - title: Keep the sandbox's read set narrow
-            body:
-              - Do not add credential directories to additionalReadonlyPaths or additionalReadwritePaths in any
-                sandbox policy, knowing ~/.ssh and SSL certificate paths are always readable.
-            url: https://cursor.com/docs/reference/sandbox
-          - title: Deny them in the CLI
-            body:
-              - Add Read() denies such as Read(.env*) and absolute credential paths to permissions.deny in
-                ~/.cursor/cli-config.json.
-            url: https://cursor.com/docs/cli/reference/permissions
-        note: >-
-          Partial by the rule applied to every vendor: the read-denies bind Cursor's own Read tool, not the
-          shell (the docs say terminal and MCP tools cannot honour .cursorignore), and nothing holds
-          credentials outside the agent or injects them only for named destinations. The sandbox's
-          additionalReadonlyPaths field implies reads outside the workspace are otherwise limited, but the docs
-          do not list which home-directory paths sandboxed commands can read, and ~/.ssh is always readable.
-          What the agent still inherits: ~/.ssh inside the sandbox, and for commands run outside it, MCP
-          servers and the extension host the developer's ssh-agent, git credential helper, cloud CLI
-          configuration and browser profiles; the docs say "there is no security boundary between agents and
-          your user account". Remote Control keeps credentials on the machine by design. The stronger fix is a
-          named product class: a dev container or VM (Cursor's own advice is Cloud Agents in a separate VM) or
-          a secretless broker such as 1Password Environments wired through a hook.
-        verified: "2026-09-25"
-        migration:
-          from:
-            - capabilityCredentialIsolation
-          reviewRequired: false
-          original:
             - capability: capabilityCredentialIsolation
               coverage: none
               mechanism: >-

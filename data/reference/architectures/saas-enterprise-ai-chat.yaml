@@ -85,9 +85,9 @@ zones:
   - id: zoneExternal
     owner: external
     note: >
-      The same vendor's unmanaged offering, one login away and carrying none of the enterprise
-      terms — and the services each employee connects on their own authority, some of them our
-      own tenants under our agreement, the rest with none.
+      Services other providers operate: the same vendor's unmanaged offering, one login away
+      and carrying none of the enterprise terms, and the third-party services each employee
+      connects on their own authority.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -127,8 +127,8 @@ blocks:
         icon: doc
         note: >
           The parallel path and often the larger one: a document pasted or attached crosses
-          the boundary with no connector, no grant and no record beyond what inspection
-          catches.
+          the boundary with no connector and no grant. Endpoint or browser DLP is the control
+          at submission; the vendor's audit export may record it afterwards.
 
   - id: vendor
     kind: provider
@@ -255,10 +255,10 @@ blocks:
     row: 3
     pack: toolServicesRemote
     note: >
-      Services each employee connects on their own authority — two classes wearing one
-      block. Our own SaaS tenants sit under our agreement and their admin-consent policy is
-      our lever; unassessed third parties have neither. The union of the individual consents
-      is the organisation's real data path, and nobody chose it.
+      Third-party SaaS each employee connects on their own authority, operated by other
+      providers. Where the target is a tenant we hold — workspace, code hosting, CRM — its
+      admin-consent policy is our lever; elsewhere we have none. The union of the individual
+      consents is the organisation's real data path, and nobody chose it.
 
   - id: govIdentity
     kind: governance
@@ -267,7 +267,7 @@ blocks:
     zone: zoneGovernance
     col: 0
     row: 4
-    mitigations: [ D3-MFA, D3-APA ]
+    mitigations: [ D3-APA ]
     note: >
       Which tenant an employee lands in, enforced by domain capture and forced account
       consolidation. The single most consequential control here — and one that governs only
@@ -284,9 +284,7 @@ blocks:
     mitigations: [ D3-CH ]
     note: >
       The tunnel host's runtime credential — the load-bearing secret on the one path we run —
-      and customer-managed keys over the vendor's storage, with their cost recorded: on at
-      least one vendor, enabling them disables conversation search, project retrieval and
-      audit log export.
+      issued, rotated and revoked from here.
 
   - id: govPolicy
     kind: governance
@@ -340,7 +338,7 @@ edges:
     note: >
       Straight out to the vendor, bypassing our cloud entirely, which is why our band sits to
       the right of theirs rather than between. Allowlisted because an assessment cleared it,
-      governed by the agreement once it arrives rather than inspected on the way.
+      and governed by the agreement once it arrives.
   - from: browser
     to: consumerTenant
     path: external
@@ -390,12 +388,11 @@ edges:
 
 pins:
   risks:
-    - risk: riskSensitiveDataDisclosure
+    - risk: riskExcessiveDataHandlingDuringInference
       at: browser->vendor
       note: >
-        More context leaves than the task needed, and it leaves under whatever terms the tenant
-        was configured with. Once the session is pinned TLS to an approved destination, nothing
-        we run can see how much.
+        More context leaves than the task needed — whole documents pasted for one answer — and
+        it is retained and processed under whatever terms the tenant was configured with.
     - risk: riskShadowAndUnknownAgents
       at: browser->consumerTenant
       note: >
@@ -416,11 +413,6 @@ pins:
         A document planted in any connected source returns into the conversation as model
         input — the zero-click exfiltration class published against exactly this archetype,
         arriving on a path nothing of ours can inspect.
-    - risk: riskStaleAgentIdentityBinding
-      at: vendor->extTools
-      note: >
-        A connector grant that outlives the person who authorised it keeps flowing — the
-        dormant integration credentials the joined breach lineage turned on.
     - risk: riskToolSourceProvenance
       at: vendor->extTools
       note: >
@@ -442,11 +434,6 @@ pins:
         The assistant indexes connected mailboxes and drives; a planted document persists in
         their retrieval and fires on later queries — the persistence half of the injection
         story, distinct from the transient return.
-    - risk: riskCrossTenantCredentialPropagation
-      at: tunnel
-      note: >
-        The runtime credential on the tunnel host is the load-bearing secret on this path — a
-        stolen token here propagates our authority through infrastructure nobody watches.
 
     - risk: riskPromptInjection
       at: vendor
@@ -455,22 +442,17 @@ pins:
         and read as instruction — the transient half of the injection story, on a path nothing
         of ours touches.
   mitigations:
-    - mitigation: D3-MFA
-      at: browser->vendor
-      note: >-
-        Verified domains, forced consolidation and SSO so an employee lands in the corporate tenant by
-        construction. The control that decides which of the two paths on this page a session takes.
     - mitigation: D3-OTF
       at: browser
       note: >-
-        The one path we can inspect, and only in the sense of admitting the destination: the corporate tenant
-        reachable, personal tenants blocked with the workspace-restriction header where the vendor supports
-        one. A pinned session to an approved vendor is not readable, and pretending otherwise would assert a
-        control nobody operates.
+        The corporate tenant reachable and personal tenants blocked. A hostname allowlist cannot tell the two
+        apart at the same host: that needs the vendor's tenant-restriction header, injected by a proxy that
+        inspects TLS for the client in use, or a managed browser that enforces the tenant.
     - mitigation: cap-sensitive-data-redaction
       at: employee->browser
       note: >-
-        Classification before the material leaves the person, because after this hop it is somebody else's.
+        Endpoint or managed-browser DLP inspects the paste or upload at submission and blocks or masks a hit
+        before it is sent, because after this hop it is somebody else's.
     - mitigation: cap-ai-vendor-assessment
       at: vendor
       note: >-
@@ -481,18 +463,9 @@ pins:
       at: aiGateway->internalTools
       note: >-
         Write-capable connectors gated on approval, bound to the exact action — surfaced through the
-        protocol's elicitation into the vendor's client, enforced by our gateway refusing the write without
-        it. A chat that can read is a disclosure question; a chat that can write is an action question.
-    - mitigation: cap-input-guardrails
-      at: vendor
-      note: >-
-        The vendor's own returned-content defenses, configured as zone 2 — theirs to implement, ours to switch
-        on and verify in assessment, because nothing on the connector path is ours to inspect.
-    - mitigation: D3-AA
-      at: vendor
-      note: >-
-        Each connector grant is a non-human identity with its own lifecycle — inventoried and expired through
-        the tenant's connector administration, or it outlives the person who authorised it.
+        protocol's elicitation, relayed through the vendor's client (support per client is unverified), and
+        enforced by our gateway refusing the write without it. A chat that can read is a disclosure question;
+        a chat that can write is an action question.
     - mitigation: D3-DI
       at: orgData
       note: >-
@@ -603,14 +576,14 @@ scenarios:
       - follow: employee->browser
         label: contract pasted
         note: >
-          The material leaves the person — and this hop is the only one where classification
-          can still read it. Whatever the browser-side inspection misses is gone.
+          The material leaves the person — and this hop is where endpoint or browser DLP can
+          still block or mask it. Whatever that inspection misses is sent.
       - follow: browser->vendor
-        label: pinned session, unreadable
+        label: into the corporate tenant
         note: >
-          Out to the corporate tenant on a pinned session the network can admit but not read:
-          the paste produces no record anywhere we can query, which is the mechanism — not a
-          breach, a blind spot the agreement papers over.
+          Out to the corporate tenant. Whether the network edge can read it depends on the client
+          and on TLS inspection; afterwards, the vendor's audit export is the record, with
+          coverage and retention set by plan.
   - title: The same person, signed in personally
     steps:
       - follow: employee->browser
@@ -678,15 +651,13 @@ deviations:
       (audience-bound tokens, per-user OAuth, rate limiting on a public listener) carried by
       the gateway pins. Re-check per vendor on a clock; the asymmetry is a product decision,
       not an architecture.
-  - subject: No customer MCP gateway is drawn on the connector path
+  - subject: No customer component sits on the native connector path
     reason: >
       The dominant connector class is user-authorised SaaS-to-SaaS — the vendor's broker
-      calling another vendor's API on a grant the user issued — and no customer component can
-      sit on that path. The organisation's MCP gateway governs the other class, custom
-      connectors into org systems: that admission is carried here by the tenant connector
-      allowlist and the grant pins rather than a block. Where custom connectors into org
-      systems dominate a deployment, read the API/SDK managed runtime's drawing, which draws
-      the gateway explicitly.
+      calling another provider's API on a grant the user issued — and no customer component
+      can sit on that path; the target tenant's admin consent and our connector inventory are
+      the levers. Custom connectors into our own systems take the drawn tunnel, AI gateway and
+      Tool services chain.
 
 sources:
   - title: "OpenAI — Secure MCP Tunnel: customer-run tunnel-client for ChatGPT, Codex and the Responses API"

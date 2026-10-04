@@ -143,15 +143,18 @@ tools:
           run of server-side-fixed Critical command-injection disclosures (CVE-2025-32711, the EchoLeak zero-click
           chain; CVE-2026-26129, -26164, -42824); the XPIA classifiers that answer them are vendor-run and may not
           cover every scenario.
-      - risk: riskSensitiveDataDisclosure
+      - risk: riskExcessiveDataHandlingDuringInference
         note: >-
-          Copilot returns whatever the user's permissions already reach, so oversharing in SharePoint, OneDrive
-          and Teams becomes an answer. Web-grounding queries leave the DPA and the EU Data Boundary.
+          Copilot grounds on whatever the user's permissions already reach, so a prompt can pull far more of
+          SharePoint, OneDrive and Teams than the question needed; web-grounding queries leave the DPA and the EU
+          Data Boundary.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Agent Builder agents can be shared with named colleagues without admin approval; a personal Copilot
           subscription can act on work documents unless Multiple account access to Copilot for work documents is
-          disabled; consumer Copilot with a personal Microsoft account is outside the tenant.
+          disabled; consumer Copilot with a personal Microsoft account is outside the tenant. Shared agents become
+          ownerless when their creator is deleted, and per-user connector OAuth grants have no admin-visible
+          expiry.
       - risk: riskRogueActions
         note: >-
           Federated connectors gain write, update and delete tools from early October 2026 and Cowork automated
@@ -160,41 +163,7 @@ tools:
         note: >-
           Federated connectors are Microsoft-published or partner-submitted and Microsoft-approved, and the tools
           an MCP server exposes can change after approval; Microsoft-published connectors are on by default.
-      - risk: riskStaleAgentIdentityBinding
-        note: >-
-          Shared agents become ownerless when their creator is deleted, and per-user connector OAuth grants have
-          no admin-visible expiry.
     controls:
-      - mitigation: D3-MFA
-        coverage: native
-        mechanism: >-
-          Microsoft Entra Conditional Access policy (Users: All users; Target resources: All resources; Grant:
-          Require authentication strength > Multifactor authentication), which Copilot honours like every
-          Microsoft 365 service; security defaults turn MFA on for tenants without Entra ID P1
-        steps:
-          - title: Require MFA for every user
-            body:
-              - >-
-                In the Microsoft Entra admin center go to Entra ID > Conditional Access > Policies > New policy:
-                include All users (exclude break-glass accounts), target All resources, grant Require
-                authentication strength > Multifactor authentication, then move the policy from Report-only to On.
-            url: https://learn.microsoft.com/en-us/entra/identity/conditional-access/policy-all-users-mfa-strength
-          - title: Confirm Copilot inherits the policy
-            body:
-              - >-
-                Copilot honours Conditional Access and the tenant's MFA settings, including Intune device
-                compliance conditions; on tenants without Entra ID P1, keep security defaults on.
-            url: https://learn.microsoft.com/en-us/microsoft-365/copilot/microsoft-365-copilot-architecture
-        note: >-
-          Native on the MFA rule applied to every vendor: the product's own identity layer (the tenant's Entra
-          ID) can require a second factor for every member, and Copilot sits behind it. Outside it: break-glass
-          accounts excluded by design; service principals and apps using application permissions such as
-          AiEnterpriseInteraction.Read.All (Conditional Access for workload identities is separate); sessions
-          that live on refresh tokens between sign-ins (sign-in frequency bounds them); agent identities, which
-          do not use human MFA; and consumer Copilot on a personal Microsoft account, which the tenant policy
-          never sees (tenant restrictions v2 is that lever). Conditional Access needs Entra ID P1, which
-          Microsoft 365 E3 and E5 include.
-        verified: "2026-09-25"
       - mitigation: D3-OTF
         coverage: partial
         mechanism: >-
@@ -369,42 +338,6 @@ tools:
           discovery). SharePoint files, Teams chats, Copilot connector content and federated MCP results have no
           admin-tunable screening.
         verified: "2026-09-25"
-      - mitigation: D3-AA
-        coverage: partial
-        mechanism: >-
-          Copilot acts as the signed-in user; agents with a Microsoft Entra agent identity (Agent 365 instances,
-          Copilot Studio agents with automatic identity creation, preview) are listed in the Entra admin center with a
-          sponsor, get expiring access-package assignments and transfer sponsorship to the manager when the
-          sponsor leaves; the Agent Registry flags ownerless agents; connector grants are per-user OAuth consents
-          that users disconnect in Settings > Sources
-        steps:
-          - title: Inventory agent identities
-            body:
-              - >-
-                Review agent identities and their sponsors in the Microsoft Entra admin center; agent sign-ins
-                are logged as AI agents.
-            url: https://learn.microsoft.com/en-us/entra/agent-id/what-are-agent-identities
-          - title: Give agent access an expiry
-            body:
-              - >-
-                Assign agent identities access through access packages with an end date (policy "For users,
-                service principals, and agent identities" > All agents) so access lapses unless the sponsor
-                extends it.
-            url: https://learn.microsoft.com/en-us/entra/id-governance/agent-id-governance-overview
-          - title: Resolve ownerless agents
-            body:
-              - >-
-                At Agents > Settings > Agent management rules run Reassign ownerless agents created with Agent
-                Builder to manager, or Block ownerless agents without usage.
-            url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/agent-settings?view=o365-worldwide
-        note: >-
-          Partial on the connector-grant rule: agent identities are inventoried with sponsor lifecycle and
-          expiring access (Agent 365 licence with Entra ID P1 or Microsoft 365 E3), but the grants that carry
-          Copilot into third-party systems, federated and self-serve connectors, are per-user OAuth consents the
-          administrator cannot list or expire per grant; the only admin lever is disabling a connector for
-          everyone. Disabling the Entra user stops Copilot use; revocation of the third-party tokens Microsoft
-          holds for that user is not documented. Agents without an agent identity run under the user.
-        verified: "2026-09-25"
       - mitigation: D3-DI
         coverage: native
         mechanism: >-
@@ -535,6 +468,14 @@ tools:
                 Restrict Agents > Settings > Allowed agent types and Sharing (Specific users), and Block any agent
                 in the registry that should not run.
             url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/agent-settings?view=o365-worldwide
+          - title: Give agent access an expiry
+            body:
+              - >-
+                Assign agent identities access through access packages with an end date (policy "For users,
+                service principals, and agent identities" > All agents) so access lapses unless the sponsor
+                extends it, and run Reassign ownerless agents created with Agent Builder to manager at Agents >
+                Settings > Agent management rules.
+            url: https://learn.microsoft.com/en-us/entra/id-governance/agent-id-governance-overview
         note: >-
           Native on the registry rule: an authoritative record of every agent and connector in the tenant with
           owner and approval state, and admin enforcement (approval queue, allowed types, block). Gaps to watch:
@@ -542,7 +483,9 @@ tools:
           users keeps direct sharing, and the control covers only Agent Builder agents); they appear in the
           registry and can be blocked, but are not pre-approved. Microsoft-published federated connectors are on
           until Allowed agent types is changed. Registry risk signals need E7 or Agent 365; Cowork plugins are
-          managed on their own page.
+          managed on their own page. The grants that carry Copilot into third-party systems are per-user OAuth
+          consents the administrator cannot list or expire per grant; disabling a connector for everyone is the
+          only admin lever.
         verified: "2026-09-25"
       - mitigation: AML.M0024
         coverage: native
