@@ -967,6 +967,15 @@ function checkArchetypes(
         if (e.outbound && ends[0] === "external")
           fail(`${where}: ${e.from}->${e.to} is outbound from the external band — an outbound edge starts on our side`);
       }
+
+      // No reference design connects to a tool surface outside any agreement. A tool or service
+      // the enterprise connects to holds an agreement and sits in the vendor band; the external
+      // band keeps what we only read or pull: the open web, public source control, and public
+      // package, model and training sources.
+      for (const b of arch.blocks) {
+        if (bandOf(b.id) === "external" && (b.title === "Tool services" || b.title === "Downstream services"))
+          fail(`${where}: ${b.title} (${b.id}) sits in the external band — a service we connect to holds an agreement and belongs in the vendor band; the external band keeps the open web, public source control and public sources`);
+      }
     }
     // A risk nobody walks past is the defect worth catching. The blunt version of this rule
     // demanded that every drawn edge belong to some named route, which is what `flows:` existed

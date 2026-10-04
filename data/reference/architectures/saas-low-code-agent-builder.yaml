@@ -74,8 +74,9 @@ zones:
     note: >
       The platform, and effectively the whole system. Authoring, the orchestrator, the model
       calls, the sandbox and the connector runtime all execute here — there is no
-      customer-hosted agent runtime on offer. Drawn before our own band because a maker reaches
-      the platform first and the platform reaches back into us second.
+      customer-hosted agent runtime on offer — beside the SaaS we hold under agreement that its
+      connectors reach. Drawn before our own band because a maker reaches the platform first
+      and the platform reaches back into us second.
   - id: zoneCloud
     owner: cloud
     note: >
@@ -83,7 +84,7 @@ zones:
       gateway a published agent is admitted at, and our own tool servers and data behind it.
   - id: zoneExternal
     owner: external
-    note: The model the vendor calls on our behalf, and the third-party services their connectors reach.
+    note: The model the vendor calls on our behalf, and the open web its search reads.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -142,11 +143,25 @@ blocks:
           Hundreds of prebuilt connectors, executing in their cloud on credentials that are the
           crux of this page.
 
+  - id: vendorTools
+    kind: service
+    title: Tool services
+    cosaiComponent: componentTools
+    zone: zoneVendor
+    col: 2
+    row: 2
+    pack: toolServicesRemote
+    note: >
+      The SaaS we hold under agreement — our own Microsoft 365, Google Workspace or Salesforce
+      tenant — reached through the platform's connectors on whichever credential the maker
+      chose. A service outside any agreement is not connected: connector policy and the target
+      tenant's admin consent decide what counts as approved.
+
   - id: aiGateway
     kind: service
     title: AI gateway
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 1
     note: >
       Where a published agent is admitted into our systems, and the policy point on that path. It carries no inference here — the vendor calls its own model — so this is purely
@@ -163,7 +178,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 2
     pack: toolServicesRemote
     note: >
@@ -176,7 +191,7 @@ blocks:
     title: Tunnel connector
     cosaiComponent: componentAgentUserQuery
     zone: zoneCloud
-    col: 2
+    col: 3
     row: 1
     note: >
       The platform's on-premises data gateway, or its private-network equivalent: vendor-supplied
@@ -198,7 +213,7 @@ blocks:
     title: Enterprise data
     cosaiComponent: componentDataSources
     zone: zoneCloud
-    col: 3
+    col: 4
     row: 3
     pack: enterpriseData
     note: >
@@ -210,7 +225,7 @@ blocks:
     title: Model provider
     cosaiComponent: componentModelServing
     zone: zoneExternal
-    col: 4
+    col: 5
     row: 0
     pack: modelProvider
     note: >
@@ -218,15 +233,25 @@ blocks:
       provider rather than ours. We neither broker the call nor hold the key, which is why our
       own gateway carries no inference on this page.
 
-  - id: extTools
-    kind: service
-    title: Tool services
-    cosaiComponent: componentTools
+  - id: openWeb
+    kind: external
+    title: Open web
+    cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 4
+    col: 5
     row: 4
-    pack: toolServicesRemote
-    note: Third-party services the platform's connectors reach, on whichever credential the maker chose.
+    note: >
+      Search results and fetched pages, reached only through the platform's web search. Every
+      page is authored by someone else, and its text enters the agent's turn as model input.
+    items:
+      - id: webSearch
+        label: Web search
+        icon: search
+        note: The search tool's results — ranked by somebody else, and read as context.
+      - id: pages
+        label: Arbitrary pages
+        icon: globe
+        note: Visible and hidden text alike, served by whoever owns the page.
 
   - id: govIdentity
     kind: governance
@@ -249,7 +274,7 @@ blocks:
     title: Secrets & key management
     icon: key
     zone: zoneGovernance
-    col: 2
+    col: 3
     row: 5
     mitigations: [ D3-CH ]
     note: >
@@ -261,7 +286,7 @@ blocks:
     title: Policy & authorization
     icon: scale
     zone: zoneGovernance
-    col: 3
+    col: 4
     row: 5
     mitigations: [ AML.M0028, cap-data-access-governance ]
     note: >
@@ -274,7 +299,7 @@ blocks:
     title: Supply-chain assurance
     icon: db
     zone: zoneGovernance
-    col: 4
+    col: 5
     row: 5
     mitigations: [ cap-agent-tool-registry, cap-staged-rollout-gate, cap-ai-vendor-assessment ]
     note: >
@@ -287,7 +312,7 @@ blocks:
     title: Observability & response
     icon: eye
     zone: zoneGovernance
-    col: 5
+    col: 6
     row: 5
     mitigations: [ cap-agent-tracing, cap-agent-kill-switch ]
     note: >
@@ -349,14 +374,23 @@ edges:
       The tunnel hands to our gateway rather than to a server or the data. A vendor-hosted
       agent reaching our data crosses here or it does not reach it at all.
   - from: platform
-    to: extTools
+    to: vendorTools
     path: external
     bidir: true
     route: vh
-    label: third-party connectors
+    label: approved SaaS connectors
     note: >
-      Connectors reaching services outside both environments. This path never touches our
+      Connectors reaching the SaaS we hold under agreement. This path never touches our
       network, so the connector policy in their tenant is the only control on it.
+  - from: platform
+    to: openWeb
+    path: external
+    outbound: true
+    route: vh
+    label: web search
+    note: >
+      The platform's web search, opened from their side. What returns rides back on it —
+      content nobody vouches for, entering the agent's turn.
 
 pins:
   risks:
@@ -384,10 +418,15 @@ pins:
         to that folder can write to the index, and every agent grounded on it reads what they
         left — the poisoning is of the retrieval source, not of the model.
     - risk: riskPromptInjection
-      at: platform->extTools
+      at: platform->vendorTools
       note: >
         Grounding content and connector results re-enter the agent as instruction. A document
         dropped in a shared folder is an instruction channel on this platform.
+    - risk: riskPromptInjection
+      at: platform->openWeb
+      note: >
+        Search results and fetched pages return into the agent's turn — content somebody else
+        authored, read with the same standing as the maker's instructions.
     - risk: riskSensitiveDataDisclosure
       at: dataGateway
       note: >
@@ -446,7 +485,7 @@ pins:
         it is ours to inspect, and re-assessed on a clock: connector defaults, publication channels and
         authentication toggles drift as the vendor ships.
     - mitigation: AML.M0028
-      at: platform->extTools
+      at: platform->vendorTools
       note: >-
         Connector policy authored centrally in the tenant: every connector classified, a confidential source
         never paired with a path that sends data out, unclassified connectors blocked — enforced at
@@ -509,6 +548,12 @@ walkthrough:
     - follow: provider->platform
       label: completion
       note: The completion comes back into their runtime as the turn's plan.
+    - follow: platform->openWeb
+      label: web search
+      note: Where the plan calls for it, the platform searches the web from their side.
+    - follow: openWeb->platform
+      label: search results
+      note: Results and fetched pages enter the turn, written by whoever owns the page.
     - follow: platform->dataGateway
       label: down the tunnel
       note: Their cloud reaches back into us through the connection our tunnel holds open.
@@ -587,7 +632,7 @@ scenarios:
       - follow: dataGateway->platform
         label: model input
         note: And enters their runtime as model input.
-      - follow: platform->extTools
+      - follow: platform->vendorTools
         label: acts with maker's authority
         note: >
           The agent acts on it with the maker's authority — on connectors that never touch
@@ -597,12 +642,12 @@ scenarios:
       - follow: builder->platform
         label: agent outlives maker
         note: An agent outlives the person who built it, still holding their connector grants.
-      - follow: platform->extTools
-        label: third-party grants keep flowing
+      - follow: platform->vendorTools
+        label: SaaS grants keep flowing
         note: >
-          The maker's third-party grants keep flowing — these never touch our network, so only
-          the platform's connection-ownership transfer or revocation can cut them. That
-          inventory operation is the primary response.
+          The maker's connector grants to our SaaS tenants keep flowing — these never touch our
+          network, so only the platform's connection-ownership transfer or revocation can cut
+          them. That inventory operation is the primary response.
       - follow: platform->dataGateway
         label: grants into us
         note: The departed maker's grants into our systems still arrive through the tunnel.

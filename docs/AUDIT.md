@@ -735,8 +735,7 @@ Highlights below are Google's original mapping, not ours.
 | Single agent workflow | Tool services | service | `componentTools` |
 | Single agent workflow | Model provider | provider | `componentModelServing` |
 | Single agent workflow | Enterprise data | external | `componentDataSources` |
-| Single agent workflow | Tool services | service | `componentTools` |
-| Single agent workflow | Downstream services | external | `componentDataSources` |
+| Single agent workflow | Open web | external | `componentDataSources` |
 | Single agent workflow | Public package sources | external | (none) |
 | Single agent workflow | Identity services | governance | (none) |
 | Single agent workflow | Secrets & key management | governance | (none) |
@@ -771,8 +770,7 @@ Highlights below are Google's original mapping, not ours.
 | Multi-agent workflow | Model provider | provider | `componentModelServing` |
 | Multi-agent workflow | Tool services | service | `componentTools` |
 | Multi-agent workflow | Enterprise data | external | `componentDataSources` |
-| Multi-agent workflow | Tool services | service | `componentTools` |
-| Multi-agent workflow | Downstream services | external | `componentDataSources` |
+| Multi-agent workflow | Open web | external | `componentDataSources` |
 | Multi-agent workflow | Public package sources | external | (none) |
 | Multi-agent workflow | Identity services | governance | (none) |
 | Multi-agent workflow | Secrets & key management | governance | (none) |
@@ -789,8 +787,7 @@ Highlights below are Google's original mapping, not ours.
 | Chat agent with tools | Model provider | provider | `componentModelServing` |
 | Chat agent with tools | Tool services | service | `componentTools` |
 | Chat agent with tools | Enterprise data | external | `componentDataSources` |
-| Chat agent with tools | Tool services | service | `componentTools` |
-| Chat agent with tools | Downstream services | external | `componentDataSources` |
+| Chat agent with tools | Open web | external | `componentDataSources` |
 | Chat agent with tools | Public package sources | external | (none) |
 | Chat agent with tools | Identity services | governance | (none) |
 | Chat agent with tools | Secrets & key management | governance | (none) |
@@ -805,7 +802,6 @@ Highlights below are Google's original mapping, not ours.
 | Remote MCP server you publish | MCP service | service | `componentApplication` |
 | Remote MCP server you publish | Tool definitions | service | `componentTools` |
 | Remote MCP server you publish | Enterprise data | external | `componentDataSources` |
-| Remote MCP server you publish | Downstream services | external | `componentDataSources` |
 | Remote MCP server you publish | Identity services | governance | (none) |
 | Remote MCP server you publish | Secrets & key management | governance | (none) |
 | Remote MCP server you publish | Policy & authorization | governance | (none) |
@@ -861,9 +857,9 @@ Highlights below are Google's original mapping, not ours.
 | First-party coding & desktop agents | Tool services | service | `componentTools` |
 | First-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
 | First-party coding & desktop agents | Private pkg registry | external | `componentDataSources` |
-| First-party coding & desktop agents | Tool services | service | `componentTools` |
 | First-party coding & desktop agents | Model provider | provider | `componentModelServing` |
-| First-party coding & desktop agents | Downstream services | external | `componentDataSources` |
+| First-party coding & desktop agents | Source control | service | `componentDataSources` |
+| First-party coding & desktop agents | Open web | external | `componentDataSources` |
 | First-party coding & desktop agents | Public package sources | external | (none) |
 | First-party coding & desktop agents | Identity services | governance | (none) |
 | First-party coding & desktop agents | Secrets & key management | governance | (none) |
@@ -879,9 +875,9 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
 | Third-party coding & desktop agents | Vendor service | provider | (none) |
 | Third-party coding & desktop agents | Tunnel connector | service | `componentAgentUserQuery` |
-| Third-party coding & desktop agents | Tool services | service | `componentTools` |
 | Third-party coding & desktop agents | Model provider | provider | `componentModelServing` |
-| Third-party coding & desktop agents | Downstream services | external | `componentDataSources` |
+| Third-party coding & desktop agents | Open web | external | `componentDataSources` |
+| Third-party coding & desktop agents | Source control | service | `componentDataSources` |
 | Third-party coding & desktop agents | Public package sources | external | (none) |
 | Third-party coding & desktop agents | Identity services | governance | (none) |
 | Third-party coding & desktop agents | Secrets & key management | governance | (none) |
@@ -916,16 +912,16 @@ Highlights below are Google's original mapping, not ours.
 | Personal autonomous agent | Enterprise data | external | `componentDataSources` |
 | Personal autonomous agent | Messaging platform | external | `componentDataSources` |
 | Personal autonomous agent | Model provider | provider | `componentModelServing` |
-| Personal autonomous agent | Tool services | service | `componentTools` |
-| Personal autonomous agent | Downstream services | external | `componentDataSources` |
+| Personal autonomous agent | Open web | external | `componentDataSources` |
 | Enterprise AI chat with connectors | Browser | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | Vendor chat service | provider | `componentApplication` |
+| Enterprise AI chat with connectors | Tool services | service | `componentTools` |
 | Enterprise AI chat with connectors | Tunnel connector | service | `componentAgentUserQuery` |
 | Enterprise AI chat with connectors | AI gateway | service | (none) |
 | Enterprise AI chat with connectors | Tool services | service | `componentTools` |
 | Enterprise AI chat with connectors | Enterprise data | external | `componentDataSources` |
 | Enterprise AI chat with connectors | Consumer product | external | `componentApplication` |
-| Enterprise AI chat with connectors | Tool services | service | `componentTools` |
+| Enterprise AI chat with connectors | Open web | external | `componentDataSources` |
 | Enterprise AI chat with connectors | Identity services | governance | (none) |
 | Enterprise AI chat with connectors | Secrets & key management | governance | (none) |
 | Enterprise AI chat with connectors | Policy & authorization | governance | (none) |
@@ -942,7 +938,8 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | Tool services | service | `componentTools` |
 | Coding & desktop session managed agent runtime | Enterprise data | external | `componentDataSources` |
 | Coding & desktop session managed agent runtime | Public package sources | external | (none) |
-| Coding & desktop session managed agent runtime | Downstream services | external | `componentDataSources` |
+| Coding & desktop session managed agent runtime | Open web | external | `componentDataSources` |
+| Coding & desktop session managed agent runtime | Source control | service | `componentDataSources` |
 | Coding & desktop session managed agent runtime | Tool services | service | `componentTools` |
 | Coding & desktop session managed agent runtime | Identity services | governance | (none) |
 | Coding & desktop session managed agent runtime | Secrets & key management | governance | (none) |
@@ -950,12 +947,13 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | Supply-chain assurance | governance | (none) |
 | Coding & desktop session managed agent runtime | Observability & response | governance | (none) |
 | UI/low-code managed agent runtime | Agent builder platform | provider | `componentApplication` |
+| UI/low-code managed agent runtime | Tool services | service | `componentTools` |
 | UI/low-code managed agent runtime | AI gateway | service | (none) |
 | UI/low-code managed agent runtime | Tool services | service | `componentTools` |
 | UI/low-code managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | UI/low-code managed agent runtime | Enterprise data | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Model provider | provider | `componentModelServing` |
-| UI/low-code managed agent runtime | Tool services | service | `componentTools` |
+| UI/low-code managed agent runtime | Open web | external | `componentDataSources` |
 | UI/low-code managed agent runtime | Identity services | governance | (none) |
 | UI/low-code managed agent runtime | Secrets & key management | governance | (none) |
 | UI/low-code managed agent runtime | Policy & authorization | governance | (none) |
@@ -970,17 +968,21 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
 | API/SDK managed agent runtime | Enterprise data | external | `componentDataSources` |
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
-| API/SDK managed agent runtime | Downstream services | external | `componentDataSources` |
 | API/SDK managed agent runtime | Identity services | governance | (none) |
 | API/SDK managed agent runtime | Secrets & key management | governance | (none) |
 | API/SDK managed agent runtime | Policy & authorization | governance | (none) |
 | API/SDK managed agent runtime | Supply-chain assurance | governance | (none) |
 | API/SDK managed agent runtime | Observability & response | governance | (none) |
+| Persistent managed agents | Remote device | service | `componentAgentUserQuery` |
 | Persistent managed agents | Vendor service | provider | `componentApplication` |
 | Persistent managed agents | Managed runtime | provider | `componentReasoningCore` |
 | Persistent managed agents | Native tools | provider | `componentTools` |
 | Persistent managed agents | Tool services | service | `componentTools` |
-| Persistent managed agents | Downstream services | external | `componentDataSources` |
+| Persistent managed agents | Tunnel connector | service | `componentAgentUserQuery` |
+| Persistent managed agents | AI gateway | service | (none) |
+| Persistent managed agents | Tool services | service | `componentTools` |
+| Persistent managed agents | Enterprise data | external | `componentDataSources` |
+| Persistent managed agents | Open web | external | `componentDataSources` |
 | Persistent managed agents | Identity services | governance | (none) |
 | Persistent managed agents | Secrets & key management | governance | (none) |
 | Persistent managed agents | Policy & authorization | governance | (none) |
@@ -1017,7 +1019,7 @@ Highlights below are Google's original mapping, not ours.
 | Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
 | API/SDK managed agent runtime | hybrid | draft | 9 | Execution Isolation, Agent Egress Control |
-| Persistent managed agents | use | draft | 7 | _none_ |
+| Persistent managed agents | use | draft | 8 | _none_ |
 
 ### 5b. AI tooling registry
 
@@ -1039,7 +1041,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Cline | cline | First-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/13 | Multi-factor Authentication |  |
+| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Multi-factor Authentication, Input Screening Guardrails |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
@@ -1060,7 +1062,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
-| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/13 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
+| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | opencode | opencode | First-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |

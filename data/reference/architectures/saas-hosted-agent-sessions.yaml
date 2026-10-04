@@ -21,7 +21,7 @@ description:
     For coding tasks, repository content, issue text and review comments enter as untrusted
     material. Authorize triggers separately from the content they carry. Limit branch and
     repository permissions, require human review before merge, and gate privileged workflows.
-    A merge gate does not authorize earlier network requests or external tool effects.
+    A merge gate does not authorize earlier network requests or connector effects.
   - >
     For general desktop tasks, the completion gate is the permitted application or file action,
     not a pull request. Apply the supported tool, destination and approval controls before that
@@ -48,7 +48,9 @@ distinguishedBy:
     binds callers to sessions, and handles custom tools and approval events.
   - >
     Against persistent managed agents: this is a bounded task service. Durable artifacts alone
-    do not make it a continuing teammate with ongoing cross-task authority.
+    do not make it a continuing teammate with ongoing cross-task authority. That drawing lists
+    the differences: retained state, channel and scheduled triggers, standing grants, approval
+    at dispatch, and a stop that must also clear what the agent kept.
 
 exemplars:
   - name: OpenAI Codex cloud
@@ -112,13 +114,15 @@ zones:
       Two blocks for the agent vendor, because a session is admitted by one and executed by
       the other: the control plane — settings, environments, the relay and the scheduler — and
       the runtime that holds the loop, the model and the sandbox. Beside them, the rented code
-      host, a separate agreement unless the agent vendor also hosts the repository. What they
-      operate inside each is assured, not drawn.
+      host, a separate agreement unless the agent vendor also hosts the repository, and the
+      vendor's connectors to the SaaS we approved. What they operate inside each is assured,
+      not drawn.
   - id: zoneExternal
     owner: external
     note: >
-      What the sandbox reaches under its egress policy: package registries in the setup phase,
-      the web in the agent phase, and the third-party tool services our gateway brokers.
+      What the session reaches out to under its egress policy: package registries in the setup
+      phase, public repositories and the open web in the agent phase. Every edge here is opened
+      from the vendor's side; nothing in this band connects back in.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -336,8 +340,9 @@ blocks:
         label: Connector broker
         icon: plug
         note: >
-          The vendor's MCP and connector service, calling our gateway and third-party servers
-          from the vendor's side, outside the sandbox's egress policy, on tokens the vendor holds.
+          The vendor's MCP and connector service, calling our gateway down the tunnel and the
+          approved SaaS connectors on the vendor's side, outside the sandbox's egress policy, on
+          tokens the vendor holds.
       - id: auditExport
         label: Session audit export
         icon: eye
@@ -417,7 +422,7 @@ blocks:
     kind: external
     title: Public package sources
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 0
     note: >
       What the setup phase installs from under the environment's allowlist. The reviewed setup
@@ -433,29 +438,57 @@ blocks:
         icon: gear
         note: Skills and plugins the repository or the environment names, pinned to reviewed versions.
 
-  - id: downstream
+  - id: openWeb
     kind: external
-    title: Downstream services
+    title: Open web
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 5
-    row: 3
-    pack: downstreamPublic
+    row: 2
     note: >
-      The web the sandbox fetches from in the agent phase, where the environment allows it,
-      and where the actions our gateway brokers land.
+      What the sandbox searches and fetches in the agent phase, where the environment allows
+      it. Every page is someone else's text, and it enters a loop nobody is watching as
+      instruction.
+    items:
+      - id: webSearch
+        label: Web search
+        icon: search
+        note: Results ranked by someone else, read as context.
+      - id: pages
+        label: Arbitrary pages
+        icon: globe
+        note: Visible and hidden text alike, served by whoever owns the page.
 
-  - id: extTools
+  - id: publicRepos
+    kind: service
+    title: Source control
+    cosaiComponent: componentDataSources
+    zone: zoneExternal
+    col: 5
+    row: 0
+    note: >
+      Public source control: open repositories a session clones read-only — an upstream
+      dependency, an example, a project to patch. Untrusted like any page: the instruction
+      files and issue text in someone else's repository are someone else's instructions.
+    items:
+      - id: publicRepositories
+        label: Public repositories
+        icon: code
+        note: Cloned read-only, never with the session's write credential.
+
+  - id: vendorTools
     kind: service
     title: Tool services
     cosaiComponent: componentTools
-    zone: zoneExternal
-    col: 5
-    row: 4
+    zone: zoneVendor
+    col: 4
+    row: 3
     pack: toolServicesRemote
     note: >
-      Third-party servers and connectors our gateway brokers outward — the same component as
-      the internal surface, out where nobody we contracted with operates it.
+      The vendor's connectors to the SaaS we approved — ticketing, chat, documents — called by
+      its connector service under our agreement, on tokens the vendor holds, outside both the
+      sandbox's egress policy and our gateway. A service outside any agreement is not
+      connected.
 
   - id: govIdentity
     kind: governance
@@ -592,10 +625,19 @@ edges:
       or does not. Require that the initiator's approval does not count and that the agent
       cannot approve, mark ready or merge; verify that each product enforces both.
   - from: vendorService
+    to: vendorTools
+    path: external
+    bidir: true
+    label: approved connectors
+    note: >
+      The connector service calling the SaaS we approved from the vendor's side, on tokens the
+      vendor holds. Its allowlist is a control-plane setting the session cannot widen; what
+      these connectors return reaches the loop without crossing anything we run.
+  - from: vendorService
     to: tunnel
     path: external
     bidir: true
-    route: vh
+    route: hv
     label: outbound-only tunnel
     note: >
       The reach-back path, and the crossing this drawing exists to govern: compute we do not
@@ -627,23 +669,6 @@ edges:
     bidir: true
     label: scoped reads & writes
     note: The records and systems the session was adopted to reach beyond the repository.
-  - from: aiGateway
-    to: extTools
-    path: external
-    outbound: true
-    route: vh
-    label: brokered external calls
-    note: >
-      Third-party servers and connectors reached through the crossing that admitted them —
-      egress and returned-content classification enforced at our boundary. The connectors the
-      vendor calls from its own side never meet this list; that path is recorded as a
-      deviation.
-  - from: extTools
-    to: downstream
-    path: external
-    bidir: true
-    label: action / returned content
-    note: Actions landing outside, and the content they return.
   - from: nativeTools
     to: sources
     path: external
@@ -657,15 +682,25 @@ edges:
       its result for the next user of the environment. The registry is also a write-capable
       host every allowlist permits, which is what makes it an exfiltration channel.
   - from: nativeTools
-    to: downstream
+    to: openWeb
     path: external
-    bidir: true
+    outbound: true
     route: hv
     label: web fetch under egress policy
     note: >
       The sandbox's own reach to the web in the agent phase, where the environment allows it —
       closed by default on some products, open by default on others — and the content that
       comes back as instruction.
+  - from: managedRuntime
+    to: publicRepos
+    path: external
+    outbound: true
+    route: hv
+    label: clone public repos
+    note: >
+      A read-only clone of a public repository — through the sandbox's egress or the vendor's
+      git proxy, depending on the product — under the same allowlist. The session's scoped
+      write credential belongs to the rented host alone.
 
 pins:
   risks:
@@ -676,7 +711,7 @@ pins:
         instruction, and most are writable by people with no commit access. The dominant
         ingress of the archetype, and the one every 2026 incident used.
     - risk: riskPromptInjection
-      at: nativeTools->downstream
+      at: nativeTools->openWeb
       note: >
         A fetched page enters a loop nobody is watching. On the products where the agent phase
         has internet by default this is the unclassified ingress the environment policy exists
@@ -941,7 +976,7 @@ scenarios:
         note: >
           Someone with no commit access files an issue whose hidden text is an instruction.
           A session starts on it — or reads it while working on something else.
-      - follow: nativeTools->downstream
+      - follow: nativeTools->openWeb
         label: attacker page fetched
         note: >
           The instruction sends the sandbox to a page the attacker controls, where the second
@@ -1027,7 +1062,8 @@ deviations:
       agent vendor's. A self-hosted repository moves the block to Enterprise cloud with the
       same policy. The endpoint drawings keep the repository as an Enterprise data item because
       there it is a working copy on a disk; here the host itself is the ingress, the egress and
-      the gate.
+      the gate. Public repositories a session only clones are a second Source control block, in
+      the External band.
   - subject: Two vendor blocks for one vendor
     reason: >
       The three-zone rule draws a vendor as one block. This drawing has two for the agent
@@ -1036,15 +1072,6 @@ deviations:
       scheduler and the connector service, all of which we configure; the runtime carries the
       loop, the model and the sandbox, of which we configure only the sandbox's reach. The
       endpoint drawing has the first, the API/SDK drawing the second; this one needs both.
-  - subject: The vendor's own connector path to third parties is recorded, not drawn
-    reason: >
-      The API/SDK sibling draws the runtime's MCP client calling third-party servers from the
-      vendor's side. The same path exists here — the connector service reaches Slack, Linear
-      and the rest without touching our network — and it is recorded on the Connector broker
-      item and pinned as tool-permission scoping on the control plane rather than drawn as a
-      second edge into the external band, so the drawing keeps one brokered external path and
-      matches the endpoint twin these products also appear on. The finding is unchanged:
-      content those connectors return enters the loop unclassified by anything we run.
   - subject: The tunnel is drawn; the public-endpoint reach-back is recorded
     reason: >
       The target state is the API/SDK sibling's: the vendor reaches our gateway through an
@@ -1089,7 +1116,8 @@ deviations:
       draw. Unlike the sibling, edges do leave the nested block here — setup installs and web
       fetch — because the setup phase needs package registries and the agent phase may be
       given the web; the reference requires pinned, verified installs and an
-      administrator-locked allowlist on both.
+      administrator-locked allowlist on both. Public clones leave from the runtime, because
+      depending on the product they take the sandbox's egress or the vendor's git proxy.
 
 sources:
   - title: "Anthropic — Claude Code in the cloud: isolated VMs, git proxy, network access levels and what bypasses them"

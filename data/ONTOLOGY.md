@@ -178,7 +178,11 @@ side opens or a one-way pull of content into a mirror or store. A call we open i
 `outbound: true` from our side: one arrowhead, pointing out, and the reply rides it, so a walk
 may follow it back. It is never `bidir`. An outsider that may connect to us — a tool, a peer
 agent, a relay — holds an agreement, and so sits in the vendor band; the vendor reaches our
-systems only through the AI gateway, over the tunnel. The build fails a two-way edge across
+systems only through the AI gateway, over the tunnel. Nor does a design connect out to a tool
+surface outside any agreement: the external band holds only what our agents read or we pull —
+the Open web, public Source control, and public package, model and training sources — plus
+model providers and the consumer products drawn to be blocked. Tool services and Downstream
+services never sit there. The build fails a two-way edge across
 this boundary, and an outbound edge that starts on the external side. *(Failed as: two-headed
 arrows between the AI gateway and external Tool services on seven drawings, read as public
 tools connecting into our gateway.)*
@@ -271,8 +275,8 @@ use; in the cloud, tool handlers and sandboxed tools). Containment is the call r
 there is no loop-to-tools edge; the edges that are drawn leave Native tools for what the tools
 reach: **Memory & state** (file and retrieval tools are how the loop reads and writes it),
 **Private pkg registry** (the package manager is a shell command), the **AI gateway** (a local
-server's brokered API and MCP calls) and, on the endpoints, **Downstream services** directly
-(a local MCP server holding its own token). Memory stays outside the harness because it
+server's brokered API and MCP calls) and, where the agent searches or fetches, the **Open web**
+directly under the endpoint's egress policy. Memory stays outside the harness because it
 outlives the process. No frame is drawn around the harness to say "this is the application":
 the harness block with its child is the application, and a boundary around one block is
 nesting for its own sake. Boundary frames are for real technical or ownership containers — a
@@ -386,8 +390,8 @@ band already says where a thing is (rule 7).
 ## 5. Layout conventions
 
 Actors in column 0 (or on the user's path); Remote device on the user's path; governance
-plane rightmost; model provider top-right; Downstream services directly beneath Tool
-services on a vertical external edge; Memory & state adjacent to the harness; customer
+plane rightmost; model provider top-right; the external band holds only Open web, public
+Source control and public sources; Memory & state adjacent to the harness; customer
 crossings (egress control and AI gateway) between the workload column and what they govern.
 These are conventions checked in review, not by the build — the build checks collisions.
 

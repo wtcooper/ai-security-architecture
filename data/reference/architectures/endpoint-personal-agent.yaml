@@ -31,8 +31,9 @@ description:
     kernel, filesystem, packages and network — and remote reach is pushed outside the boundary.
     The AI gateway brokers what leaves for a model, an MCP server or an API — credentials
     injected at the crossing so the sandbox itself holds no secrets, and the audit tap — while
-    the sandbox's own network policy makes the gateway and the mirror the only routes out. Remote MCP servers and external APIs sit behind the gateway as their own
-    tool surface, and only they touch downstream services. Two other openings exist: a
+    the sandbox's own network policy makes the gateway, the mirror and the web tools' search and
+    fetch the only routes out. Our own remote MCP servers and APIs sit behind the gateway as the cloud
+    tool surface; nothing outside an agreement is wired in as a tool. Two other openings exist: a
     read-only pull from a private, organisation-maintained package registry, and the owner's
     workspace folders, shared into the sandbox explicitly and nothing else. The boundary is
     also what the approval prompts traded away — shipped sandboxes run the agent approval-free
@@ -97,9 +98,9 @@ zones:
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company: model providers, third-party tool servers and the open web. Whoever
-      else the messaging platform admits is bounded at the bridge's allowlist, not drawn as a
-      caller.
+      Outside the company: model providers, the open web, and the public sources the mirror
+      admits from. Whoever else the messaging platform admits is bounded at the bridge's
+      allowlist, not drawn as a caller.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -257,7 +258,7 @@ blocks:
       shell, the local MCP servers it spawns, skills and computer use — all inside the sandbox in
       the target state, none of it on the host. Remote transports are not here: they live behind
       the enterprise crossing by construction. What these tools reach is drawn — memory, the
-      mounted workspace and the package mirror.
+      mounted workspace, the package mirror and the open web.
     items:
       - id: editTools
         label: File & edit tools
@@ -356,7 +357,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 2
-    row: 5
+    row: 6
     note: >
       The organisation-maintained mirror the sandbox pulls skills and images from — reviewed,
       signed and pinned before anything is installable. The registry moves the review
@@ -372,7 +373,7 @@ blocks:
     title: Public package sources
     zone: zoneExternal
     col: 5
-    row: 5
+    row: 6
     note: >
       Where the mirror gets what it serves: the public package registries and the skill and
       extension hubs it proxies and admits from. Nothing here is ours, which is why admission
@@ -393,7 +394,7 @@ blocks:
     icon: person
     zone: zoneGovernance
     col: 1
-    row: 6
+    row: 7
     mitigations: [ cap-agent-kill-switch, D3-APA ]
     note: >
       The IdP and the non-human identity plane: one workload identity per agent, bound to its
@@ -406,7 +407,7 @@ blocks:
     icon: key
     zone: zoneGovernance
     col: 2
-    row: 6
+    row: 7
     mitigations: [ D3-CH, D3-CTS ]
     note: >
       The vault and the just-in-time credential path — short-lived, scoped tokens issued from
@@ -418,7 +419,7 @@ blocks:
     icon: scale
     zone: zoneGovernance
     col: 3
-    row: 6
+    row: 7
     mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, AML.M0036 ]
     note: >
       The policy engine the crossings consult per call, and the egress and rate decisions it
@@ -430,7 +431,7 @@ blocks:
     icon: db
     zone: zoneGovernance
     col: 4
-    row: 6
+    row: 7
     mitigations: [ cap-mcp-tool-integrity ]
     note: >
       The registry, signing and scanning that decide which agents, tools, servers and images
@@ -442,7 +443,7 @@ blocks:
     icon: eye
     zone: zoneGovernance
     col: 5
-    row: 6
+    row: 7
     mitigations: [ AML.M0024, cap-shadow-ai-discovery ]
     note: >
       Telemetry, the audit trail the workload cannot amend, discovery of what nobody
@@ -521,43 +522,24 @@ blocks:
         icon: model
         note: The completion it returns is unauthenticated content that drives tool calls.
 
-  - id: remoteTools
-    kind: service
-    title: Tool services
-    cosaiComponent: componentTools
-    zone: zoneExternal
-    col: 5
-    row: 3
-    note: >
-      The MCP servers and connectors the gateway's catalogue admits — outside the boundary,
-      reachable only through it.
-    items:
-      - id: mcp
-        label: Remote MCP servers
-        icon: plug
-        note: Admitted by catalogue, never discovered; their descriptions enter context as model input.
-      - id: apis
-        label: APIs & connectors
-        icon: plug
-        note: Service calls made on brokered, owner-scoped credentials.
-
-  - id: downstream
+  - id: openWeb
     kind: external
-    title: Downstream services
+    title: Open web
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 5
-    row: 4
+    row: 5
     note: >
-      Where actions land and where fetched content comes back from — untrusted on the way in,
-      consequential on the way out.
+      What the agent's web tools search and fetch, through the sandbox's egress proxy. Every
+      page is authored by someone else, and on an unattended loop its text is the instruction
+      nobody reviews.
     items:
-      - id: saas
-        label: SaaS
-        icon: mail
-        note: The owner's mail, calendar and service accounts.
-      - id: web
-        label: Web & APIs
+      - id: search
+        label: Web search
+        icon: search
+        note: Results and snippets written by strangers, read straight into context.
+      - id: pages
+        label: Arbitrary pages
         icon: globe
         note: Attacker-writable content that re-enters the loop as context.
 
@@ -645,18 +627,6 @@ edges:
     outbound: true
     note: Inference on a brokered credential, against an allowlisted model, logged at the crossing.
   - from: gateway
-    to: remoteTools
-    path: external
-    outbound: true
-    label: brokered tool calls
-    note: Admission is the catalogue; every call carries an owner-scoped, short-lived credential.
-  - from: remoteTools
-    to: downstream
-    label: action / returned content
-    path: external
-    bidir: true
-    note: Actions land on real accounts; whatever comes back re-enters the loop as context.
-  - from: gateway
     to: internalTools
     path: primary
     bidir: true
@@ -672,6 +642,16 @@ edges:
     note: >
       Our systems of record, reached under the owner's scope rather than a standing service
       account — and logged on our side of the boundary.
+  - from: toolPlane
+    to: openWeb
+    route: vh
+    path: external
+    outbound: true
+    label: web search & fetch
+    note: >
+      The web tools search and fetch from inside the sandbox, out through the host-side proxy's
+      allowlist — no gateway and no broker on the hop. What comes back re-enters the loop as
+      context.
   - from: toolPlane
     to: registry
     route: vh
@@ -713,15 +693,15 @@ pins:
         Memory is prose the next turn treats as instruction; an injection written here survives
         restarts and re-executes on the heartbeat.
     - risk: riskPromptInjection
-      at: remoteTools->downstream
-      note: Fetched content re-enters the loop indistinguishable from the owner's own words.
+      at: toolPlane->openWeb
+      note: Fetched pages and search results re-enter the loop indistinguishable from the owner's own words.
     - risk: riskPromptInjection
       at: internalTools->orgData
       note: >
         Org documents and records are unrelated instruction entering context — many hands
         wrote them, none of them authenticated as the owner.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: gateway->remoteTools
+      at: gateway->internalTools
       note: >
         The agent acts on the owner's accounts with whatever the token exchange granted —
         delegation that does not narrow to the task is the owner's whole reach on a loop
@@ -758,10 +738,10 @@ pins:
       at: registry
       note: Skills are prose plus executable code; the registry moves the review earlier, it does not remove it.
     - risk: riskRogueActions
-      at: remoteTools->downstream
-      note: Unattended triggering, owner-scoped authority and no approval gate compound here.
+      at: internalTools->orgData
+      note: Unattended triggering and owner-scoped authority compound on writes to systems of record.
     - risk: riskToolRegistryTampering
-      at: gateway->remoteTools
+      at: gateway->internalTools
       note: The catalogue decides what the agent can be made to do; whoever edits it programs the agent.
 
     - risk: riskSensitiveDataDisclosure
@@ -792,7 +772,7 @@ pins:
       note: >-
         Proposed actions evaluated per call at the crossing before they leave — this action, this scope, now —
         rather than a session-time grant the loop argues with itself about. Unattended turns are tagged at
-        ingress and bound to a read-only or draft class on every outbound leg, internal and remote alike.
+        ingress and bound to a read-only or draft class on every brokered leg.
     - mitigation: D3-MAN
       at: harness
       note: >-
@@ -819,7 +799,7 @@ pins:
         Per-tool grants on the native tools instead of the daemon's full authority — enforced where the tools
         run, inside the harness.
     - mitigation: D3-CTS
-      at: gateway->remoteTools
+      at: gateway->internalTools
       note: >-
         On-behalf-of exchange at the crossing: each remote call carries a token whose audience is that one tool
         server and whose scope is the task — never the owner's standing grants, never a token passed through —
@@ -838,11 +818,6 @@ pins:
       note: >-
         Provenance, signing and version pinning on the supply path — an update is a decision, and drift
         between what was reviewed and what installs is an alert.
-    - mitigation: AML.M0029
-      at: gateway->remoteTools
-      note: >-
-        The approval gate fires at the crossing, before the call leaves anything we operate — because no human
-        saw the plan, and past this hop nobody can pause it.
     - mitigation: AML.M0029
       at: internalTools->orgData
       note: >-
@@ -881,8 +856,9 @@ pins:
       at: toolPlane
       note: >-
         The microVM's network policy: the only routes out of the boundary are the AI gateway, the package
-        mirror and the relay the bridges dial. Shell commands, fetches and browser traffic are bounded here —
-        not at the gateway, which brokers model, MCP and API calls and sees nothing else.
+        mirror, the relay the bridges dial, and web search and fetch on the proxy's allowlist. Shell
+        commands, fetches and browser traffic are bounded here — not at the gateway, which brokers model,
+        MCP and API calls and sees nothing else.
     - mitigation: D3-FA
       at: sources->registry
       note: >-
@@ -958,28 +934,15 @@ walkthrough:
     - follow: gateway->harness
       label: result into loop
       note: The result returns to the loop, which decides the next call — the gateway does not.
-    - follow: harness->gateway
-      label: next tool call
-      note: The loop's next call leaves on the same crossing.
-    - follow: gateway->remoteTools
-      label: tool call on owner's accounts
-      note: A tool call on the owner's own accounts, on a grant we scoped rather than one they pasted.
-    - follow: remoteTools->downstream
-      label: effect lands
-      note: And the effect lands — on the same pipe any message the platform admits would reach, which is why the allowlist at the bridge is a pinned control.
-
-    - follow: downstream->remoteTools
-      label: returned content
+    - follow: toolPlane->openWeb
+      label: web search & fetch
       note: >
-        What the account returns — authored by somebody else.
-    - follow: remoteTools->gateway
-      label: classified result
+        The loop's next step searches the web and fetches a page, through the sandbox's egress
+        proxy — the gateway is not on this hop.
+    - follow: openWeb->toolPlane
+      label: page into context
       note: >
-        Back across the crossing, classified before the loop reads it.
-    - follow: gateway->harness
-      label: outcome into loop
-      note: >
-        The outcome lands in the loop.
+        What the page says — authored by somebody else — lands in the loop as context.
     - follow: harness->owner
       label: reply
       note: >
@@ -1025,7 +988,7 @@ scenarios:
           The unattended turn crosses like any other, but it belongs to a read-only or draft
           action class enforced here at the crossing — not to the same authority an attended
           turn carries.
-      - follow: gateway->remoteTools
+      - follow: gateway->internalTools
         label: read-only action class
         note: A one-time injection has become a recurring one, bounded now by the action class.
   - title: A page in the owner's browser reaches the dashboard

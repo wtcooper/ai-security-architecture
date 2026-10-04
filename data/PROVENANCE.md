@@ -190,8 +190,9 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   actuation surface where tool or action calls land; its discipline — open tool plane vs
   deterministic action catalogue — lives in the items and notes), **Memory & state** (working
   state the agent reads back as context: memory files, journals, indexes, case state),
-  **Downstream services** (the backend systems where effects land — drawn directly beneath Tool
-  services, connected by a vertical external edge, on every architecture that has both),
+  **Open web** (what the agent searches and fetches, reached outbound; with public Source control
+  and public package sources the whole external band — no external Tool services since
+  2026-10-04),
   **Model provider** (the opaque inference boundary), **Sandboxed execution**, and **Governance
   plane** (qualified by who governs, e.g. "Tenant governance"). Untrusted-content sources keep
   content-specific names ("Repository content", "Docs & screen content") because what the

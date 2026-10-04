@@ -14,8 +14,8 @@ summary:
 description:
   - >
     The spine is a trigger path: requests, schedules and events start the process, and it runs
-    through supervisor agent, subagents, AI gateway, tool services and downstream systems —
-    there is no user interface, because nobody is conversing with it. The architecture's security posture lives almost entirely
+    through supervisor agent, subagents, AI gateway, tool services and the systems of record
+    behind them — there is no user interface, because nobody is conversing with it. The architecture's security posture lives almost entirely
     in one decision — that agents do not hold credentials for, or reach, network tools directly. Every
     network tool call, model call and connector call leaves through the gateway, which brokers short-lived
     credentials, enforces policy per call, applies rate and budget limits, and writes the audit
@@ -89,7 +89,9 @@ zones:
       them, the crossing every brokered call leaves through, and our own tool servers and data.
   - id: zoneExternal
     owner: external
-    note: Outside the company — the model provider, third-party tool servers, and where effects land.
+    note: >
+      Outside the company — the model provider, the open web the agents search, and the public
+      sources the package mirror admits from. Nothing here connects in; every call is ours.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -297,7 +299,6 @@ blocks:
     pack: toolServicesRemote
     note: >
       Our own action surface, admitted by the registry and reached only through the gateway.
-      The same component as the external surface, at a different band.
 
   - id: orgData
     kind: external
@@ -319,34 +320,26 @@ blocks:
         icon: folder
         note: Artifacts a step produced and a later step reads back as context.
 
-  - id: extTools
-    kind: service
-    title: Tool services
-    zone: zoneExternal
-    col: 4
-    row: 3
-    cosaiComponent: componentTools
-    pack: toolServicesRemote
-    items:
-      - id: peers
-        label: A2A peer agents
-        icon: agent
-        note: Cross-org delegation over the A2A protocol. A peer's output enters this graph as input.
-    note: >
-      Third-party servers, connectors and peer agents, out where nobody we contracted with
-      operates them. Admitted by assessment at the crossing, or refused there.
-
-  - id: downstream
+  - id: openWeb
     kind: external
-    title: Downstream services
+    title: Open web
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
-    row: 4
-    pack: downstreamPublic
+    row: 3
     note: >
-      Where effects land outside the company, and where the untrusted content that returns
-      enters a graph in which one confused agent propagates to all the others.
+      Search results and fetched pages, reached only through the gateway's web search and fetch
+      tool. Every page is authored by someone else, and its text enters a graph in which one
+      confused agent propagates to all the others.
+    items:
+      - id: webSearch
+        label: Web search
+        icon: search
+        note: The search tool's results — ranked by somebody else, and read as context.
+      - id: pages
+        label: Arbitrary pages
+        icon: globe
+        note: Visible and hidden text alike, served by whoever owns the page.
 
   - id: sources
     kind: external
@@ -542,19 +535,14 @@ edges:
       Where the workflow's effects land on systems of record, and where artifacts a later step
       reads back as context are stored.
   - from: gateway
-    to: extTools
+    to: openWeb
     path: external
     outbound: true
-    label: brokered external calls
-    note: Third-party servers and peer agents, reached only through the crossing that admitted them.
-  - from: extTools
-    to: downstream
-    label: action / returned content
-    path: external
-    bidir: true
+    label: web search & fetch
     note: >
-      Effects landing outside the company, and untrusted content returning into a graph where
-      it becomes several agents' input at once.
+      A specialist's search or page fetch, opened by the gateway on its behalf. What returns
+      rides back on it, untrusted, into a graph where it can become several agents' input at
+      once.
 
   - from: sources
     to: registry
@@ -572,11 +560,10 @@ pins:
         Records, documents and API responses read over the process's lifetime are chances to
         steer an agent whose output another agent will trust.
     - risk: riskPromptInjection
-      at: gateway->extTools
+      at: gateway->openWeb
       note: >
-        Content returning from third-party servers and peer agents enters a graph in which one
-        confused agent propagates to all the others — classified at the crossing or trusted by
-        every specialist at once.
+        Search results and fetched pages enter a graph in which one confused agent propagates
+        to all the others — classified at the crossing or trusted by every specialist at once.
     - risk: riskPromptInjection
       at: events->harness
       note: >
@@ -707,7 +694,7 @@ pins:
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
-        Returned record and third-party content is classified at the crossing before it reaches any agent's
+        Returned record and web content is classified at the crossing before it reaches any agent's
         context, and the initiator's request text on its first crossing, before the model reads it.
         Inter-agent messages and shared-memory reads never cross here.
     - mitigation: cap-sensitive-data-redaction
@@ -835,12 +822,12 @@ walkthrough:
       label: result to specialist
       note: It lands with the specialist that asked, which decides its next call.
     - follow: harness->gateway
-      label: next call, third party
-      note: The specialist's next call is for a third party, through the same door.
-    - follow: gateway->extTools
-      label: third-party call
-      note: Work reaches third parties through the same crossing.
-    - follow: extTools->gateway
+      label: next call, web search
+      note: The specialist's next call is a web search, through the same door.
+    - follow: gateway->openWeb
+      label: search & fetch
+      note: The gateway opens the call to the open web.
+    - follow: openWeb->gateway
       label: classified return
       note: What returns is classified before any agent reads it, because one confused agent propagates.
     - follow: gateway->harness

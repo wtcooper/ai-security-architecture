@@ -81,8 +81,8 @@ zones:
   - id: zoneExternal
     owner: external
     note: >
-      Outside the company: the model provider, third-party tool servers and peer agents, and
-      the services an approved action lands on.
+      Outside the company: the model provider, the open web the agent searches, and the public
+      sources the package mirror admits from. Nothing here connects in; every call is ours.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -269,9 +269,8 @@ blocks:
     cosaiComponent: componentTools
     pack: toolServicesRemote
     note: >
-      Our own tool servers and service APIs — the same component as the external surface, at a
-      different band. Every call carries the conversing user's grant rather than the service's
-      own authority, which is what makes the identity established at the front end load-bearing
+      Our own tool servers and service APIs. Every call carries the conversing user's grant
+      rather than the service's own authority, which is what makes the identity established at the front end load-bearing
       all the way down here.
 
   - id: orgData
@@ -295,34 +294,26 @@ blocks:
         icon: folder
         note: Documents retrieved into the thread as grounding — written by many hands, read back as context.
 
-  - id: extTools
-    kind: service
-    title: Tool services
-    zone: zoneExternal
-    col: 4
-    row: 3
-    cosaiComponent: componentTools
-    pack: toolServicesRemote
-    items:
-      - id: peers
-        label: A2A peer agents
-        icon: agent
-        note: Cross-org delegation over the A2A protocol. A peer's output enters the thread as input.
-    note: >
-      Third-party servers, connectors and peer agents, out where nobody we contracted with
-      operates them. Admitted by assessment at the crossing, or refused there.
-
-  - id: downstream
+  - id: openWeb
     kind: external
-    title: Downstream services
+    title: Open web
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
-    row: 4
-    pack: downstreamPublic
+    row: 3
     note: >
-      What the external tool surface reaches — where an approved action becomes a real one
-      outside the company, and where the content that returns was authored by somebody else.
+      Search results and fetched pages, reached only through the gateway's web search and fetch
+      tool. Every page is authored by someone else, and its text stands beside the user's words
+      on the next call.
+    items:
+      - id: webSearch
+        label: Web search
+        icon: search
+        note: The search tool's results — ranked by somebody else, and read as context.
+      - id: pages
+        label: Arbitrary pages
+        icon: globe
+        note: Visible and hidden text alike, served by whoever owns the page.
 
   - id: sources
     kind: external
@@ -500,21 +491,13 @@ edges:
       Where an approved action becomes a real one on a system of record — and where the
       grounding content a later turn will treat as instruction is read from.
   - from: gateway
-    to: extTools
+    to: openWeb
     path: external
     outbound: true
-    label: brokered external calls
+    label: web search & fetch
     note: >
-      Third-party servers and peer agents, reached only through the crossing that admitted
-      them. A peer's output enters the thread as input.
-  - from: extTools
-    to: downstream
-    label: action / returned content
-    path: external
-    bidir: true
-    note: >
-      Actions land on real systems outside the company; whatever comes back — records, pages,
-      API responses — is untrusted content entering the conversation.
+      A search or page fetch mid-turn, opened by the gateway on the conversation's behalf. What
+      returns rides back on it — untrusted content entering the conversation.
 
   - from: sources
     to: registry
@@ -533,9 +516,9 @@ pins:
         reaches the same context window as the system instruction — and uploaded documents,
         authored by anyone, arrive on the same edge.
     - risk: riskPromptInjection
-      at: gateway->extTools
+      at: gateway->openWeb
       note: >
-        Records, pages and API responses return into the thread — content somebody else
+        Search results and fetched pages return into the thread — content somebody else
         authored, standing beside the user's words on the next call.
     - risk: riskPromptInjection
       at: memory
@@ -647,7 +630,7 @@ pins:
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
-        The user's turns, uploaded documents and returned record content are classified on the crossing before
+        The user's turns, uploaded documents and returned record and web content are classified on the crossing before
         the model reads them — classification here, permission containment at the tool scoping pin.
     - mitigation: cap-output-encoding
       at: entry
@@ -869,26 +852,22 @@ scenarios:
         label: reply may surface any of it
         note: The reply can surface any of it — session-scoped memory and DLP on accumulation are what bound the answer.
 
-  - title: An approved action lands outside the company
+  - title: A web page enters the thread
     steps:
       - follow: agent->gateway
-        label: approved external action
-        note: An approved action targets a third-party service or a peer agent nobody we contracted with operates.
-      - follow: gateway->extTools
-        label: brokered grant, allowlist
-        note: It leaves on a grant brokered rather than held by the agent, against the egress allowlist.
-      - follow: extTools->downstream
-        label: effect lands
-        note: And the effect lands.
-      - follow: downstream->extTools
-        label: somebody else's content
+        label: web search mid-turn
+        note: A read-only web search runs mid-turn, without ceremony.
+      - follow: gateway->openWeb
+        label: search & fetch
+        note: The gateway opens the call to the open web.
+      - follow: openWeb->gateway
+        label: somebody else's page
         note: What returns was authored by somebody else.
-      - follow: extTools->gateway
-        label: classified at crossing
-        note: It is classified at the crossing before it re-enters the thread —
       - follow: gateway->agent
-        label: re-enters thread
-        note: which is how one poisoned result would otherwise steer every later turn in the session.
+        label: classified, re-enters thread
+        note: >
+          It is classified at the crossing before it re-enters the thread — which is how one
+          poisoned page would otherwise steer every later turn in the session.
 
   - title: A dependency arrives with the task
     steps:

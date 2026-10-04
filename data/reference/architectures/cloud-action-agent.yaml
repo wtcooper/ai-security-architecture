@@ -89,7 +89,9 @@ zones:
       systems of record.
   - id: zoneExternal
     owner: external
-    note: Outside the company — the model provider, third-party tool servers, and the services an action lands on.
+    note: >
+      Outside the company — the model provider, the open web the agent searches, and the public
+      sources the package mirror admits from. Nothing here connects in; every call is ours.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -267,35 +269,26 @@ blocks:
         icon: folder
         note: Case documents and attachments, read back into context on a later run.
 
-  - id: extTools
-    kind: service
-    title: Tool services
-    zone: zoneExternal
-    col: 4
-    row: 3
-    cosaiComponent: componentTools
-    pack: toolServicesRemote
-    items:
-      - id: peers
-        label: A2A peer agents
-        icon: agent
-        note: Cross-org delegation over the A2A protocol. A peer's output enters the loop as input.
-    note: >
-      Third-party servers, connectors and peer agents, out where nobody we contracted with
-      operates them. Admitted by assessment at the crossing, or refused there.
-
-  - id: downstream
+  - id: openWeb
     kind: external
-    title: Downstream services
+    title: Open web
     cosaiComponent: componentDataSources
     zone: zoneExternal
     col: 4
-    row: 4
-    pack: downstreamPublic
+    row: 3
     note: >
-      Where an action lands outside the company — mail sent, tickets moved, calendar entries
-      written on the requester's behalf — and where the untrusted content that returns enters
-      the next model call.
+      Search results and fetched pages, reached only through the gateway's web search and fetch
+      tool. Every page is authored by someone else, and its text enters the next model call with
+      nobody reading it first.
+    items:
+      - id: webSearch
+        label: Web search
+        icon: search
+        note: The search tool's results — ranked by somebody else, and read as context.
+      - id: pages
+        label: Arbitrary pages
+        icon: globe
+        note: Visible and hidden text alike, served by whoever owns the page.
 
   - id: sources
     kind: external
@@ -488,19 +481,14 @@ edges:
       Where the effect lands and where reversal either exists or does not — and where record
       content written by requesters and staff is read back into a later run as context.
   - from: gateway
-    to: extTools
+    to: openWeb
     path: external
     outbound: true
-    label: brokered external calls
-    note: Third-party servers and peer agents, reached only through the crossing that admitted them.
-  - from: extTools
-    to: downstream
-    label: action / returned content
-    path: external
-    bidir: true
+    label: web search & fetch
     note: >
-      Actions landing outside the company, and the untrusted content that returns into the next
-      model call with nobody reading it first.
+      The one call the loop makes to the open web: a search or a page fetch, opened by the
+      gateway on the agent's behalf. What returns rides back on it, untrusted, into the next
+      model call.
 
   - from: sources
     to: registry
@@ -560,10 +548,10 @@ pins:
         chokepoint — the gateway never sees a vulnerable or malicious in-process tool, and the
         workload's network policy is the drawn bound on where it can reach.
     - risk: riskPromptInjection
-      at: gateway->extTools
+      at: gateway->openWeb
       note: >
-        Content returning from actions outside the company was authored by somebody else and
-        re-enters the next model call as context.
+        Search results and fetched pages were authored by somebody else and re-enter the next
+        model call as context.
     - risk: riskToolRegistryTampering
       at: gateway->internalTools
       note: The catalogue is the policy surface; whoever can edit it programs the agent.
@@ -645,7 +633,7 @@ pins:
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
-        Returned record and external content is classified at the crossing before it re-enters the loop's
+        Returned record and web content is classified at the crossing before it re-enters the loop's
         context — the harder injection path gets the same treatment the request text does.
     - mitigation: cap-agent-tracing
       at: govObservability
@@ -763,8 +751,22 @@ scenarios:
           A schedule starts the run — no request, no payload authored by anyone, and nobody to
           return an outcome to.
       - follow: planner->gateway
-        label: unattended context
-        note: The unattended run crosses on the same brokered credential an attended one would.
+        label: unattended web search
+        note: >
+          The run's first step is a web search — a carrier's status page, a published rate —
+          crossing on the same brokered credential an attended run would.
+      - follow: gateway->openWeb
+        label: search & fetch
+        note: The gateway opens the call to the open web.
+      - follow: openWeb->gateway
+        label: somebody else's page
+        note: What returns was authored by somebody else, and nobody is reading it.
+      - follow: gateway->planner
+        label: classified, into context
+        note: It is classified at the crossing, and whatever survives lands in context.
+      - follow: planner->gateway
+        label: context with page text
+        note: The page text rides out with the next model call.
       - follow: gateway->provider
         label: inference, nobody watching
         note: The model proposes an action with nobody watching the proposal.
@@ -775,17 +777,16 @@ scenarios:
         label: into the loop
         note: The loop takes it as its plan.
       - follow: planner->gateway
-        label: outbound action dispatched
+        label: action dispatched
         note: And dispatches the action through the crossing.
-      - follow: gateway->extTools
-        label: outbound action
-        note: The action reaches outward, admitted by the same catalogue and egress allowlist.
-      - follow: extTools->downstream
-        label: effect lands outside
+      - follow: gateway->internalTools
+        label: catalogue bounds it
+        note: The action is admitted against the same catalogue and per-call policy as any other.
+      - follow: internalTools->orgData
+        label: compensable effect lands
         note: >
-          The effect lands outside the company, and what returns re-enters the next call as
-          somebody else's content. With no human anywhere on this path, the catalogue, the
-          threshold and the compensating transaction are the whole of the control set.
+          The effect lands. With no human anywhere on this path, the catalogue, the threshold
+          and the compensating transaction are the whole of the control set.
   - title: The injection was written months ago
     steps:
       - follow: planner->gateway

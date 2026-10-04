@@ -29,7 +29,7 @@ description:
     permitted operations at the gateway and destination. Other modes use approved public MCP
     endpoints or application-handled function tools; a tunnel is not universal.
   - >
-    Browser-enabled sessions add a route to downstream websites. Bind origin and sign-in
+    Browser-enabled sessions add a route to the open web. Bind origin and sign-in
     decisions to the authenticated caller, session and pending request. Those decisions do not
     approve every subsequent send, purchase or deletion. Custom-tool authorization remains the
     customer's responsibility even when the provider exposes approval events.
@@ -93,11 +93,9 @@ zones:
     owner: vendor
     note: >
       The provider's environment, and where the agent actually runs. A request reaches it
-      through our own front end first, and it reaches back into us through the tunnel. What
-      they operate inside it is assured, not drawn.
-  - id: zoneExternal
-    owner: external
-    note: Where the agent's actions land outside both environments.
+      through our own front end first, and it reaches back into us through the tunnel. Its
+      connectors to the SaaS we approved sit here too, under agreement. What they operate
+      inside it is assured, not drawn.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -206,15 +204,14 @@ blocks:
         icon: plug
         note: >
           The harness's own MCP client — the party that connects out. Two directions: back
-          into us through the tunnel to our gateway, and out to third-party servers and
-          connectors in the external band, called from the vendor's side with the credential
-          drawn from the vault. Under this drawing's policy that outward path is the only way
-          the agent reaches external data: the vendor's own web search and fetch tools, which
-          run on their servers and ignore the environment's network policy, are switched off
-          in the definition. The alternative for any third-party connector is to register it
-          on our gateway instead and declare the gateway's tunnel hostname as the server: same
-          connector, now scoped and recorded at our tier — the choice per connector is which
-          of the two it is.
+          into us through the tunnel to our gateway, and to the provider's hosted connectors
+          for the SaaS we approved, called from the vendor's side with the credential drawn
+          from the vault. Under this drawing's policy that second path is the only way the
+          agent reaches outside data: the vendor's own web search and fetch tools, which run
+          on their servers and ignore the environment's network policy, are switched off in
+          the definition. The alternative for any connector is to register it on our gateway
+          instead and declare the gateway's tunnel hostname as the server: same connector, now
+          scoped and recorded at our tier — the choice per connector is which of the two it is.
 
   - id: nativeTools
     kind: provider
@@ -352,27 +349,18 @@ blocks:
     pack: enterpriseData
     note: The systems of record behind those servers, reached on grants we scope per session.
 
-  - id: extTools
+  - id: vendorTools
     kind: service
     title: Tool services
     cosaiComponent: componentTools
-    zone: zoneExternal
+    zone: zoneVendor
     col: 4
-    row: 3
+    row: 1
     pack: toolServicesRemote
     note: >
-      Third-party servers and connectors our gateway brokers outward — the same component as
-      the internal surface, out where nobody we contracted with operates it.
-
-  - id: downstream
-    kind: external
-    title: Downstream services
-    cosaiComponent: componentDataSources
-    zone: zoneExternal
-    col: 4
-    row: 4
-    pack: downstreamPublic
-    note: Where an action lands outside both environments, and where untrusted content returns from.
+      The provider's hosted MCP servers and connectors for the SaaS we approved, called by the
+      runtime's MCP client under our agreement with the credential drawn from the vault.
+      Nothing we run is on this path. A service outside any agreement is not connected.
 
   - id: govIdentity
     kind: governance
@@ -518,35 +506,20 @@ edges:
     bidir: true
     label: scoped reads & writes
     note: The repositories and records the agent was adopted to work on.
-  - from: aiGateway
-    to: extTools
-    path: external
-    outbound: true
-    route: vh
-    label: brokered external calls
-    note: >
-      Third-party servers and connectors, reached through the crossing that admitted them —
-      egress and returned-content classification enforced at our boundary.
-  - from: extTools
-    to: downstream
-    label: action / returned content
-    path: external
-    bidir: true
-    note: Actions landing outside, and the content they return.
   - from: managedRuntime
-    to: extTools
+    to: vendorTools
     path: external
     bidir: true
-    route: hv
     label: hosted MCP & connectors
     note: >
-      The runtime's MCP client calling third-party servers and connectors from the vendor's
-      side — the tool list fetched by them, the credential drawn from the vault — and the
-      content those tools return entering the loop. This is the agent's only route to external
-      data under this drawing's policy: the built-in web tools are off and the sandbox's egress
-      is closed, so everything outside arrives through a tool service first. Nothing we run is
-      on the path; the control is per-tool enablement in the definition, and the alternative
-      per connector is to register it at our gateway and reach it through the tunnel.
+      The runtime's MCP client calling the approved SaaS servers and connectors from the
+      vendor's side — the tool list fetched by them, the credential drawn from the vault — and
+      the content those tools return entering the loop. This is the agent's only route to
+      outside data under this drawing's policy: the built-in web tools are off and the
+      sandbox's egress is closed, so everything outside arrives through a connector first.
+      Nothing we run is on the path; the control is per-tool enablement in the definition, and
+      the alternative per connector is to register it at our gateway and reach it through the
+      tunnel.
 
 pins:
   risks:
@@ -572,15 +545,15 @@ pins:
       at: internalTools->orgData
       note: Writes into systems of record from a loop running somewhere we cannot watch.
     - risk: riskPromptInjection
-      at: managedRuntime->extTools
+      at: managedRuntime->vendorTools
       note: >
-        Content a third-party tool service returns enters the loop vendor-side — the dominant
+        Content a connected service returns enters the loop vendor-side — the dominant
         untrusted ingress of this archetype, on a path with no customer control anywhere.
         Closing the built-in web tools and the sandbox's egress narrows the ingress to this one
         edge; it does not classify what comes back on it.
 
     - risk: riskToolSourceProvenance
-      at: managedRuntime->extTools
+      at: managedRuntime->vendorTools
       note: >
         Tool descriptions fetched vendor-side enter the loop as instruction, from servers named
         in the definition and vetted by nobody on the path.
@@ -653,11 +626,11 @@ pins:
         does not see: the web tools are off, and the MCP client is bounded by the declared tool set. A
         self-hosted worker's egress is our firewall.
     - mitigation: AML.M0028
-      at: managedRuntime->extTools
+      at: managedRuntime->vendorTools
       note: >-
         Per-tool enablement and approval policy in the definition, the built-in web tools disabled, the
         environment's egress list closed, and MCP servers admitted only as the definition declares them: the
-        settings that make "the agent reaches external data only through a tool service" true. Nothing
+        settings that make "the agent reaches outside data only through an approved connector" true. Nothing
         verifies what a declared server serves, and every one of these is configuration the next definition
         can undo, which is why the definition is reviewed like code.
     - mitigation: D3-CH
@@ -758,20 +731,16 @@ scenarios:
         note: Our gateway is where that can be noticed and cut, since it is the only hop we watch.
   - title: A hosted connector returns untrusted content
     steps:
-      - follow: managedRuntime->extTools
+      - follow: managedRuntime->vendorTools
         label: connector call, vendor side
         note: >
-          The MCP client calls a third-party connector from the vendor's side — no customer
+          The MCP client calls an approved SaaS connector from the vendor's side — no customer
           control sits anywhere on the path.
-      - follow: extTools->downstream
-        label: effect lands
-        note: The connector acts on the service behind it.
-      - follow: downstream->extTools
-        label: returned content
-        note: What that service returns starts its way back.
-      - follow: extTools->managedRuntime
+      - follow: vendorTools->managedRuntime
         label: untrusted content
-        note: Untrusted content enters the loop as instruction, unclassified, because nothing of ours is on this path.
+        note: >
+          What the service returns — a record someone else wrote — enters the loop as
+          instruction, unclassified, because nothing of ours is on this path.
       - follow: managedRuntime->tunnel
         label: steered tool request
         note: >
@@ -889,16 +858,18 @@ deviations:
       supported there, so secrets fall back to the worker's own custom tools, and the worker
       can act as the MCP client itself, in which case the provider sees only tool outputs.
 
-  - subject: The vendor's web tools are off, and the runtime's external reach is drawn once, to Tool services
+  - subject: The vendor's web tools are off, and the runtime's outside reach is drawn once, to the vendor's Tool services
     reason: >
-      A managed runtime has three routes to external data: its built-in web search and fetch
+      A managed runtime has three routes to outside data: its built-in web search and fetch
       (run on the vendor's servers, outside the environment's network policy), the sandbox's
       own egress, and the MCP client calling hosted servers and connectors. This drawing's
-      policy closes the first two in the definition and draws the third, so every external read
-      and action passes through a tool service — the same symmetry as the gateway-brokered
-      path on our side, without the gateway. An earlier revision drew the hosted browser as a
-      direct edge to Downstream services and kept the connectors as an item; the finding did
-      not change (the content returns unclassified), the topology did.
+      policy closes the first two in the definition and draws the third, to Tool services in
+      the vendor band — connectors for the SaaS we approved, under agreement — so the drawing
+      has no External band. Enabling the web tools would add an outbound edge from Native
+      tools to the Open web, the shape the coding & desktop runtime shows. Earlier revisions
+      drew the hosted browser to Downstream services and, until 2026-10-04, the connectors in
+      the External band; the finding did not change (the content returns unclassified), the
+      topology did.
   - subject: Native tools nest inside the Managed runtime, the exception to the fused-runtime rule
     reason: >
       The ontology keeps vendor-operated fused runtimes flat because we cannot see inside. The

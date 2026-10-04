@@ -89,9 +89,6 @@ zones:
       almost all of it is ours — which is unusual in this catalogue and is the reason it earns
       a page: the controls that matter when you *publish* an MCP server have nowhere else to
       live.
-  - id: zoneExternal
-    owner: external
-    note: What our own implementation reaches outward on its own credential, past the point the caller's delegation bounds anything.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -292,26 +289,15 @@ blocks:
     col: 3
     row: 2
     note: >
-      The records the service reaches on the caller's behalf. Per-tenant scoping is entirely
+      The records the service reaches on the caller's behalf, and the internal systems its
+      handlers wrap — each with authorization of its own, reached on a downstream-audience token
+      or our own service credential, never the caller's token. Per-tenant scoping is entirely
       ours to build: the protocol has no notion of a tenant, so nothing is isolated by default.
     items:
       - id: records
         label: Org data
         icon: db
         note: Reached only within the delegation the presented token carries.
-
-  - id: downstream
-    kind: external
-    title: Downstream services
-    cosaiComponent: componentDataSources
-    zone: zoneExternal
-    col: 4
-    row: 1
-    pack: downstreamPublic
-    note: >
-      What our implementation depends on. Reached on **our** credential, not the caller's — the
-      spec forbids forwarding a caller's token — which is exactly why this hop is where the
-      delegation chain stops bounding anything.
 
   - id: govIdentity
     kind: governance
@@ -336,8 +322,8 @@ blocks:
     row: 3
     mitigations: [ D3-CH ]
     note: >
-      The upstream credentials this service calls outward on — issued, scoped and rotated by a
-      secrets manager, one per upstream, never the caller's token forwarded.
+      The upstream credentials this service's handlers call on — issued, scoped and rotated by
+      a secrets manager, one per upstream, never the caller's token forwarded.
 
   - id: govPolicy
     kind: governance
@@ -350,7 +336,7 @@ blocks:
     note: >
       Per-tenant limits sized for callers that retry, loop and parallelise — limits tuned for
       human clients are not limits here — plus origin validation against DNS rebinding and the
-      egress policy that keeps our own outbound calls and discovery fetches off internal
+      egress policy that keeps the authorization server's discovery fetches off internal
       addresses.
 
   - id: govSupplyChain
@@ -447,17 +433,10 @@ edges:
     note: >
       Bounded by the delegation the token carries. One tenant's agent reaching another tenant's
       records is this architecture's defining failure, and nothing in the protocol prevents it.
-  - from: service
-    to: downstream
-    path: external
-    outbound: true
-    label: downstream-audience token / result
-    note: >
-      Where our implementation calls outward. Two honest shapes: a token exchanged on the caller's
-      behalf (audience = the upstream, scope narrowed to what this tool needs), so the upstream
-      sees who is really asking; or our own service credential where no delegation exists. The
-      one forbidden shape is the third — forwarding the caller's token — which the spec rules out
-      outright, because it breaks audit, rate limits and the trust boundary in one move.
+      A handler that wraps an internal system with authorization of its own calls it on a
+      downstream-audience token — or as the service, where no delegation exists — and the
+      forbidden shape is forwarding the caller's token, which breaks audit, rate limits and the
+      trust boundary in one move.
 
 pins:
   risks:
@@ -479,15 +458,15 @@ pins:
         approved is the classic confused deputy at the registration surface. Consent must be
         per client and recorded before the flow proceeds.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: service->downstream
+      at: service->orgData
       note: >
         Token passthrough — forwarding the caller's token upstream — is the confused deputy
         the protocol documents by name: one compromised agent becomes a multi-service problem
         wearing our audit identity.
     - risk: riskSensitiveDataDisclosure
-      at: service->downstream
+      at: service->orgData
       note: >
-        Where a handler falls back to our own service credential, whatever it reaches outward it
+        Where a handler falls back to our own service credential, whatever it reaches upstream it
         reaches with our authority regardless of who asked, and the upstream's audit shows us
         rather than them; where it exchanges on the caller's behalf, a scope wider than the tool
         needs exports more than the caller asked for.
@@ -559,13 +538,10 @@ pins:
       at: service->orgData
       note: Per-tenant scoping enforced in our own code, because the protocol has no tenants.
     - mitigation: D3-CH
-      at: service->downstream
+      at: service->orgData
       note: >-
         A separate credential for each upstream we call, never the caller's token forwarded — which the spec
         forbids outright, because forwarding breaks audit, rate limiting and the trust boundary in one move.
-    - mitigation: cap-agent-egress-control
-      at: service->downstream
-      note: Named destinations only for the calls our implementation makes as itself.
     - mitigation: AML.M0024
       at: govObservability
       note: >-
@@ -889,13 +865,13 @@ scenarios:
         note: >
           A downstream-audience token. The exchange is logged as a delegation step: who asked, through
           which tool, for which upstream, with which scope.
-      - follow: service->downstream
+      - follow: service->orgData
         label: upstream call (OBO token)
         note: >
           The upstream call carries that token, so the upstream sees who is really asking and applies
           its own authorization — instead of a service account that can see everything, or the
           caller's token forwarded, which the spec forbids outright.
-      - follow: downstream->service
+      - follow: orgData->service
         label: upstream result
         note: >
           The upstream result returns.
@@ -1075,7 +1051,7 @@ scenarios:
       - follow: gateway->service
         label: handler holds token
         note: The handler has the caller's token in hand, and the upstream wants a credential.
-      - follow: service->downstream
+      - follow: service->orgData
         label: token forwarded (forbidden)
         note: >
           Forwarding it is the confused deputy the spec forbids outright: audit, rate limits
@@ -1131,15 +1107,16 @@ deviations:
     reason: >
       Whoever calls a published server — internal agents, chat products, other services — the
       drawing deliberately claims no ownership over them: the origin is unnamed and its band
-      placement is geometry, not custody. Moving it to the external band would split that band
-      across the drawing; the origin kind exists precisely so an edge can arrive from an
-      unclaimed source.
-  - subject: Outbound secrets and egress are absorbed by the service and its platform
+      placement is geometry, not custody. Moving it to an external band would put that band left
+      of ours, against the band order; the origin kind exists precisely so an edge can arrive
+      from an unclaimed source.
+  - subject: Upstream secrets and egress are absorbed by the service and the authorization server
     reason: >
       Credential hardening (D3-CH) and egress control are embodied by the AI gateway,
-      which sits on the inbound side only. On the outbound hop the service itself holds the
-      brokered upstream credential and the platform's network policy enforces the destination
-      list — recorded here rather than drawing an egress tier that nobody runs.
+      which sits on the inbound side only. On the upstream hop the service itself holds the
+      credential the secrets manager issued, and the authorization server's discovery fetches
+      are bounded where they happen — recorded here rather than drawing an egress tier that
+      nobody runs.
   - subject: Definition pinning is enforced on the data path
     reason: >
       Tool and MCP server integrity is a management capability, and the supply-chain call-out
