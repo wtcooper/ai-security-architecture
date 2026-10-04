@@ -20,10 +20,11 @@ description:
   - >
     This drawing separates customer-visible configuration surfaces, not provider internals.
     Vendor service admits requests and approved schedules; Managed runtime represents the
-    hosted loop, inference and retained state. Its Native tools expose hosted file and browser
-    operations. Backend connectors and browser sessions have separate paths and credentials.
-    The vendor band includes the agent provider and approved SaaS suppliers; it does not imply
-    common ownership or a shared security boundary between those suppliers.
+    hosted loop, inference and retained state. Its Native tools expose hosted file, shell and
+    browser operations. Backend connectors and browser sessions have separate paths and
+    credentials. Connected services sit in the external band as on the enterprise chat
+    drawing: our own SaaS tenants under agreement and third parties alike, reached from the
+    vendor's side.
   - >
     The baseline uses scoped reads and returns drafts. Consequential writes require an
     authenticated human approval bound to the proposed action at dispatch; if a product cannot
@@ -64,10 +65,10 @@ zones:
     note: The authorised requester and the owner who approves consequential actions.
   - id: zoneVendor
     owner: vendor
-    note: The managed agent provider and approved SaaS suppliers under their respective agreements.
+    note: The managed agent provider, under the organisation's agreement.
   - id: zoneExternal
     owner: external
-    note: Public websites whose content remains untrusted when returned to the agent.
+    note: Connected services and public sites the agent reaches; what they return is untrusted.
   - id: zoneGovernance
     owner: governance
     note: Customer administration, supplier assurance and response across the continuing agent's lifetime.
@@ -79,7 +80,7 @@ blocks:
     icon: person
     zone: zoneUser
     col: 0
-    row: 1
+    row: 2
     note: An authenticated requester; only an authorised approver may approve the proposed action.
   - id: vendorService
     kind: provider
@@ -87,7 +88,7 @@ blocks:
     cosaiComponent: componentApplication
     zone: zoneVendor
     col: 1
-    row: 1
+    row: 2
     note: The vendor's product and approved channels, including the customer-visible configuration surface.
     items:
       - id: settings
@@ -108,7 +109,7 @@ blocks:
     cosaiComponent: componentReasoningCore
     zone: zoneVendor
     col: 2
-    row: 1
+    row: 2
     note: >
       The hosted agent loop and its continuing context. Per-agent, per-user and shared computer
       or memory scopes must be established from the product; no per-agent VM is assumed.
@@ -133,6 +134,10 @@ blocks:
         note: >
           The product's credential custody surface. Backend connector grants, browser cookies
           and saved logins are distinct authority; a vault claim need not cover all three.
+      - id: mcp
+        label: MCP client
+        icon: plug
+        note: Calls the connected services on the grant the vault holds for this agent.
   - id: nativeTools
     kind: provider
     title: Native tools
@@ -142,57 +147,44 @@ blocks:
     col: 0
     row: 0
     note: >
-      Hosted file and browser operations invoked by the enclosing runtime. Containment represents
+      Hosted file, shell and browser operations invoked by the enclosing runtime. Containment represents
       that local dispatch and result path, as in the other managed-runtime architectures.
     items:
       - id: files
         label: File & edit tools
         icon: folder
         note: Work files may survive individual tasks; restrict accessible material and verify its lifecycle.
+      - id: shell
+        label: Shell commands
+        icon: code
+        note: Commands on the hosted computer, an alternate route to the network beside the browser.
       - id: browser
         label: Browser tools
         icon: globe
         note: Hosted browsing with separately governed cookies, saved accounts and destination rules.
-  - id: tools
+  - id: extTools
     kind: service
     title: Tool services
     cosaiComponent: componentTools
-    zone: zoneVendor
+    zone: zoneExternal
     col: 3
     row: 0
-    note: Approved backend connectors, invoked on an identified account grant.
-    items:
-      - id: connectors
-        label: APIs & connectors
-        icon: plug
-        note: The API integration route, independent of the hosted browser's logged-in session.
-  - id: apps
-    kind: external
-    title: Downstream services
-    cosaiComponent: componentDataSources
-    zone: zoneVendor
-    col: 3
-    row: 2
-    note: Approved SaaS accounts and records reached by a connector or by the hosted browser.
-    items:
-      - id: saas
-        label: SaaS
-        icon: mail
-      - id: files
-        label: File storage
-        icon: folder
-  - id: web
+    pack: toolServicesRemote
+    note: >
+      Connectors the agent calls on an identified account grant — our own SaaS tenants under
+      agreement and third parties with none, as on the enterprise chat drawing. This baseline
+      enables APIs and connectors only; A2A peers need a reviewed flow before use.
+  - id: downstream
     kind: external
     title: Downstream services
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 4
+    col: 3
     row: 1
-    note: Approved public browsing destinations; returned pages cannot authorise further actions.
-    items:
-      - id: publicWeb
-        label: Web & APIs
-        icon: globe
+    pack: downstreamPublic
+    note: >
+      The SaaS records and public sites reached through a connector or the hosted browser.
+      Returned content is untrusted and authorises nothing.
   - id: govIdentity
     kind: governance
     title: Identity services
@@ -253,30 +245,26 @@ edges:
     label: admitted work / status
     note: User requests and approved recurring work enter here; results and proposed actions return for review.
   - from: managedRuntime
-    to: tools
+    to: extTools
     path: external
     bidir: true
     label: scoped API call / result
     route: vh
     note: Backend connector request on a specific grant; returned records are untrusted task input.
-  - from: tools
-    to: apps
+  - from: extTools
+    to: downstream
     path: external
     bidir: true
-    label: account-scoped operation
+    label: action / returned content
     note: The downstream service enforces the granted account's resource and operation permissions.
   - from: nativeTools
-    to: apps
-    path: external
-    bidir: true
-    label: browser action / page
-    note: Separate browser session and cookies; connector OAuth restrictions do not automatically constrain this route.
-  - from: nativeTools
-    to: web
+    to: downstream
     path: external
     outbound: true
-    label: public fetch / page
-    note: Outbound browsing to allowed destinations; the reply brings untrusted content into the runtime.
+    label: browser action / page
+    note: >
+      The hosted browser's own session and cookies, to allowed destinations only. Connector OAuth
+      restrictions do not constrain this route, and the reply brings untrusted content in.
 
 pins:
   risks:
@@ -296,19 +284,19 @@ pins:
       at: managedRuntime
       note: Repeated tasks and retries consume resources after the original requester has stopped watching.
     - risk: riskPromptInjection
-      at: managedRuntime->tools
+      at: managedRuntime->extTools
       note: A connector response embeds instructions that try to redirect the agent's next action.
     - risk: riskRogueActions
-      at: tools->apps
+      at: extTools->downstream
       note: A write exceeds the current approved purpose even though the connected account can technically perform it.
     - risk: riskSensitiveDataDisclosure
-      at: nativeTools->apps
+      at: nativeTools->downstream
       note: A logged-in browser exports retained sensitive material through an account unrelated to the current task.
     - risk: riskRogueActions
-      at: nativeTools->apps
+      at: nativeTools->downstream
       note: A browser operation changes records or sends material beyond the exact action its owner approved.
     - risk: riskPromptInjection
-      at: nativeTools->web
+      at: nativeTools->downstream
       note: A returned public page attempts to obtain connected-account actions or disclosure of retained context.
   mitigations:
     - mitigation: D3-MFA
@@ -318,7 +306,7 @@ pins:
       at: vendorService
       note: Administer who may create, invoke, share or reschedule agents, and who may change their account grants.
     - mitigation: AML.M0028
-      at: managedRuntime->tools
+      at: managedRuntime->extTools
       note: Limit admitted tools and effective account grants by operation and resource; use read-only accounts for draft work.
     - mitigation: AML.M0028
       at: nativeTools
@@ -336,7 +324,7 @@ pins:
         out of prompts and work files. Establish separately how saved browser credentials and
         cookies are protected and cleared.
     - mitigation: D3-CTS
-      at: managedRuntime->tools
+      at: managedRuntime->extTools
       note: Restrict each connector credential to its designated recipient and audience; do not forward it to another tool or browser route.
     - mitigation: AML.M0031
       at: managedRuntime
@@ -379,22 +367,22 @@ walkthrough:
     - follow: vendorService->managedRuntime
       label: admit scoped work
       note: Apply the continuing agent's current scope and budgets, not the authority of an arbitrary channel member.
-    - follow: managedRuntime->tools
+    - follow: managedRuntime->extTools
       label: request permitted records
       note: Invoke an approved connector on the intended user's scoped grant.
-    - follow: tools->apps
+    - follow: extTools->downstream
       label: read account records
       note: The downstream service enforces resource access.
-    - follow: apps->tools
+    - follow: downstream->extTools
       label: return records
       note: Return only the data accessible to that grant.
-    - follow: tools->managedRuntime
+    - follow: extTools->managedRuntime
       label: consume records as data
       note: Record source and scope for any context retained beyond this task.
-    - follow: nativeTools->web
+    - follow: nativeTools->downstream
       label: fetch allowed public context
       note: The runtime dispatches its nested browser tool; this route has its own egress restrictions.
-    - follow: web->nativeTools
+    - follow: downstream->nativeTools
       label: return untrusted page
       note: The tool returns page content to its enclosing runtime; the page grants no authority.
     - follow: managedRuntime->vendorService
@@ -419,10 +407,10 @@ scenarios:
       - follow: vendorService->managedRuntime
         label: release approved dispatch
         note: Refuse the operation if the product cannot enforce the required human gate.
-      - follow: nativeTools->apps
+      - follow: nativeTools->downstream
         label: perform approved browser action
         note: Recheck the browser account and target against the approved proposal before effect.
-      - follow: apps->nativeTools
+      - follow: downstream->nativeTools
         label: return action result
         note: The browser returns status to its enclosing runtime on the same session.
       - follow: managedRuntime->vendorService
@@ -433,16 +421,16 @@ scenarios:
         note: The requester receives the outcome; continuing grants remain subject to revocation.
 
 deviations:
-  - subject: Only the active tool and data roles are listed
+  - subject: Our own systems are not drawn
     reason: >
-      The shared Tool services role contains backend APIs and connectors. A2A peers, skill
-      installation, local execution and private-network access are outside this baseline.
-      Enabling any requires a reviewed flow, identity and stop boundary rather than a dormant box.
+      This baseline reaches connected SaaS and the public web only. Reaching systems behind our
+      network would use the tunnel → AI gateway → Tool services path of the sibling SaaS
+      drawings, with its own reviewed flow and stop boundary.
   - subject: Hosted browser and backend connector routes remain separate
     reason: >
       Provider-hosted tools are shown within Managed runtime using the existing SaaS grammar.
       The browser has a real outbound route and separate account state. Local desktop browsing,
-      shell execution, VPN routing or delegated child agents require their own enforcement and
+      VPN routing or delegated child agents require their own enforcement and
       lifecycle review; none inherits connector restrictions automatically.
 
 sources:
