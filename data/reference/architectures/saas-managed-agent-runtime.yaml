@@ -29,7 +29,9 @@ description:
     permitted operations at the gateway and destination. Other modes use approved public MCP
     endpoints or application-handled function tools; a tunnel is not universal.
   - >
-    Browser-enabled sessions add a route to the open web. Bind origin and sign-in
+    The sandbox reaches the open web, public source control and public package sources under
+    the environment definition's allowlist, which we author and the provider enforces; anything
+    else is refused. Browser-enabled sessions add a wider route. Bind origin and sign-in
     decisions to the authenticated caller, session and pending request. Those decisions do not
     approve every subsequent send, purchase or deletion. Custom-tool authorization remains the
     customer's responsibility even when the provider exposes approval events.
@@ -96,6 +98,12 @@ zones:
       through our own front end first, and it reaches back into us through the tunnel. Its
       connectors to the SaaS we approved sit here too, under agreement. What they operate
       inside it is assured, not drawn.
+  - id: zoneExternal
+    owner: external
+    note: >
+      What the sandbox reaches out to under the environment's allowlist: public repositories,
+      package and skill sources, and the open web. Every edge here is opened from the vendor's
+      side; nothing in this band connects back in.
   - id: zoneGovernance
     owner: governance
     note: >
@@ -206,10 +214,9 @@ blocks:
           The harness's own MCP client — the party that connects out. Two directions: back
           into us through the tunnel to our gateway, and to the provider's hosted connectors
           for the SaaS we approved, called from the vendor's side with the credential drawn
-          from the vault. Under this drawing's policy that second path is the only way the
-          agent reaches outside data: the vendor's own web search and fetch tools, which run
-          on their servers and ignore the environment's network policy, are switched off in
-          the definition. The alternative for any connector is to register it on our gateway
+          from the vault. That second path is how the agent reaches SaaS data; the public web,
+          repositories and packages it reaches from the sandbox under the environment's
+          allowlist. The alternative for any connector is to register it on our gateway
           instead and declare the gateway's tunnel hostname as the server: same connector, now
           scoped and recorded at our tier — the choice per connector is which of the two it is.
 
@@ -228,10 +235,10 @@ blocks:
       sandbox per session, the provider's cloud sandbox or, in the self-hosted variant, a
       worker we run. What they
       may reach is the environment definition's egress policy, which is why they are drawn
-      rather than assured: the policy is ours. Under this drawing's policy the sandbox reaches
-      no external data on its own — every outside call goes through the MCP client to a tool
-      service — so no edge leaves this block; the moment the egress list is opened, one does,
-      and it is the shape the endpoint drawings show.
+      rather than assured: the policy is ours. Under this drawing's policy that is an
+      allowlist — web fetch, public source control and the public package sources or the
+      provider's own mirror — so the edges that leave this block are the same as on the
+      sibling SaaS runtimes; everything else is refused.
     items:
       - id: editTools
         label: File & edit tools
@@ -281,9 +288,9 @@ blocks:
         icon: gear
         note: >
           Where sessions run and what they may reach: the vendor's cloud sandbox (a worker we
-          run is the recorded variant), and the sandbox's egress policy — closed in this
-          reference; a host list, where opened, governs the sandbox's own calls but not the
-          vendor's web tools.
+          run is the recorded variant), and the sandbox's networking policy — an allowlist of
+          the web it may fetch, public source control and the package sources or the
+          provider's mirror, with write methods restricted on hosts the list must permit.
 
   - id: tunnel
     kind: service
@@ -361,6 +368,64 @@ blocks:
       The provider's hosted MCP servers and connectors for the SaaS we approved, called by the
       runtime's MCP client under our agreement with the credential drawn from the vault.
       Nothing we run is on this path. A service outside any agreement is not connected.
+
+  - id: publicRepos
+    kind: service
+    title: Source control
+    cosaiComponent: componentDataSources
+    zone: zoneExternal
+    col: 5
+    row: 0
+    note: >
+      Public source control: open repositories a session clones read-only — an upstream
+      dependency, an example, a project to patch. Untrusted like any page: the instruction
+      files and issue text in someone else's repository are someone else's instructions.
+    items:
+      - id: publicRepositories
+        label: Public repositories
+        icon: code
+        note: Cloned read-only, never with the session's write credential.
+
+  - id: sources
+    kind: external
+    title: Public package sources
+    zone: zoneExternal
+    col: 5
+    row: 3
+    note: >
+      What a session installs from under the environment's allowlist: the provider's own
+      package mirror where it offers one, otherwise the public registries. Install only pinned
+      versions verified against lockfile hashes or signatures, and fail on a mismatch. A
+      registry is also a write-capable host every allowlist permits.
+    items:
+      - id: registries
+        label: Package registries
+        icon: db
+        note: PyPI, npm and the rest — pinned versions, verified against lockfile hashes at install.
+      - id: hubs
+        label: Skill & extension hubs
+        icon: gear
+        note: Skills and plugins the definition names, pinned to reviewed versions.
+
+  - id: openWeb
+    kind: external
+    title: Open web
+    cosaiComponent: componentDataSources
+    zone: zoneExternal
+    col: 5
+    row: 2
+    note: >
+      What the sandbox searches and fetches under the environment's allowlist. Every page is
+      someone else's text, and it enters a loop nobody is watching as instruction.
+    items:
+      - id: webSearch
+        label: Web search
+        icon: search
+        note: Results ranked by someone else, read as context.
+      - id: pages
+        label: Arbitrary pages
+        icon: globe
+        note: Visible and hidden text alike, served by whoever owns the page.
 
   - id: govIdentity
     kind: governance
@@ -514,12 +579,42 @@ edges:
     note: >
       The runtime's MCP client calling the approved SaaS servers and connectors from the
       vendor's side — the tool list fetched by them, the credential drawn from the vault — and
-      the content those tools return entering the loop. This is the agent's only route to
-      outside data under this drawing's policy: the built-in web tools are off and the
-      sandbox's egress is closed, so everything outside arrives through a connector first.
-      Nothing we run is on the path; the control is per-tool enablement in the definition, and
-      the alternative per connector is to register it at our gateway and reach it through the
-      tunnel.
+      the content those tools return entering the loop. This is the agent's route to SaaS
+      data; the public web, repositories and packages arrive from the sandbox under the
+      environment's allowlist. Nothing we run is on the path; the control is per-tool
+      enablement in the definition, and the alternative per connector is to register it at
+      our gateway and reach it through the tunnel.
+  - from: nativeTools
+    to: sources
+    path: external
+    outbound: true
+    route: vh
+    label: setup installs
+    note: >
+      The session installing pinned, hash-verified dependencies under the environment's
+      allowlist, from the provider's own package mirror where it offers one, otherwise the
+      public registries; a changed or unpinned package fails the install. The registry is also
+      a write-capable host every allowlist permits, which is what makes it an exfiltration
+      channel.
+  - from: nativeTools
+    to: openWeb
+    path: external
+    outbound: true
+    route: vh
+    label: web fetch under egress policy
+    note: >
+      The sandbox's own reach to the web, to the destinations the environment's allowlist
+      permits, and the content that comes back as instruction.
+  - from: managedRuntime
+    to: publicRepos
+    path: external
+    outbound: true
+    route: vh
+    label: clone public repos
+    note: >
+      A read-only clone of a public repository — through the sandbox's egress or the vendor's
+      git proxy, depending on the product — under the same allowlist. The session's scoped
+      write credential belongs to its own approved destinations alone.
 
 pins:
   risks:
@@ -547,10 +642,9 @@ pins:
     - risk: riskPromptInjection
       at: managedRuntime->vendorTools
       note: >
-        Content a connected service returns enters the loop vendor-side — the dominant
-        untrusted ingress of this archetype, on a path with no customer control anywhere.
-        Closing the built-in web tools and the sandbox's egress narrows the ingress to this one
-        edge; it does not classify what comes back on it.
+        Content a connected service returns enters the loop vendor-side — untrusted ingress on
+        a path with no customer control anywhere, beside the pages the sandbox fetches. The
+        allowlist bounds where the agent reaches; it does not classify what comes back.
 
     - risk: riskToolSourceProvenance
       at: managedRuntime->vendorTools
@@ -567,6 +661,22 @@ pins:
       note: >
         A record somebody else authored comes back as a tool result and enters their runtime as
         instruction — classified at our gateway on the way, which is the only reason it can be.
+    - risk: riskPromptInjection
+      at: nativeTools->openWeb
+      note: >
+        A fetched page enters a loop nobody is watching. The allowlist bounds which pages the
+        sandbox reaches; nothing on this path classifies what they say.
+    - risk: riskSensitiveDataDisclosure
+      at: nativeTools->sources
+      note: >
+        The package registries every allowlist permits are write-capable: a package publish
+        carries whatever the sandbox holds to a public index.
+    - risk: riskInsecureIntegratedComponent
+      at: nativeTools->sources
+      note: >
+        A malicious or compromised package or skill runs in the sandbox, with network, as soon
+        as it is installed. Pinning and hash verification stop a changed artifact; they do not
+        make a reviewed version benign.
   mitigations:
     - mitigation: cap-agent-tool-registry
       at: agentDef->managedRuntime
@@ -621,18 +731,18 @@ pins:
       at: nativeTools
       note: >-
         The environment definition's networking policy, authored by us and enforced by the provider around the
-        sandbox: closed in this reference, so the sandbox reaches no destination of its own and an attempt to
-        reach one is refused. The provider's own web tools and its MCP client take separate paths the policy
-        does not see: the web tools are off, and the MCP client is bounded by the declared tool set. A
-        self-hosted worker's egress is our firewall.
+        sandbox: an allowlist of web fetch, public source control and the public package sources or the
+        provider's own mirror, with write methods restricted on the hosts the list must permit; everything
+        else is refused. Paths it does not see — the MCP client, and the provider's web tools where a product
+        runs them server-side under their own domain list — are verified per product and bounded by the
+        declared tool set. A self-hosted worker's egress is our firewall.
     - mitigation: AML.M0028
       at: managedRuntime->vendorTools
       note: >-
-        Per-tool enablement and approval policy in the definition, the built-in web tools disabled, the
-        environment's egress list closed, and MCP servers admitted only as the definition declares them: the
-        settings that make "the agent reaches outside data only through an approved connector" true. Nothing
-        verifies what a declared server serves, and every one of these is configuration the next definition
-        can undo, which is why the definition is reviewed like code.
+        Per-tool enablement and approval policy in the definition, and MCP servers admitted only as the
+        definition declares them: the settings that make "the agent reaches SaaS data only through an approved
+        connector" true. Nothing verifies what a declared server serves, and every one of these is
+        configuration the next definition can undo, which is why the definition is reviewed like code.
     - mitigation: D3-CH
       at: tunnel
       note: >-
@@ -792,6 +902,29 @@ scenarios:
         note: >
           The handler posts the result back. The vendor sees the inputs and the output, never
           the credential or the network.
+  - title: A fetched page names a package
+    steps:
+      - follow: nativeTools->openWeb
+        label: web fetch under the allowlist
+        note: >
+          The session fetches a page on a host the allowlist permits — documentation, an
+          issue, a forum answer.
+      - follow: openWeb->nativeTools
+        label: page text enters as instruction
+        note: The page's visible and hidden text reaches the loop, unclassified.
+      - follow: nativeTools->sources
+        label: install the package it names
+        note: >
+          The loop installs the package the page recommends, from a registry the allowlist
+          permits — pinned and verified only if the definition insists on it.
+      - follow: sources->nativeTools
+        label: package runs in the sandbox
+        note: Its install script runs in the sandbox, with network.
+      - follow: nativeTools->sources
+        label: publish as exfiltration
+        note: >
+          It publishes what the sandbox holds to the same registry. The list said where the
+          sandbox may talk, not what it may say; method restrictions are what remain.
   - title: "Variant: the definition moves to custom code"
     steps:
       - follow: agentDef->managedRuntime
@@ -858,18 +991,6 @@ deviations:
       supported there, so secrets fall back to the worker's own custom tools, and the worker
       can act as the MCP client itself, in which case the provider sees only tool outputs.
 
-  - subject: The vendor's web tools are off, and the runtime's outside reach is drawn once, to the vendor's Tool services
-    reason: >
-      A managed runtime has three routes to outside data: its built-in web search and fetch
-      (run on the vendor's servers, outside the environment's network policy), the sandbox's
-      own egress, and the MCP client calling hosted servers and connectors. This drawing's
-      policy closes the first two in the definition and draws the third, to Tool services in
-      the vendor band — connectors for the SaaS we approved, under agreement — so the drawing
-      has no External band. Enabling the web tools would add an outbound edge from Native
-      tools to the Open web, the shape the coding & desktop runtime shows. Earlier revisions
-      drew the hosted browser to Downstream services and, until 2026-10-04, the connectors in
-      the External band; the finding did not change (the content returns unclassified), the
-      topology did.
   - subject: Native tools nest inside the Managed runtime, the exception to the fused-runtime rule
     reason: >
       The ontology keeps vendor-operated fused runtimes flat because we cannot see inside. The
@@ -877,8 +998,9 @@ deviations:
       built-in tools are the vendor's coding-agent tool surface, enumerated in the definition
       and bounded by an environment egress policy we author, and in the self-hosted variant
       they execute on a worker we run. What we configure, we draw. The block is provider-kind
-      because the execution is still theirs; no edge leaves it because this policy gives the
-      sandbox no external reach of its own.
+      because the execution is still theirs; web fetch and package installs leave it under the
+      allowlist, and public clones leave from the runtime, because depending on the product
+      they take the sandbox's egress or the vendor's git proxy.
 
 sources:
   - title: "Anthropic — MCP tunnels: outbound-only cloudflared plus proxy, inner TLS terminated at the customer, transport does not authenticate to the upstream"

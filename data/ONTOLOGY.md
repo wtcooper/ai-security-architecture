@@ -285,8 +285,9 @@ stay items on the provider block, because we cannot see inside — with one exce
 2026-09-09: the API/SDK managed runtime, whose built-in tools are the vendor's coding-agent
 tool surface, enumerated in the definition and bounded by an environment egress policy the
 customer authors. What the customer configures, the drawing shows: Native tools nest inside
-that runtime as a provider-kind child, and under the catalogue's policy no edge leaves them —
-external data reaches the agent only through a tool service, via the MCP client.
+that runtime as a provider-kind child. Every managed runtime reaches the same external set
+from its sandbox, under an egress allowlist the customer authors and the provider enforces: the
+Open web, public Source control and Public package sources (or the provider's own mirror).
 
 MCP is three things and the drawings keep them apart: the **MCP client** is an item of the
 harness; **Local MCP servers** are an item of Native tools, processes on the endpoint whether

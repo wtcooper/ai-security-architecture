@@ -20,9 +20,10 @@ description:
   - >
     Vendor service admits work from the product, team channels and schedules; Managed runtime
     holds the loop, the model and the retained state, with the hosted file, shell and browser
-    tools nested inside. The agent reaches approved SaaS through the vendor's connectors, the
-    open web through its browser, and our own systems only down an outbound-only tunnel to our
-    AI gateway, as on the sibling SaaS drawings.
+    tools nested inside. The agent reaches approved SaaS through the vendor's connectors; the
+    open web, public repositories and public package sources from its hosted computer under one
+    egress allowlist; and our own systems only down an outbound-only tunnel to our AI gateway,
+    as on the sibling SaaS drawings.
   - >
     The baseline reads with scoped accounts and returns drafts. A consequential write needs an
     authenticated human approval bound to the exact action at dispatch; where a product cannot
@@ -82,7 +83,11 @@ zones:
       keeps the agent's state between tasks, and its connectors to the SaaS we approved.
   - id: zoneExternal
     owner: external
-    note: The open web the hosted browser searches, reads and acts on; what comes back is untrusted.
+    note: >
+      What the agent reaches out to under its egress policy: public repositories, the package
+      and skill sources its hosted computer installs from, and the open web its browser reads
+      and acts on. Every edge here is opened from the vendor's side; nothing in this band
+      connects back in.
   - id: zoneGovernance
     owner: governance
     note: Customer administration, supplier assurance and response across the continuing agent's lifetime.
@@ -286,6 +291,42 @@ blocks:
         label: Arbitrary pages
         icon: globe
         note: Visible and hidden text alike — and the form a disclosure is typed into.
+  - id: publicRepos
+    kind: service
+    title: Source control
+    cosaiComponent: componentDataSources
+    zone: zoneExternal
+    col: 5
+    row: 0
+    note: >
+      Public source control: open repositories the agent clones read-only — an upstream
+      dependency, an example, a project to patch. Untrusted like any page: the instruction
+      files and issue text in someone else's repository are someone else's instructions.
+    items:
+      - id: publicRepositories
+        label: Public repositories
+        icon: code
+        note: Cloned read-only, never with a write credential the agent holds.
+  - id: sources
+    kind: external
+    title: Public package sources
+    zone: zoneExternal
+    col: 5
+    row: 3
+    note: >
+      What the agent installs on its hosted computer: the vendor's own package mirror where it
+      offers one, otherwise the public registries under the allowlist. Install only pinned
+      versions verified against lockfile hashes or signatures. A registry is also a
+      write-capable host every allowlist permits.
+    items:
+      - id: registries
+        label: Package registries
+        icon: db
+        note: PyPI, npm and the rest — pinned versions, verified against lockfile hashes at install.
+      - id: hubs
+        label: Skill & extension hubs
+        icon: gear
+        note: Skills and plugins the agent or its owner adds, pinned to reviewed versions.
   - id: govIdentity
     kind: governance
     title: Identity services
@@ -379,6 +420,28 @@ edges:
     note: >
       The hosted browser's own session and cookies, to allowed destinations only. Connector OAuth
       restrictions do not constrain this route, and the reply brings untrusted content in.
+  - from: nativeTools
+    to: sources
+    path: external
+    outbound: true
+    route: vh
+    label: package installs
+    note: >
+      Packages and skills the agent installs on its hosted computer, pinned and hash-verified,
+      from the vendor's own package mirror where it offers one, otherwise the public registries
+      under the allowlist; a changed or unpinned package fails the install. What it installs
+      stays on a computer that persists between tasks. The registry is also a write-capable
+      host every allowlist permits, which is what makes it an exfiltration channel.
+  - from: managedRuntime
+    to: publicRepos
+    path: external
+    outbound: true
+    route: hv
+    label: clone public repos
+    note: >
+      A read-only clone of a public repository from the hosted computer, under the same
+      allowlist. A write credential the agent holds belongs to its own approved destinations
+      alone.
   - from: managedRuntime
     to: tunnel
     path: external
@@ -446,6 +509,19 @@ pins:
     - risk: riskPromptInjection
       at: nativeTools->openWeb
       note: A returned public page attempts to obtain connected-account actions or disclosure of retained context.
+    - risk: riskSensitiveDataDisclosure
+      at: nativeTools->sources
+      note: >
+        The package registries every allowlist permits are write-capable: a package publish
+        carries whatever the hosted computer holds — retained files, saved tokens — to a public
+        index.
+    - risk: riskInsecureIntegratedComponent
+      at: nativeTools->sources
+      note: >
+        A malicious or compromised package or skill the agent installs runs on its hosted
+        computer, beside retained files and saved logins, and stays there for later tasks.
+        Pinning and hash verification stop a changed artifact; they do not make a reviewed
+        version benign.
     - risk: riskAgenticDelegationConfusedDeputy
       at: tunnel
       note: >
@@ -492,9 +568,12 @@ pins:
     - mitigation: cap-agent-egress-control
       at: nativeTools
       note: >
-        Configure destination restrictions for the hosted browser's actual network route and
-        verify redirects and alternate fetch tools. Enable this route only for the data class
-        its enforceable restrictions support; a connector allowlist is not browser egress control.
+        One destination allowlist for the hosted computer's actual network routes — the browser,
+        and the shell's fetches, clones and package installs — limited to the open web the task
+        needs, public source control and the package sources or the vendor's mirror, with write
+        methods restricted on hosts the list must permit. Verify redirects and alternate fetch
+        tools. Enable these routes only for the data class their enforceable restrictions
+        support; a connector allowlist is not egress control.
     - mitigation: D3-CH
       at: tunnel
       note: >-
@@ -632,6 +711,24 @@ scenarios:
         note: >
           The agent's own schedule starts the next run with nobody present. Recurrence does not
           renew authority; disabling schedules and revoking grants is part of the stop.
+  - title: An installed package tries to publish what the agent holds
+    steps:
+      - follow: nativeTools->sources
+        label: install a package
+        note: >
+          A task needs a library, and the agent installs it on its hosted computer from a
+          registry the allowlist permits.
+      - follow: sources->nativeTools
+        label: package runs on the hosted computer
+        note: >
+          Its install script runs beside retained files and saved logins, on a computer that
+          persists into later tasks.
+      - follow: nativeTools->sources
+        label: publish as exfiltration
+        note: >
+          It publishes what it found to the same registry, a host every allowlist permits. The
+          list said where the computer may talk, not what it may say; method restrictions and
+          watching those hosts for writes are what remain.
 
 deviations:
   - subject: Hosted browser and backend connector routes remain separate

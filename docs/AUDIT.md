@@ -968,6 +968,9 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
 | API/SDK managed agent runtime | Enterprise data | external | `componentDataSources` |
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
+| API/SDK managed agent runtime | Source control | service | `componentDataSources` |
+| API/SDK managed agent runtime | Public package sources | external | (none) |
+| API/SDK managed agent runtime | Open web | external | `componentDataSources` |
 | API/SDK managed agent runtime | Identity services | governance | (none) |
 | API/SDK managed agent runtime | Secrets & key management | governance | (none) |
 | API/SDK managed agent runtime | Policy & authorization | governance | (none) |
@@ -983,6 +986,8 @@ Highlights below are Google's original mapping, not ours.
 | Persistent managed agents | Tool services | service | `componentTools` |
 | Persistent managed agents | Enterprise data | external | `componentDataSources` |
 | Persistent managed agents | Open web | external | `componentDataSources` |
+| Persistent managed agents | Source control | service | `componentDataSources` |
+| Persistent managed agents | Public package sources | external | (none) |
 | Persistent managed agents | Identity services | governance | (none) |
 | Persistent managed agents | Secrets & key management | governance | (none) |
 | Persistent managed agents | Policy & authorization | governance | (none) |
