@@ -43,14 +43,27 @@ export const ICON_NAMES = [
 // architecture in one glance, with short arrows between things that talk to each other.
 const COL_W = 176;
 const COL_GAP = 44;
-/** Tall enough for a vertical run carrying three stacked risk tags to clear the tab below it. */
-const ROW_GAP = 62;
+/**
+ * Tall enough for a vertical run carrying three stacked risk tags to clear the tab below it,
+ * and — since an arrow into a block's top now stops at its tab, 11px short of the border — for
+ * two chips on that run to clear the arrowheads at both ends.
+ */
+const ROW_GAP = 73;
 const MARGIN_X = 18;
 /** Room above the first row for tabs and risk-tag stacks; grown further when a stack is deep. */
 const MARGIN_TOP = 60;
 const MARGIN_BOTTOM = 32;
 
 export const TAB_H = 20;
+/**
+ * The title tab as the renderer draws it: centred on the block's top border from 11px above
+ * it, 10px IBM Plex Mono caps (0.6em advance) with 0.08em tracking and 10px padding each side.
+ * It draws above the arrows, so an arrow meeting the top border under it loses its arrowhead.
+ */
+const TAB_TOP = 11;
+const tabHalfWidth = (title: string) => (title.length * 6.8 + 20) / 2;
+/** Half an arrowhead's width: an anchor this close to the tab still loses part of its head. */
+const ARROW_HALF = 7;
 /** Band chrome, shared with both renderers so a band's rect can be derived here. */
 export const ZONE_PAD = 16;
 export const ZONE_HEAD = 30;
@@ -372,6 +385,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     return group * 1e6 + within;
   };
   const parentOf = new Map(arch.blocks.filter((b) => b.parent).map((b) => [b.id, b.parent!]));
+  const blockById = new Map(arch.blocks.map((b) => [b.id, b]));
   const ancestors = (id: string): string[] => {
     const out: string[] = [];
     for (let p = parentOf.get(id); p; p = parentOf.get(p)) out.push(p);
@@ -418,7 +432,14 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     }
     const clampX = (x: number) => Math.min(Math.max(x, r.x + 12), r.x + r.w - 12);
     const clampY = (y: number) => Math.min(Math.max(y, r.y + 12), r.y + r.h - 12);
-    if (side === "t") return { x: clampX(along.x + along.w * f), y: r.y };
+    if (side === "t") {
+      // An arrow that meets the top border under the title tab stops at the tab's top edge
+      // instead, so its arrowhead lands on the tab rather than hidden beneath it.
+      const x = clampX(along.x + along.w * f);
+      const block = blockById.get(blockId);
+      const underTab = block && block.kind !== "actor" && Math.abs(x - cx(r)) < tabHalfWidth(block.title) + ARROW_HALF;
+      return { x, y: underTab ? r.y - TAB_TOP : r.y };
+    }
     if (side === "b") return { x: clampX(along.x + along.w * f), y: r.y + r.h };
     if (side === "l") return { x: r.x, y: clampY(along.y + along.h * f) };
     return { x: r.x + r.w, y: clampY(along.y + along.h * f) };
