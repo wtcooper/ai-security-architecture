@@ -287,7 +287,21 @@ stay items on the provider block, because we cannot see inside — with one exce
 2026-09-09: the API/SDK managed runtime, whose built-in tools are the vendor's coding-agent
 tool surface, enumerated in the definition and bounded by an environment egress policy the
 customer authors. What the customer configures, the drawing shows: Native tools nest inside
-that runtime as a provider-kind child. Every managed runtime reaches the same external set
+that runtime as a provider-kind child.
+
+**The block that runs the agent opens every connection, on every surface.** On the endpoint
+drawings that is the local harness and its Native tools: git to our Source control on the
+developer's own credentials, brokered calls through the AI gateway, the web and packages
+directly. On the managed runtimes it is the Managed runtime: git to our Source control through
+the GitHub App, tool calls down the tunnel, the vendor's connectors, the web and packages from
+its Native tools. The Vendor service is the control plane and front door — people enter, admins
+configure, audit leaves — and opens no data connection; on the endpoint drawings it is also the
+API the local harness calls. The API/SDK runtime draws no Vendor service because our own
+application is its front door. Where a vendor is one block (the enterprise chat service, the
+agent builder platform — rule 8), that block is both and its connections leave it. Our Source
+control is never behind the AI gateway or the tunnel.
+
+Every managed runtime reaches the same external set
 from its sandbox, under an egress allowlist the customer authors and the provider enforces: the
 Open web, public Source control and Public package sources (or the provider's own mirror).
 

@@ -853,6 +853,7 @@ Highlights below are Google's original mapping, not ours.
 | First-party coding & desktop agents | AI gateway | service | (none) |
 | First-party coding & desktop agents | Tool services | service | `componentTools` |
 | First-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
+| First-party coding & desktop agents | Source control | service | `componentDataSources` |
 | First-party coding & desktop agents | Private pkg registry | external | `componentDataSources` |
 | First-party coding & desktop agents | Model provider | provider | `componentModelServing` |
 | First-party coding & desktop agents | Source control | service | `componentDataSources` |
@@ -871,7 +872,7 @@ Highlights below are Google's original mapping, not ours.
 | Third-party coding & desktop agents | Tool services | service | `componentTools` |
 | Third-party coding & desktop agents | Enterprise data | external | `componentDataSources` |
 | Third-party coding & desktop agents | Vendor service | provider | (none) |
-| Third-party coding & desktop agents | Tunnel connector | service | `componentAgentUserQuery` |
+| Third-party coding & desktop agents | Source control | service | `componentDataSources` |
 | Third-party coding & desktop agents | Model provider | provider | `componentModelServing` |
 | Third-party coding & desktop agents | Open web | external | `componentDataSources` |
 | Third-party coding & desktop agents | Source control | service | `componentDataSources` |

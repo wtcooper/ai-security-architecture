@@ -165,9 +165,9 @@ blocks:
       admission decision on the drawing.
     items:
       - id: phoneWeb
-        label: Phone & web apps
+        label: Vendor apps
         icon: phone
-        note: The owner's own surfaces, signed into the vendor account the session is bound to.
+        note: The vendor's phone and browser apps on the owner's device, signed into the vendor account the session is bound to.
       - id: chatChannels
         label: Chat channels
         icon: chat
@@ -282,9 +282,9 @@ blocks:
         label: MCP client
         icon: plug
         note: >
-          The harness's own MCP client. On most products it reaches servers through the
-          vendor's connector service, outside the environment's network policy — which is why
-          the path to our servers is drawn from the control plane to our gateway, and why the
+          The harness's own MCP client. On most products its calls leave through the vendor's
+          connector proxy, outside the sandbox's network policy — which is why the path to our
+          servers is drawn from the runtime rather than from Native tools, and why the
           connector allowlist is a control-plane setting rather than a sandbox one.
 
   - id: nativeTools
@@ -338,9 +338,10 @@ blocks:
       The published surfaces of the vendor's control plane: the settings that reach a hosted
       session (server-managed, never the device's), the shared environments an owner defines,
       the org-level switch for the hosted mode, the relay behind the phone and the channel,
-      the scheduler behind routines and automations, and the connector service that calls MCP
-      servers on the session's behalf. This is the tier a hosted session is admitted by; the
-      runtime above is the tier it executes in.
+      the scheduler behind routines and automations, and where connectors and the GitHub App are
+      configured and approved. This is the tier a hosted session is admitted by and steered
+      through; it runs nothing and opens no connection of its own — every data path leaves the
+      runtime above, the tier the session executes in.
     items:
       - id: managedSettings
         label: Managed settings
@@ -348,13 +349,6 @@ blocks:
         note: >
           Server-managed settings and organisation-shared environments — network access level,
           environment variables, setup script — plus the toggles that enable hosted mode at all.
-      - id: connectorBroker
-        label: Connector broker
-        icon: plug
-        note: >
-          The vendor's MCP and connector service, calling our gateway down the tunnel and the
-          approved SaaS connectors on the vendor's side, outside the sandbox's egress policy, on
-          tokens the vendor holds.
       - id: auditExport
         label: Session audit export
         icon: eye
@@ -376,7 +370,7 @@ blocks:
     col: 3
     row: 3
     note: >
-      Vendor-supplied software we run inside our own network so the vendor's connector service
+      Vendor-supplied software we run inside our own network so the hosted runtime's MCP calls
       can reach our gateway without an inbound rule: it dials out, holds the connection open
       and carries the vendor's MCP requests in. Transport only — it does not authenticate to
       the upstream, and the payloads still traverse the vendor's cloud — so tool calls go to the
@@ -399,7 +393,7 @@ blocks:
     col: 3
     row: 4
     note: >
-      The customer-operated crossing where the vendor's connector service is admitted to our
+      The customer-operated crossing where the hosted runtime's MCP calls are admitted to our
       MCP servers: the one component on the reach-back path where the grant is ours to scope
       and revoke and the call is recorded on our terms. Not on the inference path: the hosted
       loop's model calls stay with the vendor.
@@ -495,11 +489,11 @@ blocks:
     cosaiComponent: componentTools
     zone: zoneVendor
     col: 4
-    row: 3
+    row: 0
     pack: toolServicesRemote
     note: >
-      The vendor's connectors to the SaaS we approved — ticketing, chat, documents — called by
-      its connector service under our agreement, on tokens the vendor holds, outside both the
+      The vendor's connectors to the SaaS we approved — ticketing, chat, documents — called
+      from the runtime under our agreement, on tokens the vendor holds, outside both the
       sandbox's egress policy and our gateway. A service outside any agreement is not
       connected.
 
@@ -609,15 +603,15 @@ edges:
     to: managedRuntime
     path: primary
     bidir: true
-    label: admission, settings & tool calls
+    label: admission & settings
     note: >
       The control plane admitting a session to the runtime: which environment it runs in, what
       the server-managed settings permit, which connectors it may call, and — from the
-      scheduler — sessions that start with nobody present at all. The same exchange carries
-      the session's connector calls to the connector service and their results back.
+      scheduler — sessions that start with nobody present at all. Status and results come back
+      the same way for the person steering.
   - from: managedRuntime
     to: sourceControl
-    route: vh
+    route: hv
     path: external
     bidir: true
     label: GitHub App · IP allowlist
@@ -638,16 +632,16 @@ edges:
       The gate. A person reviews the draft, approves the workflows it would fire, and merges —
       or does not. Require that the initiator's approval does not count and that the agent
       cannot approve, mark ready or merge; verify that each product enforces both.
-  - from: vendorService
+  - from: managedRuntime
     to: vendorTools
     path: external
     bidir: true
     label: approved connectors
     note: >
-      The connector service calling the SaaS we approved from the vendor's side, on tokens the
-      vendor holds. Its allowlist is a control-plane setting the session cannot widen; what
+      The runtime's connectors calling the SaaS we approved from the vendor's side, on grants the
+      vault holds. Its allowlist is a control-plane setting the session cannot widen; what
       these connectors return reaches the loop without crossing anything we run.
-  - from: vendorService
+  - from: managedRuntime
     to: tunnel
     path: external
     bidir: true
@@ -657,7 +651,7 @@ edges:
       The reach-back path, and the crossing this drawing exists to govern: compute we do not
       operate calling back into our systems for data connectors, down a connection our side
       opened, so nothing is exposed inbound. Git does not use it: it reaches our GitHub
-      Enterprise Cloud through the vendor's GitHub App. The public-endpoint form — the connector service calling an internet-facing
+      Enterprise Cloud through the vendor's GitHub App. The public-endpoint form — the runtime calling an internet-facing
       gateway URL, admitted at our edge by the vendor's IP ranges — is recorded as a deviation
       rather than drawn as a second path.
   - from: tunnel
@@ -708,9 +702,9 @@ edges:
       comes back as instruction.
   - from: managedRuntime
     to: publicRepos
+    route: hv
     path: external
     outbound: true
-    route: hv
     label: clone public repos
     note: >
       A read-only clone of a public repository — through the sandbox's egress or the vendor's
@@ -847,7 +841,7 @@ pins:
         The environment's network policy, authored by us and enforced by the vendor around the sandbox: an
         allowlist, locked by an administrator, with the setup phase separated from the agent phase and write
         methods restricted on the hosts the list must permit. Paths outside the sandbox's network — the git
-        proxy, the connector service, inference — are verified per product and bounded elsewhere.
+        proxy, the connector proxy, inference — are verified per product and bounded elsewhere.
     - mitigation: AML.M0028
       at: sourceControl
       note: >-
@@ -934,15 +928,10 @@ walkthrough:
         The reviewed setup script installs pinned dependencies verified against lockfile
         hashes — a mismatch fails the setup — and caches the result; then the network closes
         and the agent phase begins.
-    - follow: managedRuntime->vendorService
-      label: tool request to the connector
-      note: >
-        The session needs a record our systems hold, and its MCP client hands the call to the
-        vendor's connector service.
-    - follow: vendorService->tunnel
+    - follow: managedRuntime->tunnel
       label: tool call down the tunnel
       note: >
-        The connector service calls back into us — the one crossing on the drawing where
+        The runtime's MCP client calls back into us — the one crossing on the drawing where
         external compute reaches our systems — down the outbound-only connection our tunnel
         holds open.
     - follow: tunnel->aiGateway
@@ -966,12 +955,9 @@ walkthrough:
     - follow: aiGateway->tunnel
       label: into the tunnel
       note: Classified at the gateway, then back into the connector.
-    - follow: tunnel->vendorService
+    - follow: tunnel->managedRuntime
       label: tool result
-      note: And back to the vendor's connector service.
-    - follow: vendorService->managedRuntime
-      label: result to the loop
-      note: The connector service returns the result to the session, where the loop reads it.
+      note: And back to the session.
     - follow: managedRuntime->sourceControl
       label: push branch, open draft PR
       note: >
@@ -1077,22 +1063,23 @@ deviations:
       Enterprise Server changes only the network path: the vendor's IPs allowlisted at our
       firewall, private connectivity where a vendor offers it (AWS PrivateLink or Cloudflare
       Tunnel), or execution moved inside on self-hosted runners — recorded here rather than drawn.
-      The endpoint drawings keep the repository as an Enterprise data item because there it is a
-      working copy on a disk; public repositories a session only clones are a second Source
-      control block, in the External band.
+      The endpoint drawings reach the same block from the local agent's git, on the developer's
+      own credentials; public repositories a session only clones are a second Source control
+      block, in the External band.
   - subject: Two vendor blocks for one vendor
     reason: >
       The three-zone rule draws a vendor as one block. This drawing has two for the agent
       vendor because a session is admitted by one tier and executed by another, and the
-      controls sit on different ones: the control plane carries the settings, the relay, the
-      scheduler and the connector service, all of which we configure; the runtime carries the
-      loop, the model and the sandbox, of which we configure only the sandbox's reach. The
-      endpoint drawing has the first, the API/SDK drawing the second; this one needs both.
+      controls sit on different ones: the control plane carries the settings, the connector and
+      App approvals, the relay and the scheduler, all of which we configure; the runtime carries
+      the loop, the model, the sandbox and every connection out — git, tool calls and
+      connectors — of which we configure only the reach. The endpoint drawing has the first,
+      the API/SDK drawing the second; this one needs both.
   - subject: The tunnel is drawn; the public-endpoint reach-back is recorded
     reason: >
       The target state is the API/SDK sibling's: the vendor reaches our gateway through an
       outbound-only tunnel, so no MCP endpoint of ours faces the internet. Where a product has
-      no tunnel, the vendor's connector service calls an internet-facing gateway URL instead,
+      no tunnel, the runtime calls an internet-facing gateway URL instead,
       admitted at our edge by the vendor's published IP ranges — the same crossing with a
       weaker admission, because an inbound listener now exists. Either way the gateway, not
       the transport, is the control. Products whose tool calls leave from compute we run — a

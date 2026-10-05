@@ -111,6 +111,10 @@ blocks:
       answers on its owner's or a service account rather than as the person who typed — the
       widest admission decision on the drawing.
     items:
+      - id: phoneWeb
+        label: Vendor apps
+        icon: phone
+        note: The vendor's phone and browser apps on the owner's device, where they ask for work and approve it.
       - id: chatChannels
         label: Chat channels
         icon: chat
@@ -121,7 +125,7 @@ blocks:
     cosaiComponent: componentApplication
     zone: zoneVendor
     col: 3
-    row: 1
+    row: 2
     note: >
       The vendor's product and channel integrations, and the customer-visible configuration
       surface: who may create, share and invoke an agent, and the schedules it keeps.
@@ -220,7 +224,7 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 2
-    row: 0
+    row: 1
     note: >
       Our GitHub Enterprise: the code bases the agent reads and changes. Code, instruction files and
       threads enter the session as instruction; a branch and a draft pull request come back out for a
@@ -404,9 +408,8 @@ blocks:
     note: Correlate available activity records and exercise stopping work and revoking continuing authority.
 
 edges:
-  - from: vendorService
+  - from: managedRuntime
     to: sourceControl
-    route: vh
     path: external
     bidir: true
     label: GitHub App · IP allowlist
@@ -417,12 +420,6 @@ edges:
       instruction files and threads, and the events that start or steer work. Outward: the push to
       the session's own branch and the draft pull request — the only writes the installation
       allows. It never rides the tunnel or the AI gateway.
-  - from: user
-    to: vendorService
-    path: external
-    bidir: true
-    label: request / approval / result
-    note: Authenticated product session; approval authority is checked separately from the right to make a request.
   - from: user
     to: remoteDevice
     path: primary
@@ -522,19 +519,19 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: vendorService->sourceControl
+      at: managedRuntime->sourceControl
       note: >-
         Issue text, comments, review threads and instruction files enter the session as instruction, and
         most are writable by people with no commit access. The dominant ingress wherever an agent works
         on code.
     - risk: riskRogueActions
-      at: vendorService->sourceControl
+      at: managedRuntime->sourceControl
       note: >-
         A push, a pull request, a reply on the thread — from a loop that reads its own thread. An
         agent's reply can fire comment-triggered automation, and an automation configured to approve
         low-risk pull requests removes the gate this drawing rests on.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: vendorService->sourceControl
+      at: managedRuntime->sourceControl
       note: >-
         The session exercises the user's grant, an App installation's, or a shared service identity's —
         whichever the product uses — and the repository host cannot tell an injected instruction from an
@@ -597,7 +594,7 @@ pins:
         steer a session; non-collaborators and unregistered Apps or bots are refused. The setting that
         decides whether a public issue is an attack surface.
     - mitigation: cap-input-guardrails
-      at: vendorService->sourceControl
+      at: managedRuntime->sourceControl
       note: >-
         Hidden-character and HTML-comment filtering on issue text, threads and instruction files before
         the session reads them, with content from non-collaborators treated as untrusted input rather
@@ -617,7 +614,7 @@ pins:
         not the actions taken to produce it: a session's tool calls and network effects have already
         happened when the reviewer arrives, which is why the sandbox and egress pins exist.
     - mitigation: D3-MFA
-      at: user->vendorService
+      at: remoteDevice->vendorService
       note: Require a verified second factor for product access and privileged approval sessions; SSO alone is insufficient.
     - mitigation: D3-APA
       at: vendorService
@@ -704,9 +701,11 @@ walkthrough:
     Read approved SaaS, our own records and public context, keep only permitted working state,
     and return a draft to the authorised audience.
   steps:
-    - follow: user->vendorService
+    - follow: user->remoteDevice
       label: request a draft
       note: Resolve the requester and permitted audience before admitting the task.
+    - follow: remoteDevice->vendorService
+      label: through the vendor's app
     - follow: vendorService->managedRuntime
       label: admit scoped work
       note: Apply the continuing agent's current scope and budgets, not the authority of an arbitrary channel member.
@@ -740,39 +739,39 @@ walkthrough:
     - follow: managedRuntime->vendorService
       label: return draft and provenance
       note: Preserve only permitted continuing context, with the configured audience and retention.
-    - follow: vendorService->user
+    - follow: vendorService->remoteDevice
       label: show draft to authorised audience
       note: A completed draft does not authorise sending or publishing it elsewhere.
+    - follow: remoteDevice->user
+      label: shown in the vendor's app
 
 scenarios:
   - title: The agent works on our code base
     steps:
-      - follow: managedRuntime->vendorService
-        label: through the vendor's GitHub App
-      - follow: vendorService->sourceControl
-        label: clone our repository
+      - follow: managedRuntime->sourceControl
+        label: clone via the GitHub App
         note: Admitted only from the vendor's published IPs, on an installation scoped to named repositories.
-      - follow: sourceControl->vendorService
+      - follow: sourceControl->managedRuntime
         label: code & instruction files
         note: Instruction files and threads arrive as instruction — screened, from approved initiators only.
-      - follow: vendorService->managedRuntime
-        label: onto the agent's computer
-      - follow: managedRuntime->vendorService
-        label: push the agent's branch
-      - follow: vendorService->sourceControl
-        label: draft pull request for review
+      - follow: managedRuntime->sourceControl
+        label: push branch, open draft PR
         note: The only writes the App installation allows; a person reviews and merges.
   - title: A consequential browser action needs approval
     steps:
       - follow: managedRuntime->vendorService
         label: propose exact action
         note: Present the operation, account, target and arguments before any effect.
-      - follow: vendorService->user
+      - follow: vendorService->remoteDevice
         label: request owner approval
         note: Use an authenticated approval surface; an untrusted page or channel participant cannot approve.
-      - follow: user->vendorService
+      - follow: remoteDevice->user
+        label: shown in the vendor's app
+      - follow: user->remoteDevice
         label: approve this action
         note: Bind the decision to the presented action and reject changed or expired proposals.
+      - follow: remoteDevice->vendorService
+        label: through the vendor's app
       - follow: vendorService->managedRuntime
         label: release approved dispatch
         note: Refuse the operation if the product cannot enforce the required human gate.
@@ -785,9 +784,11 @@ scenarios:
       - follow: managedRuntime->vendorService
         label: report outcome
         note: Report the actual effect and available evidence, including failures.
-      - follow: vendorService->user
+      - follow: vendorService->remoteDevice
         label: deliver receipt
         note: The requester receives the outcome; continuing grants remain subject to revocation.
+      - follow: remoteDevice->user
+        label: shown in the vendor's app
   - title: "Standing authority: a channel request and a schedule"
     steps:
       - follow: remoteDevice->vendorService

@@ -181,8 +181,9 @@ blocks:
       file and edit tools, the shell, the local MCP servers it spawns or attaches to, the
       sandbox for builds and tests, skills and computer use — running as the user on a machine
       that also holds their SSH keys, cloud credentials and browser sessions. What these tools
-      reach is drawn: memory files, the package mirror, the gateway's API brokerage, and the
-      open web and public repositories directly, under the endpoint's egress allowlist.
+      reach is drawn: memory files, the package mirror, the gateway's API brokerage, our source
+      control over git, and the open web and public repositories directly, under the
+      endpoint's egress allowlist.
     items:
       - id: editTools
         label: File & edit tools
@@ -259,20 +260,11 @@ blocks:
     cosaiComponent: componentDataSources
     zone: zoneCloud
     col: 3
-    row: 2
+    row: 3
     note: >
-      The repositories, documents and systems of record behind our own tool servers. Ours, and
-      still untrusted as input — many hands wrote the content, and none of them are
-      authenticated.
+      The documents and systems of record behind our own tool servers. Ours, and still
+      untrusted as input — many hands wrote the content, and none of them are authenticated.
     items:
-      - id: code
-        label: Code & project docs
-        icon: doc
-        note: A repository is a document the attacker may have contributed to.
-      - id: dotfile
-        label: Tool config dotfile
-        icon: gear
-        note: The tool-server declaration that ships with the code — the most attacked artifact here.
       - id: records
         label: Org data
         icon: db
@@ -281,6 +273,36 @@ blocks:
         label: File storage
         icon: folder
         note: Governed content stores reached through our connectors rather than the device's mounts.
+
+  - id: sourceControl
+    kind: service
+    title: Source control
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 3
+    row: 2
+    note: >
+      Our GitHub Enterprise: the code bases the agent clones, reads and changes. Code,
+      instruction files and threads enter the session as instruction; a branch and a pull
+      request go back for a person to review. The agent reaches it from the endpoint with git
+      and the developer's own credentials — not through the AI gateway — so nothing scopes it
+      to one repository or one branch; branch protection, review and CODEOWNERS on the agent's
+      configuration at the host are the gate.
+    items:
+      - id: repos
+        label: Repositories & instruction files
+        icon: code
+        note: >
+          The code, and the rules files, hooks and tool-server declarations committed beside it
+          — content that executes as instruction and is versioned like code because it is code.
+      - id: threads
+        label: Issues & PR threads
+        icon: chat
+        note: Writable by anyone the repository admits, read by the agent as instruction.
+      - id: prs
+        label: Pull requests & CI
+        icon: shield
+        note: The branch the agent pushes, the review a person gives, and the workflows it would fire.
 
   - id: registry
     kind: external
@@ -317,7 +339,7 @@ blocks:
         icon: model
         note: Receives code, documents and screenshots; returns the plan.
 
-  - id: sourceControl
+  - id: publicRepos
     kind: service
     title: Source control
     cosaiComponent: componentDataSources
@@ -329,7 +351,7 @@ blocks:
       build against. Nobody vouches for what they ship, which in this archetype includes rules
       files, hooks and tool-server declarations the harness reads as its own configuration.
     items:
-      - id: publicRepos
+      - id: publicRepositories
         label: Public repositories
         icon: code
         note: Cloned read-only and never pushed to; untrusted like any page.
@@ -510,7 +532,7 @@ edges:
       carry a token, a file or a key. What bounds it is the endpoint's egress policy, pinned on
       the native tools.
   - from: toolPlane
-    to: sourceControl
+    to: publicRepos
     route: vh
     path: external
     outbound: true
@@ -519,6 +541,17 @@ edges:
       Public repositories cloned read-only under the endpoint's egress allowlist. What arrives
       is untrusted input — and its rules files, hooks and tool-server declarations are
       configuration the harness will read unless review stops it.
+  - from: toolPlane
+    to: sourceControl
+    route: hv
+    path: primary
+    bidir: true
+    label: clone, push & PRs as the developer
+    note: >
+      git and the host's CLI from the shell, straight to our GitHub Enterprise on the
+      developer's own credentials — source control is not behind the AI gateway. Code, threads
+      and instruction files come in as context; a branch and a pull request go out, with every
+      repository the developer can write within reach.
   - from: aiGateway
     to: hostedTools
     path: primary
@@ -529,13 +562,11 @@ edges:
       and reached on grants scoped to the developer.
   - from: hostedTools
     to: orgData
-    route: hv
     path: primary
     bidir: true
     label: scoped reads & writes
     note: >
-      Repository reads, the writes that become pull requests, and business-system calls —
-      recorded on our side of the boundary.
+      Document reads and business-system calls — recorded on our side of the boundary.
 
   - from: sources
     to: registry
@@ -549,10 +580,20 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: hostedTools->orgData
+      at: toolPlane->sourceControl
       note: >
-        Source files, manifests, issue text and documents are unrelated paths into the same
-        context window, none of which is the developer's instruction.
+        Source files, manifests, issue text and review threads are unrelated paths into the
+        same context window, none of which is the developer's instruction — and most are
+        writable by people with no commit access.
+    - risk: riskRogueActions
+      at: toolPlane->sourceControl
+      note: >
+        A push or a pull request on the developer's own credentials, which reach every
+        repository they can write — branch protection and review at the host are what stop it
+        landing.
+    - risk: riskPromptInjection
+      at: hostedTools->orgData
+      note: Documents, tickets and records come back as tool results with the same standing as the task.
     - risk: riskPromptInjection
       at: memory
       note: >
@@ -587,7 +628,7 @@ pins:
         The machine also holds SSH keys, cloud credentials and browser sessions; outside the
         sandbox nothing separates them from the agent's shell on the way out.
     - risk: riskToolSourceProvenance
-      at: toolPlane->sourceControl
+      at: toolPlane->publicRepos
       note: >
         A public repository arrives on nobody's attestation, and the tool-server declarations
         and instruction files it ships are read as configuration and model input.
@@ -784,6 +825,15 @@ walkthrough:
       label: the change, for review
       note: >
         The change lands in the working tree for the developer to review — the loop's output is a diff, never a merge.
+    - follow: developer->harness
+      label: approved to push
+      note: Pushing is a consequential action, approved like any other.
+    - follow: toolPlane->sourceControl
+      label: branch & pull request
+      note: >
+        The native tools push a branch and open a pull request on our GitHub Enterprise, on the
+        developer's own credentials and straight from the shell — not through the gateway.
+        Branch protection and a person's review decide whether it merges.
 
 scenarios:
   - title: A poisoned document phones home
@@ -841,12 +891,12 @@ scenarios:
           agent has. A compromised release is code execution as the developer.
   - title: A public repository is cloned
     steps:
-      - follow: toolPlane->sourceControl
+      - follow: toolPlane->publicRepos
         label: clone a public repo
         note: >
           The task needs a public project to build against. The native tools clone it
           read-only, under the egress allowlist.
-      - follow: sourceControl->toolPlane
+      - follow: publicRepos->toolPlane
         label: its rules & tool config arrive
         note: >
           The clone brings its own rules files, hooks and tool-server declarations, on nobody's
