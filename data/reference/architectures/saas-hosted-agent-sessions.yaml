@@ -37,6 +37,13 @@ description:
     use user grants, a repository App, or a shared automation account. These choices determine
     who can start a task, what it can change, and which grants must be revoked when it stops.
 
+  - >
+    The critical boundary is the way back in. To be useful the agent needs our code bases and
+    data, and it reaches them through exactly two controlled crossings: a GitHub App installed
+    on named repositories of our GitHub Enterprise Cloud, admitted only from the vendor's
+    published IPs, for code; and an outbound-only tunnel we run to our AI gateway, for tool
+    calls to our tool servers and the data behind them. Source control is never behind the
+    gateway, and nothing else of the vendor's crosses into our systems.
 distinguishedBy:
   - >
     Against endpoint coding and desktop agents: the loop and selected task environment are hosted.
@@ -106,16 +113,16 @@ zones:
   - id: zoneCloud
     owner: cloud
     note: >
-      The tunnel the vendor's connector service arrives through, our gateway where it is
-      admitted to our tool servers, and the systems behind them.
+      Our GitHub Enterprise Cloud tenant, reached by the vendor's GitHub App; the tunnel the
+      vendor's connector calls arrive through; our gateway, and the tool servers and systems
+      behind it.
   - id: zoneVendor
     owner: vendor
     note: >
       Two blocks for the agent vendor, because a session is admitted by one and executed by
       the other: the control plane — settings, environments, the relay and the scheduler — and
-      the runtime that holds the loop, the model and the sandbox. Beside them, the rented code
-      host, a separate agreement unless the agent vendor also hosts the repository, and the
-      vendor's connectors to the SaaS we approved. What they operate inside each is assured,
+      the runtime that holds the loop, the model and the sandbox. Beside them, the vendor's
+      connectors to the SaaS we approved. What they operate inside each is assured,
       not drawn.
   - id: zoneExternal
     owner: external
@@ -152,7 +159,8 @@ blocks:
     row: 2
     note: >
       The doors that start and steer a session with nobody at the machine: the vendor's web
-      and mobile apps, and an @-mention in a chat channel. Admission is the vendor's account
+      and mobile apps (claude.ai/code, chatgpt.com/codex, GitHub's agents panel), and an
+      @-mention in a chat channel. Admission is the vendor's account
       binding for the first and whoever the channel admits for the second — the widest
       admission decision on the drawing.
     items:
@@ -176,33 +184,37 @@ blocks:
     row: 1
     note: >
       The vendor's application on the machine — CLI, editor extension or desktop app — drawn
-      only as far as this drawing uses it: the loop that hands off. "Continue in the cloud", a prefix on the prompt or a delegate command pushes the
+      only as far as this drawing uses it: the app that starts or hands off a session. "Continue in the cloud", a prefix on the prompt or a delegate command pushes the
       working branch and a summary of the conversation up and starts a session from it;
       teleport brings the cloud branch and its history back. The full anatomy — native tools,
       memory, the local model path — is the endpoint drawing's, and nothing of it executes
       on this drawing's path.
     items:
-      - id: loop
-        label: Agent loop
-        icon: agent
-        note: The conversation that becomes the hosted session's opening context.
+      - id: apps
+        label: Desktop, CLI & IDE apps
+        icon: code
+        note: >
+          The vendor's desktop app, CLI or editor extension starting or handing off a session —
+          choosing cloud for a task, "continue in the cloud", or a delegate command. The loop
+          itself runs in the managed runtime.
 
   - id: sourceControl
     kind: service
     title: Source control
     cosaiComponent: componentDataSources
-    zone: zoneVendor
-    col: 4
+    zone: zoneCloud
+    col: 2
     row: 0
     note: >
       The one tier that is ingress, egress, definition and gate at once on the coding profile.
       Issue text, comments and review threads enter the session as instruction; a branch and a
       draft pull request come back out; the instruction files, setup scripts and environment
       configuration committed beside the code are the session's definition; review, merge and
-      "approve and run workflows" are the gate. A rented code host is operated by its provider,
-      so it sits in the Vendor band; the policy that matters — App installation scope, branch
-      protection, CODEOWNERS on the agent's own configuration, who may trigger a run — is still
-      ours to set. A self-hosted repository moves this block to Enterprise cloud.
+      "approve and run workflows" are the gate. It is our GitHub Enterprise Cloud tenant, so it
+      sits in our band, and the vendor reaches it only through a GitHub App installed on named
+      repositories, admitted by the enterprise IP allow list from the vendor's published IPs —
+      under branch protection, CODEOWNERS on the agent's own configuration and a rule for who
+      may trigger a run.
     items:
       - id: repos
         label: Repositories & instruction files
@@ -367,8 +379,9 @@ blocks:
       Vendor-supplied software we run inside our own network so the vendor's connector service
       can reach our gateway without an inbound rule: it dials out, holds the connection open
       and carries the vendor's MCP requests in. Transport only — it does not authenticate to
-      the upstream, and the payloads still traverse the vendor's cloud — so it hands to the AI
-      gateway, never to a server or the data. The tunnel token and the TLS key on this host
+      the upstream, and the payloads still traverse the vendor's cloud — so tool calls go to the
+      AI gateway, never straight to a tool server or the data. Git uses neither the tunnel nor
+      the gateway: it reaches our GitHub Enterprise Cloud through the vendor's GitHub App. The tunnel token and the TLS key on this host
       are the load-bearing secrets. Both first-party vendors ship one for their connectors
       (OpenAI's Secure MCP Tunnel for ChatGPT and Codex; Anthropic's MCP tunnels, an
       Enterprise research preview, for claude.ai connectors); where a product has none, the
@@ -604,16 +617,17 @@ edges:
       the session's connector calls to the connector service and their results back.
   - from: managedRuntime
     to: sourceControl
+    route: vh
     path: external
     bidir: true
-    route: vh
-    label: events in, branch & PR out
+    label: GitHub App · IP allowlist
     note: >
-      Both directions of the repository host. Inward: an issue assigned, a comment, a CI
-      failure or a review starts or steers a session, and the instruction files and threads
-      enter its context. Outward: the clone through the git proxy on a scoped credential, the
-      push to the session's own branch, and the draft pull request — the only write the
-      runtime is permitted.
+      Both directions of our GitHub Enterprise Cloud tenant, on a GitHub App installed on named
+      repositories and admitted by the enterprise IP allow list only from the vendor's published
+      IPs; the vendor's git proxy holds the credential outside the sandbox. Inward: the code,
+      instruction files and threads, and the events that start or steer work. Outward: the push to
+      the session's own branch and the draft pull request — the only writes the installation
+      allows. It never rides the tunnel or the AI gateway.
   - from: developer
     to: sourceControl
     path: primary
@@ -641,9 +655,9 @@ edges:
     label: outbound-only tunnel
     note: >
       The reach-back path, and the crossing this drawing exists to govern: compute we do not
-      operate calling back into our systems for data connectors. The vendor's connector
-      service sends its MCP requests down a connection our side opened, so nothing is exposed
-      inbound. The public-endpoint form — the connector service calling an internet-facing
+      operate calling back into our systems for data connectors, down a connection our side
+      opened, so nothing is exposed inbound. Git does not use it: it reaches our GitHub
+      Enterprise Cloud through the vendor's GitHub App. The public-endpoint form — the connector service calling an internet-facing
       gateway URL, admitted at our edge by the vendor's IP ranges — is recorded as a deviation
       rather than drawn as a second path.
   - from: tunnel
@@ -652,7 +666,8 @@ edges:
     bidir: true
     label: tool call / result
     note: >
-      The tunnel hands to our gateway's aggregate MCP endpoint, never to a server or the data:
+      Tool calls the tunnel hands to our gateway's aggregate MCP endpoint, never straight to a tool
+      server or the data; git never comes this way — it reaches our GitHub Enterprise Cloud through the vendor's GitHub App:
       admitted on audience-bound tokens and per-user grants our own authorization server
       issued, per-call policy evaluated at the gateway, the servers and tools scoped to a named
       list, and every call recorded against the grant. The vendor's identity and IP ranges
@@ -788,7 +803,7 @@ pins:
         Session budgets, usage ceilings and automation caps in the tenant, because an unattended loop that
         re-triggers itself bills by the minute and nobody is watching the meter.
     - mitigation: D3-APA
-      at: managedRuntime->sourceControl
+      at: sourceControl
       note: >-
         The repository host's trigger policy admits only approved initiators — people with write access, and
         registered automations or schedules with a named owner and a bounded identity — to start or steer a
@@ -834,7 +849,7 @@ pins:
         methods restricted on the hosts the list must permit. Paths outside the sandbox's network — the git
         proxy, the connector service, inference — are verified per product and bounded elsewhere.
     - mitigation: AML.M0028
-      at: managedRuntime->sourceControl
+      at: sourceControl
       note: >-
         A token that reaches one repository and one branch, cannot push the default branch, mark ready,
         approve or merge; protected scopes and repository blocklists on the products that have them; a session
@@ -1052,18 +1067,19 @@ deviations:
       loop item only, so a reader flipping between the drawings sees that the engine moved
       rather than that the endpoint lost something, and the pattern is not asserted of a block
       that does not carry it.
-  - subject: Source control is drawn in the Vendor band, as a rented code host
+  - subject: Our source control is reached through a scoped GitHub App
     reason: >
-      Bands mean the operator, and the reference assumes a rented code host, which its
-      provider operates; the vocabulary's older note places the block in our band whenever
-      its policy is ours. The policy on the data path — App installation scope, branch
-      protection, CODEOWNERS on agent configuration, who may trigger a run, "approve and run
-      workflows" — is still ours to set, and the host is usually a separate agreement from the
-      agent vendor's. A self-hosted repository moves the block to Enterprise cloud with the
-      same policy. The endpoint drawings keep the repository as an Enterprise data item because
-      there it is a working copy on a disk; here the host itself is the ingress, the egress and
-      the gate. Public repositories a session only clones are a second Source control block, in
-      the External band.
+      Our GitHub Enterprise Cloud tenant sits in our band: the policy on the data path — App
+      installation scope, the enterprise IP allow list, branch protection, CODEOWNERS on agent
+      configuration, who may trigger a run, "approve and run workflows" — is ours. Every major
+      provider connects the same way: a GitHub App on named repositories, its credential held in
+      the vendor's git proxy, admitted from the vendor's published IPs. A self-hosted GitHub
+      Enterprise Server changes only the network path: the vendor's IPs allowlisted at our
+      firewall, private connectivity where a vendor offers it (AWS PrivateLink or Cloudflare
+      Tunnel), or execution moved inside on self-hosted runners — recorded here rather than drawn.
+      The endpoint drawings keep the repository as an Enterprise data item because there it is a
+      working copy on a disk; public repositories a session only clones are a second Source
+      control block, in the External band.
   - subject: Two vendor blocks for one vendor
     reason: >
       The three-zone rule draws a vendor as one block. This drawing has two for the agent

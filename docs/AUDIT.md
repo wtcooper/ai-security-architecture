@@ -960,6 +960,7 @@ Highlights below are Google's original mapping, not ours.
 | API/SDK managed agent runtime | Managed runtime | provider | `componentReasoningCore` |
 | API/SDK managed agent runtime | Native tools | provider | `componentTools` |
 | API/SDK managed agent runtime | Agent definition & code | service | `componentAgentSystemInstruction` |
+| API/SDK managed agent runtime | Source control | service | `componentDataSources` |
 | API/SDK managed agent runtime | Tunnel connector | service | `componentAgentUserQuery` |
 | API/SDK managed agent runtime | AI gateway | service | (none) |
 | API/SDK managed agent runtime | Tool services | service | `componentTools` |
@@ -978,6 +979,7 @@ Highlights below are Google's original mapping, not ours.
 | Persistent managed agents | Managed runtime | provider | `componentReasoningCore` |
 | Persistent managed agents | Native tools | provider | `componentTools` |
 | Persistent managed agents | Tool services | service | `componentTools` |
+| Persistent managed agents | Source control | service | `componentDataSources` |
 | Persistent managed agents | Tunnel connector | service | `componentAgentUserQuery` |
 | Persistent managed agents | AI gateway | service | (none) |
 | Persistent managed agents | Tool services | service | `componentTools` |
@@ -1020,7 +1022,7 @@ Highlights below are Google's original mapping, not ours.
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
 | UI/low-code managed agent runtime | use | draft | 7 | _none_ |
-| API/SDK managed agent runtime | hybrid | draft | 9 | Execution Isolation, Agent Egress Control |
+| API/SDK managed agent runtime | hybrid | draft | 9 | Access Policy Administration, Execution Isolation, Agent Egress Control |
 | Persistent managed agents | use | draft | 8 | _none_ |
 
 ### 5b. AI tooling registry
@@ -1037,20 +1039,20 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 14/15 | Limit AI Workload Resource Consumption |  |
+| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| Amazon Bedrock AgentCore | aws | API/SDK managed agent runtime | 2026-09 | 14/15 | Limit AI Workload Resource Consumption |  |
+| Amazon Bedrock AgentCore | aws | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | Cline | cline | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Multi-factor Authentication, Input Screening Guardrails |  |
+| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Input Screening Guardrails, Multi-factor Authentication |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
 | GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 13/13 | _none_ |  |
-| Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 14/15 | Limit AI Workload Resource Consumption |  |
+| Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | LM Studio | lmstudio | Local model runtime | 2026-09 | 10/10 | _none_ |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
@@ -1058,13 +1060,13 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | MLflow Tracking Server and Model Registry | mlflow | Fine-tuning and model registry pipeline | 2026-09 | 12/12 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | Ollama | ollama | Local model runtime | 2026-09 | 10/10 | _none_ |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 14/15 | Limit AI Workload Resource Consumption |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 18/18 | _none_ |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
-| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
+| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Input Screening Guardrails, Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |

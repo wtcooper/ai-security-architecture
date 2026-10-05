@@ -41,6 +41,13 @@ description:
     grant. A saved agent identifier is not necessarily a separately revocable principal. Verify
     which identity and policy features the chosen provider exposes.
 
+  - >
+    The critical boundary is the way back in. To be useful the agent needs our code bases and
+    data, and it reaches them through exactly two controlled crossings: a GitHub App installed
+    on named repositories of our GitHub Enterprise Cloud, admitted only from the vendor's
+    published IPs, for code; and an outbound-only tunnel we run to our AI gateway, for tool
+    calls to our tool servers and the data behind them. Source control is never behind the
+    gateway, and nothing else of the vendor's crosses into our systems.
 distinguishedBy:
   - >
     Against building the agent tier: the provider owns the loop. Customers configure supported
@@ -169,7 +176,7 @@ blocks:
     title: Managed runtime
     cosaiComponent: componentReasoningCore
     zone: zoneVendor
-    col: 3
+    col: 4
     row: 1
     note: >
       The provider hosts the agent loop itself — tool-call decisions, error recovery, context
@@ -292,6 +299,36 @@ blocks:
           the web it may fetch, public source control and the package sources or the
           provider's mirror, with write methods restricted on hosts the list must permit.
 
+  - id: sourceControl
+    kind: service
+    title: Source control
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 3
+    row: 3
+    note: >
+      Our GitHub Enterprise: the code bases the agent reads and changes. Code, instruction files and
+      threads enter the session as instruction; a branch and a draft pull request come back out for a
+      person to review. It sits in our band, and the vendor reaches it only through a GitHub App on named repositories, admitted from its published IPs by our enterprise IP allow list.
+    items:
+      - id: repos
+        label: Repositories & instruction files
+        icon: code
+        note: >
+          The code, and CLAUDE.md, AGENTS.md, setup scripts, hooks and MCP configuration — content that
+          executes as instruction and is versioned like code because it is code.
+      - id: threads
+        label: Issues & PR threads
+        icon: chat
+        note: >
+          Writable by anyone the repository admits, read by the session as instruction. Hidden characters
+          and HTML comments carry payloads the human reviewer never sees.
+      - id: prs
+        label: Pull requests & CI
+        icon: shield
+        note: >
+          The draft the session opens, the review a person gives, the workflows the pull request would
+          fire — and the single branch the session may write.
   - id: tunnel
     kind: service
     title: Tunnel connector
@@ -361,7 +398,7 @@ blocks:
     title: Tool services
     cosaiComponent: componentTools
     zone: zoneVendor
-    col: 4
+    col: 5
     row: 1
     pack: toolServicesRemote
     note: >
@@ -374,7 +411,7 @@ blocks:
     title: Source control
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 0
     note: >
       Public source control: open repositories a session clones read-only — an upstream
@@ -390,7 +427,7 @@ blocks:
     kind: external
     title: Public package sources
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 3
     note: >
       What a session installs from under the environment's allowlist: the provider's own
@@ -412,7 +449,7 @@ blocks:
     title: Open web
     cosaiComponent: componentDataSources
     zone: zoneExternal
-    col: 5
+    col: 6
     row: 2
     note: >
       What the sandbox searches and fetches under the environment's allowlist. Every page is
@@ -494,6 +531,19 @@ blocks:
       their console is one we cannot query during an incident.
 
 edges:
+  - from: managedRuntime
+    to: sourceControl
+    route: vh
+    path: external
+    bidir: true
+    label: GitHub App · IP allowlist
+    note: >
+      Both directions of our GitHub Enterprise Cloud tenant, on a GitHub App installed on named
+      repositories and admitted by the enterprise IP allow list only from the vendor's published
+      IPs; the vendor's git proxy holds the credential outside the sandbox. Inward: the code,
+      instruction files and threads, and the events that start or steer work. Outward: the push to
+      the session's own branch and the draft pull request — the only writes the installation
+      allows. It never rides the tunnel or the AI gateway.
   - from: engineer
     to: agentDef
     path: primary
@@ -541,9 +591,9 @@ edges:
       decide anything about the agent itself.
   - from: managedRuntime
     to: tunnel
+    route: vh
     path: external
     bidir: true
-    route: vh
     label: outbound-only tunnel
     note: >
       Their runtime reaching back into us through software they publish and we run. Note the
@@ -618,6 +668,24 @@ edges:
 
 pins:
   risks:
+    - risk: riskPromptInjection
+      at: managedRuntime->sourceControl
+      note: >-
+        Issue text, comments, review threads and instruction files enter the session as instruction, and
+        most are writable by people with no commit access. The dominant ingress wherever an agent works
+        on code.
+    - risk: riskRogueActions
+      at: managedRuntime->sourceControl
+      note: >-
+        A push, a pull request, a reply on the thread — from a loop that reads its own thread. An
+        agent's reply can fire comment-triggered automation, and an automation configured to approve
+        low-risk pull requests removes the gate this drawing rests on.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: managedRuntime->sourceControl
+      note: >-
+        The session exercises the user's grant, an App installation's, or a shared service identity's —
+        whichever the product uses — and the repository host cannot tell an injected instruction from an
+        intended one. What bounds it is the token's scope: one repository, one branch, no merge.
     - risk: riskAgenticDelegationConfusedDeputy
       at: tunnel
       note: >
@@ -678,6 +746,33 @@ pins:
         as it is installed. Pinning and hash verification stop a changed artifact; they do not
         make a reviewed version benign.
   mitigations:
+    - mitigation: D3-APA
+      at: sourceControl
+      note: >-
+        The repository host's trigger policy admits only approved initiators — people with write access,
+        and registered automations or schedules with a named owner and a bounded identity — to start or
+        steer a session; non-collaborators and unregistered Apps or bots are refused. The setting that
+        decides whether a public issue is an attack surface.
+    - mitigation: cap-input-guardrails
+      at: managedRuntime->sourceControl
+      note: >-
+        Hidden-character and HTML-comment filtering on issue text, threads and instruction files before
+        the session reads them, with content from non-collaborators treated as untrusted input rather
+        than instruction. Screening limits what an injection can say, not what the session may do.
+    - mitigation: AML.M0028
+      at: sourceControl
+      note: >-
+        A token that reaches one repository and one branch, cannot push the default branch, mark ready,
+        approve or merge; protected scopes and repository blocklists on the products that have them; a
+        session that can reach only repositories its trigger could already reach.
+    - mitigation: AML.M0029
+      at: sourceControl
+      note: >-
+        The gate: a draft pull request a person reviews and merges, an initiator whose approval does not
+        count, workflows that wait for "approve and run", and the agent's own configuration —
+        instruction files, hooks, setup scripts, MCP config — under CODEOWNERS. It approves the output,
+        not the actions taken to produce it: a session's tool calls and network effects have already
+        happened when the reviewer arrives, which is why the sandbox and egress pins exist.
     - mitigation: cap-agent-tool-registry
       at: agentDef->managedRuntime
       note: >-
@@ -823,6 +918,17 @@ walkthrough:
       note: And to the person the session ran for, attributable end to end.
 
 scenarios:
+  - title: The agent works on our code base
+    steps:
+      - follow: managedRuntime->sourceControl
+        label: clone via the GitHub App
+        note: Admitted only from the vendor's published IPs, on an installation scoped to named repositories.
+      - follow: sourceControl->managedRuntime
+        label: code & instruction files
+        note: Instruction files and threads arrive as instruction — screened, from approved initiators only.
+      - follow: managedRuntime->sourceControl
+        label: push branch, open draft PR
+        note: The only writes the App installation allows; a person reviews and merges.
   - title: A credential outlives its owner
     steps:
       - follow: agentDef->managedRuntime

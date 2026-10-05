@@ -178,7 +178,9 @@ side opens or a one-way pull of content into a mirror or store. A call we open i
 `outbound: true` from our side: one arrowhead, pointing out, and the reply rides it, so a walk
 may follow it back. It is never `bidir`. An outsider that may connect to us — a tool, a peer
 agent, a relay — holds an agreement, and so sits in the vendor band; the vendor reaches our
-systems only through the AI gateway, over the tunnel. Nor does a design connect out to a tool
+systems through two controlled crossings only — the outbound tunnel to the AI gateway for tool
+calls, and a GitHub App on named repositories, admitted from the vendor's published IPs, for our
+own source control (GitHub Enterprise Cloud, which always sits in the Enterprise cloud band). Nor does a design connect out to a tool
 surface outside any agreement: the external band holds only what our agents read or we pull —
 the Open web, public Source control, and public package, model and training sources — plus
 model providers and the consumer products drawn to be blocked. Tool services and Downstream

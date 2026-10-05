@@ -11,7 +11,7 @@ summary:
     from the person who set it up. Unlike a coding & desktop session, it holds standing
     connector grants and saved logins, so each consequential action is approved at dispatch
     rather than through a reviewed pull request. It works through the vendor's connectors and
-    a hosted computer, and reaches our own systems only down the tunnel to our AI gateway.
+    a hosted computer, and reaches our code and data only down the tunnel we run.
 
 description:
   - >
@@ -22,8 +22,10 @@ description:
   - >
     Its key tools: the vendor's connectors to the SaaS we approved (Tool services in the vendor
     band); the hosted computer's browser and shell; package installs and public source control
-    under one egress allowlist; its retained memory; its schedules; and an outbound-only tunnel
-    to our AI gateway, the only route into our own systems.
+    under one egress allowlist; its retained memory; and its schedules. The critical boundary is
+    the way back in, through two controlled crossings: a GitHub App on named repositories of our
+    GitHub Enterprise Cloud, admitted from the vendor's published IPs, for code; and an
+    outbound-only tunnel we run to our AI gateway, for tool calls to our tool servers and data.
   - >
     The baseline reads with scoped accounts and returns drafts. A consequential write needs an
     authenticated human approval bound to the exact action at dispatch; where a product cannot
@@ -212,6 +214,36 @@ blocks:
       the agent's standing grants under our agreement. A service outside any agreement is not
       connected. This baseline enables APIs and connectors only; A2A peers need a reviewed flow
       before use.
+  - id: sourceControl
+    kind: service
+    title: Source control
+    cosaiComponent: componentDataSources
+    zone: zoneCloud
+    col: 2
+    row: 0
+    note: >
+      Our GitHub Enterprise: the code bases the agent reads and changes. Code, instruction files and
+      threads enter the session as instruction; a branch and a draft pull request come back out for a
+      person to review. It sits in our band, and the vendor reaches it only through a GitHub App on named repositories, admitted from its published IPs by our enterprise IP allow list.
+    items:
+      - id: repos
+        label: Repositories & instruction files
+        icon: code
+        note: >
+          The code, and CLAUDE.md, AGENTS.md, setup scripts, hooks and MCP configuration — content that
+          executes as instruction and is versioned like code because it is code.
+      - id: threads
+        label: Issues & PR threads
+        icon: chat
+        note: >
+          Writable by anyone the repository admits, read by the session as instruction. Hidden characters
+          and HTML comments carry payloads the human reviewer never sees.
+      - id: prs
+        label: Pull requests & CI
+        icon: shield
+        note: >
+          The draft the session opens, the review a person gives, the workflows the pull request would
+          fire — and the single branch the session may write.
   - id: tunnel
     kind: service
     title: Tunnel connector
@@ -372,6 +404,19 @@ blocks:
     note: Correlate available activity records and exercise stopping work and revoking continuing authority.
 
 edges:
+  - from: vendorService
+    to: sourceControl
+    route: vh
+    path: external
+    bidir: true
+    label: GitHub App · IP allowlist
+    note: >
+      Both directions of our GitHub Enterprise Cloud tenant, on a GitHub App installed on named
+      repositories and admitted by the enterprise IP allow list only from the vendor's published
+      IPs; the vendor's git proxy holds the credential outside the sandbox. Inward: the code,
+      instruction files and threads, and the events that start or steer work. Outward: the push to
+      the session's own branch and the draft pull request — the only writes the installation
+      allows. It never rides the tunnel or the AI gateway.
   - from: user
     to: vendorService
     path: external
@@ -455,7 +500,8 @@ edges:
     bidir: true
     label: tool call / result
     note: >
-      The tunnel hands to our gateway's aggregate MCP endpoint, never to a server or the data:
+      Tool calls the tunnel hands to our gateway's aggregate MCP endpoint, never straight to a tool
+      server or the data; git never comes this way — it reaches our GitHub Enterprise Cloud through the vendor's GitHub App:
       admitted on audience-bound tokens and per-agent grants our own authorization server
       issued, per-call policy evaluated at the gateway, the servers and tools scoped to a named
       list, and every call recorded against the grant. The vendor's identity and IP ranges
@@ -475,6 +521,24 @@ edges:
 
 pins:
   risks:
+    - risk: riskPromptInjection
+      at: vendorService->sourceControl
+      note: >-
+        Issue text, comments, review threads and instruction files enter the session as instruction, and
+        most are writable by people with no commit access. The dominant ingress wherever an agent works
+        on code.
+    - risk: riskRogueActions
+      at: vendorService->sourceControl
+      note: >-
+        A push, a pull request, a reply on the thread — from a loop that reads its own thread. An
+        agent's reply can fire comment-triggered automation, and an automation configured to approve
+        low-risk pull requests removes the gate this drawing rests on.
+    - risk: riskAgenticDelegationConfusedDeputy
+      at: vendorService->sourceControl
+      note: >-
+        The session exercises the user's grant, an App installation's, or a shared service identity's —
+        whichever the product uses — and the repository host cannot tell an injected instruction from an
+        intended one. What bounds it is the token's scope: one repository, one branch, no merge.
     - risk: riskShadowAndUnknownAgents
       at: vendorService
       note: An unregistered persistent agent or schedule continues outside the approved owner and connector inventory.
@@ -525,6 +589,33 @@ pins:
         kept. The grant is the only thing bounding it, and the grant is issued at our gateway —
         never let the vendor's tunnel or IP range reach past it.
   mitigations:
+    - mitigation: D3-APA
+      at: sourceControl
+      note: >-
+        The repository host's trigger policy admits only approved initiators — people with write access,
+        and registered automations or schedules with a named owner and a bounded identity — to start or
+        steer a session; non-collaborators and unregistered Apps or bots are refused. The setting that
+        decides whether a public issue is an attack surface.
+    - mitigation: cap-input-guardrails
+      at: vendorService->sourceControl
+      note: >-
+        Hidden-character and HTML-comment filtering on issue text, threads and instruction files before
+        the session reads them, with content from non-collaborators treated as untrusted input rather
+        than instruction. Screening limits what an injection can say, not what the session may do.
+    - mitigation: AML.M0028
+      at: sourceControl
+      note: >-
+        A token that reaches one repository and one branch, cannot push the default branch, mark ready,
+        approve or merge; protected scopes and repository blocklists on the products that have them; a
+        session that can reach only repositories its trigger could already reach.
+    - mitigation: AML.M0029
+      at: sourceControl
+      note: >-
+        The gate: a draft pull request a person reviews and merges, an initiator whose approval does not
+        count, workflows that wait for "approve and run", and the agent's own configuration —
+        instruction files, hooks, setup scripts, MCP config — under CODEOWNERS. It approves the output,
+        not the actions taken to produce it: a session's tool calls and network effects have already
+        happened when the reviewer arrives, which is why the sandbox and egress pins exist.
     - mitigation: D3-MFA
       at: user->vendorService
       note: Require a verified second factor for product access and privileged approval sessions; SSO alone is insufficient.
@@ -654,6 +745,23 @@ walkthrough:
       note: A completed draft does not authorise sending or publishing it elsewhere.
 
 scenarios:
+  - title: The agent works on our code base
+    steps:
+      - follow: managedRuntime->vendorService
+        label: through the vendor's GitHub App
+      - follow: vendorService->sourceControl
+        label: clone our repository
+        note: Admitted only from the vendor's published IPs, on an installation scoped to named repositories.
+      - follow: sourceControl->vendorService
+        label: code & instruction files
+        note: Instruction files and threads arrive as instruction — screened, from approved initiators only.
+      - follow: vendorService->managedRuntime
+        label: onto the agent's computer
+      - follow: managedRuntime->vendorService
+        label: push the agent's branch
+      - follow: vendorService->sourceControl
+        label: draft pull request for review
+        note: The only writes the App installation allows; a person reviews and merges.
   - title: A consequential browser action needs approval
     steps:
       - follow: managedRuntime->vendorService
