@@ -471,6 +471,7 @@ blocks:
     zone: zoneGovernance
     col: 0
     row: 5
+    mitigations: [ D3-APA ]
     note: >
       Three layers to govern: our workload's identity to the vendor (federated, short-lived,
       never a pasted key), the per-user credentials the vault holds for our own servers, and
@@ -499,7 +500,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 5
-    mitigations: [ AML.M0028, AML.M0029, AML.M0036, cap-agent-action-policy-enforcement ]
+    mitigations: [ AML.M0028, AML.M0029, AML.M0036, cap-agent-action-policy-enforcement, AML.M0031, cap-agent-egress-control, cap-input-guardrails ]
     note: >
       What the hosted agent may reach in our systems, decided at our gateway rather than in
       their console — the per-tool approval their connector configuration defaults to, which
@@ -541,7 +542,7 @@ edges:
       Both directions of our GitHub Enterprise Cloud tenant, on a GitHub App installed on named
       repositories and admitted by the enterprise IP allow list only from the vendor's published
       IPs; the vendor's git proxy holds the credential outside the sandbox. Inward: the code,
-      instruction files and threads, and the events that start or steer work. Outward: the push to
+      instruction files and threads. Outward: the push to
       the session's own branch and the draft pull request — the only writes the installation
       allows. It never rides the tunnel or the AI gateway.
   - from: engineer
@@ -687,7 +688,7 @@ pins:
         whichever the product uses — and the repository host cannot tell an injected instruction from an
         intended one. What bounds it is the token's scope: one repository, one branch, no merge.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: tunnel
+      at: tunnel->aiGateway
       note: >
         Their infrastructure exercising our authority. The grant is the only thing bounding it,
         and the grant is issued at our gateway — which is the entire argument for drawing one.
@@ -749,16 +750,10 @@ pins:
     - mitigation: D3-APA
       at: sourceControl
       note: >-
-        The repository host's trigger policy admits only approved initiators — people with write access,
-        and registered automations or schedules with a named owner and a bounded identity — to start or
-        steer a session; non-collaborators and unregistered Apps or bots are refused. The setting that
-        decides whether a public issue is an attack surface.
-    - mitigation: cap-input-guardrails
-      at: managedRuntime->sourceControl
-      note: >-
-        Hidden-character and HTML-comment filtering on issue text, threads and instruction files before
-        the session reads them, with content from non-collaborators treated as untrusted input rather
-        than instruction. Screening limits what an injection can say, not what the session may do.
+        The repository host's access policy decides who may write the code, threads and instruction
+        files the session reads: write access for named people and registered automations, with non-
+        collaborators' content refused or treated as untrusted. The setting that decides whether a
+        public issue is an attack surface.
     - mitigation: AML.M0028
       at: sourceControl
       note: >-
@@ -834,7 +829,7 @@ pins:
     - mitigation: AML.M0028
       at: managedRuntime->vendorTools
       note: >-
-        Per-tool enablement and approval policy in the definition, and MCP servers admitted only as the
+        Per-tool enablement in the definition, and MCP servers admitted only as the
         definition declares them: the settings that make "the agent reaches SaaS data only through an approved
         connector" true. Nothing verifies what a declared server serves, and every one of these is
         configuration the next definition can undo, which is why the definition is reviewed like code.
@@ -870,6 +865,12 @@ pins:
         Archive the agent, interrupt its running and queued sessions, revoke its vault entries and stop our
         handlers dispatching for it — the SaaS form of the stop, and the response the
         credential-outlives-its-owner scenario actually invokes. An alias rollback alone affects new sessions only.
+    - mitigation: D3-APA
+      at: endUser->entry
+      note: >-
+        Our identity provider admits the end user to our front end, and the identity binding decides who
+        the session runs for — the user's own identity carried to the vendor, never a shared service
+        account.
 
 walkthrough:
   title: A user's request becomes a tool call on our systems

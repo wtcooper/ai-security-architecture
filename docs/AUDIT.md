@@ -680,10 +680,11 @@ Highlights below are Google's original mapping, not ours.
 | Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
 | Third-party SaaS | 5 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents |
 
-### 4a. Risks no architecture pins — 4 of 36
+### 4a. Risks no architecture pins — 5 of 36
 
 - Inferred Sensitive Data (`riskInferredSensitiveData`)
 - Federated/Distributed Training Privacy (`riskFederatedDistributedTrainingPrivacy`)
+- Covert Channels in Model Outputs (`riskCovertChannelsInModelOutputs`)
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 - Stale Agent Identity Binding (`riskStaleAgentIdentityBinding`)
 
@@ -1008,17 +1009,17 @@ Highlights below are Google's original mapping, not ours.
 
 | Architecture | Mode | Status | Items | Pinned mitigations not yet addressed |
 | --- | --- | --- | --- | --- |
-| Single agent workflow | build | draft | 7 | _none_ |
+| Single agent workflow | build | draft | 7 | Execution Isolation |
 | Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
 | Multi-agent workflow | build | draft | 8 | _none_ |
-| Chat agent with tools | build | draft | 7 | _none_ |
+| Chat agent with tools | build | draft | 7 | Execution Isolation |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | _none_ |
 | Fine-tuning and model registry pipeline | build | draft | 7 | Execution Isolation |
 | Browser AI agents & extensions | use | draft | 7 | _none_ |
 | First-party coding & desktop agents | hybrid | draft | 6 | _none_ |
 | Third-party coding & desktop agents | use | draft | 9 | Agent Kill Switch and Quarantine |
-| Local model runtime | use | draft | 4 | _none_ |
+| Local model runtime | use | draft | 4 | Verify AI Artifacts |
 | Personal autonomous agent | use | draft | 7 | File Analysis |
 | Enterprise AI chat with connectors | use | draft | 7 | _none_ |
 | Coding & desktop session managed agent runtime | use | draft | 8 | _none_ |
@@ -1046,7 +1047,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Cline | cline | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Input Screening Guardrails, Multi-factor Authentication |  |
+| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Multi-factor Authentication, Input Screening Guardrails |  |
 | GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
@@ -1055,24 +1056,24 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 13/13 | _none_ |  |
 | Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| LM Studio | lmstudio | Local model runtime | 2026-09 | 10/10 | _none_ |  |
+| LM Studio | lmstudio | Local model runtime | 2026-09 | 10/11 | Verify AI Artifacts |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | MLflow Tracking Server and Model Registry | mlflow | Fine-tuning and model registry pipeline | 2026-09 | 12/12 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
-| Ollama | ollama | Local model runtime | 2026-09 | 10/10 | _none_ |  |
+| Ollama | ollama | Local model runtime | 2026-09 | 10/11 | Verify AI Artifacts |  |
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
-| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 18/18 | _none_ |  |
+| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 18/19 | Execution Isolation |  |
 | ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
-| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Input Screening Guardrails, Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
+| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
 | Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
-| Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 22/22 | _none_ |  |
+| Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 22/23 | Execution Isolation |  |
 | vLLM | vllm | Self-hosted model inference | 2026-09 | 13/13 | _none_ |  |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps

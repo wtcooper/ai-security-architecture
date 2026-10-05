@@ -406,7 +406,7 @@ blocks:
     row: 7
     note: >
       The IdP and device-posture plane deciding who may open a session at all, and on what
-      machine — the binding that makes the enterprise agreement apply to this traffic.
+      machine — the binding the gateway's per-developer grants rest on.
 
   - id: govSecrets
     kind: governance
@@ -427,7 +427,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 7
-    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-sensitive-data-redaction, AML.M0036 ]
+    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-sensitive-data-redaction, AML.M0036, AML.M0028, AML.M0031, cap-input-guardrails, AML.M0029 ]
     note: >
       The decisions the one crossing enforces per call — what may be reached, what may leave,
       and what it may cost. With no vendor console above it, this is the only tier where a
@@ -440,7 +440,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 7
-    mitigations: [ cap-agent-tool-registry, cap-mcp-tool-integrity ]
+    mitigations: [ cap-agent-tool-registry, cap-mcp-tool-integrity, D3-FA ]
     note: >
       Which agents, connectors and servers are admitted, and pinned to which versions. This
       call-out carries more weight here than in any other drawing: the supply chain delivers
@@ -453,7 +453,7 @@ blocks:
     zone: zoneGovernance
     col: 6
     row: 7
-    mitigations: [ cap-agent-tracing, cap-shadow-ai-discovery, cap-agent-kill-switch ]
+    mitigations: [ cap-agent-tracing, cap-shadow-ai-discovery, cap-agent-kill-switch, D3-PA ]
     note: >
       Our gateway tap joined to endpoint telemetry — no vendor export exists to fuse with
       either — plus the discovery that finds the installs which never enrolled, and the stop.
@@ -602,9 +602,9 @@ pins:
         incidents wrote their persistence into.
     - risk: riskToolRegistryTampering
       at: toolPlane
-      note: >
-        Configuration admits the whole native tools and can arrive with the clone. Injecting into
-        it and swapping it after approval are the disclosed paths.
+      note: >-
+        The tool-server configuration decides which local servers join the native tools, and it can
+        arrive with the clone. Injecting into it and swapping it after approval are the disclosed paths.
     - risk: riskInsecureModelOutput
       at: harness
       note: >
@@ -622,11 +622,6 @@ pins:
         The mirror decides which build of the agent runs. A tampered or unpinned release is
         code execution as the developer, on a machine that also holds their keys — the
         category's landmark incident, not a hypothetical.
-    - risk: riskSensitiveDataDisclosure
-      at: toolPlane->aiGateway
-      note: >
-        The machine also holds SSH keys, cloud credentials and browser sessions; outside the
-        sandbox nothing separates them from the agent's shell on the way out.
     - risk: riskToolSourceProvenance
       at: toolPlane->publicRepos
       note: >
@@ -672,6 +667,11 @@ pins:
         The path a phone-home takes: a fetch or a shell command bundles a token, a file or a key
         into a request to a page the attacker controls. Nothing of ours is on this hop unless
         the endpoint's egress policy is.
+    - risk: riskPromptInjection
+      at: toolPlane->openWeb
+      note: >-
+        Search results and fetched pages come back as context with the same standing as the task —
+        documentation, issue threads and answers written by strangers.
   mitigations:
     - mitigation: cap-agent-action-policy-enforcement
       at: aiGateway
@@ -718,7 +718,7 @@ pins:
         The provider key lives in the gateway's vault, never pasted into a dotfile — and org access rides
         short-lived, connector-scoped grants the crossing issues per call.
     - mitigation: cap-mcp-tool-integrity
-      at: toolPlane->aiGateway
+      at: toolPlane->registry
       note: >-
         Provenance and behavioural review before a server is admitted, and harness, extension and skill
         versions pinned against the mirror: an update is a decision, because the update channel is this
@@ -752,16 +752,16 @@ pins:
     - mitigation: cap-agent-egress-control
       at: toolPlane
       note: >-
-        The endpoint's egress allowlist, enforced by device management, decides where the direct path may go:
-        the AI gateway, the package mirror, web search and fetch, and public repositories read-only —
-        nothing else. Shell commands, fetches and browser traffic are bounded here — not at the gateway, which
-        brokers model, MCP and API calls and sees nothing else.
+        The endpoint's egress allowlist, enforced by device management, decides where the direct path
+        may go: the AI gateway, the package mirror, our source control, web search and fetch, and public
+        repositories read-only — nothing else. Shell commands, fetches and browser traffic are bounded
+        here — not at the gateway, which brokers model, MCP and API calls and sees nothing else.
     - mitigation: D3-FA
       at: sources->registry
       note: >-
-        Admission scanning at the mirror: digest and signature verification, malware and typosquat checks on
-        everything proxied in from a public source, before anything inside can pull it. The registered
-        embodiment of artifact scanning, on the one edge where it applies.
+        Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
+        public source, before anything inside can pull it. The registered embodiment of artifact
+        scanning, on the one edge where it applies.
 
 walkthrough:
   title: The developer asks for a change

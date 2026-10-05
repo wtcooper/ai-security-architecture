@@ -70,13 +70,19 @@ Every mitigation carries `enforcement` in vocabulary.yaml:
   on a standard control block) to exist in that drawing, and the chip pins onto it.
   *Absorption* is permitted (option B): a simple diagram may let a functional block absorb the
   duty — the chip pins to the absorbing block and a `deviations:` entry records the
-  absorption. The build counts unrecorded absorptions as warnings.
+  absorption, naming the capability id it absorbs. The build fails an absorption no
+  deviation names.
 - **embedded** — enforced inside a functional component or on a flow (input validation,
   tenant checks, memory scoping, output bounding, permission gates). Pin only — on the edge
   or block where enforcement happens. Never drawn as a block.
 - **management** — off the data path (audit, registry and admission, evaluation of change,
   kill switch, policy authoring, assurance). Governance-plane call-out plus chip pinned to
   that call-out.
+
+Each capability has one governance group (`governanceGroups` in vocabulary.yaml): Identity
+services, Secrets & key management, Policy & authorization, Supply-chain assurance, or
+Observability & response. A capability pinned on a drawing is cited under its group's
+call-out wherever that block is drawn, and under no other; the build checks both.
 
 The same mitigation may legitimately sit at a different locus in one architecture when the
 data path differs — the canonical example is evaluation: a block in the training pipeline

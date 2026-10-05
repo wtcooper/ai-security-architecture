@@ -365,7 +365,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 5
-    mitigations: [ AML.M0028, cap-agent-egress-control, AML.M0004, AML.M0036, AML.M0029 ]
+    mitigations: [ AML.M0028, cap-agent-egress-control, AML.M0004, AML.M0036, AML.M0029, AML.M0031, cap-data-access-governance, cap-input-guardrails, cap-sensitive-data-redaction, cap-agent-action-policy-enforcement ]
     note: >
       What the conversation may reach and what it may spend, decided outside the loop that
       would otherwise be arguing for itself.
@@ -377,7 +377,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    mitigations: [ cap-agent-tool-registry, cap-staged-rollout-gate, cap-mcp-tool-integrity ]
+    mitigations: [ cap-agent-tool-registry, cap-staged-rollout-gate, cap-mcp-tool-integrity, D3-FA ]
     note: >
       Which tools may be offered to a conversation at all — admission, not discovery — and the
       behavioural checks in front of every model, prompt or tool change.
@@ -536,15 +536,10 @@ pins:
       note: The completion proposes the tool calls, and it is untrusted output.
     - risk: riskRogueActions
       at: internalTools->orgData
-      note: >
-        An action the human approved without reading is not an overseen action. Approval
-        fatigue is this architecture's version of no gate at all.
-    - risk: riskRogueActions
-      at: events->agent
-      note: >
-        A scheduled run has nobody in the thread to approve its proposals, so the action policy
-        must stop its writes; a scheduler holding a standing approval, or an auto-approve
-        setting, turns it into an unattended write.
+      note: >-
+        An action the human approved without reading is not an overseen action, and a scheduled run has
+        nobody in the thread to approve at all. Approval fatigue is this architecture's version of no
+        gate.
     - risk: riskRunawayAgentToolLoops
       at: agent
       note: >
@@ -569,7 +564,7 @@ pins:
       note: >
         The agent acts for the user with the service's reach. Keeping every tool call on the
         user's grant, not the workload's, is what closes the gap.
-    - risk: riskSensitiveDataDisclosure
+    - risk: riskExcessiveDataHandlingDuringInference
       at: localTools->memory
       note: >
         The session accumulates everything retrieved on earlier turns; a late question can
@@ -597,10 +592,11 @@ pins:
         Behavioural checks in front of every model, prompt or tool change, because the thing being changed is
         what decides the next action the human is asked to approve.
     - mitigation: AML.M0029
-      at: user->entry
+      at: internalTools->orgData
       note: >-
-        In-thread approval before consequential actions, with the proposal specific enough to be worth reading
-        — the architecture's primary control.
+        In-thread approval before consequential writes, with the proposal specific enough to be worth
+        reading — the architecture's primary control. Scheduled runs have no thread, so their writes
+        stop at the action policy.
     - mitigation: D3-APA
       at: user->entry
       note: A delegated grant scoped to the session and the user, not a standing power the service holds.
@@ -608,8 +604,10 @@ pins:
       at: gateway->internalTools
       note: Every tool call bounded by what the conversing user may touch, decided per call.
     - mitigation: D3-AA
-      at: agent
-      note: A distinct workload identity for the agent tier, kept separate from the user grants it carries.
+      at: agent->gateway
+      note: >-
+        A distinct workload identity for the agent tier, verified at the gateway and kept separate from
+        the user grants it carries.
     - mitigation: D3-CH
       at: agent->gateway
       note: Brokered, per-call, user-scoped credentials; the loop holds no standing keys for brokered calls.
@@ -684,9 +682,14 @@ pins:
     - mitigation: D3-FA
       at: sources->registry
       note: >-
-        Admission scanning at the mirror: digest and signature verification, malware and typosquat checks on
-        everything proxied in from a public source, before anything inside can pull it. The registered
-        embodiment of artifact scanning, on the one edge where it applies.
+        Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
+        public source, before anything inside can pull it. The registered embodiment of artifact
+        scanning, on the one edge where it applies.
+    - mitigation: D3-EI
+      at: localTools
+      note: >-
+        Generated code runs only in the sandbox — an isolated runtime with its own filesystem and
+        network, torn down per task — never in the harness's own process.
 
 walkthrough:
   title: A turn that ends in an action

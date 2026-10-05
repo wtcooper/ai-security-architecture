@@ -313,7 +313,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 3
-    mitigations: [ AML.M0025, AML.M0023, AML.M0013, D3-FA ]
+    mitigations: [ AML.M0025, AML.M0023, AML.M0013, D3-FA, cap-model-documentation, AML.M0008 ]
     note: >
       What went in and what came out: the provenance of every example, the format check on the
       base checkpoint before a loader opens it, and the record tying an artifact to the run
@@ -338,7 +338,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 3
-    mitigations: [ AML.M0013, AML.M0012 ]
+    mitigations: [ AML.M0012 ]
     note: Signing keys for the output, and the credentials the job holds for its whole run.
 
   - id: govObservability
@@ -348,7 +348,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 3
-    mitigations: [ cap-model-documentation ]
+    mitigations: []
     note: >
       The lineage record and the documentation that travel with an artifact — the only reason a
       question asked long after the run has an answer.
@@ -450,10 +450,10 @@ pins:
         records.
     - risk: riskModelSourceTampering
       at: upstreamArtifacts->pkgRegistry
-      note: >
-        A base checkpoint whose format executes on load, or a framework dependency that does.
-        Publisher identity says nothing about what the artifact does when opened — which is
-        what admission at the mirror exists to decide.
+      note: >-
+        A backdoored or tampered base checkpoint, or a compromised framework package, arriving from
+        upstream. Publisher identity says nothing about what was changed — which is what admission at
+        the mirror exists to decide.
     - risk: riskInsecureIntegratedComponent
       at: trainJob
       note: >
@@ -483,11 +483,6 @@ pins:
         base's reputation. Who may register an adapter, and which base it is approved against,
         is decided here.
 
-    - risk: riskInsecureIntegratedComponent
-      at: pkgRegistry
-      note: >
-        The registry is third-party software with its own CVE stream, sitting between the job
-        and the internet; its proxying of upstream sources is a network path in its own right.
     - risk: riskMaliciousLoaderDeserialization
       at: pkgRegistry->trainJob
       note: >
@@ -536,19 +531,20 @@ pins:
       at: govSupplyChain
       note: The record tying this artifact to this data, this base and this run.
     - mitigation: cap-model-documentation
-      at: govObservability
+      at: registry
       note: >-
-        What the artifact is and what it was trained on, travelling with it rather than living in a wiki.
+        Approval state and the model card gate promotion: what the artifact is and what it was trained
+        on travel with it in the registry, kept distinct from the bill of materials.
     - mitigation: D3-NI
       at: trainJob
       note: >-
         Deny-by-default egress from the job: the mirror, the corpus store and the artifact store are the whole
         allowlist. Absorbed by the compute platform's network policy per the recorded deviation.
     - mitigation: D3-AA
-      at: corpus->trainJob
+      at: trainJob->storage
       note: >-
-        The corpus store authenticates the run's own workload credential on every read and rejects any other —
-        an identity scoped to the dataset version an approved run specification names and denied the
+        Each run has its own workload identity, verified wherever it reads or writes — the dataset
+        version its approved specification names, its own experiment and candidate — and denied the
         promotion identity, the separation the whole drawing rests on.
     - mitigation: D3-EI
       at: trainJob
@@ -666,10 +662,15 @@ deviations:
 
   - subject: Job egress and rollout containment are absorbed by the compute platform
     reason: >
-      Deny-by-default egress from the training job and containment of the actions an RL or
-      agentic recipe executes are both delivered by the platform the job runs on — its network
+      Deny-by-default egress from the training job (D3-NI) and containment of the actions an RL
+      or agentic recipe executes (D3-EI) are both delivered by the platform the job runs on — its network
       policy and its execution environment — rather than by any block the drawing could name.
       The pins sit on the job because that is what they bound.
+  - subject: Workload authentication is absorbed by the stores the run touches
+    reason: >
+      The run's own identity (D3-AA) is verified by the corpus store, the experiment tracker and
+      storage themselves; no identity provider or gateway sits on this path to draw. Identity
+      services in the governance band is where those identities are issued.
 
 sources:
   - title: "OWASP Top 10 for LLM Applications 2026 — LLM05 data and model poisoning, LLM04 supply chain"

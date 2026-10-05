@@ -228,7 +228,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    mitigations: [ D3-FA, AML.M0023, AML.M0014, cap-staged-rollout-gate ]
+    mitigations: [ D3-FA, AML.M0023, AML.M0014, cap-staged-rollout-gate, D3-AVE ]
     note: >
       Format and content inspection as a blocking gate in the promotion pipeline, and the
       record of which artifact is actually serving. The control a managed provider would have
@@ -241,7 +241,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 5
-    mitigations: [ AML.M0004, cap-output-guardrails ]
+    mitigations: [ AML.M0004, cap-output-guardrails, AML.M0005 ]
     note: >
       Per-tenant ceilings on finite capacity — what stops one caller becoming everyone's outage
       — and the content policy no provider is applying any more.
@@ -253,7 +253,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 5
-    mitigations: [ AML.M0005 ]
+    mitigations: []
     note: >
       The internal credentials this system runs on — storage pulls, registry reads,
       control-plane tokens — and the weights themselves treated as an asset worth protecting
@@ -266,7 +266,7 @@ blocks:
     zone: zoneGovernance
     col: 5
     row: 5
-    mitigations: [ AML.M0024, D3-AVE ]
+    mitigations: [ AML.M0024 ]
     note: >
       Which versions serve where and at what configuration — including whether cross-tenant
       cache sharing is on — plus per-version red teaming, because a new checkpoint from the
@@ -344,10 +344,9 @@ pins:
   risks:
     - risk: riskSensitiveDataDisclosure
       at: api
-      note: >
-        The endpoint's own exposure, distinct from the cache story pinned on the runtime:
-        authentication is opt-in on this class of server, and a completion endpoint reachable
-        without it hands every tenant's model to whatever can route to the binding.
+      note: >-
+        A caller that reaches the inference API without the gateway gets unfiltered completions from
+        models fine-tuned on internal data — authentication is opt-in on this class of server.
     - risk: riskModelSourceTampering
       at: sources
       note: Publisher identity is the only assurance the hub offers, and it says nothing about the artifact's behaviour.
@@ -368,9 +367,9 @@ pins:
       note: The serving stack is third-party code with its own CVE stream, and no provider is patching it on anyone's behalf.
     - risk: riskInsecureIntegratedComponent
       at: gateway
-      note: >
-        The gateway is third-party code holding every tenant's brokered credentials — a
-        compromised release of the gateway itself is the whole credential portfolio, a supply
+      note: >-
+        The gateway is third-party code that sees every tenant's prompts and completions and sets the
+        cache salts and quotas — a compromised release of the gateway itself is all of it, a supply-
         chain incident class with recent precedent.
     - risk: riskAcceleratorAndSystemSideChannels
       at: runtime
@@ -465,10 +464,11 @@ pins:
     - mitigation: D3-HBPI
       at: runtime
       note: >-
-        Hardware-enforced process isolation between serving instances, so one tier's process cannot read or
-        write another's memory. It does not close accelerator side channels.
+        Hardware-enforced isolation per sensitivity tier — dedicated accelerators, or confidential-
+        computing modes with attestation — so one tier's process cannot read another's memory, on the
+        host or the accelerator.
     - mitigation: D3-AVE
-      at: govObservability
+      at: govSupplyChain
       note: >-
         Enumerate the known vulnerabilities in the serving stack and the gateway against the versions actually
         running, so every advisory maps to the instances it affects. Patching them is the owner's job.
@@ -581,7 +581,7 @@ deviations:
   - subject: Network isolation of the serving plane is absorbed by platform policy
     reason: >
       The nodes of a distributed serving plane talk to each other unauthenticated by design.
-      The control is an isolated network for that plane, delivered by the cluster's network
+      The control (D3-NI) is an isolated network for that plane, delivered by the cluster's network
       policy rather than by any block on the drawing; the pin sits on the runtime because
       that is what it protects.
 

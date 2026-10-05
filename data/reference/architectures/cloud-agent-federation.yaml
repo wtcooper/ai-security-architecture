@@ -430,7 +430,7 @@ blocks:
     zone: zoneGovernance
     col: 0
     row: 4
-    mitigations: [ D3-APA, D3-AA, D3-CTS ]
+    mitigations: [ D3-APA, D3-AA ]
   - id: govSecrets
     kind: governance
     title: Secrets & key management
@@ -446,7 +446,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 4
-    mitigations: [ cap-agent-action-policy-enforcement, AML.M0004 ]
+    mitigations: [ cap-agent-action-policy-enforcement, AML.M0036, cap-input-guardrails, cap-sensitive-data-redaction, AML.M0031 ]
   - id: govSupplyChain
     kind: governance
     title: Supply-chain assurance
@@ -607,15 +607,20 @@ pins:
         payload a model composed.
     - risk: riskEconomicDenialOfWallet
       at: gateway->partner
-      note: >
-        A partner's agent that retries, streams forever or fans out is somebody else's loop
-        spending our budget; A2A has no quotas of its own, so ours are per peer and per task.
+      note: >-
+        A partner's artifacts and streams land in our context and our inference bill: oversized or
+        endless results inflate what each task costs us, and A2A has no quotas of its own.
     - risk: riskRogueActions
       at: harness
       note: >
         Our agent acting on a peer's artifact as if it were the user's instruction — the
         confused agent, one organisation removed. The action policy at the crossing decides what
         it may do, however many agents recommended it.
+    - risk: riskToolRegistryTampering
+      at: gateway->peerVendor
+      note: >-
+        A peer's Agent Card can change after admission — a moved token URL, altered skill descriptions —
+        and our gateway reads it as a trusted description of what the peer does.
   mitigations:
     - mitigation: D3-AA
       at: authServer
@@ -632,11 +637,9 @@ pins:
     - mitigation: D3-CTS
       at: gateway->authServer
       note: >-
-        Every hop gets its own token: user assertion → peer-bound token outbound; peer token → downstream
-        token inbound. Where the peer supports it the token is sender-constrained — certificate-bound (RFC
-        8705) or DPoP — so one lifted from a log cannot be replayed without the bound key; a plain bearer stays
-        replayable until it expires. The exchange is the delegation record, and nothing crosses a boundary on
-        the credential it arrived with.
+        Every hop gets its own token: user assertion → peer-bound token outbound; peer token →
+        downstream token inbound. The exchange is the delegation record, and nothing crosses a boundary
+        on the credential it arrived with.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
       note: >-
@@ -662,9 +665,11 @@ pins:
       note: >-
         Every outbound task payload and every artifact we return — to the vendor's peer and the partner's
         alike — inspected and redacted as the boundary crossing it is.
-    - mitigation: AML.M0004
+    - mitigation: AML.M0036
       at: gateway->partner
-      note: Per peer, per task and per skill, sized for agents that stream, retry and fan out.
+      note: >-
+        Bounds on what one partner task may cost us — stream duration, artifact size, retries and fan-
+        out — per peer and per task.
     - mitigation: cap-ai-vendor-assessment
       at: peerVendor
       note: >-

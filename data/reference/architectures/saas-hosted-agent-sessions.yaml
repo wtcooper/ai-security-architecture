@@ -532,7 +532,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 6
-    mitigations: [ AML.M0028, AML.M0029, AML.M0036 ]
+    mitigations: [ AML.M0028, AML.M0029, AML.M0036, AML.M0031, cap-agent-egress-control, cap-input-guardrails ]
     note: >
       One branch, no merge, a human reviewer who is not the initiator, workflows that wait for
       approval, a network allowlist an administrator locks, a connector allowlist the session
@@ -758,7 +758,7 @@ pins:
         network, before the agent starts. Pinning and hash verification stop a changed
         artifact; they do not make a reviewed version benign.
     - risk: riskShadowAndUnknownAgents
-      at: remoteDevice->vendorService
+      at: vendorService
       note: >
         A channel raises sessions for whoever it admits, a schedule runs them for an owner who
         may have left — on a grant nobody revoked — and none of it appears in any inventory we
@@ -770,12 +770,17 @@ pins:
         their own threads, make a loop with no natural end — billed by the minute and bounded
         only by the budget the tenant sets.
     - risk: riskAgenticDelegationConfusedDeputy
-      at: tunnel
+      at: tunnel->aiGateway
       note: >
         Their infrastructure exercising our authority, steered by whatever the session read.
         The grant is the only thing bounding it, and the grant is issued at our gateway — which
         is the entire argument for drawing one and for never letting the vendor's tunnel or
         allowlisted IP range reach past it.
+    - risk: riskPromptInjection
+      at: managedRuntime->vendorTools
+      note: >-
+        Ticket text, chat messages and documents the vendor's connectors return enter the loop as model
+        input, on a path nothing of ours inspects.
   mitigations:
     - mitigation: D3-APA
       at: vendorService
@@ -787,9 +792,9 @@ pins:
     - mitigation: AML.M0028
       at: vendorService
       note: >-
-        The environment an administrator owns and locks: the connector and MCP allowlist the session cannot
-        widen, the network access level, the built-in tools enabled and the permission mode, with bypass modes
-        removed. Unattended runs have no prompt to answer, so these settings are the whole of the in-session
+        The environment an administrator owns and locks: the connector and MCP allowlist the session
+        cannot widen, the built-in tools enabled and the permission mode, with bypass modes removed.
+        Unattended runs have no prompt to answer, so these settings are the whole of the in-session
         control.
     - mitigation: AML.M0036
       at: vendorService
@@ -803,12 +808,6 @@ pins:
         registered automations or schedules with a named owner and a bounded identity — to start or steer a
         session; non-collaborators and unregistered Apps or bots are refused. The setting that decides whether
         a public issue is an attack surface.
-    - mitigation: cap-input-guardrails
-      at: managedRuntime->sourceControl
-      note: >-
-        Hidden-character and HTML-comment filtering on issue text, threads and instruction files before the
-        session reads them, with content from non-collaborators treated as untrusted input rather than
-        instruction. Screening limits what an injection can say, not what the session may do.
     - mitigation: D3-CTS
       at: managedRuntime
       note: >-
@@ -832,9 +831,10 @@ pins:
     - mitigation: D3-EI
       at: nativeTools
       note: >-
-        One microVM or container per session around the built-in tools, created for the run and reclaimed
-        after it, with no shared filesystem between sessions — a provider guarantee we verify by assessment,
-        not a setting we toggle; ours to configure only where execution moves to a worker we run.
+        One microVM or container per session around the built-in tools, created for the run and
+        reclaimed after it, with no shared filesystem between sessions. The vendor provides it, so it is
+        verified per product — whether follow-up runs reuse the same machine, what survives between them
+        — and the choices the product exposes, such as which runner a session uses, are ours to set.
     - mitigation: cap-agent-egress-control
       at: nativeTools
       note: >-
@@ -1016,6 +1016,14 @@ scenarios:
         note: >
           A routine fires on a schedule; an automation re-runs the session on every CI failure
           and review comment. The loop has no natural end and no person in it.
+      - follow: managedRuntime->vendorTools
+        label: the ticket, through a connector
+        note: The run reads the ticket or thread it was raised from through the vendor's connector.
+      - follow: vendorTools->managedRuntime
+        label: its author's text, as input
+        note: >
+          Whatever the ticket's author wrote enters the loop as model input, on a path nothing of
+          ours inspects.
       - follow: managedRuntime->sourceControl
         label: replies that trigger automation
         note: >

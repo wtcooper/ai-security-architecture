@@ -517,7 +517,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 7
-    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-sensitive-data-redaction ]
+    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, cap-sensitive-data-redaction, AML.M0028, AML.M0031, cap-input-guardrails, AML.M0029 ]
     note: >
       The decisions the two crossings enforce per call — what may be reached, and what may
       leave — authored where the vendor's application cannot override them.
@@ -529,7 +529,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 7
-    mitigations: [ cap-agent-tool-registry, cap-mcp-tool-integrity, cap-ai-vendor-assessment ]
+    mitigations: [ cap-agent-tool-registry, cap-mcp-tool-integrity, cap-ai-vendor-assessment, D3-FA ]
     note: >
       Which agents, connectors and servers are admitted, pinned to which versions — and the
       vendor assessment that put the approved destinations in the allowlist.
@@ -541,7 +541,7 @@ blocks:
     zone: zoneGovernance
     col: 6
     row: 7
-    mitigations: [ cap-agent-tracing, cap-shadow-ai-discovery ]
+    mitigations: [ cap-agent-tracing, cap-shadow-ai-discovery, cap-agent-kill-switch, D3-PA ]
     note: >
       Our session record fused with the vendor's export, and the discovery that finds the
       installs which never enrolled.
@@ -742,9 +742,9 @@ pins:
         incidents wrote their persistence into.
     - risk: riskToolRegistryTampering
       at: toolPlane
-      note: >
-        Configuration admits the whole native tools and can arrive with the clone. Injecting into
-        it and swapping it after approval are the disclosed paths.
+      note: >-
+        The tool-server configuration decides which local servers join the native tools, and it can
+        arrive with the clone. Injecting into it and swapping it after approval are the disclosed paths.
     - risk: riskInsecureModelOutput
       at: harness
       note: >
@@ -756,11 +756,6 @@ pins:
         Code, documents and screenshots leave the company on the SSO session — the path most
         users are actually on — usually more than the developer pictured sharing, and with
         nothing of ours on the hop to see how much.
-    - risk: riskSensitiveDataDisclosure
-      at: toolPlane->aiGateway
-      note: >
-        The machine also holds SSH keys, cloud credentials and browser sessions; outside the
-        sandbox nothing separates them from the agent's shell on the way out.
     - risk: riskToolSourceProvenance
       at: toolPlane->publicRepos
       note: >
@@ -794,10 +789,10 @@ pins:
         launch — the persistence the CHAINDROP worm chose.
     - risk: riskRunawayAgentToolLoops
       at: harness
-      note: >
-        A scheduled session has no human to notice it looping; seat metering is the
-        only meter, and the stop is the credential.
-    - risk: riskToolSourceProvenance
+      note: >-
+        A scheduled session has no human to notice it looping; seat metering is the only meter, and the
+        stop has to come from outside the loop.
+    - risk: riskInsecureIntegratedComponent
       at: toolPlane->registry
       note: >
         What the sandbox installs is code the agent chose, on a name it read in a task, a
@@ -808,6 +803,11 @@ pins:
         The path a phone-home takes: a fetch or a shell command bundles a token, a file or a key
         into a request to a page the attacker controls. Nothing of ours is on this hop unless
         the endpoint's egress policy is.
+    - risk: riskPromptInjection
+      at: toolPlane->openWeb
+      note: >-
+        Search results and fetched pages come back as context with the same standing as the task —
+        documentation, issue threads and answers written by strangers.
   mitigations:
     - mitigation: D3-MFA
       at: vendorService
@@ -863,7 +863,7 @@ pins:
         Org access rides short-lived, connector-scoped grants issued at the marketplace on our own keys — the
         vendor's cloud never holds a standing org credential.
     - mitigation: cap-mcp-tool-integrity
-      at: toolPlane->aiGateway
+      at: toolPlane->registry
       note: >-
         Provenance and behavioural review before a server is admitted; pin versions so an update is a
         decision.
@@ -902,16 +902,17 @@ pins:
     - mitigation: cap-agent-egress-control
       at: toolPlane
       note: >-
-        The endpoint's egress allowlist, enforced by device management, decides where the direct path may go:
-        the AI gateway, the package mirror, web search and fetch, and public repositories read-only —
-        nothing else. Shell commands, fetches and browser traffic are bounded here — not at the gateway, which
-        brokers model, MCP and API calls and sees nothing else.
+        The endpoint's egress allowlist, enforced by device management, decides where the direct path
+        may go: the AI gateway, the vendor's service, the package mirror, our source control, web search
+        and fetch, and public repositories read-only — nothing else. Shell commands, fetches and browser
+        traffic are bounded here — not at the gateway, which brokers model, MCP and API calls and sees
+        nothing else.
     - mitigation: D3-FA
       at: sources->registry
       note: >-
-        Admission scanning at the mirror: digest and signature verification, malware and typosquat checks on
-        everything proxied in from a public source, before anything inside can pull it. The registered
-        embodiment of artifact scanning, on the one edge where it applies.
+        Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
+        public source, before anything inside can pull it. The registered embodiment of artifact
+        scanning, on the one edge where it applies.
 
 walkthrough:
   title: The developer asks for a change

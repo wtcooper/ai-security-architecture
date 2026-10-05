@@ -340,7 +340,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 5
-    mitigations: [ AML.M0028, cap-agent-egress-control, AML.M0036, AML.M0029 ]
+    mitigations: [ AML.M0028, cap-agent-egress-control, AML.M0036, AML.M0029, cap-agent-action-policy-enforcement, cap-data-access-governance, AML.M0031, cap-input-guardrails ]
     note: >
       The bounds the tool surface enforces per invocation, authored and changed outside the
       loop — because the loop is the thing that may be misbehaving.
@@ -352,7 +352,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 5
-    mitigations: [ cap-agent-tool-registry, cap-staged-rollout-gate, cap-mcp-tool-integrity ]
+    mitigations: [ cap-agent-tool-registry, cap-staged-rollout-gate, cap-mcp-tool-integrity, D3-FA ]
     note: >
       Which actions exist at all — admission, not discovery — the behavioural checks in
       front of every model, prompt or catalogue change, and the versioned ownership of the
@@ -367,8 +367,8 @@ blocks:
     row: 5
     mitigations: [ cap-agent-tracing, cap-agent-kill-switch ]
     note: >
-      The decision audit and the stop, plus the approval threshold — keyed to irreversibility
-      and value rather than model confidence, and rare enough that somebody actually reads it.
+      The decision audit and the stop — reaching an agent mid-action, not just one waiting for
+      its next trigger.
 
   - id: operator
     kind: actor
@@ -587,8 +587,8 @@ pins:
     - mitigation: AML.M0028
       at: gateway->internalTools
       note: >-
-        Named, parameter-validated actions with declared blast radius and a compensating transaction each —
-        the deterministic surface everything else assumes.
+        Each tool runs least-privilege on the requester's delegated grant: only the actions and records
+        this request needs, never the agent's standing access.
     - mitigation: AML.M0029
       at: internalTools->orgData
       note: >-
@@ -603,17 +603,13 @@ pins:
         session-time grant, made on the intersection of the requester's grant and the agent's own identity,
         never the union, which is what a confused deputy runs on.
     - mitigation: D3-AA
-      at: planner
+      at: planner->gateway
       note: >-
-        A distinct, revocable workload identity per agent, so actions are attributable and separately
-        revocable.
+        A distinct, revocable workload identity per agent, verified at the gateway on every call, so
+        actions are attributable and separately revocable.
     - mitigation: cap-data-access-governance
       at: internalTools->orgData
       note: Entitlement-filtered retrieval scoped to the account under discussion, enforced before fetching.
-    - mitigation: cap-input-guardrails
-      at: events->planner
-      note: >-
-        Classify the payload before the loop; whoever authored it cannot be trusted about their own request.
     - mitigation: AML.M0031
       at: stateRetrieval
       note: Case-scoped memory with hard boundaries — no cross-case reads, ever.
@@ -633,8 +629,8 @@ pins:
     - mitigation: cap-input-guardrails
       at: gateway
       note: >-
-        Returned record and web content is classified at the crossing before it re-enters the loop's
-        context — the harder injection path gets the same treatment the request text does.
+        The trigger payload, returned records and web content are classified at the crossing before they
+        enter or re-enter the loop's context — whoever authored the request cannot be trusted about it.
     - mitigation: cap-agent-tracing
       at: govObservability
       note: >-
@@ -656,9 +652,14 @@ pins:
     - mitigation: D3-FA
       at: sources->registry
       note: >-
-        Admission scanning at the mirror: digest and signature verification, malware and typosquat checks on
-        everything proxied in from a public source, before anything inside can pull it. The registered
-        embodiment of artifact scanning, on the one edge where it applies.
+        Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
+        public source, before anything inside can pull it. The registered embodiment of artifact
+        scanning, on the one edge where it applies.
+    - mitigation: D3-EI
+      at: localTools
+      note: >-
+        Generated code runs only in the sandbox — an isolated runtime with its own filesystem and
+        network, torn down per task — never in the harness's own process.
 
 walkthrough:
   title: A refund request lands on the queue
@@ -719,12 +720,11 @@ scenarios:
       - follow: events->planner
         label: poisoned ticket text
         note: >
-          The ticket text instructs the agent to ignore policy and refund in full; whatever
-          survives classification enters the same context window as the system instruction,
-          as the task.
+          The ticket text instructs the agent to ignore policy and refund in full, and it
+          enters the same context window as the system instruction, as the task.
       - follow: planner->gateway
         label: context with injected text
-        note: Whatever survived classification rides out with the context.
+        note: The injected text rides out with the context; the gateway's screening is the first classifier it meets.
       - follow: gateway->provider
         label: inference
         note: A steered model proposes the most generous action available.
@@ -886,11 +886,6 @@ scenarios:
           arrives on, which is why admission and pinning are the controls that live here.
 
 deviations:
-  - subject: The trigger ingress absorbs inbound classification
-    reason: >
-      Input screening (cap-input-guardrails) is embodied by the AI gateway, but a payload is
-      classified where it arrives — the trigger ingress absorbs the duty in this simple
-      deployment shape, mirroring the chat sibling's recorded absorption of the service edge.
   - subject: Memory poisoning is pinned as prompt injection
     reason: >
       OWASP's agentic taxonomy names memory poisoning as a distinct threat; CoSAI's risk set

@@ -395,7 +395,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 7
-    mitigations: [ cap-agent-kill-switch, D3-APA ]
+    mitigations: [ D3-APA ]
     note: >
       The IdP and the non-human identity plane: one workload identity per agent, bound to its
       owner and device, the pairing admission the bridges enforce, and the revocation that
@@ -420,7 +420,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 7
-    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, AML.M0036 ]
+    mitigations: [ cap-agent-action-policy-enforcement, cap-agent-egress-control, AML.M0036, cap-input-guardrails, cap-sensitive-data-redaction, AML.M0031, AML.M0028, cap-output-guardrails, AML.M0029 ]
     note: >
       The policy engine the crossings consult per call, and the egress and rate decisions it
       carries — authored where the workload cannot reach them.
@@ -432,7 +432,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 7
-    mitigations: [ cap-mcp-tool-integrity ]
+    mitigations: [ cap-mcp-tool-integrity, cap-agent-tool-registry, D3-FA ]
     note: >
       The registry, signing and scanning that decide which agents, tools, servers and images
       are admitted at all, and the vendor assessments behind them.
@@ -444,7 +444,7 @@ blocks:
     zone: zoneGovernance
     col: 5
     row: 7
-    mitigations: [ cap-agent-tracing, cap-shadow-ai-discovery ]
+    mitigations: [ cap-agent-tracing, cap-shadow-ai-discovery, cap-agent-kill-switch, D3-PA ]
     note: >
       Telemetry, the audit trail the workload cannot amend, discovery of what nobody
       registered, the baseline that notices drift, and the containment path when something
@@ -683,10 +683,10 @@ pins:
         not the shipped state.
     - risk: riskPromptInjection
       at: relay->platform
-      note: >
-        Anyone the platform admits can address the bot, and the message body is model input from a
-        set the organisation does not bound. The bridge's pairing records are the only thing between
-        that set and the loop — an allowlist, and a reply path the gateway never inspects.
+      note: >-
+        Anyone the platform admits can address the bot, and the message body is model input from a set
+        the organisation does not bound. The bridge's pairing records decide who reaches the loop;
+        screening at the relay limits what their messages can say.
     - risk: riskPromptInjection
       at: memory
       note: >
@@ -727,15 +727,8 @@ pins:
     - risk: riskInsecureModelOutput
       at: harness
       note: The completion is unauthenticated content, and it chooses the next tool call.
-    - risk: riskCovertChannelsInModelOutputs
-      at: gateway->provider
-      note: >
-        An always-on loop with an outbound path and no human reading its traffic is where
-        encoded output stops being a curiosity: the completion that carries hidden content is
-        also the completion that decides the next tool call, so the channel and the actuator
-        are the same hop. The gateway's record is the only place the pattern could be seen.
     - risk: riskToolSourceProvenance
-      at: registry
+      at: toolPlane->registry
       note: Skills are prose plus executable code; the registry moves the review earlier, it does not remove it.
     - risk: riskRogueActions
       at: internalTools->orgData
@@ -812,7 +805,10 @@ pins:
         proxy, so nothing is at rest inside the boundary and the loop never holds a key it could leak.
     - mitigation: cap-output-guardrails
       at: gateway->provider
-      note: The inspection a hosted product would have applied, run by the organisation on both legs.
+      note: >-
+        Completions are classified at the gateway before they reach the loop — the inspection a hosted
+        product would have applied, run by the organisation because the completion becomes the next tool
+        call.
     - mitigation: cap-mcp-tool-integrity
       at: toolPlane->registry
       note: >-
@@ -833,7 +829,7 @@ pins:
         written where the agent cannot amend it. Chat replies and local tool work never cross here, so the
         relay's log and the endpoint telemetry are joined to it.
     - mitigation: cap-agent-kill-switch
-      at: gateway
+      at: govObservability
       note: >-
         Revoking the agent's identity cuts off every model and tool call at the crossing within seconds,
         without a deploy. The rest of the stop is enforced from outside the sandbox — the daemon and its
@@ -853,7 +849,7 @@ pins:
         Every daemon that reaches the crossing is inventoried there — the one archetype whose incident says
         owners were found by scanning, not by inventory.
     - mitigation: cap-agent-egress-control
-      at: toolPlane
+      at: sandbox
       note: >-
         The microVM's network policy: the only routes out of the boundary are the AI gateway, the package
         mirror, the relay the bridges dial, and web search and fetch on the proxy's allowlist. Shell
@@ -862,9 +858,9 @@ pins:
     - mitigation: D3-FA
       at: sources->registry
       note: >-
-        Admission scanning at the mirror: digest and signature verification, malware and typosquat checks on
-        everything proxied in from a public source, before anything inside can pull it. The registered
-        embodiment of artifact scanning, on the one edge where it applies.
+        Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
+        public source, before anything inside can pull it. The registered embodiment of artifact
+        scanning, on the one edge where it applies.
 
 walkthrough:
   title: The owner asks the agent to do something
@@ -1027,13 +1023,6 @@ deviations:
       sits in the vendor band. A consumer channel with no agreement — the common state for
       personal installs — moves the platform to the external band and removes the tenant
       controls with it; that posture is recorded here rather than drawn as a second topology.
-  - subject: The kill switch is cited from Identity services and pinned at the gateway
-    reason: >
-      Revoking the agent's identity ends every brokered flow at the crossing within seconds,
-      so that part of the stop is enforced at the gateway while the implementing service is
-      the identity plane. It is not the whole stop: the daemon, its heartbeat and queued turns
-      are ended from outside the sandbox and the relay pairing is expired at the relay, because
-      those paths never cross the gateway. Deliberate, not drift.
   - subject: The local session is drawn as its own path
     reason: >
       A terminal on the machine and a phone across town are not the same admission problem:

@@ -1222,6 +1222,7 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
     itemPacks?: Record<string, { items?: { label: string; icon: string }[] }>;
     patterns?: Record<string, PatternSpec>;
     mitigationEnforcement?: { inline?: Record<string, string[]> };
+    governanceGroups?: Record<string, string[]>;
   };
   try {
     vocab = parseYaml(
@@ -1312,7 +1313,8 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
       names.add(b.title);
       for (const i of b.items ?? []) names.add(i.label);
     }
-    const deviationText = (arch.deviations ?? []).map((d) => `${d.subject} ${d.reason}`).join(" ");
+    // An absorption is recorded per capability: the deviation has to name the capability id it absorbs.
+    const deviationTexts = (arch.deviations ?? []).map((d) => `${d.subject} ${d.reason}`);
     // Zone 2 of the three-zone rule (ONTOLOGY.md §3): pins anchored on or toward a
     // provider-kind block are customer configuration of a vendor surface — the inline
     // embodiment rule applies only to customer-owned components.
@@ -1322,11 +1324,24 @@ function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
       if (!embodiments) continue;
       if (pin.at.split("->").some((ref) => providerBlocks.has(ref))) continue;
       const embodied = embodiments.some((e) => names.has(e));
-      const absorbed = deviationText.length > 0 && /absor|drawn as|folded|control on the/i.test(deviationText);
+      const absorbed = deviationTexts.some((t) => t.includes(pin.mitigation));
       if (!embodied && !absorbed)
         warnings.push(
           `${arch.id}: inline mitigation ${pin.mitigation} pinned at ${pin.at} with no embodying component (${embodiments.join(", ")}) and no recorded absorption`,
         );
+    }
+    // One governance group per capability: cited under its own group's call-out wherever
+    // that block is drawn, and never under another.
+    const groupOf = new Map(Object.entries(vocab.governanceGroups ?? {}).flatMap(([g, ids]) => ids.map((id) => [id, g] as const)));
+    const gov = new Map(arch.blocks.filter((b) => b.kind === "governance").map((b) => [b.id, b.mitigations ?? []]));
+    for (const [block, ids] of gov)
+      for (const id of ids) {
+        const g = groupOf.get(id);
+        if (g && g !== block) warnings.push(`${arch.id}: ${id} is cited under ${block}; its governance group is ${g}`);
+      }
+    for (const id of new Set(arch.pins.mitigations.map((p) => p.mitigation))) {
+      const g = groupOf.get(id);
+      if (g && gov.has(g) && !gov.get(g)!.includes(id)) warnings.push(`${arch.id}: ${id} is pinned but not cited under ${g}`);
     }
   }
   // The census. Name sprawl is the thing the registry exists to reverse, so every build

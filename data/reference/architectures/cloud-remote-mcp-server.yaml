@@ -306,7 +306,7 @@ blocks:
     zone: zoneGovernance
     col: 0
     row: 3
-    mitigations: [ D3-APA, D3-AA, D3-CTS ]
+    mitigations: [ D3-APA, D3-AA, D3-CR ]
     note: >
       Scope design and the delegation model. The scopes we publish should be the minimal set
       for basic function, with more granted by step-up — a wildcard or omnibus scope is the
@@ -320,7 +320,7 @@ blocks:
     zone: zoneGovernance
     col: 1
     row: 3
-    mitigations: [ D3-CH ]
+    mitigations: [ D3-CH, D3-CTS ]
     note: >
       The upstream credentials this service's handlers call on — issued, scoped and rotated by
       a secrets manager, one per upstream, never the caller's token forwarded.
@@ -332,7 +332,7 @@ blocks:
     zone: zoneGovernance
     col: 2
     row: 3
-    mitigations: [ AML.M0004, AML.M0028, cap-agent-egress-control ]
+    mitigations: [ AML.M0004, AML.M0028, D3-OTF, cap-data-access-governance ]
     note: >
       Per-tenant limits sized for callers that retry, loop and parallelise — limits tuned for
       human clients are not limits here — plus origin validation against DNS rebinding and the
@@ -346,7 +346,7 @@ blocks:
     zone: zoneGovernance
     col: 3
     row: 3
-    mitigations: [ cap-mcp-tool-integrity, D3-SYSVA ]
+    mitigations: [ cap-mcp-tool-integrity, D3-SYSVA, D3-AVE ]
     note: >
       Description review and definition pinning. Our tool text is a security property of
       somebody else's system, so it is reviewed like code; and behind the protocol this is a
@@ -359,7 +359,7 @@ blocks:
     zone: zoneGovernance
     col: 4
     row: 3
-    mitigations: [ AML.M0024, D3-CR, D3-AVE ]
+    mitigations: [ AML.M0024 ]
     note: >
       Per-call audit attributable to a tenant and a delegation, and revocation that reaches
       tokens already minted rather than only future ones.
@@ -441,10 +441,10 @@ edges:
 pins:
   risks:
     - risk: riskPromptInjection
-      at: gateway->service
-      note: >
-        The reverse direction is the dangerous one: what we return is read as instruction by a
-        model we do not operate. Our tool descriptions are the payload.
+      at: service->orgData
+      note: >-
+        Records written by third parties — issue text, comments, documents — come back through our tools
+        as results, and a model we do not operate reads them as instruction.
     - risk: riskToolRegistryTampering
       at: toolDefs->service
       note: >
@@ -492,7 +492,7 @@ pins:
         Decommissioning removes all of them.
 
     - risk: riskInsecureIntegratedComponent
-      at: gateway->service
+      at: service
       note: >
         The service is built on the official SDK, and the SDK's CVE stream is ours to ship — the
         2026 request-handling flaws reached every server built on it, up to 200,000 instances by
@@ -506,12 +506,8 @@ pins:
     - mitigation: D3-CTS
       at: authServer
       note: >-
-        Tokens audience-bound to this server by name, and refused if minted for anything else; the `resource`
-        audience is asserted at issuance and checked on every request. The Protected Resource Metadata that
-        names our authorization server is integrity-protected like code, because a client trusts whatever it
-        says. Under the enterprise-managed profile the consuming organisation's own policy decides issuance,
-        which makes revocation central: a policy change stops new tokens at once, and reaches tokens already
-        issued through introspection or expiry.
+        Tokens audience-bound to this server by name, and refused if minted for anything else; the
+        `resource` audience is asserted at issuance and checked on every request.
     - mitigation: AML.M0004
       at: callers->gateway
       note: >-
@@ -540,21 +536,21 @@ pins:
     - mitigation: D3-CH
       at: service->orgData
       note: >-
-        A separate credential for each upstream we call, never the caller's token forwarded — which the spec
-        forbids outright, because forwarding breaks audit, rate limiting and the trust boundary in one move.
+        A separate, vaulted credential for each upstream we call, short-lived and rotated, scoped to
+        that upstream alone.
     - mitigation: AML.M0024
       at: govObservability
       note: >-
         Every invocation with its parameters, its tenant and its delegation, retained where an incident can
         query it.
     - mitigation: D3-CR
-      at: govObservability
+      at: authServer
       note: >-
         Revocation that reaches tokens already issued, not merely future ones — introspection, short lifetimes
         and refresh tokens revoked with the grant — with the delay until they stop working measured, not
         assumed. A call already executing completes.
     - mitigation: D3-AVE
-      at: govObservability
+      at: govSupplyChain
       note: >-
         The SDK, the gateway and the handlers' dependencies enumerated against vulnerability feeds and
         prioritised by exposure — a published server ages like any other application; the fix itself ships
@@ -565,7 +561,7 @@ pins:
         Identity governance where it already lives: the IdP's registry of approved MCP servers, the groups and
         roles that may reach each, and the conditional-access rules — evaluated at every ID-JAG exchange.
         Joiners get access by group; leavers lose every new token at once.
-    - mitigation: cap-agent-egress-control
+    - mitigation: D3-OTF
       at: authServer
       note: >-
         Client metadata documents make this component an outbound HTTP client: its discovery fetches are
