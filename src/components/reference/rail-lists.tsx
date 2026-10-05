@@ -192,7 +192,6 @@ export function MitigationList({
               ) : (
                 <span className="text-[12.5px] leading-tight text-ink">{mitigation?.title ?? id}</span>
               )}
-              <span className="ident ml-auto shrink-0 text-[10px] text-ink-3">{id}</span>
             </button>
             {active && (
               <div className="mb-2 ml-8 mt-1 space-y-2">

@@ -64,10 +64,13 @@ function pinBody(note: string | undefined, kind: EntityKind, id: string, show: b
   return lines.length ? lines.join("\n") : undefined;
 }
 
-/** A chip's hover title: with org data on, the organisation's names for the capability lead. */
+/**
+ * A chip's hover title: its number and name — with org data on, the organisation's names lead.
+ * No identifier: a reader has no use for one here; it lives in the capability's own detail.
+ */
 function chipTitle(n: number, id: string, show: boolean): string {
   const names = show ? orgNamesFor(id) : [];
-  return `${n} · ${names.length ? names.join(" · ") : mitigationById.get(id)?.title ?? id} · ${id}`;
+  return `${n} · ${names.length ? names.join(" · ") : mitigationById.get(id)?.title ?? id}`;
 }
 
 type BlockNodeData = {
@@ -781,10 +784,16 @@ export function FlowDiagramRF({
   }, [archetype, cardAt, orgOverlay]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  // Rebuild whenever the nodes' inputs change — a new drawing, or org data switched on or off —
+  // so every chip repaints; holding them until the drawing changed left block chips stale.
+  const [lastInitial, setLastInitial] = useState(initialNodes);
+  if (lastInitial !== initialNodes) {
+    setLastInitial(initialNodes);
+    setNodes(initialNodes);
+  }
   const [lastId, setLastId] = useState(archetype.id);
   if (lastId !== archetype.id) {
     setLastId(archetype.id);
-    setNodes(initialNodes);
     setCard(null);
   }
 
