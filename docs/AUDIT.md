@@ -687,7 +687,7 @@ Highlights below are Google's original mapping, not ours.
 - Prompt/Response Cache Poisoning (`riskPromptResponseCachePoisoning`)
 - Stale Agent Identity Binding (`riskStaleAgentIdentityBinding`)
 
-### 4b. Capabilities no architecture pins — 22 of 76
+### 4b. Capabilities no architecture pins — 21 of 76
 
 - Configuration Inventory (`D3-CI`)
 - Restrict Library Loading (`AML.M0011`)
@@ -710,7 +710,6 @@ Highlights below are Google's original mapping, not ours.
 - System File Analysis (`D3-SFA`)
 - Dynamic Analysis (`D3-DA`)
 - Software Update (`D3-SU`)
-- AI System Threat Modelling (`cap-ai-threat-modeling`)
 
 ### 4c. CoSAI components no architecture anchors — 8 of 23
 
@@ -848,8 +847,6 @@ Highlights below are Google's original mapping, not ours.
 | Browser AI agents & extensions | Policy & authorization | governance | (none) |
 | Browser AI agents & extensions | Supply-chain assurance | governance | (none) |
 | Browser AI agents & extensions | Observability & response | governance | (none) |
-| First-party coding & desktop agents | Remote device | service | `componentAgentUserQuery` |
-| First-party coding & desktop agents | Remote relay | external | `componentAgentUserQuery` |
 | First-party coding & desktop agents | Agent harness | service | `componentReasoningCore` |
 | First-party coding & desktop agents | Memory & state | service | `componentDataStorage` |
 | First-party coding & desktop agents | Native tools | service | `componentTools` |
@@ -1043,7 +1040,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 14/15 | Limit AI Workload Resource Consumption |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | Amazon Bedrock AgentCore | aws | API/SDK managed agent runtime | 2026-09 | 14/15 | Limit AI Workload Resource Consumption |  |
-| Cline | cline | First-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
+| Cline | cline | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
 | Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Multi-factor Authentication, Input Screening Guardrails |  |
@@ -1070,10 +1067,10 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
 | Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
-| opencode | opencode | First-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
+| opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
 | Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
 | Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 22/22 | _none_ |  |
-| vLLM | vllm | Self-hosted model inference | 2026-09 | 14/14 | _none_ |  |
+| vLLM | vllm | Self-hosted model inference | 2026-09 | 13/13 | _none_ |  |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 

@@ -183,47 +183,14 @@ tools:
           With steps unset an agent iterates until the model stops or the user interrupts; the doom_loop guard
           asks after three identical calls, and --auto approves that prompt unless doom_loop is deny.
     controls:
-      - mitigation: D3-MFA
-        coverage: partial
-        mechanism: >-
-          OPENCODE_SERVER_PASSWORD (HTTP basic auth; username OPENCODE_SERVER_USERNAME, default opencode) on
-          opencode serve and opencode web; server.hostname "127.0.0.1" and server.mdns false in the managed
-          opencode.json; no user identity or second factor anywhere in the product
-        steps:
-          - title: Require the shared secret on every server launch
-            body:
-              - >-
-                Set OPENCODE_SERVER_PASSWORD (and OPENCODE_SERVER_USERNAME) in the environment of every process
-                that runs opencode serve or opencode web, including launch scripts and the desktop and IDE
-                clients that attach to it; without it the server answers unauthenticated.
-            url: https://opencode.ai/docs/server/
-          - title: Keep the listener on loopback
-            body:
-              - >-
-                In the managed opencode.json (or the ai.opencode.managed plist) set server.hostname to
-                "127.0.0.1" and server.mdns to false, and publish any remote access only through the
-                organisation's identity-aware proxy or zero-trust tunnel to that loopback port.
-            url: https://opencode.ai/docs/config/
-        note: >-
-          Partial on the drawing's rule for a shared secret on the serve port: opencode has no user identity and
-          no second factor on its remote surfaces. The server (serve on 127.0.0.1:4096 by default, web on a random
-          port) takes HTTP basic auth only when OPENCODE_SERVER_PASSWORD is set — an environment variable with no
-          config key, so the organisation cannot require it — and otherwise runs unauthenticated with a warning;
-          SECURITY.md declares opted-in server access expected behaviour. The web page says command-line flags beat
-          the config file, so --hostname 0.0.0.0 or --mdns (which defaults the hostname to 0.0.0.0 and advertises
-          opencode.local) overrides a managed hostname. There is no relay: remote and mobile use means exposing the
-          web port, so MFA comes from an identity-aware proxy or zero-trust tunnel in front of it. Browser-cached
-          basic credentials were enough for the cross-site upgrade attack (GHSA-632h-h47v-g4x4). The server page
-          says the TUI also starts a server on a random port, while SECURITY.md calls server mode opt-in. The
-          GitHub agent is admitted by GitHub (a commenter's /oc or /opencode on a repository with the workflow).
-        verified: "2026-09-25"
       - mitigation: cap-agent-action-policy-enforcement
         coverage: partial
         mechanism: >-
           permission rules (allow / ask / deny per tool, with wildcard patterns over bash commands, file paths,
           subagent and skill names and MCP tool names; last match wins) in the managed opencode.json or the
           ai.opencode.managed plist, agent.<name>.permission for the built-in agents, and a managed npm plugin's
-          tool.execute.before hook as an organisation-written attach point
+          tool.execute.before hook as an organisation-written attach point; the serve API kept on loopback
+          (server.hostname "127.0.0.1", server.mdns false) behind OPENCODE_SERVER_PASSWORD
         steps:
           - title: Ship the rules in the managed tier
             body:
@@ -251,6 +218,20 @@ tools:
                 List the organisation's npm plugin in the managed plugin array; its tool.execute.before hook
                 receives each call's tool name and arguments and blocks the call by throwing.
             url: https://opencode.ai/docs/plugins/
+          - title: Keep the server on loopback
+            body:
+              - >-
+                In the managed opencode.json (or the ai.opencode.managed plist) set server.hostname to
+                "127.0.0.1" and server.mdns to false, so prompts and permission answers reach the serve API only
+                from the device itself.
+            url: https://opencode.ai/docs/config/
+          - title: Require the shared secret on every server launch
+            body:
+              - >-
+                Set OPENCODE_SERVER_PASSWORD (and OPENCODE_SERVER_USERNAME) in the environment of every process
+                that runs opencode serve or opencode web, including launch scripts and the desktop and IDE
+                clients that attach to it; without it the server answers unauthenticated.
+            url: https://opencode.ai/docs/server/
         note: >-
           Partial on the drawing's tier rule: deterministic allow/ask/deny rules over tool name and arguments are
           evaluated by the harness before each built-in, custom and MCP tool call, and the managed tier outranks
@@ -262,7 +243,8 @@ tools:
           ask into allow. Bash patterns match parsed command text. The vendor's SECURITY.md calls the permission
           system a UX feature, not isolation. experimental.policies covers provider.use only. Remote steering: the
           serve API admits any caller holding the basic-auth secret (anyone, if unset) to post prompts, run
-          /session/:id/shell and answer permission requests; GitHub comment triggers are permission-checked
+          /session/:id/shell and answer permission requests; the password is an environment variable with no
+          config key, and --hostname 0.0.0.0 or --mdns on the command line overrides a managed loopback hostname; GitHub comment triggers are permission-checked
           against the commenter (the GitHub page notes scheduled runs have no user to check).
         verified: "2026-09-25"
       - mitigation: cap-sensitive-data-redaction
@@ -578,7 +560,7 @@ tools:
           outside any list, and plugins execute on load before any permission is consulted. An MCP gateway is
           the enforced registry; reconciliation against discovered installs is the governance platform's job.
         verified: "2026-09-25"
-      - mitigation: AML.M0024
+      - mitigation: cap-agent-tracing
         coverage: partial
         mechanism: >-
           Local logs (~/.local/share/opencode/log/, last ten files, --log-level) and session storage under

@@ -323,6 +323,16 @@ export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
 /** Whether people in the organisation may install and use this product; not listed means no. */
 export const orgToolAvailableFor = (toolId: string): boolean => postureByTool.get(toolId)?.available === true;
 export const orgCapabilitiesFor = (capabilityId: string) => orgCapabilities.filter((c) => c.capability === capabilityId);
+/**
+ * The organisation's own names for a pinned capability: its records on that id, else — for a
+ * specialisation with none of its own — the records on the MITRE parent it narrows.
+ */
+export const orgNamesFor = (capabilityId: string): string[] => {
+  const parent = mitigationById.get(capabilityId)?.parent;
+  const own = orgCapabilitiesFor(capabilityId);
+  const list = own.length || !parent ? own : orgCapabilitiesFor(parent);
+  return [...new Set(list.map((c) => c.title))];
+};
 
 export interface OrgCapabilitySupport {
   status: DisplayStatus;

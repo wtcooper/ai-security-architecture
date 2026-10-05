@@ -24,6 +24,14 @@ const SOURCES = [
 
 const BAND_IDS: BandId[] = ["application", "model", "modelInfrastructure", "dataInfrastructure"];
 
+/**
+ * The matrix shows the most granular capability only: a MITRE parent with specialisations is
+ * represented by them, so the same control never appears twice. A parent stays reachable by
+ * link and search, and its detail lists the specialisations.
+ */
+const specialised = new Set(mitigations.flatMap((m) => (m.parent ? [m.parent] : [])));
+const catalogue = mitigations.filter((m) => !specialised.has(m.id));
+
 /** The pin catalogue: every capability is a MITRE mitigation or an authored specialisation of one. */
 export function CapabilitiesBrowser() {
   const params = useSearchParams();
@@ -52,20 +60,20 @@ export function CapabilitiesBrowser() {
     && matchesSource(m)
     && (!gapsOnly || !overlay || isGap(m.id))
     && `${m.title} ${m.id} ${m.parent ?? ""} ${m.implementation}`.toLowerCase().includes(query.toLowerCase());
-  const shown = mitigations.filter((m) => matchesOthers(m) && matchesRisk(m) && matchesBand(m));
+  const shown = catalogue.filter((m) => matchesOthers(m) && matchesRisk(m) && matchesBand(m));
   // Stack-layer counts respond to every other filter, so the selectors read as one system.
   const bandCounts = Object.fromEntries(BAND_IDS.map((b) => [b, 0])) as Record<BandId, number>;
-  for (const m of mitigations) {
+  for (const m of catalogue) {
     if (!matchesOthers(m) || !matchesRisk(m)) continue;
     for (const b of bandsForMitigation(m.id)) bandCounts[b] += 1;
   }
   useEffect(() => {
     if (selected) detailRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selected]);
-  const specialisations = mitigations.filter((m) => m.parent).length;
+  const specialisations = catalogue.filter((m) => m.parent).length;
   return (
     <>
-      <PageHeader eyebrow={`${mitigations.length} capabilities · ${mitigations.length - specialisations} MITRE D3FEND + ATLAS · ${specialisations} authored specialisations`} title="Capabilities" aside={<OverlayToggle />}
+      <PageHeader eyebrow={`${catalogue.length} capabilities · ${catalogue.length - specialisations} MITRE D3FEND + ATLAS · ${specialisations} authored specialisations`} title="Capabilities" aside={<OverlayToggle />}
         lead="The actionable countermeasures that deliver CoSAI controls, each pinned where it sits in the data flow on the reference architectures. Rows are the control groups they serve; columns are the surfaces where each can exist. This is the only layer the organisation records status against.">
         <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
@@ -96,7 +104,7 @@ export function CapabilitiesBrowser() {
       </PageHeader>
       <div className="mx-auto w-full max-w-[1400px] px-6 py-8">
         <p className="mb-3 text-[13px] text-ink-3">
-          {shown.length} of {mitigations.length} capabilities
+          {shown.length} of {catalogue.length} capabilities
           {(riskCategory || band) && (
             <button onClick={() => { setRiskCategory(null); setBand(null); }} className="ml-2 font-semibold text-introduced hover:underline">
               Clear filters
@@ -108,7 +116,7 @@ export function CapabilitiesBrowser() {
           onSelect={(id) => setClicked(id === selected ? null : id)} {...filters}
           statusFor={overlay ? orgSurfaceStatusFor : undefined} label="Capabilities by control group and deployment surface" />
         {!shown.length && <p className="mt-3 text-sm text-ink-2">No capabilities match these filters.</p>}
-        <p className="mt-2 text-xs text-ink-3">A capability sits in its primary control group on the surfaces where it applies; a specialisation is shown beside its MITRE parent. A blank cell means nothing in the catalogue reaches that surface.</p>
+        <p className="mt-2 text-xs text-ink-3">A capability sits in its primary control group on the surfaces where it applies; a MITRE mitigation with specialisations is shown as those specialisations, never beside them. A blank cell means nothing in the catalogue reaches that surface.</p>
         <div ref={detailRef} className="mt-6 scroll-mt-20">
           {capability && <CapabilityDetail mitigation={capability} showOrg={overlay} onClose={() => setClicked(null)} />}
         </div>

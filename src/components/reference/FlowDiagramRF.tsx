@@ -27,7 +27,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { mitigationById, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
+import { mitigationById, orgNamesFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { chipSpots, flowBadgeSpots, itemCells, placeTags, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
@@ -52,13 +52,22 @@ interface HoverCard {
  * pre-line, so each org line stays its own line.
  */
 function pinBody(note: string | undefined, kind: EntityKind, id: string, show: boolean, status?: DisplayStatus): string | undefined {
-  const own = show ? orgEntriesFor(kind, id) : [];
+  // A capability chip already leads with the organisation's name; its body names the capability.
+  const named = show && kind === "mitigations" && orgNamesFor(id).length > 0;
+  const own = show && !named ? orgEntriesFor(kind, id) : [];
   const lines = [
     note,
+    named && `Capability: ${mitigationById.get(id)?.title ?? id}`,
     status && `Capability support: ${STATUS_META[status].label}`,
     own.length ? `Org capabilities: ${own.map((o) => `${o.label} (${o.id})`).join(" · ")}` : undefined,
   ].filter(Boolean);
   return lines.length ? lines.join("\n") : undefined;
+}
+
+/** A chip's hover title: with org data on, the organisation's names for the capability lead. */
+function chipTitle(n: number, id: string, show: boolean): string {
+  const names = show ? orgNamesFor(id) : [];
+  return `${n} · ${names.length ? names.join(" · ") : mitigationById.get(id)?.title ?? id} · ${id}`;
 }
 
 type BlockNodeData = {
@@ -711,7 +720,6 @@ export function FlowDiagramRF({
         const spot = spots[i];
         if (!spot) return;
         const n = capNumber.get(pin.mitigation) ?? 0;
-        const cap = mitigationById.get(pin.mitigation);
         nodes.push({
           id: `chip:${at}:${pin.mitigation}`,
           type: "chip",
@@ -721,7 +729,7 @@ export function FlowDiagramRF({
             n,
             dim: false,
             status: capStatus?.get(pin.mitigation),
-            title: `${n} · ${cap?.title ?? pin.mitigation} · ${pin.mitigation}`,
+            title: chipTitle(n, pin.mitigation, orgOverlay),
             body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)),
           },
           draggable: false,
@@ -841,7 +849,6 @@ export function FlowDiagramRF({
         const spot = spots[i];
         if (!spot) return;
         const n = capNumber.get(pin.mitigation) ?? 0;
-        const cap = mitigationById.get(pin.mitigation);
         list.push({
           kind: "chip",
           ref: pin.mitigation,
@@ -849,7 +856,7 @@ export function FlowDiagramRF({
           dy: spot.y - geo.midY,
           n,
           status: capStatus?.get(pin.mitigation),
-          title: `${n} · ${cap?.title ?? pin.mitigation} · ${pin.mitigation}`,
+          title: chipTitle(n, pin.mitigation, orgOverlay),
           body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)),
         });
       });

@@ -53,10 +53,16 @@ test("controls is a master-detail page; capabilities is the pin matrix", () => {
   const matrix = page("/capabilities");
   assert.match(matrix, /CoSAI control group/);
   assert.match(matrix, /Show org data/);
-  assert.equal(chips(matrix.match(/<table[\s\S]*?<\/table>/)![0]), mitigations.flatMap((m) => mitigationMatrixItem(m).placements).length);
+  // The matrix shows the most granular capability: a parent with specialisations is represented by them.
+  const specialised = new Set(mitigations.flatMap((m) => (m.parent ? [m.parent] : [])));
+  assert.equal(
+    chips(matrix.match(/<table[\s\S]*?<\/table>/)![0]),
+    mitigations.filter((m) => !specialised.has(m.id)).flatMap((m) => mitigationMatrixItem(m).placements).length,
+  );
+  assert.doesNotMatch(matrix.match(/<table[\s\S]*?<\/table>/)![0], /Generative AI Guardrails/);
 });
 
-test("specialisations sit beside their MITRE parent and restore retired capabilities", () => {
+test("specialisations narrow their MITRE parent and restore retired capabilities", () => {
   const specialisations = mitigations.filter((m) => m.parent);
   assert.ok(specialisations.length >= 15);
   for (const s of specialisations) {

@@ -9,7 +9,7 @@ import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
-import { controlCategories, mitigationById, controlsForMitigation, guidanceByArchetype, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
+import { controlCategories, mitigationById, controlsForMitigation, guidanceByArchetype, orgNamesFor, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
 import { StatusPill } from "@/components/StatusPill";
@@ -184,7 +184,14 @@ export function MitigationList({
                   {i + 1}
                 </span>
               )}
-              <span className="text-[12.5px] leading-tight text-ink">{mitigation?.title ?? id}</span>
+              {overlay && orgNamesFor(id).length ? (
+                <span className="leading-tight">
+                  <span className="block text-[12.5px] text-ink">{orgNamesFor(id).join(" · ")}</span>
+                  <span className="block text-[11px] text-ink-3">{mitigation?.title ?? id}</span>
+                </span>
+              ) : (
+                <span className="text-[12.5px] leading-tight text-ink">{mitigation?.title ?? id}</span>
+              )}
               <span className="ident ml-auto shrink-0 text-[10px] text-ink-3">{id}</span>
             </button>
             {active && (
