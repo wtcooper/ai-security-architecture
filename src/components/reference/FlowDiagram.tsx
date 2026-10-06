@@ -72,8 +72,16 @@ export function FlowDiagram({
   }, [expanded]);
 
   const buttonClass = "rounded-md border border-ink-3/40 bg-paper px-2.5 py-1 text-[11px] text-ink-2 hover:bg-mist";
-  const drawing = (height?: string) => (
-    <FlowDiagramRFLazy archetype={archetype} walk={walk} highlight={highlight} overlay={overlay} className={className} height={height} />
+  const drawing = (expandedView: boolean) => (
+    <FlowDiagramRFLazy
+      archetype={archetype}
+      walk={walk}
+      highlight={highlight}
+      overlay={overlay}
+      className={className}
+      height={expandedView ? "100%" : undefined}
+      scrollThrough={!expandedView}
+    />
   );
 
   return (
@@ -93,7 +101,7 @@ export function FlowDiagram({
           Expand ⤢
         </button>
       </div>
-      {expanded ? <div aria-hidden style={{ height: "min(640px, 70vh)" }} /> : drawing()}
+      {expanded ? <div aria-hidden style={{ height: "min(640px, 70vh)" }} /> : drawing(false)}
 
       {expanded && (
         <div role="dialog" aria-modal="true" aria-label={`${archetype.title} — expanded drawing`} className="fixed inset-0 z-50 flex flex-col bg-paper">
@@ -111,7 +119,7 @@ export function FlowDiagram({
               </button>
             </div>
           </div>
-          <div className="min-h-0 flex-1">{drawing("100%")}</div>
+          <div className="min-h-0 flex-1">{drawing(true)}</div>
         </div>
       )}
     </div>

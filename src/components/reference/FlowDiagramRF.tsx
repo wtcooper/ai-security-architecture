@@ -10,7 +10,7 @@
  * labels, which also keeps text off the drawing. An incident step overlays the same drawing:
  * its blocks and arrows take the step's phase colour and everything else fades.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -24,6 +24,7 @@ import {
   type Node,
   type NodeChange,
   type NodeProps,
+  useKeyPress,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -541,6 +542,9 @@ function BuildPathEdge(props: EdgeProps) {
 const nodeTypes = { block: BlockNode, chip: ChipNode, tag: TagNode, zone: ZoneNode };
 const edgeTypes = { buildPath: BuildPathEdge };
 
+/** Held, either key zooms an inline drawing with the wheel without clicking into it first. */
+const ZOOM_KEYS = ["Meta", "Control"];
+
 /** Pick the facing handle pair from the two blocks' initial geometry. */
 function facing(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
   const dx = b.x + b.w / 2 - (a.x + a.w / 2);
@@ -556,6 +560,7 @@ export function FlowDiagramRF({
   overlay = null,
   className,
   height = "min(640px, 70vh)",
+  scrollThrough = false,
 }: {
   archetype: Archetype;
   /** The selected sequence data flow, or null — the resting drawing carries no step numbers. */
@@ -567,6 +572,12 @@ export function FlowDiagramRF({
   className?: string;
   /** The canvas height: the inline default, or "100%" when the drawing fills the expanded overlay. */
   height?: string;
+  /**
+   * Inline, the page scrolls past the drawing: the wheel zooms only after a click into the
+   * drawing (until the pointer leaves) or with ⌘/Ctrl held, and on a touch screen one finger
+   * scrolls the page while two pinch and pan. Expanded, the drawing takes every gesture.
+   */
+  scrollThrough?: boolean;
 }) {
   const [card, setCard] = useState<HoverCard | null>(null);
   // Hovering one arrow pulls it out of the bundle — the interactive half of the answer to
@@ -600,6 +611,26 @@ export function FlowDiagramRF({
     });
   }, []);
   const onPinLeave = useCallback(() => setCard(null), []);
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [engaged, setEngaged] = useState(false);
+  const zoomKeyHeld = useKeyPress(ZOOM_KEYS);
+  const ownsWheel = !scrollThrough || engaged || zoomKeyHeld;
+  const [hint, setHint] = useState(false);
+  const hintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
+  // One-finger moves are stopped before they reach React Flow, so the browser scrolls the page
+  // (the pane's touch-action is relaxed in globals.css). A second finger turns the gesture into
+  // two-touch moves, which pass through and pinch or pan the drawing as usual.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!scrollThrough || !wrap) return;
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) e.stopPropagation();
+    };
+    wrap.addEventListener("touchmove", onTouchMove, { capture: true });
+    return () => wrap.removeEventListener("touchmove", onTouchMove, { capture: true });
+  }, [scrollThrough]);
 
   const initialNodes = useMemo(() => {
     const { layout } = archetype;
@@ -983,7 +1014,23 @@ export function FlowDiagramRF({
   }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay]);
 
   return (
-    <div data-rfwrap className={className} style={{ height, position: "relative" }}>
+    <div
+      ref={wrapRef}
+      data-rfwrap
+      data-scrollthrough={scrollThrough || undefined}
+      className={className}
+      style={{ height, position: "relative" }}
+      onPointerDown={(e) => {
+        if (scrollThrough && e.pointerType === "mouse") setEngaged(true);
+      }}
+      onPointerLeave={() => setEngaged(false)}
+      onWheel={(e) => {
+        if (ownsWheel || e.ctrlKey) return;
+        setHint(true);
+        clearTimeout(hintTimer.current);
+        hintTimer.current = setTimeout(() => setHint(false), 1500);
+      }}
+    >
       <ReactFlow
         nodes={displayNodes}
         edges={edges}
@@ -1018,12 +1065,43 @@ export function FlowDiagramRF({
         fitViewOptions={{ padding: 0.05 }}
         minZoom={0.2}
         maxZoom={4}
+        zoomOnScroll={!scrollThrough || engaged}
+        zoomActivationKeyCode={ZOOM_KEYS}
+        preventScrolling={ownsWheel}
         nodesConnectable={false}
         elementsSelectable={false}
         proOptions={{ hideAttribution: false }}
       >
         <Background gap={24} size={1} />
       </ReactFlow>
+      {scrollThrough && (
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 30,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+            opacity: hint && !ownsWheel ? 1 : 0,
+            transition: "opacity 200ms",
+          }}
+        >
+          <span
+            style={{
+              background: "var(--ink, #222)",
+              color: "var(--paper, #fff)",
+              borderRadius: 6,
+              padding: "8px 12px",
+              font: "500 12px/1.3 var(--font-body, sans-serif)",
+            }}
+          >
+            {/Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘" : "Ctrl"} + scroll to zoom, or click into the drawing
+          </span>
+        </div>
+      )}
       {card && (
         <div
           style={{

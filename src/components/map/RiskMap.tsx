@@ -79,6 +79,14 @@ export function RiskMap({
   // browser's own gesture, so the zoom has to be implemented here or a phone gets no zoom at all.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ dist: number; mid: { x: number; y: number } } | null>(null);
+  // The page scrolls past the map: the wheel zooms only after a click into it (until the pointer
+  // leaves), with ⌘/Ctrl held, or as a trackpad pinch, which arrives as Ctrl + wheel. On a touch
+  // screen one finger scrolls the page and two pinch and pan.
+  const engaged = useRef(false);
+  // The hint is drawn in map units, so it keeps the map's on-screen scale to stay at a fixed size.
+  const [hintScale, setHintScale] = useState<number | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(hintTimer.current), []);
 
   // On a phone the width-fit rendering makes the drawing unreadably small, so small screens get
   // a tall viewport and an initial zoom that fills it; pinch and pan take it from there.
@@ -129,16 +137,30 @@ export function RiskMap({
     });
   }, []);
 
-  // Wheel needs a non-passive listener to stop the page scrolling underneath.
+  // Wheel needs a non-passive listener to stop the page scrolling underneath. A two-finger
+  // touch gesture likewise cancels its touchmove, or the browser would scroll the page too.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     const onWheel = (e: WheelEvent) => {
+      if (!engaged.current && !e.ctrlKey && !e.metaKey) {
+        setHintScale(svg.getScreenCTM()?.a ?? 1);
+        clearTimeout(hintTimer.current);
+        hintTimer.current = setTimeout(() => setHintScale(null), 1500);
+        return;
+      }
       e.preventDefault();
       zoomAbout(e.deltaY < 0 ? 1.12 : 1 / 1.12, toMap(e.clientX, e.clientY));
     };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
     svg.addEventListener("wheel", onWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onWheel);
+    svg.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      svg.removeEventListener("wheel", onWheel);
+      svg.removeEventListener("touchmove", onTouchMove);
+    };
   }, [toMap, zoomAbout]);
 
   // Pointer capture is deliberately not taken until the pointer has actually moved: capturing
@@ -146,6 +168,10 @@ export function RiskMap({
   // visitor was aiming at.
   const startPan = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.pointerType === "mouse") {
+      engaged.current = true;
+      setHintScale(null);
+    }
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
       // Second finger down: stop panning, start pinching.
@@ -158,9 +184,11 @@ export function RiskMap({
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
-    drag.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
     captured.current = false;
+    // One finger on a touch screen scrolls the page; moving the map takes two.
+    if (e.pointerType === "touch") return;
+    drag.current = { x: e.clientX, y: e.clientY };
   };
 
   const doPan = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -227,8 +255,11 @@ export function RiskMap({
       onPointerMove={doPan}
       onPointerUp={endPan}
       onPointerCancel={endPan}
+      onPointerLeave={(e) => {
+        if (e.pointerType === "mouse") engaged.current = false;
+      }}
       style={{
-        touchAction: "none",
+        touchAction: "pan-x pan-y",
         cursor: panning ? "grabbing" : "grab",
         height: mobile ? "62vh" : undefined,
       }}
@@ -314,6 +345,33 @@ export function RiskMap({
         onOut={() => zoomAbout(1 / 1.3, centre)}
         onReset={() => setView({ k: 1, x: 0, y: 0 })}
       />
+
+      {/* Rendered only once a wheel has asked for it: the map is server-rendered, and the
+          key name comes from the browser. */}
+      {hintScale !== null && (
+        <foreignObject
+          x={0}
+          y={-TOP_MARGIN}
+          width={WIDTH}
+          height={HEIGHT + TOP_MARGIN}
+          aria-hidden
+          style={{ pointerEvents: "none" }}
+        >
+          <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center" }}>
+            <span
+              style={{
+                background: "var(--ink)",
+                color: "var(--paper)",
+                borderRadius: 6 / hintScale,
+                padding: `${8 / hintScale}px ${12 / hintScale}px`,
+                font: `500 ${12 / hintScale}px/1.3 var(--font-body, sans-serif)`,
+              }}
+            >
+              {/Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘" : "Ctrl"} + scroll to zoom, or click into the map
+            </span>
+          </div>
+        </foreignObject>
+      )}
     </svg>
   );
 }
