@@ -8,7 +8,7 @@
  * overlays moved into the one renderer and the SVG engine was retired.
  */
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Archetype, Phase, Scenario } from "@/lib/types";
 import { downloadArchetypeHtml } from "./export-html";
@@ -45,6 +45,9 @@ export function FlowDiagram({
   highlight = null,
   overlay = null,
   chipPaint = null,
+  simple = false,
+  showRisks = true,
+  onPickMitigation,
   className,
 }: {
   archetype: Archetype;
@@ -55,6 +58,10 @@ export function FlowDiagram({
   overlay?: StepOverlay | null;
   /** Mitigation id -> a caller's chip colouring; null keeps the reference blue / status tints. */
   chipPaint?: Map<string, ChipPaint> | null;
+  /** The simple component set: text cards, C# badges, step dots (flow-simple.tsx). */
+  simple?: boolean;
+  showRisks?: boolean;
+  onPickMitigation?: (id: string) => void;
   className?: string;
 }) {
   // Expanded, the same drawing is remounted in an overlay covering the app's viewport (not
@@ -75,24 +82,47 @@ export function FlowDiagram({
     };
   }, [expanded]);
 
+  // Inline, the simple set is as tall as the drawing at the column's width, so its text stays
+  // readable; the standard drawing keeps its fixed frame. Expanded, both fill the window.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [inlineWidth, setInlineWidth] = useState(0);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!simple || !el) return;
+    const ro = new ResizeObserver(([e]) => setInlineWidth(Math.round(e.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [simple]);
+  const L = archetype.layout;
+  const inlineHeight =
+    simple && inlineWidth ? `${Math.round(L.height * Math.min(1.1, (inlineWidth * 0.94) / L.width) + 40)}px` : undefined;
+
   const buttonClass = "rounded-md border border-ink-3/40 bg-paper px-2.5 py-1 text-[11px] text-ink-2 hover:bg-mist";
-  const drawing = (expandedView: boolean) => (
-    <FlowDiagramRFLazy
-      archetype={archetype}
-      walk={walk}
-      highlight={highlight}
-      overlay={overlay}
-      chipPaint={chipPaint}
-      className={className}
-      height={expandedView ? "100%" : undefined}
-      scrollThrough={!expandedView}
-    />
-  );
+  const drawing = (expandedView: boolean) =>
+    simple && !expandedView && !inlineHeight ? (
+      <div style={{ height: "min(640px, 70vh)" }} />
+    ) : (
+      <FlowDiagramRFLazy
+        // A new inline height refits the drawing to it.
+        key={expandedView ? "expanded" : inlineHeight}
+        archetype={archetype}
+        walk={walk}
+        highlight={highlight}
+        overlay={overlay}
+        chipPaint={chipPaint}
+        simple={simple}
+        showRisks={showRisks}
+        onPickMitigation={onPickMitigation}
+        className={className}
+        height={expandedView ? "100%" : inlineHeight}
+        scrollThrough={!expandedView}
+      />
+    );
 
   return (
-    <div className="relative w-full">
+    <div ref={wrapRef} className="relative w-full">
       <div className="absolute right-2 top-2 z-10 flex gap-1.5">
-        {!overlay && (
+        {!overlay && !simple && (
           <button
             type="button"
             onClick={() => void downloadArchetypeHtml(archetype)}
@@ -106,7 +136,7 @@ export function FlowDiagram({
           Expand ⤢
         </button>
       </div>
-      {expanded ? <div aria-hidden style={{ height: "min(640px, 70vh)" }} /> : drawing(false)}
+      {expanded ? <div aria-hidden style={{ height: inlineHeight ?? "min(640px, 70vh)" }} /> : drawing(false)}
 
       {expanded && (
         <div role="dialog" aria-modal="true" aria-label={`${archetype.title} — expanded drawing`} className="fixed inset-0 z-50 flex flex-col bg-paper">
@@ -114,7 +144,7 @@ export function FlowDiagram({
             <span className="display text-[14px] font-bold text-ink">{archetype.title}</span>
             <span className="hidden text-[11.5px] text-ink-3 sm:inline">Scroll to zoom · drag to pan · Esc to collapse</span>
             <div className="ml-auto flex gap-1.5">
-              {!overlay && (
+              {!overlay && !simple && (
                 <button type="button" onClick={() => void downloadArchetypeHtml(archetype)} className={buttonClass}>
                   Export HTML
                 </button>

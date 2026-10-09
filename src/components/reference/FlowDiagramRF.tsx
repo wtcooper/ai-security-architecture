@@ -37,6 +37,7 @@ import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types"
 import type { Highlight, StepOverlay } from "./FlowDiagram";
 import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth, type ChipPaint } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
+import { Badge, polyline, SIMPLE, SimpleBlockNode, SimpleZoneNode, type SimpleBadge } from "./flow-simple";
 
 
 interface HoverCard {
@@ -442,6 +443,8 @@ interface EdgePin {
   /** With org data on, a chip's capability status. */
   status?: DisplayStatus;
   paint?: ChipPaint;
+  /** The simple component set: chips are C# badges and step numbers are dots. */
+  simple?: boolean;
   title: string;
   body?: string;
 }
@@ -455,6 +458,7 @@ interface BuildPathData {
   highlight?: Highlight | null;
   onPinEnter: (event: React.MouseEvent, title: string, body?: string) => void;
   onPinLeave: () => void;
+  onPick?: (id: string) => void;
 }
 
 /**
@@ -465,7 +469,7 @@ function BuildPathEdge(props: EdgeProps) {
   const data = props.data as unknown as BuildPathData;
   const pinOpacity = (pin: EdgePin) => {
     if (pin.kind === "flow") return 1;
-    if (data.pinsDim) return 0;
+    if (data.pinsDim) return pin.simple ? 0.3 : 0;
     const h = data.highlight;
     if (!h) return 1;
     const match =
@@ -480,7 +484,29 @@ function BuildPathEdge(props: EdgeProps) {
       <BaseEdge path={path} markerEnd={props.markerEnd} markerStart={props.markerStart} style={props.style} />
       {data?.pins?.length ? (
         <EdgeLabelRenderer>
-          {data.pins.map((pin, i) => (
+          {data.pins.map((pin, i) =>
+            pin.simple && pin.kind !== "tag" ? (
+              <div
+                key={i}
+                onMouseEnter={(e) => data.onPinEnter(e, pin.title, pin.body)}
+                onMouseLeave={data.onPinLeave}
+                style={{
+                  position: "absolute",
+                  transform: `translate(-50%, -50%) translate(${midX + pin.dx}px, ${midY + pin.dy}px)`,
+                  opacity: pinOpacity(pin),
+                  pointerEvents: "all",
+                  zIndex: pin.kind === "flow" ? 11 : 10,
+                }}
+              >
+                {pin.kind === "flow" ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 11, background: SIMPLE.ink, color: "#fff", font: "600 11.5px/1 var(--font-mono, monospace)" }}>
+                    {pin.code}
+                  </span>
+                ) : (
+                  <Badge label={`C${pin.n}`} status={pin.status} paint={pin.paint} onClick={data.onPick && pin.ref ? () => data.onPick!(pin.ref!) : undefined} />
+                )}
+              </div>
+            ) : (
             <div
               key={i}
               onMouseEnter={(e) => data.onPinEnter(e, pin.title, pin.body)}
@@ -539,18 +565,37 @@ function BuildPathEdge(props: EdgeProps) {
               {pin.kind === "chip" ? pin.n : pin.code}
 
             </div>
-          ))}
+            ),
+          )}
         </EdgeLabelRenderer>
       ) : null}
     </>
   );
 }
 
-const nodeTypes = { block: BlockNode, chip: ChipNode, tag: TagNode, zone: ZoneNode };
+const nodeTypes = { block: BlockNode, chip: ChipNode, tag: TagNode, zone: ZoneNode, sblock: SimpleBlockNode, szone: SimpleZoneNode };
 const edgeTypes = { buildPath: BuildPathEdge };
 
 /** Held, either key zooms an inline drawing with the wheel without clicking into it first. */
 const ZOOM_KEYS = ["Meta", "Control"];
+
+/**
+ * Where the simple set seats an arrow's controls: near the end the arrow enters, clear of the
+ * arrowhead, so the midpoint stays free for step numbers and risk tags. A short arrow has no
+ * such room; there they sit beside the midpoint, on the side step numbers do not use.
+ */
+function simpleEdgeSpots(n: number, geo: { d: string; midX: number; midY: number; horizontal: boolean }) {
+  const path = polyline(geo.d);
+  return Array.from({ length: n }, (_, i) => {
+    if (path.length >= 150) {
+      const step = path.at(path.length - 50).horizontal ? 36 : 24;
+      const p = path.at(path.length - 50 - i * step);
+      return { x: p.x, y: p.y };
+    }
+    const off = i - (n - 1) / 2;
+    return geo.horizontal ? { x: geo.midX + off * 36, y: geo.midY - 16 } : { x: geo.midX - 22, y: geo.midY + off * 24 };
+  });
+}
 
 /** Pick the facing handle pair from the two blocks' initial geometry. */
 function facing(a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) {
@@ -566,6 +611,9 @@ export function FlowDiagramRF({
   highlight = null,
   overlay = null,
   chipPaint = null,
+  simple = false,
+  showRisks = true,
+  onPickMitigation,
   className,
   height = "min(640px, 70vh)",
   scrollThrough = false,
@@ -579,6 +627,12 @@ export function FlowDiagramRF({
   overlay?: StepOverlay | null;
   /** Mitigation id -> a caller's chip colouring (the experimental mockups); null keeps the default. */
   chipPaint?: Map<string, ChipPaint> | null;
+  /** Draw with the simple component set (flow-simple.tsx): text cards, C# badges, step dots. */
+  simple?: boolean;
+  /** Risk tags; the simple set hides them until asked. */
+  showRisks?: boolean;
+  /** A control badge clicked (simple set only). */
+  onPickMitigation?: (id: string) => void;
   className?: string;
   /** The canvas height: the inline default, or "100%" when the drawing fills the expanded overlay. */
   height?: string;
@@ -701,7 +755,7 @@ export function FlowDiagramRF({
       const y1 = gov ? gov.y + gov.h : bandBottom;
       nodes.push({
         id: `__zone_${zone.id}`,
-        type: "zone",
+        type: simple ? "szone" : "zone",
         position: { x: x0, y: y0 },
         data: { title: zone.title, owner: zone.owner, note: zone.note, w: x1 - x0, h: y1 - y0 },
         style: { width: x1 - x0, height: y1 - y0 },
@@ -710,6 +764,29 @@ export function FlowDiagramRF({
         zIndex: -3,
       });
     }
+    // The simple set carries a block's controls on its own corner: pinned on it, listed by a
+    // governance call-out, or listed on one of its items.
+    const badgesOf = (block: ArchBlock): SimpleBadge[] => {
+      const ids = [
+        ...archetype.pins.mitigations.filter((p) => p.at === block.id).map((p) => p.mitigation),
+        ...(block.mitigations ?? []),
+        ...(block.items ?? []).flatMap((it) => it.mitigations ?? []),
+      ];
+      return [...new Set(ids)].map((id) => {
+        const n = capNumber.get(id) ?? 0;
+        const note = archetype.pins.mitigations.find((p) => p.at === block.id && p.mitigation === id)?.note;
+        return {
+          id,
+          n,
+          status: capStatus?.get(id),
+          paint: chipPaint?.get(id),
+          title: `C${chipTitle(n, id, orgOverlay)}`,
+          body: withHint(pinBody(note, "mitigations", id, orgOverlay, capStatus?.get(id)), chipPaint?.get(id)),
+        };
+      });
+    };
+    const zoneOwnerOf = new Map((archetype.zones ?? []).map((z) => [z.id, z.owner]));
+
     // Blocks are emitted parents-first, because React Flow requires a parent node to appear
     // before its children. Depth is unbounded — the walk recurses.
     const byId = new Map(archetype.blocks.map((b) => [b.id, b]));
@@ -718,12 +795,17 @@ export function FlowDiagramRF({
       if (!block) return;
       const r = rects[id];
       const parentRect = block.parent ? rects[block.parent] : undefined;
+      const kids = kidsOf.get(id) ?? [];
       nodes.push({
         id,
-        type: "block",
+        type: simple && block.kind !== "origin" ? "sblock" : "block",
         position: parentRect ? { x: r.x - parentRect.x, y: r.y - parentRect.y } : { x: r.x, y: r.y },
         parentId: block.parent,
         data: {
+          owner: zoneOwnerOf.get(block.zone ?? "") ?? "cloud",
+          kidTop: kids.length ? Math.min(...kids.map((k) => rects[k]?.y ?? Infinity)) - r.y : undefined,
+          badges: simple ? badgesOf(block) : [],
+          onPick: onPickMitigation,
           block,
           w: r.w,
           h: r.h,
@@ -756,6 +838,7 @@ export function FlowDiagramRF({
       chipGroups.get(pin.at)!.push(pin);
     }
     for (const [at, pins] of chipGroups) {
+      if (simple) break; // the simple set draws block controls on the card itself
       if (at.includes("->")) continue; // edge-anchored chips render inside the edge itself
       if (byId.get(at)?.kind === "governance") continue; // drawn in the call-out's own chip row
       const blockRect = rects[at];
@@ -796,6 +879,7 @@ export function FlowDiagramRF({
       layout,
     );
     for (const [at, pins] of tagGroups) {
+      if (simple && !showRisks) break;
       if (at.includes("->")) continue; // edge-anchored tags render inside the edge itself
       const blockRect = rects[at];
       if (!blockRect) continue;
@@ -824,7 +908,7 @@ export function FlowDiagramRF({
       });
     }
     return nodes;
-  }, [archetype, cardAt, orgOverlay, chipPaint]);
+  }, [archetype, cardAt, orgOverlay, chipPaint, simple, showRisks, onPickMitigation]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   // Rebuild whenever the nodes' inputs change — a new drawing, or org data switched on or off —
@@ -844,7 +928,7 @@ export function FlowDiagramRF({
   const displayNodes = useMemo(
     () =>
       nodes.map((n) => {
-        if (n.type === "block") {
+        if (n.type === "block" || n.type === "sblock") {
           const mark = overlay?.marks[n.id];
           const dim =
             (walkActive && !walkBlocks.has(n.id)) || (overlay !== null && mark === undefined);
@@ -895,7 +979,7 @@ export function FlowDiagramRF({
     for (const [at, pins] of chipGroups) {
       const geo = edgeGeo.get(at);
       if (!geo) continue;
-      const spots = chipSpots(pins.length, undefined, geo);
+      const spots = simple ? simpleEdgeSpots(pins.length, geo) : chipSpots(pins.length, undefined, geo);
       const list = pinsByEdge.get(at) ?? [];
       pins.forEach((pin, i) => {
         const spot = spots[i];
@@ -903,6 +987,7 @@ export function FlowDiagramRF({
         const n = capNumber.get(pin.mitigation) ?? 0;
         list.push({
           kind: "chip",
+          simple,
           ref: pin.mitigation,
           dx: spot.x - geo.midX,
           dy: spot.y - geo.midY,
@@ -927,6 +1012,7 @@ export function FlowDiagramRF({
       layout,
     );
     for (const [at, pins] of tagGroups) {
+      if (simple && !showRisks) break;
       if (!at.includes("->")) continue;
       const geo = edgeGeo.get(at);
       if (!geo) continue;
@@ -968,8 +1054,9 @@ export function FlowDiagramRF({
       steps.forEach((step, i) => {
         list.push({
           kind: "flow",
-          dx: spots[i].x - geo.midX,
-          dy: spots[i].y - geo.midY,
+          simple,
+          dx: spots[i].x + (simple ? spots[i].w / 2 : 0) - geo.midX,
+          dy: spots[i].y + (simple ? spots[i].h / 2 : 0) - geo.midY,
           code: String(step.n),
           title: `Step ${step.n} · ${walk?.title ?? ""}`,
           body: step.note,
@@ -983,7 +1070,11 @@ export function FlowDiagramRF({
       const key = `${e.from}->${e.to}`;
       const geo = edgeGeo.get(key);
       if (!geo) continue;
-      const style = PATH_STYLE[e.path];
+      const style = simple
+        ? e.path === "external"
+          ? { stroke: SIMPLE.lineExternal, dash: "6 5" }
+          : { stroke: SIMPLE.line, dash: undefined }
+        : PATH_STYLE[e.path];
       const onStep = overlay !== null && overlay.edges.includes(key);
       const dimmed = (walkActive && !walkEdges.has(key)) || (overlay !== null && !onStep);
       const traced = hoveredEdge === key;
@@ -1009,6 +1100,7 @@ export function FlowDiagramRF({
           highlight,
           onPinEnter: cardAt,
           onPinLeave,
+          onPick: onPickMitigation,
         },
         style: {
           stroke,
@@ -1024,7 +1116,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay, chipPaint]);
+  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay, chipPaint, simple, showRisks, onPickMitigation]);
 
   return (
     <div
@@ -1052,7 +1144,7 @@ export function FlowDiagramRF({
         onNodesChange={onNodesChange}
         nodesDraggable={false}
         onNodeMouseEnter={(event, node) => {
-          if (node.type === "block") {
+          if (node.type === "block" || node.type === "sblock") {
             const block = (node.data as BlockNodeData).block;
             cardAt(event, block.title, block.note);
           } else if (node.type === "chip" || node.type === "tag") {

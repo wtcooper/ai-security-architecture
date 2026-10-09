@@ -182,13 +182,7 @@ export function toolStatus(tool: Tool, capId: string): { status: DisplayStatus; 
   return { status: s.status, note: s.contributions.map((c) => c.record?.note).filter(Boolean).join(" · ") || undefined };
 }
 
-/** Saturated chip fills so status reads on the drawing at fit-to-view zoom. */
-export const STATUS_FILL: Record<DisplayStatus, { bg: string; border: string; text: string; dashed?: boolean }> = {
-  enabled: { bg: "#06845a", border: "#06845a", text: "#ffffff" },
-  inProgress: { bg: "#d4a106", border: "#b88a00", text: "#ffffff" },
-  gap: { bg: "#d92d20", border: "#d92d20", text: "#ffffff" },
-  notAssessed: { bg: "#ffffff", border: "#98a2b3", text: "#667085", dashed: true },
-  unmapped: { bg: "#ffffff", border: "#d0d5dd", text: "#98a2b3", dashed: true },
-};
+/** Saturated status fills, shared with the simple canvas so status reads at canvas zoom. */
+export { STATUS_FILL } from "@/components/reference/flow-simple";
 
 export type { DisplayStatus };
