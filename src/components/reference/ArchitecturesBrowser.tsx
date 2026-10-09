@@ -11,6 +11,7 @@ import type { Archetype, LandscapeView as LandscapeViewDef, Paragraph, Scenario 
 import { LandscapeView } from "@/components/landscape/LandscapeView";
 import { isAiSpecific, landscapeViewById, parents } from "@/components/landscape/model";
 import { ArchetypeView } from "./ArchetypeView";
+import { DEFAULT_EXPERIMENT_ARCH, EXPERIMENTS, ExperimentView, experimentById, type ExperimentId } from "@/components/experimental/ExperimentView";
 import type { Highlight } from "./FlowDiagram";
 
 const SURFACE_TAGLINE: Record<string, string> = {
@@ -38,12 +39,14 @@ export function ArchitecturesBrowser() {
   const linkedAi = params.get("ai") === "1";
   const linkedSurface = params.get("surface");
   const linkedTool = params.get("tool");
+  const linkedExperiment = params.get("experiment");
   const linkedToolArch = linkedTool ? toolById.get(linkedTool)?.architecture : undefined;
 
   // A product deep link opens its own architecture, whatever else the URL says.
   const initial =
     linkedToolArch ||
     (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) ||
+    (linkedExperiment && experimentById.has(linkedExperiment) && DEFAULT_EXPERIMENT_ARCH) ||
     archetypesInOrder[0]?.id ||
     "";
 
@@ -64,6 +67,10 @@ export function ArchitecturesBrowser() {
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
   const [toolId, setToolId] = useState<string | null>(linkedToolArch ? linkedTool : null);
+  // The experimental zone: mockups of the Tools / org-data presentation, picked from the same dropdown.
+  const [experimentId, setExperimentId] = useState<ExperimentId | null>(
+    !linkedToolArch && linkedExperiment && experimentById.has(linkedExperiment) ? (linkedExperiment as ExperimentId) : null,
+  );
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
   const walks = useMemo(
@@ -76,6 +83,11 @@ export function ArchitecturesBrowser() {
   const landscapeView = landscapeId ? landscapeViewById.get(landscapeId) : undefined;
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (experimentId) {
+      window.history.replaceState(null, "", `?experiment=${experimentId}&archetype=${archetypeId}`);
+      document.title = `${experimentById.get(experimentId)?.title} · Experimental · Reference architectures`;
+      return;
+    }
     if (landscapeView) {
       window.history.replaceState(null, "", `?landscape=${landscapeView.id}${surface ? `&surface=${surface}` : ""}${aiOnly ? "&ai=1" : ""}`);
       document.title = `${landscapeView.title} · Enterprise AI security · Reference architectures`;
@@ -83,13 +95,22 @@ export function ArchitecturesBrowser() {
     }
     window.history.replaceState(null, "", `?archetype=${archetypeId}${toolId ? `&tool=${toolId}` : ""}`);
     document.title = `${archetype.title} · Reference architectures`;
-  }, [archetypeId, archetype.title, toolId, landscapeView, surface, aiOnly]);
+  }, [archetypeId, archetype.title, toolId, landscapeView, surface, aiOnly, experimentId]);
 
   const shown = archetypesInOrder.filter((a) => !surface || a.surface === surface);
 
   if (!archetype) return null;
 
   const select = (id: string) => {
+    if (experimentById.has(id)) {
+      // Entering the zone opens on the drawing the mockups were built around; moving between
+      // mockups keeps whichever architecture is open.
+      if (!experimentId) setArchetypeId(DEFAULT_EXPERIMENT_ARCH);
+      setExperimentId(id as ExperimentId);
+      setLandscapeId(null);
+      return;
+    }
+    setExperimentId(null);
     if (landscapeViewById.has(id)) {
       setLandscapeId(id);
       return;
@@ -120,11 +141,16 @@ export function ArchitecturesBrowser() {
         eyebrow={`${landscape.views.length} enterprise landscape view${landscape.views.length === 1 ? "" : "s"} · ${archetypesInOrder.length} application archetypes · authored`}
         title="Reference architectures"
         lead="Target-state architectures in the reference-architecture grammar the industry actually reads: mitigation blocks connected by typed data paths, the mitigations to deploy numbered onto the drawing, the risks tagged where they surface, and a numbered walkthrough paired with its sequence diagram. Built to be copied, not audited against."
-        aside={<OverlayToggle />}
+        aside={experimentId ? undefined : <OverlayToggle />}
       >
         {/* --- Picker: a searchable dropdown + surface filter pills -------------------- */}
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <ArchPicker options={shown} landscapes={landscape.views} current={landscapeView ?? archetype} onSelect={select} />
+            <ArchPicker
+              options={shown}
+              landscapes={landscape.views}
+              current={experimentId ? { id: experimentId, title: `Experimental · ${experimentById.get(experimentId)?.title}` } : landscapeView ?? archetype}
+              onSelect={select}
+            />
             <div className="flex flex-wrap gap-1.5">
               <FilterPill active={!surface} onClick={() => setSurface(null)}>
                 All
@@ -153,7 +179,14 @@ export function ArchitecturesBrowser() {
         </div>
       </PageHeader>
 
-      {landscapeView ? (
+      {experimentId ? (
+        <ExperimentView
+          experimentId={experimentId}
+          archetypeId={archetypeId}
+          onArchetype={setArchetypeId}
+          onExperiment={setExperimentId}
+        />
+      ) : landscapeView ? (
         <div className="mx-auto w-full max-w-[1500px] px-6 py-8">
           {/* --- Selected landscape view: the enterprise before any one architecture ----- */}
           <div className="max-w-3xl">
@@ -235,6 +268,7 @@ function ArchPicker({
   const q = query.trim().toLowerCase();
   const matches = options.filter((a) => !q || haystack.get(a.id)?.includes(q));
   const landscapeMatches = landscapes.filter((v) => !q || haystack.get(v.id)?.includes(q));
+  const experimentMatches = EXPERIMENTS.filter((e) => !q || `${e.title} ${e.idea} experimental mockup`.toLowerCase().includes(q));
   const option = (id: string, title: string, hint?: string) => (
     <li key={id}>
       <button
@@ -299,7 +333,7 @@ function ArchPicker({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Escape") close();
-                  if (e.key === "Enter" && (landscapeMatches.length || matches.length)) pick((landscapeMatches[0] ?? matches[0]).id);
+                  if (e.key === "Enter" && (landscapeMatches.length || matches.length || experimentMatches.length)) pick((landscapeMatches[0] ?? matches[0] ?? experimentMatches[0]).id);
                 }}
                 placeholder="Search name or description…"
                 aria-label="Search architectures by name or description"
@@ -323,7 +357,13 @@ function ArchPicker({
                   </li>
                 );
               })}
-              {!matches.length && !landscapeMatches.length && (
+              {experimentMatches.length > 0 && (
+                <li className="mt-1 border-t border-line pt-1">
+                  <p className="eyebrow px-2.5 pb-1 pt-2 !text-[#7c3aed]">Experimental · tools &amp; org data mockups</p>
+                  <ul>{experimentMatches.map((e) => option(e.id, `${e.n}. ${e.title}`))}</ul>
+                </li>
+              )}
+              {!matches.length && !landscapeMatches.length && !experimentMatches.length && (
                 <li className="px-3 py-2.5 text-[13px] text-ink-3">
                   Nothing matches &ldquo;{query}&rdquo; — try a component, risk or scenario word,
                   or clear the surface filter.

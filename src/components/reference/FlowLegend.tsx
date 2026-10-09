@@ -13,7 +13,7 @@ const CHIP_STATUSES: DisplayStatus[] = ["enabled", "inProgress", "gap", "notAsse
  * data on, a third row keys the chip colours to capability status.
  * Shared by the Reference Architectures tab and the incident replay's architecture view.
  */
-export function FlowLegend({ className = "" }: { className?: string }) {
+export function FlowLegend({ className = "", chipKey = true }: { className?: string; /** Off when a caller recolours the chips and keys them itself. */ chipKey?: boolean }) {
   const overlay = useOrgOverlay();
   return (
     <div className={`space-y-1.5 text-[12px] text-ink-2 ${className}`}>
@@ -37,7 +37,7 @@ export function FlowLegend({ className = "" }: { className?: string }) {
         ))}
         <span className="text-ink-3">Hover anything · pinch or ⌘/Ctrl + wheel to zoom</span>
       </div>
-      {overlay && (
+      {overlay && chipKey && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <span className="text-ink-3">Chip colour = capability status</span>
           {CHIP_STATUSES.map((s) => (

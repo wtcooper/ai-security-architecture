@@ -8,12 +8,25 @@ import { componentById } from "@/lib/data";
 import { STATUS_STYLE } from "@/components/StatusPill";
 import type { ArchBlock, BlockKind, DisplayStatus, PathClass, Phase } from "@/lib/types";
 
+/** A caller-supplied chip colouring that replaces the reference blue and the status tints. */
+export interface ChipPaint {
+  bg: string;
+  border: string;
+  text: string;
+  dashed?: boolean;
+  /** Appended to the chip's hover card. */
+  hint?: string;
+}
+
 /**
  * A numbered chip's colours. With org data on it takes the capability's status in the
  * Capabilities matrix tints, with a full-strength ring so it reads at canvas size; otherwise
  * the reference blue.
  */
-export function chipColors(status?: DisplayStatus) {
+export function chipColors(status?: DisplayStatus, paint?: ChipPaint) {
+  if (paint) {
+    return { background: paint.bg, borderColor: paint.border, borderStyle: paint.dashed ? "dashed" : "solid", color: paint.text } as const;
+  }
   const s = status ? STATUS_STYLE[status] : undefined;
   return {
     background: s?.bg ?? "var(--paper, #fff)",

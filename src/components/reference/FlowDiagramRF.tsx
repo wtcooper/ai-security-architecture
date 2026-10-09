@@ -35,7 +35,7 @@ import { chipSpots, flowBadgeSpots, itemCells, placeTags, TAG_H, ZONE_PAD } from
 import { STATUS_META } from "@/components/StatusPill";
 import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
-import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth } from "./flow-style";
+import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth, type ChipPaint } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 
 
@@ -65,6 +65,10 @@ function pinBody(note: string | undefined, kind: EntityKind, id: string, show: b
   return lines.length ? lines.join("\n") : undefined;
 }
 
+/** A caller's chip hint leads the hover body, so a recoloured chip says why it has that colour. */
+const withHint = (body: string | undefined, paint?: ChipPaint) =>
+  paint?.hint ? [paint.hint, body].filter(Boolean).join("\n") : body;
+
 /**
  * A chip's hover title: its number and name — with org data on, the organisation's names lead.
  * No identifier: a reader has no use for one here; it lives in the capability's own detail.
@@ -83,6 +87,8 @@ type BlockNodeData = {
   capNumber?: Map<string, number>;
   /** With org data on, mitigation id -> its status on the drawing's surface, which colours the chip. */
   capStatus?: Map<string, DisplayStatus>;
+  /** A caller's chip colouring, which wins over the status tints. */
+  capPaint?: Map<string, ChipPaint>;
   /**
    * Mitigations pinned directly on a governance call-out. They join the call-out's own chip
    * row instead of hanging off a border the call-out no longer draws.
@@ -271,7 +277,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                     height: 16,
                     borderRadius: 8,
                     borderWidth: 1.3,
-                    ...chipColors(data.capStatus?.get(id)),
+                    ...chipColors(data.capStatus?.get(id), data.capPaint?.get(id)),
                     font: "700 9.5px/14px var(--font-mono, monospace)",
                     textAlign: "center",
                   }}
@@ -321,7 +327,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                         height: 14,
                         borderRadius: 7,
                         borderWidth: 1.2,
-                        ...chipColors(data.capStatus?.get(id)),
+                        ...chipColors(data.capStatus?.get(id), data.capPaint?.get(id)),
                         font: "700 8.5px/12px var(--font-mono, monospace)",
                         textAlign: "center",
                       }}
@@ -384,7 +390,7 @@ function ZoneNode({
   );
 }
 
-function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean; status?: DisplayStatus }>>) {
+function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean; status?: DisplayStatus; paint?: ChipPaint }>>) {
   return (
     <div
       style={{
@@ -392,7 +398,7 @@ function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: bo
         height: 18,
         borderRadius: 9,
         borderWidth: 1.5,
-        ...chipColors(data.status),
+        ...chipColors(data.status, data.paint),
         font: "700 10px/15px var(--font-mono, monospace)",
         textAlign: "center",
         opacity: data.dim ? 0 : data.faint ? 0.2 : 1,
@@ -435,6 +441,7 @@ interface EdgePin {
   w?: number;
   /** With org data on, a chip's capability status. */
   status?: DisplayStatus;
+  paint?: ChipPaint;
   title: string;
   body?: string;
 }
@@ -505,7 +512,7 @@ function BuildPathEdge(props: EdgeProps) {
                       height: 18,
                       borderRadius: 9,
                       borderWidth: 1.5,
-                      ...chipColors(pin.status),
+                      ...chipColors(pin.status, pin.paint),
                       font: "700 10px/15px var(--font-mono, monospace)",
                       textAlign: "center",
                       opacity: pinOpacity(pin),
@@ -558,6 +565,7 @@ export function FlowDiagramRF({
   walk = null,
   highlight = null,
   overlay = null,
+  chipPaint = null,
   className,
   height = "min(640px, 70vh)",
   scrollThrough = false,
@@ -569,6 +577,8 @@ export function FlowDiagramRF({
   highlight?: Highlight | null;
   /** An incident step replayed on the drawing; hides pins and walks while it is set. */
   overlay?: StepOverlay | null;
+  /** Mitigation id -> a caller's chip colouring (the experimental mockups); null keeps the default. */
+  chipPaint?: Map<string, ChipPaint> | null;
   className?: string;
   /** The canvas height: the inline default, or "100%" when the drawing fills the expanded overlay. */
   height?: string;
@@ -721,6 +731,7 @@ export function FlowDiagramRF({
           onItemEnter: cardAt,
           capNumber,
           capStatus,
+          capPaint: chipPaint ?? undefined,
           pinnedCaps:
             block.kind === "governance"
               ? archetype.pins.mitigations.filter((p) => p.at === id).map((p) => p.mitigation)
@@ -763,8 +774,9 @@ export function FlowDiagramRF({
             n,
             dim: false,
             status: capStatus?.get(pin.mitigation),
+            paint: chipPaint?.get(pin.mitigation),
             title: chipTitle(n, pin.mitigation, orgOverlay),
-            body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)),
+            body: withHint(pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)), chipPaint?.get(pin.mitigation)),
           },
           draggable: false,
           selectable: false,
@@ -812,7 +824,7 @@ export function FlowDiagramRF({
       });
     }
     return nodes;
-  }, [archetype, cardAt, orgOverlay]);
+  }, [archetype, cardAt, orgOverlay, chipPaint]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   // Rebuild whenever the nodes' inputs change — a new drawing, or org data switched on or off —
@@ -896,8 +908,9 @@ export function FlowDiagramRF({
           dy: spot.y - geo.midY,
           n,
           status: capStatus?.get(pin.mitigation),
+          paint: chipPaint?.get(pin.mitigation),
           title: chipTitle(n, pin.mitigation, orgOverlay),
-          body: pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)),
+          body: withHint(pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)), chipPaint?.get(pin.mitigation)),
         });
       });
       pinsByEdge.set(at, list);
@@ -1011,7 +1024,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay]);
+  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay, chipPaint]);
 
   return (
     <div

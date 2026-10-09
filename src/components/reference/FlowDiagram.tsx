@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import type { Archetype, Phase, Scenario } from "@/lib/types";
 import { downloadArchetypeHtml } from "./export-html";
+import type { ChipPaint } from "./flow-style";
 
 const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
   ssr: false,
@@ -43,6 +44,7 @@ export function FlowDiagram({
   walk = null,
   highlight = null,
   overlay = null,
+  chipPaint = null,
   className,
 }: {
   archetype: Archetype;
@@ -51,6 +53,8 @@ export function FlowDiagram({
   highlight?: Highlight | null;
   onHighlight?: (h: Highlight | null) => void;
   overlay?: StepOverlay | null;
+  /** Mitigation id -> a caller's chip colouring; null keeps the reference blue / status tints. */
+  chipPaint?: Map<string, ChipPaint> | null;
   className?: string;
 }) {
   // Expanded, the same drawing is remounted in an overlay covering the app's viewport (not
@@ -78,6 +82,7 @@ export function FlowDiagram({
       walk={walk}
       highlight={highlight}
       overlay={overlay}
+      chipPaint={chipPaint}
       className={className}
       height={expandedView ? "100%" : undefined}
       scrollThrough={!expandedView}

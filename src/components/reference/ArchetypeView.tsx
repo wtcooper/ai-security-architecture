@@ -8,20 +8,21 @@
  * mitigation or risk tab clears the highlight, so the drawing always matches the panel.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { guidanceByArchetype, toolsForArchetype } from "@/lib/data";
 import { ToolsForArchitecture } from "@/components/tooling/ToolsForArchitecture";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
+import type { ChipPaint } from "./flow-style";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
 import { Section } from "./ArchetypeDetail";
 import { Prose } from "@/components/Prose";
 import { MitigationList, RiskList, WalkList } from "./rail-lists";
 
-type Tab = "overview" | "flows" | "mitigations" | "risks" | "tools";
+export type Tab = "overview" | "flows" | "mitigations" | "risks" | "tools";
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -35,14 +36,23 @@ interface ArchetypeViewProps {
   /** A product record open on the Tools tab (deep link `?tool=`), or null. */
   toolId: string | null;
   onTool: (id: string | null) => void;
+  /** Experimental mockups only: a bar directly above the drawing (the org toggle, a tool lens). */
+  aboveDrawing?: ReactNode;
+  /** Experimental mockups only: chip colouring handed to the drawing. */
+  chipPaint?: Map<string, ChipPaint> | null;
+  /** Experimental mockups only: replaces the drawing and its legend. */
+  renderDrawing?: (walk: Scenario | null) => ReactNode;
+  /** Experimental mockups only: replaces the Tools tab's panel. */
+  toolsPanel?: ReactNode;
+  initialTab?: Tab;
 }
 
 const MODE_LABEL = { build: "your teams build this", use: "your teams use a vendor's", hybrid: "built and consumed" } as const;
 
-export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight, toolId, onTool }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight, toolId, onTool, aboveDrawing, chipPaint = null, renderDrawing, toolsPanel, initialTab }: ArchetypeViewProps) {
   // Opens on the overview with the full drawing: a reader's first sight is the whole
   // architecture, nothing faded. Choosing the flows tab traces the walkthrough.
-  const [tab, setTab] = useState<Tab>(toolId ? "tools" : "overview");
+  const [tab, setTab] = useState<Tab>(toolId ? "tools" : initialTab ?? "overview");
   // Opening a product (from search, a mitigation page or a rail) lands on the Tools tab.
   // Adjusted during render, the Panel.tsx idiom, so there is no flash of the previous tab.
   const [prevTool, setPrevTool] = useState(toolId);
@@ -98,7 +108,8 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </span>
         </button>
       )}
-      {drawingVisible && (
+      {aboveDrawing}
+      {drawingVisible && (renderDrawing ? renderDrawing(activeWalk) : (
         <>
           <div className="-mx-6 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
             <FlowDiagram
@@ -106,12 +117,13 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
               walk={activeWalk}
               highlight={highlight}
               onHighlight={onHighlight}
+              chipPaint={chipPaint}
               className="w-full"
             />
           </div>
-          <FlowLegend className="mt-3 px-1" />
+          <FlowLegend className="mt-3 px-1" chipKey={!chipPaint && !aboveDrawing} />
         </>
-      )}
+      ))}
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (
@@ -208,7 +220,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </div>
         )}
 
-        {tab === "tools" && <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} toolId={toolId} onTool={onTool} />}
+        {tab === "tools" && (toolsPanel ?? <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} toolId={toolId} onTool={onTool} />)}
       </div>
     </div>
   );
