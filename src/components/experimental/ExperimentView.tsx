@@ -21,6 +21,7 @@ import { LayersBar, LayersPanel, useLayersPaint } from "./Option4Layers";
 import { LensBar, LensPanel, useLens } from "./Option2Lens";
 import { ScorecardBar, ScorecardPanel, useScorecardPaint } from "./Option3Scorecard";
 import { SplitBar, SplitPanel, useSplitPaint } from "./Option1Split";
+import { BoxesDrawing } from "./Option6Boxes";
 
 export const EXPERIMENTS = [
   {
@@ -53,6 +54,12 @@ export const EXPERIMENTS = [
     title: "Simpler drawing + side panel",
     idea: "A lower-density drawing: one card per component, named control badges instead of numbered dots, risks behind a switch. Click a badge and the side panel answers it for every product.",
   },
+  {
+    id: "exp-boxes",
+    n: 6,
+    title: "Simplified boxes (drop-in)",
+    idea: "The current drawing with the same layout and arrows, redrawn plainly: text cards instead of icon grids, C# control badges on each card's corner, black numbered circles for flow steps, risks behind a switch, and a key of flow steps and core controls underneath. The Tools tab is today's.",
+  },
 ] as const;
 
 export type ExperimentId = (typeof EXPERIMENTS)[number]["id"];
@@ -82,11 +89,14 @@ export function ExperimentView({
   );
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(null);
+  // Option 6 keeps today's Tools tab, which opens a product record by id.
+  const [toolId, setToolId] = useState<string | null>(null);
   const [lastArch, setLastArch] = useState(archetype.id);
   if (lastArch !== archetype.id) {
     setLastArch(archetype.id);
     setWalkIndex(null);
     setHighlight(null);
+    setToolId(null);
   }
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
@@ -104,7 +114,12 @@ export function ExperimentView({
   const scorePaint = useScorecardPaint(archetype);
   const layersPaint = useLayersPaint(archetype);
 
-  const slots = (() => {
+  const slots: {
+    bar: React.ReactNode;
+    paint: ReturnType<typeof useSplitPaint>;
+    panel?: React.ReactNode;
+    drawing?: React.ComponentProps<typeof ArchetypeView>["renderDrawing"];
+  } = (() => {
     switch (experimentId) {
       case "exp-split":
         return { bar: <SplitBar archetype={archetype} />, paint: splitPaint, panel: <SplitPanel archetype={archetype} tools={tools} onHighlight={onHighlight} /> };
@@ -120,6 +135,14 @@ export function ExperimentView({
           paint: null,
           panel: <CanvasPanel archetype={archetype} tools={tools} state={canvas} />,
           drawing: (walk: Scenario | null) => <CanvasDrawing archetype={archetype} tools={tools} walk={walk} state={canvas} />,
+        };
+      case "exp-boxes":
+        return {
+          bar: null,
+          paint: null,
+          drawing: (walk: Scenario | null, flows: { walks: Scenario[]; walkIndex: number | null; onWalk: (i: number | null) => void }) => (
+            <BoxesDrawing archetype={archetype} walk={walk} {...flows} />
+          ),
         };
     }
   })();
@@ -196,13 +219,13 @@ export function ExperimentView({
         onWalk={onWalk}
         highlight={highlight}
         onHighlight={onHighlight}
-        toolId={null}
-        onTool={() => {}}
+        toolId={toolId}
+        onTool={setToolId}
         aboveDrawing={slots.bar}
         chipPaint={slots.paint}
         renderDrawing={slots.drawing}
         toolsPanel={slots.panel}
-        initialTab="tools"
+        initialTab={experimentId === "exp-boxes" ? "overview" : "tools"}
       />
     </div>
   );

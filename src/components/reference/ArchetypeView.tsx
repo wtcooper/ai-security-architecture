@@ -41,7 +41,7 @@ interface ArchetypeViewProps {
   /** Experimental mockups only: chip colouring handed to the drawing. */
   chipPaint?: Map<string, ChipPaint> | null;
   /** Experimental mockups only: replaces the drawing and its legend. */
-  renderDrawing?: (walk: Scenario | null) => ReactNode;
+  renderDrawing?: (walk: Scenario | null, flows: { walks: Scenario[]; walkIndex: number | null; onWalk: (i: number | null) => void }) => ReactNode;
   /** Experimental mockups only: replaces the Tools tab's panel. */
   toolsPanel?: ReactNode;
   initialTab?: Tab;
@@ -109,7 +109,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
         </button>
       )}
       {aboveDrawing}
-      {drawingVisible && (renderDrawing ? renderDrawing(activeWalk) : (
+      {drawingVisible && (renderDrawing ? renderDrawing(activeWalk, { walks, walkIndex, onWalk }) : (
         <>
           <div className="-mx-6 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
             <FlowDiagram
