@@ -31,7 +31,7 @@ import "@xyflow/react/dist/style.css";
 import { mitigationById, orgNamesFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
 import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
 import { useOrgOverlay } from "@/components/tooling/overlay";
-import { chipSpots, flowBadgeSpots, itemCells, placeTags, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
+import { chipSpots, flowBadgeSpots, itemCells, labelLines, placeTags, tabStyle, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
 import { STATUS_META } from "@/components/StatusPill";
 import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
@@ -160,6 +160,12 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   }
   const style = block.kind === "actor" ? null : BLOCK_STYLE[block.kind];
   const cells = itemCells(block, { x: 0, y: 0, w, h });
+  // Items in one row share an icon line: each hangs from the row's top by the height of the
+  // row's tallest item, so a one-line label sits level with a two-line neighbour.
+  const itemHeight = (i: number) =>
+    25 + 3 + labelLines(block.items![i].label, cells[i].w) * 13.8 + ((block.items![i].mitigations?.length ?? 0) > 0 ? 19 : 0);
+  const rowTall = new Map<number, number>();
+  cells.forEach((c, i) => rowTall.set(c.y, Math.max(rowTall.get(c.y) ?? 0, itemHeight(i))));
   // A governance call-out is a control, not a component, so it gets no component box: the
   // title tab, the icon and the chip numbers stand on the band by themselves.
   const boxless = block.kind === "actor" || block.kind === "governance";
@@ -222,9 +228,9 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             background: blockTab(block),
             color: "#fff",
             font: "600 10.5px/1 var(--font-mono, monospace)",
-            letterSpacing: "0.08em",
+            letterSpacing: tabStyle(block.title, w).letterSpacing,
             textTransform: "uppercase",
-            padding: "6px 10px",
+            padding: `6px ${tabStyle(block.title, w).padX}px`,
             borderRadius: 3,
             whiteSpace: "nowrap",
           }}
@@ -245,10 +251,11 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             color: "var(--ink, #222)",
           }}
         >
-          <svg width="32" height="32" viewBox="0 0 32 32">
+          <svg width="32" height="32" viewBox="0 0 32 32" style={{ flexShrink: 0 }}>
             <FlowIcon name={block.icon ?? "person"} x={16} y={16} size={28} color="var(--ink)" />
           </svg>
-          <span style={{ fontWeight: 600 }}>{block.title}</span>
+          {/* One line, overflowing the 64px figure into its column, so the icon keeps its size and place. */}
+          <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{block.title}</span>
         </div>
       ) : (block.items?.length ?? 0) === 0 && block.icon ? (
         <div
@@ -257,7 +264,9 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
+            // Top-aligned so every call-out's icon sits level; a wrapped chip row grows downward.
+            justifyContent: "flex-start",
+            paddingTop: 16,
             gap: 5,
           }}
         >
@@ -266,7 +275,9 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
           </svg>
           {(block.mitigations?.length ?? 0) + (data.pinnedCaps?.length ?? 0) > 0 && (
             <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
-              {[...new Set([...(block.mitigations ?? []), ...(data.pinnedCaps ?? [])])].map((id) => (
+              {[...new Set([...(block.mitigations ?? []), ...(data.pinnedCaps ?? [])])]
+                .sort((x, y) => (data.capNumber?.get(x) ?? 0) - (data.capNumber?.get(y) ?? 0))
+                .map((id) => (
                 <span
                   key={id}
                   style={{
@@ -301,13 +312,14 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
               style={{
                 position: "absolute",
                 left: cell.x + cell.w / 2,
-                top: cell.y + cell.h / 2,
-                transform: "translate(-50%, -50%)",
+                top: cell.y + (cell.h - (rowTall.get(cell.y) ?? 0)) / 2,
+                transform: "translateX(-50%)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 gap: 3,
-                width: cell.w,
+                // 8px narrower than its cell, so a long label wraps before it meets its neighbour's.
+                width: cell.w - 8,
                 textAlign: "center",
                 fontSize: 11.5,
                 lineHeight: 1.2,
@@ -729,7 +741,7 @@ export function FlowDiagramRF({
     // above their blocks. Recomputing it from block rects alone drops those tags outside the band.
     const bandTop = colRects.length ? layout.bandTop : 0;
     const bandBottom = colRects.length
-      ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD
+      ? (layout.bandBottom ?? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD)
       : 0;
     // A band spans the GRID COLUMNS its members occupy, not the members' own rects. A band
     // holding only a narrow actor figure used to draw 108px wide against a 176px column and
@@ -843,7 +855,7 @@ export function FlowDiagramRF({
       if (byId.get(at)?.kind === "governance") continue; // drawn in the call-out's own chip row
       const blockRect = rects[at];
       if (!blockRect) continue;
-      const spots = chipSpots(pins.length, blockRect, undefined);
+      const spots = chipSpots(pins.length, blockRect, undefined, layout.blockChipXs?.[at]);
       pins.forEach((pin, i) => {
         const spot = spots[i];
         if (!spot) return;

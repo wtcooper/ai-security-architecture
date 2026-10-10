@@ -62,7 +62,16 @@ export const TAB_H = 20;
  * It draws above the arrows, so an arrow meeting the top border under it loses its arrowhead.
  */
 const TAB_TOP = 11;
-const tabHalfWidth = (title: string) => (title.length * 7.2 + 20) / 2;
+/**
+ * A tab that would not leave 12px of border at each top corner sets tight — no tracking, 6px
+ * padding — rather than overhang its block and hide the corners. The renderer reads the same.
+ */
+export function tabStyle(title: string, blockW: number): { letterSpacing: string; padX: number; width: number } {
+  const loose = title.length * 7.2 + 20;
+  if (loose <= blockW - 24) return { letterSpacing: "0.08em", padX: 10, width: loose };
+  return { letterSpacing: "0", padX: 6, width: title.length * 6.3 + 12 };
+}
+const tabHalfWidth = (title: string, blockW = COL_W) => tabStyle(title, blockW).width / 2;
 /** Half an arrowhead's width: an anchor this close to the tab still loses part of its head. */
 const ARROW_HALF = 7;
 /** Band chrome, shared with both renderers so a band's rect can be derived here. */
@@ -70,25 +79,78 @@ export const ZONE_PAD = 16;
 export const ZONE_HEAD = 30;
 /** Clear space between two bands: the column gap less the pad each band adds inside it. */
 const BAND_GAP = COL_GAP - ZONE_PAD * 2;
+/**
+ * Extra width for a gap between two bands that carries something: an arrow's gutter leg, or the
+ * chips and tags of an arrow crossing straight from one band to the next. At the plain gap the
+ * leg ran a few pixels from both band borders and read as a third border, and a chip in the gap
+ * sat across both.
+ */
+const BAND_GAP_WIDE = 32;
 /** Items pack two per row inside a standard block. */
 const ITEM_H = 56;
 const BLOCK_PAD_TOP = 16;
 const BLOCK_PAD_BOTTOM = 12;
 const ACTOR_H = 66;
+/** 19px chips with 3px between them across a 188px call-out. */
+const CALLOUT_CHIPS_PER_ROW = 8;
+
+/** Advance widths of ASCII 32–126 in the item-label face (IBM Plex Sans, 11.5px), measured. */
+const LABEL_CHAR_W = [2.7,3.3,4.8,8.2,6.9,10.7,8,2.8,3.9,3.9,5.2,6.9,3.1,4.6,3.1,4.4,6.9,6.9,6.9,6.9,6.9,6.9,6.9,6.9,6.9,6.9,3.4,3.4,6.9,6.9,6.9,5.5,10.2,7.4,7.5,7.1,7.7,6.7,6.4,8,8.1,4.6,5.9,7.3,5.8,9.3,8.1,8.1,7,8.1,7.4,6.7,6.6,7.8,7,10.2,7,6.8,6.7,3.6,4.4,3.6,6.9,6.5,6.9,6.1,6.7,5.8,6.7,6.3,3.7,6.1,6.5,2.9,2.9,6.1,3.1,10,6.5,6.4,6.7,6.7,4.2,5.6,4,6.5,5.7,8.8,5.8,5.7,5.3,3.9,3.6,3.9,6.9];
+const LABEL_LINE = 14;
+/**
+ * Lines an item label wraps to in a cell `cellW` wide: the renderer insets it 8px, breaks at
+ * spaces and after hyphens. A row of items grows for a label that needs a third line rather
+ * than letting it run into the row below.
+ */
+export function labelLines(label: string, cellW: number): number {
+  const max = cellW - 8 - 1;
+  const w = (t: string) => [...t].reduce((a, ch) => a + (LABEL_CHAR_W[ch.charCodeAt(0) - 32] ?? 7), 0);
+  const words = label.split(" ").flatMap((word) => word.split(/(?<=-)/).map((part, i, all) => ({ part, glued: i > 0, last: i === all.length - 1 })));
+  let lines = 1;
+  let cur = 0;
+  for (const { part, glued } of words) {
+    const add = (cur && !glued ? LABEL_CHAR_W[0] : 0) + w(part);
+    if (cur && cur + add > max) {
+      lines++;
+      cur = w(part);
+    } else cur += add;
+  }
+  return lines;
+}
+/** Each item row's height in a block `width` wide: ITEM_H, plus a line for a three-line label. */
+function itemRowHeights(block: ArchBlock, width: number, stacked: boolean): number[] {
+  const items = block.items ?? [];
+  const perRow = stacked ? 1 : 2;
+  const out: number[] = [];
+  for (let i = 0; i < items.length; i += perRow) {
+    const row = items.slice(i, i + perRow);
+    const cellW = (width - 8) / row.length;
+    const lines = Math.max(...row.map((it) => labelLines(it.label, cellW)));
+    out.push(ITEM_H + Math.max(0, lines - 2) * LABEL_LINE);
+  }
+  return out;
+}
 
 /** How tall a block wants to be, before row heights are settled. */
-function naturalHeight(block: ArchBlock, container = false): number {
+function naturalHeight(block: ArchBlock, container = false, chips = 0, chipRow = false): number {
   if (block.kind === "actor" || block.kind === "origin") return ACTOR_H;
   const items = block.items?.length ?? 0;
   // A call-out block — an icon plus the chip numbers of the controls it delivers — needs room
-  // for both. Governance-band services are drawn this way.
-  if (!items && block.icon) return 84;
+  // for both. Governance-band services are drawn this way; a row of chips that wraps grows the
+  // block downward, so its icon stays level with its neighbours'.
+  if (!items && block.icon) return 84 + Math.max(0, Math.ceil(chips / CALLOUT_CHIPS_PER_ROW) - 1) * 22;
   if (!items) return 58;
   // Tall side columns stack items vertically, one per row; everything else packs two across —
   // including a container, whose span is for its children, not for its own items.
   const stacked = (block.rowSpan ?? 1) > 1 && !container;
-  const rows = stacked ? items : Math.ceil(items / 2);
-  return TAB_H / 2 + BLOCK_PAD_TOP + rows * ITEM_H + BLOCK_PAD_BOTTOM;
+  const heights = itemRowHeights(block, COL_W, stacked);
+  const rows = heights.reduce((a, h) => a + h, 0);
+  // Chips ride the bottom border; a last row whose label wraps reaches down to them, so it
+  // gets room to clear them.
+  const perRow = stacked ? 1 : 2;
+  const lastRow = (block.items ?? []).slice(Math.floor((items - 1) / perRow) * perRow);
+  const wraps = chipRow && lastRow.some((it) => labelLines(it.label, (COL_W - 8) / lastRow.length) > 1);
+  return TAB_H / 2 + BLOCK_PAD_TOP + rows + BLOCK_PAD_BOTTOM + (wraps ? 8 : 0);
 }
 
 /** Where items sit inside a block. Client-side rendering calls this too, so it lives here. */
@@ -98,12 +160,19 @@ export function itemCells(block: ArchBlock, rect: Rect): Rect[] {
   const stacked = (block.rowSpan ?? 1) > 1 && rect.w <= COL_W + 4;
   const perRow = stacked ? 1 : 2;
   const top = rect.y + TAB_H / 2 + BLOCK_PAD_TOP;
+  const heights = itemRowHeights(block, rect.w, stacked);
+  // A stacked block stretched over several rows spreads its items down its height instead of
+  // bunching them at the top above a blank remainder.
+  const room = rect.h - TAB_H / 2 - BLOCK_PAD_TOP - BLOCK_PAD_BOTTOM;
+  const used = heights.reduce((a, h) => a + h, 0);
+  const spread = stacked && room > used ? (room - used) / heights.length : 0;
+  const rowTop = heights.map((_, r) => top + heights.slice(0, r).reduce((a, h) => a + h + spread, 0) + spread / 2);
   return items.map((_, i) => {
     const r = Math.floor(i / perRow);
     const c = i % perRow;
     const inRow = Math.min(perRow, items.length - r * perRow);
-    const cellW = (rect.w - 16) / inRow;
-    return { x: rect.x + 8 + c * cellW, y: top + r * ITEM_H, w: cellW, h: ITEM_H };
+    const cellW = (rect.w - 8) / inRow;
+    return { x: rect.x + 4 + c * cellW, y: rowTop[r], w: cellW, h: heights[r] };
   });
 }
 
@@ -119,11 +188,22 @@ const overlap = (a0: number, a1: number, b0: number, b1: number): [number, numbe
 
 /** Padding inside a container, and the room its title tab needs above its children. */
 const NEST_PAD = 20;
+/** Between wrapped lines of governance call-outs: room for the lower line's tabs, no more. */
+const GOV_LINE_GAP = 32;
 const NEST_HEAD = 34;
 /** An anonymous origin draws as a figure the size of an actor: an icon in a dashed ring. */
 const ORIGIN_W = 64;
 
-type Placed = { block: ArchBlock; w: number; h: number; kids: Placed[]; inner?: GridResult };
+type Placed = {
+  block: ArchBlock;
+  w: number;
+  h: number;
+  kids: Placed[];
+  inner?: GridResult;
+  /** A container's room above its children (title, items, their tags) and below them. */
+  head?: number;
+  pad?: number;
+};
 type GridResult = {
   width: number;
   height: number;
@@ -131,7 +211,23 @@ type GridResult = {
   at: Map<string, Rect>;
   colX: number[];
   colW: number[];
+  rowY: number[];
+  rowH: number[];
+  /**
+   * Children of a row-spanning container placed level with the rows outside it, relative to
+   * the container's top-left. A container without an entry seats its children at its foot.
+   */
+  nested?: Map<string, Map<string, Rect>>;
 };
+/** The most extra height worth spending to line a container's children up with their row. */
+const SYNC_MAX = 72;
+
+/** Drawn as an icon over a name rather than a box: where the icon sits inside its 66px cell. */
+const isFigure = (b: ArchBlock) => b.kind === "actor" || b.kind === "origin";
+const FIGURE = {
+  actor: { cy: 22.5, half: 16, top: 6 },
+  origin: { cy: 24, half: 18, top: 7 },
+} as const;
 
 const blockWidth = (b: ArchBlock) =>
   b.kind === "actor" ? 64 : b.kind === "origin" ? ORIGIN_W : COL_W;
@@ -144,62 +240,179 @@ const blockWidth = (b: ArchBlock) =>
  * authored grid used to produce — a governance band authored at row 5 with content ending at
  * row 2 no longer drags three empty rows of gutter behind it.
  */
-function gridLayout(items: Placed[]): GridResult {
-  if (!items.length) return { width: 0, height: 0, at: new Map(), colX: [], colW: [] };
+function gridLayout(items: Placed[], extraAfter: number[] = []): GridResult {
+  if (!items.length) return { width: 0, height: 0, at: new Map(), colX: [], colW: [], rowY: [], rowH: [] };
   const cols = Math.max(...items.map((p) => p.block.col)) + 1;
   const rows = Math.max(...items.map((p) => p.block.row + (p.block.rowSpan ?? 1) - 1)) + 1;
+  const spanOf = (p: Placed) => p.block.rowSpan ?? 1;
 
   const used = { col: new Set<number>(), row: new Set<number>() };
   for (const p of items) {
     used.col.add(p.block.col);
-    for (let r = p.block.row; r < p.block.row + (p.block.rowSpan ?? 1); r++) used.row.add(r);
+    for (let r = p.block.row; r < p.block.row + spanOf(p); r++) used.row.add(r);
   }
 
-  const colW = Array.from({ length: cols }, (_, c) =>
-    used.col.has(c) ? Math.max(COL_W, ...items.filter((p) => p.block.col === c).map((p) => p.w)) : 0,
-  );
-  const rowH: number[] = Array.from({ length: rows }, (_, r) => (used.row.has(r) ? 52 : 0));
+  // A column holding only figures (actors, anonymous origins) is as wide as a figure and its
+  // name need, not a full column: a 64px person in a 188px band read as empty space.
+  const colW = Array.from({ length: cols }, (_, c) => {
+    if (!used.col.has(c)) return 0;
+    const inCol = items.filter((p) => p.block.col === c);
+    return inCol.every((p) => isFigure(p.block)) ? Math.max(...inCol.map((p) => p.w)) + 56 : Math.max(COL_W, ...inCol.map((p) => p.w));
+  });
+  const rowNat: number[] = Array.from({ length: rows }, (_, r) => (used.row.has(r) ? 52 : 0));
+  const rootMax: number[] = Array.from({ length: rows }, () => 0);
   for (const p of items) {
-    if ((p.block.rowSpan ?? 1) === 1) rowH[p.block.row] = Math.max(rowH[p.block.row], p.h);
+    if (spanOf(p) > 1) continue;
+    // A figure sits with its icon on the row's line, so it needs its name's depth below that.
+    const need = isFigure(p.block) ? 2 * (p.h - FIGURE[p.block.kind as "actor" | "origin"].cy) : p.h;
+    rowNat[p.block.row] = Math.max(rowNat[p.block.row], need);
+    rootMax[p.block.row] = Math.max(rootMax[p.block.row], need);
   }
+
+  // A container spanning rows lines its children up with the rows outside it, so a child and
+  // the blocks it faces share a line and their arrows run straight through the middle of both.
+  // "full" puts each of its inner rows level with one of its last outer rows; "first" keeps the
+  // inner grid rigid and levels only its first row with the container's first row (a frame
+  // whose first child faces the row it starts in). Whichever costs least, within SYNC_MAX.
+  type Sync = { p: Placed; mode: "full" | "first"; rows: { r: number; ih: number; inner: number; i: number }[] };
+  const options: Sync[][] = [];
   for (const p of items) {
-    const span = p.block.rowSpan ?? 1;
-    if (span === 1) continue;
-    const gaps = ROW_GAP * (span - 1);
-    const have = rowH.slice(p.block.row, p.block.row + span).reduce((s, h) => s + h, 0) + gaps;
-    if (p.h > have) rowH[p.block.row + span - 1] += p.h - have;
+    const span = spanOf(p);
+    if (span < 2 || !p.inner) continue;
+    const innerUsed = p.inner.rowH.map((h, r) => (h ? r : -1)).filter((r) => r >= 0);
+    const k = innerUsed.length;
+    if (!k) continue;
+    const opts: Sync[] = [];
+    if (k <= span) opts.push({ p, mode: "full", rows: innerUsed.map((u, i) => ({ r: p.block.row + span - k + i, ih: p.inner!.rowH[u], inner: u, i })) });
+    opts.push({ p, mode: "first", rows: [{ r: p.block.row, ih: p.inner.rowH[innerUsed[0]], inner: innerUsed[0], i: 0 }] });
+    options.push(opts);
   }
+  const H = (r: number, ih: number) => Math.max(ih, rootMax[r]);
+  const solve = (syncs: Sync[]) => {
+    const c = rowNat.map((h) => h / 2);
+    for (const sy of syncs) {
+      for (const row of sy.rows) {
+        const head = row.i === 0 && row.r === sy.p.block.row ? (sy.p.head ?? 0) + H(row.r, row.ih) / 2 : 0;
+        c[row.r] = Math.max(c[row.r], H(row.r, row.ih) / 2, head);
+      }
+    }
+    const h = rowNat.map((n, r) => (n ? Math.max(n, c[r] + rootMax[r] / 2) : 0));
+    for (const sy of syncs) {
+      sy.rows.forEach((row, j) => {
+        const last = sy.mode === "full" && j === sy.rows.length - 1;
+        h[row.r] = Math.max(h[row.r], c[row.r] + H(row.r, row.ih) / 2 + (last ? (sy.p.pad ?? NEST_PAD) : 0));
+      });
+    }
+    const spanH = (p: Placed) => h.slice(p.block.row, p.block.row + spanOf(p)).reduce((a, x) => a + x, 0) + ROW_GAP * (spanOf(p) - 1);
+    for (const p of items) {
+      if (spanOf(p) === 1) continue;
+      const sy = syncs.find((x) => x.p === p);
+      if (sy?.mode === "full") continue;
+      // Rigid contents: the span has to hold them from wherever their first row was levelled.
+      const need = sy ? c[p.block.row] - H(p.block.row, sy.rows[0].ih) / 2 + p.inner!.height + (p.pad ?? NEST_PAD) : p.h;
+      const have = spanH(p);
+      if (need > have) h[p.block.row + spanOf(p) - 1] += need - have;
+    }
+    return { c, h };
+  };
+  const total = (h: number[]) => h.reduce((a, x) => a + x, 0);
+  let chosen: Sync[] = [];
+  for (const opts of options) {
+    const best = opts
+      .map((o) => ({ o, grow: total(solve([...chosen, o]).h) - total(solve(chosen).h) }))
+      .filter((x) => x.grow <= SYNC_MAX)
+      .sort((x, y) => x.grow - y.grow)[0];
+    if (best) chosen.push(best.o);
+  }
+  const rowYOf = (h: number[]) => {
+    const out: number[] = [];
+    let y = 0;
+    for (let r = 0; r < rows; r++) {
+      out.push(y);
+      if (h[r]) y += h[r] + ROW_GAP;
+    }
+    return { out, end: y };
+  };
+  // A "full" level whose first inner row is below the container's first row must still leave
+  // the container's head above it; drop any that do not.
+  let solved = solve(chosen);
+  for (let pass = 0; pass < 3; pass++) {
+    const { out } = rowYOf(solved.h);
+    const keep = chosen.filter((sy) => {
+      if (sy.mode !== "full") return true;
+      const r0 = sy.rows[0];
+      return out[r0.r] + solved.c[r0.r] - H(r0.r, r0.ih) / 2 - out[sy.p.block.row] >= (sy.p.head ?? 0) - 0.5;
+    });
+    if (keep.length === chosen.length) break;
+    chosen = keep;
+    solved = solve(chosen);
+  }
+  const { c, h: rowH } = solved;
+  const levelled = new Set(chosen.flatMap((sy) => sy.rows.map((r) => r.r)));
 
   const colX: number[] = [];
   let x = 0;
-  for (let c = 0; c < cols; c++) {
+  for (let col = 0; col < cols; col++) {
     colX.push(x);
-    if (colW[c]) x += colW[c] + COL_GAP;
+    if (colW[col]) x += colW[col] + COL_GAP + (extraAfter[col] ?? 0);
   }
-  const rowY: number[] = [];
-  let y = 0;
-  for (let r = 0; r < rows; r++) {
-    rowY.push(y);
-    if (rowH[r]) y += rowH[r] + ROW_GAP;
-  }
+  const { out: rowY, end: y } = rowYOf(rowH);
 
   const at = new Map<string, Rect>();
   for (const p of items) {
-    const span = p.block.rowSpan ?? 1;
-    const spanH =
-      rowH.slice(p.block.row, p.block.row + span).reduce((s, h) => s + h, 0) + ROW_GAP * (span - 1);
+    const span = spanOf(p);
+    const spanH = rowH.slice(p.block.row, p.block.row + span).reduce((a, v) => a + v, 0) + ROW_GAP * (span - 1);
     const h = span > 1 ? Math.max(p.h, spanH) : p.h;
-    const top = span > 1 ? rowY[p.block.row] : rowY[p.block.row] + (rowH[p.block.row] - h) / 2;
+    // Centred on the row's line: its middle, or the line a levelled container set for it.
+    const line = levelled.has(p.block.row) ? c[p.block.row] : rowH[p.block.row] / 2;
+    // A figure puts its icon, not its icon-and-name box, on the line, so its arrow carries on
+    // the row's main line.
+    const lift = isFigure(p.block) ? Math.min(Math.max(line - FIGURE[p.block.kind as "actor" | "origin"].cy, 0), rowH[p.block.row] - h) : line - h / 2;
+    const top = span > 1 ? rowY[p.block.row] : rowY[p.block.row] + lift;
     // Narrow things (an actor figure, an anonymous origin) centre in their column so flows
     // attach to the figure rather than to the edge of an invisible full-width cell.
     at.set(p.block.id, { x: colX[p.block.col] + (colW[p.block.col] - p.w) / 2, y: top, w: p.w, h });
   }
+
+  const nested = new Map<string, Map<string, Rect>>();
+  for (const sy of chosen) {
+    const inner = sy.p.inner!;
+    const top0 = rowY[sy.p.block.row];
+    const m = new Map<string, Rect>();
+    if (sy.mode === "first") {
+      const r0 = sy.rows[0];
+      const off = rowY[r0.r] + c[r0.r] - H(r0.r, r0.ih) / 2 - top0 - inner.rowY[r0.inner];
+      for (const q of sy.p.kids) {
+        const b = inner.at.get(q.block.id)!;
+        m.set(q.block.id, { x: NEST_PAD + b.x, y: off + b.y, w: b.w, h: b.h });
+      }
+    } else {
+      // Each inner row is centred on its outer row's line, like the blocks it faces.
+      const topOf = new Map(sy.rows.map((r) => [r.inner, rowY[r.r] + c[r.r] - r.ih / 2 - top0]));
+      const ihOf = new Map(sy.rows.map((r) => [r.inner, r.ih]));
+      for (const q of sy.p.kids) {
+        const b = inner.at.get(q.block.id)!;
+        const a = q.block.row;
+        const z = a + (q.block.rowSpan ?? 1) - 1;
+        const ya = topOf.get(a)!;
+        const spanning = z > a;
+        const hh = spanning ? Math.max(b.h, topOf.get(z)! + ihOf.get(z)! - ya) : b.h;
+        m.set(q.block.id, { x: NEST_PAD + b.x, y: spanning ? ya : ya + (ihOf.get(a)! - b.h) / 2, w: b.w, h: hh });
+      }
+    }
+    nested.set(sy.p.block.id, m);
+  }
+
+  const lastUsed = colW.findLastIndex((w) => w > 0);
   return {
-    width: x ? x - COL_GAP : 0,
+    width: x ? x - COL_GAP - (extraAfter[lastUsed] ?? 0) : 0,
     height: y ? y - ROW_GAP : 0,
     at,
     colX,
     colW,
+    rowY,
+    rowH,
+    nested,
   };
 }
 
@@ -220,16 +433,56 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // assembly while holding a supervisor and subagents inside it. Items occupy a band under the
   // title tab and the children's grid starts below them, so the two never overlap.
   const itemsHeight = (b: ArchBlock) => (b.items?.length ? naturalHeight(b, true) - TAB_H / 2 : 0);
+  // Chips pinned on each block. A call-out's chip row sizes it; a container whose children carry
+  // chips too keeps a chip row of room beneath them, so its own chips and theirs never meet.
+  const chipsOn = new Map<string, Set<string>>();
+  for (const pin of arch.pins?.mitigations ?? []) chipsOn.set(pin.at, new Set([...(chipsOn.get(pin.at) ?? []), pin.mitigation]));
+  const calloutChips = (b: ArchBlock) => new Set([...(b.mitigations ?? []), ...(chipsOn.get(b.id) ?? [])]).size;
+  const bottomPad = (b: ArchBlock) =>
+    chipsOn.has(b.id) && (kidsOf.get(b.id) ?? []).some((k) => chipsOn.has(k.id)) ? NEST_PAD + 16 : NEST_PAD;
+  // A child on the container's first inner row carries its risk tags above its tab, inside the
+  // container: the container's head grows to hold them clear of its own title.
+  const tagsOnBlock = (id: string) => (arch.pins?.risks ?? []).filter((p) => p.at === id).length;
+  const tagHeadroom = (kids: Placed[]) => {
+    const first = Math.min(...kids.map((k) => k.block.row));
+    const rows = Math.max(0, ...kids.filter((k) => k.block.row === first).map((k) => Math.ceil(tagsOnBlock(k.block.id) / TAGS_PER_ROW)));
+    return rows ? 14 + TAG_GAP * (rows - 1) : 0;
+  };
+  // Extra width a straight hop needs over the plain column gap for its tags (one row, 6px each
+  // side) or its chips (one line, clear of both arrowheads); 0 when the plain gap does.
+  // A chip on a two-way hop needs a little line showing between it and each arrowhead.
+  const hopExtra = (tags: number, chips: number, bidir = false) => {
+    const forTags = tags >= 2 ? tags * TAG_W_EST + (tags - 1) * TAG_X_GAP + 12 - COL_GAP : 0;
+    const forChips = chips >= 3 ? (chips - 1) * 24 + 20 + 24 - COL_GAP : 0;
+    const wide = Math.max(0, forTags, forChips) ? Math.max(BAND_GAP_WIDE, forTags, forChips) : 0;
+    return Math.max(wide, bidir && chips ? 16 : 0);
+  };
+  const pinsOn = (k: string) => (arch.pins?.risks ?? []).filter((p) => p.at === k).length;
+  const chipsAt = (k: string) => (arch.pins?.mitigations ?? []).filter((p) => p.at === k).length;
   const measure = (b: ArchBlock): Placed => {
     const kids = (kidsOf.get(b.id) ?? []).map(measure);
-    if (!kids.length) return { block: b, w: blockWidth(b), h: naturalHeight(b), kids };
-    const inner = gridLayout(kids);
+    if (!kids.length) return { block: b, w: blockWidth(b), h: naturalHeight(b, false, calloutChips(b), chipsOn.has(b.id)), kids };
+    // The same hop widening as the root grid, between two children that face each other.
+    const innerExtra: number[] = [];
+    const kidIds = new Set(kids.map((k) => k.block.id));
+    for (const e of arch.edges) {
+      if (!kidIds.has(e.from) || !kidIds.has(e.to) || e.route) continue;
+      const [ka, kb] = [kids.find((k) => k.block.id === e.from)!.block, kids.find((k) => k.block.id === e.to)!.block];
+      if (Math.abs(ka.col - kb.col) !== 1 || !(ka.row <= kb.row + (kb.rowSpan ?? 1) - 1 && kb.row <= ka.row + (ka.rowSpan ?? 1) - 1)) continue;
+      const x = hopExtra(pinsOn(`${e.from}->${e.to}`) + pinsOn(`${e.to}->${e.from}`), chipsAt(`${e.from}->${e.to}`) + chipsAt(`${e.to}->${e.from}`), e.bidir);
+      const lo = Math.min(ka.col, kb.col);
+      if (x) innerExtra[lo] = Math.max(innerExtra[lo] ?? 0, x);
+    }
+    const inner = gridLayout(kids, innerExtra);
+    const head = NEST_HEAD + tagHeadroom(kids) + itemsHeight(b);
     return {
       block: b,
       w: Math.max(inner.width + NEST_PAD * 2, blockWidth(b)),
-      h: NEST_HEAD + itemsHeight(b) + inner.height + NEST_PAD,
+      h: head + inner.height + bottomPad(b),
       kids,
       inner,
+      head,
+      pad: bottomPad(b),
     };
   };
 
@@ -244,7 +497,48 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     .filter((b) => !b.parent && isGov(b))
     .sort((a, b) => a.row - b.row || a.col - b.col)
     .map(measure);
-  const top = gridLayout(roots);
+  // Gaps between two bands widen where something lives in them (see BAND_GAP_WIDE): the leg of a
+  // gutter route into the column beside the gap, or the pins of an arrow crossing it straight.
+  const blockById0 = new Map(arch.blocks.map((b) => [b.id, b]));
+  const topOf = (id: string): ArchBlock => {
+    let b = blockById0.get(id)!;
+    while (b.parent) b = blockById0.get(b.parent)!;
+    return b;
+  };
+  const bandOfCol = new Map<number, string>();
+  for (const p of roots) bandOfCol.set(p.block.col, p.block.zone ?? "");
+  const usedCols = [...bandOfCol.keys()].sort((x, y) => x - y);
+  const pinned = new Set([...(arch.pins?.mitigations ?? []), ...(arch.pins?.risks ?? [])].map((p) => p.at));
+  const extraAfter: number[] = [];
+  const widen = (lo: number, hi: number, anyBand = false, extra = BAND_GAP_WIDE) => {
+    // The gap between two adjacent used columns lo < hi — a band seam, unless anyBand.
+    const i = usedCols.indexOf(lo);
+    if (i < 0 || usedCols[i + 1] !== hi || (!anyBand && bandOfCol.get(lo) === bandOfCol.get(hi))) return;
+    extraAfter[lo] = Math.max(extraAfter[lo] ?? 0, extra);
+  };
+  const rowsMeet = (a: ArchBlock, b: ArchBlock) => a.row <= b.row + (b.rowSpan ?? 1) - 1 && b.row <= a.row + (a.rowSpan ?? 1) - 1;
+  for (const e of arch.edges) {
+    const a = topOf(e.from);
+    const b = topOf(e.to);
+    if (isGov(a) || isGov(b) || a.col === b.col) continue;
+    if (e.route === "hvh") {
+      // The leg runs in the gap beside the target, on the source's side.
+      const side = a.col < b.col ? -1 : 1;
+      const at = usedCols.indexOf(b.col);
+      const near = usedCols[at + side];
+      if (near !== undefined) widen(Math.min(near, b.col), Math.max(near, b.col));
+    }
+    if (pinned.has(`${e.from}->${e.to}`) || pinned.has(`${e.to}->${e.from}`)) widen(Math.min(a.col, b.col), Math.max(a.col, b.col));
+    // A straight hop across one column gap with several risk tags or chips: at the plain gap the
+    // tags tower one per row, the top one far above its arrow, and three chips stack across the
+    // line; widened, they sit in one row. A band seam keeps its own pad either side.
+    const hop = hopExtra(pinsOn(`${e.from}->${e.to}`) + pinsOn(`${e.to}->${e.from}`), chipsAt(`${e.from}->${e.to}`) + chipsAt(`${e.to}->${e.from}`), e.bidir);
+    if (!e.route && rowsMeet(a, b) && hop) {
+      const seam = bandOfCol.get(Math.min(a.col, b.col)) !== bandOfCol.get(Math.max(a.col, b.col));
+      widen(Math.min(a.col, b.col), Math.max(a.col, b.col), true, hop + (seam ? ZONE_PAD * 2 : 0));
+    }
+  }
+  const top = gridLayout(roots, extraAfter);
 
   // Risk tags stack upward from a block's top edge, so the first drawn row needs headroom for
   // the tallest stack it carries. Collapsing empty rows removed the accidental slack that used
@@ -286,13 +580,34 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       const r = grid.at.get(p.block.id)!;
       const abs = { x: ox + r.x, y: oy + r.y, w: r.w, h: r.h };
       blocks[p.block.id] = abs;
-      // A container stretched over several rows keeps its own items at the top and seats its
-      // children at the bottom, level with the lower row — so a child's arrows to its
-      // neighbours there run straight instead of climbing out through the container's items.
-      if (p.inner) place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + abs.h - NEST_PAD - p.inner.height);
+      // A container stretched over several rows keeps its own items at the top. Its children sit
+      // level with the rows outside it where gridLayout could line them up, and otherwise at its
+      // foot, level with the lower row — either way a child's arrows to its neighbours run
+      // straight instead of climbing out through the container's items.
+      if (!p.inner) continue;
+      const level = grid.nested?.get(p.block.id);
+      if (level) {
+        // A child stretched to meet the outer rows no longer matches its own levelled layout.
+        const keep = new Map([...(p.inner.nested ?? [])].filter(([kid]) => level.get(kid)?.h === p.inner!.at.get(kid)?.h));
+        place(p.kids, { ...p.inner, at: level, nested: keep }, abs.x, abs.y);
+      } else place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + abs.h - bottomPad(p.block) - p.inner.height);
     }
   };
   place(roots, top, MARGIN_X, marginTop);
+  // A block alone in a column a container made wide sits under (or over) the child it connects
+  // to, so the arrow between them drops onto its middle rather than past its corner.
+  for (const p of roots) {
+    const c = p.block.col;
+    if (p.w >= top.colW[c] - 1 || roots.some((q) => q !== p && q.block.col === c && q.w < top.colW[c] - 1 && q.block.row === p.block.row)) continue;
+    const partner = arch.edges
+      .flatMap((e) => (e.from === p.block.id ? [e.to] : e.to === p.block.id ? [e.from] : []))
+      .find((id) => blockById0.get(id)?.parent && topOf(id).col === c && topOf(id).id !== p.block.id);
+    if (!partner) continue;
+    const r = blocks[p.block.id];
+    const k = blocks[partner];
+    const x0 = MARGIN_X + top.colX[c];
+    r.x = Math.min(Math.max(k.x + (k.w - r.w) / 2, x0), x0 + top.colW[c] - r.w);
+  }
 
   // --- Governance plane ---------------------------------------------------------------
   // The control plane is a band beneath the ownership bands: exactly as wide as they are
@@ -301,8 +616,9 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // wrapping to a second line when the drawing is narrower than the call-outs side by side.
   // Deriving the band from the content rather than from its own members is what stops it
   // overhanging a narrow drawing, falling short of a wide one, or sitting on the bands above.
+  // The bands' floor clears the chips hanging off the lowest blocks, as their sides do.
   const contentBottom = roots.length
-    ? Math.max(...roots.map((p) => blocks[p.block.id].y + blocks[p.block.id].h))
+    ? Math.max(...roots.map((p) => blocks[p.block.id].y + blocks[p.block.id].h + (chipsOn.has(p.block.id) ? 10 : 0)))
     : marginTop;
   let govBand: Rect | undefined;
   let bottom = contentBottom;
@@ -321,9 +637,9 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
         blocks[p.block.id] = { x, y, w: COL_W, h: lineH };
         x += COL_W + COL_GAP;
       }
-      y += lineH + ROW_GAP;
+      y += lineH + GOV_LINE_GAP;
     }
-    bottom = y - ROW_GAP + ZONE_PAD;
+    bottom = y - GOV_LINE_GAP + ZONE_PAD;
     govBand = { x: MARGIN_X - ZONE_PAD, y: bandY, w: top.width + ZONE_PAD * 2, h: bottom - bandY };
   }
 
@@ -431,57 +747,126 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     ancestors(blockId).find((p) => p !== otherId && !ancestors(otherId).includes(p));
   const sideLists = new Map<string, { ref: string; sort: number }[]>();
   plans.forEach((p, i) => {
-    const add = (blockId: string, side: Side, self: Rect, other: Rect, end: "a" | "b") => {
+    // On a container's side, two children's arrows to one block tie; the child's own position
+    // along the side breaks it, so the upper child takes the upper lane.
+    const add = (blockId: string, side: Side, self: Rect, other: Rect, end: "a" | "b", child?: Rect) => {
       const k = `${blockId}|${side}`;
       const list = sideLists.get(k) ?? [];
-      list.push({ ref: `${i}|${end}`, sort: laneKey(side, self, other) });
+      const tie = child ? (side === "t" || side === "b" ? cx(child) : cy(child)) * 1e-6 : 0;
+      list.push({ ref: `${i}|${end}`, sort: laneKey(side, self, other) + tie });
       sideLists.set(k, list);
     };
     add(p.e.from, p.aSide, p.a, p.b, "a");
     add(p.e.to, p.bSide, p.b, p.a, "b");
     const outerA = exitsThrough(p.e.from, p.e.to);
-    if (outerA) add(outerA, p.aSide, blocks[outerA], p.b, "a");
+    if (outerA) add(outerA, p.aSide, blocks[outerA], p.b, "a", p.a);
     const outerB = exitsThrough(p.e.to, p.e.from);
-    if (outerB) add(outerB, p.bSide, blocks[outerB], p.a, "b");
+    if (outerB) add(outerB, p.bSide, blocks[outerB], p.a, "b", p.b);
   });
   const slot = new Map<string, { idx: number; total: number }>();
   for (const [k, list] of sideLists) {
     list.sort((x, y) => x.sort - y.sort);
     list.forEach((entry, idx) => slot.set(`${k}|${entry.ref}`, { idx, total: list.length }));
   }
+  // Every arrow a child sends out through one side of its container keeps the container's lane
+  // order (the order the container sorted all its arrows in), spread along the child's own side.
+  // Taking the container's lane where it lands on the child and the child's lane where it does
+  // not mixed two orders, and an arrow bound upward could leave below one bound downward.
+  const exitRank = new Map<string, { rank: number; count: number }>();
+  {
+    const groups = new Map<string, { ref: string; idx: number }[]>();
+    plans.forEach((p, i) => {
+      for (const [end, child, other, side] of [
+        ["a", p.e.from, p.e.to, p.aSide],
+        ["b", p.e.to, p.e.from, p.bSide],
+      ] as const) {
+        const outer = exitsThrough(child, other);
+        if (!outer) continue;
+        const key = `${child}|${outer}|${side}`;
+        const idx = slot.get(`${outer}|${side}|${i}|${end}`)?.idx ?? 0;
+        groups.set(key, [...(groups.get(key) ?? []), { ref: `${i}|${end}`, idx }]);
+      }
+    });
+    for (const [key, list] of groups) {
+      list.sort((x, y) => x.idx - y.idx).forEach((m, rank) => exitRank.set(`${key}|${m.ref}`, { rank, count: list.length }));
+    }
+  }
+  // The stretch of a block's top border its title tab covers, widened by half an arrowhead and a
+  // hair, and how much border is left either side of it for arrows.
+  const tabSpan = (blockId: string, r: Rect) => {
+    const block = blockById.get(blockId);
+    if (!block || isFigure(block)) return undefined;
+    const half = tabHalfWidth(block.title, r.w) + ARROW_HALF + 3;
+    const l = cx(r) - half;
+    const rr = cx(r) + half;
+    const left = Math.max(0, l - (r.x + 12));
+    return { l, r: rr, left, room: left + Math.max(0, r.x + r.w - 12 - rr) };
+  };
+  const offTab = (blockId: string, r: Rect, x: number) => {
+    const span = tabSpan(blockId, r);
+    return !span || span.room < 16 || x <= span.l || x >= span.r;
+  };
+  // Where the chips of a container's children sit when those children stand at its foot.
+  const footChips = (blockId: string) => {
+    const r = blocks[blockId];
+    return (kidsOf.get(blockId) ?? []).flatMap((k) => {
+      const kr = blocks[k.id];
+      const n = chipsOn.get(k.id)?.size ?? 0;
+      return n && r.y + r.h - (kr.y + kr.h) < 48 ? Array.from({ length: n }, (_, j) => kr.x + 16 + 24 * j) : [];
+    });
+  };
   const anchorAt = (blockId: string, side: Side, r: Rect, i: number, end: "a" | "b", outer?: string) => {
     const s = slot.get(`${blockId}|${side}|${i}|${end}`) ?? { idx: 0, total: 1 };
+    // A figure (an actor, or an anonymous origin in its ring) is an icon over its name: arrows
+    // meet the icon — beside it, above it, or under the name — not the invisible box around both.
+    const fig = blockById.get(blockId);
+    if (fig && isFigure(fig)) {
+      const g = FIGURE[fig.kind as "actor" | "origin"];
+      const off = (s.idx - (s.total - 1) / 2) * 12;
+      if (side === "l") return { x: cx(r) - g.half, y: r.y + g.cy + off };
+      if (side === "r") return { x: cx(r) + g.half, y: r.y + g.cy + off };
+      if (side === "t") return { x: cx(r) + off, y: r.y + g.top };
+      return { x: cx(r) + off, y: r.y + r.h };
+    }
     let f = (s.idx + 1) / (s.total + 1);
-    // Position along the side comes from the container's lane, clamped onto the child so the
-    // line still starts on the block it belongs to.
-    let along = r;
+    // An exit through a container takes its rank in the container's lane order (see exitRank).
+    const along = r;
     if (outer) {
-      const o = slot.get(`${outer}|${side}|${i}|${end}`);
-      if (o) {
-        const fo = (o.idx + 1) / (o.total + 1);
-        const R = blocks[outer];
-        // The container's lane, unless it falls off the child: several exits clamped onto the
-        // child's end would share one point, so those keep the child's own lane order instead.
-        const v = side === "t" || side === "b" ? R.x + R.w * fo : R.y + R.h * fo;
-        const lo = side === "t" || side === "b" ? r.x + 12 : r.y + 12;
-        const hi = side === "t" || side === "b" ? r.x + r.w - 12 : r.y + r.h - 12;
-        if (v >= lo && v <= hi) {
-          f = fo;
-          along = R;
-        }
-      }
+      const er = exitRank.get(`${blockId}|${outer}|${side}|${i}|${end}`);
+      if (er) f = (er.rank + 1) / (er.count + 1);
     }
     const clampX = (x: number) => Math.min(Math.max(x, r.x + 12), r.x + r.w - 12);
     const clampY = (y: number) => Math.min(Math.max(y, r.y + 12), r.y + r.h - 12);
     if (side === "t") {
-      // An arrow that meets the top border under the title tab stops at the tab's top edge
-      // instead, so its arrowhead lands on the tab rather than hidden beneath it.
+      // Arrows meet the top border either side of the title tab, spread in lane order over the
+      // free border there. Only a tab that leaves no such room takes an arrow, which then stops
+      // at the tab's top edge so its arrowhead lands on the tab rather than hidden beneath it.
+      const span = tabSpan(blockId, r);
+      if (span && span.room >= 16) {
+        // A lone arrow takes the middle of the free border on the side facing its other end,
+        // clear of the tab and of the block's corner alike.
+        const right = span.room - span.left;
+        if (s.total === 1 && !outer) {
+          const other = end === "a" ? plans[i].b : plans[i].a;
+          const toRight = Math.abs(cx(other) - cx(r)) < 24 ? right >= span.left - 0.5 : cx(other) > cx(r);
+          if (toRight && right >= 8) return { x: span.r + right / 2, y: r.y };
+          if (!toRight && span.left >= 8) return { x: r.x + 12 + span.left / 2, y: r.y };
+        }
+        const p = f * span.room;
+        return { x: p <= span.left ? r.x + 12 + p : span.r + (p - span.left), y: r.y };
+      }
       const x = clampX(along.x + along.w * f);
-      const block = blockById.get(blockId);
-      const underTab = block && block.kind !== "actor" && Math.abs(x - cx(r)) < tabHalfWidth(block.title) + ARROW_HALF;
-      return { x, y: underTab ? r.y - TAB_TOP : r.y };
+      return { x, y: span && x > span.l && x < span.r ? r.y - TAB_TOP : r.y };
     }
-    if (side === "b") return { x: clampX(along.x + along.w * f), y: r.y + r.h };
+    if (side === "b") {
+      const nC = chipsOn.get(blockId)?.size ?? 0;
+      let x = clampX(along.x + along.w * f);
+      if (nC && !outer) x = Math.max(x, Math.min(r.x + 16 + 24 * (nC - 1) + 22, r.x + r.w - 12));
+      // Nor does it rise out of a child's chip row just above the container's foot.
+      const kidChips = footChips(blockId);
+      if (kidChips.some((k) => Math.abs(k - x) < 22)) x = Math.min(Math.max(...kidChips) + 22, r.x + r.w - 12);
+      return { x, y: r.y + r.h };
+    }
     if (side === "l") return { x: r.x, y: clampY(along.y + along.h * f) };
     return { x: r.x + r.w, y: clampY(along.y + along.h * f) };
   };
@@ -506,6 +891,8 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   }
   const GUTTER_IN = 10;
   const GUTTER_STEP = 9;
+  /** Half a chip plus a hair: a run beneath a block passes clear of the chips on its border. */
+  const CHIP_CLEAR = 12;
 
   // Anchors in three passes: every arrow takes its lane, then each arrow between two blocks that
   // face each other moves onto one straight line if it can do so without crowding another
@@ -526,6 +913,16 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     if (ob) enlist(`${ob}|${p.bSide}`, i, "B");
   });
   const LANE_MIN = 18;
+  // Pairs of arrows a walk takes one after the other: one flow, which may run as one line.
+  const planOf = (ref: string) => plans.findIndex((q) => `${q.e.from}->${q.e.to}` === ref || `${q.e.to}->${q.e.from}` === ref);
+  const inTurn = new Set<string>();
+  for (const w of [arch.walkthrough, ...(arch.scenarios ?? [])]) {
+    const ids = (w?.steps ?? []).map((st) => planOf(st.follow));
+    ids.slice(1).forEach((b, k) => {
+      const a = ids[k];
+      if (a >= 0 && b >= 0) inTurn.add(`${a}|${b}`).add(`${b}|${a}`);
+    });
+  }
   // Straightening may move an anchor along its side, but never past a neighbour: the lane order
   // is what keeps the arrows on one side from crossing each other.
   const laneIdx = (key: string, o: { i: number; end: "A" | "B" }) => slot.get(`${key}|${o.i}|${o.end === "A" ? "a" : "b"}`)?.idx ?? 0;
@@ -550,9 +947,65 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
         : [Math.max(p.a.x, p.b.x), Math.min(p.a.x + p.a.w, p.b.x + p.b.w)];
     const keysA = [`${p.e.from}|${p.aSide}`, ...[exitsThrough(p.e.from, p.e.to)].filter(Boolean).map((o) => `${o}|${p.aSide}`)];
     const keysB = [`${p.e.to}|${p.bSide}`, ...[exitsThrough(p.e.to, p.e.from)].filter(Boolean).map((o) => `${o}|${p.bSide}`)];
-    // Prefer keeping one end where it is (the other comes to meet it), then the overlap's middle.
-    const candidates = [A[axis], B[axis], (lo + hi) / 2].filter((v) => v >= lo + 12 && v <= hi - 12);
-    for (const v of candidates) {
+    // Prefer keeping one end where it is (the other comes to meet it), then the overlap's middle,
+    // then either side of a title tab the line would otherwise meet. A vertical line never
+    // settles under a tab that leaves room beside it.
+    const tops = p.kind === "v" ? ([[p.aSide, p.e.from, p.a], [p.bSide, p.e.to, p.b]] as const).filter(([sd]) => sd === "t") : [];
+    const besideTabs = tops.flatMap(([, id, r]) => {
+      const span = tabSpan(id, r);
+      return span ? [span.l, span.r] : [];
+    });
+    const near = (v: number) => Math.min(Math.max(v, lo + 12), hi - 12);
+    // Before anything else: carry on the line of a vertical arrow leaving the far side of either
+    // end (a vertical chain through one block reads as one line; a horizontal one would read as
+    // a single flow even where it is two), or, for an arrow to a container,
+    // the middle of the overlap rather than a lane its many exits pushed off-centre.
+    const opp = { l: "r", r: "l", t: "b", b: "t" } as const;
+    const cont = plans.flatMap((q, j) => {
+      if (j === i || p.kind !== "v" || q.kind !== "v") return [];
+      const out: number[] = [];
+      for (const [blk, sd] of [[p.e.from, p.aSide], [p.e.to, p.bSide]] as const) {
+        if (q.e.from === blk && q.aSide === opp[sd]) out.push(anchors[j].A[axis]);
+        if (q.e.to === blk && q.bSide === opp[sd]) out.push(anchors[j].B[axis]);
+      }
+      return out;
+    });
+    const cont0 = [kidsOf.has(p.e.from) || kidsOf.has(p.e.to) ? (lo + hi) / 2 : NaN].filter((v) => !Number.isNaN(v));
+    const figEnds = [[p.e.from, A], [p.e.to, B]].filter(([id]) => isFigure(blockById.get(id as string)!)).map(([, pt]) => (pt as { x: number; y: number })[axis]);
+    const candidates = [...cont0, ...cont, A[axis], B[axis], near(A[axis]), near(B[axis]), (lo + hi) / 2, ...besideTabs]
+      .filter((v) => v >= lo + 12 && v <= hi - 12)
+      .filter((v) => tops.every(([, id, r]) => offTab(id, r, v)))
+      .filter((v) => figEnds.every((f) => Math.abs(f - v) < 0.5));
+    // A line a few pixels off an unrelated arrow leaving the far side of either end reads as one
+    // path with a jog: either share its line exactly or keep 16px from it. And a line that meets
+    // a block within 20px of its corner reads as missing it, so lines clear of every corner
+    // come first.
+    const farInfo = plans.flatMap((q, j) => {
+      if (j === i || q.kind !== p.kind) return [];
+      const out: { v: number; via: string; j: number }[] = [];
+      for (const [blk, sd] of [[p.e.from, p.aSide], [p.e.to, p.bSide]] as const) {
+        if (q.e.from === blk && q.aSide === opp[sd]) out.push({ v: anchors[j].A[axis], via: blk, j });
+        if (q.e.to === blk && q.bSide === opp[sd]) out.push({ v: anchors[j].B[axis], via: blk, j });
+      }
+      return out;
+    });
+    const farSide = farInfo.map((f) => f.v);
+    // Lined up through a block that spans three rows or more, two arrows read as one path; that
+    // is right only when they are one flow — a walk takes them in turn, or one ends at a figure.
+    const oneFlow = (j: number) =>
+      [p.e.from, p.e.to, plans[j].e.from, plans[j].e.to].some((id) => isFigure(blockById.get(id)!)) || inTurn.has(`${i}|${j}`);
+    const falseThrough = (v: number) =>
+      farInfo.some((f) => Math.abs(f.v - v) < 0.5 && (blockById.get(f.via)?.rowSpan ?? 1) >= 3 && !oneFlow(f.j));
+    const kidChipsAt = [[p.e.from, p.aSide], [p.e.to, p.bSide]].flatMap(([id, sd]) => (sd === "b" && axis === "x" ? footChips(id) : []));
+    const span = (r: Rect) => (axis === "y" ? [r.y, r.y + r.h] : [r.x, r.x + r.w]);
+    const cornerSafe = (v: number) => [p.a, p.b].every((r) => v - span(r)[0] >= 20 && span(r)[1] - v >= 20);
+    const ranked = [...candidates, ...[(lo + hi) / 2 - 24, (lo + hi) / 2 + 24].filter((v) => v >= lo + 12 && v <= hi - 12)]
+      .filter((v) => farSide.every((f) => Math.abs(f - v) < 0.5 || Math.abs(f - v) >= 16))
+      .filter((v) => kidChipsAt.every((c) => Math.abs(c - v) >= 22))
+      .map((v, k) => ({ v, k: k + (cornerSafe(v) ? 0 : 1000) + (falseThrough(v) ? 500 : 0) }))
+      .sort((x, y) => x.k - y.k)
+      .map((x) => x.v);
+    for (const v of ranked) {
       if (clear(keysA, i, "A", axis, v) && clear(keysB, i, "B", axis, v)) {
         A[axis] = v;
         B[axis] = v;
@@ -561,6 +1014,17 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     }
   });
 
+  // Where two bands meet. A chip centred within half a chip of either border would sit across
+  // it, so pins prefer the rest of their arrow (pinSegment), and tags keep off the seam.
+  const bandSeams: [number, number][] = [];
+  for (let i = 0; i + 1 < usedCols.length; i++) {
+    const [lo, hi] = [usedCols[i], usedCols[i + 1]];
+    if (bandOfCol.get(lo) === bandOfCol.get(hi)) continue;
+    bandSeams.push([columns[lo].x + columns[lo].w + ZONE_PAD, columns[hi].x - ZONE_PAD]);
+  }
+  const bandGaps = bandSeams.map(([l, r]) => [l - 12, r + 12] as [number, number]);
+
+  const pieceOf: { lo: number; hi: number }[] = [];
   const edges = plans.map((p, i) => {
     const { e, a, b, kind, bSide } = p;
     const { A, B } = anchors[i];
@@ -583,7 +1047,13 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       // The first track runs down the middle of the column gap, so a badge seated on it clears
       // the blocks on both sides; a longer detour takes the next track out from the target, so
       // its leg never crosses a shorter one's.
-      const gx = bSide === "l" ? b.x - COL_GAP / 2 - k * GUTTER_STEP : b.x + b.w + COL_GAP / 2 + k * GUTTER_STEP;
+      // The gap is the one beside the target's column, which may be a widened band gap.
+      const ci = columns.findIndex((c) => c.w > 0 && c.x <= b.x + 1 && b.x + b.w <= c.x + c.w + 1);
+      const col = columns[ci];
+      const nb = bSide === "l" ? columns.slice(0, Math.max(ci, 0)).findLast((c) => c.w > 0) : columns.slice(ci + 1).find((c) => c.w > 0);
+      const gap = col && nb ? (bSide === "l" ? col.x - (nb.x + nb.w) : nb.x - (col.x + col.w)) : COL_GAP;
+      const edgeX = col ? (bSide === "l" ? col.x : col.x + col.w) : bSide === "l" ? b.x : b.x + b.w;
+      const gx = bSide === "l" ? edgeX - gap / 2 - k * GUTTER_STEP : edgeX + gap / 2 + k * GUTTER_STEP;
       d = `M ${A.x} ${A.y} L ${gx} ${A.y} L ${gx} ${B.y} L ${B.x} ${B.y}`;
     } else if (kind === "under" || kind === "over") {
       // Clear of both ends and of every block the run passes in their rows.
@@ -598,7 +1068,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
         .map(([, r]) => r);
       const gy =
         kind === "under"
-          ? Math.max(hi, ...mates.map((r) => r.y + r.h)) + GUTTER_IN + 6 + k * GUTTER_STEP
+          ? Math.max(hi, ...mates.map((r) => r.y + r.h)) + CHIP_CLEAR + GUTTER_IN + k * GUTTER_STEP
           : Math.min(Math.min(A.y, B.y), ...mates.map((r) => r.y - TAB_TOP)) - GUTTER_IN - 6 - k * GUTTER_STEP;
       d = `M ${A.x} ${A.y} L ${A.x} ${gy} L ${B.x} ${gy} L ${B.x} ${B.y}`;
     } else if (kind === "vhv") {
@@ -611,10 +1081,18 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       const rowMates = Object.entries(blocks)
         .filter(([id, r]) => !ends.has(id) && r.x < x1 && r.x + r.w > x0 && r.y < b.y + b.h && r.y + r.h > b.y)
         .map(([, r]) => r);
+      // Below a row it also clears the chips seated on those blocks' bottom borders — by the
+      // middle of the air between them and the tabs beneath the run, not by the bare minimum,
+      // so the chips do not read as resting on the line.
+      const floor = Math.max(b.y + b.h, ...rowMates.map((r) => r.y + r.h));
+      const beneath = Object.entries(blocks)
+        .filter(([id, r]) => !ends.has(id) && r.x < x1 && r.x + r.w > x0 && r.y > floor)
+        .map(([, r]) => r.y - TAB_TOP);
+      const ceil = Math.min(A.y, ...beneath);
       const gy =
         bSide === "t"
           ? Math.min(B.y, b.y, ...rowMates.map((r) => r.y)) - GUTTER_IN - k * GUTTER_STEP
-          : Math.max(b.y + b.h, ...rowMates.map((r) => r.y + r.h)) + GUTTER_IN + k * GUTTER_STEP;
+          : Math.max(floor + CHIP_CLEAR + GUTTER_IN, (floor + 10 + ceil) / 2) + k * GUTTER_STEP;
       d = `M ${A.x} ${A.y} L ${A.x} ${gy} L ${B.x} ${gy} L ${B.x} ${B.y}`;
     } else {
       d = `M ${A.x} ${A.y} L ${B.x} ${A.y} L ${B.x} ${B.y}`;
@@ -626,7 +1104,8 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     const containers = [...new Set([...fromA, ...toA])]
       .filter((id) => !(fromA.includes(id) && toA.includes(id)))
       .map((id) => blocks[id]);
-    const seg = pinSegment(d, containers);
+    const { lo, hi, ...seg } = pinSegment(d, containers, bandGaps);
+    pieceOf.push({ lo, hi });
     // A shallow Z between two facing blocks pins on its middle jog, which runs across the
     // edge's direction. Pins are laid out relative to the edge's direction there — beside the
     // jog, in the gap between the blocks — not relative to the jog itself, which would put a
@@ -637,15 +1116,92 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     return { from: e.from, to: e.to, d, ...seg, horizontal: isZ ? kind === "h" : seg.horizontal, extent: isZ ? gap : seg.extent };
   });
 
+  // Two arrows running side by side pick the same middle, and their pins (chips, tags and step
+  // numbers) land on each other. The later one slides along its own run until it clears.
+  const walked = new Set(
+    [arch.walkthrough, ...(arch.scenarios ?? [])].flatMap((w) => (w?.steps ?? []).map((st) => st.follow)),
+  );
+  const hasPins = (e: { from: string; to: string }) =>
+    [`${e.from}->${e.to}`, `${e.to}->${e.from}`].some((k) => pinned.has(k) || walked.has(k));
+  const crowded = (x: number, y: number, k: number) =>
+    edges.some((o, j) => j < k && hasPins(o) && Math.abs(o.midX - x) < 90 && Math.abs(o.midY - y) < 60);
+  edges.forEach((e, k) => {
+    if (!hasPins(e) || !crowded(e.midX, e.midY, k)) return;
+    const { lo, hi } = pieceOf[k];
+    for (const f of [0.3, 0.7, 0.2, 0.8]) {
+      const v = lo + (hi - lo) * f;
+      const [x, y] = e.horizontal ? [v, e.midY] : [e.midX, v];
+      const room = 2 * Math.min(v - lo, hi - v);
+      if (room >= 60 && !crowded(x, y, k)) {
+        Object.assign(e, { midX: x, midY: y, extent: room });
+        break;
+      }
+    }
+  });
+
   // Where the ownership bands start. Derived here rather than in each renderer because it is
   // not simply "above the topmost block": a risk-tag row rises out of its block or its arrow
   // and must stay inside the band that owns it, so the band's top is whichever sits higher.
   // Computed from the placed tags themselves — the same placement the renderers draw — rather
   // than from a formula that has to be kept in step with it.
+  // Chip counts per pin location, keyed as the edge is drawn, and each block's chip positions:
+  // along its bottom border from the left, stepping past any arrow that crosses or leaves that
+  // border so a chip never sits on a line.
+  const chipCounts: Record<string, number> = {};
+  for (const pin of arch.pins?.mitigations ?? []) {
+    const at = blocks[pin.at] || edges.some((e) => `${e.from}->${e.to}` === pin.at) ? pin.at : pin.at.split("->").reverse().join("->");
+    chipCounts[at] = (chipCounts[at] ?? 0) + 1;
+  }
+  const blockChipXs: Record<string, number[]> = {};
+  const depth = (id: string) => ancestors(id).length;
+  for (const [at, n] of Object.entries(chipCounts).sort(([a], [b]) => depth(b) - depth(a))) {
+    const r = blocks[at];
+    if (!r) continue;
+    const y = r.y + r.h;
+    const avoid = edges.flatMap((e) => {
+      const pts = [...e.d.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: +m[1], y: +m[2] }));
+      return pts.slice(1).flatMap((p, k) => {
+        const q = pts[k];
+        const vertical = Math.abs(p.x - q.x) < 0.5;
+        return vertical && Math.min(p.y, q.y) <= y + 1 && Math.max(p.y, q.y) >= y - 1 && p.x > r.x && p.x < r.x + r.w ? [p.x] : [];
+      });
+    });
+    const kidXs = arch.blocks.filter((k) => k.parent === at && blockChipXs[k.id] && Math.abs(blocks[k.id].y + blocks[k.id].h - y) < 48).flatMap((k) => blockChipXs[k.id]);
+    const ok = (x: number) => !avoid.some((a) => Math.abs(a - x) < 22) && !kidXs.some((k) => Math.abs(k - x) < 40);
+    let xs: number[] = [];
+    for (let x0 = r.x + 16; x0 + 24 * (n - 1) + 10 <= r.x + r.w; x0 += 24) {
+      const run = Array.from({ length: n }, (_, k) => x0 + 24 * k);
+      if (run.every(ok)) { xs = run; break; }
+    }
+    if (!xs.length) for (let x = r.x + 16; xs.length < n && x < r.x + r.w + 24 * n; x += 24) {
+      if (!avoid.some((a) => Math.abs(a - x) < 22)) xs.push(x);
+    }
+    blockChipXs[at] = xs;
+  }
+
+  {
+    // An arrow whose tags fit on neither side of it without crowding another arrow slides its
+    // pins along its own run until they do.
+    const near8 = (e: (typeof edges)[number], rs: Rect[]) => edges.some((o) => o !== e && segmentsOf(o.d).some((sg) => rs.some((r) => r.x < Math.max(sg.x0, sg.x1) + 8 && r.x + r.w > Math.min(sg.x0, sg.x1) - 8 && r.y < Math.max(sg.y0, sg.y1) + 8 && r.y + r.h > Math.min(sg.y0, sg.y1) - 8)));
+    edges.forEach((e, k) => {
+      const key = `${e.from}->${e.to}`;
+      const nT = tagsOn.get(key) ?? tagsOn.get(`${e.to}->${e.from}`) ?? 0;
+      if (!nT || !e.horizontal) return;
+      const test = () => { const t = placeTags([{ at: key, widths: Array.from({ length: nT }, () => TAG_W_EST) }], { blocks, edges, columns, chipCounts, blockChipXs, bandSeams }).get(key)!; return !near8(e, t.rects); };
+      if (test()) return;
+      const { lo, hi } = pieceOf[k];
+      const keep = { midX: e.midX, midY: e.midY, extent: e.extent };
+      for (const fr of [0.7, 0.3, 0.8, 0.2, 0.85, 0.15]) {
+        Object.assign(e, { midX: lo + (hi - lo) * fr, extent: 2 * Math.min((hi - lo) * fr, (hi - lo) * (1 - fr)) });
+        if (test()) return;
+      }
+      Object.assign(e, keep);
+    });
+  }
   const rootTops = roots.map((p) => blocks[p.block.id].y);
   const placed = placeTags(
     [...tagsOn.entries()].map(([at, n]) => ({ at, widths: Array.from({ length: n }, () => TAG_W_EST) })),
-    { blocks, edges, columns },
+    { blocks, edges, columns, chipCounts, blockChipXs, bandSeams },
   );
   const tagTops = [...placed.values()].flatMap((p) => p.rects.map((r) => r.y));
   const bandTop = Math.min(
@@ -653,7 +1209,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     ...tagTops.map((y) => y - ZONE_HEAD - 6),
   );
 
-  return { width, height, blocks, edges, columns, bandTop, govBand };
+  return { width, height, blocks, edges, columns, bandTop, bandBottom: contentBottom + ZONE_PAD, govBand, chipCounts, blockChipXs, bandSeams };
 }
 
 // --- Pin placement -----------------------------------------------------------------
@@ -677,14 +1233,20 @@ export function chipSpots(
   n: number,
   block?: Rect,
   edge?: PinEdgeGeo,
+  /** Precomputed positions along the block's bottom border (layout.blockChipXs). */
+  xs?: number[],
 ): { x: number; y: number }[] {
   if (block) {
-    return Array.from({ length: n }, (_, i) => ({ x: block.x + 16 + i * 24, y: block.y + block.h }));
+    return Array.from({ length: n }, (_, i) => ({ x: xs?.[i] ?? block.x + 16 + i * 24, y: block.y + block.h }));
   }
   if (!edge) return [];
   // A run too short for its chips in a line — two blocks side by side across a column gap —
   // stacks them across the arrow instead, so they sit in the gap rather than on the blocks.
-  const across = edge.extent !== undefined && (n - 1) * 24 + 20 > edge.extent - 12;
+  // On a short vertical run, two or more chips in a column crowd both arrowheads and the tab
+  // below: they sit side by side unless the run leaves a gap above and below them.
+  const across =
+    edge.extent !== undefined &&
+    (edge.horizontal || n === 1 ? (n - 1) * 24 + 20 > edge.extent - 12 : (n - 1) * 24 + 20 + 36 > edge.extent);
   const along = edge.horizontal !== across;
   return Array.from({ length: n }, (_, i) => {
     const off = (i - (n - 1) / 2) * 24;
@@ -804,7 +1366,8 @@ function segmentsOf(d: string): { x0: number; y0: number; x1: number; y1: number
 function pinSegment(
   d: string,
   containers: Rect[],
-): { midX: number; midY: number; horizontal: boolean; extent: number } {
+  bandGaps: [number, number][] = [],
+): { midX: number; midY: number; horizontal: boolean; extent: number; lo: number; hi: number } {
   type Piece = { horizontal: boolean; at: number; lo: number; hi: number };
   const pieces: Piece[] = [];
   const raw: Piece[] = [];
@@ -832,12 +1395,34 @@ function pinSegment(
     }
     for (const [a, b] of spans) if (b - a > 8) pieces.push({ horizontal, at, lo: a, hi: b });
   }
+  // Pins stay out of the strip where two bands meet whenever the arrow has a fair run elsewhere:
+  // a horizontal piece loses the strips it crosses, and a vertical piece inside one is set aside.
+  // An arrow that only hops the gap keeps its pins there, centred, where the gap is widened for them.
+  const clean = pieces.flatMap((p) => {
+    if (!p.horizontal) return bandGaps.some(([g0, g1]) => p.at > g0 && p.at < g1) ? [] : [p];
+    let spans: [number, number][] = [[p.lo, p.hi]];
+    for (const [g0, g1] of bandGaps) {
+      spans = spans.flatMap(([a, b]) => (g1 <= a || g0 >= b ? [[a, b] as [number, number]] : ([[a, Math.min(b, g0)], [Math.max(a, g1), b]] as [number, number][]).filter(([x, y]) => y - x > 8)));
+    }
+    return spans.map(([lo, hi]) => ({ ...p, lo, hi }));
+  });
+  const longest = (ps: Piece[]) => ps.reduce((m, p) => (p.hi - p.lo > m.hi - m.lo ? p : m), ps[0]);
   const pool = pieces.length ? pieces : raw;
-  const best = pool.reduce((m, p) => (p.hi - p.lo > m.hi - m.lo ? p : m), pool[0]);
+  const tidy = clean.length ? longest(clean) : undefined;
+  const best = tidy && tidy.hi - tidy.lo >= 60 ? tidy : longest(pool);
+  // An arrow that only hops a seam keeps its pins in the middle of the (widened) gap, the one
+  // spot clear of both band borders — not the middle of the whole run, which a narrow figure
+  // column pulls onto the seam.
+  const hop = best !== tidy && best.horizontal ? bandGaps.find(([g0, g1]) => g0 >= best.lo && g1 <= best.hi) : undefined;
+  if (hop) {
+    const [g0, g1] = hop;
+    const midX = (g0 + g1) / 2;
+    return { midX, midY: best.at, horizontal: true, extent: Math.min(g1 - g0 - 24, best.hi - best.lo), lo: best.lo, hi: best.hi };
+  }
   const mid = (best.lo + best.hi) / 2;
   return best.horizontal
-    ? { midX: mid, midY: best.at, horizontal: true, extent: best.hi - best.lo }
-    : { midX: best.at, midY: mid, horizontal: false, extent: best.hi - best.lo };
+    ? { midX: mid, midY: best.at, horizontal: true, extent: best.hi - best.lo, lo: best.lo, hi: best.hi }
+    : { midX: best.at, midY: mid, horizontal: false, extent: best.hi - best.lo, lo: best.lo, hi: best.hi };
 }
 
 /** Tags per row above a block, and the width the build assumes for a coded tag ("R07"). */
@@ -870,9 +1455,38 @@ export interface TagPlacement {
  */
 export function placeTags(
   groups: { at: string; widths: number[] }[],
-  layout: { blocks: Record<string, Rect>; edges: ArchLayout["edges"]; columns?: { x: number; w: number }[] },
+  layout: Pick<ArchLayout, "blocks" | "edges" | "columns" | "chipCounts" | "blockChipXs" | "bandSeams">,
 ): Map<string, TagPlacement> {
   const out = new Map<string, TagPlacement>();
+  // What a tag beside an arrow must keep clear of: blocks and their title tabs, every chip, the
+  // tags already placed, the seams between bands, and (by 8px) every other arrow's line.
+  const meets = (a: Rect, b: Rect, m = 0) => a.x < b.x + b.w + m && a.x + a.w > b.x - m && a.y < b.y + b.h + m && a.y + a.h > b.y - m;
+  const chipRects = Object.entries(layout.chipCounts ?? {}).flatMap(([at, n]) => {
+    const block = layout.blocks[at];
+    const e = block ? undefined : layout.edges.find((x) => `${x.from}->${x.to}` === at);
+    return chipSpots(n, block, e, layout.blockChipXs?.[at]).map((sp) => ({ x: sp.x - 10, y: sp.y - 10, w: 20, h: 20 }));
+  });
+  const placedRects: Rect[] = [];
+  type Sg = { x0: number; y0: number; x1: number; y1: number };
+  const gapTo = (r: Rect, sgs: Sg[]) =>
+    Math.min(
+      Infinity,
+      ...sgs.map((sg) =>
+        Math.hypot(
+          Math.max(Math.min(sg.x0, sg.x1) - (r.x + r.w), r.x - Math.max(sg.x0, sg.x1), 0),
+          Math.max(Math.min(sg.y0, sg.y1) - (r.y + r.h), r.y - Math.max(sg.y0, sg.y1), 0),
+        ),
+      ),
+    );
+  const others = (e: ArchLayout["edges"][number]) => layout.edges.filter((o) => o !== e).flatMap((o) => segmentsOf(o.d));
+  const nearLine = (e: ArchLayout["edges"][number] | undefined, rs: Rect[], m: number) =>
+    layout.edges.some(
+      (o) =>
+        o !== e &&
+        segmentsOf(o.d).some((sg) =>
+          rs.some((r) => meets(r, { x: Math.min(sg.x0, sg.x1), y: Math.min(sg.y0, sg.y1), w: Math.abs(sg.x1 - sg.x0), h: Math.abs(sg.y1 - sg.y0) }, m)),
+        ),
+    );
   const edgeOf = (ref: string) =>
     layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
     layout.edges.find((e) => `${e.to}->${e.from}` === ref);
@@ -893,7 +1507,8 @@ export function placeTags(
     rows.forEach((row, ri) => {
       const rowW = row.reduce((a, w) => a + w, 0) + TAG_X_GAP * (row.length - 1);
       let rx = align === "left" ? left : centreX - rowW / 2;
-      const y = firstRowY - ri * TAG_GAP;
+      // Wraps upward from the arrow or tab, but reads top-down: the first tags take the top row.
+      const y = firstRowY - (rows.length - 1 - ri) * TAG_GAP;
       for (const w of row) {
         rects.push({ x: rx, y, w, h: TAG_H });
         rx += w + TAG_X_GAP;
@@ -904,11 +1519,25 @@ export function placeTags(
 
   type Stack = { at: string; widths: number[]; side: "l" | "r" | "c"; xEdge: number; midX: number; midY: number };
   const stacks: Stack[] = [];
-  for (const g of groups) {
+  // Blocks first, then horizontal arrows, then vertical ones, which fit around the rest.
+  const rank = (at: string) => (layout.blocks[at] ? 0 : edgeOf(at)?.horizontal ? 1 : 2);
+  for (const g of [...groups].sort((x, y) => rank(x.at) - rank(y.at))) {
     const block = layout.blocks[g.at];
     if (block) {
-      const rects = rowsUp(g.widths, block.x, block.x + block.w + 2, block.y - TAB_H / 2 - 4 - TAG_H, "left");
+      // Left-aligned with the block, unless an arrow leaving its top (or that arrow's chips)
+      // runs through the row: then the row starts just past the line, or ends at the block's
+      // right edge.
+      const y0 = block.y - TAB_H / 2 - 4 - TAG_H;
+      const row = (x0: number) => rowsUp(g.widths, x0, Math.max(block.x + block.w + 2, x0 + TAG_W_EST), y0, "left");
+      const lines = layout.edges.flatMap((o) =>
+        segmentsOf(o.d).filter((sg) => Math.abs(sg.x0 - sg.x1) < 0.5 && sg.x0 > block.x - 20 && sg.x0 < block.x + block.w + 20 && Math.min(sg.y0, sg.y1) < y0 + TAG_H + 8 && Math.max(sg.y0, sg.y1) > y0 - 8).map((sg) => sg.x0),
+      );
+      const free = (rs: Rect[]) => !nearLine(undefined, rs, 8) && !chipRects.some((c) => rs.some((r) => meets(r, c, 8)));
+      const rowW = g.widths.reduce((a, w) => a + w, 0) + TAG_X_GAP * (g.widths.length - 1);
+      const starts = [block.x, block.x + block.w + 2 - rowW, ...lines.map((x) => x + 14)];
+      const rects = starts.map(row).find(free) ?? row(block.x);
       out.set(g.at, { rects, leader: "" });
+      placedRects.push(...rects);
       continue;
     }
     const e = edgeOf(g.at);
@@ -917,13 +1546,77 @@ export function placeTags(
       continue;
     }
     if (e.horizontal) {
-      const half = Math.max(e.extent / 2 - 8, TAG_W_EST);
-      const rects = rowsUp(g.widths, e.midX - half, e.midX + half, e.midY - 8 - TAG_H, "centre", e.midX);
-      const bottom = Math.max(...rects.map((r) => r.y + r.h));
-      out.set(g.at, { rects, leader: `M ${e.midX} ${bottom + 1} L ${e.midX} ${e.midY - 5}` });
+      // As wide as the run allows (two tags fit a widened gap), narrower if that meets a seam.
+      // The band borders themselves, not the clear gap between them, which a tag may sit in.
+      const seamRects = (layout.bandSeams ?? []).flatMap(([l, r]) => [l, r].map((x) => ({ x: x - 3, y: -1e5, w: 6, h: 2e5 })));
+      const wide = Math.max(e.extent / 2 - 3, TAG_W_EST);
+      const wideRow = rowsUp(g.widths, e.midX - wide, e.midX + wide, 0, "centre", e.midX);
+      const half = wideRow.some((r) => seamRects.some((b) => meets(r, b))) ? Math.max(e.extent / 2 - 8, TAG_W_EST) : wide;
+      // Tags rise from just above the arrow's own chips — a short run stacks its chips across
+      // the line, and a tag row at a fixed offset landed on them.
+      const nChips = layout.chipCounts?.[g.at] ?? 0;
+      const chipYs = nChips ? chipSpots(nChips, undefined, e).map((sp) => sp.y) : [];
+      const chipTop = chipYs.length ? Math.min(...chipYs) - 10 : e.midY - 4;
+      const above = rowsUp(g.widths, e.midX - half, e.midX + half, chipTop - 4 - TAG_H, "centre", e.midX);
+      // Above the arrow unless that sits on another arrow and below is clear: two arrows into
+      // one block run close together, and the upper one's tags would cover the lower one's line.
+      // Near another arrow reads as that arrow's tags, not only on it: keep 8px clear, and sit
+      // clearly (8px) nearer this arrow than any other.
+      const onOther = (rs: Rect[]) => nearLine(e, rs, 8) || rs.some((r) => gapTo(r, others(e)) < gapTo(r, segmentsOf(e.d)) + 8);
+      let rects = above;
+      if (onOther(above)) {
+        const chipBottom = chipYs.length ? Math.max(...chipYs) + 10 : e.midY + 4;
+        // Moved, not mirrored: the first row stays on top, now nearest the line.
+        const minY = Math.min(...above.map((r) => r.y));
+        const below = above.map((r) => ({ ...r, y: chipBottom + 4 + (r.y - minY) }));
+        if (!onOther(below)) rects = below;
+      }
+      const flipped = rects !== above;
+      const edgeY = flipped ? Math.min(...rects.map((r) => r.y)) : Math.max(...rects.map((r) => r.y + r.h));
+      out.set(g.at, { rects, leader: flipped ? `M ${e.midX} ${edgeY - 1} L ${e.midX} ${e.midY + 5}` : `M ${e.midX} ${edgeY + 1} L ${e.midX} ${e.midY - 5}` });
+      placedRects.push(...rects);
       continue;
     }
-    // Vertical: snap the stack to the nearer gutter of the arrow's column — right-aligned to
+    // Vertical: right beside the arrow, clear of its own chips — left of it, or right when the
+    // left is taken — in a column, or in pairs when the run is too short for a column. Tags
+    // parked in the column's gutter, 130px and more from their arrow, read as some other
+    // arrow's or the neighbouring block's.
+    {
+      const nChips = layout.chipCounts?.[g.at] ?? 0;
+      const chips = nChips ? chipSpots(nChips, undefined, e) : [];
+      const reach = chips.length ? Math.max(...chips.map((c) => Math.abs(c.x - e.midX))) + 10 : 0;
+      const perRow = g.widths.length * TAG_GAP - (TAG_GAP - TAG_H) <= e.extent - 24 ? 1 : 2;
+      const rows: number[][] = [];
+      g.widths.forEach((w, i) => (i % perRow ? rows[rows.length - 1].push(w) : rows.push([w])));
+      const beside = (side: "l" | "r") => {
+        const rects: Rect[] = [];
+        let y = e.midY - (rows.length * TAG_GAP - (TAG_GAP - TAG_H)) / 2;
+        for (const row of rows) {
+          const rowW = row.reduce((a, w) => a + w, 0) + TAG_X_GAP * (row.length - 1);
+          let x = side === "l" ? e.midX - reach - 6 - rowW : e.midX + reach + 6;
+          for (const w of row) {
+            rects.push({ x, y, w, h: TAG_H });
+            x += w + TAG_X_GAP;
+          }
+          y += TAG_GAP;
+        }
+        return rects;
+      };
+      const solid = Object.values(layout.blocks)
+        .filter((b) => !(e.midX > b.x && e.midX < b.x + b.w && e.midY > b.y && e.midY < b.y + b.h))
+        .map((b) => ({ x: b.x, y: b.y - TAB_TOP, w: b.w, h: b.h + TAB_TOP }));
+      const seams = (layout.bandSeams ?? []).map(([l, r]) => ({ x: l - 3, y: -1e5, w: r - l + 6, h: 2e5 }));
+      const clear = (rs: Rect[]) =>
+        !rs.some((r) => [...solid, ...seams].some((b) => meets(r, b, 2)) || [...chipRects, ...placedRects].some((b) => meets(r, b, 1))) &&
+        !nearLine(e, rs, 8);
+      const pick = [beside("l"), beside("r")].find(clear);
+      if (pick) {
+        out.set(g.at, { rects: pick, leader: "" });
+        placedRects.push(...pick);
+        continue;
+      }
+    }
+    // Otherwise snap the stack to the nearer gutter of the arrow's column — right-aligned to
     // the left gutter or left-aligned to the right one — so every stack in a gutter shares one
     // edge. An arrow running inside a container (child to child) or far from both gutters
     // keeps its tags just left of itself instead.

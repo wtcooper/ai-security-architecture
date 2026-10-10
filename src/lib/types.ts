@@ -566,6 +566,14 @@ export interface ArchLayout {
   columns: { x: number; w: number }[];
   /** Top of the ownership bands — encloses first-row risk-tag stacks, not just blocks. */
   bandTop: number;
+  /** Bottom of the ownership bands — clears the chips on the lowest blocks, not just blocks. */
+  bandBottom?: number;
+  /** Mitigation chips per pin location (block id or "from->to"), so risk tags can clear them. */
+  chipCounts?: Record<string, number>;
+  /** Where a block's chips sit along its bottom border, stepped past any arrow crossing it. */
+  blockChipXs?: Record<string, number[]>;
+  /** Where two bands meet: the x of the left band's right border and the right band's left. */
+  bandSeams?: [number, number][];
   /**
    * The governance plane's band: as wide as the ownership bands together, one band gutter
    * beneath them. Absent when the architecture draws no governance zone.

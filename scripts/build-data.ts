@@ -350,6 +350,8 @@ async function main() {
     surfaces: mitigationsDoc.surfaces,
     mitigations: mitigationsDoc.mitigations,
     riskIds,
+    // The order the site codes risks in (R01, R02…): by category, then as authored.
+    riskOrder: new Map(RISK_CATEGORIES.flatMap((c) => risks.filter((r) => r.category === c.id)).map((r, i) => [r.id, i])),
     mapTargets,
   });
 
@@ -620,6 +622,7 @@ function checkArchetypes(
     surfaces: Surface[];
     mitigations: Mitigation[];
     riskIds: Set<string>;
+    riskOrder: Map<string, number>;
     mapTargets: Set<string>;
   },
 ): Archetype[] {
@@ -790,6 +793,10 @@ function checkArchetypes(
     }
     if (!risks.length) fail(`${where}: needs at least one pinned risk`);
     if (!mitigations.length) fail(`${where}: needs at least one pinned mitigation`);
+    // Every cluster reads in number order: chips by the number they are drawn with (first
+    // appearance), tags by their risk code. A stable sort keeps the numbering itself unchanged.
+    arch.pins.mitigations.sort((x, y) => mitigations.indexOf(x.mitigation) - mitigations.indexOf(y.mitigation));
+    arch.pins.risks.sort((x, y) => (ctx.riskOrder.get(x.risk) ?? 0) - (ctx.riskOrder.get(y.risk) ?? 0));
 
     // --- Walks: one walkthrough, plus the adversarial scenarios ---------------
     // Same shape, validated the same way. The walkthrough is what the canvas numbers at rest;
@@ -1655,7 +1662,7 @@ function checkDiagramCollisions(
     chipGroups.set(pin.at, (chipGroups.get(pin.at) ?? 0) + 1);
   }
   for (const [at, n] of chipGroups) {
-    const spots = chipSpots(n, layout.blocks[at], edgeGeoOf(at));
+    const spots = chipSpots(n, layout.blocks[at], edgeGeoOf(at), layout.blockChipXs?.[at]);
     checkSpots(
       "mitigation chip",
       at,
@@ -1717,6 +1724,50 @@ function checkDiagramCollisions(
     checkSpots("risk tag", at, rects, layout.blocks[at] ? at : undefined);
   }
 
+  // Pins must never hide each other, or an arrow. Chips and risk tags show together, so a tag
+  // over a chip (or a chip over a tag, or two stacks from neighbouring arrows meeting) hides a
+  // number the reader needs; and a pin sitting on another arrow's line hides where that arrow
+  // goes. A pin on its own arrow is by design.
+  type Pin = { kind: string; at: string; r: Rect };
+  const pins: Pin[] = [
+    ...[...chipGroups].flatMap(([at, n]) =>
+      chipSpots(n, layout.blocks[at], edgeGeoOf(at), layout.blockChipXs?.[at]).map((sp) => ({ kind: "mitigation chip", at, r: { x: sp.x - 10, y: sp.y - 10, w: 20, h: 20 } })),
+    ),
+    ...[...tagGroups.keys()].flatMap((at) => (placedTags.get(at)?.rects ?? []).map((r) => ({ kind: "risk tag", at, r }))),
+  ];
+  const segsOf = (e: (typeof layout.edges)[number]) => {
+    const pts = [...e.d.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: +m[1], y: +m[2] }));
+    return pts.slice(1).map((p, k) => ({
+      x: Math.min(p.x, pts[k].x) - 1,
+      y: Math.min(p.y, pts[k].y) - 1,
+      w: Math.abs(p.x - pts[k].x) + 2,
+      h: Math.abs(p.y - pts[k].y) + 2,
+    }));
+  };
+  const sameEdge = (a: string, b: string) => a === b || a === b.split("->").reverse().join("->");
+  const reported = new Set<string>();
+  const once = (msg: string) => {
+    if (!reported.has(msg)) fail(msg);
+    reported.add(msg);
+  };
+  for (let i = 0; i < pins.length; i++) {
+    for (let j = i + 1; j < pins.length; j++) {
+      const p = pins[i];
+      const q = pins[j];
+      if (p.kind === q.kind && sameEdge(p.at, q.at)) continue; // laid out together by design
+      if (hits(inflate(p.r, -1), inflate(q.r, -1))) once(`${where}: ${p.kind} at ${p.at} overlaps ${q.kind} at ${q.at}`);
+    }
+  }
+  for (const p of pins) {
+    for (const e of layout.edges) {
+      const key = `${e.from}->${e.to}`;
+      if (sameEdge(p.at, key)) continue;
+      // A block's own pins may sit beside the arrows that leave it.
+      if (!p.at.includes("->") && (e.from === p.at || e.to === p.at)) continue;
+      if (segsOf(e).some((sg) => hits(sg, inflate(p.r, 2)))) once(`${where}: ${p.kind} at ${p.at} sits on the line of flow ${key}`);
+    }
+  }
+
   // Flow badges were the one pin class nobody checked, and it showed: the personal agent had an
   // F4 sitting across the Downstream services title bar. Their geometry is fixed by the
   // renderer — a 28x17 pill at the edge midpoint, stepping right for each additional flow on
@@ -1738,8 +1789,19 @@ function checkDiagramCollisions(
       const key = resolveLeg(st.follow);
       if (key) per.set(key, (per.get(key) ?? 0) + 1);
     }
+    const badges: { at: string; r: Rect }[] = [];
     for (const [key, n] of per) {
-      checkSpots("step badge", key, flowBadgeSpots(n, edgeGeoOf(key)!, Object.values(layout.blocks)));
+      const spots = flowBadgeSpots(n, edgeGeoOf(key)!, Object.values(layout.blocks));
+      checkSpots("step badge", key, spots);
+      for (const r of spots) badges.push({ at: key, r });
+    }
+    // A walk's numbers show without the chips and tags, so they only have to clear each other.
+    for (let i = 0; i < badges.length; i++) {
+      for (let j = i + 1; j < badges.length; j++) {
+        if (badges[i].at === badges[j].at) continue;
+        if (hits(inflate(badges[i].r, -1), inflate(badges[j].r, -1)))
+          once(`${where}: step badges on ${badges[i].at} and ${badges[j].at} overlap in "${walk.title}"`);
+      }
     }
   }
 

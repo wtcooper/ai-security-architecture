@@ -52,10 +52,12 @@ export function buildViewerModel(archetype: Archetype) {
             ? archetype.pins.mitigations.filter((p) => p.at === b.id).map((p) => p.mitigation)
             : []),
         ]),
-      ].map((id) => ({
-        n: capNumber.get(id) ?? 0,
-        title: `${mitigationById.get(id)?.title ?? id} · ${id}`,
-      })),
+      ]
+        .map((id) => ({
+          n: capNumber.get(id) ?? 0,
+          title: `${mitigationById.get(id)?.title ?? id} · ${id}`,
+        }))
+        .sort((x, y) => x.n - y.n),
       ...rect,
       items: (b.items ?? []).map((item, i) => ({
         id: item.id,
@@ -101,7 +103,7 @@ export function buildViewerModel(archetype: Archetype) {
   // Same source as the on-screen renderer: the layout knows how far the first row's risk-tag
   // stacks rise, and a band has to enclose the tags its blocks carry.
   const bandTop = colRects.length ? layout.bandTop : 0;
-  const bandBottom = colRects.length ? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD : 0;
+  const bandBottom = colRects.length ? (layout.bandBottom ?? Math.max(...colRects.map((r) => r.y + r.h)) + ZONE_PAD) : 0;
   const cols = layout.columns ?? [];
   const zones = (archetype.zones ?? []).flatMap((zone) => {
     const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);
@@ -142,7 +144,7 @@ export function buildViewerModel(archetype: Archetype) {
     if (kindOf.get(at) === "governance") continue; // drawn in the call-out's own chip row
     const blockRect = rects[at];
     const geo = blockRect ? undefined : edgeGeoOf(at);
-    const spots = chipSpots(pins.length, blockRect, geo);
+    const spots = chipSpots(pins.length, blockRect, geo, blockRect ? archetype.layout.blockChipXs?.[at] : undefined);
     pins.forEach((pin, i) => {
       const spot = spots[i];
       if (!spot) return;
