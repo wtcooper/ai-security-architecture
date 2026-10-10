@@ -752,8 +752,8 @@ function checkArchetypes(
       if (!PATH_CLASSES.has(edge.path)) {
         fail(`${at}: path must be one of ${[...PATH_CLASSES].join(", ")}`);
       }
-      if (edge.route && edge.route !== "hv" && edge.route !== "vh") {
-        fail(`${at}: route must be "hv" or "vh"`);
+      if (edge.route && !["hv", "vh", "hvh", "vhv", "under", "over"].includes(edge.route)) {
+        fail(`${at}: route must be "hv", "vh", "hvh", "vhv", "under" or "over"`);
       }
     }
 
@@ -1659,7 +1659,7 @@ function checkDiagramCollisions(
     checkSpots(
       "mitigation chip",
       at,
-      spots.map((s) => ({ x: s.x - 9, y: s.y - 9, w: 18, h: 18 })),
+      spots.map((s) => ({ x: s.x - 10, y: s.y - 10, w: 20, h: 20 })),
       layout.blocks[at] ? at : undefined,
     );
   }
@@ -1739,7 +1739,7 @@ function checkDiagramCollisions(
       if (key) per.set(key, (per.get(key) ?? 0) + 1);
     }
     for (const [key, n] of per) {
-      checkSpots("step badge", key, flowBadgeSpots(n, edgeGeoOf(key)!));
+      checkSpots("step badge", key, flowBadgeSpots(n, edgeGeoOf(key)!, Object.values(layout.blocks)));
     }
   }
 

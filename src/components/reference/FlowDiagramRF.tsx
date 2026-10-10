@@ -221,7 +221,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             transform: "translateX(-50%)",
             background: blockTab(block),
             color: "#fff",
-            font: "600 10px/1 var(--font-mono, monospace)",
+            font: "600 10.5px/1 var(--font-mono, monospace)",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
             padding: "6px 10px",
@@ -241,12 +241,12 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             alignItems: "center",
             justifyContent: "center",
             gap: 6,
-            fontSize: 11,
+            fontSize: 12.5,
             color: "var(--ink, #222)",
           }}
         >
-          <svg width="30" height="30" viewBox="0 0 30 30">
-            <FlowIcon name={block.icon ?? "person"} x={15} y={15} size={26} color="var(--ink)" />
+          <svg width="32" height="32" viewBox="0 0 32 32">
+            <FlowIcon name={block.icon ?? "person"} x={16} y={16} size={28} color="var(--ink)" />
           </svg>
           <span style={{ fontWeight: 600 }}>{block.title}</span>
         </div>
@@ -261,8 +261,8 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             gap: 5,
           }}
         >
-          <svg width="26" height="26" viewBox="0 0 26 26">
-            <FlowIcon name={block.icon} x={13} y={13} size={24} />
+          <svg width="28" height="28" viewBox="0 0 28 28">
+            <FlowIcon name={block.icon} x={14} y={14} size={26} />
           </svg>
           {(block.mitigations?.length ?? 0) + (data.pinnedCaps?.length ?? 0) > 0 && (
             <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
@@ -274,12 +274,12 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                       data.highlight && !(data.highlight.kind === "mitigation" && data.highlight.id === id)
                         ? 0.2
                         : 1,
-                    width: 16,
-                    height: 16,
-                    borderRadius: 8,
-                    borderWidth: 1.3,
+                    width: 19,
+                    height: 19,
+                    borderRadius: 10,
+                    borderWidth: 1.4,
                     ...chipColors(data.capStatus?.get(id), data.capPaint?.get(id)),
-                    font: "700 9.5px/14px var(--font-mono, monospace)",
+                    font: "700 10.5px/16px var(--font-mono, monospace)",
                     textAlign: "center",
                   }}
                 >
@@ -309,13 +309,13 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                 gap: 3,
                 width: cell.w,
                 textAlign: "center",
-                fontSize: 10,
-                lineHeight: 1.25,
+                fontSize: 11.5,
+                lineHeight: 1.2,
                 color: "var(--ink-2, #444)",
               }}
             >
-              <svg width="22" height="22" viewBox="0 0 22 22">
-                <FlowIcon name={item.icon} x={11} y={11} size={20} />
+              <svg width="25" height="25" viewBox="0 0 25 25">
+                <FlowIcon name={item.icon} x={12.5} y={12.5} size={23} />
               </svg>
               <span>{item.label}</span>
               {(item.mitigations?.length ?? 0) > 0 && (
@@ -324,12 +324,12 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                     <span
                       key={id}
                       style={{
-                        width: 14,
-                        height: 14,
-                        borderRadius: 7,
-                        borderWidth: 1.2,
+                        width: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        borderWidth: 1.3,
                         ...chipColors(data.capStatus?.get(id), data.capPaint?.get(id)),
-                        font: "700 8.5px/12px var(--font-mono, monospace)",
+                        font: "700 9.5px/13px var(--font-mono, monospace)",
                         textAlign: "center",
                       }}
                     >
@@ -379,7 +379,7 @@ function ZoneNode({
           left: 0,
           right: 0,
           textAlign: "center",
-          font: "700 10px/1 var(--font-mono, monospace)",
+          font: "700 11px/1 var(--font-mono, monospace)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
           color: tint.ink,
@@ -395,12 +395,12 @@ function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: bo
   return (
     <div
       style={{
-        width: 18,
-        height: 18,
-        borderRadius: 9,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
         borderWidth: 1.5,
         ...chipColors(data.status, data.paint),
-        font: "700 10px/15px var(--font-mono, monospace)",
+        font: "700 11px/17px var(--font-mono, monospace)",
         textAlign: "center",
         opacity: data.dim ? 0 : data.faint ? 0.2 : 1,
       }}
@@ -533,13 +533,13 @@ function BuildPathEdge(props: EdgeProps) {
                   : pin.kind === "chip"
                   ? {
                       position: "absolute",
-                      transform: `translate(${midX + pin.dx - 9}px, ${midY + pin.dy - 9}px)`,
-                      width: 18,
-                      height: 18,
-                      borderRadius: 9,
+                      transform: `translate(${midX + pin.dx - 10}px, ${midY + pin.dy - 10}px)`,
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
                       borderWidth: 1.5,
                       ...chipColors(pin.status, pin.paint),
-                      font: "700 10px/15px var(--font-mono, monospace)",
+                      font: "700 11px/17px var(--font-mono, monospace)",
                       textAlign: "center",
                       opacity: pinOpacity(pin),
                       pointerEvents: "all",
@@ -851,7 +851,7 @@ export function FlowDiagramRF({
         nodes.push({
           id: `chip:${at}:${pin.mitigation}`,
           type: "chip",
-          position: { x: spot.x - 9 - blockRect.x, y: spot.y - 9 - blockRect.y },
+          position: { x: spot.x - 10 - blockRect.x, y: spot.y - 10 - blockRect.y },
           parentId: at,
           data: {
             n,
@@ -1049,7 +1049,7 @@ export function FlowDiagramRF({
     });
     for (const [key, steps] of stepsByEdge) {
       const geo = edgeGeo.get(key)!;
-      const spots = flowBadgeSpots(steps.length, geo);
+      const spots = flowBadgeSpots(steps.length, geo, Object.values(rects));
       const list = pinsByEdge.get(key) ?? [];
       steps.forEach((step, i) => {
         list.push({

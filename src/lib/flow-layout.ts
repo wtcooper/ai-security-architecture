@@ -41,7 +41,8 @@ export const ICON_NAMES = [
 // not for visual breathing room. Generous gaps pushed connected blocks far apart and left the
 // mean canvas 85% empty, which is the opposite of legible: a reader wants the whole
 // architecture in one glance, with short arrows between things that talk to each other.
-const COL_W = 176;
+/** Wide enough for a 24-character title tab at 10.5px, and two 11px item labels side by side. */
+const COL_W = 188;
 const COL_GAP = 44;
 /**
  * Tall enough for a vertical run carrying three stacked risk tags to clear the tab below it,
@@ -57,11 +58,11 @@ const MARGIN_BOTTOM = 32;
 export const TAB_H = 20;
 /**
  * The title tab as the renderer draws it: centred on the block's top border from 11px above
- * it, 10px IBM Plex Mono caps (0.6em advance) with 0.08em tracking and 10px padding each side.
+ * it, 10.5px IBM Plex Mono caps (0.6em advance) with 0.08em tracking and 10px padding each side.
  * It draws above the arrows, so an arrow meeting the top border under it loses its arrowhead.
  */
 const TAB_TOP = 11;
-const tabHalfWidth = (title: string) => (title.length * 6.8 + 20) / 2;
+const tabHalfWidth = (title: string) => (title.length * 7.2 + 20) / 2;
 /** Half an arrowhead's width: an anchor this close to the tab still loses part of its head. */
 const ARROW_HALF = 7;
 /** Band chrome, shared with both renderers so a band's rect can be derived here. */
@@ -70,21 +71,22 @@ export const ZONE_HEAD = 30;
 /** Clear space between two bands: the column gap less the pad each band adds inside it. */
 const BAND_GAP = COL_GAP - ZONE_PAD * 2;
 /** Items pack two per row inside a standard block. */
-const ITEM_H = 50;
+const ITEM_H = 56;
 const BLOCK_PAD_TOP = 16;
 const BLOCK_PAD_BOTTOM = 12;
 const ACTOR_H = 66;
 
 /** How tall a block wants to be, before row heights are settled. */
-function naturalHeight(block: ArchBlock): number {
+function naturalHeight(block: ArchBlock, container = false): number {
   if (block.kind === "actor" || block.kind === "origin") return ACTOR_H;
   const items = block.items?.length ?? 0;
   // A call-out block — an icon plus the chip numbers of the controls it delivers — needs room
   // for both. Governance-band services are drawn this way.
-  if (!items && block.icon) return 78;
+  if (!items && block.icon) return 84;
   if (!items) return 58;
-  // Tall side columns stack items vertically, one per row; everything else packs two across.
-  const stacked = (block.rowSpan ?? 1) > 1;
+  // Tall side columns stack items vertically, one per row; everything else packs two across —
+  // including a container, whose span is for its children, not for its own items.
+  const stacked = (block.rowSpan ?? 1) > 1 && !container;
   const rows = stacked ? items : Math.ceil(items / 2);
   return TAB_H / 2 + BLOCK_PAD_TOP + rows * ITEM_H + BLOCK_PAD_BOTTOM;
 }
@@ -92,7 +94,8 @@ function naturalHeight(block: ArchBlock): number {
 /** Where items sit inside a block. Client-side rendering calls this too, so it lives here. */
 export function itemCells(block: ArchBlock, rect: Rect): Rect[] {
   const items = block.items ?? [];
-  const stacked = (block.rowSpan ?? 1) > 1;
+  // A container is wider than a column (it pads its children), and never stacks its items.
+  const stacked = (block.rowSpan ?? 1) > 1 && rect.w <= COL_W + 4;
   const perRow = stacked ? 1 : 2;
   const top = rect.y + TAB_H / 2 + BLOCK_PAD_TOP;
   return items.map((_, i) => {
@@ -216,7 +219,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // A container may also carry its own items — an agent harness keeps its loop and context
   // assembly while holding a supervisor and subagents inside it. Items occupy a band under the
   // title tab and the children's grid starts below them, so the two never overlap.
-  const itemsHeight = (b: ArchBlock) => (b.items?.length ? naturalHeight(b) - TAB_H / 2 : 0);
+  const itemsHeight = (b: ArchBlock) => (b.items?.length ? naturalHeight(b, true) - TAB_H / 2 : 0);
   const measure = (b: ArchBlock): Placed => {
     const kids = (kidsOf.get(b.id) ?? []).map(measure);
     if (!kids.length) return { block: b, w: blockWidth(b), h: naturalHeight(b), kids };
@@ -283,7 +286,10 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       const r = grid.at.get(p.block.id)!;
       const abs = { x: ox + r.x, y: oy + r.y, w: r.w, h: r.h };
       blocks[p.block.id] = abs;
-      if (p.inner) place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + NEST_HEAD + itemsHeight(p.block));
+      // A container stretched over several rows keeps its own items at the top and seats its
+      // children at the bottom, level with the lower row — so a child's arrows to its
+      // neighbours there run straight instead of climbing out through the container's items.
+      if (p.inner) place(p.kids, p.inner, abs.x + NEST_PAD, abs.y + abs.h - NEST_PAD - p.inner.height);
     }
   };
   place(roots, top, MARGIN_X, marginTop);
@@ -302,7 +308,9 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   let bottom = contentBottom;
   if (govRoots.length) {
     const bandY = contentBottom + ZONE_PAD + BAND_GAP;
-    const perRow = Math.max(1, Math.floor((top.width + COL_GAP) / (COL_W + COL_GAP)));
+    // When the call-outs need more than one line, the lines are balanced (3 + 2, not 4 + 1).
+    const fits = Math.max(1, Math.floor((top.width + COL_GAP) / (COL_W + COL_GAP)));
+    const perRow = Math.ceil(govRoots.length / Math.ceil(govRoots.length / fits));
     let y = bandY + ZONE_HEAD + ZONE_PAD;
     for (let i = 0; i < govRoots.length; i += perRow) {
       const line = govRoots.slice(i, i + perRow);
@@ -339,10 +347,24 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     const b = blocks[e.to];
     const yOv = overlap(a.y, a.y + a.h, b.y, b.y + b.h);
     const xOv = overlap(a.x, a.x + a.w, b.x, b.x + b.w);
-    let kind: "h" | "v" | "vh" | "hv";
+    let kind: "h" | "v" | "vh" | "hv" | "hvh" | "vhv" | "under" | "over";
     let aSide: Side;
     let bSide: Side;
-    if (yOv) {
+    if (e.route === "under" || e.route === "over") {
+      kind = e.route;
+      aSide = e.route === "under" ? "b" : "t";
+      bSide = aSide;
+    } else if (e.route === "hvh" && !xOv) {
+      // Even between blocks that overlap, an explicit gutter route jogs beside the target rather
+      // than midway, so it can share that gutter with the arrows around it.
+      kind = "hvh";
+      aSide = cx(a) < cx(b) ? "r" : "l";
+      bSide = cx(a) < cx(b) ? "l" : "r";
+    } else if (e.route === "vhv" && !yOv) {
+      kind = "vhv";
+      aSide = cy(a) < cy(b) ? "b" : "t";
+      bSide = cy(a) < cy(b) ? "t" : "b";
+    } else if (yOv) {
       kind = "h";
       aSide = a.x < b.x ? "r" : "l";
       bSide = a.x < b.x ? "l" : "r";
@@ -354,6 +376,14 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       kind = "vh";
       aSide = cy(a) < cy(b) ? "b" : "t";
       bSide = cx(a) < cx(b) ? "l" : "r";
+    } else if (e.route === "hvh") {
+      kind = "hvh";
+      aSide = cx(a) < cx(b) ? "r" : "l";
+      bSide = cx(a) < cx(b) ? "l" : "r";
+    } else if (e.route === "vhv") {
+      kind = "vhv";
+      aSide = cy(a) < cy(b) ? "b" : "t";
+      bSide = cy(a) < cy(b) ? "t" : "b";
     } else {
       kind = "hv";
       aSide = cx(a) < cx(b) ? "r" : "l";
@@ -371,18 +401,20 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   const laneKey = (side: Side, self: Rect, other: Rect): number => {
     const dx = cx(other) - cx(self);
     const dy = cy(other) - cy(self);
+    // Ties (two blocks in one column, or one row) fall back to where the other block sits along
+    // the side, so lanes keep the same order as the blocks they lead to.
     if (side === "t" || side === "b") {
       const level = Math.abs(dx) < 24;
       const group = level ? 1 : dx < 0 ? 0 : 2;
       const outerFirst = side === "t" ? dx > 0 : dx < 0;
       const within = level ? dx : outerFirst ? dy : -dy;
-      return group * 1e6 + within;
+      return group * 1e6 + within + dx * 1e-3;
     }
     const level = Math.abs(dy) < 24;
     const group = level ? 1 : dy < 0 ? 0 : 2;
     const outerFirst = side === "r" ? dy > 0 : dy < 0;
     const within = level ? dy : outerFirst ? -dx : dx;
-    return group * 1e6 + within;
+    return group * 1e6 + within + dy * 1e-3;
   };
   const parentOf = new Map(arch.blocks.filter((b) => b.parent).map((b) => [b.id, b.parent!]));
   const blockById = new Map(arch.blocks.map((b) => [b.id, b]));
@@ -426,8 +458,17 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     if (outer) {
       const o = slot.get(`${outer}|${side}|${i}|${end}`);
       if (o) {
-        f = (o.idx + 1) / (o.total + 1);
-        along = blocks[outer];
+        const fo = (o.idx + 1) / (o.total + 1);
+        const R = blocks[outer];
+        // The container's lane, unless it falls off the child: several exits clamped onto the
+        // child's end would share one point, so those keep the child's own lane order instead.
+        const v = side === "t" || side === "b" ? R.x + R.w * fo : R.y + R.h * fo;
+        const lo = side === "t" || side === "b" ? r.x + 12 : r.y + 12;
+        const hi = side === "t" || side === "b" ? r.x + r.w - 12 : r.y + r.h - 12;
+        if (v >= lo && v <= hi) {
+          f = fo;
+          along = R;
+        }
       }
     }
     const clampX = (x: number) => Math.min(Math.max(x, r.x + 12), r.x + r.w - 12);
@@ -445,10 +486,84 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     return { x: r.x + r.w, y: clampY(along.y + along.h * f) };
   };
 
+  // Gutter routes. Arrows that run along the same gap into one column (or above one row) each
+  // take their own track, nearest track for the shortest detour, so their legs never cross.
+  const gutterTrack = new Map<number, number>();
+  const gutterGroups = new Map<string, { i: number; dist: number }[]>();
+  plans.forEach((p, i) => {
+    if (p.kind !== "hvh" && p.kind !== "vhv" && p.kind !== "under" && p.kind !== "over") return;
+    const base =
+      p.kind === "hvh" ? (p.bSide === "l" ? p.b.x : p.b.x + p.b.w)
+      : p.kind === "under" ? Math.max(p.a.y + p.a.h, p.b.y + p.b.h)
+      : p.kind === "over" ? Math.min(p.a.y, p.b.y)
+      : p.bSide === "t" ? p.b.y : p.b.y + p.b.h;
+    const key = `${p.kind}|${p.bSide}|${base}`;
+    const dist = p.kind === "hvh" ? Math.abs(cy(p.b) - cy(p.a)) : Math.abs(cx(p.b) - cx(p.a));
+    gutterGroups.set(key, [...(gutterGroups.get(key) ?? []), { i, dist }]);
+  });
+  for (const list of gutterGroups.values()) {
+    list.sort((x, y) => x.dist - y.dist).forEach((g, k) => gutterTrack.set(g.i, k));
+  }
+  const GUTTER_IN = 10;
+  const GUTTER_STEP = 9;
+
+  // Anchors in three passes: every arrow takes its lane, then each arrow between two blocks that
+  // face each other moves onto one straight line if it can do so without crowding another
+  // arrow on either side, then the paths are drawn. Lanes alone spread a side's arrows at fixed
+  // fractions, which bent arrows that could have run straight across to a block level with them.
+  const anchors = plans.map((p, i) => ({
+    A: anchorAt(p.e.from, p.aSide, p.a, i, "a", exitsThrough(p.e.from, p.e.to)),
+    B: anchorAt(p.e.to, p.bSide, p.b, i, "b", exitsThrough(p.e.to, p.e.from)),
+  }));
+  const onSide = new Map<string, { i: number; end: "A" | "B" }[]>();
+  const enlist = (key: string, i: number, end: "A" | "B") => onSide.set(key, [...(onSide.get(key) ?? []), { i, end }]);
+  plans.forEach((p, i) => {
+    enlist(`${p.e.from}|${p.aSide}`, i, "A");
+    enlist(`${p.e.to}|${p.bSide}`, i, "B");
+    const oa = exitsThrough(p.e.from, p.e.to);
+    if (oa) enlist(`${oa}|${p.aSide}`, i, "A");
+    const ob = exitsThrough(p.e.to, p.e.from);
+    if (ob) enlist(`${ob}|${p.bSide}`, i, "B");
+  });
+  const LANE_MIN = 18;
+  // Straightening may move an anchor along its side, but never past a neighbour: the lane order
+  // is what keeps the arrows on one side from crossing each other.
+  const laneIdx = (key: string, o: { i: number; end: "A" | "B" }) => slot.get(`${key}|${o.i}|${o.end === "A" ? "a" : "b"}`)?.idx ?? 0;
+  const clear = (keys: string[], i: number, end: "A" | "B", axis: "x" | "y", v: number) =>
+    keys.every((key) => {
+      const list = [...(onSide.get(key) ?? [])].sort((x, y) => laneIdx(key, x) - laneIdx(key, y));
+      const at = list.findIndex((o) => o.i === i && o.end === end);
+      return list.every((o, j) => {
+        if (j === at) return true;
+        const w = anchors[o.i][o.end][axis];
+        return j < at ? w <= v - LANE_MIN : w >= v + LANE_MIN;
+      });
+    });
+  plans.forEach((p, i) => {
+    if (p.kind !== "h" && p.kind !== "v") return;
+    const { A, B } = anchors[i];
+    const axis = p.kind === "h" ? "y" : "x";
+    if (A[axis] === B[axis]) return;
+    const [lo, hi] =
+      p.kind === "h"
+        ? [Math.max(p.a.y, p.b.y), Math.min(p.a.y + p.a.h, p.b.y + p.b.h)]
+        : [Math.max(p.a.x, p.b.x), Math.min(p.a.x + p.a.w, p.b.x + p.b.w)];
+    const keysA = [`${p.e.from}|${p.aSide}`, ...[exitsThrough(p.e.from, p.e.to)].filter(Boolean).map((o) => `${o}|${p.aSide}`)];
+    const keysB = [`${p.e.to}|${p.bSide}`, ...[exitsThrough(p.e.to, p.e.from)].filter(Boolean).map((o) => `${o}|${p.bSide}`)];
+    // Prefer keeping one end where it is (the other comes to meet it), then the overlap's middle.
+    const candidates = [A[axis], B[axis], (lo + hi) / 2].filter((v) => v >= lo + 12 && v <= hi - 12);
+    for (const v of candidates) {
+      if (clear(keysA, i, "A", axis, v) && clear(keysB, i, "B", axis, v)) {
+        A[axis] = v;
+        B[axis] = v;
+        break;
+      }
+    }
+  });
+
   const edges = plans.map((p, i) => {
-    const { e, a, b, kind, aSide, bSide } = p;
-    const A = anchorAt(e.from, aSide, a, i, "a", exitsThrough(e.from, e.to));
-    const B = anchorAt(e.to, bSide, b, i, "b", exitsThrough(e.to, e.from));
+    const { e, a, b, kind, bSide } = p;
+    const { A, B } = anchors[i];
     let d: string;
     if (kind === "h") {
       // Straight where the anchors line up; a shallow Z where they do not.
@@ -463,6 +578,44 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
           : `M ${A.x} ${A.y} L ${A.x} ${(A.y + B.y) / 2} L ${B.x} ${(A.y + B.y) / 2} L ${B.x} ${B.y}`;
     } else if (kind === "vh") {
       d = `M ${A.x} ${A.y} L ${A.x} ${B.y} L ${B.x} ${B.y}`;
+    } else if (kind === "hvh") {
+      const k = gutterTrack.get(i) ?? 0;
+      // The first track runs down the middle of the column gap, so a badge seated on it clears
+      // the blocks on both sides; a longer detour takes the next track out from the target, so
+      // its leg never crosses a shorter one's.
+      const gx = bSide === "l" ? b.x - COL_GAP / 2 - k * GUTTER_STEP : b.x + b.w + COL_GAP / 2 + k * GUTTER_STEP;
+      d = `M ${A.x} ${A.y} L ${gx} ${A.y} L ${gx} ${B.y} L ${B.x} ${B.y}`;
+    } else if (kind === "under" || kind === "over") {
+      // Clear of both ends and of every block the run passes in their rows.
+      const k = gutterTrack.get(i) ?? 0;
+      const x0 = Math.min(A.x, B.x);
+      const x1 = Math.max(A.x, B.x);
+      const ends = new Set([e.from, e.to, ...ancestors(e.from), ...ancestors(e.to)]);
+      const lo = Math.min(a.y, b.y);
+      const hi = Math.max(a.y + a.h, b.y + b.h);
+      const mates = Object.entries(blocks)
+        .filter(([id, r]) => !ends.has(id) && r.x < x1 && r.x + r.w > x0 && r.y < hi && r.y + r.h > lo)
+        .map(([, r]) => r);
+      const gy =
+        kind === "under"
+          ? Math.max(hi, ...mates.map((r) => r.y + r.h)) + GUTTER_IN + 6 + k * GUTTER_STEP
+          : Math.min(Math.min(A.y, B.y), ...mates.map((r) => r.y - TAB_TOP)) - GUTTER_IN - 6 - k * GUTTER_STEP;
+      d = `M ${A.x} ${A.y} L ${A.x} ${gy} L ${B.x} ${gy} L ${B.x} ${B.y}`;
+    } else if (kind === "vhv") {
+      const k = gutterTrack.get(i) ?? 0;
+      // The run sits in the gap beside the target's row: clear of every block in that row that
+      // the run passes, not just the target — a taller neighbour would otherwise be cut through.
+      const x0 = Math.min(A.x, B.x);
+      const x1 = Math.max(A.x, B.x);
+      const ends = new Set([e.from, e.to, ...ancestors(e.from), ...ancestors(e.to)]);
+      const rowMates = Object.entries(blocks)
+        .filter(([id, r]) => !ends.has(id) && r.x < x1 && r.x + r.w > x0 && r.y < b.y + b.h && r.y + r.h > b.y)
+        .map(([, r]) => r);
+      const gy =
+        bSide === "t"
+          ? Math.min(B.y, b.y, ...rowMates.map((r) => r.y)) - GUTTER_IN - k * GUTTER_STEP
+          : Math.max(b.y + b.h, ...rowMates.map((r) => r.y + r.h)) + GUTTER_IN + k * GUTTER_STEP;
+      d = `M ${A.x} ${A.y} L ${A.x} ${gy} L ${B.x} ${gy} L ${B.x} ${B.y}`;
     } else {
       d = `M ${A.x} ${A.y} L ${B.x} ${A.y} L ${B.x} ${B.y}`;
     }
@@ -479,7 +632,9 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     // jog, in the gap between the blocks — not relative to the jog itself, which would put a
     // badge stack under a horizontal jog and onto the block beneath it.
     const isZ = (kind === "h" || kind === "v") && segmentsOf(d).length === 3;
-    return { from: e.from, to: e.to, d, ...seg, horizontal: isZ ? kind === "h" : seg.horizontal };
+    // A Z's pins sit in the gap between the blocks, so its room is that gap, not the jog.
+    const gap = kind === "h" ? Math.abs(B.x - A.x) : Math.abs(B.y - A.y);
+    return { from: e.from, to: e.to, d, ...seg, horizontal: isZ ? kind === "h" : seg.horizontal, extent: isZ ? gap : seg.extent };
   });
 
   // Where the ownership bands start. Derived here rather than in each renderer because it is
@@ -527,11 +682,13 @@ export function chipSpots(
     return Array.from({ length: n }, (_, i) => ({ x: block.x + 16 + i * 24, y: block.y + block.h }));
   }
   if (!edge) return [];
+  // A run too short for its chips in a line — two blocks side by side across a column gap —
+  // stacks them across the arrow instead, so they sit in the gap rather than on the blocks.
+  const across = edge.extent !== undefined && (n - 1) * 24 + 20 > edge.extent - 12;
+  const along = edge.horizontal !== across;
   return Array.from({ length: n }, (_, i) => {
     const off = (i - (n - 1) / 2) * 24;
-    return edge.horizontal
-      ? { x: edge.midX + off, y: edge.midY }
-      : { x: edge.midX, y: edge.midY + off };
+    return along ? { x: edge.midX + off, y: edge.midY } : { x: edge.midX, y: edge.midY + off };
   });
 }
 
@@ -587,22 +744,43 @@ export function flowBadgeLegs(
  */
 export const FLOW_BADGE_W = 28;
 export const FLOW_BADGE_H = 17;
-export function flowBadgeSpots(n: number, edge: PinEdgeGeo): Rect[] {
+export function flowBadgeSpots(n: number, edge: PinEdgeGeo, blocks?: Rect[]): Rect[] {
   // Beside a vertical arrow the badges stack in a column while the arrow has room for it. A
   // short vertical arrow between two stacked blocks has only the row gap to spend, so there
   // the stack turns into rows of three, which still stop short of the next column's blocks.
   const perRow = !edge.horizontal && edge.extent !== undefined && n * 21 - 4 > edge.extent - 12 ? 3 : 1;
   const rows = Math.ceil(n / perRow);
-  return Array.from({ length: n }, (_, i) =>
-    edge.horizontal
-      ? { x: edge.midX - 14, y: edge.midY + 16 + i * 21, w: FLOW_BADGE_W, h: FLOW_BADGE_H }
-      : {
-          x: edge.midX + 12 + (i % perRow) * 30,
-          y: edge.midY - (rows * 21 - 4) / 2 + Math.floor(i / perRow) * 21,
-          w: FLOW_BADGE_W,
-          h: FLOW_BADGE_H,
-        },
+  const spots = (flip: boolean, onLine = false) =>
+    Array.from({ length: n }, (_, i) =>
+      edge.horizontal
+        ? {
+            x: onLine ? edge.midX - FLOW_BADGE_W / 2 + (i - (n - 1) / 2) * (FLOW_BADGE_W + 4) : edge.midX - 14,
+            y: onLine ? edge.midY - FLOW_BADGE_H / 2 : flip ? edge.midY - 16 - FLOW_BADGE_H - i * 21 : edge.midY + 16 + i * 21,
+            w: FLOW_BADGE_W,
+            h: FLOW_BADGE_H,
+          }
+        : {
+            x: onLine ? edge.midX - FLOW_BADGE_W / 2 : flip ? edge.midX - 12 - FLOW_BADGE_W - (i % perRow) * 30 : edge.midX + 12 + (i % perRow) * 30,
+            y: onLine ? edge.midY - (n * 21 - 4) / 2 + i * 21 : edge.midY - (rows * 21 - 4) / 2 + Math.floor(i / perRow) * 21,
+            w: FLOW_BADGE_W,
+            h: FLOW_BADGE_H,
+          },
+    );
+  // Below a horizontal arrow and right of a vertical one, unless a block is there and the other
+  // side is clear — a bend that runs along a block's border has no room on the block's side.
+  // Blocks around the arrow's midpoint (the containers it runs inside) never count.
+  const near = (blocks ?? []).filter(
+    (b) => !(edge.midX > b.x && edge.midX < b.x + b.w && edge.midY > b.y && edge.midY < b.y + b.h),
   );
+  const blocked = (rs: Rect[]) =>
+    rs.some((r) => near.some((b) => r.x < b.x + b.w - 2 && r.x + r.w > b.x + 2 && r.y < b.y + b.h - 2 && r.y + r.h > b.y + 2));
+  const usual = spots(false);
+  if (!blocked(usual)) return usual;
+  const other = spots(true);
+  if (!blocked(other)) return other;
+  // A run through a narrow gutter has no room beside it: the numbers sit on the line itself.
+  const onLine = spots(false, true);
+  return blocked(onLine) ? usual : onLine;
 }
 
 /** Split our own "M x y L x y ..." path data into its axis-aligned segments. */
@@ -724,7 +902,7 @@ export function placeTags(
     return rects;
   };
 
-  type Stack = { at: string; widths: number[]; side: "l" | "r"; xEdge: number; midX: number; midY: number };
+  type Stack = { at: string; widths: number[]; side: "l" | "r" | "c"; xEdge: number; midX: number; midY: number };
   const stacks: Stack[] = [];
   for (const g of groups) {
     const block = layout.blocks[g.at];
@@ -753,9 +931,14 @@ export function placeTags(
     const inside = Object.entries(layout.blocks).some(
       ([id, r]) => id !== e.from && id !== e.to && r.x < e.midX && e.midX < r.x + r.w && r.y < e.midY && e.midY < r.y + r.h,
     );
-    let side: "l" | "r" = "l";
+    let side: "l" | "r" | "c" = "l";
     let xEdge = e.midX - 14;
-    if (col && !inside) {
+    // A run down the gap between two columns has a block on each side and room between them
+    // for a tag on the line itself.
+    if (!col && !inside) {
+      side = "c";
+      xEdge = e.midX;
+    } else if (col && !inside) {
       const left = e.midX - (col.x - 6);
       const right = col.x + col.w + 6 - e.midX;
       if (left >= 14 && left <= right && left <= 160) xEdge = col.x - 6;
@@ -794,13 +977,13 @@ export function placeTags(
     let y = centre - stackH(total) / 2;
     for (const m of c) {
       const rects = m.stack.widths.map((w) => {
-        const r = { x: side === "l" ? xEdge - w : xEdge, y, w, h: TAG_H };
+        const r = { x: side === "l" ? xEdge - w : side === "c" ? xEdge - w / 2 : xEdge, y, w, h: TAG_H };
         y += TAG_GAP;
         return r;
       });
       const near = side === "l" ? xEdge + 1 : xEdge - 1;
       const far = side === "l" ? m.stack.midX - 5 : m.stack.midX + 5;
-      out.set(m.stack.at, { rects, leader: `M ${near} ${m.stack.midY} L ${far} ${m.stack.midY}` });
+      out.set(m.stack.at, { rects, leader: side === "c" ? "" : `M ${near} ${m.stack.midY} L ${far} ${m.stack.midY}` });
     }
   }
   return out;

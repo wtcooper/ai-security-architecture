@@ -461,8 +461,13 @@ export interface ArchEdge {
    * For diagonal connections only: leave the source horizontally then turn (`hv`, the default),
    * or vertically then turn (`vh`). Authored when the default leg would cross another block —
    * the router is simple on purpose, and the fix for a collision is this hint or a better grid.
+   * `hvh` runs along the gap beside the target's column and enters its facing side; `vhv` runs
+   * along the gap above or below the target's row. Those two let blocks share a column or a row
+   * with a neighbour the arrow would otherwise have to pass through. `under` leaves the bottom
+   * of both blocks and runs beneath them — an escalation back to a person boxed in by the flow;
+   * `over` is its mirror above them.
    */
-  route?: "hv" | "vh";
+  route?: "hv" | "vh" | "hvh" | "vhv" | "under" | "over";
   label?: string;
   note?: string;
 }

@@ -82,24 +82,27 @@ export function FlowDiagram({
     };
   }, [expanded]);
 
-  // Inline, the simple set is as tall as the drawing at the column's width, so its text stays
-  // readable; the standard drawing keeps its fixed frame. Expanded, both fill the window.
+  // Inline, the frame takes the drawing's own shape: as tall as the drawing at the column's
+  // width, so fitting it never shrinks it below that scale. A fixed 640px frame squeezed every
+  // portrait drawing to under half size. The standard drawing caps at 85vh so the page around
+  // it stays in reach; the simple set reads like a page and is not capped. Expanded, both fill
+  // the window.
   const wrapRef = useRef<HTMLDivElement>(null);
   const [inlineWidth, setInlineWidth] = useState(0);
   useEffect(() => {
     const el = wrapRef.current;
-    if (!simple || !el) return;
+    if (!el) return;
     const ro = new ResizeObserver(([e]) => setInlineWidth(Math.round(e.contentRect.width)));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [simple]);
+  }, []);
   const L = archetype.layout;
-  const inlineHeight =
-    simple && inlineWidth ? `${Math.round(L.height * Math.min(1.1, (inlineWidth * 0.94) / L.width) + 40)}px` : undefined;
+  const natural = inlineWidth ? Math.max(420, Math.round(L.height * Math.min(1.1, (inlineWidth * 0.95) / L.width) + 40)) : 0;
+  const inlineHeight = natural ? (simple ? `${natural}px` : `min(${natural}px, 85vh)`) : undefined;
 
   const buttonClass = "rounded-md border border-ink-3/40 bg-paper px-2.5 py-1 text-[11px] text-ink-2 hover:bg-mist";
   const drawing = (expandedView: boolean) =>
-    simple && !expandedView && !inlineHeight ? (
+    !expandedView && !inlineHeight ? (
       <div style={{ height: "min(640px, 70vh)" }} />
     ) : (
       <FlowDiagramRFLazy
