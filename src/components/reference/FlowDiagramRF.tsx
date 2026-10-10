@@ -752,7 +752,7 @@ export function FlowDiagramRF({
       if (!cs.length) return null;
       const lo = cols[Math.min(...cs)];
       const hi = cols[Math.max(...cs)];
-      return lo && hi ? { x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD } : null;
+      return lo && hi ? { x0: lo.x - ZONE_PAD - (lo.padL ?? 0), x1: hi.x + hi.w + ZONE_PAD + (hi.padR ?? 0) } : null;
     };
     for (const zone of archetype.zones ?? []) {
       const rs = archetype.blocks.filter((b) => b.zone === zone.id).map((b) => rects[b.id]).filter(Boolean);

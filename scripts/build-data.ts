@@ -1679,6 +1679,7 @@ function checkDiagramCollisions(
   // run the edge actually covers: between the outer edges of its two endpoints' bands. A pin
   // outside that span has drifted off its own arrow, which is the real defect.
   const ZONE_PAD = 16;
+  const BAND_GUTTER = 12;
   const cols = layout.columns ?? [];
   const spanOfZone = new Map<string, { x0: number; x1: number }>();
   for (const z of arch.zones ?? []) {
@@ -1686,7 +1687,17 @@ function checkDiagramCollisions(
     if (!cs.length || !cols.length) continue;
     const lo = cols[Math.min(...cs)];
     const hi = cols[Math.max(...cs)];
-    if (lo && hi) spanOfZone.set(z.id, { x0: lo.x - ZONE_PAD, x1: hi.x + hi.w + ZONE_PAD });
+    if (lo && hi) spanOfZone.set(z.id, { x0: lo.x - ZONE_PAD - (lo.padL ?? 0), x1: hi.x + hi.w + ZONE_PAD + (hi.padR ?? 0) });
+  }
+  // Every gutter between two neighbouring bands is the same width. Room a seam needs (for a
+  // gutter route or a hop's pins) goes inside a band as padding, never into the gutter, where an
+  // odd-width gap reads as a mistake.
+  const ownership = (arch.zones ?? []).filter((z) => z.owner !== "governance" && spanOfZone.has(z.id));
+  const spans = ownership.map((z) => ({ owner: z.owner, ...spanOfZone.get(z.id)! })).sort((p, q) => p.x0 - q.x0);
+  for (let i = 1; i < spans.length; i++) {
+    const gutter = spans[i].x0 - spans[i - 1].x1;
+    if (Math.abs(gutter - BAND_GUTTER) > 0.5)
+      fail(`${where}: the gutter between the ${spans[i - 1].owner} and ${spans[i].owner} bands is ${Math.round(gutter)}px, not ${BAND_GUTTER}px — every gutter between bands is the same width`);
   }
   if (spanOfZone.size) {
     const zoneOfBlock = new Map(arch.blocks.map((b) => [b.id, b.zone ?? ""]));

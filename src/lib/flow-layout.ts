@@ -80,10 +80,11 @@ export const ZONE_HEAD = 30;
 /** Clear space between two bands: the column gap less the pad each band adds inside it. */
 const BAND_GAP = COL_GAP - ZONE_PAD * 2;
 /**
- * Extra width for a gap between two bands that carries something: an arrow's gutter leg, or the
- * chips and tags of an arrow crossing straight from one band to the next. At the plain gap the
- * leg ran a few pixels from both band borders and read as a third border, and a chip in the gap
- * sat across both.
+ * Extra room beside a seam between two bands that carries something: an arrow's gutter leg, or
+ * the chips and tags of an arrow crossing straight from one band to the next. At the plain gap
+ * the leg ran a few pixels from both band borders and read as a third border, and a chip in the
+ * gap sat across both. The room goes inside one band, as padding on that side — the gutter
+ * between bands stays BAND_GAP everywhere, so the bands still read as one evenly spaced set.
  */
 const BAND_GAP_WIDE = 32;
 /** Items pack two per row inside a standard block. */
@@ -510,11 +511,22 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   const usedCols = [...bandOfCol.keys()].sort((x, y) => x - y);
   const pinned = new Set([...(arch.pins?.mitigations ?? []), ...(arch.pins?.risks ?? [])].map((p) => p.at));
   const extraAfter: number[] = [];
-  const widen = (lo: number, hi: number, anyBand = false, extra = BAND_GAP_WIDE) => {
+  // At a seam, which band's padding takes the extra room: the one the pins or the leg sit in.
+  const seamOwner: ("l" | "r")[] = [];
+  const widen = (lo: number, hi: number, anyBand = false, extra = BAND_GAP_WIDE, owner: "l" | "r" = "r") => {
     // The gap between two adjacent used columns lo < hi — a band seam, unless anyBand.
     const i = usedCols.indexOf(lo);
     if (i < 0 || usedCols[i + 1] !== hi || (!anyBand && bandOfCol.get(lo) === bandOfCol.get(hi))) return;
-    extraAfter[lo] = Math.max(extraAfter[lo] ?? 0, extra);
+    if (extra <= (extraAfter[lo] ?? 0)) return;
+    extraAfter[lo] = extra;
+    seamOwner[lo] = owner;
+  };
+  const isSeam = (lo: number, hi: number) => bandOfCol.get(lo) !== bandOfCol.get(hi);
+  // A hop's pins sit on its target's side of the seam, unless the target is a figure, whose
+  // narrow column has no room beside it.
+  const pinSide = (a: ArchBlock, b: ArchBlock): "l" | "r" => {
+    const toward = b.col > a.col ? "r" : "l";
+    return isFigure(b) ? (toward === "r" ? "l" : "r") : toward;
   };
   const rowsMeet = (a: ArchBlock, b: ArchBlock) => a.row <= b.row + (b.rowSpan ?? 1) - 1 && b.row <= a.row + (a.rowSpan ?? 1) - 1;
   for (const e of arch.edges) {
@@ -526,16 +538,25 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       const side = a.col < b.col ? -1 : 1;
       const at = usedCols.indexOf(b.col);
       const near = usedCols[at + side];
-      if (near !== undefined) widen(Math.min(near, b.col), Math.max(near, b.col));
+      // The leg runs in the target band's padding.
+      if (near !== undefined) widen(Math.min(near, b.col), Math.max(near, b.col), false, BAND_GAP_WIDE, b.col > near ? "r" : "l");
     }
-    if (pinned.has(`${e.from}->${e.to}`) || pinned.has(`${e.to}->${e.from}`)) widen(Math.min(a.col, b.col), Math.max(a.col, b.col));
+    if (pinned.has(`${e.from}->${e.to}`) || pinned.has(`${e.to}->${e.from}`))
+      widen(Math.min(a.col, b.col), Math.max(a.col, b.col), false, BAND_GAP_WIDE, pinSide(a, b));
     // A straight hop across one column gap with several risk tags or chips: at the plain gap the
     // tags tower one per row, the top one far above its arrow, and three chips stack across the
     // line; widened, they sit in one row. A band seam keeps its own pad either side.
-    const hop = hopExtra(pinsOn(`${e.from}->${e.to}`) + pinsOn(`${e.to}->${e.from}`), chipsAt(`${e.from}->${e.to}`) + chipsAt(`${e.to}->${e.from}`), e.bidir);
-    if (!e.route && rowsMeet(a, b) && hop) {
-      const seam = bandOfCol.get(Math.min(a.col, b.col)) !== bandOfCol.get(Math.max(a.col, b.col));
-      widen(Math.min(a.col, b.col), Math.max(a.col, b.col), true, hop + (seam ? ZONE_PAD * 2 : 0));
+    const nTags = pinsOn(`${e.from}->${e.to}`) + pinsOn(`${e.to}->${e.from}`);
+    const nChips = chipsAt(`${e.from}->${e.to}`) + chipsAt(`${e.to}->${e.from}`);
+    const [lo, hi] = [Math.min(a.col, b.col), Math.max(a.col, b.col)];
+    if (!e.route && rowsMeet(a, b) && isSeam(lo, hi)) {
+      // Across a seam the pins live in one band's padding, clear of the border by half a chip
+      // and of the arrowhead by as much: that padding holds a row of tags or of chips.
+      const row = Math.max(nTags >= 2 ? nTags * TAG_W_EST + (nTags - 1) * TAG_X_GAP : 0, nChips >= 2 ? (nChips - 1) * 24 + 20 : 0);
+      if (row) widen(lo, hi, false, Math.max(BAND_GAP_WIDE, row + 12), pinSide(a, b));
+    } else {
+      const hop = hopExtra(nTags, nChips, e.bidir);
+      if (!e.route && rowsMeet(a, b) && hop) widen(lo, hi, true, hop);
     }
   }
   const top = gridLayout(roots, extraAfter);
@@ -647,7 +668,12 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   const height = bottom + MARGIN_BOTTOM;
   // Column extents let the renderer derive band rects from the grid rather than from member
   // rects, so a band holding only a narrow actor no longer leaves a gutter beside it.
-  const columns = top.colX.map((x, i) => ({ x: MARGIN_X + x, w: top.colW[i] }));
+  const columns = top.colX.map((x, i) => {
+    const prev = usedCols[usedCols.indexOf(i) - 1];
+    const padL = prev !== undefined && isSeam(prev, i) && seamOwner[prev] === "r" ? extraAfter[prev] : undefined;
+    const padR = isSeam(i, usedCols[usedCols.indexOf(i) + 1] ?? -1) && seamOwner[i] === "l" ? extraAfter[i] : undefined;
+    return { x: MARGIN_X + x, w: top.colW[i], ...(padL ? { padL } : {}), ...(padR ? { padR } : {}) };
+  });
 
   // --- Edges ---------------------------------------------------------------------
   // Every arrow gets its own anchor point. Without this, edges attaching to the same side of
@@ -1017,10 +1043,16 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
   // Where two bands meet. A chip centred within half a chip of either border would sit across
   // it, so pins prefer the rest of their arrow (pinSegment), and tags keep off the seam.
   const bandSeams: [number, number][] = [];
+  // The widened padding beside a seam, where a hop's pins and a gutter leg sit.
+  const seamRooms: [number, number][] = [];
   for (let i = 0; i + 1 < usedCols.length; i++) {
     const [lo, hi] = [usedCols[i], usedCols[i + 1]];
-    if (bandOfCol.get(lo) === bandOfCol.get(hi)) continue;
-    bandSeams.push([columns[lo].x + columns[lo].w + ZONE_PAD, columns[hi].x - ZONE_PAD]);
+    if (!isSeam(lo, hi)) continue;
+    const l = columns[lo].x + columns[lo].w + ZONE_PAD + (columns[lo].padR ?? 0);
+    const r = columns[hi].x - ZONE_PAD - (columns[hi].padL ?? 0);
+    bandSeams.push([l, r]);
+    if (columns[hi].padL) seamRooms.push([r, columns[hi].x]);
+    if (columns[lo].padR) seamRooms.push([columns[lo].x + columns[lo].w, l]);
   }
   const bandGaps = bandSeams.map(([l, r]) => [l - 12, r + 12] as [number, number]);
 
@@ -1053,7 +1085,11 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
       const nb = bSide === "l" ? columns.slice(0, Math.max(ci, 0)).findLast((c) => c.w > 0) : columns.slice(ci + 1).find((c) => c.w > 0);
       const gap = col && nb ? (bSide === "l" ? col.x - (nb.x + nb.w) : nb.x - (col.x + col.w)) : COL_GAP;
       const edgeX = col ? (bSide === "l" ? col.x : col.x + col.w) : bSide === "l" ? b.x : b.x + b.w;
-      const gx = bSide === "l" ? edgeX - gap / 2 - k * GUTTER_STEP : edgeX + gap / 2 + k * GUTTER_STEP;
+      // Beside a seam the leg runs down the middle of the target band's widened padding, inside
+      // the band, rather than in the gutter between two band borders.
+      const pad = col ? (bSide === "l" ? col.padL : col.padR) : undefined;
+      const half = pad ? (ZONE_PAD + pad) / 2 : gap / 2;
+      const gx = bSide === "l" ? edgeX - half - k * GUTTER_STEP : edgeX + half + k * GUTTER_STEP;
       d = `M ${A.x} ${A.y} L ${gx} ${A.y} L ${gx} ${B.y} L ${B.x} ${B.y}`;
     } else if (kind === "under" || kind === "over") {
       // Clear of both ends and of every block the run passes in their rows.
@@ -1104,7 +1140,7 @@ export function layoutArchetype(arch: Omit<Archetype, "layout">): ArchLayout {
     const containers = [...new Set([...fromA, ...toA])]
       .filter((id) => !(fromA.includes(id) && toA.includes(id)))
       .map((id) => blocks[id]);
-    const { lo, hi, ...seg } = pinSegment(d, containers, bandGaps);
+    const { lo, hi, ...seg } = pinSegment(d, containers, bandGaps, seamRooms);
     pieceOf.push({ lo, hi });
     // A shallow Z between two facing blocks pins on its middle jog, which runs across the
     // edge's direction. Pins are laid out relative to the edge's direction there — beside the
@@ -1367,6 +1403,7 @@ function pinSegment(
   d: string,
   containers: Rect[],
   bandGaps: [number, number][] = [],
+  seamRooms: [number, number][] = [],
 ): { midX: number; midY: number; horizontal: boolean; extent: number; lo: number; hi: number } {
   type Piece = { horizontal: boolean; at: number; lo: number; hi: number };
   const pieces: Piece[] = [];
@@ -1410,9 +1447,14 @@ function pinSegment(
   const pool = pieces.length ? pieces : raw;
   const tidy = clean.length ? longest(clean) : undefined;
   const best = tidy && tidy.hi - tidy.lo >= 60 ? tidy : longest(pool);
-  // An arrow that only hops a seam keeps its pins in the middle of the (widened) gap, the one
-  // spot clear of both band borders — not the middle of the whole run, which a narrow figure
-  // column pulls onto the seam.
+  // An arrow that only hops a seam keeps its pins in the room widened for them beside it, clear
+  // of the band border and of the arrowhead — or, where the seam was not widened, in the middle
+  // of the gap — not the middle of the whole run, which a narrow figure column pulls onto the seam.
+  const room = best !== tidy && best.horizontal ? seamRooms.find(([x0, x1]) => x0 >= best.lo - 0.5 && x1 <= best.hi + 0.5) : undefined;
+  if (room) {
+    const [x0, x1] = room;
+    return { midX: (x0 + x1) / 2, midY: best.at, horizontal: true, extent: x1 - x0 - 24, lo: best.lo, hi: best.hi };
+  }
   const hop = best !== tidy && best.horizontal ? bandGaps.find(([g0, g1]) => g0 >= best.lo && g1 <= best.hi) : undefined;
   if (hop) {
     const [g0, g1] = hop;

@@ -21,7 +21,7 @@ Run a review in three passes:
 | A3 | No chip, risk tag or step number overlaps another (step numbers within one walk). |
 | A4 | No chip or risk tag sits on, or within 2px of, the line of an arrow other than its own. |
 | A5 | No two arrows share a line, and no arrow's start, end or bend lands on another arrow. |
-| A6 | Bands never overlap; each band is one contiguous run of columns. |
+| A6 | Bands never overlap; each band is one contiguous run of columns; every gutter between two neighbouring bands is the same 12px (room a seam needs goes inside a band as padding). |
 | A7 | Every pin sits within the span of the bands its arrow connects. |
 
 ## B. Audit-reported (`npm run layout:audit`)
@@ -106,8 +106,10 @@ external sources sit on the left, because that is where its material comes from)
   tab with no room beside it takes the arrow.
 - Risk tags on a vertical arrow sit beside it, clear of its chips; a block's tag row starts past
   any arrow leaving its top.
-- Band seams widen (+32px) for a gutter leg or a pinned straight hop; a straight hop with two or
-  more tags widens its gap so they pair up.
+- A seam that carries a gutter leg or a pinned straight hop gets extra room as padding inside one
+  band (the target's, or the other when the target is a figure); the gutter between bands never
+  changes. The leg, or the hop's pins, sit in the middle of that padding. A straight hop with two
+  or more tags or chips widens its gap so they sit in one row.
 - Two arrows running side by side stagger their pins along their runs.
 - A container whose children carry chips keeps a chip row of room beneath them.
 - A container spanning rows levels its children with the rows outside it — every inner row
@@ -115,7 +117,7 @@ external sources sit on the left, because that is where its material comes from)
 - Arrows to a figure meet its icon; a lone arrow into a top border takes the middle of the free
   border on the side facing its other end; an arrow into a border with chips lands past them.
 - A straight hop widens its gap for two or more tags or three or more chips (inside frames too);
-  a hop across a seam keeps its pins in the middle of the gap.
+  a hop across a seam keeps its pins in the room widened for them inside the band.
 - Item rows grow a line for a label that needs a third; a stacked block spreads its items down
   its height; a figure-only column is as wide as a figure and its name.
 - Tags on a horizontal arrow flip to the other side when nearer another line; a block's tag

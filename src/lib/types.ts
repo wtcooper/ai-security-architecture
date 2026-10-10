@@ -563,7 +563,13 @@ export interface ArchLayout {
    * these rather than from member blocks, so a band holding only a narrow actor figure spans
    * its column instead of leaving a gutter beside it. Empty columns have zero width.
    */
-  columns: { x: number; w: number }[];
+  columns: {
+    x: number;
+    w: number;
+    /** Extra padding the column's band takes on that side, beside a seam that needs room. */
+    padL?: number;
+    padR?: number;
+  }[];
   /** Top of the ownership bands — encloses first-row risk-tag stacks, not just blocks. */
   bandTop: number;
   /** Bottom of the ownership bands — clears the chips on the lowest blocks, not just blocks. */

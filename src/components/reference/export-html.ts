@@ -114,8 +114,8 @@ export function buildViewerModel(archetype: Archetype) {
     const cs = archetype.blocks.filter((b) => b.zone === zone.id && !b.parent).map((b) => b.col);
     const lo = cols[Math.min(...cs)];
     const hi = cols[Math.max(...cs)];
-    const x0 = gov ? gov.x : (lo ? lo.x - ZONE_PAD : Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
-    const x1 = gov ? gov.x + gov.w : (hi ? hi.x + hi.w + ZONE_PAD : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
+    const x0 = gov ? gov.x : (lo ? lo.x - ZONE_PAD - (lo.padL ?? 0) : Math.min(...rs.map((r) => r.x)) - ZONE_PAD);
+    const x1 = gov ? gov.x + gov.w : (hi ? hi.x + hi.w + ZONE_PAD + (hi.padR ?? 0) : Math.max(...rs.map((r) => r.x + r.w)) + ZONE_PAD);
     const y0 = gov ? gov.y : bandTop;
     const y1 = gov ? gov.y + gov.h : bandBottom;
     return [{ title: zone.title, owner: zone.owner, note: zone.note, x: x0, y: y0, w: x1 - x0, h: y1 - y0 }];
