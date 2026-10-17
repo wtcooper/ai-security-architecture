@@ -32,7 +32,7 @@ import { capabilityName, mitigationById, riskById, riskCode, status as statusFil
 import { chipSpots, flowBadgeSpots, itemCells, labelLines, placeTags, tabStyle, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
-import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth, type ChipPaint } from "./flow-style";
+import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth, ZONE_TINT, type ChipPaint } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 import { Badge, polyline, SIMPLE, SimpleBlockNode, SimpleZoneNode, type SimpleBadge } from "./flow-simple";
 
@@ -66,6 +66,8 @@ function chipTitle(n: number, id: string): string {
   return `${n} · ${capabilityName(id)}`;
 }
 
+export type PinMode = "all" | "risks" | "capabilities";
+
 type BlockNodeData = {
   block: ArchBlock;
   w: number;
@@ -82,6 +84,8 @@ type BlockNodeData = {
   pinnedCaps?: string[];
   /** The selected mitigation or risk, so a call-out's chip numbers fade like the pins do. */
   highlight?: Highlight | null;
+  /** Risks view: chip rows keep their space but are not drawn. */
+  hideChips?: boolean;
   /** The incident step number touching this block, and the phase colouring it. */
   mark?: number;
   markStyle?: { stroke: string; fill: string };
@@ -259,7 +263,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             <FlowIcon name={block.icon} x={14} y={14} size={26} />
           </svg>
           {(block.mitigations?.length ?? 0) + (data.pinnedCaps?.length ?? 0) > 0 && (
-            <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center" }}>
+            <span style={{ display: "flex", gap: 3, flexWrap: "wrap", justifyContent: "center", visibility: data.hideChips ? "hidden" : undefined }}>
               {[...new Set([...(block.mitigations ?? []), ...(data.pinnedCaps ?? [])])]
                 .sort((x, y) => (data.capNumber?.get(x) ?? 0) - (data.capNumber?.get(y) ?? 0))
                 .map((id) => (
@@ -316,7 +320,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
               </svg>
               <span>{item.label}</span>
               {(item.mitigations?.length ?? 0) > 0 && (
-                <span style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                <span style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center", visibility: data.hideChips ? "hidden" : undefined }}>
                   {item.mitigations!.map((id) => (
                     <span
                       key={id}
@@ -343,15 +347,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
   );
 }
 
-/** Spike grammar: an ownership zone drawn as a labelled background band. */
-const ZONE_TINT: Record<string, { fill: string; line: string; ink: string }> = {
-  user: { fill: "#eef3f7", line: "#8ba6bd", ink: "#3d5a72" },
-  endpoint: { fill: "#e7f2ef", line: "#7fb3a4", ink: "#2e7d5b" },
-  cloud: { fill: "#eaf0fb", line: "#94aede", ink: "#3667c4" },
-  vendor: { fill: "#fff4e6", line: "#dfb277", ink: "#b0710c" },
-  external: { fill: "#f3eef9", line: "#a894ce", ink: "#6f4bb5" },
-  governance: { fill: "#eef1f5", line: "#9aa3b0", ink: "#4b5b70" },
-};
+/** An ownership zone drawn as a labelled background band; ZONE_TINT says who runs it. */
 
 function ZoneNode({
   data,
@@ -363,7 +359,7 @@ function ZoneNode({
         width: data.w,
         height: data.h,
         background: tint.fill,
-        border: `1.5px solid ${tint.line}`,
+        border: `1.5px ${tint.dotted ? "dotted" : "solid"} ${tint.line}`,
         borderRadius: 14,
         position: "relative",
         pointerEvents: "none",
@@ -610,6 +606,7 @@ export function FlowDiagramRF({
   chipPaint = null,
   simple = false,
   showRisks = true,
+  pins = "all",
   onPickMitigation,
   className,
   height = "min(640px, 70vh)",
@@ -628,6 +625,11 @@ export function FlowDiagramRF({
   simple?: boolean;
   /** Risk tags; the simple set hides them until asked. */
   showRisks?: boolean;
+  /**
+   * Which pins show at rest: risk codes, capability chips, or both. Every pin stays in the
+   * data; the drawing shows one kind at a time so neither crowds the other out.
+   */
+  pins?: PinMode;
   /** A control badge clicked (simple set only). */
   onPickMitigation?: (id: string) => void;
   className?: string;
@@ -927,6 +929,7 @@ export function FlowDiagramRF({
             data: {
               ...n.data,
               dim,
+              hideChips: pins === "risks",
               highlight,
               mark,
               markStyle: mark !== undefined && overlay ? OVERLAY_STYLE[overlay.phase] : undefined,
@@ -937,11 +940,12 @@ export function FlowDiagramRF({
           const wants = n.type === "chip" ? "mitigation" : "risk";
           const faint =
             highlight !== null && !(highlight.kind === wants && n.id.endsWith(`:${highlight.id}`));
-          return { ...n, data: { ...n.data, dim: inScenario, faint } };
+          const hidden = n.type === "chip" ? pins === "risks" : pins === "capabilities";
+          return { ...n, hidden, data: { ...n.data, dim: inScenario, faint } };
         }
         return n;
       }),
-    [nodes, walkActive, walkBlocks, highlight, overlay],
+    [nodes, walkActive, walkBlocks, highlight, overlay, pins],
   );
 
   const onNodesChange = useCallback(
@@ -949,6 +953,8 @@ export function FlowDiagramRF({
     [],
   );
 
+  // The edge builder's loops name their own `pins`; read the prop under another name there.
+  const pinMode = pins;
   const edges = useMemo(() => {
     const { layout } = archetype;
     const rects = layout.blocks;
@@ -964,6 +970,7 @@ export function FlowDiagramRF({
       chipGroups.get(pin.at)!.push(pin);
     }
     for (const [at, pins] of chipGroups) {
+      if (pinMode === "risks") break;
       const geo = edgeGeo.get(at);
       if (!geo) continue;
       const spots = simple ? simpleEdgeSpots(pins.length, geo) : chipSpots(pins.length, undefined, geo);
@@ -999,6 +1006,7 @@ export function FlowDiagramRF({
     );
     for (const [at, pins] of tagGroups) {
       if (simple && !showRisks) break;
+      if (pinMode === "capabilities") break;
       if (!at.includes("->")) continue;
       const geo = edgeGeo.get(at);
       if (!geo) continue;
@@ -1102,7 +1110,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, chipPaint, simple, showRisks, onPickMitigation]);
+  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, chipPaint, simple, showRisks, pinMode, onPickMitigation]);
 
   return (
     <div

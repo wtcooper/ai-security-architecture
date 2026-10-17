@@ -24,9 +24,13 @@ const COL = 168;
 const ROW_H = 44;
 const PAD_X = 16;
 
+/**
+ * Greys, as on the drawing: a message inside the system is dark, one carrying external content
+ * or actions is lighter. Dashes keep their sequence-diagram meaning here — the return leg.
+ */
 const PATH_COLOR: Record<string, string> = {
-  primary: "var(--mitigated)",
-  external: "var(--band-data-rail)",
+  primary: "var(--ink)",
+  external: "var(--ink-3)",
 };
 
 export function FlowSequence({
@@ -204,12 +208,12 @@ export function FlowSequence({
                     {label}
                   </text>
                 )}
-                <circle cx={x1} cy={y} r={8.5} fill="var(--paper)" stroke="var(--introduced)" strokeWidth={1.3} />
+                <circle cx={x1} cy={y} r={8.5} fill="var(--ink)" />
                 <text
                   x={x1}
                   y={y + 3.3}
                   textAnchor="middle"
-                  fill="var(--introduced)"
+                  fill="#fff"
                   style={{ font: "700 9.5px var(--font-mono-id), monospace" }}
                 >
                   {step + 1}
@@ -220,7 +224,7 @@ export function FlowSequence({
         </svg>
       </div>
       <p className="mt-1.5 px-1 text-[10.5px] text-ink-3">
-        Numbers sit on the lifeline a message leaves from; a dashed arrow is the return leg of a round trip.
+        Numbers sit on the lifeline a message leaves from. A lighter arrow carries external content or actions; a dashed one is the return leg of a round trip.
       </p>
 
       {/* The prose of the walk — what each step actually is. */}

@@ -87,6 +87,8 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
               walk={activeWalk}
               highlight={highlight}
               onHighlight={onHighlight}
+              // One kind of pin at a time: risk codes while reading the risk, chips on the Capabilities tab.
+              pins={tab === "mitigations" ? "capabilities" : "risks"}
               className="w-full"
             />
           </div>

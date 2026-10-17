@@ -92,10 +92,10 @@ export function MitigationList({
               onClick={() => onHighlight(active ? null : { kind: "mitigation", id })}
               aria-pressed={active}
               className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors ${
-                active ? "border-introduced bg-introduced-soft" : "border-transparent hover:bg-mist"
+                active ? "border-chip bg-chip-soft" : "border-transparent hover:bg-mist"
               }`}
             >
-              <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-introduced bg-introduced-soft text-[10.5px] font-bold text-introduced">
+              <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-chip bg-chip-soft text-[10.5px] font-bold text-chip">
                 {i + 1}
               </span>
               {statusFile[id]?.displayName ? (

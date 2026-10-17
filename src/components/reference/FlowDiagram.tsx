@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Archetype, Phase, Scenario } from "@/lib/types";
 import { downloadArchetypeHtml } from "./export-html";
 import type { ChipPaint } from "./flow-style";
+import type { PinMode } from "./FlowDiagramRF";
 
 const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
   ssr: false,
@@ -47,6 +48,7 @@ export function FlowDiagram({
   chipPaint = null,
   simple = false,
   showRisks = true,
+  pins = "all",
   onPickMitigation,
   className,
 }: {
@@ -61,6 +63,8 @@ export function FlowDiagram({
   /** The simple component set: text cards, C# badges, step dots (flow-simple.tsx). */
   simple?: boolean;
   showRisks?: boolean;
+  /** Which pins show at rest: risk codes, capability chips, or both. */
+  pins?: PinMode;
   onPickMitigation?: (id: string) => void;
   className?: string;
 }) {
@@ -115,6 +119,7 @@ export function FlowDiagram({
         chipPaint={chipPaint}
         simple={simple}
         showRisks={showRisks}
+        pins={pins}
         onPickMitigation={onPickMitigation}
         className={className}
         height={expandedView ? "100%" : inlineHeight}
@@ -124,7 +129,8 @@ export function FlowDiagram({
 
   return (
     <div ref={wrapRef} className="relative w-full">
-      <div className="absolute right-2 top-2 z-10 flex gap-1.5">
+      {/* A bar of its own above the canvas: floating over it, the buttons covered the rightmost zone's label. */}
+      <div className="flex justify-end gap-1.5 px-2 pt-2">
         {!overlay && !simple && (
           <button
             type="button"

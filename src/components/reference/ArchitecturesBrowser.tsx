@@ -61,9 +61,11 @@ export function ArchitecturesBrowser() {
     setWalkIndex(i);
     setHighlight(null);
   };
+  // Picking a capability or risk ends a walk; clearing the highlight must not, or opening the
+  // flows tab (which clears it) would undo the walkthrough it has just selected.
   const onHighlight = (h: Highlight | null) => {
     setHighlight(h);
-    setWalkIndex(null);
+    if (h) setWalkIndex(null);
   };
 
   const summary = typeof archetype.summary[0] === "string" ? archetype.summary[0] : "";

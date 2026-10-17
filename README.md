@@ -305,9 +305,16 @@ code), **Model** (the model and its serving infrastructure, one green), **Data**
 rest — records, memory files, indexes, registries), and a quiet grey for the security and
 governance machinery CoSAI has no component for — gateways, identity edges, sandboxes, the
 governance plane itself. That grey is a finding about the taxonomy, not a gap in the drawings:
-it marks the 2026 product categories the component list has not caught up to. Border style
-carries who runs the block — solid for services you operate, dashed grey for a provider you
-cannot see into, dashed amber for the outside world.
+it marks the 2026 product categories the component list has not caught up to. The **zones**
+say who runs each block: neutral grey bands for what you operate, a darker band with a dotted
+edge for a vendor's platform and the outside world. Every block border is solid; only a
+containment frame is dashed. Paths are dark grey and differ by dash alone (solid data path,
+dashed external content & actions), and capability chips are violet — so each colour on the
+drawing means one thing.
+
+The drawing shows **one kind of pin at a time**: risk codes on Overview and Risks, numbered
+capability chips on Capabilities, step numbers on Sequence flows. Every pin stays authored and
+placed; only what is visible changes.
 
 The discipline matches the rest of the repository — architectures are authored as graphs, never
 as pictures:

@@ -253,6 +253,7 @@ export function IncidentExplorer() {
             <FlowDiagram
               archetype={archetype}
               overlay={stepOverlay(archetype, step)}
+              pins="risks"
               className="h-full w-full max-h-[calc(100vh-15rem)]"
             />
           )}

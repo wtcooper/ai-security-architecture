@@ -1,9 +1,9 @@
-import { CHIP, PATH_STYLE, REF_LAYERS, TAG } from "./flow-style";
+import { CHIP, PATH_STYLE, REF_LAYERS, TAG, ZONE_TINT } from "./flow-style";
 
 /**
  * The reading key for a flow-style architecture drawing, on one line: the two path styles,
- * what a numbered chip and a risk code are, and the three tab colours. Shared by the
- * architecture page and the incident replay's architecture view.
+ * what a numbered chip and a risk code are, the three tab colours, and what a dotted zone
+ * means. Shared by the architecture page and the incident replay's architecture view.
  */
 export function FlowLegend({ className = "" }: { className?: string }) {
   return (
@@ -41,6 +41,14 @@ export function FlowLegend({ className = "" }: { className?: string }) {
           <span key={l.label} title={`${l.label} layer`} className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: l.color }} />
         ))}
         {REF_LAYERS.map((l) => l.label).join(" · ")}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className="inline-block h-3 w-5 rounded-[3px]"
+          style={{ background: ZONE_TINT.vendor.fill, border: `1.5px dotted ${ZONE_TINT.vendor.line}` }}
+        />
+        Run by a vendor or outside
       </span>
       <span className="text-ink-3">Hover anything for detail</span>
     </div>

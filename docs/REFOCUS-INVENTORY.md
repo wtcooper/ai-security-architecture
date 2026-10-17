@@ -36,7 +36,11 @@ buy or both), in four layers: foundations for all AI → surface baseline → us
 | Incidents: 10 replayed on the map, sourced | Keep | |
 | Architecture picker (searchable, grouped by surface, surface pills) | Keep | |
 | Architecture drawing (blocks, flows, numbered capability chips, R-coded risk tags) | Keep | Learn shows where risk enters; chips stay as the hand-off to Enable. |
-| Drawing legend (two line styles, tab colour = layer, chip status colours) | Simplify | One line: two path styles, capability chip, risk code, three layer swatches. Chips no longer change colour with status. Restyling the drawing itself (zone tints, border styles) is a follow-up. |
+| Drawing legend (two line styles, tab colour = layer, chip status colours) | Simplify | One line: two path styles, capability chip, risk code, three layer swatches, dotted zone. Chips no longer change colour with status. |
+| Drawing styling: zone tints, border dash styles, path colours | Simplify | Zones, layout, components, flows and pins unchanged. Zones neutral (dotted edge = vendor or outside); block borders solid except containment; paths dark grey, solid vs dashed; chips violet. Export HTML matches. |
+| Risk codes and capability chips both shown at rest | Simplify | One kind at a time: risk codes on Overview, Risks and incident replays; chips on Capabilities; step numbers on Sequence flows. |
+| Export / Expand buttons floating over the canvas | Simplify | Moved to a bar above it; they covered the rightmost zone label. |
+| Sequence flows tab | Keep | Fixed: opening the tab now numbers the walkthrough (clearing the highlight used to clear the walk too). |
 | Pan/zoom, Expand, hover notes on blocks | Keep | |
 | Export HTML of a drawing | Keep | |
 | Sequence flows: walk list, numbered steps on drawing, sequence diagram | Keep | The core learning device; stays a tab on the architecture page. |
@@ -103,6 +107,5 @@ buy or both), in four layers: foundations for all AI → surface baseline → us
 
 ## Follow-ups not in the first pass
 
-- Restyle the drawing itself: zone tints and border styles still carry meaning only the hover explains.
 - Restore any disabled architecture the Enable picker should offer (RAG assistant, AI gateway, shadow AI are the likeliest).
 - Onboard products for the architectures that show "Pattern only" on Enable.
