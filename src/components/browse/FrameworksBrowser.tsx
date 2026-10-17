@@ -8,7 +8,7 @@ import { RiskMap } from "@/components/map/RiskMap";
 import { PageHeader } from "@/components/Panel";
 import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { FilterPill } from "@/components/browse/RisksBrowser";
-import { categoryById, controlById, componentTitle, org, overlayFor } from "@/lib/data";
+import { controlById, componentTitle, overlayFor } from "@/lib/data";
 import {
   frameworkView,
   isVisibleFramework,
@@ -58,28 +58,19 @@ export function FrameworksBrowser() {
       <PageHeader
         eyebrow="Cross-reference"
         title="Frameworks"
-        lead="CoSAI remains the core taxonomy. Explore its published cross-references alongside repository-authored mappings for technology categories, defensive functions and cybersecurity outcomes. NIST AI RMF and NIST CSF are complementary views of the CoSAI controls."
+        lead="CoSAI remains the core taxonomy. Explore its published cross-references alongside repository-authored mappings onto the OWASP lists and NIST CSF. NIST AI RMF and NIST CSF are complementary views of the CoSAI controls."
       >
-        {(["external", "org"] as const).map((group) => {
-          const items = visibleFrameworks.filter((f) => Boolean(f.org) === (group === "org"));
-          if (!items.length) return null;
-          return (
-            <div key={group} className="mt-5 flex flex-wrap items-center gap-1.5">
-              <span className="eyebrow mr-1.5 w-full sm:w-auto">
-                {group === "org" ? (org.example ? "Example organisation" : org.name) : "External"}
-              </span>
-              {items.map((f) => {
-                const v = frameworkView(f.id)!;
-                return (
-                  <FilterPill key={f.id} active={f.id === frameworkId} onClick={() => select(f.id)}>
-                    {f.name}
-                    <span className="ml-1.5 opacity-60">{v.entries.length || "—"}</span>
-                  </FilterPill>
-                );
-              })}
-            </div>
-          );
-        })}
+        <div className="mt-5 flex flex-wrap items-center gap-1.5">
+          {visibleFrameworks.map((f) => {
+            const v = frameworkView(f.id)!;
+            return (
+              <FilterPill key={f.id} active={f.id === frameworkId} onClick={() => select(f.id)}>
+                {f.name}
+                <span className="ml-1.5 opacity-60">{v.entries.length || "—"}</span>
+              </FilterPill>
+            );
+          })}
+        </div>
       </PageHeader>
 
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-6 py-8 lg:flex-row">
@@ -96,18 +87,7 @@ export function FrameworksBrowser() {
               {view.framework.version && (
                 <span className="ident">version {view.framework.version}</span>
               )}
-              {view.framework.org ? (
-                <span
-                  className="rounded-full bg-mist px-2 py-[2px] text-[11px] font-semibold text-ink-2"
-                  title={
-                    org.example
-                      ? "Example content shipped with the repository. Copy data/org/example to data/org/local and replace it with your own catalogue."
-                      : `Your organisation's catalogue, from data/org/local — technology mappings are authored by ${org.name}; MITRE and CoSAI associations are derived.`
-                  }
-                >
-                  {org.example ? "example data — replace data/org/example" : "your organisation"}
-                </span>
-              ) : view.framework.authored ? (
+              {view.framework.authored ? (
                 <span
                   className="rounded-full bg-mist px-2 py-[2px] text-[11px] font-semibold text-ink-2"
                   title="CoSAI does not carry this framework. The mappings onto it were authored in this repository."
@@ -248,9 +228,7 @@ export function FrameworksBrowser() {
 
                 {entry.total === 0 ? (
                   <p className="mt-4 rounded-lg border-l-[3px] border-exposed bg-exposed-soft/40 py-3 pl-4 pr-4 text-[13.5px] leading-relaxed text-ink-2">
-                    {view.framework.org
-                      ? "This entry maps to nothing in CoSAI. Either it is a process requirement with no technology behind it, or the cross-map in data/org has not reached it yet — worth deciding which."
-                      : view.framework.authored
+                    {view.framework.authored
                         ? "No mapping has been selected for this entry. This is a gap in this repository’s crosswalk, not a claim that CoSAI cannot address the outcome."
                         : "Nothing in CoSAI maps to this entry. That is a gap in the cross-reference worth knowing about if this framework is what you are measured against."}
                   </p>
@@ -292,14 +270,6 @@ export function FrameworksBrowser() {
                         </div>
                       </div>
                     )}
-                    {entry.categories.length > 0 && (
-                      <div>
-                        <p className="eyebrow">{entry.categories.length} technology categories</p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {entry.categories.map((c) => <Link key={c.id} href={`/capabilities?category=${c.id}`}><Chip>{c.title}</Chip></Link>)}
-                        </div>
-                      </div>
-                    )}
                     {entry.personas.length > 0 && (
                       <div>
                         <p className="eyebrow">{entry.personas.length} personas</p>
@@ -319,7 +289,7 @@ export function FrameworksBrowser() {
                     <summary className="cursor-pointer text-sm font-semibold">Mapping relationships and rationale · authored here</summary>
                     <ul className="mt-3 space-y-3">
                       {entry.mappingNotes.map((m) => <li key={`${m.kind}/${m.entity}`} className="text-sm text-ink-2">
-                        <span className="font-semibold">{(m.kind === "controls" ? controlById : categoryById).get(m.entity)?.title}</span>
+                        <span className="font-semibold">{controlById.get(m.entity)?.title}</span>
                         <span className="ml-2 text-xs text-ink-3">{m.relationship.replaceAll("-", " ")}</span>
                         <p className="mt-1 text-xs leading-relaxed">{m.rationale}</p>
                       </li>)}

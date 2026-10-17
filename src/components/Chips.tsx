@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { frameworkById, frameworkEntries, org } from "@/lib/data";
+import { frameworkById, frameworkEntries } from "@/lib/data";
 import { FRAMEWORK_ORDER, frameworkHref } from "@/lib/frameworks";
-import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Mappings } from "@/lib/types";
 
 export function Chip({
@@ -44,23 +43,17 @@ export function MappingBadges({
   mappings?: Mappings;
   extra?: { frameworkId: string; values: string[]; authored: boolean }[];
 }) {
-  // The organisation's ids are an overlay, not part of the reference; they appear only when the
-  // viewer has switched the overlay on (see components/tooling/overlay.ts).
-  const overlay = useOrgOverlay();
   const merged: Record<string, { values: string[]; authored: boolean }> = {};
   for (const [id, values] of Object.entries(mappings ?? {})) {
     if (values?.length) merged[id] = { values, authored: false };
   }
   for (const e of extra ?? []) {
-    if (!overlay && frameworkById.get(e.frameworkId)?.org) continue;
     if (e.authored && e.values.length) merged[e.frameworkId] = { values: e.values, authored: true };
   }
 
-  // Organisation catalogues lead — they are what the reader is measured against — then the
-  // external frameworks in their usual order, then anything else so a new one appears rather
-  // than vanishing.
+  // The external frameworks in their usual order, then anything else so a new one appears
+  // rather than vanishing.
   const rank = (id: string) => {
-    if (frameworkById.get(id)?.org) return -1;
     const i = FRAMEWORK_ORDER.indexOf(id);
     return i === -1 ? FRAMEWORK_ORDER.length : i;
   };
@@ -78,18 +71,7 @@ export function MappingBadges({
             <Link href={frameworkHref(id)} className="shrink-0 hover:opacity-70">
               <span className="eyebrow">{fw?.name ?? id}</span>
             </Link>
-            {authored && fw?.org ? (
-              <span
-                className="ident shrink-0 text-ink-3"
-                title={
-                  org.example
-                    ? "Example content shipped with the repository — replace data/org/example with your own catalogue."
-                    : `Cross-mapped by ${org.name} in data/org/local.`
-                }
-              >
-                {org.example ? "example organisation" : "your organisation"}
-              </span>
-            ) : authored ? (
+            {authored ? (
               <span
                 className="ident shrink-0 text-ink-3"
                 title="CoSAI does not publish this mapping — it was authored in this repository."

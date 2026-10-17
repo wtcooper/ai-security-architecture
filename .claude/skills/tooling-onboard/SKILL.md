@@ -13,12 +13,12 @@ MITRE entry (`D3-OTF`) or an authored `cap-*` specialisation of one
 `mitigation`. The entry's job is to say, for each of those, whether the vendor lets an
 administrator switch it on and exactly where.
 
-The registry renders in exactly one place: the **Tools** tab of the drawing the product
-instantiates. That grid has one row per pinned capability, grouped by control group, with
-technology-category pills beside each row (categories map to the MITRE parent, so a
-specialisation shows its parent's) and one column per product; a cell reads the product's
-`controls[]` row for that capability as vendor coverage, and the organisation's status for that
-product on that capability from `data/org`. The product's full record sits beneath the grid.
+The registry renders in exactly one place: step 4 (**Tools**) of the Enable page for the
+architecture the product instantiates. That grid has one row per pinned capability, grouped by
+Enable layer (foundations, surface baseline, use-case additions), and one column per product;
+a cell reads the product's `controls[]` row for that capability and shows it as one of three
+words — Built-in (`native`), Partial (`partial`), Not in tool (`external` or `none`). The
+product's full record opens beneath the grid.
 Nothing in the taxonomy links back to a product, so an entry earns its place by being right
 about that drawing's pinned mitigations, not by being cross-referenced elsewhere.
 
@@ -114,35 +114,13 @@ architectures with their surface).
    (what it is, where inference runs, what leaves the device), `facts` with the canonical labels
    from `references/schema.md`, `variants` with urls, `riskNotes` for the pinned risks this
    product changes the shape of, `advisories`, `sources`. Add the vendor to `vendors.yaml` if new.
-5. **Seed the organisation's justification text.** The Tools grid shows, on hover over each
-   cell, the organisation's `note` for that capability from `data/org/<profile>/tooling-status.yaml`
-   (`example/` upstream, `local/` in an adopter's clone). That file is the template an
-   organisation edits, so a product is not finished until it has a block there: `available`,
-   and under `capabilities` one entry per **organisation capability ID** (the `EX-*` / `YC-*`
-   ids in that profile's `capabilities.yaml`, each mapped to a capability: a MITRE id or a
-   `cap-*` specialisation) with a
-   `status` and a `note` written as the justification an administrator would give — the
-   setting or change that backs the status (`permissions.deny and
-   allowManagedPermissionRulesOnly in managed-settings.json`), or for a `gap` why it is not in
-   place (`sandbox.enabled pending bubblewrap packaging`; `Vendor offers nothing; kept in the
-   governance register`). A capability may only be assessed for a product when it is pinned on
-   the product's architecture — itself, its MITRE parent, or a specialisation of it; the build
-   rejects the rest, and `node .claude/skills/org-taxonomy-customize/scripts/cosai-index.mjs tools <id>`
-   lists the eligible set. Derive the note from the matching row's `mechanism` and name the
-   real keys or console paths; where the organisation keyed its record on a MITRE parent, the
-   rows for its specialisations fold into that one note. A capability whose row is `none`
-   still gets a note saying what stands in. Upstream, the
-   example organisation runs a handful of products; set `available: true` only if it plausibly
-   would, otherwise `false` — the notes are still the adopter's starting text.
-6. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
+5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-7. **Look at it.** `npm run dev`, open `/reference?archetype=<arch>&tool=<id>`: the drawing's
-   Tools tab with your product as a column and its record open beneath the grid. Check that
-   each capability row shows the coverage you expect from its row and that the coverage
-   word links to the page an administrator would actually use, expand the record for the steps,
-   and switch **Show org data** on and hover a few cells: every one should show the capability
-   note you seeded, none should say "nothing recorded yet". Without a browser, confirm the compiled entry instead:
+6. **Look at it.** `npm run dev`, open `/enable?archetype=<arch>&tool=<id>`: the Tools step
+   with your product as a column and its record open beneath the grid. Check that each
+   capability row shows the coverage word you expect from its row, and open a few rows in the
+   record for the steps and their links. Without a browser, confirm the compiled entry instead:
    `node -e 'const d=require("./src/data/generated/dataset.json");console.log(d.tools.find(t=>t.id==="<id>"))'`.
    Deliberate exclusions go in the file header comment and under "Exclusions" in
    `data/tooling/README.md`.
@@ -175,8 +153,5 @@ about ninety wrong ones (`docs/VALIDATION-2026-09-10-TOOLING.md`). What it learn
 
 Re-fetch every URL in the entity under the rules above. Update facts that changed, bump `asOf`
 and each row's `verified`, and record retired surfaces as exclusions rather than deleting history
-silently. If a mechanism changed, reread the organisation's `note` for the capability that
-mitigation falls under in `tooling-status.yaml` — it names the old key. Keep the id — guidance
-documents and the organisation's `tooling-status.yaml` reference it, and that file says
-`available: true|false` per product plus a status per organisation capability, so a renamed id
-silently drops an organisation's posture.
+silently. Keep the id — guidance documents reference it, and old
+`/reference?tool=<id>` links redirect to it on Enable.

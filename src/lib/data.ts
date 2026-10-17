@@ -1,4 +1,3 @@
-import { capabilitySupportStatus } from "./org-capabilities";
 import raw from "@/data/generated/dataset.json";
 import { bandFor, type BandId } from "./bands";
 import { ACTORS, actorById } from "./map-layout";
@@ -13,7 +12,6 @@ import type {
   Risk,
   RiskOverlay,
   Tool,
-  OrgCapabilityStatus,
   DisplayStatus,
 } from "./types";
 
@@ -37,7 +35,6 @@ export const {
   overlays,
   incidents,
   surfaces,
-  technologyCategories,
   mitigations,
   mitigationAliases,
   mitigationGaps,
@@ -46,9 +43,8 @@ export const {
   vendors,
   tools,
   toolingAttribution,
-  orgToolPosture,
-  orgCapabilities,
-  landscape,
+  status,
+  enablement,
   meta,
 } = dataset;
 
@@ -57,21 +53,9 @@ const index = <T extends { id: string }>(items: T[]) => new Map(items.map((i) =>
 export const componentById = index(components);
 export const riskById = index(risks);
 export const controlById = index(controls);
-export const categoryById = index(technologyCategories);
 
-/**
- * A capability is a MITRE mitigation or an authored specialisation of one. Categories map to
- * the MITRE parent, so a specialisation inherits its parent's technology dimension.
- */
+/** A capability is a MITRE mitigation or an authored specialisation of one. */
 export const specializationsOf = (id: string) => mitigations.filter((m) => m.parent === id);
-export const categoriesForMitigations = (ids: string[]) => {
-  const roots = new Set(ids.map((id) => mitigations.find((m) => m.id === id)?.parent ?? id));
-  return technologyCategories.filter((c) => c.mitigationMappings.some((m) => roots.has(m.mitigation)));
-};
-export const mitigationsForCategory = (id: string) => {
-  const roots = new Set(technologyCategories.find((c) => c.id === id)?.mitigationMappings.map((m) => m.mitigation) ?? []);
-  return mitigations.filter((m) => roots.has(m.id) || (m.parent && roots.has(m.parent)));
-};
 export const personaById = index(personas);
 export const frameworkById = index(frameworks);
 export const overlayByRisk = new Map(overlays.map((o) => [o.risk, o]));
@@ -314,75 +298,50 @@ export const controlsForTool = (toolId: string) => {
   }));
 };
 
-// --- Organisation layer -----------------------------------------------------------
+// --- Status and display names (data/status.yaml) -----------------------------------
 
-export const org = meta.org;
-const postureByTool = new Map(orgToolPosture.map((p) => [p.tool, p]));
+/** What the organisation calls a capability: its own display name, else the catalogue title. */
+export const capabilityName = (id: string) => status[id]?.displayName ?? mitigationById.get(id)?.title ?? id;
 
-export const orgPostureFor = (toolId: string) => postureByTool.get(toolId);
-/** Whether people in the organisation may install and use this product; not listed means no. */
-export const orgToolAvailableFor = (toolId: string): boolean => postureByTool.get(toolId)?.available === true;
-export const orgCapabilitiesFor = (capabilityId: string) => orgCapabilities.filter((c) => c.capability === capabilityId);
 /**
- * The organisation's own names for a pinned capability: its records on that id, else — for a
- * specialisation with none of its own — the records on the MITRE parent it narrows.
+ * Several statuses read as one. Enabled only when every part is; a gap when nothing is under
+ * way; anything else — some enabled, some not yet set — is in progress, because one part
+ * switched on is only partial evidence for the whole.
  */
-export const orgNamesFor = (capabilityId: string): string[] => {
-  const parent = mitigationById.get(capabilityId)?.parent;
-  const own = orgCapabilitiesFor(capabilityId);
-  const list = own.length || !parent ? own : orgCapabilitiesFor(parent);
-  return [...new Set(list.map((c) => c.title))];
-};
-
-export interface OrgCapabilitySupport {
-  status: DisplayStatus;
-  technology?: string;
-  note: string;
-  evidence?: string;
-  contributions: { id: string; title: string; capability: string; context: string; record?: OrgCapabilityStatus }[];
+function rollup(values: DisplayStatus[]): DisplayStatus {
+  if (values.every((v) => v === "notSet")) return "notSet";
+  if (values.every((v) => v === "enabled")) return "enabled";
+  if (values.every((v) => v === "gap" || v === "notSet")) return "gap";
+  return "inProgress";
 }
 
 /**
- * Status is authored only against capabilities (a MITRE id or a specialisation): per surface for
- * the enterprise layer, per product for the tool layer. Everything else is a rollup. A parent
- * rolls up its specialisations' records too. With no surface, the rollup spans every surface
- * and every available product.
+ * A capability's status: its own entry, else — for a MITRE parent — the rollup of its
+ * specialisations' entries.
  */
-function capabilitySupport(ids: string[], surfaceId?: string, toolId?: string): OrgCapabilitySupport {
-  if (!ids.length) return { status: "unmapped", note: "No capability delivers this.", contributions: [] };
-  const capabilityIds = new Set(ids.flatMap((id) => [id, ...specializationsOf(id).map((s) => s.id)]));
-  const contributions = orgCapabilities.filter((c) => capabilityIds.has(c.capability)).flatMap((c) => {
-    const base = { id: c.id, title: c.title, capability: c.capability };
-    if (toolId) return [{ ...base, context: toolById.get(toolId)?.name ?? toolId, record: postureByTool.get(toolId)?.capabilities[c.id] }];
-    const onSurface = (id: string) => !surfaceId || id === surfaceId;
-    return [
-      ...Object.entries(c.surfaces).filter(([id]) => onSurface(id)).map(([id, record]) => ({ ...base, context: `Enterprise · ${surfaceById.get(id)?.title ?? id}`, record })),
-      ...orgToolPosture.filter((p) => p.available && onSurface(archetypeById.get(toolById.get(p.tool)!.architecture)?.surface ?? ""))
-        .map((p) => ({ ...base, context: toolById.get(p.tool)!.name, record: p.capabilities[c.id] })),
-    ];
-  }).filter((c) => c.record);
-  const status = capabilitySupportStatus(contributions.map((c) => c.record));
-  return {
-    status, contributions,
-    technology: [...new Set(contributions.map((c) => c.title))].join(" · ") || undefined,
-    note: contributions.length
-      ? "Capability rollup; not a control-compliance or mitigation-effectiveness assessment. " + contributions.map((c) => [`${c.title} (${c.context})`, c.record?.note].filter(Boolean).join(": ")).join(" · ")
-      : "No organization capability assessment recorded for this context.",
-    evidence: contributions.map((c) => c.record?.evidence).filter(Boolean).join(" · ") || undefined,
-  };
+export function statusFor(id: string): DisplayStatus {
+  const own = status[id]?.status;
+  if (own) return own;
+  return rollup(specializationsOf(id).map((s) => status[s.id]?.status ?? "notSet"));
 }
 
-/** The landscape tile reads one capability across every surface and available product. */
-export const orgCapabilityPostureFor = (capabilityId: string, surfaceId?: string) => capabilitySupport([capabilityId], surfaceId);
+/** Control status is never authored: it rolls up from the parent capabilities that support it. */
+export const controlStatusFor = (controlId: string): DisplayStatus =>
+  rollup(mitigationsForControl(controlId).filter((m) => !m.parent).map((m) => statusFor(m.id)));
 
-/** The Capabilities matrix reads the enterprise and product records on one surface. */
-export const orgSurfacePostureFor = (capabilityId: string, surfaceId: string) => capabilitySupport([capabilityId], surfaceId);
-export const orgSurfaceStatusFor = (capabilityId: string, surfaceId: string): DisplayStatus => orgSurfacePostureFor(capabilityId, surfaceId).status;
+// --- Enable layers ----------------------------------------------------------------
 
-/** A product's own record on one capability; nothing from the enterprise layer leaks in. */
-export const orgStatusFor = (toolId: string, capabilityId: string) => capabilitySupport([capabilityId], undefined, toolId);
+export type Layer = "foundation" | "surface" | "useCase";
 
-/** Control status is a rollup of the capabilities that deliver it, never authored. */
-export const orgControlPostureFor = (controlId: string, surfaceId?: string) =>
-  capabilitySupport(mitigationsForControl(controlId).filter((m) => !m.parent).map((m) => m.id), surfaceId);
-export const orgControlStatusFor = (controlId: string, surfaceId?: string): DisplayStatus => orgControlPostureFor(controlId, surfaceId).status;
+const foundationIds = new Set(enablement.foundations.flatMap((g) => g.mitigations));
+
+/** Which layer a capability belongs to for one architecture: set up once, per surface, or for this use case. */
+export function layerFor(capabilityId: string, archetype: Archetype): Layer {
+  if (foundationIds.has(capabilityId)) return "foundation";
+  if (enablement.surfaces[archetype.surface]?.mitigations.includes(capabilityId)) return "surface";
+  return "useCase";
+}
+
+/** The capabilities this use case adds beyond the foundations and its surface baseline. */
+export const additionsFor = (archetype: Archetype): Mitigation[] =>
+  mitigationsForArchetype(archetype.id).filter((m) => layerFor(m.id, archetype) === "useCase");

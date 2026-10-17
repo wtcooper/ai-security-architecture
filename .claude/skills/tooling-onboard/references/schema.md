@@ -33,16 +33,14 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
   `external`, `notApplicable` or `unknown` carry `evidence: [{ title, url }]` — the page the
   absence or integration claim was checked against — because the build requires every row to
   have a step url or an evidence entry.
-- **The first step's URL is the configure link.** In the grid the coverage word itself is the
-  link (except `none`, which never links), so `steps[0].url` must be the page an administrator
-  performs the step on. Coverage carries no colour of its own: colour on that screen means the
-  organisation's status, from `data/org`.
-- **The grid and the record share one id set.** Tools-tab rows are the capabilities pinned on
-  the architecture — MITRE mitigations and `cap-*` specialisations of them, the same ids your
-  `controls[]` rows name — grouped by control group, with technology-category pills beside
-  them (categories map to the MITRE parent); a product cell shows that row's coverage, and the
-  record beneath the grid expands its steps. Where a parent is shown with its specialisations,
-  mixed coverage stays visible as mixed.
+- **The first step's URL is the configure link.** `steps[0].url` must be the page an
+  administrator performs the step on; the product record links each step title to it.
+- **The grid and the record share one id set.** The Enable Tools grid's rows are the
+  capabilities pinned on the architecture — MITRE mitigations and `cap-*` specialisations of
+  them, the same ids your `controls[]` rows name — grouped by Enable layer. A cell collapses
+  `coverage` to three words: `native` → Built-in, `partial` → Partial, `external`/`none` → Not
+  in tool; `notApplicable` → N/A and `unknown` or a missing row → Unverified. Keep the finer
+  grade in the data: the record's note and evidence say which applies.
 - **Canonical `facts` labels**, in this order: `Plans`, `Inference & routing`,
   `Data leaving the device`, `Retention & training`, `Docs index`, then anything
   product-specific (`Network requirements`, `Vendor ownership`, …).
@@ -50,11 +48,6 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
   on each row; `advisories[].date` as `"2025-10"`.
 - **Header comment** of each file: the two-line schema pointer, then exclusions specific to the
   family, then a short fetch log of URLs that redirected or failed during the last verification.
-- **Ids are stable**: guidance documents and `data/org/*/tooling-status.yaml` reference them.
-- **The organisation's side lives next door.** `data/org/<profile>/tooling-status.yaml` carries,
-  per product, `available` and one `{ status, note, evidence? }` per **organisation capability
-  ID** (each mapped to a MITRE id or `cap-*` specialisation in that profile's
-  `capabilities.yaml`), never per control; the build accepts only capabilities pinned on the
-  product's architecture — itself, its MITRE parent, or a specialisation of it. The `note` is
-  what the grid shows on hover. Onboarding a product includes writing that block (SKILL.md
-  step 5).
+- **Ids are stable**: guidance documents reference them, and old `/reference?tool=<id>` links
+  redirect to them on Enable. The organisation records no per-tool status; its capability
+  status lives in `data/status.yaml`.

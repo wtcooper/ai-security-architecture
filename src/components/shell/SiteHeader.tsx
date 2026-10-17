@@ -5,26 +5,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
-/** The taxonomy shares one menu; the map, the architectures and the incidents stand alone. */
+/**
+ * Learn, then Enable, then the reference behind both. Learn is the risk map, the architectures
+ * and the incidents; Enable is what to put in place; the taxonomy shares one menu.
+ */
 type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
 const NAV: NavItem[] = [
   { href: "/map", label: "Risk map" },
+  { href: "/reference", label: "Architectures" },
+  { href: "/examples", label: "Incidents" },
+  { href: "/enable", label: "Enable" },
   {
-    label: "Taxonomy",
+    label: "Reference",
     children: [
       { href: "/risks", label: "Risks" },
-      { href: "/components", label: "Components" },
       { href: "/controls", label: "Controls" },
       { href: "/capabilities", label: "Capabilities" },
+      { href: "/components", label: "Components" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },
     ],
   },
-  { href: "/reference", label: "Architectures" },
-  { href: "/examples", label: "Incidents" },
 ];
 
 /** The flat list, for the small-screen menu. */

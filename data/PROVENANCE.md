@@ -304,19 +304,23 @@ build fails otherwise. `npm run audit` lists the pinned mitigations each entity 
 addressed and flags entries older than six months. The `tooling-onboard` skill under
 `.claude/skills/` carries the research protocol.
 
-## Organisation layer
+## Organisation status
 
-`data/org/` is the adopter's, not this repository's. Upstream ships `example/` (labelled as
-such everywhere it renders); an adopter creates `local/`, which the build prefers and which
-upstream never ships. Its catalogues become authored frameworks with `org: true`, inverted from
-the entry-keyed authoring into the same cross-reference shape as the OWASP lenses, so the
-Frameworks tab, the card badges, the architecture rails and hover cards and the AI Tooling tab
-all read them without special cases. Every organisation record maps to one capability — a
-MITRE mitigation id or a `cap-*` specialisation — and carries status per surface; tool posture
-lives beside it, per tool × capability, using the same status enum. Status is authored nowhere
-else: a parent mitigation rolls up its specialisations' records, control status is a rollup of
-the capabilities that support the control, and technology categories carry none. The
-`org-taxonomy-customize` skill walks through it.
+`data/status.yaml` is the adopter's, not this repository's, and ships empty. Keyed by
+capability id — a MITRE mitigation or a `cap-*` specialisation — each entry carries a `status`
+(`enabled`, `inProgress` or `gap`), optionally the organisation's own `displayName` for the
+capability, and a `note`. Status is authored nowhere else: a parent mitigation with no entry
+rolls up its specialisations, and control status is a rollup of the capabilities that support
+the control. The `org-taxonomy-customize` skill walks through it.
+
+## Enable layers
+
+`data/overlay/enablement.yaml` is original work: it groups capabilities into enterprise
+foundations every AI deployment needs (four groups, set up once) and a baseline per surface.
+A use case's additions are derived — its pinned capabilities that neither layer already holds.
+The grouping is this repository's judgement about the order an organisation puts controls in
+place; the build checks that every foundation applies on every surface, every baseline
+capability applies on its surface, and no capability sits in two layers.
 
 ## Capabilities
 
@@ -340,32 +344,8 @@ one specialisation; the MITRE-id rule applies to parents only. Titles, implement
 surface notes and process items are repository prose, not a published standard, and a mapping
 records that a capability supports a control, never that the control is fulfilled.
 
-## Enterprise landscape
+## NIST CSF 2.0 crosswalk
 
-`data/overlay/landscape.yaml` places every MITRE parent capability onto the security domains an
-enterprise security organisation runs, so coverage reads at the enterprise level, on the
-Reference architectures page, before any one architecture is opened: the CISA Zero Trust
-Maturity Model's five pillars and three cross-cutting capabilities. The framing is CISA's and is
-cited; the placement of each capability — one primary home, in a `group` or `group/lane`
-grammar — is this repository's judgement and does not claim CISA would agree. (Two alternative
-framings, a Cyber Defense Matrix and Gartner's AI TRiSM layers, were trialled on 2026-09-19 and
-retired on 2026-09-24 in favour of this one.) Specialisations are never placed: they follow their
-parent and their organisation records roll up into it, exactly as on the Capabilities page. The
-build requires every parent to be placed in every view and refuses any other id.
-
-## Technology categories and supplementary framework lenses
-
-`data/overlay/technology-categories.yaml` defines 25 sourced technology categories using local
-`tech-*` keys. They are the technology dimension of a capability — each maps to MITRE parents,
-and a specialisation inherits its parent's categories — and carry no surfaces and no status of
-their own. `data/frameworks/technology-sources.yaml`
-records exact category names, source versions/locations, official-vs-local identifier kinds,
-and the additive NIST CSF control crosswalk. OWASP is the primary AI naming source; ENISA
-ECSMAF 3.0 and ECSO supply additional technology categories; CISA TIC v3.3 functions and NIST
-CSF 2.0 outcomes provide supplementary views. Descriptions and all category/implementation
-crosswalks are authored here. Each mapping has an explicit relationship and rationale. See
-[the source contract](frameworks/README.md).
-
-CoSAI controls and their NIST AI RMF mappings are unchanged. Technology associations never
-change architecture pins, vendor evidence, incident evidence, or organization posture. Names
-are shown before IDs, and repository keys are never labeled as publisher identifiers.
+`data/frameworks/nist-csf.yaml` records the 22 NIST CSF 2.0 categories and an authored,
+category-level crosswalk from CoSAI controls onto them, each with a rationale. CoSAI controls
+and their NIST AI RMF mappings are unchanged. See [the source contract](frameworks/README.md).

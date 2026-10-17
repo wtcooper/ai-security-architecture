@@ -19,19 +19,18 @@ export interface ChipPaint {
 }
 
 /**
- * A numbered chip's colours. With org data on it takes the capability's status in the
- * Capabilities matrix tints, with a full-strength ring so it reads at canvas size; otherwise
- * the reference blue.
+ * A numbered chip's colours: a caller's paint where given, else a status tint with a
+ * full-strength ring so it reads at canvas size, else the reference blue.
  */
 export function chipColors(status?: DisplayStatus, paint?: ChipPaint) {
   if (paint) {
     return { background: paint.bg, borderColor: paint.border, borderStyle: paint.dashed ? "dashed" : "solid", color: paint.text } as const;
   }
-  const s = status ? STATUS_STYLE[status] : undefined;
+  const s = status && status !== "notSet" ? STATUS_STYLE[status] : undefined;
   return {
     background: s?.bg ?? "var(--paper, #fff)",
     borderColor: s?.text ?? "var(--chip, #4a5fd0)",
-    borderStyle: s?.dashed ? "dashed" : "solid",
+    borderStyle: "solid",
     color: s?.text ?? "var(--chip, #4a5fd0)",
   } as const;
 }

@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Chip, MappingBadges } from "@/components/Chips";
+import { Chip } from "@/components/Chips";
 import { Prose } from "@/components/Prose";
 import { bandFor } from "@/lib/bands";
 import { BAND_TOKENS } from "@/lib/map-layout";
 import {
   archetypesForMitigation,
-  categoriesForMitigations,
+  capabilityName,
   componentsForMitigation,
   mitigationById,
   specializationsOf,
@@ -15,33 +15,34 @@ import {
   controlCategories,
   controlsForMitigation,
   risksForMitigation,
-  orgSurfacePostureFor,
-  orgSurfaceStatusFor,
+  status as statusFile,
+  statusFor,
   surfaces,
-  frameworkById,
 } from "@/lib/data";
-import { mappingsForMitigation } from "@/lib/frameworks";
-import { useOrgOverlay } from "@/components/tooling/overlay";
 import type { Mitigation } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
-import { StatusPill } from "@/components/StatusPill";
+import { StatusHeading, StatusPill } from "@/components/StatusPill";
 
-export function CapabilityDetail({ mitigation, onClose, showOrg = true, framed = true }: { mitigation: Mitigation; onClose?: () => void; showOrg?: boolean; framed?: boolean }) {
+export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitigation: Mitigation; onClose?: () => void; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);
   const categoryTitle = controlCategories.find((c) => c.id === mitigation.category)?.title;
-  const orgMappings = mappingsForMitigation(mitigation).filter((m) => showOrg || !frameworkById.get(m.frameworkId)?.org);
-  const orgOverlay = useOrgOverlay();
-  const overlay = showOrg && orgOverlay;
+  const own = statusFile[mitigation.id];
 
   return (
     <div className={framed ? "rounded-xl border border-line bg-paper p-7" : undefined}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="display text-[24px] font-bold leading-tight text-ink">
-            {mitigation.title}
+            {capabilityName(mitigation.id)}
           </h2>
+          {own?.displayName && <p className="mt-1 text-sm text-ink-2">{mitigation.title}</p>}
+          <p className="mt-2 flex items-center gap-2 text-xs text-ink-3">
+            <StatusHeading className="font-semibold text-ink-2" />
+            <StatusPill status={statusFor(mitigation.id)} title={own?.note} compact />
+            {own?.note && <span>{own.note}</span>}
+          </p>
           <p className="mt-2 text-xs text-ink-3">{mitigation.parent ? `Authored specialisation of ${mitigation.parent} · ${mitigation.id}` : `${mitigation.origin.framework} · ${mitigation.id} · ${mitigation.origin.version}`}</p>
         </div>
         {onClose && (
@@ -74,12 +75,6 @@ export function CapabilityDetail({ mitigation, onClose, showOrg = true, framed =
         {mitigation.features && <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-ink-2">{mitigation.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>}
       </div>
 
-      {orgMappings.length > 0 && (
-        <div className="mt-4">
-          <MappingBadges extra={orgMappings} />
-        </div>
-      )}
-
       {(mitigation.parent || specializationsOf(mitigation.id).length > 0) && (
         <div className="mt-5 rounded-lg border border-line p-4">
           <p className="eyebrow">{mitigation.parent ? "Specialises" : "Specialised as"}</p>
@@ -92,38 +87,26 @@ export function CapabilityDetail({ mitigation, onClose, showOrg = true, framed =
           </div>
         </div>
       )}
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <div>
-          <p className="eyebrow">Realised by · technology categories</p>
-          <p className="mt-1 text-xs text-ink-3">How this is bought. Categories map to the MITRE entry, so a specialisation inherits its parent&rsquo;s.</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {categoriesForMitigations([mitigation.id]).map((c) => <Link key={c.id} href={`/capabilities?category=${c.id}`}><Chip>{c.title}</Chip></Link>)}
-            {!categoriesForMitigations([mitigation.id]).length && <span className="text-xs text-ink-3">No technology category; delivered by process.</span>}
-          </div>
-        </div>
-        {mitigation.process?.length ? (
-          <div>
-            <p className="eyebrow">Realised by · process</p>
-            <ul className="mt-2 space-y-1.5">
-              {mitigation.process.map((item) => <li key={item.title} className="text-[12.5px] leading-snug"><span className="font-medium text-ink">{item.title}</span><span className="block text-[11.5px] text-ink-3">{item.note}</span></li>)}
-            </ul>
-          </div>
-        ) : null}
-      </div>
-      <details className="mt-5">
-        <summary className="cursor-pointer text-xs font-semibold text-ink-2">Implementation examples · authored guidance</summary>
+      <div className="mt-5">
+        <p className="eyebrow">What delivers it · example technologies</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {mitigation.examples.map((e) => (
             <Chip key={e}>{e}</Chip>
           ))}
         </div>
-      </details>
+      </div>
+      {mitigation.process?.length ? (
+        <div className="mt-5">
+          <p className="eyebrow">Run as a process</p>
+          <ul className="mt-2 space-y-1.5">
+            {mitigation.process.map((item) => <li key={item.title} className="text-[12.5px] leading-snug"><span className="font-medium text-ink">{item.title}</span><span className="block text-[11.5px] text-ink-3">{item.note}</span></li>)}
+          </ul>
+        </div>
+      ) : null}
 
-      {overlay && <p className="mt-6 text-xs text-ink-3">Organization status below rolls up from capability deployments. It describes supporting technology, not an assessment of this mitigation.</p>}
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         {surfaces.map((s) => {
           const info = mitigation.surfaces[s.id];
-          const status = overlay ? orgSurfaceStatusFor(mitigation.id, s.id) : null;
           return (
             <div
               key={s.id}
@@ -131,21 +114,10 @@ export function CapabilityDetail({ mitigation, onClose, showOrg = true, framed =
             >
               <p className="flex items-center justify-between gap-2 text-[13px] font-semibold text-ink">
                 {s.title}
-                {info?.applies ? (
-                  status && <StatusPill status={status} />
-                ) : (
-                  <span className="text-[11px] font-medium text-ink-3">outside profile</span>
-                )}
+                {!info?.applies && <span className="text-[11px] font-medium text-ink-3">does not apply</span>}
               </p>
               <p className="mt-1.5 text-xs font-medium text-ink-2">{info?.responsibility.replaceAll("-", " ")}</p>
               {info?.note && <p className="mt-1.5 text-[12.5px] leading-snug text-ink-3">{info.note}</p>}
-              {overlay && info?.applies && orgSurfacePostureFor(mitigation.id, s.id)?.technology && (
-                <p className="mt-1.5 text-[12px] leading-snug text-ink-2">
-                  <span className="eyebrow mr-1">Org capability</span>
-                  {orgSurfacePostureFor(mitigation.id, s.id)!.technology}
-                </p>
-              )}
-              {overlay && orgSurfacePostureFor(mitigation.id, s.id)?.note && <p className="mt-2 text-xs text-ink-3">{orgSurfacePostureFor(mitigation.id, s.id)!.note}</p>}
             </div>
           );
         })}

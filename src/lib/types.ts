@@ -24,6 +24,7 @@ export const FULL_LIST_FRAMEWORKS = [
   "stride",
   "owasp-agentic",
   "owasp-mcp",
+  "nist-csf",
 ];
 
 /** A paragraph of CoSAI prose, already split from the YAML block scalars. */
@@ -65,18 +66,6 @@ export interface Framework {
    * offered as a lens, because an obsolete edition of a list is noise next to the current one.
    */
   superseded?: boolean;
-  /**
-   * An organisation's own catalogue (data/org/<profile>/frameworks.yaml): a control standard
-   * or a risk register, cross-mapped onto CoSAI here. Authored like the others, but by the
-   * adopter rather than this repository, and badged as theirs.
-   */
-  org?: boolean;
-  /**
-   * Every entry of the framework is present in `frameworkEntries`, so an entry nothing maps
-   * to is a finding to show, not a build failure. Set by the build for org catalogues; the
-   * upstream equivalent is FULL_LIST_FRAMEWORKS.
-   */
-  entriesComplete?: boolean;
 }
 
 /** Entity id -> framework entry ids, per entity kind. Personas carry no authored mappings. */
@@ -84,8 +73,6 @@ export type AuthoredMappings = {
   risks?: Record<string, string[]>;
   controls?: Record<string, string[]>;
   mitigations?: Record<string, string[]>;
-  /** Technology categories (tech-*) an external source names. */
-  categories?: Record<string, string[]>;
 };
 
 /** An editorial note on a framework CoSAI does carry, where upstream has moved on. */
@@ -122,65 +109,7 @@ export interface FrameworkEntryInfo {
   /** Category names sometimes have no official identifier. Never present our key as one. */
   identifierKind?: "official" | "repository-key";
   sourceLocation?: string;
-  mappingNotes?: { kind: "controls" | "categories"; entity: string; relationship: string; rationale: string }[];
-}
-
-/**
- * ------------------------------------------------------------------ Enterprise landscape
- *
- * The MITRE parent capabilities placed onto well-known enterprise framings, one primary home per
- * view, so coverage and gaps read at the enterprise level. A grouped view has groups (optionally
- * subdivided into lanes); the matrix has rows and columns. Placements are strings in the grammar
- * `group`, `group/lane` or `row/column`; see scripts/lib/landscape.ts resolvePlacement.
- */
-export interface LandscapeAxisEntry {
-  id: string;
-  title: string;
-  blurb?: string;
-}
-
-export interface LandscapeGroup extends LandscapeAxisEntry {
-  blurb: string;
-  /** Domain view only: pillars stand as columns, cross-cutting groups run as bars beneath. */
-  role?: "pillar" | "crosscutting";
-  lanes?: { id: string; title: string }[];
-}
-
-export interface LandscapeView {
-  id: string;
-  title: string;
-  short: string;
-  kind: "groups" | "matrix";
-  /** The framework this framing is borrowed from, with its source. */
-  basis: string;
-  url: string;
-  description: string;
-  groups?: LandscapeGroup[];
-  rows?: LandscapeAxisEntry[];
-  columns?: LandscapeAxisEntry[];
-}
-
-export interface Landscape {
-  attribution: string;
-  views: LandscapeView[];
-  /** MITRE parent id -> view id -> placement string. */
-  placements: Record<string, Record<string, string>>;
-}
-
-/** Sourced technology categories: the technology dimension of a capability, keyed to MITRE methods. */
-export interface TechnologyCategory {
-  id: string;
-  title: string;
-  category: string;
-  description: string;
-  primarySource: { framework: string; entry: string };
-  frameworkMappings: {
-    framework: string;
-    entry: string;
-    relationship: "same-category" | "narrower" | "supports";
-    rationale: string;
-  }[];
-  mitigationMappings: { mitigation: string; rationale: string; sources?: { title: string; url: string }[] }[];
+  mappingNotes?: { kind: "controls"; entity: string; relationship: string; rationale: string }[];
 }
 
 export interface ComponentCategory {
@@ -258,13 +187,38 @@ export interface Vocabulary {
 }
 
 /**
- * The organization capability status vocabulary, also used for derived support rollups.
- * Missing assessments display as Not assessed once status is
- * shown; Not assessed is a display state rather than an authored posture value.
+ * The status vocabulary an organisation sets per capability in data/status.yaml. Nothing ships
+ * with a status: an unset capability reads "Not set". Control status is a rollup, never authored.
  */
-export type OrgStatus = "enabled" | "inProgress" | "gap";
-export type DisplayStatus = OrgStatus | "notAssessed" | "unmapped";
-export const ORG_STATUSES: OrgStatus[] = ["enabled", "inProgress", "gap"];
+export type Status = "enabled" | "inProgress" | "gap";
+export type DisplayStatus = Status | "notSet";
+export const STATUSES: Status[] = ["enabled", "inProgress", "gap"];
+
+/** One organisation's entry for a capability: its status and, optionally, its own name for it. */
+export interface CapabilityCustomisation {
+  status?: Status;
+  /** The organisation's name for the capability; the catalogue name is shown beneath it. */
+  displayName?: string;
+  note?: string;
+}
+
+/**
+ * The Enable layers. Foundations are the enterprise controls every AI deployment needs, set up
+ * once; a surface baseline is what one surface adds. A use case's own additions are derived:
+ * its pinned capabilities that no earlier layer already holds.
+ */
+export interface EnablementGroup {
+  id: string;
+  title: string;
+  blurb: string;
+  mitigations: string[];
+}
+
+export interface Enablement {
+  foundations: EnablementGroup[];
+  /** Keyed by surface id. */
+  surfaces: Record<string, { blurb: string; mitigations: string[] }>;
+}
 
 /** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */
 export interface Surface {
@@ -890,60 +844,12 @@ export interface Incident {
   sources: IncidentSource[];
 }
 
-/**
- * ------------------------------------------------------------------ Organisation layer
- *
- * What an adopter records about itself in data/org/<profile>/. Its catalogues become org
- * frameworks (see Framework.org); its tool posture is the one place a deployment states what
- * it has actually switched on.
- */
-
-export interface OrgMeta {
-  /** "local" when data/org/local/ was used, else "example". */
-  profile: "local" | "example";
-  name: string;
-  shortName?: string;
-  /** True when the shipped example content is rendering — badged so nobody reads it as a posture. */
-  example: boolean;
-}
-
-/** A recorded deployment assessment of an organization capability. */
-export interface OrgCapabilityStatus {
-  status: OrgStatus;
-  note?: string;
-  evidence?: string;
-}
-
-/** One organization capability maps to exactly one catalogue capability (cap-*). */
-export interface OrgCapability {
-  id: string;
-  title: string;
-  capability: string;
-  description?: string;
-  surfaces: Record<string, OrgCapabilityStatus>;
-}
-
-/** Historical migration evidence, retained only by the legacy conversion tools. */
-export interface OrgOrgStatus extends OrgCapabilityStatus {
-  technology?: string;
-  migration?: MitigationMigrationEvidence;
-}
-
-/** Tool availability plus capability assessments, keyed by organization capability ID. */
-export interface OrgToolPosture {
-  tool: string;
-  available?: boolean;
-  note?: string;
-  capabilities: Record<string, OrgCapabilityStatus>;
-}
-
 /** Everything the app renders, emitted by scripts/build-data.ts. */
 export interface Dataset {
   meta: {
     cosaiRef: string;
     generatedAt: string;
     counts: Record<string, number>;
-    org: OrgMeta;
   };
   componentCategories: ComponentCategory[];
   components: Component[];
@@ -972,8 +878,6 @@ export interface Dataset {
   /** Authored specialisations of MITRE mitigations, also merged into `mitigations`. */
   specializations: Mitigation[];
   specializationsAttribution: string;
-  technologyCategories: TechnologyCategory[];
-  technologyCategoriesAttribution: string;
   mitigations: Mitigation[];
   /** Provenance statement for the mitigations overlay, carried for YAML round-tripping. */
   mitigationsAttribution: string;
@@ -986,7 +890,7 @@ export interface Dataset {
   tools: Tool[];
   /** Provenance statement for the tool registry; each guidance document carries its own. */
   toolingAttribution: string;
-  orgToolPosture: OrgToolPosture[];
-  orgCapabilities: OrgCapability[];
-  landscape: Landscape;
+  /** Capability id -> the organisation's status and display name, from data/status.yaml. */
+  status: Record<string, CapabilityCustomisation>;
+  enablement: Enablement;
 }

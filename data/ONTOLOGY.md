@@ -18,7 +18,7 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
 | Control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the capabilities that deliver it |
 | Capability (`mitigation` in data and code) | data/overlay/mitigations.yaml, data/overlay/specializations.yaml | A MITRE mitigation with its MITRE-native ID from pinned D3FEND/ATLAS, or an authored specialisation of one (`cap-*`, exactly one MITRE parent); the pin unit on every drawing, with per-diagram chip numbers and an authored per-surface decision; the only entity that carries authored status |
-| Technology category | data/overlay/technology-categories.yaml | Local `tech-*` keys for published OWASP/ENISA/ECSO categories; maps to MITRE parents and framework entries; no surfaces, no status; never mitigation IDs |
+| Enable layer | data/overlay/enablement.yaml | Foundations (once, for all AI) and a baseline per surface; a use case's own additions are derived from its pins |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
 | Guidance document | data/reference/guidance/*.yaml | one per architecture; `mode: build | use | hybrid` |
@@ -36,16 +36,13 @@ the parent is too coarse to pin or report on; it inherits the parent's definitio
 surfaces unless it overrides them (its controls must be a subset of the parent's), is the pin
 unit where it exists, and lists the retired home-grown ids it restores. In data and code the
 record is called `mitigation`; the app calls the layer Capabilities. Status is authored only on
-capabilities — per surface in the organisation layer, per product in the tool layer. A parent
-rolls up its specialisations' records, control status is the rollup of the capabilities that
-support it, and product cells read that product's own records; technology categories carry
-none.
+capabilities, one value each, in `data/status.yaml`. A parent
+rolls up its specialisations' entries and control status is the rollup of the capabilities that
+support it. Products carry vendor coverage only, never organisation status.
 
-Technology categories map many-to-many to MITRE mitigations and external source entries.
-`same-category` aligns terminology; `narrower` means the source category is broader; `supports`
-indicates a contribution to a function or outcome. Related controls, architectures, and incidents
-are navigational paths, not inherited coverage or posture. CoSAI remains canonical; NIST AI RMF
-is retained verbatim and NIST CSF is an additional repository-authored crosswalk.
+Related controls, architectures, and incidents are navigational paths, not inherited coverage
+or posture. CoSAI remains canonical; NIST AI RMF is retained verbatim and NIST CSF is an
+additional repository-authored crosswalk.
 
 **A dimension states the axis it measures.** Naming rules only help if the concept being
 named is coherent: a set of bands that mixes "where it runs" with "what it does" produces

@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { controlCategories, surfaces } from "@/lib/data";
-import { NEUTRAL_STYLE, STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
+import { STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
+
+/** A chip with no status set: unanswered, neutral. */
+const NEUTRAL = { bg: "#f7f8fa", border: "#dfe4ec", text: "#5b6675" };
 
 export interface MatrixItem {
   id: string;
@@ -14,7 +17,7 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
   onSelect: (id: string) => void;
   category: string;
   surface: string;
-  statusFor?: (id: string, surface: string) => DisplayStatus;
+  statusFor?: (id: string) => DisplayStatus;
   label: string;
   /** Rendered under the chips of a non-empty cell, e.g. the mitigations those items implement. */
   cellExtra?: (category: string, surface: string, items: MatrixItem[]) => ReactNode;
@@ -33,12 +36,12 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
           return <td key={s.id} className="border-l border-line px-3 py-3 align-top">
             {cell.length ? <div className="flex flex-wrap gap-1.5">{cell.map((item) => {
               const active = item.id === selectedId;
-              const status = statusFor?.(item.id, s.id);
-              const tint = status ? STATUS_STYLE[status] : NEUTRAL_STYLE;
+              const status = statusFor?.(item.id);
+              const tint = status && status !== "notSet" ? STATUS_STYLE[status] : NEUTRAL;
               return <button key={item.id} onClick={() => onSelect(item.id)} aria-pressed={active}
-                title={`${item.title} (${item.id})${status ? ` — ${STATUS_META[status].label}` : ""}`}
+                title={`${item.title} (${item.id})${status && status !== "notSet" ? ` — ${STATUS_META[status].label}` : ""}`}
                 className="inline-flex rounded-full border px-2.5 py-[5px] text-left text-xs font-medium"
-                style={{ background: tint.bg, color: tint.text, borderColor: active ? "var(--ink)" : tint.border, borderStyle: "dashed" in tint && tint.dashed ? "dashed" : "solid", boxShadow: active ? "0 0 0 1px var(--ink)" : undefined }}>
+                style={{ background: tint.bg, color: tint.text, borderColor: active ? "var(--ink)" : tint.border, boxShadow: active ? "0 0 0 1px var(--ink)" : undefined }}>
                 {item.title}
               </button>;
             })}</div> : <span className="text-sm text-ink-3">—</span>}

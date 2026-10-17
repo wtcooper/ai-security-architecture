@@ -28,11 +28,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { mitigationById, orgNamesFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
-import { orgEntriesFor, type EntityKind } from "@/lib/frameworks";
-import { useOrgOverlay } from "@/components/tooling/overlay";
+import { capabilityName, mitigationById, riskById, riskCode, status as statusFile } from "@/lib/data";
 import { chipSpots, flowBadgeSpots, itemCells, labelLines, placeTags, tabStyle, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
-import { STATUS_META } from "@/components/StatusPill";
 import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types";
 import type { Highlight, StepOverlay } from "./FlowDiagram";
 import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth, type ChipPaint } from "./flow-style";
@@ -48,21 +45,12 @@ interface HoverCard {
 }
 
 /**
- * A pin's hover text: its note, then, for a chip with org data on, the capability status its
- * colour shows, then the organisation's own identifiers that reach the same CoSAI entity, so a
- * reader sees their control number next to the chip without leaving the drawing. Rendered
- * pre-line, so each org line stays its own line.
+ * A pin's hover text: its note, then — where the organisation renamed the capability in
+ * data/status.yaml — the catalogue name the chip title no longer shows. Rendered pre-line.
  */
-function pinBody(note: string | undefined, kind: EntityKind, id: string, show: boolean, status?: DisplayStatus): string | undefined {
-  // A capability chip already leads with the organisation's name; its body names the capability.
-  const named = show && kind === "mitigations" && orgNamesFor(id).length > 0;
-  const own = show && !named ? orgEntriesFor(kind, id) : [];
-  const lines = [
-    note,
-    named && `Capability: ${mitigationById.get(id)?.title ?? id}`,
-    status && `Capability support: ${STATUS_META[status].label}`,
-    own.length ? `Org capabilities: ${own.map((o) => `${o.label} (${o.id})`).join(" · ")}` : undefined,
-  ].filter(Boolean);
+function pinBody(note: string | undefined, kind: "mitigations" | "risks", id: string): string | undefined {
+  const renamed = kind === "mitigations" && statusFile[id]?.displayName;
+  const lines = [note, renamed && `Capability: ${mitigationById.get(id)?.title ?? id}`].filter(Boolean);
   return lines.length ? lines.join("\n") : undefined;
 }
 
@@ -71,12 +59,11 @@ const withHint = (body: string | undefined, paint?: ChipPaint) =>
   paint?.hint ? [paint.hint, body].filter(Boolean).join("\n") : body;
 
 /**
- * A chip's hover title: its number and name — with org data on, the organisation's names lead.
- * No identifier: a reader has no use for one here; it lives in the capability's own detail.
+ * A chip's hover title: its number and the organisation's name for the capability. No
+ * identifier: a reader has no use for one here; it lives in the capability's own detail.
  */
-function chipTitle(n: number, id: string, show: boolean): string {
-  const names = show ? orgNamesFor(id) : [];
-  return `${n} · ${names.length ? names.join(" · ") : mitigationById.get(id)?.title ?? id}`;
+function chipTitle(n: number, id: string): string {
+  return `${n} · ${capabilityName(id)}`;
 }
 
 type BlockNodeData = {
@@ -86,9 +73,7 @@ type BlockNodeData = {
   dim: boolean;
   /** Mitigation id -> chip number, so an item can show what it implements. */
   capNumber?: Map<string, number>;
-  /** With org data on, mitigation id -> its status on the drawing's surface, which colours the chip. */
-  capStatus?: Map<string, DisplayStatus>;
-  /** A caller's chip colouring, which wins over the status tints. */
+  /** A caller's chip colouring, which wins over the reference blue. */
   capPaint?: Map<string, ChipPaint>;
   /**
    * Mitigations pinned directly on a governance call-out. They join the call-out's own chip
@@ -289,7 +274,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                     height: 19,
                     borderRadius: 10,
                     borderWidth: 1.4,
-                    ...chipColors(data.capStatus?.get(id), data.capPaint?.get(id)),
+                    ...chipColors(undefined, data.capPaint?.get(id)),
                     font: "700 10.5px/16px var(--font-mono, monospace)",
                     textAlign: "center",
                   }}
@@ -340,7 +325,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                         height: 16,
                         borderRadius: 8,
                         borderWidth: 1.3,
-                        ...chipColors(data.capStatus?.get(id), data.capPaint?.get(id)),
+                        ...chipColors(undefined, data.capPaint?.get(id)),
                         font: "700 9.5px/13px var(--font-mono, monospace)",
                         textAlign: "center",
                       }}
@@ -664,7 +649,6 @@ export function FlowDiagramRF({
   // sequence data flow numbers its steps onto the arrows it uses and dims the rest. Every walk
   // behaves the same way, so a number on a drawing means one thing — the step you are on — and
   // it is only ever there because somebody asked for it.
-  const orgOverlay = useOrgOverlay();
   const walkEdges = useMemo(() => new Set(walk?.steps.map((s) => s.follow) ?? []), [walk]);
   const walkBlocks = useMemo(
     () => new Set(walk?.steps.flatMap((s) => s.follow.split("->")) ?? []),
@@ -719,9 +703,6 @@ export function FlowDiagramRF({
     }
     const rects = layout.blocks;
     const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
-    const capStatus = orgOverlay
-      ? new Map(archetype.mitigations.map((id) => [id, orgSurfaceStatusFor(id, archetype.surface)]))
-      : undefined;
 
     const nodes: Node[] = [];
 
@@ -790,10 +771,9 @@ export function FlowDiagramRF({
         return {
           id,
           n,
-          status: capStatus?.get(id),
           paint: chipPaint?.get(id),
-          title: `C${chipTitle(n, id, orgOverlay)}`,
-          body: withHint(pinBody(note, "mitigations", id, orgOverlay, capStatus?.get(id)), chipPaint?.get(id)),
+          title: `C${chipTitle(n, id)}`,
+          body: withHint(pinBody(note, "mitigations", id), chipPaint?.get(id)),
         };
       });
     };
@@ -824,7 +804,6 @@ export function FlowDiagramRF({
           dim: false,
           onItemEnter: cardAt,
           capNumber,
-          capStatus,
           capPaint: chipPaint ?? undefined,
           pinnedCaps:
             block.kind === "governance"
@@ -868,10 +847,9 @@ export function FlowDiagramRF({
           data: {
             n,
             dim: false,
-            status: capStatus?.get(pin.mitigation),
             paint: chipPaint?.get(pin.mitigation),
-            title: chipTitle(n, pin.mitigation, orgOverlay),
-            body: withHint(pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)), chipPaint?.get(pin.mitigation)),
+            title: chipTitle(n, pin.mitigation),
+            body: withHint(pinBody(pin.note, "mitigations", pin.mitigation), chipPaint?.get(pin.mitigation)),
           },
           draggable: false,
           selectable: false,
@@ -911,7 +889,7 @@ export function FlowDiagramRF({
             w: r.w,
             dim: false,
             title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
-            body: pinBody(pin.note, "risks", pin.risk, orgOverlay),
+            body: pinBody(pin.note, "risks", pin.risk),
           },
           draggable: false,
           selectable: false,
@@ -920,7 +898,7 @@ export function FlowDiagramRF({
       });
     }
     return nodes;
-  }, [archetype, cardAt, orgOverlay, chipPaint, simple, showRisks, onPickMitigation]);
+  }, [archetype, cardAt, chipPaint, simple, showRisks, onPickMitigation]);
 
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   // Rebuild whenever the nodes' inputs change — a new drawing, or org data switched on or off —
@@ -978,9 +956,6 @@ export function FlowDiagramRF({
 
     // Edge-anchored pins, as offsets from the build midpoint.
     const capNumber = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
-    const capStatus = orgOverlay
-      ? new Map(archetype.mitigations.map((id) => [id, orgSurfaceStatusFor(id, archetype.surface)]))
-      : undefined;
     const pinsByEdge = new Map<string, EdgePin[]>();
     const chipGroups = new Map<string, { mitigation: string; note?: string }[]>();
     for (const pin of archetype.pins.mitigations) {
@@ -1004,10 +979,9 @@ export function FlowDiagramRF({
           dx: spot.x - geo.midX,
           dy: spot.y - geo.midY,
           n,
-          status: capStatus?.get(pin.mitigation),
           paint: chipPaint?.get(pin.mitigation),
-          title: chipTitle(n, pin.mitigation, orgOverlay),
-          body: withHint(pinBody(pin.note, "mitigations", pin.mitigation, orgOverlay, capStatus?.get(pin.mitigation)), chipPaint?.get(pin.mitigation)),
+          title: chipTitle(n, pin.mitigation),
+          body: withHint(pinBody(pin.note, "mitigations", pin.mitigation), chipPaint?.get(pin.mitigation)),
         });
       });
       pinsByEdge.set(at, list);
@@ -1043,7 +1017,7 @@ export function FlowDiagramRF({
           code: codes[i],
           w: r.w,
           title: `${codes[i]} · ${risk?.title ?? pin.risk}`,
-          body: pinBody(pin.note, "risks", pin.risk, orgOverlay),
+          body: pinBody(pin.note, "risks", pin.risk),
         });
       });
       pinsByEdge.set(at, list);
@@ -1128,7 +1102,7 @@ export function FlowDiagramRF({
       });
     }
     return out;
-  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, orgOverlay, chipPaint, simple, showRisks, onPickMitigation]);
+  }, [archetype, walk, walkActive, inScenario, walkEdges, hoveredEdge, cardAt, onPinLeave, highlight, overlay, chipPaint, simple, showRisks, onPickMitigation]);
 
   return (
     <div

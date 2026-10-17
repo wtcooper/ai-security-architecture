@@ -1,57 +1,31 @@
-# Organization capability schema
+# The status file
 
-`data/org/local/` is preferred; `example/` is the fallback. Only the following active files
-are accepted. Historical control/mitigation mappings belong under `archive/`.
+`data/status.yaml` is the only file an organisation edits to record its position. It ships
+with no entries.
 
 ```yaml
-# capabilities.yaml
-organisation:
-  name: Acme
-  shortName: AC
 capabilities:
-  - id: AC-DLP
-    title: Corporate endpoint DLP
-    capability: cap-sensitive-data-redaction # one MITRE id (data/overlay/mitigations.yaml) or cap-* (data/overlay/specializations.yaml)
-    description: Sensitive-data inspection for AI prompts and uploads.
-    surfaces:
-      surfaceEndpoint:
-        status: inProgress # enabled | inProgress | gap
-        note: Upload inspection is still in pilot.
-        evidence: SEC-42 # optional reference
-  - id: AC-MFA
-    title: Workforce IdP with phishing-resistant MFA
-    capability: D3-MFA # a MITRE id directly
-    surfaces: {}
+  cap-sensitive-data-redaction:      # a cap-* specialisation (data/overlay/specializations.yaml)
+    status: inProgress               # enabled | inProgress | gap
+    displayName: Corporate AI DLP    # optional: shown first, the catalogue name beneath it
+    note: Upload inspection is still in pilot.   # optional: shown on hover
+  D3-MFA:                            # or a MITRE id (data/overlay/mitigations.yaml)
+    status: enabled
+    displayName: Phishing-resistant SSO
 ```
 
-`surfaces: {}` means no assessment yet. Other surfaces are `surfaceCloud` and `surfaceSaas`.
-A surface entry is accepted only where the capability has `applies: true` for that surface;
-the reason is in its surface note, and a specialisation inherits its parent's surfaces unless
-it overrides them. Organization IDs must be unique, titles nonempty, and the capability key
-valid. Do not add `controls`, `mitigations`, `risks`, `capabilities`, `categories`, or
-multiple targets to an organization entry; the build rejects them.
+Rules the build enforces (`scripts/lib/enablement.ts`, `loadStatus`):
 
-```yaml
-# tooling-status.yaml
-tools:
-  - tool: toolClaudeCode
-    available: true
-    note: Approved for engineering.
-    capabilities:
-      AC-DLP: # organization capability ID, not a MITRE id, cap-* or tech-*
-        status: inProgress
-        note: Verifying coverage of this tool's outbound prompts.
-        evidence: SEC-43
-```
+- every key is a capability id in the catalogue;
+- `status`, if present, is `enabled`, `inProgress` or `gap`;
+- only `status`, `displayName` and `note` are accepted; `displayName` may not be empty.
 
-The capability behind the org ID must be pinned on the product's reference architecture —
-itself, its MITRE parent, or a specialisation of it; a product is assessed only against
-capabilities its drawing calls for. Unavailable tools do not contribute to surface rollups.
-Only recorded assessments contribute: matching statuses retain their value; mixed statuses
-become partial. Missing records are Not assessed.
+An entry may carry only a `displayName` — renaming without assessing. Status is one value per
+capability, not per surface or per product.
 
-Status is authored only here, on capabilities. A parent rolls up its specialisations' records;
-control status is the rollup of the capabilities that support it; technology categories carry
-none. All CoSAI organization associations are generated. Vendor research remains per
-capability row in the tool registry and is not organization posture. See
-`data/org/README.md` for migration.
+Rollups, computed in `src/lib/data.ts`:
+
+- a MITRE parent with no entry of its own takes the rollup of its specialisations;
+- a CoSAI control takes the rollup of the parent capabilities that support it;
+- a rollup is Enabled only when every part is, a Gap when nothing is enabled or in progress,
+  and In progress otherwise. Nothing set at all reads Not set.

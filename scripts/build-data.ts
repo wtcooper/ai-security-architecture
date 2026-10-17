@@ -8,14 +8,13 @@
  *   npm run data
  */
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
-import { compileOrgCapabilities, checkOrgToolCapabilities } from "./lib/org-capabilities";
-import { loadTechnologyCategories } from "./lib/technology-categories";
-import { loadLandscape } from "./lib/landscape";
+import { loadControlCrosswalks } from "./lib/control-crosswalks";
+import { loadEnablement, loadStatus } from "./lib/enablement";
 import { loadSpecializations } from "./lib/specializations";
 
 import type {
@@ -31,9 +30,6 @@ import type {
   FrameworkNote,
   Guidance,
   Incident,
-  OrgCapability,
-  OrgMeta,
-  OrgToolPosture,
   Persona,
   Rect,
   Risk,
@@ -171,30 +167,6 @@ async function loadTooling(): Promise<{
 }
 
 /**
- * The organisation layer: data/org/local/ when the adopter has created it, else the shipped
- * example. Missing files inside the chosen profile are an empty layer, not an error — an
- * organization may inventory capabilities before assessing their deployment.
- */
-async function loadOrg(): Promise<{ meta: OrgMeta; capabilities: OrgCapability[]; posture: OrgToolPosture[] }> {
-  const base = join(ROOT, "data", "org");
-  const profile: OrgMeta["profile"] = existsSync(join(base, "local")) ? "local" : "example";
-  const dir = join(base, profile);
-  if (["frameworks.yaml", "mitigations.yaml"].some((name) => existsSync(join(dir, name)))) {
-    throw new Error(`org/${profile}: use capabilities.yaml for organization mappings and status; archive legacy frameworks.yaml and mitigations.yaml after reviewing the migration guide in data/org/README.md`);
-  }
-  const path = join(dir, "capabilities.yaml");
-  const doc = existsSync(path) ? await loadYaml<{ organisation?: { name?: string; shortName?: string }; capabilities?: OrgCapability[] }>(path) : undefined;
-  if (doc?.capabilities && !Array.isArray(doc.capabilities)) throw new Error(`org/${profile}/capabilities.yaml: expected a list of organization capabilities, not the legacy MITRE schema`);
-  const statusPath = join(dir, "tooling-status.yaml");
-  const status = existsSync(statusPath) ? await loadYaml<{ tools?: OrgToolPosture[] }>(statusPath) : undefined;
-  return {
-    meta: { profile, example: profile === "example", name: doc?.organisation?.name?.trim() || "Your organisation", shortName: doc?.organisation?.shortName?.trim() || undefined },
-    capabilities: doc?.capabilities ?? [],
-    posture: status?.tools ?? [],
-  };
-}
-
-/**
  * An architecture as authored: the build computes the geometry and derives the risk and
  * mitigation lists from the pins.
  */
@@ -301,10 +273,8 @@ async function main() {
   });
   mitigationsDoc.mitigations.push(...specializations.specializations);
   for (const s of specializations.specializations) mitigationIds.add(s.id);
-  const technology = await loadTechnologyCategories(ROOT, mitigationIds, controlIds);
-  // The enterprise landscape places every MITRE parent onto three framings; specialisations follow their parent.
-  const landscape = await loadLandscape(ROOT, new Set(mitigationsDoc.mitigations.filter((m) => !m.parent).map((m) => m.id)));
-  authoredDoc.frameworks.push(...technology.frameworks);
+  const crosswalks = await loadControlCrosswalks(ROOT, controlIds);
+  authoredDoc.frameworks.push(...crosswalks.frameworks);
   // CoSAI's six, plus any framework authored here. Kept in one list so the UI treats them
   // alike, with `authored` marking which is which.
   const allFrameworks = markSuperseded([
@@ -323,16 +293,10 @@ async function main() {
     riskIds,
     controlIds,
     mitigationIds,
-    categoryIds: new Set(technology.categories.map((c) => c.id)),
     frameworksDoc,
   });
 
-  // Organization records map onto capabilities (MITRE ids or authored specialisations); control links derive.
-  const org = await loadOrg();
-  const orgFrameworks = compileOrgCapabilities(org, mitigationsDoc.mitigations, new Set(mitigationsDoc.surfaces.map((s) => s.id)));
-  allFrameworks.push(...orgFrameworks.frameworks);
-  Object.assign(authoredMappings, orgFrameworks.mappings);
-  const declaredEntries = { ...entriesDoc.frameworks, ...technology.entries, ...orgFrameworks.entries };
+  const declaredEntries = { ...entriesDoc.frameworks, ...crosswalks.entries };
 
   // --- Framework entry reference text ----------------------------------------------
   const frameworkEntries = checkFrameworkEntries(declaredEntries, {
@@ -367,8 +331,9 @@ async function main() {
     toolIds: new Set(tools.map((t) => t.id)),
   });
 
-  // --- Organisation tool posture -------------------------------------------------
-  const orgToolPosture = checkOrgToolCapabilities(org.posture, org.capabilities, mitigationsDoc.mitigations, tools, archetypes);
+  // --- Enable layers and the organisation's status file ----------------------------
+  const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes);
+  const status = await loadStatus(ROOT, mitigationsDoc.mitigations);
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -452,16 +417,12 @@ async function main() {
         incidents: incidents.length,
         mitigations: mitigationsDoc.mitigations.length,
         specializations: specializations.specializations.length,
-        technologyCategories: technology.categories.length,
         archetypes: archetypes.length,
         guidance: guidance.length,
         tools: tools.length,
         vendors: toolingLoaded.vendors.length,
-        orgFrameworks: orgFrameworks.frameworks.length,
-        orgToolPosture: orgToolPosture.length,
-        landscapeViews: landscape.views.length,
+        statuses: Object.values(status).filter((s) => s.status).length,
       },
-      org: org.meta,
     },
     componentCategories: componentsDoc.categories,
     components,
@@ -482,8 +443,6 @@ async function main() {
     surfaces: mitigationsDoc.surfaces,
     specializations: specializations.specializations,
     specializationsAttribution: specializations.attribution,
-    technologyCategories: technology.categories,
-    technologyCategoriesAttribution: technology.attribution,
     mitigations: mitigationsDoc.mitigations,
     mitigationsAttribution: mitigationsDoc.attribution ?? "",
     mitigationAliases: mitigationsDoc.aliases,
@@ -493,9 +452,8 @@ async function main() {
     vendors: toolingLoaded.vendors,
     tools,
     toolingAttribution: toolingLoaded.attribution,
-    orgToolPosture,
-    orgCapabilities: org.capabilities,
-    landscape,
+    status,
+    enablement,
   };
 
   await mkdir(OUT_DIR, { recursive: true });
@@ -507,8 +465,7 @@ async function main() {
       `${authored} authored), ${controls.length} controls, ${components.length} components, ` +
       `${incidents.length} incidents, ${mitigationsDoc.mitigations.length} mitigations, ` +
       `${archetypes.length} archetypes, ${guidance.length} guidance docs, ` +
-      `${tools.length} tools, org profile "${org.meta.profile}" ` +
-      `(${orgFrameworks.frameworks.length} catalogues, ${orgToolPosture.length} tool postures)`,
+      `${tools.length} tools, ${Object.values(status).filter((s) => s.status).length} capability statuses set`,
   );
 }
 
@@ -2101,7 +2058,6 @@ function checkAuthoredFrameworks(
     riskIds: Set<string>;
     controlIds: Set<string>;
     mitigationIds: Set<string>;
-    categoryIds: Set<string>;
     frameworksDoc: { frameworks: Framework[] };
   },
 ): Record<string, AuthoredMappings> {
@@ -2125,10 +2081,9 @@ function checkAuthoredFrameworks(
       risks: ctx.riskIds,
       controls: ctx.controlIds,
       mitigations: ctx.mitigationIds,
-      categories: ctx.categoryIds,
     };
     const mapped: AuthoredMappings = {};
-    for (const kind of ["risks", "controls", "mitigations", "categories"] as (keyof AuthoredMappings)[]) {
+    for (const kind of ["risks", "controls", "mitigations"] as (keyof AuthoredMappings)[]) {
       const byId = framework.mappings?.[kind];
       if (!byId) continue;
       for (const [id, entries] of Object.entries(byId)) {
@@ -2137,7 +2092,7 @@ function checkAuthoredFrameworks(
       }
       mapped[kind] = byId;
     }
-    if (!mapped.risks && !mapped.controls && !mapped.mitigations && !mapped.categories) {
+    if (!mapped.risks && !mapped.controls && !mapped.mitigations) {
       fail(`${where}: declares no mappings at all`);
     }
     out[framework.id] = mapped;
@@ -2189,12 +2144,11 @@ function checkFrameworkEntries(
         continue;
       }
       if (!entry.label?.trim()) fail(`framework entries: ${framework.id} "${id}" has no label`);
-      // Organisation catalogues may carry bare identifiers; external frameworks explain theirs.
-      if (!entry.description?.trim() && !framework.org)
+      if (!entry.description?.trim())
         fail(`framework entries: ${framework.id} "${id}" has no description`);
     }
     for (const id of Object.keys(entries)) {
-      if (!mapped.has(id) && !FULL_LIST.has(framework.id) && !framework.entriesComplete) {
+      if (!mapped.has(id) && !FULL_LIST.has(framework.id)) {
         fail(`framework entries: ${framework.id} "${id}" has an entry but CoSAI maps nothing to it`);
       }
     }

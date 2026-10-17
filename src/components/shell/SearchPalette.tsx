@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   activePersonas,
   archetypesInOrder,
+  capabilityName,
   mitigationsInOrder,
   componentTitle,
   components,
@@ -51,10 +52,10 @@ function buildIndex(): Entry[] {
     })),
     ...mitigationsInOrder.map((c) => ({
       kind: "Capability",
-      title: c.title,
+      title: capabilityName(c.id),
       hint: c.parent ? ` · specialisation` : c.id,
-      href: `/capabilities?capability=`,
-      text: norm(c.title, c.abbrev, c.id, c.parent),
+      href: `/capabilities?capability=${c.id}`,
+      text: norm(capabilityName(c.id), c.title, c.abbrev, c.id, c.parent),
     })),
     ...components.map((c) => ({
       kind: "Component",
@@ -76,11 +77,17 @@ function buildIndex(): Entry[] {
       href: `/reference?archetype=${a.id}`,
       text: norm(a.title, a.abbrev, a.id),
     })),
+    ...archetypesInOrder.map((a) => ({
+      kind: "Enable",
+      title: `Enable ${a.title.charAt(0).toLowerCase()}${a.title.slice(1)}`,
+      href: `/enable?archetype=${a.id}`,
+      text: norm("enable", a.title, a.abbrev, a.id),
+    })),
     ...toolsInOrder.map((t) => ({
       kind: "Tool",
       title: t.name,
       hint: vendorById.get(t.vendor)?.name ?? t.vendor,
-      href: `/reference?archetype=${t.architecture}&tool=${t.id}`,
+      href: `/enable?archetype=${t.architecture}&tool=${t.id}`,
       text: norm(t.name, t.family, t.vendor, t.id, ...(t.variants ?? []).map((v) => v.name)),
     })),
     ...incidents.map((i) => ({
@@ -93,7 +100,7 @@ function buildIndex(): Entry[] {
   ];
 }
 
-const KIND_ORDER = ["Architecture", "Tool", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
+const KIND_ORDER = ["Architecture", "Enable", "Tool", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);

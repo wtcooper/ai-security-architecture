@@ -3,9 +3,9 @@
 Map each organization capability to one existing id: a MITRE mitigation in
 `data/overlay/mitigations.yaml` or a `cap-*` specialisation in
 `data/overlay/specializations.yaml`. Read the capability's definition and implementation
-scope, the controls it supports and the technology categories that realise it, not just a
-similar label. Where a specialisation exists for what is deployed, use it rather than the
-parent. Never author separate organization mappings to technology categories or controls.
+scope and the controls it supports, not just a similar label. Where a specialisation exists
+for what is deployed, use it rather than the parent. Never record status against a control:
+control status rolls up from its capabilities.
 
 | Organization technology or practice | Capability |
 | --- | --- |

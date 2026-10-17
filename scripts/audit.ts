@@ -308,7 +308,6 @@ async function main() {
     tools: Tool[];
     mitigationGaps: Dataset["mitigationGaps"];
     specializations: Dataset["specializations"];
-    technologyCategories: Dataset["technologyCategories"];
     frameworks: Dataset["frameworks"];
     authoredMappings: Dataset["authoredMappings"];
   };
@@ -317,8 +316,7 @@ async function main() {
   p("## 4. Architecture coverage");
   p();
   p(
-    `${archetypes.length} flow-style reference architectures (pilots; the 28-archetype ` +
-      "zone-style catalogue is archived under data/reference/archive). Everything below is a " +
+    `${archetypes.length} flow-style reference architectures. Everything below is a ` +
       "gap between the taxonomy and the drawings.",
   );
   p();
@@ -486,29 +484,13 @@ async function main() {
   p("See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom mitigation identifiers are introduced.");
   p();
 
-  p("## 7. Technology categories and supplementary mappings");
+  p("## 7. NIST CSF 2.0 crosswalk");
   p();
-  p(`${dataset.technologyCategories.length} sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.`);
+  const csf = dataset.authoredMappings["nist-csf"]?.controls ?? {};
+  p(`${Object.keys(csf).length} of ${controls.length} CoSAI controls map onto a NIST CSF 2.0 category. CoSAI controls and their NIST AI RMF mappings remain unchanged.`);
   p();
-  p("| Framework | Technology categories mapped | CoSAI controls mapped here |");
-  p("| --- | --- | --- |");
-  for (const id of ["owasp-solutions", "enisa-ecsmaf", "ecso-market", "cisa-tic", "nist-csf"]) {
-    const mapping = dataset.authoredMappings[id];
-    p(`| ${dataset.frameworks.find((f) => f.id === id)?.name} | ${Object.keys(mapping?.categories ?? {}).length} | ${Object.keys(mapping?.controls ?? {}).length} |`);
-  }
-  p();
-  const namedMethods = new Set(dataset.technologyCategories.flatMap((c) => c.mitigationMappings.map((m) => m.mitigation)));
-  const methodsWithoutTechnology = dataset.mitigations.filter((m) => !namedMethods.has(m.id));
-  p(`### MITRE methods without a selected technology category — ${methodsWithoutTechnology.length}`);
-  p();
-  p("These methods remain available. Some describe engineering or governance practices rather than technology categories; others need a further sourced implementation mapping.");
-  p();
-  for (const m of methodsWithoutTechnology) p(`- ${m.title} (${m.id})`);
-  p();
-  const noCsf = controls.filter((c) => !dataset.authoredMappings["nist-csf"].controls?.[c.id]);
-  p(`CoSAI controls without a selected NIST CSF category mapping: ${noCsf.map((c) => c.title).join(", ")}.`);
-  p();
-  p("See [the source and relationship contract](../data/frameworks/README.md) for versions, scopes and identifier conventions.");
+  const noCsf = controls.filter((c) => !csf[c.id]);
+  p(`CoSAI controls without a NIST CSF category mapping: ${noCsf.map((c) => c.title).join(", ") || "none"}.`);
   p();
 
   await mkdir(join(ROOT, "docs"), { recursive: true });

@@ -8,51 +8,9 @@
 import Link from "next/link";
 
 import { Chip } from "@/components/Chips";
-import { Prose } from "@/components/Prose";
-import { controlCategories, mitigationById, controlsForMitigation, guidanceByArchetype, orgNamesFor, orgSurfacePostureFor, orgSurfaceStatusFor, riskById, riskCode } from "@/lib/data";
-import { frameworkHref, orgEntriesFor, type EntityKind } from "@/lib/frameworks";
-import { useOrgOverlay } from "@/components/tooling/overlay";
-import { StatusPill } from "@/components/StatusPill";
+import { capabilityName, controlCategories, mitigationById, controlsForMitigation, riskById, riskCode, status as statusFile } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
 import type { Highlight } from "./FlowDiagram";
-import { chipColors } from "./flow-style";
-
-/** The organisation's own identifiers for a pinned entity, linked into the Frameworks tab. */
-/** With status shown, what the organisation has on this surface for the mitigation. */
-function OrgSurfaceStatus({ mitigationId, surfaceId }: { mitigationId: string; surfaceId: string }) {
-  const overlay = useOrgOverlay();
-  if (!overlay) return null;
-  const posture = orgSurfacePostureFor(mitigationId, surfaceId);
-  return (
-    <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
-      <span className="mr-0.5">Capability support:</span>
-      <StatusPill status={orgSurfaceStatusFor(mitigationId, surfaceId)} compact />
-      {posture?.technology && <span className="text-ink-2">{posture.technology}</span>}
-      {posture?.note && <span>— {posture.note}</span>}
-    </p>
-  );
-}
-
-function OrgRefs({ kind, id }: { kind: EntityKind; id: string }) {
-  const overlay = useOrgOverlay();
-  const refs = orgEntriesFor(kind, id);
-  if (!overlay || !refs.length) return null;
-  return (
-    <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-3">
-      <span className="mr-0.5">Org capabilities:</span>
-      {refs.map((o) => (
-        <Link
-          key={`${o.frameworkId}:${o.id}`}
-          href={frameworkHref(o.frameworkId, o.id)}
-          title={o.label}
-          className="rounded bg-mist px-1.5 py-[1px] text-ink-2 hover:underline"
-        >
-          {o.label} <span className="text-[10px] text-ink-3">({o.id})</span>
-        </Link>
-      ))}
-    </p>
-  );
-}
 
 export function WalkList({
   walks,
@@ -103,40 +61,6 @@ function notesFor(pins: { note?: string }[]) {
   return [...new Set(pins.map((p) => p.note).filter((n): n is string => Boolean(n)))];
 }
 
-/**
- * What the controls-guidance document says about one control on this architecture: the items
- * that cite it, with their prose, links and the products they name. Folded into the control
- * row so guidance is read beside the control it is about rather than on a tab of its own.
- */
-function GuidanceFor({ archetype, mitigationId }: { archetype: Archetype; mitigationId: string }) {
-  const doc = guidanceByArchetype.get(archetype.id);
-  const items = doc?.items.filter((i) => i.mitigations.includes(mitigationId)) ?? [];
-  if (!items.length) return null;
-  return (
-    <div className="space-y-2.5">
-      {items.map((item) => (
-        <div key={item.title} className="rounded-lg border border-line bg-mist/40 px-3 py-2.5">
-          <p className="text-[12.5px] font-semibold text-ink">{item.title}</p>
-          <div className="mt-1">
-            <Prose blocks={item.body} size="sm" />
-          </div>
-          {(item.links?.length ?? 0) > 0 && (
-            <ul className="mt-1 space-y-0.5">
-              {item.links!.map((l) => (
-                <li key={l.url} className="text-[11.5px]">
-                  <a href={l.url} target="_blank" rel="noreferrer" className="text-ink-2 hover:text-introduced hover:underline">
-                    {l.title} →
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function MitigationList({
   archetype,
   highlight,
@@ -148,7 +72,6 @@ export function MitigationList({
   onHighlight: (h: Highlight | null) => void;
   columns?: 1 | 2;
 }) {
-  const overlay = useOrgOverlay();
   // Control first, method second: the numbered chips read under the CoSAI control group they serve.
   const numbered = archetype.mitigations.map((id, i) => ({ id, i, mitigation: mitigationById.get(id) }));
   const groups = controlCategories
@@ -172,21 +95,12 @@ export function MitigationList({
                 active ? "border-introduced bg-introduced-soft" : "border-transparent hover:bg-mist"
               }`}
             >
-              {overlay ? (
-                <span
-                  className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border text-[10.5px] font-bold"
-                  style={chipColors(orgSurfaceStatusFor(id, archetype.surface))}
-                >
-                  {i + 1}
-                </span>
-              ) : (
-                <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-introduced bg-introduced-soft text-[10.5px] font-bold text-introduced">
-                  {i + 1}
-                </span>
-              )}
-              {overlay && orgNamesFor(id).length ? (
+              <span className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border border-introduced bg-introduced-soft text-[10.5px] font-bold text-introduced">
+                {i + 1}
+              </span>
+              {statusFile[id]?.displayName ? (
                 <span className="leading-tight">
-                  <span className="block text-[12.5px] text-ink">{orgNamesFor(id).join(" · ")}</span>
+                  <span className="block text-[12.5px] text-ink">{capabilityName(id)}</span>
                   <span className="block text-[11px] text-ink-3">{mitigation?.title ?? id}</span>
                 </span>
               ) : (
@@ -208,15 +122,20 @@ export function MitigationList({
                     </Link>
                   ))}
                 </p>
-                <OrgSurfaceStatus mitigationId={id} surfaceId={archetype.surface} />
-                <OrgRefs kind="mitigations" id={id} />
-                <GuidanceFor archetype={archetype} mitigationId={id} />
-                <Link
-                  href={`/capabilities?capability=${id}`}
-                  className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
-                >
-                  This method across every surface →
-                </Link>
+                <span className="flex flex-wrap gap-x-4">
+                  <Link
+                    href={`/enable?archetype=${archetype.id}#capability-${id}`}
+                    className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
+                  >
+                    How to enable it →
+                  </Link>
+                  <Link
+                    href={`/capabilities?capability=${id}`}
+                    className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"
+                  >
+                    Full definition →
+                  </Link>
+                </span>
               </div>
             )}
           </div>
@@ -266,7 +185,6 @@ export function RiskList({
                     {note}
                   </p>
                 ))}
-                <OrgRefs kind="risks" id={id} />
                 <Link
                   href={`/risks?risk=${id}`}
                   className="inline-block text-[11.5px] font-semibold text-introduced hover:underline"

@@ -1,4 +1,4 @@
-import { surfaces } from "@/lib/data";
+import { status, surfaces } from "@/lib/data";
 import type { Mitigation } from "@/lib/types";
 import type { MatrixItem } from "./DefenseMatrix";
 
@@ -6,7 +6,7 @@ import type { MatrixItem } from "./DefenseMatrix";
 export function mitigationMatrixItem(mitigation: Mitigation): MatrixItem {
   return {
     id: mitigation.id,
-    title: mitigation.abbrev ?? mitigation.title,
+    title: status[mitigation.id]?.displayName ?? mitigation.abbrev ?? mitigation.title,
     placements: surfaces.filter((s) => mitigation.surfaces[s.id]?.applies)
       .map((s) => ({ category: mitigation.category, surface: s.id })),
   };

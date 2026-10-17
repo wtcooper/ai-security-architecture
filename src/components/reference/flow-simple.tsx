@@ -26,8 +26,7 @@ export const STATUS_FILL: Record<DisplayStatus, { bg: string; border: string; te
   enabled: { bg: "#06845a", border: "#06845a", text: "#ffffff" },
   inProgress: { bg: "#d4a106", border: "#b88a00", text: "#ffffff" },
   gap: { bg: "#d92d20", border: "#d92d20", text: "#ffffff" },
-  notAssessed: { bg: "#ffffff", border: "#98a2b3", text: "#667085", dashed: true },
-  unmapped: { bg: "#ffffff", border: "#d0d5dd", text: "#98a2b3", dashed: true },
+  notSet: { bg: "#ffffff", border: "#98a2b3", text: "#667085", dashed: true },
 };
 
 export function badgeColors(status?: DisplayStatus, paint?: ChipPaint) {

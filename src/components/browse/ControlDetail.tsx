@@ -6,23 +6,22 @@ import { Prose } from "@/components/Prose";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 import { StatusPill } from "@/components/StatusPill";
-import { archetypesForControl, mitigationGaps, mitigationsForControl, componentsForControl, componentTitle, controlById, controlCategories, frameworkById, orgControlPostureFor, personaTitle, risksForControl } from "@/lib/data";
+import { archetypesForControl, mitigationGaps, mitigationsForControl, componentsForControl, componentTitle, controlById, controlCategories, controlStatusFor, personaTitle, risksForControl } from "@/lib/data";
 import { mappingsForControl } from "@/lib/frameworks";
 
-export function ControlDetail({ controlId, onClose, framed = true, overlay = false }: { controlId: string; onClose?: () => void; framed?: boolean; overlay?: boolean }) {
+export function ControlDetail({ controlId, onClose, framed = true }: { controlId: string; onClose?: () => void; framed?: boolean }) {
   const control = controlById.get(controlId)!;
   const risks = risksForControl(control.id);
   const comps = componentsForControl(control.id);
   const mitigationGap = mitigationGaps.find((gap) => gap.control === control.id);
-  const posture = overlay ? orgControlPostureFor(control.id) : null;
+  const status = controlStatusFor(control.id);
   return <section className={framed ? "rounded-xl border border-line bg-paper p-6" : undefined}>
     {onClose && <button onClick={onClose} className="float-right text-xs text-ink-3 hover:text-ink" aria-label="Close control detail">Close ×</button>}
     <p className="eyebrow">{controlCategories.find((c) => c.id === control.category)?.title}</p>
-    <h2 className="display mt-1.5 flex flex-wrap items-center gap-3 text-[27px] font-bold leading-tight text-ink">{control.title}{posture && <StatusPill status={posture.status} />}</h2>
-    {posture && <p className="mt-2 text-xs text-ink-3">Rolled up from the capabilities below across every surface and available product; never authored against the control itself.</p>}
+    <h2 className="display mt-1.5 flex flex-wrap items-center gap-3 text-[27px] font-bold leading-tight text-ink">{control.title}{status !== "notSet" && <StatusPill status={status} title="Rolled up from the capabilities below; never set on the control itself." />}</h2>
 
     <Prose blocks={control.description} refs={control.externalReferences} className="mt-4" />
-    <CapabilityLinks controls={[control.id]} overlay={overlay} />
+    <CapabilityLinks controls={[control.id]} />
     {!mitigationsForControl(control.id).length && <p className="mt-4 text-sm text-ink-3">No capability in the catalogue delivers this control yet; it is met by process until one is authored.</p>}
     {mitigationGap && (
       <div className="mt-4 rounded-lg border border-line bg-mist p-4">
@@ -81,7 +80,7 @@ export function ControlDetail({ controlId, onClose, framed = true, overlay = fal
     </div>
 
     <div className="mt-6">
-      <MappingBadges mappings={control.mappings} extra={mappingsForControl(control).filter((m) => !frameworkById.get(m.frameworkId)?.org)} />
+      <MappingBadges mappings={control.mappings} extra={mappingsForControl(control)} />
     </div>
 
   </section>;

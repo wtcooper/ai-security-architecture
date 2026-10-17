@@ -672,7 +672,7 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-17 flow-style reference architectures (pilots; the 28-archetype zone-style catalogue is archived under data/reference/archive). Everything below is a gap between the taxonomy and the drawings.
+17 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
@@ -1101,61 +1101,8 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 
 See [the profile and migration assessment](MITRE-CAPABILITY-GAPS.md) for scope and source limitations. No custom mitigation identifiers are introduced.
 
-## 7. Technology categories and supplementary mappings
+## 7. NIST CSF 2.0 crosswalk
 
-25 sourced technology categories. Counts describe authored relationships, not deployed coverage. CoSAI controls and their NIST AI RMF mappings remain unchanged.
+34 of 35 CoSAI controls map onto a NIST CSF 2.0 category. CoSAI controls and their NIST AI RMF mappings remain unchanged.
 
-| Framework | Technology categories mapped | CoSAI controls mapped here |
-| --- | --- | --- |
-| OWASP AI Solutions | 4 | 0 |
-| ENISA ECSMAF | 20 | 0 |
-| ECSO Market Taxonomy | 15 | 0 |
-| CISA TIC Capabilities | 12 | 0 |
-| NIST CSF | 25 | 34 |
-
-### MITRE methods without a selected technology category — 38
-
-These methods remain available. Some describe engineering or governance practices rather than technology categories; others need a further sourced implementation mapping.
-
-- Maintain AI Dataset Provenance (AML.M0025)
-- Sanitize Training Data (AML.M0007)
-- Code Signing (AML.M0013)
-- Verify AI Artifacts (AML.M0014)
-- Restrict Library Loading (AML.M0011)
-- Message Authentication (D3-MAN)
-- Application Configuration Hardening (D3-ACH)
-- Restore Configuration (D3-RC)
-- Restore Software (D3-RS)
-- Restore Database (D3-RD)
-- Predictive AI Model Hardening (AML.M0003)
-- Generative AI Model Alignment (AML.M0022)
-- Generative AI Guidelines (AML.M0021)
-- Restrict AI Agent Tool Invocation on Untrusted Data (AML.M0030)
-- Memory Hardening (AML.M0031)
-- Limit AI Service Query Volume and Rate (AML.M0004)
-- Limit AI Workload Resource Consumption (AML.M0036)
-- Credential Transmission Scoping (D3-CTS)
-- Token Binding (D3-TB)
-- System File Analysis (D3-SFA)
-- Software Update (D3-SU)
-- Input Screening Guardrails (cap-input-guardrails)
-- Output Content Safety Guardrails (cap-output-guardrails)
-- Sensitive Data Detection and Redaction (cap-sensitive-data-redaction)
-- Retrieval Trust and Grounding Checks (cap-retrieval-grounding-checks)
-- AI Vendor Risk Assessment (cap-ai-vendor-assessment)
-- AI System Threat Modelling (cap-ai-threat-modeling)
-- Model Registry and Documentation (cap-model-documentation)
-- Agent Action Policy Enforcement (cap-agent-action-policy-enforcement)
-- Data Access Governance for Retrieval (cap-data-access-governance)
-- Output Encoding and Safe Rendering (cap-output-encoding)
-- Agent and Tool Registry (cap-agent-tool-registry)
-- Shadow AI Discovery (cap-shadow-ai-discovery)
-- Agent Egress Control (cap-agent-egress-control)
-- Agent Kill Switch and Quarantine (cap-agent-kill-switch)
-- Staged Rollout and Rollback Gate (cap-staged-rollout-gate)
-- Agent Execution Tracing (cap-agent-tracing)
-- Tool and MCP Server Integrity (cap-mcp-tool-integrity)
-
-CoSAI controls without a selected NIST CSF category mapping: User Transparency and Controls.
-
-See [the source and relationship contract](../data/frameworks/README.md) for versions, scopes and identifier conventions.
+CoSAI controls without a NIST CSF category mapping: User Transparency and Controls.

@@ -5,20 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { loadMitigations, readVerifiedSource, isDefensiveTechnique } from "./lib/mitigations";
-import { type LegacyToolControl as ToolControl, migrateKeyed, migrateToolControls, type MigrationRules } from "./lib/capability-migration";
-import type { OrgOrgStatus } from "../src/lib/types";
 import { dataset, archetypeById, mitigationById, controlById, controlsForTool } from "../src/lib/data";
 import { buildViewerModel } from "../src/components/reference/export-html";
-import { renameMitigationKeys } from "./rename-mitigations";
 
-test("schema rename preserves evidence, labels and formatting and is idempotent", () => {
-  const before = "# historical evidence stays intact\ncapabilities:\n  - capability: AML.M0020\n    note: capability is historical wording\n    migration:\n      original:\n        - capability: capabilityAiDlp\n";
-  const after = renameMitigationKeys(before);
-  assert.equal(after, before.replace("capabilities:", "mitigations:").replace("capability: AML.M0020", "mitigation: AML.M0020"));
-  assert.equal(renameMitigationKeys(after), after);
-});
-
-test("all live tabs share native mitigation references, including framework and organization mappings", () => {
+test("all live tabs share native mitigation references, including framework mappings", () => {
   const retired = new Set(Object.keys(dataset.mitigationAliases));
   const walk = (value: unknown, path: string) => {
     if (typeof value === "string") assert.ok(!retired.has(value), `${path}: retired reference ${value}`);
@@ -136,38 +126,4 @@ test("the profile rejects invented mitigation IDs and authored overrides of MITR
     await writeFile(path, stringify(profile));
     await assert.rejects(loadMitigations(root), /upstream definitions must not be overridden/);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
-
-const rules: MigrationRules = {
-  capabilityBundle: { targets: ["D3-EI", "AML.M0031"], reviewRequired: true, reason: "split" },
-  capabilityOther: { targets: ["D3-EI"], reviewRequired: true, reason: "merge" },
-};
-test("split and merged tool claims become unknown while preserving all original evidence", () => {
-  const rows: ToolControl[] = [
-    { capability: "capabilityBundle", coverage: "native", verified: "2026-01-01", steps: [{ title: "Enable", body: ["Configure isolation"], url: "https://example.com/a" }] },
-    { capability: "capabilityOther", coverage: "none", evidence: [{ title: "Limits", url: "https://example.com/b" }], note: "Not supported" },
-  ];
-  const migrated = migrateToolControls(rows, rules);
-  assert.equal(migrated.length, 2);
-  for (const row of migrated) {
-    assert.equal(row.coverage, "unknown");
-    assert.equal(row.verified, undefined);
-    assert.equal(row.migration?.reviewRequired, true);
-  }
-  assert.deepEqual(migrated[0].migration?.original, rows);
-  assert.deepEqual(migrated[0].steps, rows[0].steps);
-  assert.deepEqual(migrated[0].evidence, rows[1].evidence);
-  assert.deepEqual(migrateToolControls(migrated, rules), migrated);
-});
-
-test("posture splits never manufacture enabled functions and preserve gaps and evidence", () => {
-  const original = { capabilityBundle: { status: "enabled", note: "Pilot", evidence: "TICKET-1" }, capabilityOther: { status: "gap", note: "Missing" } };
-  const migrated = migrateKeyed(original, rules) as Record<string, OrgOrgStatus>;
-  assert.equal(migrated["D3-EI"].status, "inProgress");
-  assert.equal(migrated["AML.M0031"].status, "inProgress");
-  assert.equal(migrated["D3-EI"].migration?.original[0].evidence, "TICKET-1");
-  assert.equal(migrated["D3-EI"].migration?.original.length, 2);
-  assert.deepEqual(migrateKeyed(migrated, rules), migrated);
-  const gap = migrateKeyed({ capabilityBundle: { surfaceCloud: { status: "gap", note: "Missing" } } }, rules) as Record<string, Record<string, OrgOrgStatus>>;
-  assert.equal(gap["D3-EI"].surfaceCloud.status, "gap");
 });

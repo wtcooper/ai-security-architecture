@@ -1,53 +1,48 @@
-"use client";
-
-import { STATUS_META } from "@/components/StatusPill";
-import { useOrgOverlay } from "@/components/tooling/overlay";
-import type { DisplayStatus } from "@/lib/types";
-import { chipColors, PATH_STYLE, REF_LAYERS } from "./flow-style";
-
-const CHIP_STATUSES: DisplayStatus[] = ["enabled", "inProgress", "gap", "notAssessed"];
+import { CHIP, PATH_STYLE, REF_LAYERS, TAG } from "./flow-style";
 
 /**
- * The reading key for a flow-style architecture drawing, laid out as two breathing rows —
- * paths, then layers — so it can sit under a diagram without cramping into a corner. With org
- * data on, a third row keys the chip colours to capability status.
- * Shared by the Reference Architectures tab and the incident replay's architecture view.
+ * The reading key for a flow-style architecture drawing, on one line: the two path styles,
+ * what a numbered chip and a risk code are, and the three tab colours. Shared by the
+ * architecture page and the incident replay's architecture view.
  */
-export function FlowLegend({ className = "", chipKey = true }: { className?: string; /** Off when a caller recolours the chips and keys them itself. */ chipKey?: boolean }) {
-  const overlay = useOrgOverlay();
+export function FlowLegend({ className = "" }: { className?: string }) {
   return (
-    <div className={`space-y-1.5 text-[12px] text-ink-2 ${className}`}>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
-        {Object.entries(PATH_STYLE).map(([id, style]) => (
-          <span key={id} className="flex items-center gap-1.5">
-            <svg width="26" height="10" aria-hidden>
-              <path d="M 1 5 H 25" stroke={style.stroke} strokeWidth="2" strokeDasharray={style.dash} />
-            </svg>
-            {style.label}
-          </span>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        <span className="text-ink-3">Tab colour = layer</span>
+    <div className={`flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[12px] text-ink-2 ${className}`}>
+      {Object.entries(PATH_STYLE).map(([id, style]) => (
+        <span key={id} className="flex items-center gap-1.5">
+          <svg width="22" height="10" aria-hidden>
+            <path d="M 1 5 H 21" stroke={style.stroke} strokeWidth="2" strokeDasharray={style.dash} />
+          </svg>
+          {style.label}
+        </span>
+      ))}
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className="flex h-[16px] w-[16px] items-center justify-center rounded-full border text-[9px] font-bold"
+          style={{ background: CHIP.fill, borderColor: CHIP.stroke, color: CHIP.text }}
+        >
+          1
+        </span>
+        Capability
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className="ident rounded-sm border px-1 py-px text-[9px] font-bold"
+          style={{ background: TAG.fill, borderColor: TAG.stroke, color: TAG.text }}
+        >
+          R01
+        </span>
+        Risk
+      </span>
+      <span className="flex items-center gap-1.5">
         {REF_LAYERS.map((l) => (
-          <span key={l.label} className="flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: l.color }} />
-            {l.label}
-          </span>
+          <span key={l.label} title={`${l.label} layer`} className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: l.color }} />
         ))}
-        <span className="text-ink-3">Hover anything · pinch or ⌘/Ctrl + wheel to zoom</span>
-      </div>
-      {overlay && chipKey && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <span className="text-ink-3">Chip colour = capability status</span>
-          {CHIP_STATUSES.map((s) => (
-            <span key={s} className="flex items-center gap-1">
-              <span aria-hidden className="inline-block h-3 w-3 rounded-full" style={{ borderWidth: 1.3, ...chipColors(s) }} />
-              {STATUS_META[s].label}
-            </span>
-          ))}
-        </div>
-      )}
+        {REF_LAYERS.map((l) => l.label).join(" · ")}
+      </span>
+      <span className="text-ink-3">Hover anything for detail</span>
     </div>
   );
 }

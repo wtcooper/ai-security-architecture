@@ -1,28 +1,24 @@
 "use client";
 
 /**
- * One architecture on the page: the drawing at full width, then one tab
- * strip beneath it — overview, sequence flows, tools, controls (with the guidance folded in), risks. One panel is
- * visible at a time and nothing is expanded by default, so the page never shows two lists
- * and a sequence diagram at once. Leaving the flows tab clears the numbering; leaving the
- * mitigation or risk tab clears the highlight, so the drawing always matches the panel.
+ * One architecture on the page: the drawing at full width, then one tab strip beneath it —
+ * overview, sequence flows, capabilities, risks. One panel is visible at a time and nothing is
+ * expanded by default, so the page never shows two lists and a sequence diagram at once.
+ * Leaving the flows tab clears the numbering; leaving the capability or risk tab clears the
+ * highlight, so the drawing always matches the panel. What to put in place, and which tools
+ * deliver it, lives on Enable.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 
-import { guidanceByArchetype, toolsForArchetype } from "@/lib/data";
-import { ToolsForArchitecture } from "@/components/tooling/ToolsForArchitecture";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
-import type { ChipPaint } from "./flow-style";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
-import { Section } from "./ArchetypeDetail";
-import { Prose } from "@/components/Prose";
 import { MitigationList, RiskList, WalkList } from "./rail-lists";
 
-export type Tab = "overview" | "flows" | "mitigations" | "risks" | "tools";
+export type Tab = "overview" | "flows" | "mitigations" | "risks";
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -33,43 +29,19 @@ interface ArchetypeViewProps {
   onWalk: (index: number | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
-  /** A product record open on the Tools tab (deep link `?tool=`), or null. */
-  toolId: string | null;
-  onTool: (id: string | null) => void;
-  /** Experimental mockups only: a bar directly above the drawing (the org toggle, a tool lens). */
-  aboveDrawing?: ReactNode;
-  /** Experimental mockups only: chip colouring handed to the drawing. */
-  chipPaint?: Map<string, ChipPaint> | null;
-  /** Experimental mockups only: replaces the drawing and its legend. */
-  renderDrawing?: (walk: Scenario | null, flows: { walks: Scenario[]; walkIndex: number | null; onWalk: (i: number | null) => void }) => ReactNode;
-  /** Experimental mockups only: replaces the Tools tab's panel. */
-  toolsPanel?: ReactNode;
-  initialTab?: Tab;
 }
 
-const MODE_LABEL = { build: "your teams build this", use: "your teams use a vendor's", hybrid: "built and consumed" } as const;
-
-export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight, toolId, onTool, aboveDrawing, chipPaint = null, renderDrawing, toolsPanel, initialTab }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
   // Opens on the overview with the full drawing: a reader's first sight is the whole
   // architecture, nothing faded. Choosing the flows tab traces the walkthrough.
-  const [tab, setTab] = useState<Tab>(toolId ? "tools" : initialTab ?? "overview");
-  // Opening a product (from search, a mitigation page or a rail) lands on the Tools tab.
-  // Adjusted during render, the Panel.tsx idiom, so there is no flash of the previous tab.
-  const [prevTool, setPrevTool] = useState(toolId);
-  if (prevTool !== toolId) {
-    setPrevTool(toolId);
-    if (toolId) setTab("tools");
-  }
+  const [tab, setTab] = useState<Tab>("overview");
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
-  const guidance = guidanceByArchetype.get(archetype.id);
-  const tools = toolsForArchetype(archetype.id);
 
   const go = (next: Tab) => {
     setTab(next);
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
     if (next !== "mitigations" && next !== "risks") onHighlight(null);
-    if (next !== "tools") onTool(null);
   };
 
   // On a phone the drawing is unreadable at page width, so it folds behind a toggle and the
@@ -88,7 +60,6 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
-    { id: "tools", label: "Tools", count: tools.length },
     { id: "mitigations", label: "Capabilities", count: archetype.mitigations.length },
     { id: "risks", label: "Risks", count: archetype.risks.length },
   ];
@@ -108,8 +79,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </span>
         </button>
       )}
-      {aboveDrawing}
-      {drawingVisible && (renderDrawing ? renderDrawing(activeWalk, { walks, walkIndex, onWalk }) : (
+      {drawingVisible && (
         <>
           <div className="-mx-6 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
             <FlowDiagram
@@ -117,13 +87,12 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
               walk={activeWalk}
               highlight={highlight}
               onHighlight={onHighlight}
-              chipPaint={chipPaint}
               className="w-full"
             />
           </div>
-          <FlowLegend className="mt-3 px-1" chipKey={!chipPaint && !aboveDrawing} />
+          <FlowLegend className="mt-3 px-1" />
         </>
-      ))}
+      )}
 
       <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (
@@ -182,27 +151,9 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
         {tab === "mitigations" && (
           <div>
             <p className="text-[12px] leading-snug text-ink-3">
-              The numbered chips on the drawing are MITRE D3FEND techniques and ATLAS mitigations mapped as contributions to
-              CoSAI controls. Select one to see its required placement, implementation guidance and product evidence.
-              A mapping does not establish complete control coverage.
+              The numbered chips on the drawing: where each capability sits in the data flow. Select one for its
+              placement notes; how to put it in place, and which tools deliver it, is on Enable.
             </p>
-            {guidance && (
-              <div className="mt-3 rounded-xl border border-line bg-paper">
-                <Section title={`How to govern this · ${MODE_LABEL[guidance.mode]}${guidance.status === "draft" ? " · draft" : ""}`} count={null} last>
-                  <Prose blocks={guidance.overview} size="sm" />
-                  <p className="mt-2 text-[11.5px] text-ink-3">{guidance.attribution}</p>
-                  <ul className="mt-2 space-y-1">
-                    {guidance.sources.map((src) => (
-                      <li key={src.url} className="text-[12px] leading-snug">
-                        <a href={src.url} target="_blank" rel="noreferrer" className="text-ink-2 hover:text-introduced hover:underline">
-                          {src.title}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </Section>
-              </div>
-            )}
             <div className="mt-3">
               <MitigationList archetype={archetype} highlight={highlight} onHighlight={onHighlight} columns={2} />
             </div>
@@ -220,7 +171,6 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </div>
         )}
 
-        {tab === "tools" && (toolsPanel ?? <ToolsForArchitecture key={archetype.id} archetype={archetype} tools={tools} toolId={toolId} onTool={onTool} />)}
       </div>
     </div>
   );

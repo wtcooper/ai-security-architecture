@@ -6,78 +6,39 @@ import {
   mitigations,
   components,
   controls,
+  enablement,
   incidents,
   activePersonas,
   risks,
-  technologyCategories,
   tools,
 } from "@/lib/data";
-import { visibleExternalFrameworks } from "@/lib/frameworks";
+import { visibleFrameworks } from "@/lib/frameworks";
 
 export const metadata = {
   title: "AI Security Architecture",
   description:
-    "AI security from risk map to reference architecture: CoSAI risks and controls, MITRE-backed capabilities, and target-state architectures for every class of AI application.",
+    "Securely enabling AI, grounded in risk: learn where AI risk is introduced, exposed and mitigated, then put the foundations, controls and tools in place to reduce it.",
 };
 
 const specialisations = mitigations.filter((m) => m.parent).length;
+const foundationCount = enablement.foundations.reduce((n, g) => n + g.mitigations.length, 0);
 
-/** Every page, in navigation order: the map, the taxonomy, the architectures, the incidents. */
-const SECTIONS = [
+type Card = { href: string; label: string; blurb: string; count: string; accent: string };
+
+/** Learn the risk, then enable the reduction; the reference sits behind both. */
+const LEARN: Card[] = [
   {
     href: "/map",
-    label: "Risk Map",
-    blurb: "Step through every risk and watch it light up the components it touches.",
-    count: `${risks.length * 3} steps`,
-    accent: "var(--band-app-rail)",
-  },
-  {
-    href: "/risks",
-    label: "Risks",
-    blurb: "Every risk in full: causes, impact, framework mappings, linked controls.",
+    label: "Risk map",
+    blurb: "Step through every risk and watch it light up where it is introduced, exposed and mitigated.",
     count: `${risks.length} risks`,
     accent: "var(--exposed)",
   },
   {
-    href: "/components",
-    label: "Components",
-    blurb: "The building blocks of an AI system, and what each one is exposed to.",
-    count: `${components.length} components`,
-    accent: "var(--band-model-rail)",
-  },
-  {
-    href: "/controls",
-    label: "Controls",
-    blurb: "The protections CoSAI requires, what they protect, who owns them, and how far the organisation delivers each.",
-    count: `${controls.length} controls`,
-    accent: "var(--mitigated)",
-  },
-  {
-    href: "/capabilities",
-    label: "Capabilities",
-    blurb: "The MITRE-backed countermeasures that deliver the controls, pinned in the data flow. Status lives here.",
-    count: `${mitigations.length} capabilities · ${technologyCategories.length} technology categories`,
-    accent: "var(--introduced)",
-  },
-  {
-    href: "/personas",
-    label: "Personas",
-    blurb: "The actors in an AI supply chain, and the risks each one carries.",
-    count: `${activePersonas.length} personas`,
-    accent: "var(--band-infra-rail)",
-  },
-  {
-    href: "/frameworks",
-    label: "Frameworks",
-    blurb: "Read the mapping backwards: pick OWASP, ATLAS or NIST and see where it lands.",
-    count: `${visibleExternalFrameworks.length} frameworks`,
-    accent: "var(--ink-2)",
-  },
-  {
     href: "/reference",
     label: "Architectures",
-    blurb: "One target-state drawing per class of AI application, with the capabilities numbered onto it and the named products rated against it.",
-    count: `${archetypes.length} archetypes · ${tools.length} tools`,
+    blurb: "How each class of AI application is built, with sequence flows showing where risk enters.",
+    count: `${archetypes.length} architectures`,
     accent: "var(--band-model-rail)",
   },
   {
@@ -87,6 +48,15 @@ const SECTIONS = [
     count: `${incidents.length} incidents`,
     accent: "var(--band-data-rail)",
   },
+];
+
+const REFERENCE: { href: string; label: string; count: string }[] = [
+  { href: "/risks", label: "Risks", count: `${risks.length}` },
+  { href: "/controls", label: "Controls", count: `${controls.length}` },
+  { href: "/capabilities", label: "Capabilities", count: `${mitigations.length}` },
+  { href: "/components", label: "Components", count: `${components.length}` },
+  { href: "/personas", label: "Personas", count: `${activePersonas.length}` },
+  { href: "/frameworks", label: "Frameworks", count: `${visibleFrameworks.length}` },
 ];
 
 const SOURCES = [
@@ -115,42 +85,33 @@ const link = "font-medium text-introduced underline decoration-introduced/30 und
 export default function LandingPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-24">
-      <p className="eyebrow">AI security, from risk map to reference architecture</p>
+      <p className="eyebrow">Securely enabling AI, grounded in risk</p>
       <h1 className="display mt-4 max-w-3xl text-[44px] font-bold leading-[1.08] tracking-[-0.025em] text-ink sm:text-[56px]">
-        Where AI risk is <span className="text-introduced">introduced</span>,{" "}
-        <span className="text-exposed">exposed</span>, and{" "}
-        <span className="text-mitigated">mitigated</span> — and what to build about it.
+        Understand where AI risk is <span className="text-introduced">introduced</span> and{" "}
+        <span className="text-exposed">exposed</span> — then put in place what{" "}
+        <span className="text-mitigated">reduces</span> it.
       </h1>
       <p className="mt-6 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-        A recreation of{" "}
-        <a href="https://saif.google/secure-ai-framework" target="_blank" rel="noreferrer" className={link}>Google&rsquo;s SAIF Map</a>
-        {" "}on the{" "}
+        Built on the{" "}
         <a href="https://github.com/cosai-oasis/secure-ai-tooling/tree/main/risk-map" target="_blank" rel="noreferrer" className={link}>CoSAI Risk Map</a>
-        {" "}that succeeded it. Same walkthrough, more of the modern attack surface: agents, orchestration, tools, memory and
-        retrieval.
-      </p>
-      <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-        Behind the map sits the taxonomy — every risk, component, control and persona, the MITRE-backed capabilities that
-        deliver the controls and where the organisation stands on each, and the frameworks cross-walked onto them — and
-        a reference architecture for every class of AI application with those capabilities numbered onto the drawing.
+        {" "}that succeeded{" "}
+        <a href="https://saif.google/secure-ai-framework" target="_blank" rel="noreferrer" className={link}>Google&rsquo;s SAIF</a>
+        , with MITRE D3FEND and ATLAS capabilities and the products that deliver them.
       </p>
       <div className="mt-8 flex flex-wrap items-center gap-3">
         <Link href="/map" className="rounded-lg bg-ink px-5 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90">
-          Start the tour
+          Start with the risks
         </Link>
-        <Link href="/capabilities" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
-          See the capabilities →
-        </Link>
-        <Link href="/reference" className="text-[14px] font-semibold text-ink hover:text-introduced hover:underline">
-          Browse the architectures →
+        <Link href="/enable" className="text-[14px] font-semibold text-ink hover:text-mitigated hover:underline">
+          Go straight to Enable →
         </Link>
       </div>
 
       <PhaseLegend className="mt-8" />
 
-      <h2 className="display mt-14 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">Explore</h2>
-      <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {SECTIONS.map((s) => (
+      <h2 className="display mt-14 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">1 · Learn the risk</h2>
+      <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+        {LEARN.map((s) => (
           <li key={s.href}>
             <Link
               href={s.href}
@@ -162,6 +123,39 @@ export default function LandingPage() {
               </span>
               <span className="mt-1.5 flex-1 text-[13.5px] leading-snug text-ink-2">{s.blurb}</span>
               <span className="ident mt-3">{s.count}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="display mt-12 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">2 · Enable the reduction</h2>
+      <Link
+        href="/enable"
+        className="group mt-4 flex flex-col gap-4 rounded-xl border border-line bg-paper p-6 transition-colors hover:border-line-strong sm:flex-row sm:items-center"
+      >
+        <div className="flex-1">
+          <span className="h-[3px] w-8 rounded-full" style={{ background: "var(--mitigated)", display: "block" }} aria-hidden />
+          <span className="display mt-3 block text-[19px] font-semibold text-ink transition-colors group-hover:text-mitigated">Enable</span>
+          <span className="mt-1.5 block max-w-2xl text-[13.5px] leading-snug text-ink-2">
+            Pick what you are enabling. Stand up the enterprise foundations once, add what the surface and the use case need,
+            then see how far each product — built or bought — covers the rest.
+          </span>
+        </div>
+        <ol className="grid shrink-0 gap-1.5 text-[12.5px] text-ink-2">
+          <li><span className="mr-2 font-bold text-ink">1</span>Foundations <span className="text-ink-3">{foundationCount}</span></li>
+          <li><span className="mr-2 font-bold text-ink">2</span>Surface baseline</li>
+          <li><span className="mr-2 font-bold text-ink">3</span>Use-case additions</li>
+          <li><span className="mr-2 font-bold text-ink">4</span>Tools <span className="text-ink-3">{tools.length}</span></li>
+        </ol>
+      </Link>
+
+      <h2 className="display mt-12 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">Reference</h2>
+      <ul className="mt-4 flex flex-wrap gap-2">
+        {REFERENCE.map((r) => (
+          <li key={r.href}>
+            <Link href={r.href} className="flex items-center gap-2 rounded-full border border-line bg-paper px-4 py-2 text-[13.5px] font-medium text-ink-2 hover:border-line-strong hover:text-ink">
+              {r.label}
+              <span className="ident">{r.count}</span>
             </Link>
           </li>
         ))}

@@ -33,15 +33,6 @@ export function SiteFooter() {
           {meta.counts.incidents} incidents
         </span>
         <span
-          title={
-            meta.org.example
-              ? "The organisation layer is rendering the example profile shipped with the repository. Create data/org/local to replace it."
-              : `Organisation layer: data/org/local (${meta.org.name}).`
-          }
-        >
-          org: <span className="ident text-ink-2">{meta.org.example ? "example" : meta.org.name}</span>
-        </span>
-        <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"
           style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}
           title="Mitigation definitions come from pinned MITRE D3FEND and ATLAS releases. CoSAI mappings, deployment scope, architecture pins and guidance are authored here and under review."

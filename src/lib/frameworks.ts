@@ -8,7 +8,6 @@
  */
 import {
   activePersonas,
-  technologyCategories,
   authoredMappings,
   mitigations,
   controls,
@@ -26,12 +25,11 @@ import type {
   FrameworkNote,
   Persona,
   Risk,
-  TechnologyCategory,
   FrameworkEntryInfo,
 } from "./types";
 
-export type EntityKind = "risks" | "controls" | "mitigations" | "categories" | "personas";
-type Entity = Risk | Control | Mitigation | TechnologyCategory | Persona;
+export type EntityKind = "risks" | "controls" | "mitigations" | "personas";
+type Entity = Risk | Control | Mitigation | Persona;
 
 export interface FrameworkEntry {
   /** Bare identifier, with CoSAI's `@version` suffix stripped. */
@@ -44,12 +42,11 @@ export interface FrameworkEntry {
   /** What CoSAI's own, older edition of the framework calls this identifier. */
   predecessor?: FrameworkCrosswalkRow;
   url?: string;
-  /** A heading the entry sits under in its own catalogue (organisation standards). */
+  /** A heading the entry sits under in its own catalogue. */
   group?: string;
   risks: Risk[];
   controls: Control[];
   mitigations: Mitigation[];
-  categories: TechnologyCategory[];
   identifierKind?: FrameworkEntryInfo["identifierKind"];
   sourceLocation?: string;
   mappingNotes?: FrameworkEntryInfo["mappingNotes"];
@@ -68,15 +65,9 @@ export interface FrameworkView {
   unmapped: { kind: EntityKind; items: Entity[] }[];
 }
 
-/**
- * Frameworks whose every entry is listed even when nothing maps to it: the upstream full-list
- * frameworks, and every organisation catalogue — organization entries retain their derived associations.
- */
+/** Frameworks whose every entry is listed even when nothing maps to it. */
 const KNOWN_ENTRIES: Record<string, string[]> = Object.fromEntries(
-  [
-    ...FULL_LIST_FRAMEWORKS,
-    ...frameworks.filter((f) => f.entriesComplete).map((f) => f.id),
-  ].map((id) => [id, Object.keys(frameworkEntries[id] ?? {})]),
+  FULL_LIST_FRAMEWORKS.map((id) => [id, Object.keys(frameworkEntries[id] ?? {})]),
 );
 
 /**
@@ -89,7 +80,6 @@ const ENTITIES: Record<EntityKind, Entity[]> = {
   risks,
   controls,
   mitigations,
-  categories: technologyCategories,
   personas: activePersonas,
 };
 
@@ -105,7 +95,7 @@ const bare = (value: string) => value.split("@")[0];
  * resolves to nothing, and 14 of the 39 ATLAS identifiers CoSAI maps to are mitigations.
  */
 function entryUrl(framework: Framework, id: string) {
-  // Organisation catalogues carry per-entry links; nothing else does.
+  // An authored entry may carry its own link.
   const own = frameworkEntries[framework.id]?.[id]?.url;
   if (own) return own;
   if (framework.id === "mitre-atlas" && id.startsWith("AML.M")) {
@@ -141,7 +131,6 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
         risks: [],
         controls: [],
         mitigations: [],
-        categories: [],
         identifierKind: reference[id]?.identifierKind,
         sourceLocation: reference[id]?.sourceLocation,
         mappingNotes: reference[id]?.mappingNotes,
@@ -164,13 +153,13 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   // can mistake one for the other.
   const authored = authoredMappings[frameworkId];
   const mappingsFor = (kind: EntityKind, item: Entity): string[] => {
-    // MITRE and technology entities use explicitly authored crosswalks.
+    // MITRE entities use explicitly authored crosswalks.
     if (!authored) return "mappings" in item ? (item.mappings?.[frameworkId] ?? []) : [];
     if (kind === "personas") return [];
     return authored[kind]?.[item.id] ?? [];
   };
 
-  for (const kind of ["risks", "controls", "mitigations", "categories", "personas"] as EntityKind[]) {
+  for (const kind of ["risks", "controls", "mitigations", "personas"] as EntityKind[]) {
     const items = ENTITIES[kind];
     const mapped = items.filter((item) => mappingsFor(kind, item).length);
     if (!mapped.length) continue;
@@ -190,7 +179,7 @@ export function frameworkView(frameworkId: string): FrameworkView | undefined {
   const entries = [...byEntry.values()]
     .map((e) => ({
       ...e,
-      total: e.risks.length + e.controls.length + e.mitigations.length + e.categories.length + e.personas.length,
+      total: e.risks.length + e.controls.length + e.mitigations.length + e.personas.length,
     }))
     .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
@@ -230,48 +219,6 @@ export function mappingsForControl(
   return out;
 }
 
-/** The same, for a mitigation — only organisation catalogues map onto mitigations. */
-export function mappingsForMitigation(
-  mitigation: Mitigation,
-): { frameworkId: string; values: string[]; authored: boolean }[] {
-  const out: { frameworkId: string; values: string[]; authored: boolean }[] = [];
-  for (const [frameworkId, mapped] of Object.entries(authoredMappings)) {
-    const values = mapped.mitigations?.[mitigation.id];
-    if (values?.length) out.push({ frameworkId, values, authored: true });
-  }
-  return out;
-}
-
-/**
- * Organization capability entries that reach a taxonomy entity through default capability mappings — what the badges on cards, rails
- * and hover cards show next to the CoSAI id. Empty when no org catalogue maps here.
- */
-export interface OrgEntryRef {
-  frameworkId: string;
-  frameworkName: string;
-  id: string;
-  label: string;
-  url?: string;
-}
-export function orgEntriesFor(kind: EntityKind, entityId: string): OrgEntryRef[] {
-  const out: OrgEntryRef[] = [];
-  for (const framework of orgFrameworks) {
-    const byKind = authoredMappings[framework.id];
-    const ids = kind === "personas" ? undefined : byKind?.[kind]?.[entityId];
-    for (const id of ids ?? []) {
-      const ref = frameworkEntries[framework.id]?.[id];
-      out.push({
-        frameworkId: framework.id,
-        frameworkName: framework.name,
-        id,
-        label: ref?.label ?? id,
-        url: ref?.url,
-      });
-    }
-  }
-  return out;
-}
-
 /** Does anything at all map to this framework, from CoSAI or from the authored overlay? */
 function hasAnyMapping(frameworkId: string): boolean {
   const authored = authoredMappings[frameworkId];
@@ -295,19 +242,12 @@ export const FRAMEWORK_ORDER = [
   "stride",
   "nist-ai-rmf",
   "nist-csf",
-  "owasp-solutions",
-  "enisa-ecsmaf",
-  "ecso-market",
-  "cisa-tic",
   "iso-22989",
 ];
 const orderOf = (id: string) => {
   const i = FRAMEWORK_ORDER.indexOf(id);
   return i === -1 ? FRAMEWORK_ORDER.length : i;
 };
-
-/** The adopter's own catalogues, in file order. */
-export const orgFrameworks: Framework[] = frameworks.filter((f) => f.org);
 
 /**
  * The frameworks offered as a lens. Two kinds are withheld:
@@ -322,9 +262,7 @@ export const orgFrameworks: Framework[] = frameworks.filter((f) => f.org);
  */
 export const visibleFrameworks = frameworks
   .filter((f) => !f.superseded && hasAnyMapping(f.id))
-  .sort((a, b) => Number(Boolean(a.org)) - Number(Boolean(b.org)) || orderOf(a.id) - orderOf(b.id));
-/** The external lenses only — what the landing page and the header count as "frameworks". */
-export const visibleExternalFrameworks = visibleFrameworks.filter((f) => !f.org);
+  .sort((a, b) => orderOf(a.id) - orderOf(b.id));
 const visibleIds = new Set(visibleFrameworks.map((f) => f.id));
 export const isVisibleFramework = (id: string) => visibleIds.has(id);
 
@@ -346,7 +284,6 @@ export function resolveFrameworkLink(frameworkId: string, entryId?: string) {
 export const KIND_LABEL: Record<EntityKind, string> = {
   risks: "risks",
   controls: "controls",
-  categories: "technology categories",
   mitigations: "capabilities",
   personas: "personas",
 };
