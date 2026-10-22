@@ -1040,6 +1040,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
 | Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
+| Claude Duet | anthropic | Persistent managed agents | 2026-10 | 14/14 | _none_ |  |
 | Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
@@ -1057,6 +1058,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
 | Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
 | LM Studio | lmstudio | Local model runtime | 2026-09 | 10/11 | Verify AI Artifacts |  |
+| Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
 | MLflow Tracking Server and Model Registry | mlflow | Fine-tuning and model registry pipeline | 2026-09 | 12/12 | _none_ |  |

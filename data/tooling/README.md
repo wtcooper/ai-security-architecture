@@ -141,6 +141,12 @@ SDK, the GitHub MCP server, vLLM and MLflow. Every entity on every drawing now a
 pinned capability. Agent-to-agent federation has no registry entity: its exemplars are a protocol,
 a draft grant type and a class of platforms, not products.
 
+Onboarded 2026-10-22 on the persistent managed agents drawing: `toolClaudeDuet` (research
+preview) and `toolMetaMuse`, each addressing all 14 pins. Both are consumer products with no
+organisation plan, so a control the person sets is rated partial at most and the organisation's
+levers (OAuth app approval at the connected services, OAuth-grant discovery, vendor assessment)
+are `external`.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.
