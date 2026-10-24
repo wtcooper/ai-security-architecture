@@ -5,8 +5,9 @@
  * in place. The foundations every AI deployment needs, what the surface adds, what this use case
  * adds, then the tools — build, buy or both — and how far each covers the rest. Every row is a
  * numbered chip on the drawing above, so the requirements and where they go read as one.
+ * The four steps open folded, so the tab first reads as the plan; a step unfolds to its rows.
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { additionsFor, capabilityName, guidanceByArchetype, layerFor, status, statusFor, toolById, toolsForArchetype } from "@/lib/data";
@@ -25,20 +26,65 @@ function Progress({ capabilities }: { capabilities: Mitigation[] }) {
   return <span className="text-[12px] font-normal text-ink-3">{enabled} of {capabilities.length} enabled</span>;
 }
 
-function Step({ n, id, title, lead, aside, children }: { n: number; id: string; title: string; lead: string; aside?: ReactNode; children: ReactNode }) {
+type StepId = "foundations" | "surface" | "use-case" | "tools";
+
+function Step({
+  n,
+  id,
+  title,
+  lead,
+  aside,
+  chips,
+  expanded,
+  onToggle,
+  children,
+}: {
+  n: number;
+  id: StepId;
+  title: string;
+  lead: string;
+  aside?: ReactNode;
+  /** The pin numbers this step covers, shown while it is folded. */
+  chips?: number[];
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
   return (
-    <section id={id} className="scroll-mt-20">
-      <div className="flex items-start gap-3">
+    <section id={id} className="scroll-mt-20 rounded-xl border border-line bg-paper">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={`${id}-body`}
+        className="flex w-full items-start gap-3 rounded-xl px-4 py-4 text-left transition-colors hover:bg-mist/50"
+      >
         <span className="display flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ink text-[14px] font-bold text-white">{n}</span>
-        <div className="min-w-0 flex-1">
-          <h3 className="display flex flex-wrap items-baseline gap-x-3 text-[18px] font-bold leading-tight text-ink">
+        <span className="min-w-0 flex-1">
+          <span className="display flex flex-wrap items-baseline gap-x-3 text-[18px] font-bold leading-tight text-ink">
             {title}
             {aside}
-          </h3>
-          <p className="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-ink-2">{lead}</p>
+          </span>
+          <span className="mt-1 block max-w-3xl text-[13.5px] leading-relaxed text-ink-2">{lead}</span>
+          {!expanded && chips && chips.length > 0 && (
+            <span className="mt-2 flex flex-wrap gap-1" aria-label="Pins on the drawing">
+              {chips.map((c) => (
+                <span key={c} className="flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10px] font-bold text-chip">
+                  {c}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+        <svg width="14" height="14" viewBox="0 0 12 12" className={`mt-2 shrink-0 text-ink-3 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden>
+          <path d="M 2 4 L 6 8 L 10 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      </button>
+      {expanded && (
+        <div id={`${id}-body`} className="px-4 pb-5 sm:pl-[60px]">
+          {children}
         </div>
-      </div>
-      <div className="mt-4 sm:pl-11">{children}</div>
+      )}
     </section>
   );
 }
@@ -85,6 +131,30 @@ export function EnablePanel({
   const drawnFoundations = byPin(foundations.filter((m) => layerFor(m.id, archetype) === "foundation"));
   const drawnBaseline = byPin(baseline.capabilities.filter((m) => layerFor(m.id, archetype) === "surface"));
 
+  const drawnAdditions = byPin(additions);
+  const pinNumber = (m: Mitigation) => archetype.mitigations.indexOf(m.id) + 1;
+
+  // Steps the reader unfolded. A step also stands open while it holds the lit capability or the
+  // open product, so a chip picked on the drawing or a product link always lands on a visible row.
+  const [unfolded, setUnfolded] = useState<Set<StepId>>(new Set());
+  const holds: Record<StepId, boolean> = {
+    foundations: drawnFoundations.some((m) => m.id === open),
+    surface: drawnBaseline.some((m) => m.id === open),
+    "use-case": drawnAdditions.some((m) => m.id === open),
+    tools: Boolean(tool),
+  };
+  const isOpen = (id: StepId) => unfolded.has(id) || holds[id];
+  const toggle = (id: StepId) => {
+    const next = new Set(unfolded);
+    if (isOpen(id)) {
+      next.delete(id);
+      // Folding a step lets go of what held it open.
+      if (holds[id] && id === "tools") onPickTool(null);
+      else if (holds[id]) onOpen(null);
+    } else next.add(id);
+    setUnfolded(next);
+  };
+
   const recordRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (tool && !focus) recordRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -95,10 +165,11 @@ export function EnablePanel({
   );
 
   return (
-    <div className="space-y-10">
-      <p className="max-w-3xl text-[13px] leading-relaxed text-ink-2">
-        Everything this architecture needs in place, in the order an organisation puts it in place. Each row is a numbered chip on the
-        drawing: open one to light it and read how to put it in place, or pick a chip on the drawing to open its row.
+    <div className="space-y-3">
+      <p className="mb-4 max-w-3xl text-[13px] leading-relaxed text-ink-2">
+        Everything this architecture needs in place, in the order an organisation puts it in place. Open a step for its capabilities;
+        each is a numbered chip on the drawing. Open one to light it and read how to put it in place, or pick a chip on the drawing to
+        open its row.
       </p>
 
       <Step
@@ -106,6 +177,9 @@ export function EnablePanel({
         id="foundations"
         title="Enterprise foundations"
         aside={<Progress capabilities={drawnFoundations} />}
+        chips={drawnFoundations.map(pinNumber)}
+        expanded={isOpen("foundations")}
+        onToggle={() => toggle("foundations")}
         lead="Set up once, and every AI deployment inherits them. Most of the risk on this architecture is reduced here, before any tool is chosen."
       >
         {table(drawnFoundations)}
@@ -117,6 +191,9 @@ export function EnablePanel({
         id="surface"
         title={`${baseline.surface.title} baseline`}
         aside={<Progress capabilities={drawnBaseline} />}
+        chips={drawnBaseline.map(pinNumber)}
+        expanded={isOpen("surface")}
+        onToggle={() => toggle("surface")}
         lead={baseline.blurb}
       >
         {drawnBaseline.length ? table(drawnBaseline) : <p className="text-[13px] text-ink-3">Nothing from the baseline is drawn on this architecture.</p>}
@@ -128,9 +205,12 @@ export function EnablePanel({
         id="use-case"
         title="Use-case additions"
         aside={<Progress capabilities={additions} />}
+        chips={drawnAdditions.map(pinNumber)}
+        expanded={isOpen("use-case")}
+        onToggle={() => toggle("use-case")}
         lead={`What ${archetype.title} needs beyond the foundations and its surface baseline.`}
       >
-        {additions.length ? table(byPin(additions)) : <p className="text-[13px] text-ink-3">Nothing beyond the foundations and the surface baseline.</p>}
+        {additions.length ? table(drawnAdditions) : <p className="text-[13px] text-ink-3">Nothing beyond the foundations and the surface baseline.</p>}
         {guidance && (
           <details className="mt-4 rounded-xl border border-line bg-paper px-4 py-3">
             <summary className="cursor-pointer text-[13px] font-semibold text-ink">How to govern this{guidance.status === "draft" ? " · draft" : ""}</summary>
@@ -143,6 +223,9 @@ export function EnablePanel({
         n={4}
         id="tools"
         title="Tools"
+        aside={tools.length ? <span className="text-[12px] font-normal text-ink-3">{tools.length} products</span> : undefined}
+        expanded={isOpen("tools")}
+        onToggle={() => toggle("tools")}
         lead={
           tools.length
             ? "How each product's own settings cover the capabilities above. Pick a product or a cell for its settings, steps and vendor links. Anything not in the tool has to come from a foundation, the baseline or another product."

@@ -52,15 +52,22 @@ test("coverage collapses to Built-in, Partial and Not in tool", () => {
   assert.equal(coverageWord(undefined), "unverified");
 });
 
-test("the Enable tab walks four steps and lists every pinned capability once, numbered as on the drawing", () => {
-  for (const arch of dataset.archetypes) {
-    const html = renderToStaticMarkup(
-      <EnablePanel archetype={arch} open={null} onOpen={() => {}} onShowDrawing={() => {}} tool={null} focus={null} onPickTool={() => {}} />,
+test("the Enable tab opens on four folded steps, and every pinned capability unfolds its own step, numbered as on the drawing", () => {
+  const panel = (arch: (typeof dataset.archetypes)[number], open: string | null) =>
+    renderToStaticMarkup(
+      <EnablePanel archetype={arch} open={open} onOpen={() => {}} onShowDrawing={() => {}} tool={null} focus={null} onPickTool={() => {}} />,
     );
-    for (const id of ["foundations", "surface", "use-case", "tools"]) assert.match(html, new RegExp(`id="${id}"`), arch.id);
-    const rows = [...html.matchAll(/id="capability-([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual([...rows].sort(), [...arch.mitigations].sort(), `${arch.id}: one row per chip`);
-    assert.match(html, /Status/);
+  for (const arch of dataset.archetypes) {
+    const folded = panel(arch, null);
+    for (const id of ["foundations", "surface", "use-case", "tools"]) assert.match(folded, new RegExp(`id="${id}"`), arch.id);
+    assert.doesNotMatch(folded, /id="capability-/, `${arch.id}: steps open folded`);
+    assert.equal([...folded.matchAll(/aria-expanded="false"/g)].length, 4);
+    for (const [i, id] of arch.mitigations.entries()) {
+      const html = panel(arch, id);
+      assert.match(html, new RegExp(`id="capability-${id.replace(/\./g, "\\.")}"`), `${arch.id}: ${id} has a row`);
+      assert.match(html, /Status/);
+      assert.ok(html.includes(`>${i + 1}</span>`), `${arch.id}: ${id} is chip ${i + 1}`);
+    }
   }
 });
 
