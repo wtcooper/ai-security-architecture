@@ -154,7 +154,7 @@ export function RisksBrowser() {
               {incidents.map((inc) => (
                 <li key={inc.id} className="text-[13px] leading-snug">
                   <Link
-                    href={`/examples?incident=${inc.id}`}
+                    href={`/incidents/${inc.id}`}
                     className="font-medium text-ink-2 hover:text-introduced hover:underline"
                   >
                     {inc.title}

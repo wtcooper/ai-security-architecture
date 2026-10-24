@@ -24,7 +24,13 @@ const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.
 export interface Highlight {
   kind: "mitigation" | "risk";
   id: string;
+  /** Further ids lit alongside `id` — an incident's breaks light several chips at once. */
+  with?: string[];
 }
+
+/** Whether a highlight keeps this chip (mitigation) or tag (risk) lit. */
+export const isLit = (h: Highlight, kind: Highlight["kind"], id: string) =>
+  h.kind === kind && (h.id === id || Boolean(h.with?.includes(id)));
 
 /**
  * An incident step replayed on the drawing: the blocks it lands in and the edges it rides,

@@ -7,8 +7,8 @@ Securely enabling AI, grounded in risk. The site reads as one path, from the ris
 - **Learn the risk.** An interactive map of AI security risk — where each risk is
   **introduced**, where it is **exposed**, and where it can be **mitigated**, across the
   components of an AI system — plus reference architectures for every class of AI application,
-  with sequence flows that show how data moves and where risk enters, and ten real 2025–26
-  incidents replayed on the same map.
+  with sequence flows that show how data moves and where risk enters, and twenty real 2025–26
+  incidents walked step by step across the architecture each happened on.
 - **Enable it, per architecture.** Every architecture has an Enable tab: what to put in place,
   in the order an organisation puts it in place — enterprise foundations every AI deployment
   needs, what the surface adds, what the use case adds, then the tools, built or bought, and how
@@ -116,7 +116,7 @@ as reference — **Risk map** · **Capabilities** · **Architectures** · **Inci
 | **Landing** | What this is, the path from risk to enablement in four steps, where the data comes from. |
 | **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
 | **Architectures** | 17 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — four steps that open folded, each showing its pin numbers until unfolded: (1) the enterprise foundations this architecture draws on, (2) the surface baseline, (3) the use case's own additions, each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**; then (4) a tools grid — every product of that kind against every capability, one word per cell: Built-in, Partial or Not in tool — with each product's record and operator steps beneath. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
-| **Incidents** | Ten real 2025–26 incidents replayed step by step on the map and on an architecture, every step sourced. |
+| **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the capability pins that would have broken the chain — each a link to its row on the Enable tab. Old `/examples` links redirect. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › Controls** | The 35 CoSAI controls in six groups. A control's status rolls up from the capabilities that deliver it. |
 | **Reference › Capabilities** | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a control group × deployment-surface matrix, tinted by status. A capability's detail shows the MITRE definition, the authored implementation scope, example technologies and where it is pinned. |
@@ -363,7 +363,7 @@ data/
 ├── frameworks/
 │   ├── entries.yaml              framework entry titles and descriptions
 │   └── nist-csf.yaml             NIST CSF 2.0 categories + CoSAI control crosswalk
-├── incidents/                    10 authored incidents, replayed on the map
+├── incidents/                    authored incidents, one YAML each, replayed on their architecture
 ├── reference/
 │   ├── architectures/            ★ 17 flow-style reference architectures, one YAML each
 │   └── guidance/                 controls guidance, one document per architecture
@@ -392,8 +392,9 @@ src/
 │   └── frameworks.ts             framework lens logic
 ├── app/                          one route per tab (App Router, static export)
 │   ├── page.tsx                  landing
-│   └── map|reference|examples|enable|risks|controls|capabilities|components|personas|frameworks/
-│                                   (enable/ only redirects to an architecture's Enable tab)
+│   ├── incidents/[id]/           one static page per incident
+│   └── map|reference|incidents|examples|enable|risks|controls|capabilities|components|personas|frameworks/
+│                                   (enable/ and examples/ only redirect)
 └── components/
     ├── shell/SiteHeader.tsx      nav: Risk map · Capabilities · Architectures · Incidents · Reference ▾
     ├── map/RiskMap.tsx           the SVG map
@@ -403,30 +404,36 @@ src/
     ├── capabilities/             the Capabilities matrix (control group × surface) and detail
     ├── reference/                ★ flow diagram, sequence flows, picker, per-block styling
     ├── enable/                   ★ an architecture's Enable tab: the four layers, the tools grid, product records
-    └── examples/IncidentExplorer.tsx
+    └── incidents/                the incident list and the per-incident walk-through
 
 docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
 ```
 
 ## The incidents
 
-Each is authored in `data/incidents/`, replayed as a numbered attack flow on the same map, and
-tagged `target` (the AI system was attacked) or `weapon` (an AI agent ran the attack).
+Each incident is one YAML file in `data/incidents/`, walked step by step across one reference
+architecture. The list on `/incidents` stays one glance however many are added: newest first,
+with two filters — the attack type and the architecture.
 
-1. **OpenAI–Hugging Face** (May–Jul 2026) — training agents turned a writable package cache into
-   a message board, taught each other to escape, and reached Hugging Face production.
-2. **MCP supply chain** (2025–26) — malicious tool servers, SDK flaws and a backdoored AI gateway.
-3. **Prompt injection** (2025–26) — from one zero-click email to a self-spreading worm.
-4. **Coding agents hijacked** (2026) — through repository files, issues and PR comments.
-5. **Attackers running intrusions with AI agents** (2025–26) — from a jailbroken assistant to
-   autonomous ransomware.
-6. **OpenClaw** (Jan–Jun 2026) — tens of thousands of personal agents, exposed by default.
-7. **Taiwan government intrusion** (Jul 2026) — eight parallel sub-agents built on OpenClaw and
-   Hermes.
-8. **Agent capability evaluations escaped containment** (2026) — and attacked real systems.
-9. **The 2026 AI breaches** — stolen OAuth tokens, leaked credentials, unapproved AI tools.
-10. **Hosted agent runs hijacked** (Jan–May 2026) — CI comments, runner secrets and a poisoned
-    release.
+**Attack types** (`src/lib/incident-categories.ts`), one per incident: prompt injection, supply
+chain, identity & credentials, exposed by default, agent breaks out, AI as the attacker. The list
+is short on purpose; an incident that fits none of them is a reason to revisit it.
+
+**Adding one.** The build checks every field:
+
+- `date` (`YYYY-MM`, when it came to light) sorts the list; `dateRange` is the human version.
+- `category`, `perspective` (`target`: the AI system was attacked; `weapon`: an agent ran the
+  attack) and `archetype`.
+- `subtitle` (what happened, in a sentence or two) leads both the list row and the page.
+- `caveat` when the account rests on one report or on figures nobody has confirmed.
+- `steps`, each with a `path` of real edges and blocks on the architecture; the last step is the
+  `mitigated` one.
+- `breaks`: three to five capabilities pinned on that architecture, each with one line on where
+  it bites. The last step lights them on the drawing.
+- `sources` on the incident and on each step; smaller related events go in `alsoSeen`.
+
+`components` and `controls` (the CoSAI component map and controls) are optional and no longer
+shown; older case studies keep them.
 
 ## Run it
 
@@ -438,7 +445,7 @@ npm run dev      # http://localhost:3000
 | Script | Purpose |
 | --- | --- |
 | `npm run data` | Compile `data/**` → the typed dataset, with every integrity check |
-| `npm test` | Run the capability, matrix and Enable tests |
+| `npm test` | Run the capability, matrix, Enable and Incidents tests |
 | `npm run audit` | Regenerate `docs/AUDIT.md` |
 | `npm run fetch:cosai` | Refresh the vendored CoSAI snapshot from its pinned commit |
 | `npm run extract:saif` | Re-extract the SAIF tour seed from the public SAIF bundle |

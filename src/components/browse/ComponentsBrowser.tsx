@@ -231,7 +231,7 @@ function ActorPanel({ actor, onSelect }: { actor: Actor; onSelect: (id: string) 
         </p>
         {steps.length === 0 ? (
           <p className="mt-2 text-[13px] leading-snug text-ink-2">
-            None of the five incidents replayed here is an attack on the training-data supply,
+            None of the incidents replayed here is an attack on the training-data supply,
             so nothing currently names this boundary. It is drawn because the pipeline starts
             outside the organisation whether or not this set of case studies exercises it.
           </p>
@@ -240,7 +240,7 @@ function ActorPanel({ actor, onSelect }: { actor: Actor; onSelect: (id: string) 
             {steps.map(({ incident, step }) => (
               <li key={`${incident.id}-${step.n}`}>
                 <Link
-                  href="/examples"
+                  href={`/incidents/${incident.id}?step=${step.n}`}
                   className="text-[13.5px] text-ink-2 transition-colors hover:text-introduced"
                 >
                   <span className="ident">{step.n}</span> {step.title}

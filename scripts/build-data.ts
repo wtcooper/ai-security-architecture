@@ -45,6 +45,7 @@ import {
   TOOL_COVERAGES,
   TOOL_SURFACE_CLASSES,
 } from "../src/lib/types";
+import { categoryById, INCIDENT_CATEGORIES } from "../src/lib/incident-categories";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
 import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, placeTags, TAG_W_EST } from "../src/lib/flow-layout";
 import {
@@ -348,8 +349,21 @@ async function main() {
       fail(`${where}: archetype "${inc.archetype}" is not a reference architecture`);
     }
     for (const id of inc.risks) if (!riskIds.has(id)) fail(`${where}: unknown risk ${id}`);
-    for (const id of inc.controls) if (!controlIds.has(id)) fail(`${where}: unknown control ${id}`);
+    for (const id of inc.controls ?? []) if (!controlIds.has(id)) fail(`${where}: unknown control ${id}`);
     if (!inc.sources?.length) fail(`${where}: needs at least one source`);
+    if (!categoryById.has(inc.category)) {
+      fail(`${where}: category "${inc.category}" is not one of ${INCIDENT_CATEGORIES.map((c) => c.id).join(", ")}`);
+    }
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(inc.date ?? "")) fail(`${where}: date "${inc.date}" must be YYYY-MM (the latest event)`);
+    if (incidents.filter((i) => i.id === inc.id).length > 1) fail(`${where}: duplicate incident id`);
+    // The last step lights these on the drawing, so each must be a capability pinned there.
+    const pinnedHere = new Set(archetypes.find((a) => a.id === inc.archetype)?.mitigations ?? []);
+    if (!inc.breaks?.length || inc.breaks.length > 6) fail(`${where}: needs 1–6 breaks (capabilities that stop the chain)`);
+    for (const b of inc.breaks ?? []) {
+      if (!pinnedHere.has(b.capability)) fail(`${where}: breaks names ${b.capability}, which is not pinned on ${inc.archetype}`);
+      if (!b.how?.trim()) fail(`${where}: break ${b.capability} needs a "how"`);
+    }
+    if (inc.steps.at(-1)?.phase !== "mitigated") fail(`${where}: the last step must be the mitigated one — it is where the breaks light`);
     // The replay on the reference architecture is authored, not inferred: every step names
     // the edges it rides and the blocks it lands in, on the incident's own archetype. Edges
     // must exist (the reverse of a bidirectional one is fine), blocks must exist, and the
@@ -367,8 +381,7 @@ async function main() {
     for (const step of inc.steps) {
       const at = `${where} step ${step.n}`;
       if (!PHASES.includes(step.phase)) fail(`${at}: bad phase ${step.phase}`);
-      if (!step.components.length) fail(`${at}: no components`);
-      for (const id of step.components) {
+      for (const id of step.components ?? []) {
         if (!mapTargets.has(id)) fail(`${at}: unknown component or actor ${id}`);
       }
       if (!step.path?.length) fail(`${at}: needs a path on ${inc.archetype} — edges and blocks the step touches`);

@@ -56,7 +56,7 @@ test("incident replays use migrated architectures while keeping CoSAI control re
     const arch = archetypeById.get(incident.archetype);
     assert.ok(arch, incident.id);
     for (const id of arch.mitigations) assert.ok(mitigationById.has(id), incident.id);
-    for (const id of incident.controls) assert.ok(controlById.has(id), incident.id);
+    for (const id of incident.controls ?? []) assert.ok(controlById.has(id), incident.id);
     const paths = new Set([
       ...arch.blocks.map((b) => b.id),
       ...arch.edges.flatMap((e) => [`${e.from}->${e.to}`, ...(e.bidir || e.outbound ? [`${e.to}->${e.from}`] : [])]),

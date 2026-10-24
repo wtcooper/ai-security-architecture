@@ -6,6 +6,7 @@
  * (one entry per paragraph); the build step normalises them to Paragraph[].
  */
 
+import type { IncidentCategory } from "./incident-categories";
 
 export type Phase = "introduced" | "exposed" | "mitigated";
 export const PHASES: Phase[] = ["introduced", "exposed", "mitigated"];
@@ -800,14 +801,16 @@ export interface IncidentStep {
   title: string;
   phase: Phase;
   narrative: string;
-  /** CoSAI components and boundary actors this step touches — what the risk map lights. */
-  components: string[];
+  /**
+   * CoSAI components and boundary actors this step touches. Optional: it feeds the Components
+   * page's boundary actors only; the replay itself runs on `path`.
+   */
+  components?: string[];
   /**
    * The step on the incident's reference architecture: edges as "from->to" (the reverse of a
    * bidirectional edge is legal) and, for what happens inside a component, block ids. The
-   * Incidents tab replays the step by lighting exactly these, so a drawing change is a
-   * build failure here rather than a silently wrong replay. The CoSAI `components` list
-   * serves the risk map only; the replay never guesses from component anchors.
+   * Incidents page replays the step by lighting exactly these, so a drawing change is a
+   * build failure here rather than a silently wrong replay.
    */
   path: string[];
   risks?: string[];
@@ -822,22 +825,36 @@ export interface IncidentRelated {
   sources?: IncidentSource[];
 }
 
+/** A capability pinned on the incident's drawing that would have broken the chain. */
+export interface IncidentBreak {
+  capability: string;
+  /** One line: where in the chain it bites. */
+  how: string;
+}
+
 export interface Incident {
   id: string;
   title: string;
+  /** One or two sentences: what happened. The list row and the page header both lead with it. */
   subtitle: string;
+  /** "YYYY-MM" when it last came to light (the latest event or disclosure); the list sorts on it, newest first. */
+  date: string;
   dateRange: string;
+  /** One of INCIDENT_CATEGORIES — the attack type the list files it under. */
+  category: IncidentCategory;
   /** "target" = the AI system was attacked. "weapon" = an AI agent ran the attack. */
   perspective: "target" | "weapon";
-  /**
-   * The reference architecture this incident played out on — the Incidents tab replays the
-   * same steps on that drawing as an alternate view of the risk map.
-   */
+  /** The reference architecture the incident is replayed on. */
   archetype: string;
+  /** Set when the account rests on one report or on figures nobody has confirmed. */
+  caveat?: string;
   summary: string[];
-  patterns: string[];
+  /** The 3–5 capabilities, each pinned on the drawing, that would have broken the chain. */
+  breaks: IncidentBreak[];
   risks: string[];
-  controls: string[];
+  /** CoSAI controls; kept for the older case studies, no longer shown or required. */
+  controls?: string[];
+  patterns?: string[];
   cves?: string[];
   steps: IncidentStep[];
   alsoSeen?: IncidentRelated[];

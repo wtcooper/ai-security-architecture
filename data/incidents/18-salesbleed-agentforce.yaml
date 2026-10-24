@@ -1,0 +1,162 @@
+id: salesbleed-agentforce
+title: "SalesBleed: a public lead form turns Agentforce into a zero-click CRM leak"
+subtitle: >
+  An attacker filled in a public Web-to-Lead form with hidden instructions. When an employee
+  later asked Agentforce about their newest leads, it read the Accounts table and spelled it
+  out, one account at a time, in DNS lookups to the attacker's server.
+date: 2026-09
+dateRange: June – September 2026 (disclosed 24 September)
+category: promptInjection
+perspective: target
+archetype: archLowCodeAgentBuilder
+breaks:
+  - capability: cap-input-guardrails
+    how: "Lead fields written by the public are data to screen, never instructions to follow."
+  - capability: AML.M0028
+    how: "A lead-review agent needs Leads, not Accounts; the injection needed no escalation because the permission was already there."
+  - capability: D3-AA
+    how: "Every post the agent makes carries the person who triggered it, so a planted lead cannot phish in someone else's name."
+  - capability: cap-ai-vendor-assessment
+    how: "Ask the platform how agent output is rendered and which URLs it will fetch; the Trusted URLs gap was the vendor's to close."
+  - capability: cap-agent-tracing
+    how: "A lead that re-runs its instructions on every review, and a query against Accounts nobody asked for, both show in the trace."
+summary:
+  - >
+    Web-to-Lead is unauthenticated by design: anyone on the internet can create a record in a
+    company's CRM. Zenity Labs put a prompt injection in one field of an ordinary-looking lead
+    and waited for an employee to ask Agentforce something routine — check my latest leads,
+    help me with the newest one.
+  - >
+    The default General CRM subagent holds Query Records on both Leads and Accounts, so the
+    planted instruction could pull company names and deal sizes without escalating anything.
+    It wrote them into the subdomain of an attacker-controlled hostname. The Trusted URLs
+    redactor that should have stopped the link knew only a fixed list of top-level domains —
+    `.fun` was not on it — and disagreed with the renderer about where a URL ends.
+  - >
+    The data left in the DNS lookup itself. The chat surface rendered external image tags with
+    no interaction, and on agents published to Slack the link preview crawled the URL, so a
+    follow-up HTTP request could fail and the data was still gone. A related flaw let the agent
+    post into Slack with no confirmation and no attribution, which made it a phishing channel.
+  - >
+    Reported on 1 June 2026; Salesforce confirmed fixes on 18 August, hardening Trusted URLs,
+    adding attribution to Slack posts and requiring confirmation for the write action. No
+    exploitation in the wild was reported.
+risks:
+  - riskPromptInjection
+  - riskAgenticDelegationConfusedDeputy
+  - riskCovertChannelsInModelOutputs
+  - riskSensitiveDataDisclosure
+  - riskRogueActions
+steps:
+  - n: 1
+    title: A public form writes the instruction into the CRM
+    phase: introduced
+    narrative: >
+      The attacker submits a lead through the company's Web-to-Lead form. It looks benign; one
+      field carries a hidden prompt injection. The endpoint is unauthenticated by design, so
+      the instruction is now a CRM record like any other, waiting to be read.
+    path: [platform]
+    risks:
+      - riskPromptInjection
+    sources:
+      - title: "SalesBleed: 0-click data exfiltration on Agentforce"
+        url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+        publisher: Zenity Labs
+        date: 2026-09-24
+  - n: 2
+    title: An employee asks about their newest leads
+    phase: introduced
+    narrative: >
+      A salesperson asks Agentforce to check their latest leads and help with the newest one.
+      The agent reads the planted lead into its context and treats the hidden text as part of
+      its task. Nothing the employee does is unusual, and nothing they see is.
+    path: [consumer->platform]
+    risks:
+      - riskPromptInjection
+    sources:
+      - title: "SalesBleed: 0-click data exfiltration on Agentforce"
+        url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+        publisher: Zenity Labs
+        date: 2026-09-24
+  - n: 3
+    title: The CRM subagent already holds the Accounts table
+    phase: exposed
+    narrative: >
+      The default General CRM subagent has Query Records on Leads and on Accounts. Following
+      the injected instructions, it queries Accounts and takes company names and deal sizes.
+      As Zenity put it, the attack didn't need to escalate privileges — the permissions were
+      already there.
+    path: [platform]
+    risks:
+      - riskAgenticDelegationConfusedDeputy
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "SalesBleed: 0-click data exfiltration on Agentforce"
+        url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+        publisher: Zenity Labs
+        date: 2026-09-24
+  - n: 4
+    title: Out through a DNS lookup the redactor never saw
+    phase: exposed
+    narrative: >
+      The agent writes the values into a subdomain of an attacker hostname on `.fun`, a
+      top-level domain the Trusted URLs redactor did not recognise. Brackets and braces the
+      redactor ignored still rendered as part of a link. Redaction ran after generation, so the
+      payload was tuned around it. The chat surface rendered the image tag, or Slack's link
+      preview crawled the URL, and the DNS lookup carried the data — the HTTP request after it
+      did not need to succeed. The proof of concept took the whole Accounts table, one account
+      at a time.
+    path: [platform->openWeb, platform->vendorTools]
+    risks:
+      - riskCovertChannelsInModelOutputs
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "SalesBleed: 0-click data exfiltration on Agentforce"
+        url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+        publisher: Zenity Labs
+        date: 2026-09-24
+  - n: 5
+    title: The agent posts into Slack, unconfirmed and unattributed
+    phase: exposed
+    narrative: >
+      Agentforce's Slack response action needed no confirmation by default and did not show
+      which user had started it. A planted lead, once reviewed, could have the agent post a
+      message into a relevant Slack discussion, with a phishing link hidden behind innocent
+      text — and the recipients had no way to trace it to who set it off.
+    path: [platform->vendorTools]
+    risks:
+      - riskRogueActions
+    sources:
+      - title: "Agentforce data leak and phishing flaws fixed"
+        url: https://itdaily.com/news/security/agentforce-data-breach-phishing/
+        publisher: ITdaily
+        date: 2026-09-25
+  - n: 6
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Screen anything the public can write — form fields, lead notes, inbound email — as data
+      before an agent reads it. Scope the subagent to the table the task needs: a lead review
+      has no reason to query Accounts. Make every agent post carry the identity of the person
+      who triggered it, and require confirmation for writes. Hold the platform to account for
+      how output is rendered and which hosts it will fetch, because a DNS lookup from an image
+      preview passes every HTTP egress control. And trace agent runs, so a lead that fires its
+      instructions on every review is seen the second time, not the hundredth.
+    path: [consumer->platform, platform->openWeb, platform->vendorTools, govPolicy, govObservability]
+    sources:
+      - title: "SalesBleed: 0-click data exfiltration on Agentforce"
+        url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+        publisher: Zenity Labs
+        date: 2026-09-24
+sources:
+  - title: "SalesBleed: 0-click data exfiltration on Agentforce"
+    url: https://labs.zenity.io/post/salesbleed-0-click-data-exfiltration-on-agentforce
+    publisher: Zenity Labs
+    date: 2026-09-24
+  - title: "Agentforce data leak and phishing flaws fixed"
+    url: https://itdaily.com/news/security/agentforce-data-breach-phishing/
+    publisher: ITdaily
+    date: 2026-09-25
+  - title: "Salesforce bugs and agent governance"
+    url: https://thestack.technology/salesforce-bugs-agent-governance
+    publisher: The Stack

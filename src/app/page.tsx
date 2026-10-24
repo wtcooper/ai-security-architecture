@@ -136,8 +136,8 @@ export default function LandingPage() {
       </ol>
       <p className="mt-4 text-[13.5px] text-ink-2">
         See it happen:{" "}
-        <Link href="/examples" className={link}>{incidents.length} real 2025–26 incidents</Link>
-        {" "}replayed on the same map, step by step and sourced.
+        <Link href="/incidents" className={link}>{incidents.length} real 2025–26 incidents</Link>
+        {" "}walked step by step across their architectures, every step sourced.
       </p>
 
       <h2 className="display mt-12 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">Reference</h2>

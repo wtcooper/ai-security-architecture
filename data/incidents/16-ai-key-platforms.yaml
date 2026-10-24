@@ -1,0 +1,159 @@
+id: ai-key-platforms
+title: "Platforms that hold customers' AI provider keys breached in a single fortnight"
+subtitle: >
+  Within twelve days of each other, Andromeda, OpenCode's hosted Console and Railway disclosed
+  intrusions into the systems that keep their customers' secrets. Users found model bills they
+  had not run up; Railway paused every deployment and asked the model providers to revoke keys.
+date: 2026-10
+dateRange: 9–21 October 2026
+category: identity
+perspective: target
+archetype: archManagedAgentRuntime
+caveat: >
+  The link between the three intrusions, and the distillation motive, are the vendors' own
+  claims; no third party has confirmed them, and none has disclosed a root cause.
+breaks:
+  - capability: D3-CTS
+    how: "Hand the platform a short-lived, scoped token per workload, not a standing provider key it must store."
+  - capability: D3-CH
+    how: "One key per tool and platform, rotated on schedule, so a breach at one revokes one key rather than all of them."
+  - capability: AML.M0036
+    how: "Provider-side spend limits and alerts turn a stolen key into a capped bill and an alarm."
+  - capability: cap-ai-vendor-assessment
+    how: "Ask how a platform stores and decrypts customer secrets before pasting a key into it."
+summary:
+  - >
+    A managed platform that calls models on its customers' behalf has to hold their provider
+    keys somewhere it can decrypt them. Concentrate enough of those keys and the platform is
+    worth attacking for the keys alone.
+  - >
+    Andromeda, an AI infrastructure provider, says unauthorised access to its own and certain
+    customers' credentials began on or about 9 October, was detected on 13 October, and was part
+    of an "industry-wide attack". OpenCode says an intruder reached a legacy system behind its
+    hosted Console on the night of 16 October; 1.4% of Console users, those with a provider key
+    stored there, were told to revoke them. On 21 October Railway reported that an intruder may
+    have obtained decrypted customer environment variables, which it tied to "a series of
+    attacks recently targeting platform companies" aimed at AI inference providers.
+  - >
+    The damage landed on the customers' provider accounts. OpenCode users reported unrecognised
+    OpenAI, Anthropic and Google charges from a few hundred dollars to about $1,700, and at least
+    one Google project was suspended. OpenCode linked its breach to "a large-scale distillation
+    attack" without explaining how.
+  - >
+    The lesson is less about any one platform than about the key: a long-lived provider key,
+    pasted into a third party, with no spend limit, is a standing credential whose blast radius
+    the customer cannot see.
+risks:
+  - riskCrossTenantCredentialPropagation
+  - riskSensitiveDataDisclosure
+  - riskEconomicDenialOfWallet
+  - riskModelReverseEngineering
+steps:
+  - n: 1
+    title: The platform keeps the customer's model keys
+    phase: introduced
+    narrative: >
+      OpenCode Console exists so a team can store its OpenAI, Anthropic or Google key once and
+      let members call models without ever seeing it. Railway keeps customers' environment
+      variables, API keys among them, encrypted for its deployments. Both designs mean the
+      platform must be able to decrypt the keys at run time — the keys the CLI keeps locally
+      were, by OpenCode's account, never at risk.
+    path: [entry->managedRuntime, managedRuntime, govSecrets]
+    risks:
+      - riskCrossTenantCredentialPropagation
+    sources:
+      - title: "OpenCode Console breach may have exposed provider API keys"
+        url: https://thehackernews.com/2026/10/opencode-console-breach-may-have.html
+        publisher: The Hacker News
+        date: 2026-10-19
+  - n: 2
+    title: Intruders reach the secret stores
+    phase: introduced
+    narrative: >
+      Andromeda's compromised accounts were active from about 9 October until it disabled them on
+      the 13th. OpenCode's intruder reached a legacy system on 16 October. Railway detected
+      anomalous activity in the systems that store customer environment variables on the morning
+      of 21 October, and for some of them the attacker may have obtained decrypted contents. None
+      has said how the intruder got in.
+    path: [govSecrets, govIdentity]
+    risks:
+      - riskCrossTenantCredentialPropagation
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "October 2026 security incident"
+        url: https://andromeda.ai/security-updates/october-2026-security-incident
+        publisher: Andromeda
+        date: 2026-10-20
+      - title: "Security disclosure — Wednesday, October 21st"
+        url: https://blog.railway.com/p/security-disclosure-wednesday-october-21st
+        publisher: Railway
+        date: 2026-10-21
+  - n: 3
+    title: The keys are spent somewhere else
+    phase: exposed
+    narrative: >
+      Affected OpenCode users reported usage they never ran — $281 on OpenAI and $168 on
+      Anthropic for one, about $1,700 for another, €200 of Google usage followed by a suspended
+      project for a third. OpenCode called the breach part of a large-scale distillation attack:
+      someone else's paid model access, used to copy a frontier model's behaviour.
+    path: [managedRuntime]
+    risks:
+      - riskEconomicDenialOfWallet
+      - riskModelReverseEngineering
+    sources:
+      - title: "OpenCode Console breach may have exposed provider API keys"
+        url: https://thehackernews.com/2026/10/opencode-console-breach-may-have.html
+        publisher: The Hacker News
+        date: 2026-10-19
+      - title: "OpenCode hack exposes API keys amid AI distillation attacks"
+        url: https://www.bleepingcomputer.com/news/security/opencode-hack-exposes-api-keys-amid-ai-distillation-attacks/
+        publisher: BleepingComputer
+        date: 2026-10-19
+  - n: 4
+    title: Rotation becomes the outage
+    phase: exposed
+    narrative: >
+      Railway asked upstream providers to revoke all keys and paused every deployment while it
+      investigated, so customers could not ship until builds were restored. OpenCode's advice
+      carried the trap: deleting a key from Console does not revoke it. Every customer had to
+      rotate at the provider, update every tool that used the old key, and read back their bills.
+    path: [agentDef->managedRuntime, managedRuntime]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "Security disclosure — Wednesday, October 21st"
+        url: https://blog.railway.com/p/security-disclosure-wednesday-october-21st
+        publisher: Railway
+        date: 2026-10-21
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Prefer platforms that never hold a standing provider key: a short-lived token scoped to one
+      workload is worth little a day later. Where a key must be stored, make it one key per tool,
+      rotated on a schedule, so a breach at one platform revokes one key. Set spend limits and
+      alerts at the provider, which turn a stolen key into a capped bill and an early warning.
+      And before pasting a key into anyone's console, ask how they store and decrypt it.
+    path: [entry->managedRuntime, managedRuntime, govSecrets, govPolicy]
+    sources:
+      - title: "OpenCode Console breach may have exposed provider API keys"
+        url: https://thehackernews.com/2026/10/opencode-console-breach-may-have.html
+        publisher: The Hacker News
+        date: 2026-10-19
+sources:
+  - title: "OpenCode Console breach may have exposed provider API keys"
+    url: https://thehackernews.com/2026/10/opencode-console-breach-may-have.html
+    publisher: The Hacker News
+    date: 2026-10-19
+  - title: "Security disclosure — Wednesday, October 21st"
+    url: https://blog.railway.com/p/security-disclosure-wednesday-october-21st
+    publisher: Railway
+    date: 2026-10-21
+  - title: "October 2026 security incident"
+    url: https://andromeda.ai/security-updates/october-2026-security-incident
+    publisher: Andromeda
+    date: 2026-10-20
+  - title: "OpenCode hack exposes API keys amid AI distillation attacks"
+    url: https://www.bleepingcomputer.com/news/security/opencode-hack-exposes-api-keys-amid-ai-distillation-attacks/
+    publisher: BleepingComputer
+    date: 2026-10-19

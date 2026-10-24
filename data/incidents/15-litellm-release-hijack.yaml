@@ -1,0 +1,151 @@
+id: litellm-release-hijack
+title: "LiteLLM 1.107.0: a hijacked release pipeline ships a key stealer inside the AI gateway"
+subtitle: >
+  Stolen GitHub tokens from three LiteLLM engineers were enough to run and approve a release.
+  For about two hours the official 1.107.0 package and images carried a stealer aimed at the
+  provider keys an AI gateway exists to hold.
+date: 2026-10
+dateRange: 21 October 2026
+category: supplyChain
+perspective: target
+archetype: archSelfHostedInference
+breaks:
+  - capability: AML.M0014
+    how: "Pin the gateway by digest and verify provenance, so a release from a lookalike build never installs."
+  - capability: cap-staged-rollout-gate
+    how: "A new gateway version soaks before production; floating `latest` and `main-stable` tags never deploy straight through."
+  - capability: AML.M0023
+    how: "A bill of materials answers, within the hour, which deployments run 1.107.0 and whose keys they held."
+  - capability: D3-FA
+    how: "Flag new `.pth` and `sitecustomize.py` files in site-packages: startup hooks are execution, not packaging."
+  - capability: D3-NI
+    how: "A gateway that can reach only its model backends cannot post to a lookalike domain or poll a dead drop."
+summary:
+  - >
+    An AI gateway concentrates the most valuable secrets in an AI estate: every provider key the
+    organisation pays for, plus the model routing around them. That makes the gateway's release
+    pipeline a target in its own right.
+  - >
+    On 21 October 2026 an attacker used three LiteLLM engineers' GitHub accounts — apparently
+    through stolen GitHub CLI OAuth tokens — to trigger the project's release run with one
+    account and approve it with another. The application code was untouched. The installation
+    package was not: version 1.107.0 on PyPI, Docker Hub and GHCR carried `cook.pth`, `cook.py`
+    and `sitecustomize.py`, built from a lookalike `Berri-AI/litellm` repository.
+  - >
+    Python runs `.pth` lines and `sitecustomize` at every interpreter start, so the payload ran
+    before LiteLLM was ever imported — and again whenever a responder ran `python` or `pip` to
+    investigate. It collected cloud, Kubernetes, CI and developer secrets alongside the LiteLLM
+    proxy's own saved provider credentials, sent them to `litellm[.]dev`, and left an hourly
+    loader polling a GitHub dead drop for more code.
+  - >
+    It was the gateway's second compromise of 2026. In March the TeamPCP group published
+    malicious LiteLLM versions after breaching the Trivy scanner in its CI, with the same
+    `cook.pth` behaviour. A release approval that two stolen accounts can satisfy is not a gate.
+risks:
+  - riskInsecureIntegratedComponent
+  - riskModelDeploymentTampering
+  - riskSensitiveDataDisclosure
+  - riskCrossTenantCredentialPropagation
+steps:
+  - n: 1
+    title: Two stolen tokens run and approve a release
+    phase: introduced
+    narrative: >
+      With GitHub CLI OAuth tokens taken from three engineers, the attacker triggered the
+      project-releaser run from one account and approved its production gate from another. Two
+      people's sign-off was required; the attacker held both. The payload was built from a
+      lookalike `Berri-AI/litellm` repository, not the official one.
+    path: [govSupplyChain]
+    risks:
+      - riskModelDeploymentTampering
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "LiteLLM compromised in supply chain attack"
+        url: https://thehackernews.com/2026/10/litellm-compromised-in-supply-chain.html
+        publisher: The Hacker News
+        date: 2026-10-21
+      - title: "litellm 1.107.0 compromised"
+        url: https://github.com/BerriAI/litellm/issues/47826
+        publisher: BerriAI/litellm
+        date: 2026-10-21
+  - n: 2
+    title: The official channels serve the trojaned gateway
+    phase: introduced
+    narrative: >
+      All seven 1.107.0 wheels were live on PyPI from 11:39 to 13:23 UTC. On Docker Hub and GHCR
+      the `v1.107.0`, `latest`, `main-latest` and `main-stable` tags pointed at compromised images
+      from 11:46 until 13:51 (GHCR) and 14:20 (Docker Hub). Anything that pulled a floating tag in
+      that window installed the stealer into the gateway tier.
+    path: [gateway]
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskModelDeploymentTampering
+    sources:
+      - title: "LiteLLM release pipeline hacked to distribute info-stealer malware"
+        url: https://www.bleepingcomputer.com/news/security/litellm-release-pipeline-hacked-to-distribute-info-stealer-malware/
+        publisher: BleepingComputer
+        date: 2026-10-22
+  - n: 3
+    title: Python's own startup runs the stealer
+    phase: exposed
+    narrative: >
+      `cook.pth` holds a single line, `import cook`, and Python executes it at every interpreter
+      start — no LiteLLM import needed. The collector took cloud and Kubernetes credentials, CI and
+      registry tokens, SSH and TLS keys, browser data, environment variables, and the LiteLLM
+      proxy's saved provider credentials and model configuration: every key the gateway brokered.
+    path: [gateway, govSecrets]
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskCrossTenantCredentialPropagation
+    sources:
+      - title: "LiteLLM compromised in supply chain attack"
+        url: https://thehackernews.com/2026/10/litellm-compromised-in-supply-chain.html
+        publisher: The Hacker News
+        date: 2026-10-21
+  - n: 4
+    title: The keys leave, and a loader stays
+    phase: exposed
+    narrative: >
+      The haul was encrypted and posted to `litellm[.]dev/healthcheck`, a lookalike of the
+      project's own name. `sitecustomize.py` also started a detached daemon that read a pointer
+      from a GitHub repository every hour and ran whatever Python the domain behind it served.
+      Removing the package left the startup files and the loader in place; responders were told
+      to inspect affected systems without launching Python at all.
+    path: [gateway]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "LiteLLM release pipeline hacked to distribute info-stealer malware"
+        url: https://www.bleepingcomputer.com/news/security/litellm-release-pipeline-hacked-to-distribute-info-stealer-malware/
+        publisher: BleepingComputer
+        date: 2026-10-22
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Treat the gateway as the key vault it is. Install it from a pinned digest whose provenance
+      is checked against the official repository, and let a new version soak before it reaches
+      production, so a two-hour window never meets a floating tag. Keep a bill of materials that
+      names every deployment and the keys it holds, so rotation starts with a list rather than a
+      search. Watch site-packages for new startup hooks. And give the gateway egress to its model
+      backends only: the stealer's upload and the loader's hourly poll both needed the open
+      internet.
+    path: [registry->storage, govSupplyChain, gateway, govObservability]
+    sources:
+      - title: "LiteLLM compromised in supply chain attack"
+        url: https://thehackernews.com/2026/10/litellm-compromised-in-supply-chain.html
+        publisher: The Hacker News
+        date: 2026-10-21
+sources:
+  - title: "LiteLLM compromised in supply chain attack"
+    url: https://thehackernews.com/2026/10/litellm-compromised-in-supply-chain.html
+    publisher: The Hacker News
+    date: 2026-10-21
+  - title: "LiteLLM release pipeline hacked to distribute info-stealer malware"
+    url: https://www.bleepingcomputer.com/news/security/litellm-release-pipeline-hacked-to-distribute-info-stealer-malware/
+    publisher: BleepingComputer
+    date: 2026-10-22
+  - title: "litellm 1.107.0 compromised"
+    url: https://github.com/BerriAI/litellm/issues/47826
+    publisher: BerriAI/litellm
+    date: 2026-10-21

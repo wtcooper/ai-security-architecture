@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { categoryById } from "@/lib/incident-categories";
 import {
   activePersonas,
   archetypesInOrder,
@@ -93,9 +94,9 @@ function buildIndex(): Entry[] {
     ...incidents.map((i) => ({
       kind: "Incident",
       title: i.title,
-      hint: i.dateRange,
-      href: `/examples?incident=${i.id}`,
-      text: norm(i.title, i.id, ...i.patterns),
+      hint: `${categoryById.get(i.category)?.label ?? ""} · ${i.dateRange}`,
+      href: `/incidents/${i.id}`,
+      text: norm(i.title, i.id, i.subtitle, categoryById.get(i.category)?.label ?? "", ...(i.patterns ?? [])),
     })),
   ];
 }

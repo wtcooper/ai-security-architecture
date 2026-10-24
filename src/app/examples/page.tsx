@@ -1,10 +1,13 @@
 import { Suspense } from "react";
-import { IncidentExplorer } from "@/components/examples/IncidentExplorer";
+import { ExamplesRedirect } from "@/components/incidents/ExamplesRedirect";
 
 export const metadata = { title: "Incidents · AI Security Architecture" };
 
+/** The old address: forwards to /incidents. */
 export default function ExamplesPage() {
-  return <Suspense>
-      <IncidentExplorer />
-    </Suspense>;
+  return (
+    <Suspense>
+      <ExamplesRedirect />
+    </Suspense>
+  );
 }

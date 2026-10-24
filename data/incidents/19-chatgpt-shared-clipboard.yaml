@@ -1,0 +1,140 @@
+id: chatgpt-shared-clipboard
+title: "ChatGPT's shared clipboard: a hidden task reads your Gmail and passes it to another account"
+subtitle: >
+  Every ChatGPT code container could write to the same internal package server, and its item
+  properties were not separated by account. A hidden instruction made a victim's session read
+  their Gmail and leave it there for the attacker's account to collect.
+date: 2026-09
+dateRange: June – September 2026 (published 8 September)
+category: promptInjection
+perspective: target
+archetype: archEnterpriseAiChat
+breaks:
+  - capability: cap-input-guardrails
+    how: "Shared conversations, pasted prompts and custom GPT configurations are untrusted input, screened before they steer a session."
+  - capability: AML.M0029
+    how: "\"Always ask\" puts a person in front of every connector read; the default let Gmail reads run first and report after."
+  - capability: AML.M0028
+    how: "Connect only the apps a task needs; the hidden task could reach whatever the session could."
+  - capability: cap-ai-vendor-assessment
+    how: "Ask how the vendor isolates tenants inside its own sandbox; a shared package server was the whole channel."
+  - capability: cap-agent-tracing
+    how: "The session audit shows a connector read nobody asked for, even when the answer on screen looks normal."
+summary:
+  - >
+    ChatGPT runs code in a per-account container with no public internet. To install packages
+    it reaches an internal JFrog Artifactory, using reader credentials kept in the container's
+    environment. Check Point found those credentials could also set and read item properties,
+    and that the properties were not isolated by account: a value written from one account
+    could be read from another.
+  - >
+    That made a clipboard between strangers. A hidden instruction — in a pasted prompt, a
+    shared conversation the victim only had to open and reply to, or a custom GPT's
+    configuration — told ChatGPT to run two streams in each turn: answer the visible question,
+    and quietly check the clipboard for an attacker task, run it with the victim's connectors,
+    and write the result back, Base64-encoded across keys if large.
+  - >
+    The proof of concept read the victim's Gmail. Under the default setting, connector reads
+    need no approval and Gmail auto-approves low-risk actions, so the only sign was a small
+    "Talked to Gmail" label after the read had happened. Drive, Teams and GitHub would have been
+    reachable the same way.
+  - >
+    Check Point found the channel in June 2026 and published on 8 September. OpenAI confirmed
+    the Artifactory instance had been decommissioned.
+risks:
+  - riskPromptInjection
+  - riskAgenticDelegationConfusedDeputy
+  - riskInsecureIntegratedComponent
+  - riskSensitiveDataDisclosure
+steps:
+  - n: 1
+    title: An instruction arrives in a shared chat
+    phase: introduced
+    narrative: >
+      The victim opens a shared conversation and sends an ordinary message, pastes a prompt
+      from somewhere, or uses a custom GPT. Each carries a hidden instruction. Nothing about
+      the chat looks wrong.
+    path: [employee->browser, browser->vendor]
+    risks:
+      - riskPromptInjection
+    sources:
+      - title: "The shared clipboard inside the sandbox: cross-account data leakage in ChatGPT"
+        url: https://research.checkpoint.com/2026/the-shared-clipboard-inside-the-sandbox-cross-account-data-leakage-in-chatgpt/
+        publisher: Check Point Research
+        date: 2026-09-08
+  - n: 2
+    title: Every turn runs a second, invisible task
+    phase: introduced
+    narrative: >
+      In Thinking mode, each turn now carries two streams. ChatGPT answers what the victim
+      asked, and in the same turn checks a hidden mailbox for a task from the attacker. The
+      instruction tells it never to mix the two, so the visible answer gives nothing away.
+    path: [vendor]
+    risks:
+      - riskPromptInjection
+      - riskAgenticDelegationConfusedDeputy
+    sources:
+      - title: "The shared clipboard inside the sandbox: cross-account data leakage in ChatGPT"
+        url: https://research.checkpoint.com/2026/the-shared-clipboard-inside-the-sandbox-cross-account-data-leakage-in-chatgpt/
+        publisher: Check Point Research
+        date: 2026-09-08
+  - n: 3
+    title: It reads Gmail without asking
+    phase: exposed
+    narrative: >
+      The attacker's task runs with the victim's own connectors. Under the default "Important
+      actions" setting, reads need no prior approval, and the Gmail integration auto-approves
+      low-risk actions. The victim sees a small "Talked to Gmail" label after the read, with no
+      chance to stop it. Drive, Teams and GitHub were reachable the same way.
+    path: [vendor->vendorTools]
+    risks:
+      - riskAgenticDelegationConfusedDeputy
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "ChatGPT flaw lets attackers pull Gmail data across accounts via a hidden channel"
+        url: https://www.csoonline.com/article/4220203/chatgpt-flaw-lets-attackers-pull-gmail-data-across-accounts-via-a-hidden-channel.html
+        publisher: CSO Online
+  - n: 4
+    title: A package server every account could write to
+    phase: exposed
+    narrative: >
+      The code container's reader credentials for the internal Artifactory could also call Set
+      Item Properties, and the properties were shared across accounts. The session writes the
+      mail there, Base64-encoded and split across keys; the attacker's own container reads it
+      back. Two sandboxes that were never meant to meet now shared a clipboard.
+    path: [vendor]
+    risks:
+      - riskInsecureIntegratedComponent
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "The shared clipboard inside the sandbox: cross-account data leakage in ChatGPT"
+        url: https://research.checkpoint.com/2026/the-shared-clipboard-inside-the-sandbox-cross-account-data-leakage-in-chatgpt/
+        publisher: Check Point Research
+        date: 2026-09-08
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Treat shared conversations, pasted prompts and custom GPT configurations as untrusted
+      input. Set connector approval to "Always ask" where the data matters, and connect only the
+      apps a person actually uses with the assistant. Isolation inside the vendor's sandbox is
+      the vendor's job, but it belongs in the assessment: ask what the code container can reach
+      and whether anything there is shared between tenants. And export the session audit, so a
+      connector read nobody asked for is visible even when the answer on screen is not.
+    path: [browser->vendor, vendor->vendorTools, govPolicy, govObservability]
+    sources:
+      - title: "The shared clipboard inside the sandbox: cross-account data leakage in ChatGPT"
+        url: https://research.checkpoint.com/2026/the-shared-clipboard-inside-the-sandbox-cross-account-data-leakage-in-chatgpt/
+        publisher: Check Point Research
+        date: 2026-09-08
+sources:
+  - title: "The shared clipboard inside the sandbox: cross-account data leakage in ChatGPT"
+    url: https://research.checkpoint.com/2026/the-shared-clipboard-inside-the-sandbox-cross-account-data-leakage-in-chatgpt/
+    publisher: Check Point Research
+    date: 2026-09-08
+  - title: "ChatGPT flaw lets attackers pull Gmail data across accounts via a hidden channel"
+    url: https://www.csoonline.com/article/4220203/chatgpt-flaw-lets-attackers-pull-gmail-data-across-accounts-via-a-hidden-channel.html
+    publisher: CSO Online
+  - title: "A worrying ChatGPT bug let strangers read Gmail messages via a hidden cross-account channel"
+    url: https://techradar.com/pro/security/a-worrying-chatgpt-bug-let-strangers-read-gmail-messages-via-a-hidden-cross-account-channel
+    publisher: TechRadar

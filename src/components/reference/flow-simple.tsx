@@ -10,6 +10,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 
 import type { ArchBlock, DisplayStatus } from "@/lib/types";
 import type { ChipPaint } from "./flow-style";
+import { isLit, type Highlight } from "./FlowDiagram";
 import { FlowIcon } from "./FlowIcons";
 
 export const SIMPLE = {
@@ -74,7 +75,7 @@ export type SimpleBlockData = {
   /** Top of the first contained card, relative to this one, so a container's text stops above it. */
   kidTop?: number;
   badges: SimpleBadge[];
-  highlight?: { kind: string; id: string } | null;
+  highlight?: Highlight | null;
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
   onPick?: (id: string) => void;
 };
@@ -149,7 +150,7 @@ export function SimpleBlockNode({ data }: NodeProps<Node<SimpleBlockData>>) {
           label={`C${b.n}`}
           status={b.status}
           paint={b.paint}
-          faded={!!highlight && !(highlight.kind === "mitigation" && highlight.id === b.id)}
+          faded={!!highlight && !isLit(highlight, "mitigation", b.id)}
           onEnter={(e) => onItemEnter(e, b.title, b.body)}
           onLeave={leave}
           onClick={onPick ? () => onPick(b.id) : undefined}

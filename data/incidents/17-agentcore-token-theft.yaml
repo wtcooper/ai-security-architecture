@@ -1,0 +1,152 @@
+id: agentcore-token-theft
+title: "AWS AgentCore: a support ticket walks off with the agent's identity token"
+subtitle: >
+  A hidden comment in a support ticket had an AgentCore agent run a script through its default
+  root shell. The script read the harness's memory, took the operator's MCP credential in
+  plaintext, and the researchers replayed it from a laptop to pull customer records.
+date: 2026-09
+dateRange: Reported 19 May 2026 · published 18 September 2026
+category: promptInjection
+perspective: target
+archetype: archManagedAgentRuntime
+breaks:
+  - capability: AML.M0028
+    how: "Scope allowedTools per session: a ticket-triage agent has no reason to hold a root shell."
+  - capability: D3-EI
+    how: "Run the shell in its own sandbox, out of reach of the process that resolves credentials."
+  - capability: D3-CTS
+    how: "A least-privilege, short-lived token bound to its caller is little use replayed from a laptop."
+  - capability: cap-agent-egress-control
+    how: "Unlisted destinations are blocked and alerted on — the script's download and upload both needed one."
+  - capability: cap-input-guardrails
+    how: "Ticket bodies, comments included, are screened as data before the agent reads them as instructions."
+summary:
+  - >
+    A managed agent runtime resolves the agent's credentials for it, so the agent never sees a
+    key. That holds only while nothing the agent runs can read the runtime's memory.
+  - >
+    Unit 42 showed that in Amazon Bedrock AgentCore it could. A support ticket with a hidden
+    HTML comment told the agent to fetch a script and pipe it into Python. The built-in shell
+    tool, enabled by default, ran it as root under the same user as the harness, PID 1. The
+    script scanned `/proc/1/mem` and found what the harness had resolved from the AgentCore
+    Identity vault: a 1,034-byte bearer JWT for the operator's `mcp-service` account, and the
+    MCP server's URL.
+  - >
+    From a laptop with no AWS credentials, the researchers connected to that MCP server, listed
+    its tools, looked up customer personal data and created a ticket. AWS closed the report as
+    informative under the shared responsibility model, pointing to `allowedTools` scoping and
+    egress filtering as the customer's controls.
+  - >
+    The finding is not a bug in a model. It is a default: a general-purpose shell in the same
+    trust domain as the credentials the platform promises to keep from the agent.
+risks:
+  - riskPromptInjection
+  - riskRogueActions
+  - riskAgenticDelegationConfusedDeputy
+  - riskSensitiveDataDisclosure
+steps:
+  - n: 1
+    title: A support ticket carries the instruction
+    phase: introduced
+    narrative: >
+      The agent's job was to read support tickets through the operator's tools. One ticket held
+      a hidden HTML comment telling it to `curl` a reconnaissance script and pipe it into
+      `python3`. A second ticket later delivered the exfiltration script the same way.
+    path: [internalTools->aiGateway, aiGateway->tunnel, tunnel->managedRuntime]
+    risks:
+      - riskPromptInjection
+    sources:
+      - title: "Securing AWS AgentCore harness credentials"
+        url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-09-18
+  - n: 2
+    title: The default shell runs it as root
+    phase: introduced
+    narrative: >
+      AgentCore's built-in shell tool is on unless the operator scopes it out, and it ran as root
+      inside the harness. The agent fetched the script from the open web and executed it. Nothing
+      between the ticket and the shell asked whether triaging a ticket needs to run code.
+    path: [nativeTools->openWeb, nativeTools]
+    risks:
+      - riskPromptInjection
+      - riskRogueActions
+    sources:
+      - title: "Securing AWS AgentCore harness credentials"
+        url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-09-18
+  - n: 3
+    title: The harness's memory holds the key in plaintext
+    phase: exposed
+    narrative: >
+      PID 1 was the harness runtime, and the shell ran under the same UID, so `/proc/1/mem` was
+      readable. The harness resolves Identity vault references to plaintext at run time; the
+      script mapped the address space through `/proc/1/maps` and scanned it for a JWT pattern and
+      an MCP server URL. It found both — the operator's service-account credential, not an end
+      user's session.
+    path: [nativeTools, managedRuntime, govSecrets]
+    risks:
+      - riskSensitiveDataDisclosure
+      - riskAgenticDelegationConfusedDeputy
+    sources:
+      - title: "Securing AWS AgentCore harness credentials"
+        url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-09-18
+  - n: 4
+    title: Token and URL leave in one request
+    phase: exposed
+    narrative: >
+      The script sent the JWT and the MCP server URL in a single HTTP POST to a webhook endpoint
+      the researchers controlled. The harness container's egress allowed it.
+    path: [nativeTools->openWeb]
+    risks:
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "Securing AWS AgentCore harness credentials"
+        url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-09-18
+  - n: 5
+    title: Replayed from a laptop, outside AWS
+    phase: exposed
+    narrative: >
+      With no AWS credentials at all, the researchers connected to the MCP server as
+      `mcp-service`, listed its tools, called `lookup_customer` to retrieve customer personal
+      data, and created a ticket. The credential worked wherever it was presented.
+    path: [aiGateway->internalTools, internalTools->orgData]
+    risks:
+      - riskAgenticDelegationConfusedDeputy
+      - riskRogueActions
+      - riskSensitiveDataDisclosure
+    sources:
+      - title: "Securing AWS AgentCore harness credentials"
+        url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-09-18
+  - n: 6
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Scope `allowedTools` to what each session needs when it is invoked — the shell and file
+      tools are on by default. Where a shell is needed, run it in a separate sandbox from the
+      process that resolves credentials. Give each vault service account least privilege and a
+      token that is short-lived and bound to its caller. Treat egress to unlisted destinations
+      from a harness container as a sign of prompt injection and block it. And screen ticket
+      content as data before the agent reads it: every channel an agent reads is an input.
+    path: [nativeTools->openWeb, nativeTools, managedRuntime, govSecrets, govPolicy]
+    sources:
+      - title: "Securing AWS AgentCore harness credentials"
+        url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+        publisher: Unit 42, Palo Alto Networks
+        date: 2026-09-18
+sources:
+  - title: "Securing AWS AgentCore harness credentials"
+    url: https://unit42.paloaltonetworks.com/securing-aws-agentcore-harness-credentials/
+    publisher: Unit 42, Palo Alto Networks
+    date: 2026-09-18
+  - title: "Top AI agent security resources — October 2026"
+    url: https://adversa.ai/blog/top-ai-agent-security-resources-october-2026/
+    publisher: Adversa AI
+    date: 2026-10-04

@@ -5,7 +5,7 @@ import { CHIP, PATH_STYLE, REF_LAYERS, TAG, ZONE_TINT } from "./flow-style";
  * what a numbered chip and a risk code are, the three tab colours, and what a dotted zone
  * means. Shared by the architecture page and the incident replay's architecture view.
  */
-export function FlowLegend({ className = "" }: { className?: string }) {
+export function FlowLegend({ className = "", risks = true }: { className?: string; /** False where risk tags never show, as on an incident replay. */ risks?: boolean }) {
   return (
     <div className={`flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[12px] text-ink-2 ${className}`}>
       {Object.entries(PATH_STYLE).map(([id, style]) => (
@@ -26,7 +26,7 @@ export function FlowLegend({ className = "" }: { className?: string }) {
         </span>
         Capability
       </span>
-      <span className="flex items-center gap-1.5">
+      {risks && <span className="flex items-center gap-1.5">
         <span
           aria-hidden
           className="ident rounded-sm border px-1 py-px text-[9px] font-bold"
@@ -35,7 +35,7 @@ export function FlowLegend({ className = "" }: { className?: string }) {
           R01
         </span>
         Risk
-      </span>
+      </span>}
       <span className="flex items-center gap-1.5">
         {REF_LAYERS.map((l) => (
           <span key={l.label} title={`${l.label} layer`} className="inline-block h-2.5 w-2.5 rounded-[2px]" style={{ background: l.color }} />

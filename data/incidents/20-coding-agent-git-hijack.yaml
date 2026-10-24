@@ -1,0 +1,157 @@
+id: coding-agent-git-hijack
+title: "GitSpawn and Plugin4Shell: coding agents run attacker code before anyone approves anything"
+subtitle: >
+  Two disclosures in September 2026. A repository's own git settings ran a program the moment
+  a coding agent looked at it, and a plugin pinned to a reviewed commit could be swapped on
+  auto-update. Neither needed a click.
+date: 2026-09
+dateRange: May – September 2026
+category: supplyChain
+perspective: target
+archetype: archCodingAgentThirdParty
+breaks:
+  - capability: D3-FA
+    how: "Inspect .git/config in anything received before an agent opens it: any setting that names a program can run it."
+  - capability: D3-EI
+    how: "Background git calls run sandboxed and with program-naming settings stripped, not as the user before the trust prompt."
+  - capability: cap-mcp-tool-integrity
+    how: "Verify the checked-out plugin is the pinned commit, not just that the pin looks intact."
+  - capability: cap-agent-tool-registry
+    how: "Plugins come from an admitted list, and an upstream bump is reviewed before auto-update takes it."
+  - capability: D3-PA
+    how: "git spawning an unexpected program at agent start-up is a process event worth alerting on."
+summary:
+  - >
+    Coding agents run git in the background to build context. Manifold Security showed that
+    `git status` and `git diff` refresh the index, which runs whatever `core.fsmonitor` names
+    in the repository's own `.git/config` — as the user, outside the sandbox, and in several
+    agents before the workspace-trust prompt. A repository that arrives as files with its
+    `.git` directory, in a shared `.zip` or a sync folder, is enough; cloning is not.
+  - >
+    Eight findings across seven agents, four unpatched at publication on 1 September. Claude
+    Code ran it at start-up before trust was accepted (patched in 2.1.196; its ultrareview path
+    was still exposed); Qwen Code before authentication; Grok Build on the first keystroke;
+    Hermes on the first message (CVE-2026-71963); Goose during `goose review` (CVE-2026-72718,
+    patched in 1.44.0).
+  - >
+    On 18 September AIR published Plugin4Shell. Plugin marketplaces pin each plugin to a
+    reviewed commit, but Claude Code, Codex, Copilot and Gemini CLI checked out the pin without
+    confirming the checkout landed on it. Where a git server allows a branch named like a
+    40-character hash — Bitbucket and self-hosted servers do, GitHub does not — the branch wins.
+    Background auto-update reruns the checkout, so the swap reaches installed plugins with no
+    user action.
+  - >
+    Both say the same thing about the endpoint coding agent: the files it reads to understand a
+    project, and the plugins it trusts, are executable. Claude Code and Codex fixed
+    Plugin4Shell; Copilot had no fix at publication and Gemini CLI was deprecated instead.
+risks:
+  - riskInsecureIntegratedComponent
+  - riskToolSourceProvenance
+  - riskToolRegistryTampering
+steps:
+  - n: 1
+    title: A project arrives with its own git settings
+    phase: introduced
+    narrative: >
+      A developer receives a project as files — a `.zip` from a colleague or a candidate, a
+      synced folder — with its `.git` directory intact. Its `.git/config` sets `core.fsmonitor`
+      to a program of the attacker's choosing. Clone, fetch and pull would not carry it; files
+      do. The developer opens the folder with their coding agent.
+    path: [developer->harness]
+    risks:
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "AI coding agents hijacked through git"
+        url: https://www.manifold.security/blog/ai-coding-agents-git-hijack
+        publisher: Manifold Security
+        date: 2026-09-01
+  - n: 2
+    title: The agent's background git runs it before the trust prompt
+    phase: exposed
+    narrative: >
+      To gather context the agent runs `git status` or `git diff`. The index refresh runs the
+      `core.fsmonitor` program as the user, outside any sandbox, with no approval prompt. Claude
+      Code did it at start-up before trust was accepted, Qwen Code before authentication, Grok
+      Build on the first keystroke, Hermes on the first message, Goose during a review.
+    path: [toolPlane]
+    risks:
+      - riskInsecureIntegratedComponent
+    cves:
+      - CVE-2026-71963
+      - CVE-2026-72718
+    sources:
+      - title: "AI coding agents hijacked through git"
+        url: https://www.manifold.security/blog/ai-coding-agents-git-hijack
+        publisher: Manifold Security
+        date: 2026-09-01
+  - n: 3
+    title: A pinned plugin that isn't the pinned commit
+    phase: introduced
+    narrative: >
+      Plugin marketplaces lock each plugin to a reviewed commit SHA. The agents checked out
+      the pin without confirming they had landed on it. On Bitbucket or a self-hosted git
+      server, a branch can be named like a 40-character hash, and the checkout takes the branch.
+      The attacker either publishes a plugin that passes review and turns it later, or takes
+      over the repository of one people already trust.
+    path: [toolPlane->publicRepos]
+    risks:
+      - riskToolSourceProvenance
+      - riskToolRegistryTampering
+    sources:
+      - title: "Plugin4Shell: zero-click flaw in AI coding agents"
+        url: https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/
+        publisher: Help Net Security
+        date: 2026-09-18
+  - n: 4
+    title: Auto-update delivers the swap with no click
+    phase: exposed
+    narrative: >
+      Background auto-update, on by default in Claude Code and Codex, reruns the same checkout.
+      When the marketplace bumps the pin, the attacker's branch reaches every installed copy.
+      Claude Code fixed it in 2.1.179 and Codex in 0.146.0; Copilot had no fix at publication,
+      and Google deprecated Gemini CLI rather than patching it.
+    path: [toolPlane->publicRepos, toolPlane->memory]
+    risks:
+      - riskToolRegistryTampering
+      - riskInsecureIntegratedComponent
+    sources:
+      - title: "Plugin4Shell: zero-click flaw in AI coding agents"
+        url: https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/
+        publisher: Help Net Security
+        date: 2026-09-18
+  - n: 5
+    title: Where this chain breaks
+    phase: mitigated
+    narrative: >
+      Inspect `.git/config` in anything received before an agent opens it — any setting that
+      names a program can run it — and have the agent strip those settings and sandbox its own
+      background git calls. Verify a plugin's checkout against its pin rather than trusting the
+      pin. Install plugins from an admitted list, mirrored where you can, so an upstream bump
+      is reviewed before auto-update takes it. And watch for git spawning an unexpected process
+      when an agent starts: it is the one moment both attacks share.
+    path: [developer->harness, toolPlane->registry, sources->registry, govSupplyChain, govObservability]
+    sources:
+      - title: "AI coding agents hijacked through git"
+        url: https://www.manifold.security/blog/ai-coding-agents-git-hijack
+        publisher: Manifold Security
+        date: 2026-09-01
+alsoSeen:
+  - title: "SkillJacking — 925 hijacked skills in active use, reaching 134,000 agents"
+    date: 2026
+    note: >
+      AIR's earlier research behind Plugin4Shell's second attack path: take over the repository
+      of a skill people already trust, and every agent that installed it follows.
+    sources:
+      - title: "Plugin4Shell: zero-click flaw in AI coding agents"
+        url: https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/
+        publisher: Help Net Security
+        date: 2026-09-18
+sources:
+  - title: "AI coding agents hijacked through git"
+    url: https://www.manifold.security/blog/ai-coding-agents-git-hijack
+    publisher: Manifold Security
+    date: 2026-09-01
+  - title: "Plugin4Shell: zero-click flaw in AI coding agents"
+    url: https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/
+    publisher: Help Net Security
+    date: 2026-09-18

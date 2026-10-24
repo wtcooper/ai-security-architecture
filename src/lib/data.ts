@@ -79,7 +79,7 @@ export { actorById };
 export function incidentStepsFor(targetId: string) {
   return incidents.flatMap((incident) =>
     incident.steps
-      .filter((step) => step.components.includes(targetId))
+      .filter((step) => step.components?.includes(targetId))
       .map((step) => ({ incident, step })),
   );
 }

@@ -17,7 +17,7 @@ const NAV: NavItem[] = [
   { href: "/map", label: "Risk map" },
   { href: "/capabilities", label: "Capabilities" },
   { href: "/reference", label: "Architectures" },
-  { href: "/examples", label: "Incidents" },
+  { href: "/incidents", label: "Incidents" },
   {
     label: "Reference",
     children: [

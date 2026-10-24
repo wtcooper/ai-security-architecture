@@ -31,7 +31,7 @@ import "@xyflow/react/dist/style.css";
 import { capabilityName, mitigationById, riskById, riskCode, status as statusFile } from "@/lib/data";
 import { chipSpots, flowBadgeSpots, itemCells, labelLines, placeTags, tabStyle, TAG_H, ZONE_PAD } from "@/lib/flow-layout";
 import type { ArchBlock, Archetype, DisplayStatus, Scenario } from "@/lib/types";
-import type { Highlight, StepOverlay } from "./FlowDiagram";
+import { isLit, type Highlight, type StepOverlay } from "./FlowDiagram";
 import { blockTab, BLOCK_STYLE, chipColors, OVERLAY_STYLE, PATH_STYLE, tagWidth, ZONE_TINT, type ChipPaint } from "./flow-style";
 import { FlowIcon } from "./FlowIcons";
 import { Badge, polyline, SIMPLE, SimpleBlockNode, SimpleZoneNode, type SimpleBadge } from "./flow-simple";
@@ -271,7 +271,7 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                   key={id}
                   style={{
                     opacity:
-                      data.highlight && !(data.highlight.kind === "mitigation" && data.highlight.id === id)
+                      data.highlight && !isLit(data.highlight, "mitigation", id)
                         ? 0.2
                         : 1,
                     width: 19,
@@ -467,7 +467,7 @@ function BuildPathEdge(props: EdgeProps) {
     const h = data.highlight;
     if (!h) return 1;
     const match =
-      pin.kind === "chip" ? h.kind === "mitigation" && h.id === pin.ref : h.kind === "risk" && h.id === pin.ref;
+      Boolean(pin.ref) && isLit(h, pin.kind === "chip" ? "mitigation" : "risk", pin.ref!);
     return match ? 1 : 0.2;
   };
   const path = data?.d ?? "";
@@ -943,7 +943,7 @@ export function FlowDiagramRF({
         if (n.type === "chip" || n.type === "tag") {
           const wants = n.type === "chip" ? "mitigation" : "risk";
           const faint =
-            highlight !== null && !(highlight.kind === wants && n.id.endsWith(`:${highlight.id}`));
+            highlight !== null && !isLit(highlight, wants, n.id.slice(n.id.lastIndexOf(":") + 1));
           const hidden = n.type === "chip" ? pins === "risks" : pins === "capabilities";
           return { ...n, hidden, data: { ...n.data, dim: inScenario, faint, onPick: n.type === "chip" && Boolean(onPickMitigation) } };
         }
