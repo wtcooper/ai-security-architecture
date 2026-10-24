@@ -24,7 +24,7 @@ lacks one, report the gap.
    A `note` is optional and shows on hover. Leave a capability out entirely when it has not
    been assessed: it reads "Not set".
 4. Run `npm run data` (it rejects unknown ids, statuses and fields), then check the Status
-   column on Enable, the Capabilities matrix and the Controls list.
+   column on an architecture's Enable tab, the Capabilities matrix and the Controls list.
 
 Status is set only on capabilities. A MITRE parent with no entry of its own rolls up its
 specialisations; a control rolls up the parent capabilities that support it. A rollup is

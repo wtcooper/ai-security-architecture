@@ -80,14 +80,14 @@ function buildIndex(): Entry[] {
     ...archetypesInOrder.map((a) => ({
       kind: "Enable",
       title: `Enable ${a.title.charAt(0).toLowerCase()}${a.title.slice(1)}`,
-      href: `/enable?archetype=${a.id}`,
+      href: `/reference?archetype=${a.id}&tab=enable`,
       text: norm("enable", a.title, a.abbrev, a.id),
     })),
     ...toolsInOrder.map((t) => ({
       kind: "Tool",
       title: t.name,
       hint: vendorById.get(t.vendor)?.name ?? t.vendor,
-      href: `/enable?archetype=${t.architecture}&tool=${t.id}`,
+      href: `/reference?archetype=${t.architecture}&tab=enable&tool=${t.id}`,
       text: norm(t.name, t.family, t.vendor, t.id, ...(t.variants ?? []).map((v) => v.name)),
     })),
     ...incidents.map((i) => ({

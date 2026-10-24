@@ -13,8 +13,8 @@ MITRE entry (`D3-OTF`) or an authored `cap-*` specialisation of one
 `mitigation`. The entry's job is to say, for each of those, whether the vendor lets an
 administrator switch it on and exactly where.
 
-The registry renders in exactly one place: step 4 (**Tools**) of the Enable page for the
-architecture the product instantiates. That grid has one row per pinned capability, grouped by
+The registry renders in exactly one place: step 4 (**Tools**) of the **Enable** tab on the
+reference architecture the product instantiates. That grid has one row per pinned capability, grouped by
 Enable layer (foundations, surface baseline, use-case additions), and one column per product;
 a cell reads the product's `controls[]` row for that capability and shows it as one of three
 words — Built-in (`native`), Partial (`partial`), Not in tool (`external` or `none`). The
@@ -117,7 +117,7 @@ architectures with their surface).
 5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-6. **Look at it.** `npm run dev`, open `/enable?archetype=<arch>&tool=<id>`: the Tools step
+6. **Look at it.** `npm run dev`, open `/reference?tool=<id>`: the Enable tab's Tools step
    with your product as a column and its record open beneath the grid. Check that each
    capability row shows the coverage word you expect from its row, and open a few rows in the
    record for the steps and their links. Without a browser, confirm the compiled entry instead:
@@ -154,4 +154,4 @@ about ninety wrong ones (`docs/VALIDATION-2026-09-10-TOOLING.md`). What it learn
 Re-fetch every URL in the entity under the rules above. Update facts that changed, bump `asOf`
 and each row's `verified`, and record retired surfaces as exclusions rather than deleting history
 silently. Keep the id — guidance documents reference it, and old
-`/reference?tool=<id>` links redirect to it on Enable.
+`/reference?tool=<id>` and `/enable?…&tool=<id>` links open it on the Enable tab.

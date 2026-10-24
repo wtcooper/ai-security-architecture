@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
 /**
- * Learn, then Enable, then the reference behind both. Learn is the risk map, the architectures
- * and the incidents; Enable is what to put in place; the taxonomy shares one menu.
+ * One path, risk down to enablement: the risk map, the capabilities that reduce it, then each
+ * architecture with its Enable tab. Incidents replay the risk; the taxonomy shares one menu.
  */
 type NavItem =
   | { href: string; label: string }
@@ -15,15 +15,14 @@ type NavItem =
 
 const NAV: NavItem[] = [
   { href: "/map", label: "Risk map" },
+  { href: "/capabilities", label: "Capabilities" },
   { href: "/reference", label: "Architectures" },
   { href: "/examples", label: "Incidents" },
-  { href: "/enable", label: "Enable" },
   {
     label: "Reference",
     children: [
       { href: "/risks", label: "Risks" },
       { href: "/controls", label: "Controls" },
-      { href: "/capabilities", label: "Capabilities" },
       { href: "/components", label: "Components" },
       { href: "/personas", label: "Personas" },
       { href: "/frameworks", label: "Frameworks" },

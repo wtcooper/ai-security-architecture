@@ -2,26 +2,29 @@
 
 /**
  * One architecture on the page: the drawing at full width, then one tab strip beneath it —
- * overview, sequence flows, capabilities, risks. One panel is visible at a time and nothing is
- * expanded by default, so the page never shows two lists and a sequence diagram at once.
- * Leaving the flows tab clears the numbering; leaving the capability or risk tab clears the
- * highlight, so the drawing always matches the panel. What to put in place, and which tools
- * deliver it, lives on Enable.
+ * overview, sequence flows, enable. One panel is visible at a time. The drawing shows the
+ * capability chips at rest; the flows tab swaps them for the walk's numbers and the risk tags
+ * where risk enters. On Enable every row is one of those chips: opening a row lights its chip,
+ * and picking a chip opens its row.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { EnablePanel } from "@/components/enable/EnablePanel";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
-import { MitigationList, RiskList, WalkList } from "./rail-lists";
+import { WalkList } from "./rail-lists";
 
-export type Tab = "overview" | "flows" | "mitigations" | "risks";
+export type Tab = "overview" | "flows" | "enable";
+export const TABS: Tab[] = ["overview", "flows", "enable"];
 
 interface ArchetypeViewProps {
   archetype: Archetype;
+  tab: Tab;
+  onTab: (tab: Tab) => void;
   /** Every walk on the drawing, walkthrough first. They behave identically. */
   walks: Scenario[];
   /** Index into `walks`, or null when the drawing carries no step numbers. */
@@ -29,20 +32,37 @@ interface ArchetypeViewProps {
   onWalk: (index: number | null) => void;
   highlight: Highlight | null;
   onHighlight: (h: Highlight | null) => void;
+  /** The product open on the Enable tab's tools step, and the capability it is opened on. */
+  tool: string | null;
+  focus: string | null;
+  onPickTool: (toolId: string | null, capabilityId?: string) => void;
 }
 
-export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, onHighlight }: ArchetypeViewProps) {
-  // Opens on the overview with the full drawing: a reader's first sight is the whole
-  // architecture, nothing faded. Choosing the flows tab traces the walkthrough.
-  const [tab, setTab] = useState<Tab>("overview");
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
+  const drawingRef = useRef<HTMLDivElement>(null);
+  const open = highlight?.kind === "mitigation" ? highlight.id : null;
 
   const go = (next: Tab) => {
-    setTab(next);
+    onTab(next);
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
-    if (next !== "mitigations" && next !== "risks") onHighlight(null);
+    if (next !== "enable") onHighlight(null);
   };
+
+  // A chip picked on the drawing opens its row on Enable, wherever the reader was.
+  const pick = useRef<(id: string) => void>(() => {});
+  useEffect(() => {
+    pick.current = (id: string) => {
+      go("enable");
+      onHighlight({ kind: "mitigation", id });
+      requestAnimationFrame(() =>
+        document.getElementById(`capability-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      );
+    };
+  });
+  // Stable, so the drawing does not rebuild its nodes on every render of this view.
+  const pickChip = useCallback((id: string) => pick.current(id), []);
 
   // On a phone the drawing is unreadable at page width, so it folds behind a toggle and the
   // tabs lead; a reader who wants the drawing gets it full-bleed and pinch-zoomable.
@@ -56,12 +76,15 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
     return () => mq.removeEventListener("change", update);
   }, []);
   const drawingVisible = !narrow || showDrawing;
+  const scrollToDrawing = () => {
+    setShowDrawing(true);
+    requestAnimationFrame(() => drawingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "overview", label: "Overview" },
     { id: "flows", label: "Sequence flows", count: walks.length },
-    { id: "mitigations", label: "Capabilities", count: archetype.mitigations.length },
-    { id: "risks", label: "Risks", count: archetype.risks.length },
+    { id: "enable", label: "Enable", count: archetype.mitigations.length },
   ];
 
   return (
@@ -81,14 +104,15 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
       )}
       {drawingVisible && (
         <>
-          <div className="-mx-6 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
+          <div ref={drawingRef} className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
             <FlowDiagram
               archetype={archetype}
               walk={activeWalk}
               highlight={highlight}
               onHighlight={onHighlight}
-              // One kind of pin at a time: risk codes while reading the risk, chips on the Capabilities tab.
-              pins={tab === "mitigations" ? "capabilities" : "risks"}
+              // One kind of pin at a time: risk tags where a walk shows risk entering, capability chips everywhere else.
+              pins={tab === "flows" ? "risks" : "capabilities"}
+              onPickMitigation={pickChip}
               className="w-full"
             />
           </div>
@@ -96,7 +120,7 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
         </>
       )}
 
-      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
+      <div id="architecture-tabs" className="mt-5 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -150,29 +174,17 @@ export function ArchetypeView({ archetype, walks, walkIndex, onWalk, highlight, 
           </div>
         )}
 
-        {tab === "mitigations" && (
-          <div>
-            <p className="text-[12px] leading-snug text-ink-3">
-              The numbered chips on the drawing: where each capability sits in the data flow. Select one for its
-              placement notes; how to put it in place, and which tools deliver it, is on Enable.
-            </p>
-            <div className="mt-3">
-              <MitigationList archetype={archetype} highlight={highlight} onHighlight={onHighlight} columns={2} />
-            </div>
-          </div>
+        {tab === "enable" && (
+          <EnablePanel
+            archetype={archetype}
+            open={open}
+            onOpen={(id) => onHighlight(id ? { kind: "mitigation", id } : null)}
+            onShowDrawing={scrollToDrawing}
+            tool={tool}
+            focus={focus}
+            onPickTool={onPickTool}
+          />
         )}
-
-        {tab === "risks" && (
-          <div>
-            <p className="text-[12px] leading-snug text-ink-3">
-              CoSAI risks tagged where they surface. Codes are stable across every architecture.
-            </p>
-            <div className="mt-3">
-              <RiskList archetype={archetype} highlight={highlight} onHighlight={onHighlight} columns={2} />
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );

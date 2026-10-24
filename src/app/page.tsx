@@ -6,7 +6,6 @@ import {
   mitigations,
   components,
   controls,
-  enablement,
   incidents,
   activePersonas,
   risks,
@@ -21,39 +20,44 @@ export const metadata = {
 };
 
 const specialisations = mitigations.filter((m) => m.parent).length;
-const foundationCount = enablement.foundations.reduce((n, g) => n + g.mitigations.length, 0);
 
 type Card = { href: string; label: string; blurb: string; count: string; accent: string };
 
-/** Learn the risk, then enable the reduction; the reference sits behind both. */
-const LEARN: Card[] = [
+/** One path, from the risk down to what reduces it on a given deployment. */
+const FLOW: Card[] = [
   {
     href: "/map",
-    label: "Risk map",
+    label: "Risks",
     blurb: "Step through every risk and watch it light up where it is introduced, exposed and mitigated.",
     count: `${risks.length} risks`,
     accent: "var(--exposed)",
   },
   {
+    href: "/capabilities",
+    label: "Capabilities",
+    blurb: "The MITRE D3FEND and ATLAS countermeasures that reduce each risk, grouped under the CoSAI controls they deliver.",
+    count: `${mitigations.length} capabilities`,
+    accent: "var(--mitigated)",
+  },
+  {
     href: "/reference",
     label: "Architectures",
-    blurb: "How each class of AI application is built, with sequence flows showing where risk enters.",
+    blurb: "How each class of AI application is built and how data moves through it, with every capability pinned where it goes.",
     count: `${archetypes.length} architectures`,
     accent: "var(--band-model-rail)",
   },
   {
-    href: "/examples",
-    label: "Incidents",
-    blurb: "Real 2025–26 incidents replayed on the same map, step by step and sourced.",
-    count: `${incidents.length} incidents`,
-    accent: "var(--band-data-rail)",
+    href: "/reference?tab=enable",
+    label: "Enable",
+    blurb: "On each architecture: the foundations, the surface baseline and the use case's own additions, then how far each product covers them.",
+    count: `${tools.length} products`,
+    accent: "var(--chip)",
   },
 ];
 
 const REFERENCE: { href: string; label: string; count: string }[] = [
   { href: "/risks", label: "Risks", count: `${risks.length}` },
   { href: "/controls", label: "Controls", count: `${controls.length}` },
-  { href: "/capabilities", label: "Capabilities", count: `${mitigations.length}` },
   { href: "/components", label: "Components", count: `${components.length}` },
   { href: "/personas", label: "Personas", count: `${activePersonas.length}` },
   { href: "/frameworks", label: "Frameworks", count: `${visibleFrameworks.length}` },
@@ -102,22 +106,25 @@ export default function LandingPage() {
         <Link href="/map" className="rounded-lg bg-ink px-5 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90">
           Start with the risks
         </Link>
-        <Link href="/enable" className="text-[14px] font-semibold text-ink hover:text-mitigated hover:underline">
-          Go straight to Enable →
+        <Link href="/reference" className="text-[14px] font-semibold text-ink hover:text-mitigated hover:underline">
+          Go straight to an architecture →
         </Link>
       </div>
 
       <PhaseLegend className="mt-8" />
 
-      <h2 className="display mt-14 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">1 · Learn the risk</h2>
-      <ul className="mt-4 grid gap-3 sm:grid-cols-3">
-        {LEARN.map((s) => (
+      <h2 className="display mt-14 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">From risk to enablement</h2>
+      <ol className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {FLOW.map((s, i) => (
           <li key={s.href}>
             <Link
               href={s.href}
               className="group flex h-full flex-col rounded-xl border border-line bg-paper p-5 transition-colors hover:border-line-strong"
             >
-              <span className="h-[3px] w-8 rounded-full" style={{ background: s.accent }} aria-hidden />
+              <span className="flex items-center gap-2">
+                <span className="display flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[12px] font-bold text-white">{i + 1}</span>
+                <span className="h-[3px] w-8 rounded-full" style={{ background: s.accent }} aria-hidden />
+              </span>
               <span className="display mt-3 text-[17px] font-semibold text-ink transition-colors group-hover:text-introduced">
                 {s.label}
               </span>
@@ -126,28 +133,12 @@ export default function LandingPage() {
             </Link>
           </li>
         ))}
-      </ul>
-
-      <h2 className="display mt-12 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">2 · Enable the reduction</h2>
-      <Link
-        href="/enable"
-        className="group mt-4 flex flex-col gap-4 rounded-xl border border-line bg-paper p-6 transition-colors hover:border-line-strong sm:flex-row sm:items-center"
-      >
-        <div className="flex-1">
-          <span className="h-[3px] w-8 rounded-full" style={{ background: "var(--mitigated)", display: "block" }} aria-hidden />
-          <span className="display mt-3 block text-[19px] font-semibold text-ink transition-colors group-hover:text-mitigated">Enable</span>
-          <span className="mt-1.5 block max-w-2xl text-[13.5px] leading-snug text-ink-2">
-            Pick what you are enabling. Stand up the enterprise foundations once, add what the surface and the use case need,
-            then see how far each product — built or bought — covers the rest.
-          </span>
-        </div>
-        <ol className="grid shrink-0 gap-1.5 text-[12.5px] text-ink-2">
-          <li><span className="mr-2 font-bold text-ink">1</span>Foundations <span className="text-ink-3">{foundationCount}</span></li>
-          <li><span className="mr-2 font-bold text-ink">2</span>Surface baseline</li>
-          <li><span className="mr-2 font-bold text-ink">3</span>Use-case additions</li>
-          <li><span className="mr-2 font-bold text-ink">4</span>Tools <span className="text-ink-3">{tools.length}</span></li>
-        </ol>
-      </Link>
+      </ol>
+      <p className="mt-4 text-[13.5px] text-ink-2">
+        See it happen:{" "}
+        <Link href="/examples" className={link}>{incidents.length} real 2025–26 incidents</Link>
+        {" "}replayed on the same map, step by step and sourced.
+      </p>
 
       <h2 className="display mt-12 text-[13px] font-semibold uppercase tracking-[0.1em] text-ink-2">Reference</h2>
       <ul className="mt-4 flex flex-wrap gap-2">

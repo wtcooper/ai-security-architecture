@@ -17,7 +17,7 @@ const haystack = new Map(
 );
 
 /**
- * The architecture selector, shared by Learn and Enable: one compact button opening a
+ * The architecture selector on the Architectures page: one compact button opening a
  * searchable list grouped by surface. Pills for every name took a third of a phone screen; a
  * combobox takes one row anywhere.
  */

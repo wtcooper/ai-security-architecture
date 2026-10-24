@@ -384,10 +384,11 @@ function ZoneNode({
   );
 }
 
-function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean; status?: DisplayStatus; paint?: ChipPaint }>>) {
+function ChipNode({ data }: NodeProps<Node<{ n: number; dim: boolean; faint?: boolean; status?: DisplayStatus; paint?: ChipPaint; onPick?: boolean }>>) {
   return (
     <div
       style={{
+        cursor: data.onPick ? "pointer" : undefined,
         width: 20,
         height: 20,
         borderRadius: 10,
@@ -504,6 +505,7 @@ function BuildPathEdge(props: EdgeProps) {
               key={i}
               onMouseEnter={(e) => data.onPinEnter(e, pin.title, pin.body)}
               onMouseLeave={data.onPinLeave}
+              onClick={pin.kind === "chip" && pin.ref && data.onPick ? () => data.onPick!(pin.ref!) : undefined}
               style={
                 pin.kind === "flow"
                   ? {
@@ -534,6 +536,7 @@ function BuildPathEdge(props: EdgeProps) {
                       ...chipColors(pin.status, pin.paint),
                       font: "700 11px/17px var(--font-mono, monospace)",
                       textAlign: "center",
+                      cursor: data.onPick ? "pointer" : undefined,
                       opacity: pinOpacity(pin),
                       pointerEvents: "all",
                       zIndex: 10,
@@ -848,6 +851,7 @@ export function FlowDiagramRF({
           parentId: at,
           data: {
             n,
+            mitigation: pin.mitigation,
             dim: false,
             paint: chipPaint?.get(pin.mitigation),
             title: chipTitle(n, pin.mitigation),
@@ -941,11 +945,11 @@ export function FlowDiagramRF({
           const faint =
             highlight !== null && !(highlight.kind === wants && n.id.endsWith(`:${highlight.id}`));
           const hidden = n.type === "chip" ? pins === "risks" : pins === "capabilities";
-          return { ...n, hidden, data: { ...n.data, dim: inScenario, faint } };
+          return { ...n, hidden, data: { ...n.data, dim: inScenario, faint, onPick: n.type === "chip" && Boolean(onPickMitigation) } };
         }
         return n;
       }),
-    [nodes, walkActive, walkBlocks, highlight, overlay, pins],
+    [nodes, walkActive, walkBlocks, highlight, overlay, pins, onPickMitigation],
   );
 
   const onNodesChange = useCallback(
@@ -1147,6 +1151,10 @@ export function FlowDiagramRF({
           }
         }}
         onNodeMouseLeave={() => setCard(null)}
+        onNodeClick={(_, node) => {
+          const id = (node.data as { mitigation?: string }).mitigation;
+          if (node.type === "chip" && id && onPickMitigation) onPickMitigation(id);
+        }}
         onEdgeMouseEnter={(event, edge) => {
           setHoveredEdge(edge.id);
           const d = edge.data as { label?: string; note?: string };

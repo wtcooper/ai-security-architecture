@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
 import { archetypeById, archetypesInOrder, surfaces, toolById } from "@/lib/data";
 import type { Scenario } from "@/lib/types";
-import { ArchetypeView } from "./ArchetypeView";
+import { ArchetypeView, TABS, type Tab } from "./ArchetypeView";
 import { ArchPicker } from "./ArchPicker";
 import type { Highlight } from "./FlowDiagram";
 
@@ -17,26 +16,47 @@ const SURFACE_TAGLINE: Record<string, string> = {
   surfaceSaas: "a vendor hosting its own",
 };
 
-/** Learn: how each class of AI application is built, how data moves through it, and where risk enters. */
+/** Each class of AI application: how it is built, how data moves through it, and how to enable it securely. */
 export function ArchitecturesBrowser() {
   const params = useSearchParams();
-  const router = useRouter();
-  const linkedArchetype = params.get("archetype");
   const linkedTool = params.get("tool");
-
-  // Products moved to Enable; an old product deep link lands there on the same record.
-  useEffect(() => {
-    const tool = linkedTool ? toolById.get(linkedTool) : undefined;
-    if (tool) router.replace(`/enable?archetype=${tool.architecture}&tool=${tool.id}`);
-  }, [linkedTool, router]);
+  const tool0 = linkedTool ? toolById.get(linkedTool) : undefined;
+  // A product link names its own architecture; it wins over a stale archetype in the same URL.
+  const linkedArchetype = tool0?.architecture ?? params.get("archetype");
+  const linkedTab = params.get("tab") as Tab | null;
+  // Read once on arrival; this view renders on the client only, behind useSearchParams' Suspense.
+  const [anchored] = useState(() => {
+    const id = typeof window === "undefined" ? undefined : window.location.hash.match(/^#capability-(.+)$/)?.[1];
+    const arch = linkedArchetype ? archetypeById.get(linkedArchetype) : undefined;
+    return id && arch?.mitigations.includes(id) ? id : null;
+  });
 
   const [archetypeId, setArchetypeId] = useState(
     (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) || archetypesInOrder[0]?.id || "",
   );
+  // Opens on the overview with the whole drawing, unless the link names a tab or a product.
+  const [tab, setTab] = useState<Tab>(tool0 || anchored ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview");
   // Index into the walk list, or null for the resting drawing. A page opens on the resting
   // drawing — the whole architecture, nothing faded — and a walk is something the reader chooses.
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
-  const [highlight, setHighlight] = useState<Highlight | null>(null);
+  const [highlight, setHighlight] = useState<Highlight | null>(anchored ? { kind: "mitigation", id: anchored } : null);
+  const [selected, setSelected] = useState<{ tool: string; capability?: string } | null>(tool0 ? { tool: tool0.id } : null);
+
+  // A link to this page from this page (search, say) changes the URL but not the mounted view:
+  // adopt what it names. Our own replaceState echoes back here too, but matches the state already.
+  const linkKey = `${linkedArchetype}|${linkedTab}|${linkedTool}`;
+  const [seenKey, setSeenKey] = useState(linkKey);
+  if (linkKey !== seenKey) {
+    setSeenKey(linkKey);
+    if (linkedArchetype && linkedArchetype !== archetypeId && archetypeById.has(linkedArchetype)) {
+      setArchetypeId(linkedArchetype);
+      setWalkIndex(null);
+      setHighlight(null);
+    }
+    const nextTab: Tab = tool0 ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview";
+    if (nextTab !== tab) setTab(nextTab);
+    if ((tool0?.id ?? null) !== (selected?.tool ?? null)) setSelected(tool0 ? { tool: tool0.id } : null);
+  }
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
   const walks = useMemo(
@@ -44,28 +64,42 @@ export function ArchitecturesBrowser() {
     [archetype],
   );
 
+  // A capability anchor in the URL (an old Enable link) opens that row on the Enable tab.
+  useEffect(() => {
+    if (anchored) requestAnimationFrame(() => document.getElementById(`capability-${anchored}`)?.scrollIntoView({ block: "center" }));
+  }, [anchored]);
+
   // Deep links stay shareable. replaceState rather than router.push: pushing would drop the
   // GitHub Pages basePath, the same reason TourExplorer does it this way.
   useEffect(() => {
-    if (typeof window === "undefined" || linkedTool) return;
-    window.history.replaceState(null, "", `?archetype=${archetypeId}`);
+    if (typeof window === "undefined") return;
+    const query = new URLSearchParams({ archetype: archetypeId });
+    if (tab !== "overview") query.set("tab", tab);
+    if (tab === "enable" && selected) query.set("tool", selected.tool);
+    window.history.replaceState(null, "", `?${query}${window.location.hash}`);
     document.title = `${archetype.title} · Reference architectures`;
-  }, [archetypeId, archetype.title, linkedTool]);
+  }, [archetypeId, archetype.title, tab, selected]);
 
   const select = (id: string) => {
     setArchetypeId(id);
     setWalkIndex(null);
     setHighlight(null);
+    setSelected(null);
   };
   const onWalk = (i: number | null) => {
     setWalkIndex(i);
     setHighlight(null);
   };
-  // Picking a capability or risk ends a walk; clearing the highlight must not, or opening the
+  // Picking a capability ends a walk; clearing the highlight must not, or opening the
   // flows tab (which clears it) would undo the walkthrough it has just selected.
   const onHighlight = (h: Highlight | null) => {
     setHighlight(h);
     if (h) setWalkIndex(null);
+  };
+  const openEnable = () => {
+    setTab("enable");
+    setWalkIndex(null);
+    requestAnimationFrame(() => document.getElementById("architecture-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const summary = typeof archetype.summary[0] === "string" ? archetype.summary[0] : "";
@@ -76,9 +110,9 @@ export function ArchitecturesBrowser() {
   return (
     <>
       <PageHeader
-        eyebrow={`Learn · ${archetypesInOrder.length} architectures`}
+        eyebrow={`${archetypesInOrder.length} architectures`}
         title="Reference architectures"
-        lead="How each class of AI application is built, how data moves through it, and where risk enters. Pick one, then walk a sequence flow to follow a use case step by step."
+        lead="How each class of AI application is built, how data moves through it, where each capability goes, and how to enable it securely. Pick one, walk a sequence flow, then open Enable for what to put in place and which tools deliver it."
       >
         <div className="mt-6">
           <ArchPicker current={archetype} onSelect={select} />
@@ -96,21 +130,29 @@ export function ArchitecturesBrowser() {
               {examples && `Examples include ${examples}. `}{summary}
             </p>
           </div>
-          <Link
-            href={`/enable?archetype=${archetype.id}`}
-            className="shrink-0 rounded-lg bg-mitigated px-4 py-2.5 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            Enable this securely →
-          </Link>
+          {tab !== "enable" && (
+            <button
+              type="button"
+              onClick={openEnable}
+              className="shrink-0 rounded-lg bg-mitigated px-4 py-2.5 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Enable this securely →
+            </button>
+          )}
         </div>
 
         <ArchetypeView
           archetype={archetype}
+          tab={tab}
+          onTab={setTab}
           walks={walks}
           walkIndex={walkIndex}
           onWalk={onWalk}
           highlight={highlight}
           onHighlight={onHighlight}
+          tool={selected?.tool ?? null}
+          focus={selected?.capability ?? null}
+          onPickTool={(toolId, capability) => setSelected(toolId ? { tool: toolId, capability } : null)}
         />
       </div>
     </>

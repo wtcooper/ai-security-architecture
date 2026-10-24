@@ -2,17 +2,17 @@
 
 **[wtcooper.github.io/ai-security-architecture](https://wtcooper.github.io/ai-security-architecture/)**
 
-Securely enabling AI, grounded in risk. The site reads in two halves:
+Securely enabling AI, grounded in risk. The site reads as one path, from the risk down to enabling a deployment:
 
 - **Learn the risk.** An interactive map of AI security risk — where each risk is
   **introduced**, where it is **exposed**, and where it can be **mitigated**, across the
   components of an AI system — plus reference architectures for every class of AI application,
   with sequence flows that show how data moves and where risk enters, and ten real 2025–26
   incidents replayed on the same map.
-- **Enable the reduction.** Pick what you are enabling and see what to put in place, in the
-  order an organisation puts it in place: enterprise foundations every AI deployment needs,
-  what the surface adds, what the use case adds, then the tools — built or bought — and how far
-  each covers the rest.
+- **Enable it, per architecture.** Every architecture has an Enable tab: what to put in place,
+  in the order an organisation puts it in place — enterprise foundations every AI deployment
+  needs, what the surface adds, what the use case adds, then the tools, built or bought, and how
+  far each covers the rest. Every row is a numbered capability chip on the drawing above it.
 
 It began as a recreation of [Google's SAIF Map](https://saif.google/secure-ai-framework), rebuilt
 on the broader taxonomy that succeeded it — the
@@ -107,17 +107,16 @@ provenances:
 
 ## The tabs
 
-The nav follows the story: learn the risk, then enable the reduction, with the taxonomy kept
-as reference — **Risk map** · **Architectures** · **Incidents** · **Enable** · **Reference ▾**
-(Risks, Controls, Capabilities, Components, Personas, Frameworks).
+The nav follows one path, from the risk down to enabling a deployment, with the taxonomy kept
+as reference — **Risk map** · **Capabilities** · **Architectures** · **Incidents** · **Reference ▾**
+(Risks, Controls, Components, Personas, Frameworks).
 
 | View | What it does |
 | --- | --- |
-| **Landing** | What this is, Learn then Enable, where the data comes from. |
+| **Landing** | What this is, the path from risk to enablement in four steps, where the data comes from. |
 | **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **Architectures** | 17 reference architectures, one per class of AI application. The drawing, then four tabs: Overview, Sequence flows (a walk numbered onto the drawing beside its sequence diagram), Capabilities (the numbered chips) and Risks (the coded tags). **Enable this securely →** opens the same architecture on Enable. |
+| **Architectures** | 17 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — (1) the enterprise foundations this architecture draws on, (2) the surface baseline, (3) the use case's own additions, each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**; then (4) a tools grid — every product of that kind against every capability, one word per cell: Built-in, Partial or Not in tool — with each product's record and operator steps beneath. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
 | **Incidents** | Ten real 2025–26 incidents replayed step by step on the map and on an architecture, every step sourced. |
-| **Enable** | Pick what you are enabling. (1) Enterprise foundations, set up once; (2) the surface baseline; (3) the use case's own additions, with placement notes and governance guidance; (4) a tools grid — every product of that kind against every capability, one word per cell: Built-in, Partial or Not in tool — with each product's record and operator steps beneath. Every capability row carries a **Status ⓘ**. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › Controls** | The 35 CoSAI controls in six groups. A control's status rolls up from the capabilities that deliver it. |
 | **Reference › Capabilities** | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a control group × deployment-surface matrix, tinted by status. A capability's detail shows the MITRE definition, the authored implementation scope, example technologies and where it is pinned. |
@@ -204,7 +203,7 @@ Two countermeasure vocabularies sit at different altitudes:
 | Layer | Source | Role | Status? |
 | --- | --- | --- | --- |
 | Controls | CoSAI, 35 | The function the business needs ("Agent Execution Bounds"); personas own them | rolled up |
-| **Capabilities** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable countermeasure at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing and the rows on Enable | **yes** |
+| **Capabilities** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable countermeasure at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing and the rows on its Enable tab | **yes** |
 | Tools | registry, 42 | Named products; each an instance of one reference architecture, with vendor coverage per capability | no |
 
 A capability is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary; each
@@ -394,15 +393,16 @@ src/
 ├── app/                          one route per tab (App Router, static export)
 │   ├── page.tsx                  landing
 │   └── map|reference|examples|enable|risks|controls|capabilities|components|personas|frameworks/
+│                                   (enable/ only redirects to an architecture's Enable tab)
 └── components/
-    ├── shell/SiteHeader.tsx      nav: Risk map · Architectures · Incidents · Enable · Reference ▾
+    ├── shell/SiteHeader.tsx      nav: Risk map · Capabilities · Architectures · Incidents · Reference ▾
     ├── map/RiskMap.tsx           the SVG map
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
     ├── capabilities/             the Capabilities matrix (control group × surface) and detail
     ├── reference/                ★ flow diagram, sequence flows, picker, per-block styling
-    ├── enable/                   ★ the four Enable layers, the tools grid and product records
+    ├── enable/                   ★ an architecture's Enable tab: the four layers, the tools grid, product records
     └── examples/IncidentExplorer.tsx
 
 docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
