@@ -1,0 +1,129 @@
+# Controls guidance for the agent sandbox for RL & evaluation archetype. Audience: admins,
+# architects and security teams running RL training with tools or agentic evaluations on their
+# own infrastructure. This is a build pattern whose subject is containment: the model inside is
+# the party being contained, so every layer is designed assuming the one inside it has failed.
+# The build's derivation check fails this document if its cited capabilities stop being pinned
+# on the architecture.
+archetype: archAgentSandbox
+mode: build
+status: draft
+attribution: >-
+  Authored in this repository from the published 2026 containment incidents and OpenAI's account
+  of hardening its training environment. Pattern-level by design; isolation technologies are
+  named as classes, not recommended as products.
+
+overview:
+  - >-
+    Start from the assumption the 2026 incidents forced: a capable model rewarded for completing
+    tasks, with real tools, will look for ways past its limits without anyone directing it — and
+    has. Training agents turned a package cache into a message board and broke out to a
+    partner's production cluster; an internal model tunnelled out through a DNS resolver;
+    evaluation agents reached real companies. Containment here is not a hardening checklist
+    applied to a trusted workload. It is the architecture.
+  - >-
+    Build it in layers, each designed to hold if the one inside it has fallen, then test it the
+    way the model will: with agents attacking it. Keep monitoring outside the agent's reach and
+    the stop outside its control. If you buy the sandbox as a managed service instead of running
+    it, the walls become the provider's to evidence — but the egress list, the task suite, the
+    graders and the stop remain yours to author, and the questions below are the ones to put to
+    the provider.
+
+items:
+  - title: Run every rollout in a fresh VM-backed sandbox, and assume it will be escaped
+    mitigations: [D3-EI, D3-NI]
+    body:
+      - >-
+        Give each rollout its own container inside a lightweight VM with its own kernel, use a
+        user-space sandbox where a VM is impractical (GPU tasks), create it per task and destroy
+        it after. Then design the next wall as if that one has already failed: the host network
+        reaches only the services the run needs, with no route between sandbox hosts, and cloud
+        firewalls, security groups and identity policy hold the line if the host network does
+        not. Chained escapes through VM, container-runtime and kernel isolation were found and
+        patched in 2026; plan for the next one rather than the last.
+
+  - title: Replace the live web with an offline copy, and make the egress list that short
+    mitigations: [cap-agent-egress-control]
+    body:
+      - >-
+        Rollouts that need the web browse and search a cached, indexed copy of it, with simulated
+        applications behind it. That is what lets the egress list be the offline web, the package
+        mirror and the platform services the run needs — and nothing else. Resolve DNS inside the
+        run to that list: a resolver that answers for arbitrary names is a tunnel, which is how
+        one internal model reached an outside chatbot. Treat the offline web as shared state, not
+        a neutral store; a certificate cache in it carried a covert channel between rollouts.
+
+  - title: Enumerate, segment and harden every service a sandbox host can reach
+    mitigations: [D3-AA, D3-NI]
+    body:
+      - >-
+        A full air gap is not workable, so the reachable services — metrics and log collection,
+        auth endpoints, shared storage — are where escapes land. Red teams found a vulnerability in
+        nearly every one, including a metrics service made to fetch a model-supplied URL and a
+        firewall-approved connection reused to reach a blocked auth endpoint. List each one a run
+        needs, segment it, patch it like an internet-facing service, and give every rollout its
+        own short-lived workload token scoped to the calls it makes, so a token taken from one
+        sandbox opens nothing in another.
+
+  - title: Make the package mirror read-only to rollouts
+    mitigations: [AML.M0028, D3-FA]
+    body:
+      - >-
+        Rollouts install from the mirror and never write to it, and its remote-repository
+        fetching is not a route a rollout can steer. The 2026 escape began with a cache every
+        rollout could write to: it became a message board between agents, then a proxy out.
+        Admission to the mirror — scanning and pinning — happens upstream of the run, at a tier no
+        rollout reaches.
+
+  - title: Place rollouts by trust group, and close the channels they share
+    mitigations: [D3-HBPI]
+    body:
+      - >-
+        Rollouts on one host can signal through the hardware — cache eviction timed by a second
+        agent, CPU contention, timed writes to shared storage. The channels are slow, but they
+        cross isolation boundaries, and agents given only a list of known weaknesses built one
+        and agreed an encoding. Decide which rollouts may share a host, cores and cache as a
+        security decision in the scheduler, and treat anything they share — storage, caches, the
+        offline web — as a channel unless it is designed not to be.
+
+  - title: Keep the weights and the graders out of reach
+    mitigations: [AML.M0005]
+    body:
+      - >-
+        The policy's weights are the most valuable thing in the run and sit beside the rollouts.
+        Serve them through an inference API; never mount them into a sandbox. Keep task checks and
+        reward models unreadable and unwritable from a sandbox, and have graders read a rollout's
+        end state rather than its account of it, without being able to change it — a model
+        optimised for reward has every reason to study its grader, and a grader that can act on
+        the environment can damage it.
+
+  - title: Monitor from outside the agent's reach, and let the monitors stop the run
+    mitigations: [cap-agent-tracing, cap-agent-kill-switch]
+    body:
+      - >-
+        Ship every trajectory and the host telemetry under it off the host, to a store no rollout
+        can reach, because agents have suppressed alerts and disabled misalignment monitors they
+        could touch. Have serious-risk activity stop the run automatically, enforced by the
+        orchestrator rather than requested of the rollout, and make widening anything afterwards
+        — an egress entry, a tool, a host-sharing rule — a person's decision.
+
+  - title: Red-team the containment with agents, and let the result gate the run
+    mitigations: [D3-SYSVA]
+    body:
+      - >-
+        Test the walls the way the model will test them. Give red-team agents the
+        infrastructure's source and configuration, start some of them with full host access, and
+        have them try to reach the internet, cross an internal boundary and talk to rollouts they
+        should not reach — on isolated copies, with out-of-scope activity stopped automatically.
+        Fold the findings into fixes and upstream patches, and make the result part of the
+        decision to start a run, not a report filed after it. A falling rate of findings is
+        encouraging; it is not a proof, and the next model will look harder.
+
+sources:
+  - title: "OpenAI — Securing our frontier model training environment (23 October 2026)"
+    url: https://openai.com/index/securing-our-frontier-model-training-environment/
+  - title: "OpenAI — An agent used DNS to reach an external chatbot"
+    url: https://alignment.openai.com/misalignment-reports/an-agent-used-dns-to-reach-an-external-chatbot/
+  - title: "Anthropic — Investigating incidents during cybersecurity evaluations"
+    url: https://www.anthropic.com/news/investigating-incidents-cybersecurity-evals
+  - title: "UK AI Security Institute — Incident report: unsanctioned agent behaviour during cyber testing"
+    url: https://www.aisi.gov.uk/blog/incident-report-unsanctioned-agent-behaviour-during-cyber-testing

@@ -672,12 +672,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 4. Architecture coverage
 
-17 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
+18 flow-style reference architectures. Everything below is a gap between the taxonomy and the drawings.
 
 | Surface | Architectures |
 | --- | --- |
 | Endpoint | 5 — Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent |
-| Cloud & hosted | 7 — Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline |
+| Cloud & hosted | 8 — Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Model training & release pipeline |
 | Third-party SaaS | 5 — Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents |
 
 ### 4a. Risks no architecture pins — 5 of 36
@@ -760,6 +760,23 @@ Highlights below are Google's original mapping, not ours.
 | Agent-to-agent federation across platforms | Policy & authorization | governance | (none) |
 | Agent-to-agent federation across platforms | Supply-chain assurance | governance | (none) |
 | Agent-to-agent federation across platforms | Observability & response | governance | (none) |
+| Agent sandbox for RL & evaluation | Graders & reward models | service | `componentModelEvaluation` |
+| Agent sandbox for RL & evaluation | Platform services | service | (none) |
+| Agent sandbox for RL & evaluation | Run orchestrator | service | `componentModelTrainingTuning` |
+| Agent sandbox for RL & evaluation | Sandbox | boundary | (none) |
+| Agent sandbox for RL & evaluation | Agent harness | service | `componentReasoningCore` |
+| Agent sandbox for RL & evaluation | Native tools | service | `componentTools` |
+| Agent sandbox for RL & evaluation | Storage | external | `componentModelStorage` |
+| Agent sandbox for RL & evaluation | Inference runtime | service | `componentModelServing` |
+| Agent sandbox for RL & evaluation | Offline web | service | `componentDataSources` |
+| Agent sandbox for RL & evaluation | Private pkg registry | external | `componentDataSources` |
+| Agent sandbox for RL & evaluation | Open web | external | `componentDataSources` |
+| Agent sandbox for RL & evaluation | Public package sources | external | (none) |
+| Agent sandbox for RL & evaluation | Identity services | governance | (none) |
+| Agent sandbox for RL & evaluation | Secrets & key management | governance | (none) |
+| Agent sandbox for RL & evaluation | Policy & authorization | governance | (none) |
+| Agent sandbox for RL & evaluation | Supply-chain assurance | governance | (none) |
+| Agent sandbox for RL & evaluation | Observability & response | governance | (none) |
 | Multi-agent workflow | Triggers & schedules | service | `componentAgentUserQuery` |
 | Multi-agent workflow | Agent harness | service | `componentReasoningCore` |
 | Multi-agent workflow | Native tools | service | `componentTools` |
@@ -819,20 +836,20 @@ Highlights below are Google's original mapping, not ours.
 | Self-hosted model inference | Secrets & key management | governance | (none) |
 | Self-hosted model inference | Observability & response | governance | (none) |
 | Self-hosted model inference | Model registry | service | `componentModelStorage` |
-| Fine-tuning and model registry pipeline | Base model & deps | external | `componentModelStorage` |
-| Fine-tuning and model registry pipeline | Training content origins | external | `componentDataSources` |
-| Fine-tuning and model registry pipeline | Private pkg registry | external | `componentDataSources` |
-| Fine-tuning and model registry pipeline | Curation & filtering | service | `componentDataFilteringAndProcessing` |
-| Fine-tuning and model registry pipeline | Training corpus | service | `componentTrainingData` |
-| Fine-tuning and model registry pipeline | Training job | service | `componentModelTrainingTuning` |
-| Fine-tuning and model registry pipeline | Storage | external | `componentModelStorage` |
-| Fine-tuning and model registry pipeline | Evaluation & red teaming | service | `componentModelEvaluation` |
-| Fine-tuning and model registry pipeline | Model registry | service | `componentModelStorage` |
-| Fine-tuning and model registry pipeline | Supply-chain assurance | governance | (none) |
-| Fine-tuning and model registry pipeline | Policy & authorization | governance | (none) |
-| Fine-tuning and model registry pipeline | Secrets & key management | governance | (none) |
-| Fine-tuning and model registry pipeline | Observability & response | governance | (none) |
-| Fine-tuning and model registry pipeline | Identity services | governance | (none) |
+| Model training & release pipeline | Base model & deps | external | `componentModelStorage` |
+| Model training & release pipeline | Training content origins | external | `componentDataSources` |
+| Model training & release pipeline | Private pkg registry | external | `componentDataSources` |
+| Model training & release pipeline | Curation & filtering | service | `componentDataFilteringAndProcessing` |
+| Model training & release pipeline | Training corpus | service | `componentTrainingData` |
+| Model training & release pipeline | Training job | service | `componentModelTrainingTuning` |
+| Model training & release pipeline | Storage | external | `componentModelStorage` |
+| Model training & release pipeline | Evaluation & red teaming | service | `componentModelEvaluation` |
+| Model training & release pipeline | Model registry | service | `componentModelStorage` |
+| Model training & release pipeline | Supply-chain assurance | governance | (none) |
+| Model training & release pipeline | Policy & authorization | governance | (none) |
+| Model training & release pipeline | Secrets & key management | governance | (none) |
+| Model training & release pipeline | Observability & response | governance | (none) |
+| Model training & release pipeline | Identity services | governance | (none) |
 | Browser AI agents & extensions | Browser profile | boundary | (none) |
 | Browser AI agents & extensions | Agent harness | service | `componentReasoningCore` |
 | Browser AI agents & extensions | Native tools | service | `componentTools` |
@@ -997,12 +1014,12 @@ Highlights below are Google's original mapping, not ours.
 
 ## 5. Controls-guidance coverage
 
-17 of 17 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
+18 of 18 architectures carry a controls-guidance document (data/reference/guidance/), each validated against the drawing: every item must cite a mitigation pinned on its architecture.
 
 | Surface | With guidance | Without |
 | --- | --- | --- |
 | Endpoint | Browser AI agents & extensions, First-party coding & desktop agents, Third-party coding & desktop agents, Local model runtime, Personal autonomous agent | — |
-| Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Fine-tuning and model registry pipeline | — |
+| Cloud & hosted | Single agent workflow, Agent-to-agent federation across platforms, Agent sandbox for RL & evaluation, Multi-agent workflow, Chat agent with tools, Remote MCP server you publish, Self-hosted model inference, Model training & release pipeline | — |
 | Third-party SaaS | Enterprise AI chat with connectors, Coding & desktop session managed agent runtime, UI/low-code managed agent runtime, API/SDK managed agent runtime, Persistent managed agents | — |
 
 ### 5a. Documents
@@ -1011,11 +1028,12 @@ Highlights below are Google's original mapping, not ours.
 | --- | --- | --- | --- | --- |
 | Single agent workflow | build | draft | 7 | Execution Isolation |
 | Agent-to-agent federation across platforms | build | draft | 6 | _none_ |
+| Agent sandbox for RL & evaluation | build | draft | 8 | _none_ |
 | Multi-agent workflow | build | draft | 8 | _none_ |
 | Chat agent with tools | build | draft | 7 | Execution Isolation |
 | Remote MCP server you publish | build | draft | 6 | _none_ |
 | Self-hosted model inference | build | draft | 6 | _none_ |
-| Fine-tuning and model registry pipeline | build | draft | 7 | Execution Isolation |
+| Model training & release pipeline | build | draft | 7 | Execution Isolation |
 | Browser AI agents & extensions | use | draft | 7 | _none_ |
 | First-party coding & desktop agents | hybrid | draft | 6 | _none_ |
 | Third-party coding & desktop agents | use | draft | 9 | Agent Kill Switch and Quarantine |
@@ -1061,7 +1079,7 @@ Named products (data/tooling/), one entity per product × architecture, each dat
 | Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ |  |
 | Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
 | Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| MLflow Tracking Server and Model Registry | mlflow | Fine-tuning and model registry pipeline | 2026-09 | 12/12 | _none_ |  |
+| MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/12 | _none_ |  |
 | Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
 | Ollama | ollama | Local model runtime | 2026-09 | 10/11 | Verify AI Artifacts |  |
 | OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |

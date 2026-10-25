@@ -115,7 +115,7 @@ as reference — **Risk map** · **Capabilities** · **Architectures** · **Inci
 | --- | --- |
 | **Landing** | What this is, the path from risk to enablement in four steps, where the data comes from. |
 | **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **Architectures** | 17 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — four steps that open folded, each showing its pin numbers until unfolded: (1) the enterprise foundations this architecture draws on, (2) the surface baseline, (3) the use case's own additions, each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**; then (4) a tools grid — every product of that kind against every capability, one word per cell: Built-in, Partial or Not in tool — with each product's record and operator steps beneath. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
+| **Architectures** | 18 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — four steps that open folded, each showing its pin numbers until unfolded: (1) the enterprise foundations this architecture draws on, (2) the surface baseline, (3) the use case's own additions, each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**; then (4) a tools grid — every product of that kind against every capability, one word per cell: Built-in, Partial or Not in tool — with each product's record and operator steps beneath. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
 | **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the capability pins that would have broken the chain — each a link to its row on the Enable tab. Old `/examples` links redirect. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › Controls** | The 35 CoSAI controls in six groups. A control's status rolls up from the capabilities that deliver it. |
@@ -275,7 +275,7 @@ segmentation and identity entries).
 
 The taxonomy answers *what to worry about* and the mitigations answer *what defensive function to
 deploy*. The architectures answer the question that comes next in every review: **"so what does
-a sound deployment actually look like?"** — one drawing per class of AI application, 17 in all,
+a sound deployment actually look like?"** — one drawing per class of AI application, 18 in all,
 across the three deployment surfaces used by the capability matrix.
 
 The catalogue is original work: no published source offers "here are the classes of AI
@@ -287,7 +287,7 @@ separate when their control sets differ, not when their vendors do.
 | Surface | Architectures |
 | --- | --- |
 | **Endpoint** (5) | Third-party coding & desktop agents, first-party coding & desktop agents, personal autonomous agent (the OpenClaw class), local model runtime, browser AI agents & extensions |
-| **Cloud & hosted** (7) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, fine-tuning and model registry pipeline, agent-to-agent federation |
+| **Cloud & hosted** (8) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation |
 | **Third-party SaaS** (5) | Enterprise AI chat with connectors, and four managed agent runtimes: UI/low-code, coding & desktop sessions, API/SDK, and persistent agents |
 
 The drawing grammar is the one practitioners already read from vendor reference architectures
@@ -365,7 +365,7 @@ data/
 │   └── nist-csf.yaml             NIST CSF 2.0 categories + CoSAI control crosswalk
 ├── incidents/                    authored incidents, one YAML each, replayed on their architecture
 ├── reference/
-│   ├── architectures/            ★ 17 flow-style reference architectures, one YAML each
+│   ├── architectures/            ★ 18 flow-style reference architectures, one YAML each
 │   └── guidance/                 controls guidance, one document per architecture
 ├── tooling/                      ★ the AI tooling registry: named products, one entity per
 │   ├── vendors.yaml                product × architecture, with per-control operator steps

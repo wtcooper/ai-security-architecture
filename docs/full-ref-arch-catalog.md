@@ -10,7 +10,7 @@ re-run `npm run data`).
 Most of the parked entries fell to one test: *is this a distinct architecture, or an agent
 workflow with a different tool set, a single node, or a control drawn as a place?*
 
-## Active — 17
+## Active — 18
 
 ### Endpoint (5)
 
@@ -75,7 +75,7 @@ workflow with a different tool set, a single node, or a control drawn as a place
   ("a tool-calling use case") addressed the tool-set framing; the admission model — an unbounded
   author set acting on every signed-in session — is what earned it the drawing.
 
-### Cloud & hosted (7)
+### Cloud & hosted (8)
 
 | Rank | Architecture | id | File |
 | --- | --- | --- | --- |
@@ -84,9 +84,16 @@ workflow with a different tool set, a single node, or a control drawn as a place
 | 3 | Chat agent with tools | `archChatAgent` | `cloud-chat-agent.yaml` |
 | 4 | Remote MCP server | `archRemoteMcpServer` | `cloud-remote-mcp-server.yaml` |
 | 5 | Self-hosted open-weights inference | `archSelfHostedInference` | `cloud-self-hosted-inference.yaml` |
-| 6 | Fine-tuning and model registry pipeline | `archTrainingPipeline` | `cloud-training-pipeline.yaml` |
-| 7 | Agent-to-agent federation across platforms | `archAgentFederation` | `cloud-agent-federation.yaml` |
+| 6 | Model training & release pipeline | `archTrainingPipeline` | `cloud-training-pipeline.yaml` |
+| 7 | Agent sandbox for RL & evaluation | `archAgentSandbox` | `cloud-agent-sandbox.yaml` |
+| 8 | Agent-to-agent federation across platforms | `archAgentFederation` | `cloud-agent-federation.yaml` |
 
+- **Agent sandbox for RL & evaluation** (added 2026-10-25) is where a model's actions are
+  executed and contained — rollout sandboxes, an offline web, graders, the platform services the
+  hosts can reach — with the model inside as the party being contained. It splits from the
+  training pipeline (renamed *model training & release pipeline* the same day) on whether the
+  system runs what the model produces: there the model is passive and the threat flows into it,
+  here it acts and the threat flows out. A frontier RL run uses both; an evaluator only this one.
 - **Agent-to-agent federation** (added 2026-09-03) is the identity drawing: our harness speaking
   A2A both ways with a vendor platform's agent and a partner's, an identity provider and
   authorization server doing the exchanges the protocol leaves out, and the gateway admitting
