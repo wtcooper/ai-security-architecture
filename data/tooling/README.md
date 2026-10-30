@@ -46,6 +46,19 @@ tools:
       - { title: ..., body: [...], links: [{ title, url }] }
     riskNotes:                          # tool-specific emphasis; risk must be pinned on the architecture
       - { risk: riskPromptInjection, note: ... }
+    settings:                           # every security-relevant setting, with the baseline value
+      - id: requireSso                  #   (rubric: data/tooling/BASELINE.md)
+        name: Require SSO for Claude    # exactly as the vendor page names it
+        where: Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]   # mdm | adminConsole | configFile | apiCli | identityProvider | cloudPolicy | code
+        area: identity                  # identity | data | tools | network | audit | sharing
+        default: "Off"
+        recommended: "On, with MFA enforced in your IdP"
+        why: one line — the path the recommended value closes
+        mitigations: [D3-MFA]           # chips it delivers; each pinned on the architecture
+        requires: Team or Enterprise
+        url: https://...
+        verified: "2026-10-30"
     controls:                           # one row per pinned mitigation the vendor addresses
       - mitigation: capabilityToolPermissionScoping
         coverage: native                # native | partial | none | external | notApplicable | unknown
@@ -58,7 +71,9 @@ tools:
     sources: [{ title, url }]
 ```
 
-Build rules: the vendor exists; the architecture exists; every `controls[].mitigation` and
+Build rules: the vendor exists; the architecture exists; every setting row is complete, dated,
+links over https and names only capabilities pinned on its architecture; once a tool has
+settings, every capability it rates `native` or `partial` is delivered by at least one row; every `controls[].mitigation` and
 `riskNotes[].risk` is pinned on the primary architecture; every step, advisory and source has a
 title and a url; `asOf` is present; every control row has either a step with a url or an
 `evidence` entry saying where the claim was checked. A tool cannot claim, or disclaim, a control

@@ -306,6 +306,7 @@ async function main() {
     surfaces: Surface[];
     guidance: Guidance[];
     tools: Tool[];
+    clouds?: Dataset["clouds"];
     mitigationGaps: Dataset["mitigationGaps"];
     specializations: Dataset["specializations"];
     frameworks: Dataset["frameworks"];
@@ -442,7 +443,9 @@ async function main() {
     "Named products (data/tooling/), one entity per product × architecture, each dated. An " +
       "entry older than six months is due a re-verification pass against the vendor's current " +
       "documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture " +
-      "that the entry does not yet describe — the research work list.",
+      "that the entry does not yet describe — the research work list. *Settings* counts the " +
+      "rows of its settings table (data/tooling/BASELINE.md); *Newest check* is the latest " +
+      "`verified` date among them, and a tool with no table falls back to its capability record.",
   );
   p();
   const archTitle = (id: string) => archetypes.find((a) => a.id === id)?.title ?? id;
@@ -451,8 +454,8 @@ async function main() {
   const staleBefore = `${now.getFullYear() - (now.getMonth() < 6 ? 1 : 0)}-${String(
     ((now.getMonth() - 6 + 12) % 12) + 1,
   ).padStart(2, "0")}`;
-  p("| Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |");
-  p("| --- | --- | --- | --- | --- | --- | --- |");
+  p("| Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | Settings | Newest check | |");
+  p("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const tool of tools) {
     const stale = tool.asOf < staleBefore;
     const pinned = archetypes.find((a) => a.id === tool.architecture)?.mitigations ?? [];
@@ -462,8 +465,33 @@ async function main() {
       `| ${tool.name} | ${tool.vendor} | ${archTitle(tool.architecture)} | ${tool.asOf} | ` +
         `${pinned.length - missing.length}/${pinned.length} | ` +
         `${missing.map((id) => capTitle.get(id) ?? id).join(", ") || "_none_"} | ` +
+        `${tool.settings?.length ?? "**none yet**"} | ${tool.settings?.map((st) => st.verified).sort().at(-1) ?? ""} | ` +
         `${stale ? "**stale — re-verify**" : ""} |`,
     );
+  }
+  p();
+
+  p("### 5c. Cloud implementations");
+  p();
+  p(
+    "Each first-party cloud architecture as built on each cloud (data/clouds/): the services " +
+      "bound to its blocks and the settings rows that cover its pinned capabilities. *Code rows* " +
+      "are capabilities no cloud setting provides, which the organisation builds itself.",
+  );
+  p();
+  const cloudArchs = archetypes.filter((a) => a.surface === "surfaceCloud");
+  const cloudList = dataset.clouds ?? [];
+  p(`| Architecture | ${cloudList.map((c) => c.short).join(" | ")} |`);
+  p(`| --- | ${cloudList.map(() => "---").join(" | ")} |`);
+  for (const arch of cloudArchs) {
+    const cells = cloudList.map((cloud) => {
+      const impl = cloud.implementations.find((i) => i.architecture === arch.id);
+      if (!impl) return "**not yet**";
+      const rows = impl.settings.map((id) => cloud.settings.find((st) => st.id === id)!);
+      const code = rows.filter((r) => r.setVia.includes("code") && r.setVia.length === 1).length;
+      return `${rows.length} rows (${code} code), ${impl.bindings.length} blocks bound`;
+    });
+    p(`| ${arch.title} | ${cells.join(" | ")} |`);
   }
   p();
 
