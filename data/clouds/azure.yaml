@@ -79,6 +79,150 @@ settings:
     mitigations: [D3-CTS]
     url: https://learn.microsoft.com/en-us/azure/api-management/credentials-overview
     verified: "2026-10-30"
+  - id: serviceBusSenderRole
+    name: Azure Service Bus Data Sender
+    where: Service Bus namespace › (trigger queue) › Access control (IAM)
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: Assigned at the queue scope, only to the identities allowed to start a run; nothing at namespace scope
+    why: Who can put work on the agent's queue is a named role assignment on that one queue, so starting a run is itself an authorization decision.
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/service-bus-messaging/authenticate-application
+    verified: "2026-10-30"
+  - id: serviceBusDisableLocalAuth
+    name: Local Authentication (disableLocalAuth)
+    where: Service Bus namespace › Overview › Local Authentication; disableLocalAuth in Bicep or ARM
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "Enabled (SAS keys accepted)"
+    recommended: Disabled
+    why: Only an Entra identity holding the sender role can start a run; a SAS connection string copied from a config file starts nothing.
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/service-bus-messaging/disable-local-authentication
+    verified: "2026-10-30"
+  - id: entraAgentIdentity
+    name: Agent identities (Microsoft Entra Agent ID)
+    where: Microsoft Entra admin center › Entra ID › Agents › Agent identities › New agent identity; or Microsoft Graph
+    setVia: [identityProvider, apiCli]
+    area: identity
+    recommended: One agent identity per agent, created from a blueprint whose credential is a managed identity, each with an owner and a sponsor
+    why: Every agent is a separately attributable, separately revocable principal in the directory — not one service account the whole system acts as.
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/create-delete-agent-identities
+    verified: "2026-10-30"
+  - id: entraAgentObo
+    name: On-behalf-of flow (agent identities)
+    where: Agent code, through Microsoft.Identity.Web or the Microsoft Entra ID Auth SDK (sidecar)
+    setVia: [identityProvider, code]
+    area: identity
+    default: Not configured
+    recommended: Each agent exchanges the user's token for its own token, scoped to its task's resource; no token is handed from one agent to the next
+    why: Authority narrows at each hop — a specialist holds a token for its own step, never the caller's or the supervisor's.
+    mitigations: [D3-CTS]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/agent-on-behalf-of-oauth-flow
+    verified: "2026-10-30"
+  - id: entraApplicationIdUri
+    name: Application ID URI (with requestedAccessTokenVersion 2)
+    where: Microsoft Entra admin center › App registrations › (MCP server) › Expose an API; requestedAccessTokenVersion in the manifest
+    setVia: [identityProvider]
+    area: identity
+    recommended: The server's exact canonical URL (every URL clients use), on v2 access tokens
+    why: Entra matches the client's resource parameter to this URI, so every token is audience-bound to this server and one minted for another resource is refused.
+    mitigations: [D3-CTS]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id
+    verified: "2026-10-30"
+  - id: entraApiScopes
+    name: Scopes (Expose an API › Add a scope)
+    where: Microsoft Entra admin center › App registrations › (MCP server) › Expose an API
+    setVia: [identityProvider]
+    area: identity
+    recommended: One scope per class of operation (tool.read, tool.execute), Admins only consent; no omnibus scope
+    why: A client is granted only the operations it asked for and an administrator approved, and the server checks the scope before it runs a tool.
+    mitigations: [AML.M0028]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id
+    verified: "2026-10-30"
+  - id: entraAppRoles
+    name: App roles (Allowed member types — Applications)
+    where: Microsoft Entra admin center › App registrations › (your API) › App roles; assigned to each calling agent identity or application
+    setVia: [identityProvider]
+    area: identity
+    recommended: A narrow role per autonomous caller, assigned individually; no tenant-wide application permission
+    why: A workload with no user behind it gets only the roles assigned to its own identity, carried in the token's roles claim — no borrowed user authority.
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id
+    verified: "2026-10-30"
+  - id: entraCertificateCredentials
+    name: Certificate credentials (client assertion)
+    where: Microsoft Entra admin center › App registrations › (client) › Certificates & secrets › Certificates
+    setVia: [identityProvider]
+    area: identity
+    recommended: A certificate credential on every non-interactive client; no client secrets
+    why: The client proves possession of a private key (private_key_jwt) rather than presenting a shared secret that can be copied.
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/entra/identity-platform/certificate-credentials
+    verified: "2026-10-30"
+  - id: entraObo
+    name: On-behalf-of (OBO) flow
+    where: Your server code, through MSAL or Microsoft.Identity.Web
+    setVia: [code]
+    area: identity
+    default: Not used
+    recommended: A handler that calls an upstream API exchanges the inbound token for a downstream token; the inbound token is never forwarded
+    why: The caller's token stops at this server, so it cannot be replayed against another API, and each downstream call is a logged delegation step.
+    mitigations: [D3-CTS]
+    url: https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-on-behalf-of-flow
+    verified: "2026-10-30"
+  - id: entraRevokeSessions
+    name: Revoke-MgUserSignInSession (revoke refresh tokens)
+    where: Microsoft Graph PowerShell, or Microsoft Entra admin center › Users › (user) › Revoke sessions
+    setVia: [identityProvider, apiCli]
+    area: identity
+    default: Access tokens last 1 hour
+    recommended: Part of the leaver and incident runbook, with the default 1-hour access-token lifetime as the measured revocation delay
+    why: Refresh tokens stop at once and issued access tokens expire within the hour, so a revoked grant cannot keep calling the server.
+    mitigations: [D3-CR]
+    url: https://learn.microsoft.com/en-us/entra/identity/users/users-revoke-access
+    verified: "2026-10-30"
+  - id: keyVaultReferences
+    name: Key Vault references
+    where: App Service or Functions › Environment variables › "@Microsoft.KeyVault(...)"; the app's managed identity holds Key Vault Secrets User
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: Every upstream credential a handler uses held in Key Vault, one per upstream, referenced without a version so rotation is picked up
+    why: No upstream secret sits in app settings or code, and rotating one in Key Vault reaches the server without a redeploy.
+    mitigations: [D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references
+    verified: "2026-10-30"
+  - id: amlComputeIdentity
+    name: Compute cluster managed identity (identity-based data access)
+    where: Azure Machine Learning › Compute › (training cluster) › Managed identity; datastores set to identity-based access
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    recommended: A user-assigned identity per training workload, granted read on its approved dataset and write on its own output container — never the registry or the signing key
+    why: The run reads and writes as its own identity, checked by each store, and holds nothing that could promote or sign what it produced.
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-identity-based-service-authentication
+    verified: "2026-10-30"
+  - id: kvSigningCryptoUser
+    name: Key Vault Crypto User (on a dedicated signing vault)
+    where: Key Vault (signing vault, Azure RBAC permission model) › Access control (IAM)
+    setVia: [cloudPolicy]
+    area: identity
+    recommended: Assigned only to the promotion pipeline's identity, which runs after a separate human approval
+    why: Only the promotion step can produce a release signature, so a signed model proves the gate was passed — the training job cannot sign its own output.
+    mitigations: [AML.M0013]
+    url: https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide
+    verified: "2026-10-30"
+  - id: aksWorkloadIdentity
+    name: Microsoft Entra Workload ID (AKS)
+    where: AKS cluster OIDC issuer and workload identity; a Kubernetes service account per rollout, federated to its own user-assigned identity
+    setVia: [cloudPolicy, configFile]
+    area: identity
+    recommended: Every rollout pod runs under a service account federated to a narrowly scoped identity; no credential in the image
+    why: A rollout presents a short-lived projected token that each platform service verifies, so a token stolen from one sandbox opens nothing in another.
+    mitigations: [D3-AA]
+    url: https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview
+    verified: "2026-10-30"
 
   # --- Data & retention ----------------------------------------------------------------
   - id: cosmosConversationTtl
@@ -124,6 +268,136 @@ settings:
     why: Personal data a user pasted is not kept in the thread for every later turn — and every later reader — to see.
     mitigations: [cap-sensitive-data-redaction]
     url: https://learn.microsoft.com/en-us/azure/ai-services/language-service/personally-identifiable-information/overview
+    verified: "2026-10-30"
+  - id: dtsAutopurge
+    name: Autopurge retention policies
+    where: Durable Task Scheduler › retention policies (applies to every task hub in the scheduler)
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: "Enabled, 30 days"
+    recommended: "Enabled, 30 days (keep the default)"
+    why: Finished runs' journals — every payload a step returned — are deleted on a schedule instead of building up as a second store of client data.
+    mitigations: [AML.M0031]
+    url: https://learn.microsoft.com/en-us/azure/durable-task/scheduler/durable-task-scheduler-auto-purge
+    verified: "2026-10-30"
+  - id: tenantClaimValidation
+    name: Validate the tenant (tid) and subject claims
+    where: Your server's handlers — every read and write keyed by the token's tid and oid
+    setVia: [code]
+    area: data
+    default: Not enforced by the protocol or the platform
+    recommended: Every record access filtered to the caller's tenant and delegation; never data from one tenant served to another
+    why: MCP has no notion of a tenant, so the token's tenant claim checked in the handler is the only thing keeping one customer's records from another's caller.
+    mitigations: [cap-data-access-governance]
+    url: https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation
+    verified: "2026-10-30"
+  - id: storageSharedKeyAccess
+    name: AllowSharedKeyAccess
+    where: Storage account property, via Bicep, ARM, Azure CLI or Azure Policy
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: "null (Shared Key and SAS permitted)"
+    recommended: "false — every read and write authorized by Entra RBAC, the writer and reader roles held by named identities"
+    why: Weights and datasets can be read only by identities granted a role on the account; an account key or SAS token copied out of a pipeline opens nothing.
+    mitigations: [AML.M0005]
+    url: https://learn.microsoft.com/en-us/azure/storage/common/shared-key-authorization-prevent
+    verified: "2026-10-30"
+  - id: defenderMalwareScanning
+    name: On-upload malware scanning (Defender for Storage)
+    where: Microsoft Defender for Cloud › Defender for Storage plan (subscription or storage account) › Malware scanning add-on
+    setVia: [cloudPolicy]
+    area: data
+    default: "Off"
+    recommended: On for every storage account that receives model files or training data, with malicious blobs soft-deleted
+    why: An artifact carrying known malware is caught on arrival, before any promotion step or loader opens it.
+    mitigations: [D3-FA]
+    requires: Microsoft Defender for Storage plan
+    url: https://learn.microsoft.com/en-us/azure/defender-for-cloud/introduction-malware-scanning
+    verified: "2026-10-30"
+  - id: modelLoadVerification
+    name: Verify the release signature before load
+    where: Your serving image's init step — hash the files, verify the release signature with the signing key's public half
+    setVia: [code]
+    area: data
+    default: Weights load without verification
+    recommended: The runtime starts only if every file matches the signed release; a hub artifact only if it matches the digest in its promotion record
+    why: A file replaced in storage — even with a new digest written beside it — fails verification and never loads.
+    mitigations: [AML.M0014]
+    url: https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys-details
+    verified: "2026-10-30"
+  - id: servingModelRecord
+    name: Deploy by registry model name and version
+    where: Your deployment manifests — the serving workload names the Azure Machine Learning registry model and version it loads
+    setVia: [code]
+    area: data
+    default: Deployments point at a path
+    recommended: Every serving deployment references a registered model version, never a bare path or a hub ID
+    why: The question of what is running has an answer — each instance maps to a registry entry with its publisher, format, scan and lineage.
+    mitigations: [AML.M0023]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-models
+    verified: "2026-10-30"
+  - id: amlDataAssetVersions
+    name: Data asset versions (Azure Machine Learning)
+    where: Azure Machine Learning › Data › (asset) — referenced as azureml:<name>:<version>, with source and licence recorded as tags
+    setVia: [apiCli, code]
+    area: data
+    recommended: Every training input registered as a data asset version with its source and licence; jobs read assets by version, never by raw path
+    why: A version is immutable, so the exact bytes a run consumed — and where they came from — can be named after the fact.
+    mitigations: [AML.M0025]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-create-data-assets
+    verified: "2026-10-30"
+  - id: curationFilters
+    name: Data-preparation components (Azure Machine Learning pipeline)
+    where: Your curation pipeline — filtering components that call Azure AI Language PII detection and Azure AI Content Safety on each example
+    setVia: [code]
+    area: data
+    default: Whatever the pipeline author runs
+    recommended: Quality, safety and sensitive-content filters as required pipeline steps before a corpus version is registered
+    why: A poisoned, harmful or restricted example is removed while it is still a deletion, not something the model has learned.
+    mitigations: [AML.M0007]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/concept-ml-pipelines
+    verified: "2026-10-30"
+  - id: storageCmk
+    name: Customer-managed keys for Azure Storage encryption
+    where: Storage account › Encryption — key held in Key Vault
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: Microsoft-managed keys
+    recommended: A customer-managed key in Key Vault on the dataset and model storage accounts
+    why: The organisation can revoke the key and with it every read of the corpus and the checkpoints, independent of any role assignment.
+    mitigations: [AML.M0012]
+    url: https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview
+    verified: "2026-10-30"
+  - id: amlModelFromJob
+    name: Register a model from a job output (azureml://jobs)
+    where: Azure Machine Learning studio › Models › Register, from a job output; or az ml model create --path azureml://jobs/...
+    setVia: [apiCli, code]
+    area: data
+    recommended: Every candidate registered from the run that produced it, never from a local file
+    why: The registered model carries its lineage to the job — and through it the data asset versions, code and environment — so a discovered poisoning can be scoped.
+    mitigations: [AML.M0023]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-models
+    verified: "2026-10-30"
+  - id: amlModelTags
+    name: Model description and tags (tags.stage)
+    where: Azure Machine Learning registry › Models › (version) — the only mutable properties of a model version
+    setVia: [apiCli, code]
+    area: data
+    recommended: Description and a model-card link on every version; tags.stage moved to Prod only by the promotion pipeline
+    why: What the artifact is, what it was trained on and whether it was approved travel with it in the registry, not in someone's notes.
+    mitigations: [cap-model-documentation]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-manage-models
+    verified: "2026-10-30"
+  - id: a2aPayloadRedaction
+    name: PII redaction on A2A payloads (send-request to Azure AI Language)
+    where: API Management › A2A agent APIs › policies — send-request to PII detection on each outbound task and each artifact we return
+    setVia: [cloudPolicy, code]
+    area: data
+    default: Payloads cross unchanged
+    recommended: Redact on every payload that leaves for a peer, vendor or partner alike
+    why: Personal data in a delegated task or a returned artifact is removed at the boundary, not trusted to the peer's handling.
+    mitigations: [cap-sensitive-data-redaction]
+    url: https://learn.microsoft.com/en-us/azure/api-management/send-request-policy
     verified: "2026-10-30"
 
   # --- Tools & extensions --------------------------------------------------------------
@@ -182,6 +456,28 @@ settings:
     mitigations: [AML.M0029]
     url: https://learn.microsoft.com/en-us/agent-framework/agents/tools/
     verified: "2026-10-30"
+  - id: agentOperatorApproval
+    name: ApprovalRequiredAIFunction (human-in-the-loop approval)
+    where: Your agent code — the approval request is routed to an operator work queue and the session resumes on the answer
+    setVia: [code]
+    area: tools
+    default: Tools run without approval
+    recommended: Wrapped around every action above the value or irreversibility threshold; the approver is an operator, never the requester
+    why: A consequential write waits for someone other than its beneficiary; below the threshold the action's compensating transaction, not review, is the safety net.
+    mitigations: [AML.M0029]
+    url: https://learn.microsoft.com/en-us/agent-framework/agents/tools/tool-approval
+    verified: "2026-10-30"
+  - id: workflowRequestPort
+    name: Human-in-the-loop request and response (RequestPort)
+    where: Your workflow code — Agent Framework workflow, made durable with the Durable Extension
+    setVia: [code]
+    area: tools
+    default: Steps run without approval
+    recommended: A request port in front of every consequential write; the step suspends and resumes only on the operator's response to that request
+    why: The approval is bound to the exact pending step and its checkpointed state, so a step resumed days later cannot run a different action than the one approved.
+    mitigations: [AML.M0029]
+    url: https://learn.microsoft.com/en-us/agent-framework/workflows/human-in-the-loop
+    verified: "2026-10-30"
   - id: outputSanitisation
     name: Sanitise rendered model output
     where: Your front-end code
@@ -226,6 +522,207 @@ settings:
     mitigations: [D3-FA]
     url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-behavior
     verified: "2026-10-30"
+  - id: apimRateLimitByKey
+    name: rate-limit-by-key policy
+    where: API Management › MCP servers › Inbound processing
+    setVia: [cloudPolicy]
+    area: tools
+    default: No limit
+    recommended: Per-client and per-tenant counters (counter-key on the token's appid and tid), sized for callers that retry and parallelise
+    why: One looping or hostile client hits its own ceiling at the gateway instead of exhausting the server for every tenant.
+    mitigations: [AML.M0004]
+    url: https://learn.microsoft.com/en-us/azure/api-management/rate-limit-by-key-policy
+    verified: "2026-10-30"
+  - id: toolDefinitionPinning
+    name: Pin tool definitions to a reviewed version
+    where: Your server's loader — definitions shipped with the release and checked against the hash recorded at review
+    setVia: [code]
+    area: tools
+    default: No integrity check in the protocol
+    recommended: Refuse to serve any definition whose hash differs from the reviewed release; a wording change goes through the release gate
+    why: A description edited outside the pipeline never reaches a caller's model, so the server cannot be turned into a tool-poisoning vector.
+    mitigations: [cap-mcp-tool-integrity]
+    url: https://microsoft.github.io/mcp-azure-security-guide/mcp/mcp03-tool-poisoning/
+    verified: "2026-10-30"
+  - id: ghazdoCodeScanning
+    name: Code scanning (GitHub Advanced Security for Azure DevOps)
+    where: Azure DevOps › Project settings › Repos › Repositories › (repo) › Advanced Security; code scanning default setup or CodeQL pipeline tasks
+    setVia: [adminConsole, configFile]
+    area: tools
+    default: "Off"
+    recommended: On for every repository that ships the server, with high-severity alerts blocking the release
+    why: The handlers behind the protocol are tested like any published application before they serve callers.
+    mitigations: [D3-SYSVA]
+    requires: GitHub Advanced Security for Azure DevOps, or GitHub Code Security for Azure DevOps
+    url: https://learn.microsoft.com/en-us/azure/devops/repos/security/github-advanced-security-code-scanning
+    verified: "2026-10-30"
+  - id: ghazdoDependencyScanning
+    name: Dependency scanning (GitHub Advanced Security for Azure DevOps)
+    where: Azure DevOps › repository dependency scanning default setup, or the AdvancedSecurity-Dependency-Scanning@1 pipeline task
+    setVia: [adminConsole, configFile]
+    area: tools
+    default: "Off"
+    recommended: On for every repository that ships the service, alerts triaged by exposure
+    why: The SDK and every dependency are enumerated against vulnerability advisories, so an advisory maps to the release it affects.
+    mitigations: [D3-AVE]
+    requires: GitHub Advanced Security for Azure DevOps, or GitHub Code Security for Azure DevOps
+    url: https://learn.microsoft.com/en-us/azure/devops/repos/security/github-advanced-security-dependency-scanning
+    verified: "2026-10-30"
+  - id: apimContentSafetyCompletions
+    name: llm-content-safety policy with enforce-on-completions
+    where: API Management › model APIs › Inbound processing
+    setVia: [cloudPolicy]
+    area: tools
+    default: No policy
+    recommended: enforce-on-completions="true" on every model API with no provider-side content filter
+    why: With open weights and no provider applying policy, the gateway checks completions as well as prompts and blocks harmful output before it is returned.
+    mitigations: [cap-output-guardrails]
+    url: https://learn.microsoft.com/en-us/azure/api-management/llm-content-safety-policy
+    verified: "2026-10-30"
+  - id: apimWeightedPool
+    name: Load-balanced pool — Weighted
+    where: API Management › Backends › (pool); the model API routes to the pool
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: One backend
+    recommended: The new model version's backend takes a small weight after its evaluation passes; the previous version stays in the pool
+    why: A new checkpoint serves a slice of traffic before everyone, and rollback is a weight change rather than a re-download.
+    mitigations: [cap-staged-rollout-gate]
+    url: https://learn.microsoft.com/en-us/azure/api-management/backends
+    verified: "2026-10-30"
+  - id: vllmRuntimeLora
+    name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
+    where: vLLM server environment, in the serving deployment
+    setVia: [configFile]
+    area: tools
+    default: Not set (runtime adapter loading off)
+    recommended: Not set; adapters load only from a promoted release at start-up
+    why: Nobody who can reach the server can load an adapter that changes the model's behaviour through /v1/load_lora_adapter.
+    mitigations: [D3-ACH]
+    url: https://docs.vllm.ai/en/stable/usage/security/
+    verified: "2026-10-30"
+  - id: vllmCacheSalt
+    name: cache_salt (set per tenant at the gateway)
+    where: API Management set-body policy on the model API — overwrites any cache_salt the caller sent
+    setVia: [cloudPolicy, code]
+    area: tools
+    default: No salt (all requests share cached prefixes)
+    recommended: A secret per tenant, derived at the gateway from the caller's identity
+    why: Only requests from the same tenant can share prefix-cache blocks, closing the cache-timing path to another tenant's prompts.
+    mitigations: [D3-ACH]
+    url: https://docs.vllm.ai/en/stable/usage/security/
+    verified: "2026-10-30"
+  - id: aksGpuNodeTaints
+    name: Node taints on dedicated GPU node pools
+    where: AKS › az aks nodepool add --node-taints; tolerations on each tier's serving workload
+    setVia: [apiCli, configFile]
+    area: tools
+    default: Pods can share any node
+    recommended: A separate GPU node pool per sensitivity tier, tainted NoSchedule, so a tier's models run only on its own VMs and GPUs
+    why: Tiers that must not share memory never share a host or an accelerator — the separation is the VM boundary, not the scheduler's goodwill.
+    mitigations: [D3-HBPI]
+    url: https://learn.microsoft.com/en-us/azure/aks/use-node-taints
+    verified: "2026-10-30"
+  - id: defenderContainerVa
+    name: Container vulnerability assessment (Defender for Containers)
+    where: Microsoft Defender for Cloud › Environment settings › Defender for Containers; registry and runtime scanning
+    setVia: [cloudPolicy]
+    area: tools
+    default: "Off"
+    recommended: On for the registry and every cluster that runs serving or training images
+    why: The serving stack's known vulnerabilities are mapped to the images actually running, so each advisory points at the instances it affects.
+    mitigations: [D3-AVE]
+    requires: Microsoft Defender for Containers (or Defender CSPM for supported scenarios)
+    url: https://learn.microsoft.com/en-us/azure/defender-for-cloud/agentless-vulnerability-assessment-azure
+    verified: "2026-10-30"
+  - id: foundryRedTeaming
+    name: AI Red Teaming Agent (Microsoft Foundry)
+    where: Foundry SDK or portal, run against the candidate deployed to an isolated evaluation endpoint
+    setVia: [apiCli, code]
+    area: tools
+    default: Not run
+    recommended: Run on every candidate before promotion, its attack success rate a blocking threshold beside your capability, backdoor and memorisation tests
+    why: A candidate that a fine-tune made unsafe fails the gate before it is signed, not after it serves.
+    url: https://learn.microsoft.com/en-us/azure/foundry/concepts/ai-red-teaming-agent
+    mitigations: [AML.M0008]
+    verified: "2026-10-30"
+  - id: aksPodSandboxing
+    name: Pod Sandboxing (Kata Containers)
+    where: AKS Azure Linux node pool with the Kata workload runtime; runtimeClassName on each untrusted pod
+    setVia: [apiCli, configFile]
+    area: tools
+    default: Pods share the host kernel
+    recommended: Every pod that runs model-generated code uses the Kata runtime class, one pod per task, deleted after
+    why: Generated code runs in a lightweight VM with its own guest kernel, so a container escape lands in that VM rather than on the host or beside other pods.
+    mitigations: [D3-EI]
+    url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
+    verified: "2026-10-30"
+  - id: artifactsFeedReader
+    name: Feed Reader (feed permission)
+    where: Azure Artifacts › (feed) › Feed settings › Permissions
+    setVia: [adminConsole]
+    area: tools
+    default: Build services hold Feed and Upstream Reader (Collaborator)
+    recommended: Feed Reader for every rollout and agent identity; only the admission pipeline saves packages from upstream
+    why: A rollout can install what was admitted but cannot write to the feed or make it fetch a new package from upstream — the cache cannot become a channel or a proxy.
+    mitigations: [AML.M0028]
+    url: https://learn.microsoft.com/en-us/azure/devops/artifacts/feeds/feed-permissions
+    verified: "2026-10-30"
+  - id: containmentPenTest
+    name: Containment red teaming (penetration testing under the Rules of Engagement)
+    where: Your pre-run security testing — agents attack the sandbox, the cluster network and the platform services
+    setVia: [code]
+    area: tools
+    default: Not run
+    recommended: Before every run that changes the sandbox, tools or egress list; findings block the run until fixed
+    why: Escape routes through the sandbox, the host network and shared services are found by testing them, not assumed closed.
+    mitigations: [D3-SYSVA]
+    url: https://learn.microsoft.com/en-us/azure/security/fundamentals/pen-testing
+    verified: "2026-10-30"
+  - id: apimA2aApis
+    name: A2A agent APIs in API Management
+    where: API Management › APIs › + Add API › A2A Agent; per-skill policies on each operation
+    setVia: [cloudPolicy]
+    area: tools
+    default: Agents call peers directly
+    recommended: Our published agent and every peer we call imported as A2A agent APIs, with token validation and per-skill authorization on each
+    why: Every task in either direction crosses one gateway that authenticates the peer, authorizes the skill and logs the call — the authorization A2A leaves to us.
+    mitigations: [cap-agent-action-policy-enforcement]
+    url: https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api
+    verified: "2026-10-30"
+  - id: apiCenterAgents
+    name: Agent registration in API Center
+    where: Azure API Center › Inventory › Assets › + Register an asset › Agent (from the agent card JSON)
+    setVia: [adminConsole, apiCli]
+    area: tools
+    default: Not registered
+    recommended: Every admitted peer agent and every agent we publish registered from its reviewed card, with an owner
+    why: An agent that is not in the registry is not a peer — the list of who our agent may delegate to is governed, not discovered.
+    mitigations: [cap-agent-tool-registry]
+    url: https://learn.microsoft.com/en-us/azure/api-center/register-manage-agents
+    verified: "2026-10-30"
+  - id: agentCardPinning
+    name: Agent cards from your registry (AgentCard.AsAIAgent)
+    where: Your agent code — build each peer client from the card held in the registry, after verifying its signature and hash
+    setVia: [code]
+    area: tools
+    default: Card fetched live with A2ACardResolver
+    recommended: Never resolve a peer's card live in production; a changed card is re-reviewed before the registry entry changes
+    why: A peer that alters its card — new skills, new endpoint, new security scheme — is not trusted until someone has decided to trust the change.
+    mitigations: [cap-mcp-tool-integrity]
+    url: https://learn.microsoft.com/en-us/agent-framework/integrations/by-component/agent-services/a2a
+    verified: "2026-10-30"
+  - id: apimQuotaByKey
+    name: quota-by-key policy
+    where: API Management › A2A agent APIs › Inbound processing; forward-request timeout on the backend call
+    setVia: [cloudPolicy]
+    area: tools
+    default: No quota
+    recommended: Call and bandwidth quotas per peer and per task, with a timeout on every streamed task
+    why: One partner task that retries, fans out or streams without end hits its own ceiling instead of our budget.
+    mitigations: [AML.M0036]
+    url: https://learn.microsoft.com/en-us/azure/api-management/quota-by-key-policy
+    verified: "2026-10-30"
 
   # --- Network -------------------------------------------------------------------------
   - id: firewallEgress
@@ -261,6 +758,50 @@ settings:
     mitigations: [AML.M0004]
     url: https://learn.microsoft.com/en-us/azure/web-application-firewall/afds/waf-front-door-rate-limit
     verified: "2026-10-30"
+  - id: appServiceRouteAll
+    name: outboundVnetRouting.allTraffic
+    where: App Service › Networking › Virtual network integration; set with the Azure CLI, subnet routed to Azure Firewall
+    setVia: [cloudPolicy, apiCli]
+    area: network
+    default: Application traffic uses the default route
+    recommended: "true, with the integration subnet's route table sending outbound traffic through Azure Firewall"
+    why: Every outbound call the server makes leaves through the firewall's allowlist, so a handler or fetch steered to an internal or metadata address is dropped.
+    mitigations: [D3-OTF]
+    url: https://learn.microsoft.com/en-us/azure/app-service/configure-vnet-integration-routing
+    verified: "2026-10-30"
+  - id: aksNetworkPolicy
+    name: Network policy engine (Azure CNI Powered by Cilium)
+    where: AKS cluster network profile; a default-deny Kubernetes network policy in each serving or training namespace
+    setVia: [cloudPolicy, configFile]
+    area: network
+    default: All pods can send and receive traffic without limitations
+    recommended: Cilium, with default deny; only the gateway reaches the serving pods, and inter-node serving traffic stays inside the namespace
+    why: The serving plane's unauthenticated job and inter-node channels are reachable from nothing else in the cluster.
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/aks/use-network-policies
+    verified: "2026-10-30"
+  - id: amlManagedNetwork
+    name: Managed virtual network isolation mode
+    where: Azure Machine Learning workspace › Networking › Workspace managed outbound access
+    setVia: [cloudPolicy, apiCli]
+    area: network
+    recommended: Allow only approved outbound (Private with Approved Outbound in the portal), with the package mirror and the dataset and model storage as the only added rules
+    why: The training job can reach the stores it needs and nothing else, so a compromised dependency or a run holding the corpus has no route out.
+    mitigations: [D3-NI]
+    url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-managed-network
+    verified: "2026-10-30"
+  - id: aksFqdnFiltering
+    name: FQDN filtering (Advanced Container Networking Services)
+    where: AKS with Azure CNI Powered by Cilium and Advanced Container Networking Services; a Cilium network policy listing the allowed FQDNs
+    setVia: [cloudPolicy, configFile]
+    area: network
+    default: All pods can send and receive traffic without limitations
+    recommended: The offline web, the package feed and the platform services as the rollout's whole list; every other DNS request refused
+    why: DNS requests are checked against the policy before they are answered, so a rollout cannot resolve — or tunnel through — a name that is not on its list.
+    mitigations: [cap-agent-egress-control]
+    requires: Advanced Container Networking Services
+    url: https://learn.microsoft.com/en-us/azure/aks/container-network-security-fqdn-filtering-concepts
+    verified: "2026-10-30"
 
   # --- Audit & monitoring --------------------------------------------------------------
   - id: appInsightsOtel
@@ -284,6 +825,83 @@ settings:
     why: Suspending the agent's subscription cuts its model and tool access at the gateway at once, without redeploying anything.
     mitigations: [cap-agent-kill-switch]
     url: https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions
+    verified: "2026-10-30"
+  - id: dtsTerminate
+    name: Terminate orchestration instances
+    where: Durable Task client API (DurableTaskClient), or the Durable Task Scheduler dashboard
+    setVia: [apiCli, code]
+    area: audit
+    default: Runs continue until they complete
+    recommended: A runbook step that queries the workflow's running and suspended instances and terminates each, with a reason
+    why: The stop reaches a workflow parked on a timer or an approval for days, not only one that is executing now.
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/azure/durable-task/common/durable-task-instance-management
+    verified: "2026-10-30"
+  - id: entraAgentDisable
+    name: Disable agent identity
+    where: Microsoft Entra admin center › Entra ID › Agents › Agent identities (or Agent blueprints) › Disable
+    setVia: [identityProvider]
+    area: audit
+    default: Enabled
+    recommended: Enabled, with Disable as an incident-runbook step held by Agent ID Administrators
+    why: A disabled agent identity receives no new tokens, so one agent is cut off without touching the others or redeploying.
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/entra/agent-id/disable-agent-identities
+    verified: "2026-10-30"
+  - id: apimGatewayLogs
+    name: Diagnostic setting — Logs related to ApiManagement Gateway
+    where: API Management › Monitoring › Diagnostic settings; resource-specific ApiManagementGatewayLogs table in Log Analytics
+    setVia: [cloudPolicy]
+    area: audit
+    default: Not collected
+    recommended: On, sent to the Log Analytics workspace connected to Microsoft Sentinel, with the generative AI gateway logs where model APIs pass through
+    why: Every call through the gateway is recorded with its caller and operation, where an incident can query it.
+    mitigations: [AML.M0024]
+    url: https://learn.microsoft.com/en-us/azure/api-management/monitor-api-management
+    verified: "2026-10-30"
+  - id: aksContainerLogs
+    name: Container log collection (Azure Monitor)
+    where: AKS › Monitoring — Azure Monitor agent collecting stdout/stderr and Kubernetes events to a Log Analytics workspace
+    setVia: [cloudPolicy]
+    area: audit
+    default: Not collected
+    recommended: On for every sandbox node pool, to a workspace no rollout identity can read or write
+    why: Trajectories and host telemetry leave the node as they happen, so a rollout that disables what it can touch cannot erase what was already shipped.
+    mitigations: [cap-agent-tracing]
+    url: https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-monitoring-overview
+    verified: "2026-10-30"
+  - id: monitorAutoStop
+    name: Alert rule with an action group (automated stop)
+    where: Azure Monitor › Alerts › Action groups — an Azure Function or Automation Runbook that tells the orchestrator to halt the run
+    setVia: [cloudPolicy, code]
+    area: audit
+    default: No automated action
+    recommended: Serious-risk detections stop the run and cordon its node pool automatically; resuming is a person's decision
+    why: The stop is enforced from outside every sandbox the moment a monitor fires, without waiting for someone to read the alert.
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/action-groups
+    verified: "2026-10-30"
+  - id: entraAppSignInDisable
+    name: Enabled for users to sign-in?
+    where: Microsoft Entra admin center › Enterprise applications › (peer platform or peer agent) › Properties
+    setVia: [identityProvider]
+    area: audit
+    default: "Yes"
+    recommended: Yes, with No as the first step of the peer cut-off runbook
+    why: Setting it to No stops every new token for that application at once, so a peer is cut off in one action alongside dropping its registry entry.
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/disable-user-sign-in-portal
+    verified: "2026-10-30"
+  - id: mdaAppRiskScore
+    name: Cloud app catalog risk score (Defender for Cloud Apps)
+    where: Microsoft Defender portal › Cloud apps › Cloud app catalog › (peer platform)
+    setVia: [adminConsole]
+    area: sharing
+    recommended: Reviewed for every peer platform before the agreement is signed, alongside the questions A2A leaves open — tenant isolation, card signing, audit export
+    why: A peer is admitted on an assessment of how it handles our users' identity and data, not only on its card.
+    mitigations: [cap-ai-vendor-assessment]
+    requires: Microsoft Defender for Cloud Apps
+    url: https://learn.microsoft.com/en-us/defender-cloud-apps/risk-score
     verified: "2026-10-30"
 
 implementations:
@@ -337,4 +955,332 @@ implementations:
       - foundryPublicNetworkAccess
       - wafRateLimit
       - appInsightsOtel
+      - apimSubscriptionState
+
+  - architecture: archActionAgent
+    asOf: "2026-10"
+    reference:
+      - title: AI agent orchestration patterns — single agent with tools
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
+      - title: AI gateway capabilities in Azure API Management
+        url: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
+    summary:
+      - >-
+        Your own agent on Azure Container Apps, started by a Service Bus queue message rather than a
+        person, reaching models and tools through API Management and leaving the virtual network only
+        through Azure Firewall. Azure's orchestration guide calls this a single agent with tools —
+        the right default before any multiagent pattern. Approvals above the threshold go to an
+        operator queue; below it, the action's compensating transaction is the safety net.
+    bindings:
+      - { block: events, service: Azure Service Bus queues and Event Grid, note: "The only way in: each message carries the grant the run acts on." }
+      - { block: planner, service: Your agent on Azure Container Apps (Microsoft Agent Framework), note: "Foundry Agent Service is the managed alternative — the API/SDK managed agent runtime drawing." }
+      - { block: localTools, service: Container Apps dynamic sessions (code interpreter) }
+      - { block: stateRetrieval, service: Azure Cosmos DB and Azure AI Search }
+      - { block: gateway, service: Azure API Management (AI gateway) }
+      - { block: internalTools, service: Your action catalogue as MCP servers and APIs, build: true, note: "Named, parameter-validated actions, each with a compensating transaction, exposed only through API Management." }
+      - { block: provider, service: Azure OpenAI in Foundry Models }
+      - { block: orgData, service: Your systems of record, build: true, note: "Azure SQL, Blob Storage, line-of-business systems — whatever the actions change." }
+      - { block: openWeb, service: Grounding with Bing Search }
+      - { block: sources, service: "Public registries (PyPI, npm)" }
+      - { block: registry, service: Azure Artifacts feed }
+    settings:
+      - serviceBusSenderRole
+      - serviceBusDisableLocalAuth
+      - agentManagedIdentity
+      - foundryDisableLocalAuth
+      - apimValidateToken
+      - cosmosConversationTtl
+      - searchDocumentAccess
+      - groundednessDetection
+      - apimContentSafety
+      - apimTokenLimit
+      - apimMcpServers
+      - apiCenterInventory
+      - agentOperatorApproval
+      - sessionPoolEgress
+      - containerAppsTrafficSplit
+      - artifactsUpstream
+      - firewallEgress
+      - foundryPublicNetworkAccess
+      - appInsightsOtel
+      - apimSubscriptionState
+
+  - architecture: archAgentWorkflow
+    asOf: "2026-10"
+    reference:
+      - title: AI agent orchestration patterns
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
+      - title: Durable Task extension for Microsoft Agent Framework
+        url: https://learn.microsoft.com/en-us/azure/durable-task/sdks/durable-agents-microsoft-agent-framework
+      - title: AI gateway capabilities in Azure API Management
+        url: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
+    summary:
+      - >-
+        A Microsoft Agent Framework workflow — a supervisor and its specialists in one process on
+        Azure Container Apps — made durable by the Durable Task extension, with Durable Task
+        Scheduler journalling each step so a run survives crashes and waits days for an approval.
+        Each agent has its own Entra agent identity, and every model and tool call crosses API
+        Management. Foundry Agent Service's connected agents are the managed alternative Azure's
+        guide names for simpler, nondeterministic chains.
+    bindings:
+      - { block: events, service: Azure Service Bus queues and Event Grid, note: "Starts runs, and carries the operator's response that resumes a suspended step." }
+      - { block: harness, service: Agent Framework workflow on Azure Container Apps, note: "Self-hosted Durable Extension; Azure Functions (Flex Consumption) is the serverless host for the same code." }
+      - { block: localTools, service: Container Apps dynamic sessions (code interpreter) }
+      - { block: orchestration, service: Workflow supervisor with the Durable Extension, note: "The durable engine is Durable Task Scheduler: checkpoints each step, replays to recover." }
+      - { block: subagents, service: Agent Framework agents, each with an Entra agent identity }
+      - { block: state, service: "Durable Task Scheduler, Cosmos DB, AI Search", note: "Journal in the scheduler's task hub; shared memory in Cosmos DB; the vector index in Azure AI Search." }
+      - { block: gateway, service: Azure API Management (AI gateway) }
+      - { block: provider, service: Azure OpenAI in Foundry Models }
+      - { block: internalTools, service: Your MCP servers and APIs, exposed through API Management }
+      - { block: orgData, service: Your systems of record, build: true, note: "Azure SQL, Blob Storage, line-of-business systems — whatever the workflow changes." }
+      - { block: openWeb, service: Grounding with Bing Search }
+      - { block: sources, service: "Public registries (PyPI, npm)" }
+      - { block: registry, service: Azure Artifacts feed }
+    settings:
+      - serviceBusSenderRole
+      - serviceBusDisableLocalAuth
+      - entraAgentIdentity
+      - entraAgentObo
+      - agentManagedIdentity
+      - foundryDisableLocalAuth
+      - apimValidateToken
+      - apimCredentialManager
+      - dtsAutopurge
+      - cosmosConversationTtl
+      - searchDocumentAccess
+      - groundednessDetection
+      - piiRedaction
+      - apimContentSafety
+      - apimTokenLimit
+      - apimMcpServers
+      - apiCenterInventory
+      - workflowRequestPort
+      - sessionPoolEgress
+      - containerAppsTrafficSplit
+      - artifactsUpstream
+      - firewallEgress
+      - foundryPublicNetworkAccess
+      - appInsightsOtel
+      - dtsTerminate
+      - entraAgentDisable
+      - apimSubscriptionState
+
+  - architecture: archRemoteMcpServer
+    asOf: "2026-10"
+    reference:
+      - title: Secure a Model Context Protocol (MCP) server with Microsoft Entra ID
+        url: https://learn.microsoft.com/en-us/entra/agent-id/secure-mcp-server-with-entra-id
+      - title: Secure access to MCP servers in API Management
+        url: https://learn.microsoft.com/en-us/azure/api-management/secure-mcp-servers
+      - title: Configure built-in MCP server authorization on App Service
+        url: https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-mcp
+    summary:
+      - >-
+        Your MCP server on Azure App Service, published through API Management's MCP servers, with
+        Microsoft Entra ID as both the identity provider and the authorization server: the server is
+        an app registration whose Application ID URI is its canonical URL, so every token is
+        audience-bound to it. Entra offers no dynamic client registration, so clients are pre-registered
+        and preauthorized, and the organisation's callers are governed where they sign in: the server's
+        enterprise app assignment and Conditional Access.
+    bindings:
+      - { block: idp, service: Microsoft Entra ID, note: "Sign-in, the server's enterprise app assignment and Conditional Access decide who can get a token at all." }
+      - { block: gateway, service: Azure API Management (MCP servers) }
+      - { block: authServer, service: Microsoft Entra ID (server app registration), note: "Issues v2 access tokens for the server's Application ID URI; clients are pre-registered, so there is no client-metadata fetch to bound here." }
+      - { block: service, service: Your MCP server on Azure App Service, note: "Built-in MCP server authorization serves the protected resource metadata; Azure Functions MCP bindings are the serverless alternative." }
+      - { block: toolDefs, service: Tool definitions in your repository, build: true, note: "Versioned with the release and pinned by hash where the server loads them." }
+      - { block: orgData, service: Your systems of record, build: true, note: "Reached on an on-behalf-of token or the server's own managed identity, never the caller's token." }
+    settings:
+      - entraAssignmentRequired
+      - appServiceRequireAuth
+      - entraApplicationIdUri
+      - entraApiScopes
+      - entraAppRoles
+      - entraCertificateCredentials
+      - apimValidateToken
+      - entraObo
+      - apimCredentialManager
+      - keyVaultReferences
+      - entraRevokeSessions
+      - tenantClaimValidation
+      - apimRateLimitByKey
+      - toolDefinitionPinning
+      - ghazdoCodeScanning
+      - ghazdoDependencyScanning
+      - appServiceRouteAll
+      - apimGatewayLogs
+
+  - architecture: archSelfHostedInference
+    asOf: "2026-10"
+    reference:
+      - title: Deploy an AI model on AKS with the AI toolchain operator add-on
+        url: https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator
+      - title: Architecture pattern for AI workloads (Azure Well-Architected)
+        url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+      - title: AI gateway capabilities in Azure API Management
+        url: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
+    summary:
+      - >-
+        Open-weights models served by vLLM on AKS GPU node pools — the shape the AI toolchain
+        operator (KAITO) add-on deploys — behind API Management as the one front door for every
+        consuming application. Releases come from the Azure Machine Learning registry and load from
+        Blob Storage after their signature is checked. With no provider applying content policy, the
+        gateway's content-safety checks on prompts and completions are the organisation's own.
+    bindings:
+      - { block: consumers, service: Your applications and agents, build: true, note: "Each calls the gateway with its own managed identity." }
+      - { block: gateway, service: Azure API Management (AI gateway) }
+      - { block: api, service: vLLM OpenAI-compatible server, note: "Reachable only from API Management; the gateway exposes the /v1 operations and nothing else." }
+      - { block: runtime, service: vLLM on AKS GPU node pools (KAITO), note: "KAITO's custom-model template downloads from Hugging Face at start-up; load from your storage instead." }
+      - { block: storage, service: Azure Blob Storage (model files) }
+      - { block: sources, service: Public model hubs (Hugging Face) }
+      - { block: registry, service: Azure Machine Learning registry }
+    settings:
+      - apimValidateToken
+      - apimRateLimitByKey
+      - vllmCacheSalt
+      - apimContentSafetyCompletions
+      - apimWeightedPool
+      - vllmRuntimeLora
+      - storageSharedKeyAccess
+      - defenderMalwareScanning
+      - modelLoadVerification
+      - servingModelRecord
+      - aksGpuNodeTaints
+      - aksNetworkPolicy
+      - defenderContainerVa
+      - apimGatewayLogs
+
+  - architecture: archTrainingPipeline
+    asOf: "2026-10"
+    reference:
+      - title: Machine learning operations (MLOps) v2
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/machine-learning-operations-v2
+      - title: Workspace managed network isolation (Azure Machine Learning)
+        url: https://learn.microsoft.com/en-us/azure/machine-learning/how-to-managed-network
+      - title: Architecture pattern for AI workloads (Azure Well-Architected)
+        url: https://learn.microsoft.com/en-us/azure/well-architected/ai/architecture-pattern
+    summary:
+      - >-
+        Azure Machine Learning end to end: pipeline jobs curate versioned data assets, GPU compute
+        clusters train inside a managed virtual network that allows only approved outbound traffic,
+        and candidates are registered from the job that produced them. A separate promotion pipeline
+        — the only identity that can use the signing key — signs a release into the Azure Machine
+        Learning registry after the evaluation gate and a human approval, following MLOps v2's gated
+        promotion between workspaces.
+    bindings:
+      - { block: upstreamArtifacts, service: "Public hubs (Hugging Face, PyPI, conda)" }
+      - { block: dataOrigins, service: Your data sources, build: true, note: "Internal records, purchased and scraped sets, and labelling vendors' output." }
+      - { block: pkgRegistry, service: Azure Artifacts feed, note: "Universal Packages carry admitted base checkpoints beside the training dependencies." }
+      - { block: curation, service: Azure Machine Learning pipeline (data prep) }
+      - { block: corpus, service: Azure ML data assets on Blob Storage }
+      - { block: trainJob, service: Azure ML GPU compute cluster, note: "In a managed virtual network; RL rollouts go to the agent sandbox drawing." }
+      - { block: storage, service: Azure Blob Storage (job outputs) }
+      - { block: evaluation, service: Azure ML evaluation job and Foundry red teaming, note: "On separate compute with a read-only identity and no registry or signing access." }
+      - { block: registry, service: Azure Machine Learning registry }
+    settings:
+      - curationFilters
+      - amlDataAssetVersions
+      - storageSharedKeyAccess
+      - artifactsUpstream
+      - defenderMalwareScanning
+      - kvSigningCryptoUser
+      - foundryRedTeaming
+      - storageCmk
+      - amlModelFromJob
+      - amlModelTags
+      - amlManagedNetwork
+      - amlComputeIdentity
+      - aksPodSandboxing
+
+  - architecture: archAgentSandbox
+    asOf: "2026-10"
+    reference:
+      - title: Pod Sandboxing with Azure Kubernetes Service (AKS)
+        url: https://learn.microsoft.com/en-us/azure/aks/use-pod-sandboxing
+      - title: Baseline architecture for an Azure Kubernetes Service (AKS) cluster
+        url: https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/containers/aks/baseline-aks
+    summary:
+      - >-
+        Rollouts run as Kata pods — each in a lightweight VM with its own guest kernel — on dedicated
+        AKS node pools, with Cilium network policy and FQDN filtering as the second wall and Azure
+        Firewall as the third, following Pod Sandboxing and the AKS baseline's segmentation. The
+        orchestrator, graders and offline web are the organisation's own code on separate node pools;
+        Container Apps dynamic sessions are the managed alternative for lighter code-execution tasks.
+    bindings:
+      - { block: graders, service: Your graders on a separate AKS node pool, build: true, note: "Unreachable from rollout pods by network policy; read end state, never write it." }
+      - { block: platform, service: "Azure Monitor, Workload ID, Azure Files", note: "Log collection, token issuance and shared storage — each reachable only as far as the rollout needs." }
+      - { block: orchestrator, service: Your run orchestrator on AKS, build: true }
+      - { block: sandbox, service: AKS Pod Sandboxing (Kata) node pool, note: "One pod per task, deleted after; trust groups placed on separate node pools." }
+      - { block: harness, service: Your episode harness in the Kata pod, build: true }
+      - { block: localTools, service: "Shell, files, browser in the pod", build: true }
+      - { block: storage, service: Azure Blob Storage (checkpoints) }
+      - { block: inference, service: vLLM on AKS GPU node pools }
+      - { block: offlineWeb, service: Your offline web snapshot and simulated apps, build: true }
+      - { block: registry, service: Azure Artifacts feed }
+      - { block: openWeb, service: The live web (crawl source only) }
+      - { block: sources, service: "Public registries (PyPI, npm)" }
+    settings:
+      - aksPodSandboxing
+      - aksNetworkPolicy
+      - firewallEgress
+      - aksGpuNodeTaints
+      - aksFqdnFiltering
+      - artifactsFeedReader
+      - artifactsUpstream
+      - aksWorkloadIdentity
+      - storageSharedKeyAccess
+      - aksContainerLogs
+      - appInsightsOtel
+      - monitorAutoStop
+      - containmentPenTest
+
+  - architecture: archAgentFederation
+    asOf: "2026-10"
+    reference:
+      - title: Import an A2A agent API (Azure API Management)
+        url: https://learn.microsoft.com/en-us/azure/api-management/agent-to-agent-api
+      - title: Integrate third-party agents with Microsoft Entra Agent ID
+        url: https://learn.microsoft.com/en-us/entra/agent-id/configure-third-party-agents
+      - title: AI agent orchestration patterns
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
+    summary:
+      - >-
+        Your Agent Framework agent on Azure Container Apps speaks A2A both ways through API
+        Management's A2A agent APIs, with Microsoft Entra ID as identity provider and authorization
+        server: our agent holds an Entra agent identity, each peer agent we admit is a registered
+        client with its own certificate and app roles per skill, and our users' identity reaches the
+        vendor platform only through its Entra enterprise application. Admitted cards live in API
+        Center; nothing is resolved live.
+    bindings:
+      - { block: idp, service: Microsoft Entra ID, note: "The vendor platform's enterprise app assignment decides whose identity may be asserted to it." }
+      - { block: entry, service: App Service behind Application Gateway with WAF }
+      - { block: authServer, service: Microsoft Entra ID (agent and app registrations), note: "Mints our agent's tokens for peers and validates peers' tokens for our agent; the partner peer runs its own." }
+      - { block: harness, service: Your agent on Azure Container Apps (Microsoft Agent Framework), note: "A2A client and server through Agent Framework's A2A hosting; Foundry Agent Service is the managed alternative." }
+      - { block: localTools, service: Agent Framework function tools }
+      - { block: memory, service: Azure Cosmos DB and Azure AI Search }
+      - { block: gateway, service: Azure API Management (A2A agent APIs) }
+      - { block: internalTools, service: Your MCP servers and APIs, exposed through API Management }
+      - { block: orgData, service: Your systems of record, build: true }
+      - { block: peerVendor, service: Vendor platform A2A agent, note: "Under agreement, federated to our Entra tenant as an enterprise application." }
+      - { block: provider, service: Azure OpenAI in Foundry Models }
+      - { block: partner, service: Partner organisation A2A agent, note: "No federation: agent identity and skill scopes only." }
+    settings:
+      - entraAssignmentRequired
+      - appServiceRequireAuth
+      - entraAgentIdentity
+      - entraCertificateCredentials
+      - entraAppRoles
+      - entraAgentObo
+      - apimCredentialManager
+      - apimValidateToken
+      - cosmosConversationTtl
+      - a2aPayloadRedaction
+      - apimContentSafety
+      - apimA2aApis
+      - apimQuotaByKey
+      - apiCenterAgents
+      - agentCardPinning
+      - mdaAppRiskScore
+      - appInsightsOtel
+      - entraAppSignInDisable
+      - entraAgentDisable
       - apimSubscriptionState

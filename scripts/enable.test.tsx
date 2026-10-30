@@ -113,7 +113,9 @@ test("a cloud architecture lists its clouds first, binds every component and cov
         <ProductSettings archetype={arch} products={products} selected={cloud.id} onPick={() => {}} lit={null} onLight={() => {}} />,
       );
       assert.match(html, new RegExp(`What plays each component on ${cloud.short}`));
-      for (const b of impl.bindings) assert.ok(html.includes(b.service.replace(/&/g, "&amp;")), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
+      // Matched as React escapes text, so a service name may carry any character.
+      const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+      for (const b of impl.bindings) assert.ok(html.includes(escape(b.service)), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
     }
   }
 });
