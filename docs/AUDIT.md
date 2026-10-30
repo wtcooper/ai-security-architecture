@@ -1047,54 +1047,75 @@ Highlights below are Google's original mapping, not ours.
 
 ### 5b. AI tooling registry
 
-Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture that the entry does not yet describe — the research work list.
+Named products (data/tooling/), one entity per product × architecture, each dated. An entry older than six months is due a re-verification pass against the vendor's current documentation. *Unaddressed* lists the mitigations pinned on the tool's architecture that the entry does not yet describe — the research work list. *Settings* counts the rows of its settings table (data/tooling/BASELINE.md); *Newest check* is the latest `verified` date among them, and a tool with no table falls back to its capability record.
 
-| Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | |
-| --- | --- | --- | --- | --- | --- | --- |
-| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
-| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/15 | _none_ |  |
-| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| Claude Duet | anthropic | Persistent managed agents | 2026-10 | 14/14 | _none_ |  |
-| Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
-| Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| Amazon Bedrock AgentCore | aws | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
-| Cline | cline | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
-| Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Grok Bot | cursor | Persistent managed agents | 2026-10 | 12/14 | Multi-factor Authentication, Input Screening Guardrails |  |
-| GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
-| GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 13/13 | _none_ |  |
-| Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
-| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| LM Studio | lmstudio | Local model runtime | 2026-09 | 10/11 | Verify AI Artifacts |  |
-| Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ |  |
-| Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
-| Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/12 | _none_ |  |
-| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
-| Ollama | ollama | Local model runtime | 2026-09 | 10/11 | Verify AI Artifacts |  |
-| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 14/16 | Access Policy Administration, Limit AI Workload Resource Consumption |  |
-| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 18/19 | Execution Isolation |  |
-| ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ |  |
-| Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ |  |
-| Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ |  |
-| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 7/14 | Multi-factor Authentication, Credential Transmission Scoping, Limit AI Workload Resource Consumption, Input Screening Guardrails, Agent and Tool Registry, AI Vendor Risk Assessment, Agent Execution Tracing |  |
-| Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ |  |
-| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ |  |
-| opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ |  |
-| Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ |  |
-| Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 22/23 | Execution Isolation |  |
-| vLLM | vllm | Self-hosted model inference | 2026-09 | 13/13 | _none_ |  |
+| Tool | Vendor | Architecture | asOf | Addressed | Unaddressed | Settings | Newest check | |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Claude Agent SDK | anthropic | Multi-agent workflow | 2026-10 | 21/21 | _none_ | 25 | 2026-10-30 |  |
+| Claude in Chrome (Claude for Chrome) | anthropic | Browser AI agents & extensions | 2026-09 | 15/15 | _none_ | 19 | 2026-10-30 |  |
+| Claude Code | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 29 | 2026-10-30 |  |
+| Claude Code on the web (cloud sessions) | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 25 | 2026-10-30 |  |
+| Claude Cowork | anthropic | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 28 | 2026-10-30 |  |
+| Claude Cowork in the cloud | anthropic | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 21 | 2026-10-30 |  |
+| Claude (claude.ai web, mobile and Claude Desktop) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 27 | 2026-10-30 |  |
+| Claude Duet | anthropic | Persistent managed agents | 2026-10 | 14/14 | _none_ | 8 | 2026-10-30 |  |
+| Claude for Microsoft 365 (Excel, PowerPoint, Word, Outlook add-ins) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
+| Claude Managed Agents | anthropic | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 25 | 2026-10-30 |  |
+| Claude Tag (Claude in Slack) | anthropic | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 22 | 2026-10-30 |  |
+| Amazon Bedrock AgentCore | aws | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ | 32 | 2026-10-30 |  |
+| Amazon Quick Automate (automation groups, UI agents, custom agents, human-in-the-loop tasks, scheduled and API triggers) | aws | UI/low-code managed agent runtime | 2026-10 | 11/11 | _none_ | 20 | 2026-10-30 |  |
+| Cline | cline | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ | 28 | 2026-10-30 |  |
+| Cursor Cloud Agents | cursor | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 26 | 2026-10-30 |  |
+| Cursor | cursor | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 32 | 2026-10-30 |  |
+| Grok Bot | cursor | Persistent managed agents | 2026-10 | 14/14 | _none_ | 25 | 2026-10-30 |  |
+| llama.cpp server (llama-server) | ggml | Local model runtime | 2026-10 | 11/11 | _none_ | 33 | 2026-10-30 |  |
+| GitHub Copilot Chat on github.com | github | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 16 | 2026-10-30 |  |
+| GitHub Copilot CLI | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 29 | 2026-10-30 |  |
+| GitHub Copilot cloud agent | github | Coding & desktop session managed agent runtime | 2026-10 | 14/14 | _none_ | 31 | 2026-10-30 |  |
+| GitHub Copilot in editors | github | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 31 | 2026-10-30 |  |
+| GitHub Copilot SDK | github | Multi-agent workflow | 2026-09 | 21/21 | _none_ | 23 | 2026-10-30 |  |
+| GitHub MCP server | github | Remote MCP server you publish | 2026-09 | 13/13 | _none_ | 23 | 2026-10-30 |  |
+| Gemini Enterprise Agent Platform Agent Runtime (Vertex AI Agent Engine) | google | API/SDK managed agent runtime | 2026-09 | 16/16 | _none_ | 27 | 2026-10-30 |  |
+| Gemini in Chrome (with Chrome auto browse) | google | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
+| Gemini CLI | google | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 34 | 2026-10-30 |  |
+| Gemini Enterprise app (assistant, search and connected-data actions) | google | Enterprise AI chat with connectors | 2026-10 | 14/14 | _none_ | 22 | 2026-10-30 |  |
+| Gemini Enterprise Workflow Builder (chat agents and workflows) | google | UI/low-code managed agent runtime | 2026-10 | 11/11 | _none_ | 12 | 2026-10-30 |  |
+| LM Studio | lmstudio | Local model runtime | 2026-09 | 11/11 | _none_ | 13 | 2026-10-30 |  |
+| Meta Muse | meta | Persistent managed agents | 2026-10 | 14/14 | _none_ | 6 | 2026-10-30 |  |
+| Microsoft Copilot in Edge (Microsoft 365 Copilot Chat in the Edge for Business side pane, browsing with Copilot) | microsoft | Browser AI agents & extensions | 2026-10 | 15/15 | _none_ | 17 | 2026-10-30 |  |
+| Microsoft Copilot Studio (agents, knowledge, tools and connectors, autonomous triggers, computer use) | microsoft | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 32 | 2026-10-30 |  |
+| Microsoft 365 Copilot (Microsoft Copilot app, Copilot Chat, in-app Copilot, agents and connectors) | microsoft | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 16 | 2026-10-30 |  |
+| MLflow Tracking Server and Model Registry | mlflow | Model training & release pipeline | 2026-09 | 12/12 | _none_ | 29 | 2026-10-30 |  |
+| Hermes Agent | nous | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 38 | 2026-10-30 |  |
+| Ollama | ollama | Local model runtime | 2026-09 | 11/11 | _none_ | 19 | 2026-10-30 |  |
+| OpenAI Agents API | openai | API/SDK managed agent runtime | 2026-10 | 16/16 | _none_ | 26 | 2026-10-30 |  |
+| OpenAI Agents SDK | openai | Single agent workflow | 2026-09 | 19/19 | _none_ | 24 | 2026-10-30 |  |
+| ChatGPT Enterprise (web, desktop and Work) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 32 | 2026-10-30 |  |
+| Codex | openai | Third-party coding & desktop agents | 2026-09 | 18/18 | _none_ | 32 | 2026-10-30 |  |
+| Codex cloud | openai | Coding & desktop session managed agent runtime | 2026-09 | 14/14 | _none_ | 19 | 2026-10-30 |  |
+| Codex SDK | openai | Multi-agent workflow | 2026-09 | 21/21 | _none_ | 28 | 2026-10-30 |  |
+| OpenAI Dots | openai | Persistent managed agents | 2026-10 | 14/14 | _none_ | 17 | 2026-10-30 |  |
+| Secure MCP Tunnel (tunnel-client) | openai | Enterprise AI chat with connectors | 2026-09 | 14/14 | _none_ | 18 | 2026-10-30 |  |
+| OpenClaw | openclaw | Personal autonomous agent | 2026-09 | 21/21 | _none_ | 37 | 2026-10-30 |  |
+| opencode | opencode | First-party coding & desktop agents | 2026-09 | 17/17 | _none_ | 19 | 2026-10-30 |  |
+| Salesforce Agentforce (agents built in Agentforce Builder, with subagents, actions, Data Library grounding and channels) | salesforce | UI/low-code managed agent runtime | 2026-09 | 11/11 | _none_ | 19 | 2026-10-30 |  |
+| Vercel AI SDK | vercel | Chat agent with tools | 2026-09 | 23/23 | _none_ | 30 | 2026-10-30 |  |
+| vLLM | vllm | Self-hosted model inference | 2026-09 | 13/13 | _none_ | 32 | 2026-10-30 |  |
+
+### 5c. Cloud implementations
+
+Each first-party cloud architecture as built on each cloud (data/clouds/): the services bound to its blocks and the settings rows that cover its pinned capabilities. *Code rows* are capabilities no cloud setting provides, which the organisation builds itself.
+
+| Architecture | AWS | Azure | Google Cloud |
+| --- | --- | --- | --- |
+| Single agent workflow | 24 rows (1 code), 11 blocks bound | 20 rows (1 code), 11 blocks bound | 24 rows (2 code), 11 blocks bound |
+| Agent-to-agent federation across platforms | 18 rows (2 code), 12 blocks bound | 20 rows (1 code), 12 blocks bound | 12 rows (4 code), 12 blocks bound |
+| Agent sandbox for RL & evaluation | 16 rows (1 code), 12 blocks bound | 13 rows (1 code), 12 blocks bound | 14 rows (2 code), 12 blocks bound |
+| Multi-agent workflow | 27 rows (0 code), 13 blocks bound | 27 rows (1 code), 13 blocks bound | 27 rows (2 code), 13 blocks bound |
+| Chat agent with tools | 30 rows (2 code), 12 blocks bound | 24 rows (2 code), 12 blocks bound | 29 rows (3 code), 12 blocks bound |
+| Remote MCP server you publish | 20 rows (2 code), 6 blocks bound | 18 rows (3 code), 6 blocks bound | 17 rows (4 code), 6 blocks bound |
+| Self-hosted model inference | 18 rows (2 code), 7 blocks bound | 14 rows (2 code), 7 blocks bound | 14 rows (2 code), 7 blocks bound |
+| Model training & release pipeline | 14 rows (1 code), 9 blocks bound | 13 rows (1 code), 9 blocks bound | 14 rows (1 code), 9 blocks bound |
 
 ## 6. MITRE mitigation provenance and CoSAI gaps
 
