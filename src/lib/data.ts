@@ -13,6 +13,10 @@ import type {
   RiskOverlay,
   Tool,
   DisplayStatus,
+  AdoptionStatus,
+  CloudImplementation,
+  CloudPlatform,
+  ProductSetting,
 } from "./types";
 
 export const dataset = raw as unknown as Dataset;
@@ -44,6 +48,8 @@ export const {
   tools,
   toolingAttribution,
   status,
+  productStatus,
+  clouds,
   enablement,
   meta,
 } = dataset;
@@ -279,6 +285,42 @@ export const toolsForVendor = (vendorId: string): Tool[] =>
 /** Every product that instantiates this architecture — the variants of one category of tool. */
 export const toolsForArchetype = (archetypeId: string): Tool[] =>
   toolsInOrder.filter((t) => t.architecture === archetypeId);
+
+// --- Products on the Enable tab: tools and clouds -------------------------------------
+
+export const cloudById = index(clouds);
+
+/**
+ * Something an organisation switches on and configures: a registry tool, or a cloud carrying a
+ * first-party architecture. Both read as one row of pills and one settings table on Enable.
+ */
+export type Product =
+  | { kind: "tool"; id: string; name: string; tool: Tool; settings: ProductSetting[] }
+  | { kind: "cloud"; id: string; name: string; cloud: CloudPlatform; implementation: CloudImplementation; settings: ProductSetting[] };
+
+/** The products on one architecture: its clouds first (where the architecture is built, not bought), then its tools. */
+export function productsForArchetype(archetypeId: string): Product[] {
+  const cloudProducts: Product[] = clouds.flatMap((cloud) => {
+    const implementation = cloud.implementations.find((i) => i.architecture === archetypeId);
+    if (!implementation) return [];
+    const byId = new Map(cloud.settings.map((st) => [st.id, st]));
+    return [{ kind: "cloud" as const, id: cloud.id, name: cloud.name, cloud, implementation, settings: implementation.settings.map((id) => byId.get(id)!) }];
+  });
+  const toolProducts: Product[] = toolsForArchetype(archetypeId).map((tool) => ({ kind: "tool" as const, id: tool.id, name: tool.name, tool, settings: tool.settings ?? [] }));
+  return [...cloudProducts, ...toolProducts];
+}
+
+/** A product's adoption, and whether the organisation recorded it at all: unset reads "Not enabled". */
+export const adoptionFor = (productId: string): { status: AdoptionStatus; set: boolean; note?: string } => {
+  const entry = productStatus[productId];
+  return { status: entry?.status ?? "notEnabled", set: Boolean(entry?.status), note: entry?.note };
+};
+
+/** One setting's adoption on one product. */
+export const settingAdoptionFor = (productId: string, settingId: string): { status: AdoptionStatus; set: boolean; value?: string; note?: string } => {
+  const entry = productStatus[productId]?.settings?.[settingId];
+  return { status: entry?.status ?? "notEnabled", set: Boolean(entry?.status), value: entry?.value, note: entry?.note };
+};
 
 /** The architectures a vendor's products instantiate, in catalogue order. */
 export const archetypesForVendor = (vendorId: string) =>

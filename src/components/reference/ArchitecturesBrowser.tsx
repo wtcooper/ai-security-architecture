@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/Panel";
-import { archetypeById, archetypesInOrder, surfaces, toolById } from "@/lib/data";
+import { archetypeById, archetypesInOrder, cloudById, surfaces, toolById } from "@/lib/data";
 import type { Scenario } from "@/lib/types";
 import { ArchetypeView, TABS, type Tab } from "./ArchetypeView";
 import { ArchPicker } from "./ArchPicker";
@@ -21,6 +21,8 @@ export function ArchitecturesBrowser() {
   const params = useSearchParams();
   const linkedTool = params.get("tool");
   const tool0 = linkedTool ? toolById.get(linkedTool) : undefined;
+  // A product is a tool (which names its own architecture) or a cloud (which does not).
+  const linkedProduct = linkedTool && (tool0 || cloudById.has(linkedTool)) ? linkedTool : null;
   // A product link names its own architecture; it wins over a stale archetype in the same URL.
   const linkedArchetype = tool0?.architecture ?? params.get("archetype");
   const linkedTab = params.get("tab") as Tab | null;
@@ -35,12 +37,12 @@ export function ArchitecturesBrowser() {
     (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) || archetypesInOrder[0]?.id || "",
   );
   // Opens on the overview with the whole drawing, unless the link names a tab or a product.
-  const [tab, setTab] = useState<Tab>(tool0 || anchored ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview");
+  const [tab, setTab] = useState<Tab>(linkedProduct || anchored ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview");
   // Index into the walk list, or null for the resting drawing. A page opens on the resting
   // drawing — the whole architecture, nothing faded — and a walk is something the reader chooses.
   const [walkIndex, setWalkIndex] = useState<number | null>(null);
   const [highlight, setHighlight] = useState<Highlight | null>(anchored ? { kind: "mitigation", id: anchored } : null);
-  const [selected, setSelected] = useState<{ tool: string; capability?: string } | null>(tool0 ? { tool: tool0.id } : null);
+  const [selected, setSelected] = useState<{ tool: string } | null>(linkedProduct ? { tool: linkedProduct } : null);
 
   // A link to this page from this page (search, say) changes the URL but not the mounted view:
   // adopt what it names. Our own replaceState echoes back here too, but matches the state already.
@@ -53,9 +55,9 @@ export function ArchitecturesBrowser() {
       setWalkIndex(null);
       setHighlight(null);
     }
-    const nextTab: Tab = tool0 ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview";
+    const nextTab: Tab = linkedProduct ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview";
     if (nextTab !== tab) setTab(nextTab);
-    if ((tool0?.id ?? null) !== (selected?.tool ?? null)) setSelected(tool0 ? { tool: tool0.id } : null);
+    if (linkedProduct !== (selected?.tool ?? null)) setSelected(linkedProduct ? { tool: linkedProduct } : null);
   }
 
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
@@ -151,8 +153,8 @@ export function ArchitecturesBrowser() {
           highlight={highlight}
           onHighlight={onHighlight}
           tool={selected?.tool ?? null}
-          focus={selected?.capability ?? null}
-          onPickTool={(toolId, capability) => setSelected(toolId ? { tool: toolId, capability } : null)}
+          focus={null}
+          onPickTool={(id) => setSelected(id ? { tool: id } : null)}
         />
       </div>
     </>

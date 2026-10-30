@@ -3,19 +3,19 @@
 /**
  * The Enable tab of an architecture: what to put in place, in the order an organisation puts it
  * in place. The foundations every AI deployment needs, what the surface adds, what this use case
- * adds, then the tools — build, buy or both — and how far each covers the rest. Every row is a
- * numbered chip on the drawing above, so the requirements and where they go read as one.
+ * adds, then the products it is built on or bought as, each with its own settings and the
+ * baseline value for each. Every capability row is a numbered chip on the drawing above, and
+ * every setting names the chips it delivers, so the requirements and where they go read as one.
  * The four steps open folded, so the tab first reads as the plan; a step unfolds to its rows.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
-import { additionsFor, capabilityName, guidanceByArchetype, layerFor, status, statusFor, toolById, toolsForArchetype } from "@/lib/data";
+import { additionsFor, capabilityName, guidanceByArchetype, layerFor, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
 import { CapabilityTable } from "./CapabilityTable";
 import { foundationGroups, surfaceBaseline } from "./model";
-import { ToolRecord } from "./ToolRecord";
-import { ToolsMatrix } from "./ToolsMatrix";
+import { ProductSettings } from "./ProductSettings";
 
 const anyStatus = Object.values(status).some((s) => s.status);
 
@@ -105,8 +105,7 @@ export function EnablePanel({
   open,
   onOpen,
   onShowDrawing,
-  tool: toolId,
-  focus,
+  tool: productId,
   onPickTool,
 }: {
   archetype: Archetype;
@@ -114,18 +113,18 @@ export function EnablePanel({
   open: string | null;
   onOpen: (id: string | null) => void;
   onShowDrawing: () => void;
-  /** The product whose record is open beneath the tools grid, and the capability it is opened on. */
+  /** The product open in the tools step: a tool or a cloud id. */
   tool: string | null;
-  focus: string | null;
-  onPickTool: (toolId: string | null, capabilityId?: string) => void;
+  focus?: string | null;
+  onPickTool: (productId: string | null) => void;
 }) {
   const pinned = new Set(archetype.mitigations);
   const foundations = foundationGroups().flatMap((g) => g.capabilities);
   const baseline = surfaceBaseline(archetype.surface);
   const additions = additionsFor(archetype);
   const guidance = guidanceByArchetype.get(archetype.id);
-  const tools = toolsForArchetype(archetype.id);
-  const tool = toolId ? toolById.get(toolId) : undefined;
+  const products = productsForArchetype(archetype.id);
+  const product = productId ? products.find((p) => p.id === productId) : undefined;
   // In pin order, so the rows count up with the chips on the drawing.
   const byPin = (list: Mitigation[]) => list.filter((m) => pinned.has(m.id)).sort((a, b) => archetype.mitigations.indexOf(a.id) - archetype.mitigations.indexOf(b.id));
   const drawnFoundations = byPin(foundations.filter((m) => layerFor(m.id, archetype) === "foundation"));
@@ -137,11 +136,15 @@ export function EnablePanel({
   // Steps the reader unfolded. A step also stands open while it holds the lit capability or the
   // open product, so a chip picked on the drawing or a product link always lands on a visible row.
   const [unfolded, setUnfolded] = useState<Set<StepId>>(new Set());
+  // A chip lit from a setting row lights the drawing without unfolding the step that holds its
+  // capability row: the reader is working down a product's settings, not the capability list.
+  const [litFromTools, setLitFromTools] = useState(false);
+  const fromRows = !litFromTools;
   const holds: Record<StepId, boolean> = {
-    foundations: drawnFoundations.some((m) => m.id === open),
-    surface: drawnBaseline.some((m) => m.id === open),
-    "use-case": drawnAdditions.some((m) => m.id === open),
-    tools: Boolean(tool),
+    foundations: fromRows && drawnFoundations.some((m) => m.id === open),
+    surface: fromRows && drawnBaseline.some((m) => m.id === open),
+    "use-case": fromRows && drawnAdditions.some((m) => m.id === open),
+    tools: Boolean(product),
   };
   const isOpen = (id: StepId) => unfolded.has(id) || holds[id];
   const toggle = (id: StepId) => {
@@ -155,13 +158,12 @@ export function EnablePanel({
     setUnfolded(next);
   };
 
-  const recordRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (tool && !focus) recordRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [tool, focus]);
-
+  const openRow = (id: string | null) => {
+    setLitFromTools(false);
+    onOpen(id);
+  };
   const table = (capabilities: Mitigation[]) => (
-    <CapabilityTable capabilities={capabilities} archetype={archetype} open={open} onOpen={onOpen} onShowDrawing={onShowDrawing} />
+    <CapabilityTable capabilities={capabilities} archetype={archetype} open={open} onOpen={openRow} onShowDrawing={onShowDrawing} />
   );
 
   return (
@@ -223,27 +225,27 @@ export function EnablePanel({
         n={4}
         id="tools"
         title="Tools"
-        aside={tools.length ? <span className="text-[12px] font-normal text-ink-3">{tools.length} products</span> : undefined}
+        aside={products.length ? <span className="text-[12px] font-normal text-ink-3">{products.length} products</span> : undefined}
         expanded={isOpen("tools")}
         onToggle={() => toggle("tools")}
         lead={
-          tools.length
-            ? "How each product's own settings cover the capabilities above. Pick a product or a cell for its settings, steps and vendor links. Anything not in the tool has to come from a foundation, the baseline or another product."
-            : "No product of this kind is in the registry yet. Build it to the capabilities above, or onboard a product with the tooling-onboard skill."
+          products.length
+            ? "The products this is built on or bought as. Pick one for its own security settings: where each is set, the baseline value to set it to and why, and the chips on the drawing it delivers. A pill is green once your organisation records it as enabled."
+            : "No product of this kind is catalogued yet. Build it to the capabilities above."
         }
       >
-        {tools.length > 0 && (
-          <ToolsMatrix
+        {products.length > 0 && (
+          <ProductSettings
             archetype={archetype}
-            tools={tools}
-            selected={tool ? { tool: tool.id, capability: focus ?? undefined } : null}
-            onPick={(id, capability) => onPickTool(id, capability)}
+            products={products}
+            selected={product?.id ?? null}
+            onPick={(id) => onPickTool(id)}
+            lit={open}
+            onLight={(id) => {
+              setLitFromTools(true);
+              onOpen(open === id ? null : id);
+            }}
           />
-        )}
-        {tool && (
-          <div ref={recordRef} className="mt-6 scroll-mt-20 rounded-xl border border-line bg-paper px-5 py-5">
-            <ToolRecord key={tool.id} tool={tool} focus={focus} onClose={() => onPickTool(null)} />
-          </div>
         )}
       </Step>
     </div>

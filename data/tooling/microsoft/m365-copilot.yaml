@@ -654,6 +654,192 @@ tools:
           blocking a SharePoint or Foundry agent affects only Copilot Chat. Session revocation leaves issued
           access tokens alive for up to an hour.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Copilot inherits Microsoft 365's identity, permissions and compliance stack, so several rows
+    # live in Entra, Purview and SharePoint rather than in Copilot's own settings. Verified 2026-10-30.
+    settings:
+      - id: copilotUserAccess
+        name: User access
+        where: Microsoft 365 admin center › Agents › Settings › User access
+        setVia: [adminConsole]
+        area: identity
+        default: All users
+        recommended: Specific groups — the Entra groups licensed for Copilot
+        why: Who can use agents, plugins and connectors is a group decision you can audit, not everyone by default.
+        mitigations: [D3-APA, AML.M0028]
+        url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/agent-settings
+        verified: "2026-10-30"
+      - id: tenantRestrictionsV2
+        name: Tenant restrictions v2
+        where: Microsoft Entra admin center › External Identities › Cross-tenant access settings › Tenant restrictions
+        setVia: [identityProvider, mdm]
+        area: network
+        default: Not configured
+        recommended: Block external tenants and personal Microsoft accounts, signalled by your proxy or Global Secure Access
+        why: Staff on managed devices cannot sign in to Copilot with a personal or another organisation's account and take client data with them.
+        mitigations: [D3-OTF]
+        url: https://learn.microsoft.com/en-us/entra/external-id/tenant-restrictions-v2
+        verified: "2026-10-30"
+      - id: dlpCopilotPrompts
+        name: DLP for Microsoft 365 Copilot — Restrict Copilot from processing content › Processing prompts
+        where: Microsoft Purview › Data loss prevention › Policies › location "Microsoft 365 Copilot and Copilot Chat"
+        setVia: [adminConsole]
+        area: data
+        default: No policy
+        recommended: On, for your sensitive information types (credentials, national IDs, client account numbers)
+        why: A prompt carrying a sensitive information type is refused before Copilot processes it.
+        mitigations: [cap-sensitive-data-redaction]
+        requires: Microsoft 365 E5 or Purview add-on
+        url: https://learn.microsoft.com/en-us/purview/dlp-microsoft365-copilot-location-learn-about
+        verified: "2026-10-30"
+      - id: dlpCopilotLabels
+        name: DLP for Microsoft 365 Copilot — Content contains › Sensitivity labels
+        where: Microsoft Purview › Data loss prevention › Policies › location "Microsoft 365 Copilot and Copilot Chat"
+        setVia: [adminConsole]
+        area: data
+        default: No policy
+        recommended: Exclude your highest label (e.g. Highly Confidential – client restricted) from processing
+        why: Labelled files and mail can still be cited but their content never enters a Copilot answer.
+        mitigations: [cap-sensitive-data-redaction, cap-data-access-governance]
+        requires: Microsoft 365 E5 or Purview add-on
+        url: https://learn.microsoft.com/en-us/purview/dlp-microsoft365-copilot-location-learn-about
+        verified: "2026-10-30"
+      - id: restrictedContentDiscovery
+        name: Restricted Content Discovery
+        where: SharePoint admin center, or Set-SPOSite -Identity <site> -RestrictContentOrgWideSearch $true
+        setVia: [adminConsole, apiCli]
+        area: data
+        default: "Off"
+        recommended: On for sites the oversharing reports flag, until their permissions are fixed
+        why: An overshared site stops surfacing in Copilot answers and org-wide search while its access is cleaned up.
+        mitigations: [cap-data-access-governance]
+        requires: Microsoft 365 Copilot licence
+        url: https://learn.microsoft.com/en-us/sharepoint/restricted-content-discovery
+        verified: "2026-10-30"
+      - id: dspmRiskAssessments
+        name: Data risk assessments (DSPM)
+        where: Microsoft Purview › Data Security Posture Management › Data risk assessments
+        setVia: [adminConsole]
+        area: data
+        default: Default assessment of the most-used SharePoint sites
+        recommended: Default assessment on, plus a custom one over client-engagement sites
+        why: Finds the sensitive content Copilot can already reach before a user's question does.
+        mitigations: [D3-DI]
+        requires: Microsoft 365 E5 or Purview add-on
+        url: https://learn.microsoft.com/en-us/purview/data-security-posture-management-learn-about
+        verified: "2026-10-30"
+      - id: dataAccessGovernanceReports
+        name: Data access governance reports
+        where: SharePoint admin center › Reports › Data access governance
+        setVia: [adminConsole]
+        area: data
+        default: Not run
+        recommended: Run monthly; feed the results to Restricted Content Discovery and site owners
+        why: Shows sites shared with everyone or with many guests — the oversharing Copilot amplifies.
+        mitigations: [D3-DI, cap-data-access-governance]
+        requires: SharePoint Advanced Management
+        url: https://learn.microsoft.com/en-us/sharepoint/data-access-governance-reports
+        verified: "2026-10-30"
+      - id: webSearch
+        name: Allow web search in Copilot
+        where: Cloud Policy service for Microsoft 365 › Allow web search in Copilot
+        setVia: [adminConsole]
+        area: data
+        default: Enabled
+        recommended: Enabled
+        why: Web grounding is much of Copilot's value; generated queries go to Bing outside the Microsoft 365 boundary, so regulated teams turn it off by group.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/microsoft-365/copilot/manage-public-web-access
+        verified: "2026-10-30"
+      - id: agentPluginAccess
+        name: Agent and plugin access
+        where: Microsoft 365 admin center › Agents › Settings › Agent and plugin access
+        setVia: [adminConsole]
+        area: tools
+        default: All three publisher types allowed
+        recommended: Microsoft and your organisation allowed; external publishers off, with approved ones enabled one by one
+        why: Third-party agents, plugins, connectors and MCP servers reach Copilot only after someone has approved them.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://learn.microsoft.com/en-us/microsoft-365/copilot/connectors/manage-federated-connectors
+        verified: "2026-10-30"
+      - id: agentRequests
+        name: Agent requests (review before publishing)
+        where: Microsoft 365 admin center › Agents › Requests
+        setVia: [adminConsole]
+        area: tools
+        default: Org-wide publishing needs admin approval
+        recommended: Review every request; publish only agents with an owner and a stated data scope
+        why: The registry stays a list of agents someone is accountable for, not everything anyone built.
+        mitigations: [cap-agent-tool-registry, D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/agent-requests
+        verified: "2026-10-30"
+      - id: connectorStaging
+        name: Connector staged rollout
+        where: Microsoft 365 admin center › Copilot connectors › Your connections › (connector) › staged rollout
+        setVia: [adminConsole]
+        area: tools
+        default: New connectors available to all users
+        recommended: Each connector staged to the groups that need it
+        why: A connector that can write to a system of record reaches only the people whose job needs it.
+        mitigations: [AML.M0028, cap-data-access-governance, D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-365/copilot/connectors/manage-federated-connectors
+        verified: "2026-10-30"
+      - id: coworkAccess
+        name: Cowork spending policy scope
+        where: Microsoft 365 admin center › Copilot › Cost Management › Configuration › spending policy
+        setVia: [adminConsole]
+        area: tools
+        default: No users (usage billing off)
+        recommended: Specific groups — a pilot group first
+        why: Cowork runs multi-step tasks that send mail and change shared files; it reaches only the people you scope in.
+        mitigations: [AML.M0029, D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-365/copilot/cowork/cowork-admin-governance
+        verified: "2026-10-30"
+      - id: connectorAgentAuth
+        name: Microsoft Graph connector agent — authentication
+        where: Entra app registration › Certificates and secrets, selected in the connector agent
+        setVia: [identityProvider]
+        area: identity
+        default: Client secret or certificate
+        recommended: Certificate, rotated before expiry
+        why: The on-premises connector agent holds a credential to your tenant; a certificate is harder to lift than a pasted secret.
+        mitigations: [D3-CH]
+        url: https://learn.microsoft.com/en-us/microsoft-365/copilot/connectors/connector-agent
+        verified: "2026-10-30"
+      - id: promptInjectionMail
+        name: Prompt injection protection
+        where: Microsoft Defender portal › Email & collaboration (Defender for Office 365 Plan 2)
+        setVia: [adminConsole]
+        area: tools
+        default: On with Plan 2
+        recommended: "On"
+        why: Inbound mail carrying instructions aimed at an AI assistant is detected before Copilot reads it.
+        mitigations: [cap-input-guardrails]
+        requires: Defender for Office 365 Plan 2
+        url: https://learn.microsoft.com/en-us/defender-office-365/step-by-step-guides/prompt-injection-protection-defender-for-office-365
+        verified: "2026-10-30"
+      - id: auditCopilotInteraction
+        name: Audit — CopilotInteraction records
+        where: Microsoft Purview › Audit; streamed through the Office 365 Management Activity API
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: Auditing on for new tenants
+        recommended: On, streamed to your SIEM; alert on JailbreakDetected and XPIADetected
+        why: Every Copilot and agent interaction, the resources it touched and the classifier verdicts are in one record type you can search and alert on.
+        mitigations: [cap-agent-tracing, cap-input-guardrails]
+        url: https://learn.microsoft.com/en-us/purview/audit-copilot
+        verified: "2026-10-30"
+      - id: agentBlock
+        name: Block agent
+        where: Microsoft 365 admin center › Agents › All agents › (agent) › Block
+        setVia: [adminConsole]
+        area: audit
+        default: Agents unblocked
+        recommended: Your incident runbook's first step for a misbehaving agent
+        why: Stops one agent for the whole organisation without removing anyone's Copilot.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/agent-actions
+        verified: "2026-10-30"
     advisories:
       - title: "CVE-2025-32711 — M365 Copilot information disclosure (AI command injection; the EchoLeak zero-click chain), fixed server-side"
         url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711

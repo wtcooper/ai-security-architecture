@@ -45,6 +45,3 @@ export function placementsFor(archetypeId: string, capabilityId: string): { bloc
 /** A product's own record on one capability, if the registry has one. */
 export const toolControlFor = (tool: Tool, capabilityId: string): ToolControl | undefined =>
   tool.controls.find((c) => c.mitigation === capabilityId);
-
-/** The vendor page for configuring one capability on one product: the first operator step's link. */
-export const configureUrl = (control?: ToolControl) => control?.steps?.find((st) => st.url)?.url;

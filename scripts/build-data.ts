@@ -15,6 +15,7 @@ import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
 import { loadControlCrosswalks } from "./lib/control-crosswalks";
 import { loadEnablement, loadStatus } from "./lib/enablement";
+import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
 
 import type {
@@ -322,7 +323,8 @@ async function main() {
 
   // --- AI tooling registry -------------------------------------------------------
   const toolingLoaded = await loadTooling();
-  const tools = checkTooling(toolingLoaded, { archetypes, riskIds });
+  const tools = checkTooling(toolingLoaded, { archetypes, riskIds, mitigationIds });
+  const clouds = await loadClouds(ROOT, { archetypes, mitigationIds, fail });
 
   // --- Controls guidance ---------------------------------------------------------
   const guidanceLoaded = await loadGuidance();
@@ -335,6 +337,7 @@ async function main() {
   // --- Enable layers and the organisation's status file ----------------------------
   const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes);
   const status = await loadStatus(ROOT, mitigationsDoc.mitigations);
+  const productStatus = await loadProductStatus(ROOT, tools, clouds);
 
   // --- Overlay -----------------------------------------------------------------
   const overlays = resolveOverlays(overlayDoc.overlays, { risks, controls, componentIds: mapTargets });
@@ -466,6 +469,8 @@ async function main() {
     tools,
     toolingAttribution: toolingLoaded.attribution,
     status,
+    productStatus,
+    clouds,
     enablement,
   };
 
@@ -1455,7 +1460,7 @@ const COVERAGES = new Set<string>(TOOL_COVERAGES);
 
 function checkTooling(
   loaded: { attribution: string; vendors: ToolVendor[]; tools: { file: string; tool: Tool }[] },
-  ctx: { archetypes: Archetype[]; riskIds: Set<string> },
+  ctx: { archetypes: Archetype[]; riskIds: Set<string>; mitigationIds: Set<string> },
 ): Tool[] {
   const archetypeById = new Map(ctx.archetypes.map((a) => [a.id, a]));
   const vendorIds = new Set<string>();
@@ -1540,6 +1545,16 @@ function checkTooling(
       if (!item.title?.trim()) fail(`${where}: an item needs a title`);
       if (!item.body?.length) fail(`${where} item "${item.title}": needs a body`);
       checkLinks(`${where} item "${item.title}"`, item.links);
+    }
+    // The settings table: rows to the baseline rubric, each capability it names pinned on the
+    // tool's drawing. Once a tool has its table, every capability it rates Built-in or Partial
+    // must be backed by at least one row, so the rating and the table cannot drift apart.
+    checkSettings(where, tool.settings, { mitigationIds: ctx.mitigationIds, pinned, fail });
+    if (tool.settings?.length) {
+      const delivered = new Set(tool.settings.flatMap((st) => st.mitigations));
+      for (const c of tool.controls ?? [])
+        if ((c.coverage === "native" || c.coverage === "partial") && !delivered.has(c.mitigation))
+          fail(`${where}: rated ${c.coverage} on ${c.mitigation}, but no setting delivers it`);
     }
     checkLinks(`${where} advisories`, tool.advisories);
     if (!tool.sources?.length) fail(`${where}: needs at least one vendor documentation source`);

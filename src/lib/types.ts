@@ -708,6 +708,91 @@ export interface ToolControl {
   migration?: MitigationMigrationEvidence;
 }
 
+/**
+ * How a setting is applied — the channel an administrator uses. A setting reachable two ways
+ * (an admin-console toggle that MDM can also push) lists both.
+ */
+export type SettingVia = "mdm" | "adminConsole" | "configFile" | "apiCli" | "identityProvider" | "cloudPolicy" | "code";
+export const SETTING_VIAS: SettingVia[] = ["mdm", "adminConsole", "configFile", "apiCli", "identityProvider", "cloudPolicy", "code"];
+
+/** The admin area a setting sits in, in the order a console is usually worked through. */
+export type SettingArea = "identity" | "data" | "tools" | "network" | "audit" | "sharing";
+export const SETTING_AREAS: SettingArea[] = ["identity", "data", "tools", "network", "audit", "sharing"];
+
+/**
+ * One security-relevant setting a product or cloud exposes, with the baseline value this
+ * catalogue recommends for it (data/tooling/BASELINE.md). Rows are the unit of the Enable tab's
+ * tools step: what to set, where, to what, and which capabilities on the drawing it delivers.
+ */
+export interface ProductSetting {
+  /** Unique within its product (or cloud), camelCase; the key data/status.yaml uses. */
+  id: string;
+  /** The setting's name exactly as the vendor's page gives it. */
+  name: string;
+  /** Where it lives: an admin-console path, a policy or settings key, a CLI flag. */
+  where: string;
+  setVia: SettingVia[];
+  area: SettingArea;
+  /** The value out of the box, where the vendor documents one. */
+  default?: string;
+  /** The baseline value. */
+  recommended: string;
+  /** One line: the path the recommended value closes. */
+  why: string;
+  /** Capabilities this setting delivers; each must be pinned on the drawing it is shown on. */
+  mitigations: string[];
+  /** The plan or licence it needs, when it is not on every plan. */
+  requires?: string;
+  /** The vendor page that documents it. */
+  url: string;
+  /** When the setting's name and url were checked, e.g. "2026-10-30". */
+  verified: string;
+}
+
+/** Whether the organisation has a product, a cloud or one of their settings switched on. */
+export type AdoptionStatus = "enabled" | "testing" | "notEnabled";
+export const ADOPTION_STATUSES: AdoptionStatus[] = ["enabled", "testing", "notEnabled"];
+
+/** The organisation's entry for one product or cloud in data/status.yaml. */
+export interface ProductStatusEntry {
+  status?: AdoptionStatus;
+  note?: string;
+  settings?: Record<string, { status?: AdoptionStatus; value?: string; note?: string }>;
+}
+
+/** One block of a cloud architecture bound to the cloud service that plays it. */
+export interface CloudBinding {
+  block: string;
+  /** The service, or for a block with no managed equivalent, what you run yourself. */
+  service: string;
+  url?: string;
+  note?: string;
+  /** True when no managed service fills the block: the organisation builds or runs it. */
+  build?: boolean;
+}
+
+/** One first-party architecture as built on one cloud: its services, and the settings that secure it. */
+export interface CloudImplementation {
+  architecture: string;
+  /** The cloud's own published reference architecture(s) this implementation follows. */
+  reference: GuidanceLink[];
+  summary?: Paragraph[];
+  asOf: string;
+  bindings: CloudBinding[];
+  /** Ids into the cloud's settings, in the order they read on this architecture. */
+  settings: string[];
+}
+
+/** A cloud platform: its security-relevant settings, and how each first-party architecture is built on it. */
+export interface CloudPlatform {
+  /** ^cloud[A-Z] — shares the namespace data/status.yaml keys products by. */
+  id: string;
+  name: string;
+  short: string;
+  settings: ProductSetting[];
+  implementations: CloudImplementation[];
+}
+
 /** Retained pre-migration evidence is not a new coverage attestation. */
 export interface MitigationMigrationEvidence {
   from: string[];
@@ -749,6 +834,8 @@ export interface Tool {
   /** Tool-specific emphasis on risks pinned on the architecture. */
   riskNotes?: { risk: string; note: string }[];
   controls: ToolControl[];
+  /** The security-relevant settings the product exposes, with the baseline value for each. */
+  settings?: ProductSetting[];
   advisories?: { title: string; url: string; date?: string }[];
   sources: GuidanceLink[];
 }
@@ -909,5 +996,9 @@ export interface Dataset {
   toolingAttribution: string;
   /** Capability id -> the organisation's status and display name, from data/status.yaml. */
   status: Record<string, CapabilityCustomisation>;
+  /** Tool or cloud id -> the organisation's adoption status and per-setting status, from data/status.yaml. */
+  productStatus: Record<string, ProductStatusEntry>;
+  /** The three clouds and how each first-party cloud architecture is built on them, from data/clouds/. */
+  clouds: CloudPlatform[];
   enablement: Enablement;
 }

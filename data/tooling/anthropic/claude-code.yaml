@@ -1451,6 +1451,336 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://code.claude.com/docs/en/claude_code_docs_map.md
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Managed-settings keys reach a device through MDM (managed-settings.json, the macOS plist
+    # domain or the Windows policy key) or, on Team and Enterprise, through server-managed
+    # settings in the admin console; MDM is the stronger channel. Verified 2026-10-30.
+    settings:
+      - id: requireSso
+        name: Require SSO for Claude
+        where: claude.ai Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: Every interactive claude.ai login goes through the corporate IdP and its MFA; personal email logins on your domain stop working.
+        mitigations: [D3-MFA]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Claude Code
+        why: Removing someone in the IdP removes their seat, so a leaver's access ends with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: restrictOrgCreation
+        name: Restrict organization creation
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Stops staff creating personal or side Claude organisations on your verified domains, which no admin can see.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Team or Enterprise, verified domain
+        url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        verified: "2026-10-30"
+      - id: forceLoginMethod
+        name: forceLoginMethod
+        where: managed-settings.json → forceLoginMethod
+        setVia: [mdm, adminConsole]
+        area: identity
+        default: Unset (any account type)
+        recommended: '"claudeai"'
+        why: Managed devices sign in only with a claude.ai account, not a personal Console API key.
+        mitigations: [D3-MFA, cap-shadow-ai-discovery]
+        url: https://code.claude.com/docs/en/settings-reference#forceloginmethod
+        verified: "2026-10-30"
+      - id: forceLoginOrgUUID
+        name: forceLoginOrgUUID
+        where: managed-settings.json → forceLoginOrgUUID
+        setVia: [mdm, adminConsole]
+        area: identity
+        default: Unset (any organisation)
+        recommended: Your organisation's UUID
+        why: A login to anyone else's organisation, and ambient API keys in the environment, are refused at startup.
+        mitigations: [D3-MFA, D3-CH, cap-shadow-ai-discovery]
+        url: https://code.claude.com/docs/en/settings-reference#forceloginorguuid
+        verified: "2026-10-30"
+      - id: apiKeyHelper
+        name: apiKeyHelper
+        where: managed-settings.json → apiKeyHelper
+        setVia: [mdm, configFile]
+        area: identity
+        default: Unset (key from login or environment)
+        recommended: Only on API-key deployments — a script returning a short-lived key from your vault
+        why: Replaces a long-lived key in a file or variable with one that rotates; not needed on claude.ai logins.
+        mitigations: [D3-CH]
+        url: https://code.claude.com/docs/en/settings-reference#apikeyhelper
+        verified: "2026-10-30"
+      - id: cleanupPeriodDays
+        name: cleanupPeriodDays
+        where: managed-settings.json → cleanupPeriodDays
+        setVia: [mdm, adminConsole]
+        area: data
+        default: "30"
+        recommended: "30 — don't raise it"
+        why: Session transcripts sit on the laptop in plain text; a longer period keeps more client material on every device.
+        mitigations: [AML.M0031]
+        url: https://code.claude.com/docs/en/settings-reference#cleanupperioddays
+        verified: "2026-10-30"
+      - id: inferenceHooks
+        name: Inference hooks
+        where: claude.ai Organization settings › Data and privacy › Inference hooks
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
+        why: Each request, tool results included, is checked by your own service before inference, so secrets and injected content can be stopped centrally.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+        verified: "2026-10-30"
+      - id: permissionsDeny
+        name: permissions.deny
+        where: managed-settings.json → permissions.deny
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset
+        recommended: Deny reads of secret paths — Read(./.env*), Read(~/.ssh/**), Read(~/.aws/**), Read(~/.config/gcloud/**)
+        why: Managed deny rules win over every mode and every user rule, so keys and tokens never enter the context.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-sensitive-data-redaction]
+        url: https://code.claude.com/docs/en/settings-reference#permissions-deny
+        verified: "2026-10-30"
+      - id: allowManagedPermissionRulesOnly
+        name: allowManagedPermissionRulesOnly
+        where: managed-settings.json → allowManagedPermissionRulesOnly
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (rules from every scope apply)
+        recommended: Unset — developers may add their own allow rules; managed deny rules still win
+        why: Keeps prompts manageable for developers; regulated teams set it true so only the organisation's rules count.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
+        url: https://code.claude.com/docs/en/settings-reference#allowmanagedpermissionrulesonly
+        verified: "2026-10-30"
+      - id: disableBypassPermissionsMode
+        name: permissions.disableBypassPermissionsMode
+        where: managed-settings.json → permissions.disableBypassPermissionsMode
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (bypass mode available)
+        recommended: '"disable"'
+        why: Removes --dangerously-skip-permissions, the one switch that runs every tool without a prompt.
+        mitigations: [AML.M0029, AML.M0028]
+        url: https://code.claude.com/docs/en/settings-reference#permissions-disablebypasspermissionsmode
+        verified: "2026-10-30"
+      - id: defaultMode
+        name: permissions.defaultMode
+        where: managed-settings.json → permissions.defaultMode
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (the plan's built-in default)
+        recommended: '"default" — sessions start with approval prompts'
+        why: A session starts asking before edits and commands; developers can still switch to auto mode, which deny and ask rules precede.
+        mitigations: [AML.M0029]
+        url: https://code.claude.com/docs/en/settings-reference#permissions-defaultmode
+        verified: "2026-10-30"
+      - id: allowManagedHooksOnly
+        name: allowManagedHooksOnly
+        where: managed-settings.json → allowManagedHooksOnly
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (hooks from every scope run)
+        recommended: "true"
+        why: A cloned repository's hooks are commands that run on the developer's machine; only the organisation's hooks run.
+        mitigations: [cap-agent-action-policy-enforcement, cap-agent-tool-registry]
+        url: https://code.claude.com/docs/en/settings-reference#allowmanagedhooksonly
+        verified: "2026-10-30"
+      - id: allowedMcpServers
+        name: allowedMcpServers
+        where: managed-settings.json → allowedMcpServers
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (any server)
+        recommended: The approved servers from your MCP registry, matched by URL or command
+        why: A server outside the list is blocked wherever it is defined — project files, plugins or the command line.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        url: https://code.claude.com/docs/en/settings-reference#allowedmcpservers
+        verified: "2026-10-30"
+      - id: allowManagedMcpServersOnly
+        name: allowManagedMcpServersOnly
+        where: managed-settings.json → allowManagedMcpServersOnly
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset
+        recommended: "true"
+        why: Only the managed allowlist counts, so a user's own settings cannot widen it.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry]
+        url: https://code.claude.com/docs/en/settings-reference#allowmanagedmcpserversonly
+        verified: "2026-10-30"
+      - id: strictKnownMarketplaces
+        name: strictKnownMarketplaces
+        where: managed-settings.json → strictKnownMarketplaces
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (any marketplace)
+        recommended: Your organisation's marketplace(s) only
+        why: Plugins — which bundle skills, hooks and MCP servers — install only from sources you curate.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity, D3-FA]
+        url: https://code.claude.com/docs/en/settings-reference#strictknownmarketplaces
+        verified: "2026-10-30"
+      - id: strictPluginOnlyCustomization
+        name: strictPluginOnlyCustomization
+        where: managed-settings.json → strictPluginOnlyCustomization
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (nothing locked)
+        recommended: '["hooks", "mcp"]'
+        why: Hooks and MCP servers come only from managed settings or approved plugins; project skills and agents stay available.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity, AML.M0031]
+        url: https://code.claude.com/docs/en/settings-reference#strictpluginonlycustomization
+        verified: "2026-10-30"
+      - id: disableSideloadFlags
+        name: disableSideloadFlags
+        where: managed-settings.json → disableSideloadFlags
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset
+        recommended: "true"
+        why: Rejects --plugin-dir, --plugin-url, --agents and --mcp-config, which otherwise bypass the marketplace allowlist for one run.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity]
+        url: https://code.claude.com/docs/en/settings-reference#disablesideloadflags
+        verified: "2026-10-30"
+      - id: pluginScanning
+        name: Skill and plugin security scanning
+        where: claude.ai Organization settings › Plugins & skills › Policy
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: "On"
+        why: Every skill and plugin uploaded to the organisation is scanned before it reaches developers' machines.
+        mitigations: [D3-FA]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/15927065-get-started-with-skill-and-plugin-scanning
+        verified: "2026-10-30"
+      - id: sandboxEnabled
+        name: sandbox.enabled with sandbox.failIfUnavailable
+        where: managed-settings.json → sandbox.enabled, sandbox.failIfUnavailable
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: "false / false"
+        recommended: "true / true"
+        why: Bash commands run in an OS sandbox with filesystem and network limits, and a machine that cannot sandbox refuses to start instead of silently running unsandboxed.
+        mitigations: [D3-EI, cap-agent-egress-control]
+        url: https://code.claude.com/docs/en/settings-reference#sandbox-enabled
+        verified: "2026-10-30"
+      - id: subprocessEnvScrub
+        name: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
+        where: managed-settings.json → env.CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset
+        recommended: '"1"'
+        why: Strips credentials from the environment of every command, hook and MCP server Claude starts, so an injected command finds no keys to read.
+        mitigations: [D3-CH, D3-EI]
+        url: https://code.claude.com/docs/en/env-vars
+        verified: "2026-10-30"
+      - id: requiredMinimumVersion
+        name: requiredMinimumVersion
+        where: managed-settings.json → requiredMinimumVersion
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset
+        recommended: The oldest version carrying your last required security fix
+        why: An outdated client with a known flaw exits at startup and tells the user to update.
+        mitigations: [cap-agent-kill-switch]
+        url: https://code.claude.com/docs/en/settings-reference#requiredminimumversion
+        verified: "2026-10-30"
+      - id: sandboxAllowedDomains
+        name: sandbox.network.allowedDomains with allowManagedDomainsOnly
+        where: managed-settings.json → sandbox.network.allowedDomains, sandbox.network.allowManagedDomainsOnly
+        setVia: [mdm, adminConsole]
+        area: network
+        default: Unset / false
+        recommended: Your source control, package mirror and approved domains / true
+        why: Sandboxed commands reach only the hosts you list, and developers cannot add their own.
+        mitigations: [cap-agent-egress-control]
+        url: https://code.claude.com/docs/en/settings-reference#sandbox-network-alloweddomains
+        verified: "2026-10-30"
+      - id: corporateProxy
+        name: HTTPS_PROXY
+        where: managed-settings.json → env.HTTPS_PROXY (or the system proxy)
+        setVia: [mdm, configFile]
+        area: network
+        default: Unset (direct)
+        recommended: Your corporate proxy, with its CA in NODE_EXTRA_CA_CERTS
+        why: Claude Code's own traffic passes the firewall and SWG that hold the organisation's allowlist and tenant restriction.
+        mitigations: [cap-agent-egress-control]
+        url: https://code.claude.com/docs/en/network-config
+        verified: "2026-10-30"
+      - id: otelTelemetry
+        name: CLAUDE_CODE_ENABLE_TELEMETRY with OTEL exporters
+        where: managed-settings.json → env.CLAUDE_CODE_ENABLE_TELEMETRY, OTEL_LOGS_EXPORTER, OTEL_EXPORTER_OTLP_ENDPOINT
+        setVia: [mdm, adminConsole]
+        area: audit
+        default: Off
+        recommended: '"1", exporting OTLP logs and metrics to your collector'
+        why: Every tool decision, command and API request lands in the SIEM keyed by user and session; a managed endpoint overrides any developer-set destination.
+        mitigations: [cap-agent-tracing]
+        url: https://code.claude.com/docs/en/monitoring-usage
+        verified: "2026-10-30"
+      - id: otelLogUserPrompts
+        name: OTEL_LOG_USER_PROMPTS
+        where: managed-settings.json → env.OTEL_LOG_USER_PROMPTS
+        setVia: [mdm, adminConsole]
+        area: audit
+        default: Disabled (prompt text redacted)
+        recommended: Leave disabled
+        why: Tool decisions are logged without the prompt text, keeping client material out of the SIEM; turn on only for an investigation.
+        mitigations: [cap-agent-tracing]
+        url: https://code.claude.com/docs/en/monitoring-usage
+        verified: "2026-10-30"
+      - id: complianceApi
+        name: Compliance API (session transcripts)
+        where: claude.ai Organization settings › Data and privacy, then an API key with compliance scope
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your eDiscovery or SIEM
+        why: Claude Code session transcripts are retrievable centrally after the fact, not only from the developer's laptop.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-10-30"
+      - id: forceRemoteSettingsRefresh
+        name: forceRemoteSettingsRefresh
+        where: managed-settings.json → forceRemoteSettingsRefresh
+        setVia: [mdm]
+        area: audit
+        default: Unset (starts on cached policy)
+        recommended: "true"
+        why: A session cannot start without the latest server policy — so a fleet-wide deny pushed in an incident takes effect at the next start.
+        mitigations: [cap-agent-kill-switch]
+        url: https://code.claude.com/docs/en/settings-reference#forceremotesettingsrefresh
+        verified: "2026-10-30"
+      - id: disableRemoteControl
+        name: disableRemoteControl
+        where: managed-settings.json → disableRemoteControl
+        setVia: [mdm, adminConsole]
+        area: sharing
+        default: Remote Control off on Team and Enterprise until an Owner enables it
+        recommended: "true, unless a team needs to drive local sessions from a phone"
+        why: Stops a local session — with the developer's files and credentials — being steered from another device.
+        mitigations: []
+        url: https://code.claude.com/docs/en/settings-reference#disableremotecontrol
+        verified: "2026-10-30"
     advisories:
       - title: "CVE-2025-59536 — code execution from project files before the trust prompt (fixed 1.0.111)"
         url: >-

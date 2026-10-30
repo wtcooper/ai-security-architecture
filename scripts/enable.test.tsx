@@ -5,10 +5,10 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { EnablePanel } from "../src/components/enable/EnablePanel";
 import { ArchitecturesBrowser } from "../src/components/reference/ArchitecturesBrowser";
-import { ToolsMatrix } from "../src/components/enable/ToolsMatrix";
+import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
 import { pinnedByLayer } from "../src/components/enable/model";
-import { dataset, enablement, layerFor, toolsForArchetype, additionsFor } from "../src/lib/data";
+import { dataset, enablement, layerFor, productsForArchetype, toolsForArchetype, additionsFor } from "../src/lib/data";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
 const page = (query = "") =>
@@ -35,13 +35,31 @@ test("every pinned capability falls in exactly one layer, and use-case additions
   }
 });
 
-test("the tools grid has one row per pinned capability and one word per cell", () => {
-  const arch = dataset.archetypes.find((a) => toolsForArchetype(a.id).length > 1)!;
-  const tools = toolsForArchetype(arch.id);
-  const html = renderToStaticMarkup(<ToolsMatrix archetype={arch} tools={tools} selected={null} onPick={() => {}} />);
-  assert.equal([...html.matchAll(/<th scope="row"/g)].length, arch.mitigations.length);
-  assert.equal([...html.matchAll(/<td /g)].length, arch.mitigations.length * tools.length);
-  assert.doesNotMatch(html, /Settable|3rd-party|Not offered/, "the registry's finer grades collapse to three words");
+test("step 4 shows one pill per product and the picked product's settings, each naming its chips", () => {
+  const arch = dataset.archetypes.find((a) => productsForArchetype(a.id).some((p) => p.id === "toolClaudeCode"))!;
+  const products = productsForArchetype(arch.id);
+  const html = renderToStaticMarkup(
+    <ProductSettings archetype={arch} products={products} selected="toolClaudeCode" onPick={() => {}} lit={null} onLight={() => {}} />,
+  );
+  assert.equal([...html.matchAll(/role="tab"/g)].length, products.length, "a pill per product");
+  const cc = products.find((p) => p.id === "toolClaudeCode")!;
+  assert.equal([...html.matchAll(/id="setting-toolClaudeCode-/g)].length, cc.settings.length, "a row per setting");
+  for (const s of cc.settings) for (const id of s.mitigations) {
+    assert.ok(html.includes(`>${arch.mitigations.indexOf(id) + 1}</button>`), `${s.id} shows chip for ${id}`);
+  }
+  // Nothing is recorded in data/status.yaml, so every row reads Not enabled and the page says where to record it.
+  assert.equal([...html.matchAll(/>Not enabled</g)].length, cc.settings.length);
+  assert.match(html, /data\/status\.yaml/);
+  assert.doesNotMatch(html, /Built-in|Not in tool/, "the capability grid is gone");
+});
+
+test("a product not yet catalogued setting by setting falls back to its capability record", () => {
+  const arch = dataset.archetypes.find((a) => productsForArchetype(a.id).some((p) => !p.settings.length))!;
+  const product = productsForArchetype(arch.id).find((p) => !p.settings.length)!;
+  const html = renderToStaticMarkup(
+    <ProductSettings archetype={arch} products={productsForArchetype(arch.id)} selected={product.id} onPick={() => {}} lit={null} onLight={() => {}} />,
+  );
+  assert.match(html, /not catalogued row by row yet/);
 });
 
 test("coverage collapses to Built-in, Partial and Not in tool", () => {

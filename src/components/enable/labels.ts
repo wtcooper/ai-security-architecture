@@ -1,4 +1,4 @@
-import type { ToolCoverage, ToolSurfaceClass } from "@/lib/types";
+import type { AdoptionStatus, SettingArea, SettingVia, ToolCoverage, ToolSurfaceClass } from "@/lib/types";
 
 /** Display names for the registry's enums, in one place so every view says the same thing. */
 export const SURFACE_CLASS_META: Record<ToolSurfaceClass, { label: string; short: string }> = {
@@ -47,3 +47,35 @@ export const coverageWord = (coverage?: ToolCoverage): CoverageWord => {
     default: return "unverified";
   }
 };
+
+/** How a setting is applied, as a short tag. */
+export const SETTING_VIA_META: Record<SettingVia, { label: string; blurb: string }> = {
+  mdm: { label: "MDM", blurb: "Device policy pushed by MDM or Group Policy: a managed file, plist, registry key or browser policy." },
+  adminConsole: { label: "Admin console", blurb: "A switch in the vendor's admin console, applied to the whole tenant or a group." },
+  configFile: { label: "Config file", blurb: "A settings or configuration file, or an environment variable, read by the product." },
+  apiCli: { label: "API / CLI", blurb: "Set through the vendor's admin API, PowerShell or a command-line flag." },
+  identityProvider: { label: "IdP", blurb: "Configured in the identity provider: SSO, conditional access, SCIM." },
+  cloudPolicy: { label: "Cloud policy", blurb: "A cloud resource setting or policy: IAM, network rules, Azure Policy, an org policy constraint." },
+  code: { label: "Your code", blurb: "No setting exists: the organisation builds it into its own application." },
+};
+
+/** The admin areas a settings table is grouped by, in the order a console is worked through. */
+export const SETTING_AREA_META: Record<SettingArea, string> = {
+  identity: "Identity & access",
+  data: "Data & retention",
+  tools: "Tools & extensions",
+  network: "Network",
+  audit: "Audit & monitoring",
+  sharing: "Sharing & collaboration",
+};
+
+/** Whether the organisation has switched a product or a setting on, from data/status.yaml. */
+export const ADOPTION_META: Record<AdoptionStatus, { label: string; bg: string; border: string; text: string; dot: string }> = {
+  enabled: { label: "Enabled", bg: "#e8f6ef", border: "#a7dcc4", text: "#06845a", dot: "#10b981" },
+  testing: { label: "In testing", bg: "#fef8dc", border: "#ecd58a", text: "#a16207", dot: "#eab308" },
+  notEnabled: { label: "Not enabled", bg: "transparent", border: "#d9dee5", text: "#8792a2", dot: "#c3cad4" },
+};
+
+export const ADOPTION_HELP =
+  "Your organisation records which products and settings it has switched on under products: in data/status.yaml — " +
+  "Enabled, In testing or Not enabled. Anything not recorded reads Not enabled.";
