@@ -73,9 +73,11 @@ tools:
         url: https://docs.github.com/en/copilot/reference/ai-models/model-hosting
       - label: Sandboxes
         value: >-
-          Local sandbox uses Microsoft eXecution Container (MXC: Seatbelt on macOS 15+, bubblewrap on Linux,
-          BaseContainer on Windows 11); cloud sandbox runs on Azure Container Apps Sandboxes behind the Cloud
-          sandbox access policy (off by default). Both public preview.
+          Local sandbox uses Microsoft eXecution Container (MXC: Seatbelt on macOS 15+, bubblewrap on Linux, a
+          recent Windows 11 build on Windows — GitHub's CLI reference names the Windows backend ProcessContainer,
+          its local-sandboxing page BaseContainer); cloud sandboxes are isolated, ephemeral GitHub-hosted Linux
+          environments with no access setting of their own — the Copilot in the cloud policy (enabled by default)
+          decides whether members can use them.
         url: >-
           https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/about-cloud-and-local-sandboxes
       - label: Docs index
@@ -358,8 +360,10 @@ tools:
           - title: Keep secret files out of context
             body:
               - >-
-                Enterprise, organization and repository content-exclusion rules apply to the CLI ("Excluded files
-                are not used as context").
+                Set enterprise, organization and repository content-exclusion rules, and test them in the CLI
+                before relying on them: the CLI administration page says they apply ("Excluded files are not used
+                as context"), while the content-exclusion how-to says Copilot CLI does not support content
+                exclusion. Back them with managed Read(...) denies.
             url: >-
               https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
         note: >-
@@ -368,10 +372,13 @@ tools:
           --secret-env-vars (a flag, not a managed key), and its policy hooks are an inline attach point that can
           block or rewrite traffic once the organisation attaches a detector (userPromptSubmitted config-file
           hooks cannot change the prompt; userPromptTransformed can). Content exclusion and managed Read(...)
-          denies are path filtering, credited as data minimisation; the model still sees whatever the developer
+          denies are path filtering, credited as data minimisation; GitHub's own pages contradict each other on
+          content exclusion for the CLI — the CLI administration page, the content-exclusion concept table and
+          the supported-surfaces table say it applies, the content-exclusion how-to says the CLI does not support
+          it — so the Read(...) denies are the dependable half. The model still sees whatever the developer
           pastes.
           Local BYOK sends prompts straight to the configured provider.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAiDlp
@@ -508,8 +515,8 @@ tools:
         coverage: native
         mechanism: >-
           Managed sandbox floor: sandbox.enabled, failIfUnavailable, allowBypass, sandboxMcpServers, sandboxLspServers
-          and userPolicy.filesystem / network rules (MXC: Seatbelt, bubblewrap, BaseContainer; public preview); Cloud
-          sandbox access policy for GitHub-hosted sessions. Credential paths: deny-by-default sandbox filesystem with
+          and userPolicy.filesystem / network rules (MXC: Seatbelt, bubblewrap and a Windows 11 backend); cloud
+          sandboxes for GitHub-hosted sessions, governed by the Copilot in the cloud policy. Credential paths: deny-by-default sandbox filesystem with
           managed sandbox.auth.git / sandbox.auth.gh=false (renamed from gitAuth / ghAuth), allowDevToolAccess=false,
           userPolicy.filesystem.deniedPaths and seatbelt.keychainAccess=false; managed Read() denies for built-in
           tools
@@ -533,8 +540,9 @@ tools:
           - title: Decide on cloud sandboxes
             body:
               - >-
-                Enterprise > Policies > Sandboxes > Cloud sandbox access: Disabled (default), Let organizations
-                enable (opt-in) or Enabled by default for all organizations (opt-out).
+                Cloud sandboxes have no access setting of their own and cannot be disabled separately: the Copilot
+                in the cloud policy (enabled by default) decides whether members can start sessions in them from
+                any client, and a cloud sandbox budget limits their spend.
             url: >-
               https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/enabling-or-disabling-cloud-sandboxes-for-your-organization
           - title: Stop token injection into sandboxed commands
@@ -564,20 +572,19 @@ tools:
           Native by the rule applied to every vendor: an administrator can require an OS-enforced sandbox around
           agent-run shell commands, searches and local MCP/LSP servers, covering filesystem and network, that the user
           cannot turn off and that fails closed. Public preview; macOS 15+ (Seatbelt), Linux with bubblewrap 0.5+, and
-          Windows only on builds that supply BaseContainer (the how-to pages say a Windows Insiders build), where
-          deniedPaths and the proxy are unavailable. Outside the OS boundary: the CLI process itself, its built-in
+          Windows only on recent Windows 11 builds (25H2 with KB5124010 or 26H1 with KB5124006 or later), where
+          support for denied paths, localhost connections and proxying depends on the Windows version. Outside the OS boundary: the CLI process itself, its built-in
           file tools (a software-only policy check), remote MCP servers and detached background commands, which cannot
           be sandboxed. The GitHub Copilot app honours the same managed sandbox key. Credential paths: with the
           managed sandbox required, credential paths are OS-denied to agent commands — the filesystem policy is
           deny-by-default, gh's stored credentials and the keychain are blocked, and token injection can be locked
-          off. The managed-settings reference still names the injection keys gitAuth / ghAuth; the CLI configuration
-          reference says they were renamed to auth.git / auth.gh and the old keys are ignored — confirm with /sandbox
-          policy. Still inherited: environment variables (unless the user passes --secret-env-vars), the unsandboxed
+          off. Both the managed-settings and the CLI configuration references now name the injection keys auth.git
+          / auth.gh (renamed from gitAuth / ghAuth) — confirm the effective values with /sandbox policy. Still inherited: environment variables (unless the user passes --secret-env-vars), the unsandboxed
           CLI process with its own GitHub token and MCP OAuth tokens, remote MCP servers' credentials, built-in file
           tools (software check only), and whatever a bypassed or detached command reaches; ssh-agent socket access is
           not documented. On Windows deniedPaths cannot be used. No on-behalf-of exchange: the CLI acts as the
           signed-in developer.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentSandboxing

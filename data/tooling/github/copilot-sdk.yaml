@@ -722,9 +722,9 @@ tools:
           - title: Keep GitHub credentials out of agent-run commands
             body:
               - >-
-                When enabling the runtime sandbox through session.rpc.options.update({ sandboxConfig }), leave
-                auth.git and auth.gh false (the default) so no Git credential header or GH_TOKEN is injected into
-                sandboxed commands.
+                When enabling the runtime sandbox with the createSession / resumeSession sandboxConfig option (or
+                session.rpc.options.update), leave auth.git and auth.gh false (the default) so no Git credential
+                header or GH_TOKEN is injected into sandboxed commands.
             url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/rpc.ts
         note: >-
           Partial by the rule for this drawing: credentials can be scoped per MCP server and, through per-agent
@@ -734,7 +734,7 @@ tools:
           admin-required managed sandbox floor that no SDK guide documents for SDK sessions. No on-behalf-of
           exchange: a sub-agent acts with the parent session's authority, and the per-session token crosses the
           SDK–runtime link, which is unauthenticated unless a connectionToken is set.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityCredentialIsolation
@@ -1025,9 +1025,10 @@ tools:
       - mitigation: D3-EI
         coverage: partial
         mechanism: >-
-          Runtime sandbox via session.rpc.options.update({ sandboxConfig }) (enabled, userPolicy.filesystem,
-          sandboxMcpServers, allowBypass default false; experimental, off by default); isolated CLI per user;
-          cloud sessions on GitHub compute; in-process transport runs the runtime inside the application
+          Runtime sandbox through the sandboxConfig option on createSession / resumeSession, applied before any
+          MCP server or session tool starts (also session.rpc.options.update; enabled, userPolicy.filesystem,
+          sandboxMcpServers, allowBypass default false; marked experimental, off unless set); isolated CLI per
+          user; cloud sessions on GitHub compute; in-process transport runs the runtime inside the application
         steps:
           - title: Isolate the runtime per tenant
             body:
@@ -1038,10 +1039,11 @@ tools:
           - title: Turn on the runtime sandbox for each session
             body:
               - >-
-                Call session.rpc.options.update({ sandboxConfig: { enabled: true, userPolicy: { filesystem: {
-                readwritePaths, deniedPaths } } } }), leaving allowBypass unset (false) and sandboxMcpServers
-                true; session.rpc.sandbox.getEnforcementStatus reports whether managed policy already requires it.
-            url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/rpc.ts
+                Pass sandboxConfig: { enabled: true, sandboxMcpServers: true, userPolicy: { filesystem: {
+                readwritePaths, deniedPaths } } } to createSession and again on every cold resumeSession, leaving
+                allowBypass unset (false); a conflict with managed sandbox policy fails creation
+                (managed_sandbox_policy_conflict) instead of falling back to an unsandboxed session.
+            url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
           - title: Offload risky work to cloud sessions
             body:
               - >-
@@ -1052,13 +1054,14 @@ tools:
         note: >-
           Partial by core rule 3 and the rule for this drawing: the SDK can put agent-run commands and local MCP
           servers in the Copilot CLI's OS sandbox with bypass off by default, but the sandbox is optional, set
-          per session by the application through an experimental RPC no SDK guide documents, and off unless
-          set. getEnforcementStatus reports whether managed policy requires the sandbox, which suggests the
-          CLI's device-managed floor (sandbox.enabled, failIfUnavailable, allowBypass=false) applies on the
-          runtime host — unverified for SDK sessions. Outside the boundary: the runtime process, its built-in
+          per session by the application (the sandboxConfig session option, now documented in the SDK's MCP
+          guide; its type is still marked experimental) and off unless set. Managed sandbox policy is validated
+          against it — a conflicting configuration fails session creation — but whether the CLI's
+          device-managed floor (sandbox.enabled, failIfUnavailable, allowBypass=false) turns the sandbox on for an
+          SDK session that does not ask for it is not stated. Outside the boundary: the runtime process, its built-in
           file tools (software check), remote MCP servers and the application itself; the in-process transport
           puts the runtime on the orchestration tier. Cloud sessions are GitHub's isolation.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -1223,15 +1226,17 @@ tools:
       - mitigation: cap-agent-egress-control
         coverage: partial
         mechanism: >-
-          sandboxConfig.userPolicy.network allowedHosts / blockedHosts / allowOutbound / allowLocalNetwork via
-          session.rpc.options.update (experimental, off by default); Domain() rules in managedSettings.permissions
+          sandboxConfig.userPolicy.network allowedHosts / blockedHosts / allowOutbound / allowLocalNetwork, set
+          through the createSession / resumeSession sandboxConfig option (marked experimental, off unless set);
+          Domain() rules in managedSettings.permissions
           for URL fetches; loopback-bound headless runtime; BYOK baseUrl
         steps:
           - title: Allow-list sandboxed traffic
             body:
               - >-
-                With sandboxConfig.enabled set, list userPolicy.network.allowedHosts (a non-empty list denies
-                every unmatched host through the built-in proxy) and blockedHosts, and set allowLocalNetwork false.
+                In the sandboxConfig passed to createSession, with enabled set, list
+                userPolicy.network.allowedHosts (a non-empty list denies every unmatched host through the
+                built-in proxy) and blockedHosts, and set allowLocalNetwork false.
             url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/rpc.ts
           - title: Restrict fetches by domain
             body:
@@ -1246,12 +1251,13 @@ tools:
             url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/backend-services
         note: >-
           Partial by the rule for this drawing: the Copilot CLI's sandbox allowlist exists for SDK sessions but
-          only through an experimental RPC the application must call per session, off by default and documented
-          in no SDK guide (Windows host filtering needs a recent build). It bounds sandboxed commands and
+          only through the sandboxConfig session option the application must pass per session (documented in
+          the SDK's MCP guide, typed as experimental, off unless set; Windows host filtering needs a recent
+          build). It bounds sandboxed commands and
           sandboxed MCP servers; the runtime process's own traffic — model calls, GitHub API, anything when the
           sandbox is off — leaves under the host network policy the deployer builds. baseUrl pins only the model
           endpoint.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityEgressControl

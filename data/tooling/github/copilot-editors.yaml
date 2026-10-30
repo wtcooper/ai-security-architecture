@@ -123,14 +123,15 @@ tools:
       - title: VS Code device policies and the Copilot managed-settings plane
         body:
           - "VS Code's ADMX/plist/policy.json set carries the agent lockdown: ChatAgentMode,
-            ChatToolsAutoApprove, ChatToolsTerminalEnableAutoApprove, ChatAgentSandbox*,
-            ChatAgentNetworkFilter with allowed/denied domains, ChatMCP / ChatAllowedMcpServers /
+            ChatToolsAutoApprove, ChatToolsTerminalEnableAutoApprove, the deprecated ChatAgentSandbox* policies
+            (Local harness only), ChatAgentNetworkFilter with allowed/denied domains, ChatMCP / ChatAllowedMcpServers /
             ChatDeniedMcpServers / ChatAllowManagedMcpServersOnly, McpGalleryServiceUrl, ChatPlugins* and
             ChatStrictMarketplaces, ChatHooks / ChatAllowManagedHooksOnly, Claude3PIntegration /
             Codex3PIntegration, ChatApprovedAccountOrganizations and the CopilotOtel* export keys. Developer:
             Policy Diagnostics shows which source won."
           - "The same keys arrive through GitHub's managed-settings.json (permissions deny/ask/allow,
-            disableBypassPermissionsMode, allowedMcpServers, enabledPlugins, telemetry). Precedence in VS Code
+            disableBypassPermissionsMode, allowedMcpServers, enabledPlugins, telemetry, and the sandbox.* keys
+            that now govern sandboxing in Copilot harness sessions). Precedence in VS Code
             1.128+: MDM-delivered managed settings, then server-managed, then the local file — and a Copilot
             managed setting outranks the equivalent VS Code policy."
         links:
@@ -147,8 +148,9 @@ tools:
           Three of the four 2025–26 CVEs on this surface are prompt injection turned into code execution
           (settings-file rewrite in VS Code, shell metacharacters in the JetBrains plugin, consent-prompt
           bypass in the extension host). The vendor mitigations are approval prompts and the sandbox; the
-          enterprise controls that survive a successful injection are ChatToolsAutoApprove=false,
-          ChatAgentSandboxEnabled and the network filter.
+          enterprise controls that survive a successful injection are ChatToolsAutoApprove=false, the managed
+          sandbox.enabled key (the ChatAgentSandbox* device policies are deprecated and reach only Local harness
+          sessions) and the network filter.
       - risk: riskZombieShadowMCPServers
         note: >-
           The registry-based restriction matches on server name only and is bypassable by editing mcp.json;
@@ -562,27 +564,28 @@ tools:
       - mitigation: D3-EI
         coverage: partial
         mechanism: >-
-          VS Code ChatAgentSandboxEnabled with ChatAgentSandboxAllowUnsandboxedCommands and
-          ChatAgentSandboxAllowNetwork (terminal commands; macOS, Linux, WSL2 Preview); Agent Host SDK-shell sandbox
-          (chat.agentHost.sdkSandbox.enabled, Experimental); JetBrains enterprise-managed sandbox (preview);
-          per-server stdio MCP sandbox in mcp.json. Credential paths: the VS Code terminal sandbox keeps sensitive
-          home-directory locations away from sandboxed commands by default, with extra denyRead rules in
-          chat.agent.sandbox.fileSystem.mac / .linux; managed Read(...) denies in Agent Host sessions; otherwise the
-          agent holds the developer's credentials
+          Copilot harness (Agent Host) sessions in VS Code: the runtime sandbox (macOS Seatbelt, glibc Linux and
+          WSL2 bubblewrap, Windows BaseContainer — Experimental), required by the managed sandbox.enabled,
+          sandbox.failIfUnavailable and sandbox.allowBypass keys (enforcement Preview), with sandboxMcpServers /
+          sandboxLspServers; Local harness sessions keep the deprecated ChatAgentSandboxEnabled /
+          ChatAgentSandboxAllowUnsandboxedCommands / ChatAgentSandboxAllowNetwork device policies (macOS and
+          Linux); JetBrains enterprise-managed sandbox (preview). Credential paths: managed
+          sandbox.userPolicy.filesystem.deniedPaths, sandbox.auth.git / auth.gh and allowDevToolAccess; managed
+          Read(...) denies in Agent Host sessions; otherwise the agent holds the developer's credentials
         steps:
-          - title: Require the VS Code terminal sandbox and close its exits
+          - title: Require the sandbox for Copilot harness sessions
             body:
               - >-
-                Set ChatAgentSandboxEnabled=on, ChatAgentSandboxAllowUnsandboxedCommands=false and
-                ChatAgentSandboxAllowNetwork=false so agent terminal commands run sandboxed and cannot leave the
-                sandbox after a confirmation.
-            url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Check Agent Host sessions and Windows
+                In managed-settings.json set sandbox.enabled=true, sandbox.failIfUnavailable=true and
+                sandbox.allowBypass=false; VS Code 1.140 and later then lock the session's sandbox toggle, and
+                clients below the minimum version (VS Code 1.141.0) lose Copilot until they update.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Check Windows and the effective policy
             body:
               - >-
-                Copilot sessions on Agent Host use the Copilot SDK built-in shell, whose sandbox is Experimental
-                and enabled by chat.agentHost.sdkSandbox.enabled; Windows uses chat.agent.sandbox.enabledWindows
-                (Experimental). Run /sandbox-policy in a session to see the effective policy.
+                The Windows sandbox is Experimental; run /sandbox policy in a Copilot harness session to see the
+                effective policy, including organisation-managed restrictions (not available in Local harness
+                sessions).
             url: https://code.visualstudio.com/docs/agents/run/agent-sandboxing
           - title: Push the JetBrains sandbox policy from managed settings
             body:
@@ -591,25 +594,28 @@ tools:
                 network access, proxy, developer-tool and macOS Keychain access) and locks it under GitHub Copilot
                 > Sandbox — public preview.
             url: https://github.blog/changelog/2026-09-08-enterprise-managed-sandbox-in-copilot-for-jetbrains/
-          - title: Sandbox local stdio MCP servers
+          - title: Sandbox the MCP servers a session starts
             body:
               - >-
-                In a server entry set "sandboxEnabled": true with sandbox allowWrite paths and allowedDomains
-                (macOS and Linux); this is a user or workspace mcp.json setting, not a policy.
-            url: https://code.visualstudio.com/docs/agent-customization/mcp-servers
-          - title: Require the sandbox so credential paths stay unreadable
+                Set sandbox.sandboxMcpServers=true (and sandboxLspServers) in managed settings so servers the
+                Copilot harness starts run inside the sandbox; the per-server sandbox entry in mcp.json is a user
+                or workspace setting and is not available on Windows.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+          - title: Cover Local harness sessions too
             body:
               - >-
-                Set ChatAgentSandboxEnabled=on and ChatAgentSandboxAllowUnsandboxedCommands=false so terminal
-                commands cannot leave the sandbox after a confirmation.
-            url: https://code.visualstudio.com/docs/enterprise/ai-settings
+                Managed sandbox keys do not reach Local harness sessions; for those, the deprecated
+                ChatAgentSandboxEnabled=on and ChatAgentSandboxAllowUnsandboxedCommands=false device policies
+                still apply (macOS and Linux), and ChatTemporaryDefaultToLocalHarness should stay unset because
+                Local does not enforce runtime-only sandbox and permission settings.
+            url: https://code.visualstudio.com/docs/enterprise/policies
           - title: Deny credential directories explicitly
             body:
               - >-
-                Add denyRead entries for the SSH, cloud-CLI and browser-profile directories to
-                chat.agent.sandbox.fileSystem.mac and chat.agent.sandbox.fileSystem.linux; these are user
-                settings with no enterprise policy.
-            url: https://code.visualstudio.com/docs/agents/run/agent-sandboxing
+                Add the SSH, cloud-CLI and browser-profile directories to sandbox.userPolicy.filesystem.deniedPaths
+                in managed settings (managed denied paths add to the user's), and set sandbox.auth.git /
+                sandbox.auth.gh to false where a task needs no GitHub credentials.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
           - title: Deny credential reads in Agent Host sessions
             body:
               - >-
@@ -619,25 +625,27 @@ tools:
               https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
         note: >-
           Partial by the rule applied to every vendor: the sandbox exists but is platform-limited and only partly
-          admin-requirable. VS Code can require it by policy for Local sessions and the Agent Host custom terminal
-          tool on macOS, Linux and WSL2 (Preview), disables the session toggle when a managed setting requires it
-          without a bypass, and does not fall back unsandboxed when its dependencies are missing; the Agent Host's
-          default SDK shell and Windows sandboxes are Experimental, enabled by settings the policy reference does not
-          list. The boundary is terminal commands only: built-in file tools, extension tools, remote MCP servers, the
-          extension host and the Agent Host process run outside it, and
-          chat.agent.sandbox.retryWithAllowNetworkRequests (no policy) lets a user retry a blocked command with open
-          network. Copilot's managed sandbox key is not supported in VS Code, and GitHub's managed-settings reference
-          marks it unsupported in JetBrains too, while the 2026-09-08 changelog announces a JetBrains managed sandbox
-          in preview. Visual Studio, Xcode and Eclipse have no sandbox; a dev container or VM supplies one. Credential
-          paths: VS Code's sandbox makes "sensitive locations in your home directory" unreadable to sandboxed terminal
-          commands by default and can be required by policy on macOS, Linux and WSL2 (Preview), but the path rules are
-          user settings, the Agent Host's default SDK shell sandbox and the Windows sandbox are Experimental, and
-          built-in file tools, MCP servers and extensions sit outside the terminal sandbox. Not documented: whether
+          admin-requirable. For Copilot harness sessions VS Code's own docs say the device policies no longer
+          enforce sandboxing and administrators should require it with Copilot managed settings; GitHub's
+          managed-settings reference lists the sandbox key as supported in VS Code, while VS Code's AI-settings page
+          says the reference does not list it for VS Code — the two vendors' pages disagree, so verify the effective
+          policy with /sandbox policy before relying on it. Managed enforcement is in Preview and the Windows
+          sandbox is Experimental. The ChatAgentSandbox* device policies are deprecated and govern only Local
+          harness sessions (macOS and Linux), which auto-approve sandboxed commands. The boundary is processes the
+          session starts: terminal commands, and MCP and language servers when configured; built-in file tools,
+          extension tools, remote MCP servers, the extension host and the Agent Host process run outside it, and
+          the deprecated chat.agent.sandbox.retryWithAllowNetworkRequests still lets Local harness users retry a
+          blocked command with open network. GitHub's managed-settings reference marks the sandbox key unsupported
+          in JetBrains, while the 2026-09-08 changelog announces a JetBrains managed sandbox in preview. Visual
+          Studio, Xcode and Eclipse have no sandbox; a dev container or VM supplies one. Credential paths: managed
+          deniedPaths, auth.git / auth.gh and allowDevToolAccess bound what sandboxed commands can read in Copilot
+          harness sessions (the old chat.agent.sandbox.fileSystem.mac / .linux settings are deprecated and ignored
+          there); built-in file tools, MCP servers outside the sandbox and extensions are not covered. Not documented: whether
           environment variables, the ssh-agent socket or the git credential helper reach sandboxed commands. Tool
           calls carry the signed-in user's GitHub authority with no on-behalf-of exchange. JetBrains' managed sandbox
           (preview) adds Keychain and developer-tool access switches; Visual Studio, Xcode and Eclipse run with the
           developer's full credential set, where a dev container or VM is the external fix.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -928,8 +936,8 @@ tools:
         coverage: partial
         mechanism: >-
           permissions.disableBypassPermissionsMode and permissions.ask in managed settings (ask only in Agent
-          Host Copilot sessions); VS Code ChatToolsAutoApprove, ChatToolsEligibleForAutoApproval,
-          ChatToolsTerminalEnableAutoApprove and ChatAgentSandboxAllowAutoApprove
+          Host Copilot sessions); VS Code ChatToolsAutoApprove, ChatToolsEligibleForAutoApproval and
+          ChatToolsTerminalEnableAutoApprove
         steps:
           - title: Remove bypass and Autopilot
             body:
@@ -952,12 +960,14 @@ tools:
                 Set ChatToolsTerminalEnableAutoApprove=false and name tools under ChatToolsEligibleForAutoApproval
                 so they always prompt.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
-          - title: Stop sandboxed commands from auto-approving
+          - title: Know that Local sessions auto-approve sandboxed commands
             body:
               - >-
-                Set ChatAgentSandboxAllowAutoApprove=false so terminal commands that run inside the sandbox go
-                through the existing approval flow instead of being auto-approved.
-            url: https://code.visualstudio.com/docs/enterprise/policies
+                In Local harness sessions sandboxed terminal commands are approved automatically and
+                ChatToolsTerminalEnableAutoApprove does not prevent it; the policy reference no longer lists a
+                policy to turn that off, so keep agent work on the Copilot harness, where managed permissions.ask
+                applies.
+            url: https://code.visualstudio.com/docs/enterprise/ai-settings
         note: >-
           Partial by the rule applied to every vendor: a person approves each prompted action and sees the
           command, but auto-approval paths remain that the admin cannot remove. Agents-window worktree sessions
@@ -968,7 +978,7 @@ tools:
           permissions is an LLM judge, hidden when global auto-approval is disabled. Managed ask holds only in
           Agent Host Copilot sessions; JetBrains honours only the bypass lockout; Visual Studio, Xcode and
           Eclipse have no admin approval control beyond disabling agent mode.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityHitlControls
@@ -1275,16 +1285,24 @@ tools:
         coverage: partial
         mechanism: >-
           VS Code ChatAgentNetworkFilter with ChatAgentAllowedNetworkDomains / ChatAgentDeniedNetworkDomains
-          (fetch tool, integrated browser, and sandboxed terminal commands on macOS and Linux); Domain() managed
-          permissions in Agent Host sessions; Copilot service domains at the proxy
+          (fetch tool and integrated browser; in Copilot harness sessions also the runtime's web fetch tool);
+          managed sandbox.userPolicy.network allowedHosts / blockedHosts for sandboxed commands in Copilot harness
+          sessions; Domain() managed permissions in Agent Host sessions; Copilot service domains at the proxy
         steps:
           - title: Turn on the agent network filter with an allowlist
             body:
               - >-
-                Set ChatAgentNetworkFilter=true, ChatAgentSandboxEnabled=on, ChatAgentSandboxAllowNetwork=false,
-                ChatAgentSandboxAllowUnsandboxedCommands=false and list ChatAgentAllowedNetworkDomains (wildcards
-                allowed; an empty list blocks all), with ChatAgentDeniedNetworkDomains taking precedence.
+                Set ChatAgentNetworkFilter=true and list ChatAgentAllowedNetworkDomains (wildcards allowed), with
+                ChatAgentDeniedNetworkDomains taking precedence; in Copilot harness sessions a non-empty allowed list
+                also blocks the runtime's web fetch tool outside it, even with Allow all.
             url: https://code.visualstudio.com/docs/enterprise/ai-settings
+          - title: Limit sandboxed commands to your hosts
+            body:
+              - >-
+                With the managed sandbox required, list sandbox.userPolicy.network.allowedHosts (a non-empty list
+                blocks hosts that do not match) and blockedHosts; on Windows the sandbox relies on programs
+                honouring the proxy.
+            url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
           - title: Deny domains in managed permissions
             body:
               - >-
@@ -1301,13 +1319,14 @@ tools:
             url: https://docs.github.com/en/copilot/reference/copilot-allowlist-reference
         note: >-
           Partial by the rule applied to every vendor: the domain allowlist covers only some tools and is not
-          fully admin-lockable. It binds the fetch tool, the integrated browser and, with the sandbox on,
-          terminal commands on macOS and Linux; the Agent Host's Copilot SDK shell and the Windows sandbox get
-          all-or-nothing network only, and chat.agent.sandbox.retryWithAllowNetworkRequests (default true, no
-          policy) lets a user retry a blocked command with unrestricted network. Remote MCP servers, extensions,
+          fully admin-lockable. The network filter binds the fetch tool and the integrated browser (and, in
+          Copilot harness sessions, the runtime's web fetch); sandboxed commands in Copilot harness sessions are
+          bound by the managed sandbox host rules, which on Windows depend on programs honouring the proxy, and
+          the deprecated chat.agent.sandbox.retryWithAllowNetworkRequests still lets Local harness users retry a
+          blocked command with unrestricted network. Remote MCP servers, extensions,
           the extension host and the agent's own API traffic bypass it; JetBrains' managed sandbox (preview)
           has network switches; Visual Studio, Xcode and Eclipse rely on the host firewall or SSE.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityEgressControl
