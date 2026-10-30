@@ -9,6 +9,11 @@
 # answered 200 with no redirect; github.com/sst/opencode redirects to github.com/anomalyco/opencode; docs
 # key names were cross-checked against the docs source (packages/web/src/content/docs) and config
 # precedence against packages/opencode/src/config/config.ts on the dev branch (commit adee738).
+# 2026-10-30: settings table added from the docs source (raw.githubusercontent.com/anomalyco/opencode/dev/
+# packages/web/src/content/docs) and the live pages (200). Corrections: opencode.ai/docs/share/ now 404s and
+# share appears only in the config schema (opencode.ai/config.json); autoupdate never installs updates (notify
+# only); experimental.policies is OpenCode 2 only; the GitHub page no longer documents a share input.
+# Latest npm opencode-ai is 1.19.5 (2026-10-28).
 vendor: opencode
 family: opencode
 tools:
@@ -48,9 +53,11 @@ tools:
         a local model server, or the vendor's optional Zen and Go gateways.
       - >-
         Prompts, file contents and tool output go straight to the chosen provider; the vendor states it
-        stores no code or context. The exception is /share, which syncs the whole conversation to opencode.ai
-        and publishes it at opncd.ai/s/<id> (CDN-cached); the GitHub agent shares by default on public
-        repositories. Provider keys pasted with /connect sit in ~/.local/share/opencode/auth.json.
+        stores no code or context. The exception is session sharing (config key share: manual, auto or
+        disabled), which syncs the conversation to opencode.ai and publishes a public link; its docs page was
+        removed (opencode.ai/docs/share/ answered 404 on 2026-10-30) and the key is documented only in the
+        config schema, while the Enterprise page recommends disabling the share pages. Provider keys pasted
+        with /connect sit in ~/.local/share/opencode/auth.json.
       - >-
         No vendor control plane governs the harness. A managed tier — opencode.json in /etc/opencode,
         /Library/Application Support/opencode or %ProgramData%\opencode, and the ai.opencode.managed macOS
@@ -75,16 +82,17 @@ tools:
         value: >-
           Remote or local, bring your own key: /connect or opencode auth login for any models.dev provider,
           environment variables or a project .env file; provider.<id>.options.baseURL points a provider at a
-          proxy or gateway; enabled_providers / disabled_providers and experimental.policies (provider.use)
-          restrict which providers load.
+          proxy or gateway; enabled_providers / disabled_providers restrict which providers load
+          (experimental.policies with provider.use is OpenCode 2 only and not enforced in OpenCode 1).
         url: https://opencode.ai/docs/providers/
       - label: Data leaving the device
         value: >-
           Prompts, context files and tool output to the model provider; the model catalogue from models.dev
-          (OPENCODE_DISABLE_MODELS_FETCH); update downloads at startup (autoupdate); npm plugin installs with Bun
-          at startup; LSP server downloads (OPENCODE_DISABLE_LSP_DOWNLOAD); full conversations to opencode.ai
-          when shared (share manual by default, auto or disabled).
-        url: https://opencode.ai/docs/share/
+          (OPENCODE_DISABLE_MODELS_FETCH); an update check at startup (autoupdate; nothing is installed
+          automatically); npm plugin installs with Bun at startup; LSP server downloads
+          (OPENCODE_DISABLE_LSP_DOWNLOAD); full conversations to opencode.ai when shared (share manual, auto or
+          disabled in the config schema).
+        url: https://opencode.ai/config.json
       - label: Retention & training
         value: >-
           The vendor stores no code or context; shared conversations stay public until /unshare deletes them.
@@ -158,8 +166,8 @@ tools:
         note: >-
           A cloned repository's .opencode/plugins/ run as code at startup with no trust prompt, and its
           opencode.json can add MCP servers and npm plugins that Bun installs on launch; SECURITY.md treats
-          malicious config files as out of scope. The harness self-updates at startup unless autoupdate is
-          false.
+          malicious config files as out of scope. The harness checks for updates at startup but installs one
+          only when the developer runs /update or opencode upgrade.
       - risk: riskRogueActions
         note: >-
           Every permission defaults to allow except doom_loop and external_directory, there is no sandbox, and
@@ -167,8 +175,8 @@ tools:
       - risk: riskSensitiveDataDisclosure
         note: >-
           /share uploads the full conversation to opencode.ai and publishes it at a public link until unshared;
-          share "auto" shares every session and the GitHub agent's share input defaults to true on public
-          repositories. Set share "disabled" in the managed file. Pasted keys sit in auth.json.
+          share "auto" shares every session. Set share "disabled" in the managed file. Pasted keys sit in
+          auth.json.
       - risk: riskPromptInjection
         note: >-
           AGENTS.md (or CLAUDE.md) is read from the working directory upward, instructions accepts remote URLs,
@@ -241,7 +249,8 @@ tools:
           and a repository can add a new agent under .opencode/agents/ with its own permission block; repository
           plugins load without a prompt and a plugin tool replaces a built-in of the same name; --auto turns every
           ask into allow. Bash patterns match parsed command text. The vendor's SECURITY.md calls the permission
-          system a UX feature, not isolation. experimental.policies covers provider.use only. Remote steering: the
+          system a UX feature, not isolation. experimental.policies is not enforced in OpenCode 1 (the policies page,
+          re-read 2026-10-30, says it requires OpenCode 2). Remote steering: the
           serve API admits any caller holding the basic-auth secret (anyone, if unset) to post prompts, run
           /session/:id/shell and answer permission requests; the password is an environment variable with no
           config key, and --hostname 0.0.0.0 or --mdns on the command line overrides a managed loopback hostname; GitHub comment triggers are permission-checked
@@ -455,9 +464,9 @@ tools:
           - title: Make other providers' keys inert
             body:
               - >-
-                Set enabled_providers to the gateway's provider ID in the managed file (or experimental.policies
-                deny "*" then allow it) so keys for any other provider are not loaded.
-            url: https://opencode.ai/docs/policies/
+                Set enabled_providers to the gateway's provider ID in the managed file so keys for any other
+                provider are not loaded (experimental.policies is not enforced in OpenCode 1).
+            url: https://opencode.ai/docs/config/
           - title: Prefer short-lived cloud credentials
             body:
               - >-
@@ -476,15 +485,16 @@ tools:
       - mitigation: cap-mcp-tool-integrity
         coverage: partial
         mechanism: >-
-          autoupdate false in the managed opencode.json with opencode-ai installed at a fixed version from the
-          organisation's mirror; managed mcp.<name> definitions (command arrays naming a pinned package version,
-          remote url) that outrank same-named project entries
+          opencode-ai installed at a fixed version from the organisation's mirror (updates are never installed
+          automatically); managed mcp.<name> definitions (command arrays naming a pinned package version, remote
+          url) that outrank same-named project entries; a managed plugin list of pinned npm packages
         steps:
           - title: Pin the harness version
             body:
               - >-
-                Set autoupdate to false in the managed file and install opencode-ai at a fixed version from the
-                organisation's package mirror or artifact repository.
+                Install opencode-ai at a fixed version from the organisation's package mirror or artifact
+                repository; the config page says updates are never installed automatically, and autoupdate false
+                also stops the update check and notice.
             url: https://opencode.ai/docs/config/
           - title: Define tool servers centrally
             body:
@@ -496,9 +506,9 @@ tools:
           Partial by the rule applied to every vendor: definitions admit servers and pin nothing they serve.
           opencode hashes and re-verifies nothing: tool definitions refresh with the server, remote servers are
           unpinned, and a repository's opencode.json can add servers under new names or enable ones the
-          .well-known defaults disable. The update channel is on by default (autoupdate downloads new versions at
-          startup); a managed autoupdate false stops that, but opencode upgrade still installs on demand, the
-          config page says notify mode does not apply to package-manager installs, and the server's
+          .well-known defaults disable. The update channel only notifies: the config page (re-read 2026-10-30) says
+          updates are never installed automatically and run only through /update or opencode upgrade, which a
+          developer can still run on demand; the server's
           /global/upgrade endpoint installed arbitrary packages before 1.18.22 (GHSA-632h-h47v-g4x4). npm plugins
           install with Bun at every startup and the plugins page shows only unversioned specs. npm opencode-ai
           1.18.32 has registry signatures but no provenance attestation.
@@ -671,7 +681,7 @@ tools:
             body:
               - >-
                 Set share to "disabled" in the managed file so no conversation is synced to opencode.ai.
-            url: https://opencode.ai/docs/share/
+            url: https://opencode.ai/config.json
           - title: Send the rest through the proxy
             body:
               - >-
@@ -706,6 +716,219 @@ tools:
           ~/.npmrc, the integration point for admission scanning at the mirror. No model files are loaded unless
           the developer points a provider at a local model server.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # There is no vendor console: every key below is delivered in the managed opencode.json (or the
+    # ai.opencode.managed macOS profile) by MDM, which outranks user and project config but not
+    # OPENCODE_PERMISSION, command-line flags or repository plugins. Verified 2026-10-30.
+    settings:
+      - id: managedConfig
+        name: Managed settings
+        where: /Library/Application Support/opencode/, /etc/opencode/ or %ProgramData%\opencode → opencode.json; macOS ai.opencode.managed profile
+        setVia: [mdm]
+        area: tools
+        default: None deployed
+        recommended: The keys below in a root-owned managed file on every developer device
+        why: Managed keys win over remote, global, project and inline config, so a cloned repository's opencode.json cannot loosen them.
+        mitigations: []
+        url: https://opencode.ai/docs/config/
+        verified: "2026-10-30"
+      - id: permissionBash
+        name: permission.bash
+        where: managed opencode.json → permission.bash
+        setVia: [mdm, configFile]
+        area: tools
+        default: '"allow"'
+        recommended: '"*": "ask", with "allow" for read-only commands (git status *, ls *) and "deny" for rm -rf * and git push --force *'
+        why: Every other shell command waits for approval, and deny rules hold even under --auto.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0029, AML.M0028]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
+      - id: permissionEdit
+        name: permission.edit
+        where: managed opencode.json → permission.edit
+        setVia: [mdm, configFile]
+        area: tools
+        default: '"allow"'
+        recommended: '"*": "ask", with "deny" for opencode.json, AGENTS.md and .opencode/**'
+        why: Each write shows for approval, and the agent cannot rewrite its own config, instructions or plugins.
+        mitigations: [AML.M0029, AML.M0031, cap-agent-action-policy-enforcement]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
+      - id: permissionRead
+        name: permission.read
+        where: managed opencode.json → permission.read
+        setVia: [mdm, configFile]
+        area: data
+        default: '"allow", with *.env and *.env.* on "ask"'
+        recommended: '"allow", with "deny" for *.env and *.env.* (*.env.example allowed)'
+        why: Project secrets never enter the context, even when a developer runs --auto, which turns the default ask into allow.
+        mitigations: [AML.M0028, cap-sensitive-data-redaction]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
+      - id: permissionExternalDirectory
+        name: permission.external_directory
+        where: managed opencode.json → permission.external_directory
+        setVia: [mdm, configFile]
+        area: tools
+        default: '"ask"'
+        recommended: '"ask" — no allow entries for the home directory'
+        why: Any tool touching a path outside the working directory, ~/.ssh and ~/.aws included, needs a click; allowed paths inherit read allow.
+        mitigations: [AML.M0028]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
+      - id: permissionDoomLoop
+        name: permission.doom_loop
+        where: managed opencode.json → permission.doom_loop
+        setVia: [mdm, configFile]
+        area: tools
+        default: '"ask"'
+        recommended: '"deny"'
+        why: The same call repeated three times with identical input is stopped outright, which --auto cannot approve.
+        mitigations: [AML.M0036]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
+      - id: permissionWebfetch
+        name: permission.webfetch
+        where: managed opencode.json → permission.webfetch (and permission.websearch)
+        setVia: [mdm, configFile]
+        area: network
+        default: '"allow"'
+        recommended: '"allow"'
+        why: Web fetch is why people use the tool; it is one switch for all URLs, so regulated teams set "deny" and fetch through approved MCP servers instead.
+        mitigations: [cap-agent-egress-control]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
+      - id: agentSteps
+        name: steps
+        where: managed opencode.json → agent.build.steps (and agent.plan.steps)
+        setVia: [mdm, configFile]
+        area: tools
+        default: Unset (the agent iterates until the model stops or the user interrupts)
+        recommended: A ceiling such as 100
+        why: At the limit the agent must summarise and stop, so a runaway loop ends without someone watching it.
+        mitigations: [AML.M0036]
+        url: https://opencode.ai/docs/agents/
+        verified: "2026-10-30"
+      - id: subagentDepth
+        name: subagent_depth
+        where: managed opencode.json → subagent_depth
+        setVia: [mdm, configFile]
+        area: tools
+        default: "1"
+        recommended: "1"
+        why: Subagents cannot launch further subagents, which bounds fan-out and the tool authority each run inherits.
+        mitigations: [AML.M0036]
+        url: https://opencode.ai/docs/config/
+        verified: "2026-10-30"
+      - id: enabledProviders
+        name: enabled_providers
+        where: managed opencode.json → enabled_providers
+        setVia: [mdm, configFile]
+        area: data
+        default: Unset (every provider with credentials loads)
+        recommended: The organisation gateway's provider id only
+        why: Keys for any other provider, from /connect, the environment or a project .env, are not loaded, so prompts go only where the organisation inspects them.
+        mitigations: [D3-CH, cap-agent-egress-control, cap-sensitive-data-redaction, cap-input-guardrails]
+        url: https://opencode.ai/docs/config/
+        verified: "2026-10-30"
+      - id: providerBaseUrl
+        name: baseURL
+        where: managed opencode.json → provider.<id>.options.baseURL
+        setVia: [mdm, configFile]
+        area: data
+        default: The provider's public endpoint
+        recommended: The organisation's AI gateway URL
+        why: Model traffic passes the gateway's DLP, injection screening and budgets before any provider sees it.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails, cap-agent-egress-control]
+        url: https://opencode.ai/docs/providers/
+        verified: "2026-10-30"
+      - id: providerApiKey
+        name: apiKey
+        where: managed opencode.json → provider.<id>.options.apiKey
+        setVia: [mdm, configFile]
+        area: identity
+        default: Unset (keys from /connect, the environment or .env)
+        recommended: '"{env:VAR}" or "{file:path}" pointing at a short-lived gateway token the credential helper writes'
+        why: No long-lived key is written into config or auth.json; a developer can still paste a key, so the gateway should reject long-lived ones.
+        mitigations: [D3-CH]
+        url: https://opencode.ai/docs/config/
+        verified: "2026-10-30"
+      - id: mcpServers
+        name: mcp
+        where: managed opencode.json → mcp.<name>
+        setVia: [mdm, configFile]
+        area: tools
+        default: Unset
+        recommended: The approved servers, local commands naming an exact package version
+        why: Managed definitions outrank same-named project entries, so a repository cannot repoint an approved server; it can still add servers under new names.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity]
+        url: https://opencode.ai/docs/mcp-servers/
+        verified: "2026-10-30"
+      - id: pluginList
+        name: plugin
+        where: managed opencode.json → plugin
+        setVia: [mdm, configFile]
+        area: tools
+        default: Unset
+        recommended: The organisation's audit and inspection plugin and approved packages at pinned versions, from the private npm registry
+        why: Its tool.execute.before and after hooks are where tool calls are logged and inspected; repository .opencode/plugins still load without a prompt.
+        mitigations: [cap-agent-tracing, cap-input-guardrails, cap-sensitive-data-redaction, cap-agent-tool-registry, cap-mcp-tool-integrity]
+        url: https://opencode.ai/docs/plugins/
+        verified: "2026-10-30"
+      - id: share
+        name: share
+        where: managed opencode.json → share
+        setVia: [mdm, configFile]
+        area: sharing
+        recommended: '"disabled"'
+        why: No session is uploaded to opencode.ai and published at a public link; the vendor's enterprise page also recommends disabling the share pages.
+        mitigations: [cap-agent-egress-control]
+        url: https://opencode.ai/config.json
+        verified: "2026-10-30"
+      - id: snapshot
+        name: snapshot
+        where: managed opencode.json → snapshot
+        setVia: [mdm, configFile]
+        area: tools
+        default: "true"
+        recommended: "true"
+        why: Agent edits, to instruction and config files included, can be undone and reverted within the session.
+        mitigations: [AML.M0031]
+        url: https://opencode.ai/docs/config/
+        verified: "2026-10-30"
+      - id: serverHostname
+        name: server.hostname
+        where: managed opencode.json → server.hostname (and server.mdns)
+        setVia: [mdm, configFile]
+        area: network
+        default: 127.0.0.1 (0.0.0.0 when mdns is on and no hostname is set); mdns false
+        recommended: 127.0.0.1, mdns false
+        why: The local server can post prompts and run shell commands, so it stays off the network; --hostname on the command line still overrides it.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://opencode.ai/docs/config/
+        verified: "2026-10-30"
+      - id: serverPassword
+        name: OPENCODE_SERVER_PASSWORD
+        where: environment variable OPENCODE_SERVER_PASSWORD for opencode serve and opencode web
+        setVia: [mdm, apiCli]
+        area: identity
+        default: Unset (the server is unauthenticated)
+        recommended: A random per-launch secret set by the wrapper that starts the server
+        why: A web page or local process cannot drive the server's shell and PTY endpoints without it, the path behind CVE-2026-22812.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://opencode.ai/docs/server/
+        verified: "2026-10-30"
+      - id: autoMode
+        name: --auto
+        where: opencode --auto, opencode run --auto, or the TUI's Enable auto-approve permissions
+        setVia: [apiCli]
+        area: tools
+        default: "Off"
+        recommended: Not used; the deny rules above cover what must never run
+        why: Auto mode approves every request that is not an explicit deny, and no config key removes it.
+        mitigations: [AML.M0029]
+        url: https://opencode.ai/docs/permissions/
+        verified: "2026-10-30"
     advisories:
       - title: >-
           GHSA-632h-h47v-g4x4: cross-site /global/upgrade request on opencode serve installs an arbitrary npm
@@ -725,7 +948,7 @@ tools:
     sources:
       - title: opencode docs index
         url: https://opencode.ai/docs/
-      - title: Config (precedence, managed settings, autoupdate, share)
+      - title: Config (precedence, managed settings, autoupdate)
         url: https://opencode.ai/docs/config/
       - title: Permissions
         url: https://opencode.ai/docs/permissions/
@@ -739,8 +962,8 @@ tools:
         url: https://opencode.ai/docs/server/
       - title: Web
         url: https://opencode.ai/docs/web/
-      - title: Share
-        url: https://opencode.ai/docs/share/
+      - title: Config schema (share, autoupdate)
+        url: https://opencode.ai/config.json
       - title: CLI
         url: https://opencode.ai/docs/cli/
       - title: Providers

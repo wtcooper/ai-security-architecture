@@ -14,6 +14,10 @@
 # text, gateway/sandboxing and gateway/config-agents/sandbox all say "off". The advisories API lists 722
 # published advisories; 75 new since 2026-09-10, all published 2026-09-11 (30 high, none critical); the
 # five high ones that touch a pinned control are listed below. Latest release v2026.9.6 (2026-09-23).
+# 2026-10-30: settings table added; each key re-read on its docs.openclaw.ai page (.md variant). Corrections:
+# agents.defaults.timeoutSeconds is now documented as a budget per model attempt (fallbacks get a fresh one);
+# the tools/mcp page no longer documents a bundle-mcp tools.deny entry; askFallback lives in the host exec
+# approvals file (defaults.askFallback), not under tools.exec.
 vendor: openclaw
 family: OpenClaw
 tools:
@@ -1010,9 +1014,9 @@ tools:
             url: https://docs.openclaw.ai/tools/skills-config
           - title: Filter MCP tools
             body:
-              - Restrict each server with mcp.servers.<name>.toolFilter.include or exclude, check it with
-                `openclaw mcp doctor <name> --probe`, and put bundle-mcp in tools.deny when no MCP server is
-                needed.
+              - Restrict each server with mcp.servers.<name>.toolFilter.include or exclude and check it with
+                `openclaw mcp doctor <name> --probe`; set the server's approval to prompt with `openclaw mcp
+                configure <server> --approval prompt`.
             url: https://docs.openclaw.ai/tools/mcp
         note: >-
           Partial by the rule applied to every vendor: an allowlist admits servers but pins nothing they
@@ -1146,7 +1150,8 @@ tools:
       - mitigation: AML.M0036
         coverage: partial
         mechanism: >-
-          agents.defaults.timeoutSeconds (elapsed run budget, default 172800 s, aborting on expiry),
+          agents.defaults.timeoutSeconds (elapsed budget per model attempt, default 172800 s; each fallback model
+          gets a fresh budget, so a whole run can exceed it),
           tools.loopDetection (off by default; blocks a repeating tool batch, then ends the run), sub-agent
           maxConcurrent 8, maxChildrenPerAgent 5 and maxSpawnDepth (default 5), tools.exec.timeoutSeconds, and
           cadence for self-waking turns (heartbeat every and activeHours, automation pacing.min / pacing.max,
@@ -1155,7 +1160,7 @@ tools:
           - title: Cap each run's lifetime
             body:
               - Set agents.defaults.timeoutSeconds (default 172800, 48 hours; 0 is unlimited) to the longest
-                run you accept; approval waits pause the budget.
+                model attempt you accept; each fallback model starts a fresh budget.
             url: https://docs.openclaw.ai/concepts/agent-loop
           - title: Break tool loops
             body:
@@ -1678,6 +1683,415 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://docs.openclaw.ai/llms.txt
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The "admin" is the person who runs the Gateway: nearly every row is a key in ~/.openclaw/openclaw.json
+    # (openclaw config set), a channel or approvals file, or an openclaw CLI command. Verified 2026-10-30.
+    settings:
+      - id: gatewayBind
+        name: gateway.bind
+        where: openclaw.json → gateway.bind
+        setVia: [configFile]
+        area: network
+        default: '"loopback" on regular hosts ("auto" in a detected container)'
+        recommended: '"loopback", reached remotely through Tailscale Serve or an SSH tunnel'
+        why: The Gateway is the agent's control plane; a LAN or 0.0.0.0 bind is how thousands of instances ended up exposed.
+        mitigations: [D3-MAN]
+        url: https://docs.openclaw.ai/gateway/config-gateway
+        verified: "2026-10-30"
+      - id: gatewayAuthMode
+        name: gateway.auth.mode
+        where: openclaw.json → gateway.auth.mode (with gateway.auth.token)
+        setVia: [configFile]
+        area: identity
+        default: Onboarding generates a token
+        recommended: '"token", with a long generated gateway.auth.token'
+        why: Every client, the Control UI included, must present the secret; "none" leaves the control plane open to anything that reaches the port.
+        mitigations: [D3-MAN]
+        url: https://docs.openclaw.ai/gateway/config-gateway
+        verified: "2026-10-30"
+      - id: controlUiAllowedOrigins
+        name: gateway.controlUi.allowedOrigins
+        where: openclaw.json → gateway.controlUi.allowedOrigins
+        setVia: [configFile]
+        area: network
+        default: gateway.publicOrigin when set
+        recommended: The exact Control UI origin
+        why: A web page from any other origin cannot open a Gateway connection from your browser.
+        mitigations: [D3-MAN]
+        url: https://docs.openclaw.ai/gateway/config-gateway
+        verified: "2026-10-30"
+      - id: nodesAutoApproveLocal
+        name: gateway.nodes.pairing.autoApproveLocal
+        where: openclaw.json → gateway.nodes.pairing.autoApproveLocal
+        setVia: [configFile]
+        area: identity
+        default: "true"
+        recommended: "false"
+        why: Pairing, role upgrades and scope upgrades from local connections need your decision instead of being approved silently.
+        mitigations: [D3-MAN, D3-APA]
+        url: https://docs.openclaw.ai/gateway/config-gateway
+        verified: "2026-10-30"
+      - id: dmPolicy
+        name: dmPolicy
+        where: openclaw.json → channels.<channel>.dmPolicy
+        setVia: [configFile]
+        area: identity
+        default: '"pairing"'
+        recommended: '"pairing"'
+        why: Unknown senders get a code and are ignored until you approve them; "open" lets anyone who finds the bot instruct it.
+        mitigations: [D3-APA]
+        url: https://docs.openclaw.ai/gateway/security/access-control
+        verified: "2026-10-30"
+      - id: allowFrom
+        name: allowFrom
+        where: openclaw.json → channels.<channel>.allowFrom (and groupAllowFrom)
+        setVia: [configFile]
+        area: identity
+        default: Unset
+        recommended: Your own sender ids only, never "*"
+        why: Only you can message the agent on each bridge; approvals persist until removed, so review the list.
+        mitigations: [D3-APA]
+        url: https://docs.openclaw.ai/gateway/security/access-control
+        verified: "2026-10-30"
+      - id: commandsAllowFrom
+        name: commands.allowFrom
+        where: openclaw.json → commands.allowFrom
+        setVia: [configFile]
+        area: identity
+        default: Unset
+        recommended: Your own sender ids per provider
+        why: When set it is the only authority for commands and directives such as /exec, so no other room member can move exec onto the host.
+        mitigations: [D3-APA, cap-agent-action-policy-enforcement]
+        url: https://docs.openclaw.ai/gateway/config-channels/commands
+        verified: "2026-10-30"
+      - id: commandsBash
+        name: commands.bash
+        where: openclaw.json → commands.bash
+        setVia: [configFile]
+        area: tools
+        default: "false"
+        recommended: "false"
+        why: Keeps ! (/bash) chat commands from running shell commands directly on the Gateway host.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://docs.openclaw.ai/gateway/config-channels/commands
+        verified: "2026-10-30"
+      - id: sandboxMode
+        name: agents.defaults.sandbox.mode
+        where: openclaw.json → agents.defaults.sandbox.mode
+        setVia: [configFile]
+        area: tools
+        default: '"off"'
+        recommended: '"all"'
+        why: Exec and file tools of every session run in the container; "non-main" leaves your own DM session on the host.
+        mitigations: [D3-EI]
+        url: https://docs.openclaw.ai/gateway/config-agents/sandbox
+        verified: "2026-10-30"
+      - id: sandboxScope
+        name: agents.defaults.sandbox.scope
+        where: openclaw.json → agents.defaults.sandbox.scope
+        setVia: [configFile]
+        area: tools
+        default: '"agent"'
+        recommended: '"agent"'
+        why: Each agent keeps its own container and workspace, so one agent's sessions cannot read or poison another's; "shared" removes that.
+        mitigations: [D3-EI, AML.M0031]
+        url: https://docs.openclaw.ai/gateway/security/tool-permissions
+        verified: "2026-10-30"
+      - id: sandboxDockerNetwork
+        name: agents.defaults.sandbox.docker.network
+        where: openclaw.json → agents.defaults.sandbox.docker.network
+        setVia: [configFile]
+        area: network
+        default: '"none"'
+        recommended: '"none" ("bridge" only for an agent whose task needs outbound access)'
+        why: Sandboxed commands cannot reach the network at all, which closes exfiltration from inside the container.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        url: https://docs.openclaw.ai/gateway/config-agents/sandbox
+        verified: "2026-10-30"
+      - id: elevatedEnabled
+        name: tools.elevated.enabled
+        where: openclaw.json → tools.elevated.enabled
+        setVia: [configFile]
+        area: tools
+        recommended: "false"
+        why: Exec calls cannot leave the sandbox onto the Gateway or node host, and /elevated cannot skip prompts.
+        mitigations: [D3-EI, AML.M0029]
+        url: https://docs.openclaw.ai/tools/elevated
+        verified: "2026-10-30"
+      - id: execMode
+        name: tools.exec.mode
+        where: openclaw.json → tools.exec.mode
+        setVia: [configFile]
+        area: tools
+        default: Full host exec with no prompts (exec.security full, exec.ask off on gateway and node hosts)
+        recommended: '"ask"'
+        why: Allowlisted commands run and every other host command waits for you, bound to its argv, cwd and binary; "auto" puts a model in that seat.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0029, AML.M0028]
+        url: https://docs.openclaw.ai/tools/exec-approvals
+        verified: "2026-10-30"
+      - id: askFallback
+        name: askFallback
+        where: host exec approvals file → defaults.askFallback
+        setVia: [configFile]
+        area: tools
+        default: '"deny"'
+        recommended: '"deny"'
+        why: A prompt nobody can answer, in a scheduled or unattended turn, blocks the command instead of running it.
+        mitigations: [AML.M0029]
+        url: https://docs.openclaw.ai/tools/exec-approvals
+        verified: "2026-10-30"
+      - id: strictInlineEval
+        name: tools.exec.strictInlineEval
+        where: openclaw.json → tools.exec.strictInlineEval
+        setVia: [configFile]
+        area: tools
+        default: "false"
+        recommended: "true"
+        why: An allowlisted interpreter still asks for -c / -e inline code, so python or node on the list is not a blanket pass.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://docs.openclaw.ai/tools/exec-approvals
+        verified: "2026-10-30"
+      - id: toolsProfile
+        name: tools.profile
+        where: openclaw.json → tools.profile
+        setVia: [configFile]
+        area: tools
+        default: '"full" (set by local onboarding)'
+        recommended: '"messaging", adding the tools you use through tools.allow'
+        why: The full profile pre-approves every tool; a narrower profile omits the runtime, file and openclaw config tools a chat agent does not need.
+        mitigations: [AML.M0028]
+        url: https://docs.openclaw.ai/gateway/config-tools/tool-policy
+        verified: "2026-10-30"
+      - id: toolsDeny
+        name: tools.deny
+        where: openclaw.json → tools.deny
+        setVia: [configFile]
+        area: tools
+        default: Unset
+        recommended: '["group:automation"], plus gateway, cron, sessions_spawn and sessions_send on agents that read untrusted content'
+        why: The agent cannot rewrite its own sandbox or tool policy through the openclaw tool, which a Full Access run applies without asking; deny wins over every allow.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, D3-EI]
+        url: https://docs.openclaw.ai/gateway/config-tools/tool-policy
+        verified: "2026-10-30"
+      - id: fsWorkspaceOnly
+        name: tools.fs.workspaceOnly
+        where: openclaw.json → tools.fs.workspaceOnly
+        setVia: [configFile]
+        area: data
+        default: Unset (optional)
+        recommended: "true"
+        why: read, write, edit and apply_patch stay inside the workspace, so file tools cannot pick up ~/.ssh or the Gateway's own state.
+        mitigations: [AML.M0028, cap-sensitive-data-redaction]
+        url: https://docs.openclaw.ai/gateway/security/tool-permissions
+        verified: "2026-10-30"
+      - id: mcpApproval
+        name: --approval
+        where: openclaw mcp configure <server> --approval approve|prompt|auto
+        setVia: [apiCli]
+        area: tools
+        default: Derived from the permission posture (no prompt under full)
+        recommended: prompt, for every server that can write
+        why: That server's tools keep asking regardless of stored Allow Always grants.
+        mitigations: [AML.M0029]
+        url: https://docs.openclaw.ai/tools/mcp
+        verified: "2026-10-30"
+      - id: pluginsAllow
+        name: plugins.allow
+        where: openclaw.json → plugins.allow (plugins.deny wins over it)
+        setVia: [configFile]
+        area: tools
+        default: Unset (discovered non-bundled plugins may auto-load)
+        recommended: The plugin ids you trust
+        why: A plugin outside the list cannot load, and the startup warning and security audit flag anything that tried.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, cap-shadow-ai-discovery]
+        url: https://docs.openclaw.ai/tools/plugin
+        verified: "2026-10-30"
+      - id: installPolicy
+        name: security.installPolicy
+        where: openclaw.json → security.installPolicy (enabled, targets, exec.command)
+        setVia: [configFile]
+        area: tools
+        default: enabled false
+        recommended: Enabled, exec.command pointing at your scanner for skill and plugin installs
+        why: Every skill or plugin install is checked by your own scanner before it commits; --force never overrides a block.
+        mitigations: [D3-FA, cap-mcp-tool-integrity]
+        url: https://docs.openclaw.ai/tools/skills-config
+        verified: "2026-10-30"
+      - id: allowUnsafeExternalContent
+        name: allowUnsafeExternalContent
+        where: openclaw.json → hooks.mappings[].allowUnsafeExternalContent and hooks.gmail.allowUnsafeExternalContent
+        setVia: [configFile]
+        area: tools
+        default: Unset
+        recommended: Unset
+        why: Mail, webhook and fetched content keeps its untrusted-content boundary markers; the docs say keep these off in production.
+        mitigations: [cap-input-guardrails]
+        url: https://docs.openclaw.ai/gateway/security/prompt-injection
+        verified: "2026-10-30"
+      - id: bedrockGuardrail
+        name: guardrail
+        where: openclaw.json → plugins.entries.amazon-bedrock.config.guardrail (guardrailIdentifier, guardrailVersion)
+        setVia: [configFile]
+        area: data
+        default: Unset
+        recommended: Your Bedrock Guardrail, on deployments whose provider is Amazon Bedrock
+        why: AWS screens every model input and output for harmful content and sensitive information; no other provider path has a built-in equivalent.
+        mitigations: [cap-output-guardrails, cap-input-guardrails, cap-sensitive-data-redaction]
+        url: https://docs.openclaw.ai/providers/bedrock
+        verified: "2026-10-30"
+      - id: redactPatterns
+        name: logging.redactPatterns
+        where: openclaw.json → logging.redactPatterns
+        setVia: [configFile]
+        area: data
+        default: Unset (the built-in pattern list)
+        recommended: Unset, unless you add internal token formats — then copy in the defaults you still want
+        why: Logs, Control UI tool events and diagnostics exports are masked for known secret patterns; setting the key replaces the default list.
+        mitigations: [cap-sensitive-data-redaction]
+        url: https://docs.openclaw.ai/gateway/logging
+        verified: "2026-10-30"
+      - id: memoryExcludeExternalSources
+        name: hookExternalContentSources
+        where: openclaw.json → plugins.entries.memory-core.config.memoryPolicy.excludeSessions.hookExternalContentSources
+        setVia: [configFile]
+        area: data
+        default: "[]"
+        recommended: Every external-content hook source you use, for example ["email", "gmail"]
+        why: Sessions fed by mail and webhooks never enter dreaming ingestion, so injected text cannot be promoted into long-term memory.
+        mitigations: [AML.M0031]
+        url: https://docs.openclaw.ai/reference/memory-config
+        verified: "2026-10-30"
+      - id: secretRefs
+        name: secrets.providers
+        where: openclaw.json → secrets.providers (exec provider), referenced as { source, provider, id } from credential fields
+        setVia: [configFile]
+        area: identity
+        default: Unset (plaintext keys in config, .env or the unencrypted store)
+        recommended: An exec provider for your password manager, with every provider key a SecretRef
+        why: Keys stay out of openclaw.json and the agent's context; the built-in store is not encrypted at rest.
+        mitigations: [D3-CH]
+        url: https://docs.openclaw.ai/gateway/secrets/secretref-contract
+        verified: "2026-10-30"
+      - id: secretEgressProxy
+        name: secrets.egressProxy.enabled
+        where: openclaw config set secrets.egressProxy.enabled true, with secrets stored using --allow-host
+        setVia: [configFile, apiCli]
+        area: identity
+        default: "false"
+        recommended: true, each stored secret bound to its API host
+        why: Host commands get a sentinel the proxy swaps for the real key only on the bound host, so a leaked or exfiltrated value is useless elsewhere.
+        mitigations: [D3-CTS, D3-CH]
+        url: https://docs.openclaw.ai/gateway/secrets/secret-store-and-egress
+        verified: "2026-10-30"
+      - id: egressAllowedHosts
+        name: secrets.egressProxy.allowedHosts
+        where: openclaw.json → secrets.egressProxy.allowedHosts
+        setVia: [configFile]
+        area: network
+        default: Omitted (unrestricted)
+        recommended: The hosts your host-exec work needs
+        why: Gateway-hosted exec traffic that honours the proxy reaches only listed destinations; raw sockets can still bypass it.
+        mitigations: [cap-agent-egress-control]
+        url: https://docs.openclaw.ai/gateway/secrets/secret-store-and-egress
+        verified: "2026-10-30"
+      - id: ssrfPrivateNetwork
+        name: tools.web.fetch.ssrfPolicy.dangerouslyAllowPrivateNetwork
+        where: openclaw.json → tools.web.fetch.ssrfPolicy.dangerouslyAllowPrivateNetwork
+        setVia: [configFile]
+        area: network
+        default: "false"
+        recommended: false, with single internal hosts named in allowedHostnames if needed
+        why: web_fetch cannot be pointed at the home network, router or cloud metadata endpoints.
+        mitigations: [cap-agent-egress-control]
+        url: https://docs.openclaw.ai/tools/web-fetch
+        verified: "2026-10-30"
+      - id: runTimeout
+        name: agents.defaults.timeoutSeconds
+        where: openclaw.json → agents.defaults.timeoutSeconds
+        setVia: [configFile]
+        area: tools
+        default: 172800 (48 hours)
+        recommended: The longest run you accept, for example 7200
+        why: A model attempt that keeps going is aborted at the budget; each fallback model gets a fresh one, so a run can exceed it.
+        mitigations: [AML.M0036]
+        url: https://docs.openclaw.ai/concepts/agent-loop
+        verified: "2026-10-30"
+      - id: loopDetection
+        name: tools.loopDetection.enabled
+        where: openclaw.json → tools.loopDetection.enabled
+        setVia: [configFile]
+        area: tools
+        default: "false"
+        recommended: "true"
+        why: Repeating tool patterns warn, then the batch is blocked and the run ends, instead of spending until the timeout.
+        mitigations: [AML.M0036]
+        url: https://docs.openclaw.ai/tools/loop-detection
+        verified: "2026-10-30"
+      - id: otelExport
+        name: diagnostics.otel.enabled
+        where: openclaw.json → diagnostics.otel (enabled, endpoint, traces, sampleRate), with the diagnostics-otel plugin allowed
+        setVia: [configFile]
+        area: audit
+        default: "false"
+        recommended: true, traces to your own collector at sampleRate 1.0
+        why: Every run's model calls and tool executions, with parameters, land off the host where an unsandboxed agent cannot edit them.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.openclaw.ai/gateway/config-observability
+        verified: "2026-10-30"
+      - id: otelCaptureContent
+        name: diagnostics.otel.captureContent
+        where: openclaw.json → diagnostics.otel.captureContent
+        setVia: [configFile]
+        area: data
+        default: "Off"
+        recommended: "Off"
+        why: Spans carry tool names and parameters without message and tool-result text, so the collector does not become a second copy of every conversation.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.openclaw.ai/gateway/config-observability
+        verified: "2026-10-30"
+      - id: auditExecutionIdentity
+        name: logging.audit.executionIdentity
+        where: openclaw.json → logging.audit.executionIdentity (logging.audit.enabled stays true)
+        setVia: [configFile]
+        area: audit
+        default: "false"
+        recommended: "true"
+        why: The local ledger keeps who triggered each execution and the approval or hook decision behind it, queryable with openclaw audit.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.openclaw.ai/gateway/config-observability
+        verified: "2026-10-30"
+      - id: telemetryEnabled
+        name: telemetry.enabled
+        where: openclaw.json → telemetry.enabled
+        setVia: [configFile]
+        area: data
+        default: "false"
+        recommended: "false"
+        why: Configured channel and provider names stay off the daily update check.
+        mitigations: []
+        url: https://docs.openclaw.ai/gateway/config-observability
+        verified: "2026-10-30"
+      - id: cronEnabled
+        name: cron.enabled
+        where: openclaw.json → cron.enabled
+        setVia: [configFile]
+        area: tools
+        default: "true"
+        recommended: true — the switch to set false, before any restart, in an incident
+        why: false pauses every stored automation without deleting it, so a compromised schedule does not resume when the Gateway comes back.
+        mitigations: [cap-agent-kill-switch]
+        url: https://docs.openclaw.ai/gateway/config-automation
+        verified: "2026-10-30"
+      - id: gatewayStop
+        name: openclaw gateway stop
+        where: openclaw gateway stop (--force in a non-interactive shell); openclaw gateway uninstall
+        setVia: [apiCli]
+        area: tools
+        recommended: The incident stop, followed by uninstall if the service must not return at next login
+        why: It drains work, then cancels the Gateway's remaining runs, which also halts heartbeats and automations running inside it.
+        mitigations: [cap-agent-kill-switch]
+        url: https://docs.openclaw.ai/cli/gateway/service
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-25253 — Control UI auto-connected to an attacker-supplied gatewayUrl and sent the gateway

@@ -9,6 +9,11 @@
 # www.npmjs.com/package/cline returned 403 and the VS Code Marketplace item page 404 to curl (versions read from
 # the npm registry and the Marketplace gallery API); CLINE_NO_AUTO_UPDATE, the extension hook event names and
 # the remote-config globalRules / kanbanEnabled fields appear only in the cline/cline source, not in the docs.
+# 2026-10-30: settings table added; re-read docs.cline.bot pages (.md variants, all 200). Corrections: telemetry
+# is now documented as on by default and the org setting as a lock (extensions only); CLINE_COMMAND_PERMISSIONS
+# has left the docs (the CLI reference says there is no command allow/deny list); the remote-configuration
+# overview now carries a per-product support table (CLI: rules and workflows only; YOLO and Kanban: none);
+# --retries defaults to 3.
 vendor: cline
 family: Cline
 tools:
@@ -38,8 +43,9 @@ tools:
         provider key (30+ providers, local runtimes included) or the Cline provider billed in Cline credits."
       - "Prompts, file contents and tool output go straight to the chosen provider, or through Cline when the
         Cline provider is used. Task history, checkpoints (a shadow Git repository) and provider credentials
-        stay under ~/.cline on the device. Anonymous usage telemetry goes to Cline when the Cline Telemetry
-        toggle is on."
+        stay under ~/.cline on the device. Usage and error telemetry, identifying the account and organisation
+        when signed in, goes to Cline by default until Allow error and usage reporting (telemetryOptOut in the
+        CLI) is turned off."
       - "The Open Source tier ships no organisation control plane. Cline Enterprise adds one: SSO through WorkOS
         AuthKit, Owner / Admin / Member roles, and a remote configuration held at app.cline.bot that the client
         applies to members signed in to the organisation — provider and model pinning, yoloModeAllowed, MCP
@@ -65,10 +71,12 @@ tools:
         url: https://docs.cline.bot/enterprise-solutions/configuration/remote-configuration/overview
       - label: Data leaving the device
         value: >-
-          Prompts, rules, file contents and tool results to the model endpoint; anonymous feature, task and error
-          events to Cline while Cline Telemetry is on (the docs call it opt-in; remote-config telemetryEnabled
-          sets a default a user can still turn off); on Enterprise, optional OTLP export to the organisation's
-          collector and Prompt Storage of each task's full conversation to its S3 or R2 bucket.
+          Prompts, rules, file contents and tool results to the model endpoint; feature, task, token-count and
+          error events to Cline, on by default in every product (with the Cline and ClinePass providers they can
+          include the prompt and response); remote-config telemetryEnabled (Cline Telemetry) locks the choice in
+          the VS Code and JetBrains extensions, while the CLI and Cline Desktop ignore it; on Enterprise,
+          optional OTLP export to the organisation's collector and Prompt Storage of each task's full
+          conversation to its S3 or R2 bucket.
         url: https://docs.cline.bot/enterprise-solutions/monitoring/telemetry
       - label: Retention & training
         value: >-
@@ -106,7 +114,10 @@ tools:
             openTelemetry* export fields and enterpriseTelemetry.promptUploading. The schema in the source also
             carries globalRules, globalWorkflows and globalSkills (alwaysEnabled) and kanbanEnabled. The YOLO page
             says the policy cannot be overridden by users; the OpenTelemetry override page says environment
-            variables win over it."
+            variables win over it. The overview's support table (re-read 2026-10-30) applies providers, MCP
+            policy, telemetry and the no-personal-account lock only in the VS Code and JetBrains extensions, the
+            CLI only rules and workflows, Cline Desktop none, and lists Allow YOLO mode and Allow Kanban as
+            supported in no product; Admins and Owners can choose Opt out of remote config."
         links:
           - title: Enterprise provider configuration
             url: https://docs.cline.bot/enterprise-solutions/configuration/remote-configuration/overview
@@ -119,8 +130,9 @@ tools:
           - "Global state lives in ~/.cline (data/settings/providers.json for provider keys, global-settings.json,
             cline_mcp_settings.json, plus rules, hooks, skills, agents, plugins and cron specs) and
             ~/Documents/Cline; project configuration in .cline/ and .clinerules/ travels with the repository.
-            Workspace rules win over global ones on conflict. CLINE_DATA_DIR, --config and --data-dir relocate the
-            store, and CLINE_COMMAND_PERMISSIONS carries the only rule language for shell commands."
+            Workspace rules win over global ones on conflict. CLINE_DIR, CLINE_DATA_DIR, --config and --data-dir
+            relocate the store. CLINE_COMMAND_PERMISSIONS is no longer documented (2026-10-30): the CLI reference
+            says the CLI has no allow or deny list for shell commands and points to a PreToolUse hook instead."
         links:
           - title: Config
             url: https://docs.cline.bot/getting-started/config
@@ -165,19 +177,10 @@ tools:
       - mitigation: cap-agent-action-policy-enforcement
         coverage: partial
         mechanism: >-
-          CLINE_COMMAND_PERMISSIONS (JSON allow / deny globs and allowRedirects over shell commands, deny wins),
-          the per-category Auto Approve toggles, PreToolUse hook scripts that cancel a call, and the Enterprise
-          remote-config yoloModeAllowed false; remote steering admitted by cline connect --allowed-user-id or
-          --hook-command
+          The per-category Auto Approve toggles, PreToolUse hook scripts that cancel a call (the CLI reference's
+          stated replacement for a command allow / deny list), and the Enterprise remote-config yoloModeAllowed
+          false; remote steering admitted by cline connect --allowed-user-id or --hook-command
         steps:
-          - title: Restrict shell commands by pattern
-            body:
-              - >-
-                Set CLINE_COMMAND_PERMISSIONS in the environment that launches the editor or CLI (for example the
-                MDM-managed login environment) to a policy such as {"allow": ["npm *", "git *"], "deny": ["rm -rf
-                *", "sudo *"]}; deny overrides allow, commands matching no allow pattern are refused, and shell
-                redirects are refused unless allowRedirects is true.
-            url: https://docs.cline.bot/getting-started/config
           - title: Forbid YOLO mode organisation-wide
             body:
               - >-
@@ -198,17 +201,19 @@ tools:
                 returns {"action": "deny"} for every sender but the owner; without either, every message is run.
             url: https://docs.cline.bot/cli/connectors
         note: >-
-          Partial on the tier rule: Cline evaluates deterministic rules before a call for one tool class only, and
-          none of them can be delivered where the developer cannot change it. CLINE_COMMAND_PERMISSIONS covers
-          shell commands by glob over the command string (a script or interpreter that runs the same thing is not
-          matched) and is an environment variable the developer can unset; Auto Approve is per-category user
-          settings; hooks are user or workspace files behind a user toggle, and a repository can ship its own in
-          .clinerules/hooks. The Enterprise remote configuration, applied to members signed in to the organisation,
-          carries yoloModeAllowed and MCP server policy but no per-tool or per-argument rules. File edits, MCP tools
-          and fetches have no rule language beyond approve or auto-approve. Remote instructions: connectors admit
+          Partial on the tier rule: Cline has no built-in rule language over tool arguments, and nothing
+          deterministic can be delivered where the developer cannot change it. CLINE_COMMAND_PERMISSIONS, the
+          shell-command glob policy cited here before, is no longer documented — the CLI reference now says the
+          CLI has no allow or deny list for shell commands and names a PreToolUse hook as the way to block them
+          (re-checked 2026-10-30). Auto Approve is per-category user settings; hooks are user or workspace files
+          behind a user toggle, and a repository can ship its own in .clinerules/hooks. The Enterprise remote
+          configuration, applied to members signed in to the organisation in the VS Code and JetBrains extensions,
+          carries yoloModeAllowed and MCP server policy but no per-tool or per-argument rules, and its support table
+          currently lists Allow YOLO mode as supported in no product. File edits, MCP tools and fetches have no rule
+          language beyond approve or auto-approve. Remote instructions: connectors admit
           what --allowed-user-id or --hook-command allows and everything by default; the Kanban port admits any
           local client; ACP takes instructions over stdio from the editor that launched it.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
       - mitigation: cap-sensitive-data-redaction
         coverage: partial
         mechanism: >-
@@ -244,7 +249,7 @@ tools:
         coverage: partial
         mechanism: >-
           CLI -t / --timeout <seconds> (default 0, no timeout) and --retries <count> (consecutive mistakes before
-          halting) per run; no token, turn or cost budget; token and cost counts observable in the OpenTelemetry
+          halting, default 3) per run; no token, turn or cost budget; token and cost counts observable in the OpenTelemetry
           task.tokens event
         steps:
           - title: Bound unattended CLI runs
@@ -271,8 +276,8 @@ tools:
         mechanism: >-
           Auto Approve toggles split by scope (Read / Edit project files versus all files, Execute safe versus all
           commands, Use the browser, Use MCP servers), Plan mode (no edits or commands), per-server MCP autoApprove
-          and disabled, CLINE_COMMAND_PERMISSIONS for shell commands, and the Enterprise MCP policy
-          (mcpMarketplaceEnabled, allowedMCPServers, blockPersonalRemoteMCPServers)
+          and disabled, and the Enterprise MCP policy (mcpMarketplaceEnabled, allowedMCPServers,
+          blockPersonalRemoteMCPServers)
         steps:
           - title: Keep auto-approval inside the working tree
             body:
@@ -286,12 +291,6 @@ tools:
                 In remote configuration set allowedMCPServers to the approved server ids and
                 blockPersonalRemoteMCPServers to true (Cline Enterprise).
             url: https://docs.cline.bot/enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/mcp-server-controls
-          - title: Restrict shell commands
-            body:
-              - >-
-                Deliver CLINE_COMMAND_PERMISSIONS with the allow patterns the task needs; commands matching no
-                allow pattern are refused.
-            url: https://docs.cline.bot/getting-started/config
         note: >-
           Partial on the tier rule: the workspace boundary is real but governs auto-approval, not access — a call
           outside the working tree still runs once the developer approves it — and every toggle is a user setting
@@ -496,7 +495,7 @@ tools:
           the extension, but the organisation can remove only YOLO. The per-category toggles — Edit all files and
           Execute all commands together approximate YOLO — stay user settings, and Execute safe commands lets the
           model's own requires_approval flag decide (CVE-2026-52024 bypassed it). The CLI auto-approves by default
-          and the docs do not say whether it honours yoloModeAllowed; scheduled runs, connectors (the /yolo command)
+          and, per the remote-configuration support table, honours no remote setting but rules and workflows; scheduled runs, connectors (the /yolo command)
           and Kanban tasks run with whatever approval the launcher set. Approval is per call with no expiry or
           identity binding; checkpoints revert, they do not approve.
         verified: "2026-09-25"
@@ -666,6 +665,323 @@ tools:
           Marketplace or Open VSX source the editor may install the extension from. Model weights load only when a
           local runtime (Ollama, LM Studio) is chosen, and that runtime loads them.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Organisation policy is Cline Enterprise remote configuration, which only the VS Code and JetBrains
+    # extensions fully apply (the CLI takes rules and workflows only); everything else is a per-device
+    # extension setting, a CLI flag or a file the developer controls. Verified 2026-10-30.
+    settings:
+      - id: sso
+        name: SSO
+        where: WorkOS dashboard › AuthKit › Connections › Add Connection
+        setVia: [identityProvider, adminConsole]
+        area: identity
+        recommended: The corporate IdP connected, with MFA enforced on the Cline app in the IdP
+        why: Members reach the organisation only through the IdP and its MFA, and only verified-domain addresses can join.
+        mitigations: []
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/sso-setup
+        verified: "2026-10-30"
+      - id: jitProvisioning
+        name: just-in-time provisioning
+        where: IdP assignment of the Cline app (through WorkOS); roles mapped from the IdP
+        setVia: [identityProvider]
+        area: identity
+        default: On (the only mode documented)
+        recommended: Access granted by one IdP group; leavers removed there
+        why: Removal in the IdP revokes Cline at the next sign-in and Members › Remove from Organization does it at once; a session on a personal provider key keeps running either way.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/onboarding
+        verified: "2026-10-30"
+      - id: memberRoles
+        name: Member, Admin and Owner roles
+        where: app.cline.bot › Members › role dropdown
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: Member for everyone; Admin for the few who run remote configuration; Owner for one or two
+        why: Admins and Owners can choose Opt out of remote config on the Account page, so the role is also the way out of every organisation policy.
+        mitigations: []
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/team-management/managing-members
+        verified: "2026-10-30"
+      - id: apiProvider
+        name: API Provider
+        where: app.cline.bot › Settings › Cline Settings › Enable settings › API Provider (with its Base URL)
+        setVia: [adminConsole]
+        area: data
+        default: Enable settings off (members choose any provider)
+        recommended: LiteLLM or OpenAI Compatible, Base URL set to the organisation's AI gateway
+        why: In the VS Code and JetBrains extensions members can't pick another provider or a personal account, so prompts and code reach only the gateway's DLP, screening and budgets; the CLI and Cline Desktop don't enforce it.
+        mitigations: [D3-CH, cap-sensitive-data-redaction, cap-input-guardrails, AML.M0036]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/remote-configuration/litellm/admin-configuration
+        verified: "2026-10-30"
+      - id: litellmMasterKey
+        name: Master Key
+        where: app.cline.bot › Settings › Cline Settings › API Provider (LiteLLM) › Master Key
+        setVia: [adminConsole]
+        area: identity
+        default: Unset (optional)
+        recommended: Unset — each member authenticates to the gateway with their own key
+        why: The master key is one long-lived credential with full proxy access used by every member's client; per-member keys keep attribution and can be revoked one at a time.
+        mitigations: [D3-CH]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/remote-configuration/litellm/admin-configuration
+        verified: "2026-10-30"
+      - id: yoloModeAllowed
+        name: yoloModeAllowed
+        where: app.cline.bot remote configuration → yoloModeAllowed
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (members may turn YOLO Mode on)
+        recommended: "false"
+        why: Withdraws the one switch that auto-approves every edit, command and MCP call; the remote-configuration support table currently marks Allow YOLO mode unsupported in every product, so keep YOLO Mode off locally as well.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/yolo-mode
+        verified: "2026-10-30"
+      - id: yoloMode
+        name: YOLO Mode
+        where: Cline Settings › Features › YOLO Mode
+        setVia: [configFile]
+        area: tools
+        default: "Off"
+        recommended: "Off"
+        why: YOLO approves file changes anywhere on the system, every terminal command, browser and MCP actions and Plan-to-Act switches with no prompt.
+        mitigations: [AML.M0029]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: autoApproveEditProjectFiles
+        name: Edit project files
+        where: Cline Settings › Auto Approve › Edit project files
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: Each edit shows its diff for approval before it lands; a team that turns it on relies on checkpoints to revert.
+        mitigations: [AML.M0029]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: autoApproveSafeCommands
+        name: Execute safe commands
+        where: Cline Settings › Auto Approve › Execute safe commands
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: What counts as safe is the model's own requires_approval flag, not an allowlist, and CVE-2026-52024 bypassed it.
+        mitigations: [AML.M0029]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: autoApproveAllCommands
+        name: Execute all commands
+        where: Cline Settings › Auto Approve › Execute all commands
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: Runs commands the model itself flagged as needing approval, such as installs and deletions, without a prompt.
+        mitigations: [AML.M0029, AML.M0028]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: autoApproveReadAllFiles
+        name: Read all files
+        where: Cline Settings › Auto Approve › Read all files
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: Reads outside the workspace — ~/.ssh, ~/.aws, other clients' repositories — keep needing a click.
+        mitigations: [AML.M0028]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: autoApproveEditAllFiles
+        name: Edit all files
+        where: Cline Settings › Auto Approve › Edit all files
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: Writes outside the workspace, shell profiles and other repositories included, keep needing a click.
+        mitigations: [AML.M0028]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: autoApproveMcp
+        name: Use MCP servers
+        where: Cline Settings › Auto Approve › Use MCP servers
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: Each MCP tool call, including writes to the systems behind the server, shows its arguments for approval.
+        mitigations: [AML.M0029]
+        url: https://docs.cline.bot/features/auto-approve
+        verified: "2026-10-30"
+      - id: mcpMarketplaceEnabled
+        name: mcpMarketplaceEnabled
+        where: app.cline.bot remote configuration → mcpMarketplaceEnabled (Enable MCP Marketplace)
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (local servers allowed)
+        recommended: Unset — restrict local servers with allowedMCPServers instead
+        why: false blocks every locally configured server; the allowlist keeps vetted ones usable, and regulated teams set false and serve only organisation servers.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/mcp-server-controls
+        verified: "2026-10-30"
+      - id: allowedMcpServers
+        name: allowedMCPServers
+        where: app.cline.bot remote configuration → allowedMCPServers
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (no local allowlist)
+        recommended: The approved server ids
+        why: Unlisted local servers are blocked and unlisted marketplace entries hidden; the id matches the member's own server name, so the command behind an approved name is still the member's.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity, AML.M0028]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/mcp-server-controls
+        verified: "2026-10-30"
+      - id: remoteMcpServers
+        name: remoteMCPServers
+        where: app.cline.bot remote configuration → remoteMCPServers (Organization MCP servers)
+        setVia: [adminConsole]
+        area: tools
+        default: Unset
+        recommended: The organisation's internal servers, alwaysEnabled where they must stay on, auth headers held centrally
+        why: The organisation, not each developer, decides which remote endpoints Cline talks to and with what credential.
+        mitigations: [cap-agent-tool-registry]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/mcp-server-controls
+        verified: "2026-10-30"
+      - id: blockPersonalRemoteMcpServers
+        name: blockPersonalRemoteMCPServers
+        where: app.cline.bot remote configuration → blockPersonalRemoteMCPServers
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (members add their own remote servers)
+        recommended: "true"
+        why: Only the servers in remoteMCPServers are reachable, so no developer wires client code to an unvetted hosted server.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/configuration/infrastructure-configuration/control-other-cline-features/mcp-server-controls
+        verified: "2026-10-30"
+      - id: clineTelemetryOrg
+        name: Cline Telemetry
+        where: app.cline.bot remote configuration → telemetryEnabled
+        setVia: [adminConsole]
+        area: data
+        default: Unset (telemetry on, each member's choice)
+        recommended: "false"
+        why: Usage and error events identifying the account and organisation stop going to Cline, and members can't turn them back on; the CLI and Cline Desktop ignore it.
+        mitigations: []
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/monitoring/telemetry
+        verified: "2026-10-30"
+      - id: telemetryOptOut
+        name: telemetryOptOut
+        where: ~/.cline/data/settings/global-settings.json → telemetryOptOut
+        setVia: [configFile, mdm]
+        area: data
+        default: Unset (telemetry on)
+        recommended: "true"
+        why: One per-computer setting turns telemetry off for the CLI and Cline Desktop too, which ignore the organisation setting.
+        mitigations: []
+        url: https://docs.cline.bot/enterprise-solutions/monitoring/telemetry
+        verified: "2026-10-30"
+      - id: openTelemetry
+        name: OpenTelemetry
+        where: app.cline.bot › organization settings › OpenTelemetry (OTLP endpoint, protocol, headers; logs and metrics)
+        setVia: [adminConsole]
+        area: audit
+        default: "Off"
+        recommended: On, logs and metrics to the organisation's collector over TLS
+        why: Task, tool and error events reach the SIEM for signed-in members; CLINE_OTEL_* environment variables still override it on a member's machine.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/monitoring/opentelemetry
+        verified: "2026-10-30"
+      - id: promptUploading
+        name: Prompt Uploading
+        where: app.cline.bot › Settings › Enterprise Telemetry › Prompt Uploading (enterpriseTelemetry.promptUploading)
+        setVia: [adminConsole]
+        area: audit
+        default: "Off"
+        recommended: "Off"
+        why: It copies every task's full conversation, files read and command output included, to an S3 or R2 bucket; turn it on only where an audit duty needs transcripts, then gitignore .cline/remote-config, whose settings copy can hold the bucket keys.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise
+        url: https://docs.cline.bot/enterprise-solutions/monitoring/prompt-storage
+        verified: "2026-10-30"
+      - id: enableHooks
+        name: Enable Hooks
+        where: Cline settings › Features › Enable Hooks
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: Once on, scripts in a cloned repository's .clinerules/hooks run as code; turn it on only with the organisation's own global PreToolUse guard, accepting that workspace hooks then run too.
+        mitigations: [AML.M0031]
+        url: https://docs.cline.bot/customization/clineignore
+        verified: "2026-10-30"
+      - id: enableCheckpoints
+        name: Enable Checkpoints
+        where: Cline settings › Feature Settings › Enable Checkpoints
+        setVia: [configFile]
+        area: tools
+        default: "On"
+        recommended: "On"
+        why: Every agent write, to rules and memory-bank files included, can be rolled back from the shadow-Git snapshot.
+        mitigations: [AML.M0031]
+        url: https://docs.cline.bot/core-workflows/checkpoints
+        verified: "2026-10-30"
+      - id: cliAutoApprove
+        name: --auto-approve
+        where: cline CLI flag --auto-approve <boolean>
+        setVia: [apiCli]
+        area: tools
+        default: "true (false in ACP mode)"
+        recommended: false, set in the organisation's wrapper and job definitions
+        why: The CLI otherwise approves every tool call, so a headless run gets no prompt at all.
+        mitigations: [AML.M0029]
+        url: https://docs.cline.bot/cli/cli-reference
+        verified: "2026-10-30"
+      - id: cliTimeout
+        name: --timeout
+        where: cline CLI flag -t, --timeout <seconds>
+        setVia: [apiCli]
+        area: tools
+        default: 0 (no timeout)
+        recommended: A ceiling on every unattended run, for example 3600
+        why: A looping headless or scheduled run stops on time; the extension has no equivalent and the spend cap stays at the gateway.
+        mitigations: [AML.M0036]
+        url: https://docs.cline.bot/cli/cli-reference
+        verified: "2026-10-30"
+      - id: connectorAllowedUserId
+        name: --allowed-user-id
+        where: cline connect telegram --allowed-user-id (--hook-command for the other connectors)
+        setVia: [apiCli]
+        area: sharing
+        default: Unset (every message is run)
+        recommended: The owner's own user id, and no connector unless a team has a reason
+        why: Without it or a --hook-command, anyone who can message the bot drives a Cline instance with the developer's authority.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://docs.cline.bot/cli/connectors
+        verified: "2026-10-30"
+      - id: kanbanHost
+        name: --host
+        where: kanban --host (or KANBAN_RUNTIME_HOST)
+        setVia: [apiCli]
+        area: sharing
+        default: 127.0.0.1
+        recommended: 127.0.0.1
+        why: Kanban gives full access to the repository and terminal, so binding 0.0.0.0 hands both to the network (CVE-2026-44211 reached it from a browser even on loopback).
+        mitigations: []
+        url: https://docs.cline.bot/kanban/remote-access
+        verified: "2026-10-30"
+      - id: cliNoAutoUpdate
+        name: CLINE_NO_AUTO_UPDATE
+        where: environment variable CLINE_NO_AUTO_UPDATE (source only)
+        setVia: [mdm]
+        area: tools
+        default: Unset (the CLI installs a new release at startup)
+        recommended: 1, with the CLI installed at a fixed version from the organisation's mirror
+        why: A compromised npm release, as cline@2.3.0 was, does not reach every developer at their next launch.
+        mitigations: [cap-mcp-tool-integrity]
+        url: https://raw.githubusercontent.com/cline/cline/main/apps/cli/src/commands/update.ts
+        verified: "2026-10-30"
     advisories:
       - title: >-
           GHSA-9ppg-jx86-fqw7 — unauthorised npm publish of cline@2.3.0 with a postinstall that installed openclaw

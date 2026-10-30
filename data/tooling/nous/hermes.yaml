@@ -19,6 +19,10 @@
 # security-advisories API returns an empty list unauthenticated, GHSA-3vpc-7q5r-276h and GHSA-5qr3-c538-wm9j
 # (cited in the docs) return 404 publicly, and the Advisory Database has no hermes-agent entry after
 # 2026-06-17; releases v0.21.2-v0.21.5 (2026-09-11 to 09-24) carry no security notes.
+# 2026-10-30: settings table added; keys re-read on the rendered docs pages (200). Corrections: the Langfuse
+# plugin moved from the bundled observability/langfuse to the official catalog (hermes plugins install langfuse;
+# its README on raw.githubusercontent.com/NousResearch/hermes-official-plugins documents the variables);
+# memory.write_approval stages writes for /memory pending, and foreground CLI writes prompt inline.
 vendor: nous
 family: Hermes Agent
 tools:
@@ -501,8 +505,9 @@ tools:
         steps:
           - title: Require approval for memory writes, or switch memory off
             body:
-              - "Set memory.write_approval: true in ~/.hermes/config.yaml so every save to MEMORY.md or USER.md —
-                including the unprompted background review — is staged for /memory approve, pinned to the exact entry;
+              - "Set memory.write_approval: true in ~/.hermes/config.yaml so saves to MEMORY.md or USER.md from
+                messaging platforms, scripts and the unprompted background review are staged for /memory pending
+                (foreground CLI writes prompt inline);
                 set memory_enabled and user_profile_enabled to false to remove the memory tool entirely."
             url: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
           - title: Gate the agent's self-written skills the same way
@@ -1144,16 +1149,17 @@ tools:
       - mitigation: cap-agent-tracing
         coverage: native
         mechanism: >-
-          The bundled observability/langfuse plugin (hermes plugins enable observability/langfuse with
-          HERMES_LANGFUSE_* keys) ships one span per turn, one generation per model call and one observation per tool
+          The official langfuse catalog plugin (hermes plugins install langfuse with HERMES_LANGFUSE_* keys;
+          formerly the bundled observability/langfuse) ships one span per turn, one generation per model call and one observation per tool
           call to a Langfuse server off the host; hooks.outbound posts HMAC-signed post_tool_call and session events;
           locally, agent.log / gateway.log, state.db sessions, iron-proxy.log and a2a_audit.jsonl
         steps:
           - title: Export per-turn traces with tool calls off the host
             body:
-              - "Run hermes tools and pick Langfuse Observability (or hermes plugins enable observability/langfuse) and
-                set HERMES_LANGFUSE_PUBLIC_KEY, HERMES_LANGFUSE_SECRET_KEY and HERMES_LANGFUSE_BASE_URL (your
-                self-hosted server) in ~/.hermes/.env; keep HERMES_LANGFUSE_SAMPLE_RATE at 1.0."
+              - "Run hermes plugins install langfuse (the plugin moved from the bundled observability/langfuse to the
+                official catalog; hermes update migrates profiles that had it enabled) and set
+                HERMES_LANGFUSE_PUBLIC_KEY, HERMES_LANGFUSE_SECRET_KEY and HERMES_LANGFUSE_BASE_URL (your self-hosted
+                server) in ~/.hermes/.env; leave HERMES_LANGFUSE_SAMPLE_RATE unset or at 1.0."
             url: >-
               https://hermes-agent.nousresearch.com/docs/user-guide/features/built-in-plugins#observabilitylangfuse
           - title: Push a signed tool-call feed to your collector
@@ -1575,6 +1581,427 @@ tools:
                 - title: Hermes Agent — official site, reviewed; no setting for this control (2026-09-10)
                   url: https://hermes-agent.nousresearch.com/
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The "admin" is the person who runs Hermes: rows are keys in ~/.hermes/config.yaml or ~/.hermes/.env
+    # (pinnable from a root-owned /etc/hermes/config.yaml against a non-root user) or hermes CLI commands.
+    # Verified 2026-10-30.
+    settings:
+      - id: gatewayAllowedUsers
+        name: GATEWAY_ALLOWED_USERS
+        where: ~/.hermes/.env → GATEWAY_ALLOWED_USERS (and per-platform lists such as TELEGRAM_ALLOWED_USERS)
+        setVia: [configFile]
+        area: identity
+        default: Unset (with no list configured every user is denied)
+        recommended: Your own user ids; GATEWAY_ALLOW_ALL_USERS and gateway.allow_all_users never set
+        why: Only you can instruct the agent over a messaging bridge; an allow-all flag hands it to anyone who finds the bot.
+        mitigations: [D3-APA]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: unauthorizedDmBehavior
+        name: unauthorized_dm_behavior
+        where: ~/.hermes/config.yaml → unauthorized_dm_behavior (global or per platform)
+        setVia: [configFile]
+        area: identity
+        default: '"pair" on chat platforms, "ignore" for email'
+        recommended: '"pair"'
+        why: An unknown sender gets a one-time code you approve with hermes pairing approve; approvals are permanent, so review hermes pairing list.
+        mitigations: [D3-APA]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: approvalsMode
+        name: approvals.mode
+        where: ~/.hermes/config.yaml → approvals.mode
+        setVia: [configFile]
+        area: tools
+        default: '"smart"'
+        recommended: '"manual"'
+        why: Every flagged command waits for you; smart mode lets an auxiliary model approve the ones it judges low-risk.
+        mitigations: [AML.M0029]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: approvalsDeny
+        name: approvals.deny
+        where: ~/.hermes/config.yaml → approvals.deny
+        setVia: [configFile]
+        area: tools
+        default: Empty
+        recommended: Quoted globs for commands that must never run, such as "git push --force*" and "dd if=* of=/dev/*"
+        why: Matching commands are blocked on every backend before YOLO or mode off is consulted.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: approvalsCronMode
+        name: approvals.cron_mode
+        where: ~/.hermes/config.yaml → approvals.cron_mode
+        setVia: [configFile]
+        area: tools
+        default: '"deny"'
+        recommended: '"deny"'
+        why: A scheduled job that reaches a dangerous command is blocked rather than auto-approved while nobody is there.
+        mitigations: [AML.M0029]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: approvalsUnattendedMode
+        name: approvals.unattended_mode
+        where: ~/.hermes/config.yaml → approvals.unattended_mode
+        setVia: [configFile]
+        area: tools
+        default: '"deny"'
+        recommended: '"deny"'
+        why: Webhook, msgraph_webhook and api_server sessions, which outsiders can trigger, cannot run flagged commands unattended.
+        mitigations: [AML.M0029]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: yoloMode
+        name: --yolo
+        where: hermes --yolo, the /yolo toggle, or HERMES_YOLO_MODE=1
+        setVia: [apiCli]
+        area: tools
+        default: "Off"
+        recommended: Not used
+        why: YOLO bypasses every dangerous-command prompt; only the hardline blocklist and approvals.deny still apply.
+        mitigations: [AML.M0029]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: writeSafeRoot
+        name: HERMES_WRITE_SAFE_ROOT
+        where: environment variable HERMES_WRITE_SAFE_ROOT (the gateway's service unit)
+        setVia: [configFile]
+        area: tools
+        default: Unset (writes anywhere outside the protected-path denylist)
+        recommended: Your project directories and ~/.hermes
+        why: write_file and patch outside those roots are hard-blocked with no prompt, so the agent cannot plant files in shell profiles or other repositories.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: preToolCallFailClosed
+        name: fail_closed
+        where: ~/.hermes/config.yaml → hooks.pre_tool_call[].fail_closed
+        setVia: [configFile]
+        area: tools
+        default: "false"
+        recommended: true on your policy hook
+        why: A crash or timeout of the hook that decides tool calls blocks the call instead of letting it through.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
+        verified: "2026-10-30"
+      - id: hooksAutoAccept
+        name: hooks_auto_accept
+        where: ~/.hermes/config.yaml → hooks_auto_accept (also --accept-hooks, HERMES_ACCEPT_HOOKS)
+        setVia: [configFile]
+        area: tools
+        default: Unset (each new shell hook asks once)
+        recommended: Unset
+        why: A shell hook added to config.yaml, by you or by the agent, runs only after you approve that exact command.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
+        verified: "2026-10-30"
+      - id: managedScope
+        name: managed scope
+        where: /etc/hermes/config.yaml (HERMES_MANAGED_DIR)
+        setVia: [mdm, configFile]
+        area: tools
+        default: None
+        recommended: approvals.* and the sandbox keys pinned in a root-owned file, with Hermes run as a non-root user
+        why: The agent, running as you, cannot loosen the pinned keys; it is advisory if Hermes runs as root or the user can set HERMES_MANAGED_DIR.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/managed-scope
+        verified: "2026-10-30"
+      - id: dashboardHost
+        name: --host
+        where: hermes dashboard --host
+        setVia: [apiCli]
+        area: network
+        default: 127.0.0.1
+        recommended: 127.0.0.1, reached over an SSH tunnel or Tailscale
+        why: The dashboard drives the agent; a non-loopback bind refuses to start without an auth provider, but loopback keeps it off the network entirely.
+        mitigations: [D3-MAN]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard
+        verified: "2026-10-30"
+      - id: apiServerKey
+        name: API_SERVER_KEY
+        where: ~/.hermes/.env → API_SERVER_KEY (with API_SERVER_ENABLED)
+        setVia: [configFile]
+        area: identity
+        default: Unset (API server off)
+        recommended: API server off; where needed, a long random key and a narrow API_SERVER_CORS_ORIGINS
+        why: The OpenAI-compatible server accepts tasks for the agent, so it needs its bearer token even on loopback.
+        mitigations: [D3-MAN]
+        url: https://hermes-agent.nousresearch.com/docs/reference/environment-variables
+        verified: "2026-10-30"
+      - id: memoryWriteApproval
+        name: memory.write_approval
+        where: ~/.hermes/config.yaml → memory.write_approval
+        setVia: [configFile]
+        area: data
+        default: "false"
+        recommended: "true"
+        why: Saves to MEMORY.md and USER.md from messaging, scripts and the background self-review are staged for you, so injected text cannot persist into every later session.
+        mitigations: [AML.M0031]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
+        verified: "2026-10-30"
+      - id: skillsWriteApproval
+        name: skills.write_approval
+        where: ~/.hermes/config.yaml → skills.write_approval
+        setVia: [configFile]
+        area: tools
+        default: "false"
+        recommended: "true"
+        why: Skills the agent writes for itself are staged for /skills diff and approve before they join its prompt.
+        mitigations: [AML.M0031]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
+        verified: "2026-10-30"
+      - id: terminalBackend
+        name: terminal.backend
+        where: ~/.hermes/config.yaml → terminal.backend
+        setVia: [configFile]
+        area: tools
+        default: '"local" (no isolation)'
+        recommended: '"docker"'
+        why: Commands, file writes and code execution run in a hardened container instead of directly as you on the host.
+        mitigations: [D3-EI]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: dockerForwardEnv
+        name: terminal.docker_forward_env
+        where: ~/.hermes/config.yaml → terminal.docker_forward_env
+        setVia: [configFile]
+        area: data
+        default: "[]"
+        recommended: "[]"
+        why: No host environment variable, and so no secret, is forwarded into the sandbox.
+        mitigations: [D3-CTS, D3-CH]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: dockerNetwork
+        name: terminal.docker_network
+        where: ~/.hermes/config.yaml → terminal.docker_network (TERMINAL_DOCKER_NETWORK)
+        setVia: [configFile]
+        area: network
+        default: "true"
+        recommended: true, with sandbox traffic through the egress proxy below
+        why: Tasks keep web access; false starts the container with --network=none for work that needs none.
+        mitigations: [cap-agent-egress-control]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: dockerPersistAcrossProcesses
+        name: docker_persist_across_processes
+        where: ~/.hermes/config.yaml → terminal.docker_persist_across_processes (TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES)
+        setVia: [configFile]
+        area: tools
+        default: "true"
+        recommended: "false"
+        why: Stopping Hermes also ends its sandbox and the background processes in it, instead of leaving them running.
+        mitigations: [cap-agent-kill-switch, D3-EI]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: adoptExternalLogins
+        name: auth.adopt_external_logins
+        where: ~/.hermes/config.yaml → auth.adopt_external_logins
+        setVia: [configFile]
+        area: identity
+        default: "true"
+        recommended: "false"
+        why: Hermes stops reading and refreshing the Codex CLI and Claude Code login files, so it never acts on credentials issued to another tool.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/security
+        verified: "2026-10-30"
+      - id: egressProxy
+        name: proxy.enabled
+        where: ~/.hermes/config.yaml → proxy.enabled (hermes egress setup, hermes egress start), proxy.enforce_on_docker left true
+        setVia: [configFile, apiCli]
+        area: network
+        default: "false"
+        recommended: "true"
+        why: The sandbox holds only proxy tokens and iron-proxy swaps in the real key on the host for allowlisted upstreams; a sandbox will not start while the proxy is down.
+        mitigations: [D3-CTS, D3-CH, cap-agent-egress-control]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
+        verified: "2026-10-30"
+      - id: proxyExtraAllowedHosts
+        name: proxy.extra_allowed_hosts
+        where: ~/.hermes/config.yaml → proxy.extra_allowed_hosts
+        setVia: [configFile]
+        area: network
+        default: "[]"
+        recommended: Only the hosts your tasks need beyond the bundled defaults
+        why: Sandbox traffic through the proxy reaches the bundled upstreams and the hosts you list, nothing else.
+        mitigations: [cap-agent-egress-control]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/egress/iron-proxy
+        verified: "2026-10-30"
+      - id: bitwardenSecrets
+        name: secrets.bitwarden.enabled
+        where: ~/.hermes/config.yaml → secrets.bitwarden.enabled with project_id (hermes secrets bitwarden setup)
+        setVia: [configFile, apiCli]
+        area: identity
+        default: "false"
+        recommended: true (or the 1Password source), with ~/.hermes/.env holding no provider keys
+        why: Keys are fetched from the vault at start instead of sitting in a plaintext .env file the agent's tools could read.
+        mitigations: [D3-CH]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/secrets/bitwarden
+        verified: "2026-10-30"
+      - id: redactSecrets
+        name: security.redact_secrets
+        where: ~/.hermes/config.yaml → security.redact_secrets
+        setVia: [configFile]
+        area: data
+        default: "true"
+        recommended: "true"
+        why: API-key, token and password patterns in tool output are masked before the model or the logs see them.
+        mitigations: [cap-sensitive-data-redaction]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: redactPii
+        name: privacy.redact_pii
+        where: ~/.hermes/config.yaml → privacy.redact_pii
+        setVia: [configFile]
+        area: data
+        default: "false"
+        recommended: "true"
+        why: Messaging user ids, phone numbers and chat ids reach the model provider as hashes (gateway platforms only).
+        mitigations: [cap-sensitive-data-redaction]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: modelBaseUrl
+        name: model.base_url
+        where: ~/.hermes/config.yaml → model.provider custom with model.base_url (auxiliary.*.provider routed the same way)
+        setVia: [configFile]
+        area: data
+        default: The chosen provider's endpoint
+        recommended: An OpenAI-compatible AI gateway that screens requests and responses
+        why: Prompts, tool results and replies pass a classifier and DLP before and after the model, which Hermes itself does not ship.
+        mitigations: [cap-input-guardrails, cap-output-guardrails, cap-sensitive-data-redaction]
+        url: https://hermes-agent.nousresearch.com/docs/integrations/providers
+        verified: "2026-10-30"
+      - id: pluginsEnabled
+        name: plugins.enabled
+        where: ~/.hermes/config.yaml → plugins.enabled (hermes plugins install owner/repo --ref <40-char SHA>)
+        setVia: [configFile, apiCli]
+        area: tools
+        default: Empty (no plugin with hooks or tools loads)
+        recommended: Only reviewed plugins, each pinned to a full commit SHA, including your screening plugin
+        why: Nothing loads unless named, a pinned plugin cannot move on update, and transform_tool_result and transform_llm_output hooks are where your classifier attaches.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, cap-input-guardrails, cap-output-guardrails]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins
+        verified: "2026-10-30"
+      - id: mcpToolsInclude
+        name: tools.include
+        where: ~/.hermes/config.yaml → mcp_servers.<name>.tools.include (or enabled false)
+        setVia: [configFile]
+        area: tools
+        default: Unset (every tool the server offers)
+        recommended: The tools you use from each server
+        why: Only listed MCP tools are registered, so a server cannot hand the agent new write tools unnoticed.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+        verified: "2026-10-30"
+      - id: disabledToolsets
+        name: agent.disabled_toolsets
+        where: ~/.hermes/config.yaml → agent.disabled_toolsets
+        setVia: [configFile]
+        area: tools
+        default: Empty
+        recommended: The toolsets you do not use
+        why: Removed toolsets are gone on every platform, which shrinks what an injected instruction can call.
+        mitigations: [AML.M0028]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: maxTurns
+        name: agent.max_turns
+        where: ~/.hermes/config.yaml → agent.max_turns
+        setVia: [configFile]
+        area: tools
+        default: none (unlimited)
+        recommended: A positive ceiling such as 90
+        why: At the limit Hermes allows one final answer and stops the loop.
+        mitigations: [AML.M0036]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: loopHardStop
+        name: tool_loop_guardrails.hard_stop_enabled
+        where: ~/.hermes/config.yaml → tool_loop_guardrails.hard_stop_enabled
+        setVia: [configFile]
+        area: tools
+        default: false (non_interactive_hard_stop_enabled true for gateway and cron)
+        recommended: "true"
+        why: Interactive sessions stop on a detected tool loop too, not only gateway and cron runs.
+        mitigations: [AML.M0036]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: delegationSpawnDepth
+        name: delegation.max_spawn_depth
+        where: ~/.hermes/config.yaml → delegation.max_spawn_depth
+        setVia: [configFile]
+        area: tools
+        default: "1"
+        recommended: "1"
+        why: Child agents cannot spawn grandchildren, which bounds fan-out and spend.
+        mitigations: [AML.M0036]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
+        verified: "2026-10-30"
+      - id: outboundWebhooks
+        name: hooks.outbound
+        where: ~/.hermes/config.yaml → hooks.outbound (url, events, secret_env)
+        setVia: [configFile]
+        area: audit
+        default: Unset
+        recommended: Your collector, with post_tool_call and on_session_end events signed through secret_env
+        why: A signed record of every tool call leaves the host, where the agent cannot rewrite it.
+        mitigations: [cap-agent-tracing]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
+        verified: "2026-10-30"
+      - id: langfuseBaseUrl
+        name: HERMES_LANGFUSE_BASE_URL
+        where: ~/.hermes/.env → HERMES_LANGFUSE_BASE_URL, after hermes plugins install langfuse
+        setVia: [configFile]
+        area: audit
+        default: Plugin not installed
+        recommended: Your self-hosted Langfuse, with HERMES_LANGFUSE_SAMPLE_RATE unset or 1.0
+        why: Per-turn traces with each tool call's arguments and result reach a server you hold; a sample rate below 1 drops whole turns.
+        mitigations: [cap-agent-tracing]
+        url: https://raw.githubusercontent.com/NousResearch/hermes-official-plugins/main/langfuse/README.md
+        verified: "2026-10-30"
+      - id: langfuseCapture
+        name: HERMES_LANGFUSE_CAPTURE
+        where: ~/.hermes/.env → HERMES_LANGFUSE_CAPTURE
+        setVia: [configFile]
+        area: data
+        default: '"sanitized"'
+        recommended: '"sanitized"'
+        why: Traces keep sanitised arguments and results rather than full content, so the trace store is not a second copy of every conversation.
+        mitigations: [cap-agent-tracing]
+        url: https://raw.githubusercontent.com/NousResearch/hermes-official-plugins/main/langfuse/README.md
+        verified: "2026-10-30"
+      - id: checkpointsEnabled
+        name: checkpoints.enabled
+        where: ~/.hermes/config.yaml → checkpoints.enabled (or hermes chat --checkpoints)
+        setVia: [configFile]
+        area: tools
+        default: "false"
+        recommended: "true"
+        why: The project is snapshotted before destructive operations, so /rollback can undo what a misled agent did.
+        mitigations: [cap-agent-kill-switch]
+        url: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+        verified: "2026-10-30"
+      - id: gatewayStopAll
+        name: hermes gateway stop --all
+        where: hermes gateway stop --all (after /stop in the chat)
+        setVia: [apiCli]
+        area: tools
+        recommended: The incident stop, followed by hermes pairing revoke and hermes egress setup --rotate-tokens
+        why: Every profile's gateway, and the cron scheduler it hosts, stops; revocation and token rotation cut the senders and sandboxes that remain.
+        mitigations: [cap-agent-kill-switch]
+        url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+        verified: "2026-10-30"
+      - id: securityAudit
+        name: hermes security audit
+        where: hermes security audit --fail-on high, run from cron or CI
+        setVia: [apiCli]
+        area: tools
+        recommended: Scheduled weekly, failing on high
+        why: The venv, plugin requirements and pinned npx / uvx MCP servers are checked against known vulnerabilities after install, not only at it.
+        mitigations: [D3-FA, cap-mcp-tool-integrity]
+        url: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-53869 (GHSA-4pqm-j46f-795x) — DNS rebinding on dashboard WebSocket endpoints, fixed in
