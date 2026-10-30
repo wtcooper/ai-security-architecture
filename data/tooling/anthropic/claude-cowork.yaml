@@ -59,8 +59,9 @@ tools:
         It is not the self-hosted autonomous personal-agent class; the cloud variant stretches towards a
         managed agent runtime and is noted on the variant. Admin control is in the claude.ai console at
         Organization settings > Cowork: "Enable for your organization", "Run Cowork in the cloud", the
-        built-in browser toggle, "Allow 'Automatically approve' mode", "Allow 'Always allow' for connector
-        tools", an OTLP collector for session events, and curated plugin marketplaces (Installed by default /
+        built-in browser toggle, "Allow 'Always allow' for connector tools" and an OTLP collector for session
+        events; under Organization settings > Capabilities, "Allow 'Automatically approve' mode" and "Start
+        new tasks in 'Automatically approve' mode"; and curated plugin marketplaces (Installed by default /
         Available / Required / Not available), with role-based access on Enterprise; on the device, Claude
         Desktop's enterprise policy (com.anthropic.claudefordesktop, HKLM\SOFTWARE\Policies\Claude) adds
         allowedWorkspaceFolders, secureVmFeaturesEnabled, isLocalDevMcpEnabled, isDesktopExtensionEnabled and
@@ -126,8 +127,9 @@ tools:
         note: >-
           Users can attach home folders, Documents, AppData and whole drives (4 September 2026; SSH keys and
           cloud credentials inside them stay off-limits); allowedWorkspaceFolders in the enterprise policy is
-          the fence. The Help Center says OTLP events include prompt content by default, while the Cowork
-          monitoring reference says metadata only unless content capture is enabled; filter at the collector.
+          the fence. OTLP events carry metadata only on current Desktop versions unless the otlpContentCapture
+          device key adds content (some older versions send it when the key is unset, so deploy it as []);
+          connected folder paths are always included, so filter at the collector.
       - risk: riskShadowAndUnknownAgents
         note: >-
           Cloud sessions and scheduled tasks run unattended without a device; the Enterprise console can enable
@@ -275,8 +277,9 @@ tools:
           Partial by the rule: MFA is configured in the IdP, not in Claude, which documents no second-factor
           requirement of its own. Paths that skip a fresh challenge: the desktop's signed-in session (kept while
           the user stays active unless Shortened session length is set), cloud sessions and scheduled tasks that
-          keep running on that sign-in with no device present (the architecture overview describes a
-          trusted-device and recent-sign-in requirement for cloud sessions without naming the toggle), and
+          keep running on that sign-in with no device present ("Require trusted devices" under Organization
+          settings > Capabilities > Remote sessions adds an enrolled-device and 18-hour sign-in check to
+          reaching a device from those sessions), and
           personal accounts on unmanaged devices, which the tenant-restriction header or Enterprise domain
           capture address. Claude Desktop on 3P has no Anthropic identity; sign-in is the provider's or the
           organisation's IdP.
@@ -610,9 +613,9 @@ tools:
         coverage: partial
         mechanism: >-
           Connector tool policy per connector and tool (Always allow / Needs approval / Blocked), organisation-wide
-          and per custom role, enforced on Anthropic's servers; "Allow 'Automatically approve' mode" and the
-          built-in browser and Claude in Chrome toggles; Claude Code managed Read / Edit rules reach local
-          sessions
+          and per custom role, enforced on Anthropic's servers; "Allow 'Automatically approve' mode" under
+          Organization settings > Capabilities and the built-in browser and Claude in Chrome toggles; Claude
+          Code managed Read / Edit rules reach local sessions
         steps:
           - title: Scope connector tools by role
             body:
@@ -621,8 +624,8 @@ tools:
             url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
           - title: Remove the classifier mode where needed
             body:
-              - Turn off "Allow 'Automatically approve' mode" under Organization settings > Cowork > Permissions so
-                the mode disappears from members' selector.
+              - Turn off "Allow 'Automatically approve' mode" under Organization settings > Capabilities so the
+                mode disappears from members' selector.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
           - title: Decide on browsers
@@ -795,8 +798,9 @@ tools:
         mechanism: >-
           Manually approve mode; connector tools capped at "Needs approval" ask before every call and lose "Always
           allow"; "Allow 'Always allow' for connector tools" (off by default) keeps write-capable connector tools
-          on per-task approval; "Allow 'Automatically approve' mode" removes the classifier mode; permanent file
-          deletion always asks
+          on per-task approval; "Start new tasks in 'Automatically approve' mode" off keeps Manually approve as
+          the default and "Allow 'Automatically approve' mode" off removes the classifier mode (both under
+          Organization settings > Capabilities); permanent file deletion always asks
         steps:
           - title: Force approval on named connector tools
             body:
@@ -805,8 +809,10 @@ tools:
             url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
           - title: Keep persistent approval and the classifier mode off
             body:
-              - Leave "Allow 'Always allow' for connector tools" off and turn off "Allow 'Automatically approve'
-                mode" under Organization settings > Cowork > Permissions.
+              - Leave "Allow 'Always allow' for connector tools" off under Organization settings > Cowork >
+                Permissions, turn off "Start new tasks in 'Automatically approve' mode" under Organization
+                settings > Capabilities (on by default for Team), and turn off "Allow 'Automatically approve'
+                mode" there for groups whose every task must be approved manually.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
         note: >-
@@ -857,10 +863,11 @@ tools:
             url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
         note: >-
           Native: capture is set by an administrator, carries tool calls and permission decisions to a sink the
-          organisation runs, and no user off switch is documented. The privacy control is contested: the Help
-          Center says prompt content is included by default and to filter at the collector, while the Cowork
-          monitoring reference says events are metadata only unless otlpContentCapture (a 3P key) adds prompts,
-          responses or tool details; check a test session. user.email is always present on standard deployments.
+          organisation runs, and no user off switch is documented. Content is a device key on first-party and
+          3P deployments alike: current Claude Desktop versions send metadata only unless otlpContentCapture
+          adds prompts, responses or tool details, and some older first-party versions send content when it is
+          unset, so deploy it as [] for metadata only. user.email and connected folder paths are always present
+          on standard deployments.
           Settings load at session start. Integrity and retention are the collector's; audit logs record no
           Cowork session events, and the Compliance API skips local sessions in HIPAA-ready organisations.
         verified: "2026-09-25"
@@ -1616,9 +1623,9 @@ tools:
         the claude.ai console only — device managed configuration (allowedWorkspaceFolders,
         coworkEgressAllowedHosts, disabledBuiltinTools) reaches local sessions and not these. Organisation
         settings > Cowork carries "Run Cowork in the cloud" (Team on by default; Enterprise off by default and
-        granted through custom roles), the network-access policy under Capabilities, the "Automatically
-        approve" and "Always allow for connector tools" toggles, trusted-device enrolment and the OTLP
-        collector; the Compliance API captures remote Cowork sessions, including agent-owned scheduled runs.
+        granted through custom roles), "Allow 'Always allow' for connector tools" and the OTLP collector;
+        Organization settings > Capabilities carries the network-access policy, the two "Automatically
+        approve" settings, "Require trusted devices" and the Scheduled tasks (Was Routines) toggle; the Compliance API captures remote Cowork sessions, including agent-owned scheduled runs.
         Cowork is not covered by zero data retention.
     facts:
       - label: Plans
@@ -1683,10 +1690,11 @@ tools:
       - mitigation: D3-APA
         coverage: partial
         mechanism: >-
-          "Run Cowork in the cloud" at Organization settings > Cowork plus the "Cowork in the cloud (beta)"
-          custom-role capability on Enterprise; only the signed-in account owner starts or steers a session; a
-          trusted-device and recent-sign-in requirement for cloud sessions; the built-in browser and Claude in
-          Chrome toggles govern the reach-back into devices
+          "Run Cowork in the cloud" at Organization settings > Cowork plus the "Cowork in the cloud" custom-role
+          capability on Enterprise; Scheduled tasks (Was Routines) at Organization settings > Capabilities >
+          Remote sessions and as a role capability; only the signed-in account owner starts or steers a
+          session; "Require trusted devices" for reaching devices from cloud sessions; the built-in browser and
+          Claude in Chrome toggles govern the reach-back into devices
         steps:
           - title: Gate cloud sessions by role
             body:
@@ -1695,11 +1703,18 @@ tools:
                 turn it off there deliberately.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
+          - title: Keep unattended runs owned
+            body:
+              - Turn the Scheduled tasks (Was Routines) toggle off at Organization settings > Capabilities > Remote
+                sessions, or on Enterprise grant the Scheduled tasks capability only to the roles that own
+                unattended runs; turning it off also stops Cowork's cloud scheduled tasks.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
           - title: Require trusted devices for cloud sessions
             body:
-              - In the organisation's cloud-session controls require trusted-device enrollment and a recent
-                sign-in; it then applies to every cloud session in the organisation.
-            url: https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview
+              - Turn on "Require trusted devices" at Organization settings > Capabilities > Remote sessions; members
+                then need an enrolled device and a sign-in under 18 hours old, and it applies to every cloud
+                session in the organisation.
+            url: https://code.claude.com/docs/en/remote-control#trusted-devices
           - title: Decide the reach-back into devices
             body:
               - Toggle the built-in browser at Organization settings > Cowork and Claude in Chrome at Organization
@@ -1709,9 +1724,9 @@ tools:
         note: >-
           Partial by the rule: enablement is per role on Enterprise (organisation-wide only on Team) and there is
           no repository, bot or channel trigger, but the trigger condition is fixed by the vendor (the account
-          owner, from any of their devices), scheduled tasks, which start sessions with nobody present, have no
-          switch of their own on standard deployments (scheduledTasksEnabled is a 3P key), and the trusted-device
-          requirement is described without a named toggle. Sessions cannot be shared with other members.
+          owner, from any of their devices), and scheduled tasks, which start sessions with nobody present, are
+          switched on or off per organisation or per role, not per task or trigger. Sessions cannot be shared
+          with other members.
         verified: "2026-09-25"
         migration:
           from:
@@ -1852,8 +1867,9 @@ tools:
         coverage: partial
         mechanism: >-
           Manually approve mode and connector tools capped at "Needs approval" ask the owner before each call;
-          "Allow 'Always allow' for connector tools" (off by default) and "Allow 'Automatically approve' mode"
-          at Organization settings > Cowork > Permissions
+          "Allow 'Always allow' for connector tools" (off by default) at Organization settings > Cowork >
+          Permissions; "Allow 'Automatically approve' mode" and "Start new tasks in 'Automatically approve'
+          mode" at Organization settings > Capabilities
         steps:
           - title: Force approval on named connector tools
             body:
@@ -1862,8 +1878,10 @@ tools:
             url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
           - title: Keep persistent approval and the classifier mode off
             body:
-              - Leave "Allow 'Always allow' for connector tools" off and turn off "Allow 'Automatically approve'
-                mode" for sensitive groups under Organization settings > Cowork > Permissions.
+              - Leave "Allow 'Always allow' for connector tools" off under Organization settings > Cowork >
+                Permissions, turn off "Start new tasks in 'Automatically approve' mode" under Organization
+                settings > Capabilities, and turn off "Allow 'Automatically approve' mode" there for groups whose
+                every task must be approved manually.
             url: >-
               https://support.claude.com/en/articles/13455879-use-claude-cowork-on-team-and-enterprise-plans
         note: >-
@@ -1950,7 +1968,8 @@ tools:
                 and 30-day use for each governed item.
             url: https://support.claude.com/en/articles/13837433-manage-plugins-for-your-organization
         note: >-
-          Partial by the rule: there is no admin view of members' scheduled tasks and no way to deny one, runs
+          Partial by the rule: there is no admin view of members' scheduled tasks and no way to deny one short
+          of the organisation or role Scheduled tasks switch, runs
           appear only after they happen, and each task is owned by whoever created it; the inventory covers what
           the organisation distributes, not what members build for themselves.
         verified: "2026-09-25"
@@ -2025,7 +2044,8 @@ tools:
         mechanism: >-
           "Run Cowork in the cloud" or "Enable for your organization" off at Organization settings > Cowork, the
           Cowork in the cloud capability removed from a role (up to 15 minutes), an Inference hooks deny for an
-          account (Enterprise, beta); the owner stops, pauses or deletes their own tasks
+          account (Enterprise, beta); the Scheduled tasks (Was Routines) toggle or role capability; the owner
+          stops, pauses or deletes their own tasks
         steps:
           - title: Disable cloud sessions
             body:
@@ -2038,10 +2058,17 @@ tools:
               - With Inference hooks enforcing, have your AI security server deny that user's requests; turning
                 enforcement on or off reaches every Anthropic server in about a minute.
             url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Stop every scheduled task
+            body:
+              - Turn off Scheduled tasks (Was Routines) at Organization settings > Capabilities > Remote sessions,
+                or the Scheduled tasks capability on a role; turning it off also turns off Cowork's cloud
+                scheduled tasks.
+            url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
         note: >-
-          Partial by the rule: whether switching cloud sessions off stops a running session or a scheduled task
-          is not documented (delay not documented; role changes take up to 15 minutes; network changes reach new
-          sessions only). Only the owner can stop a task or pause and delete a scheduled one. An Inference hooks
+          Partial by the rule: whether switching cloud sessions off stops a running session is not documented
+          (delay not documented; role changes take up to 15 minutes; network changes reach new sessions only).
+          The Scheduled tasks switch stops all scheduled tasks at once, but only the owner can stop one task or
+          pause and delete a single scheduled one. An Inference hooks
           deny refuses the next request without terminating the session or cancelling queued runs, and setting a
           group's pooled budget to $0 freezes its usage on usage-based Enterprise. No EDR complement exists,
           because the sessions run off every endpoint.
