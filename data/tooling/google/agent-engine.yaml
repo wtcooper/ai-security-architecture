@@ -15,6 +15,11 @@
 # ?hl= locale, so read with hl=en; vertex-ai/docs/general/custom-constraints and .../scale/runtime/quotas 404. Pages
 # disagree on Agent Gateway with VPC-SC (manage-agent-access: unsupported; 2026-09-09 release note: supported for
 # gateways created after 2026-09-08).
+# 2026-10-30: added settings (27 rows) and the D3-APA and AML.M0036 rows the drawing now pins; every Agent Platform
+# page read with ?hl=en answered 200; cloud.google.com/security/compliance/hipaa -> docs.cloud.google.com/docs/security/
+# compliance/hipaa; roles/aiplatform.user carries reasoningEngines.create; iam.managed.disableServiceAccountKeyCreation is
+# not on govern/agent-identity-overview (left out of settings). The Managed Agents API stays a variant (same platform,
+# project, IAM, docs tree and billing), not a second entity.
 # 2026-10-04: removed the D3-MFA and D3-AA rows and the stale-binding risk note after the managed-runtime drawing pruned those pins (review MR-02); the orphaned-grant fact moved to the shadow-agents note.
 vendor: google
 family: Gemini Enterprise Agent Platform (Vertex AI Agent Engine)
@@ -372,7 +377,7 @@ tools:
               27001/27017/27018, SOC 1/2/3, PCI DSS, penetration testing; last modified 2026-07-16)
             url: https://cloud.google.com/security/compliance/services-in-scope
           - title: HIPAA covered products (Gemini Enterprise Agent Platform, Model Armor listed)
-            url: https://cloud.google.com/security/compliance/hipaa
+            url: https://docs.cloud.google.com/docs/security/compliance/hipaa
           - title: Agent Platform and zero data retention
             url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/zero-data-retention
           - title: Access Transparency for Agent Platform (Agent Engine listed)
@@ -662,6 +667,351 @@ tools:
           bindings in place, and nothing cancels work handed to A2A subagents. Managed Agents API: DELETE the
           agent resource; its environment lasts 7 days after the last interaction.
         verified: "2026-09-25"
+      - mitigation: D3-APA
+        coverage: native
+        mechanism: >-
+          IAM on the ReasoningEngine resource (a narrow invoker role with aiplatform.reasoningEngines.query and .get
+          bound per agent); deploy permissions (reasoningEngines.create / update / delete) held by the release
+          pipeline; IAM deny policies and Principal Access Boundary on agent identities
+        steps:
+          - title: Bind callers per agent
+            body:
+              - Create a custom role with aiplatform.reasoningEngines.query and aiplatform.reasoningEngines.get and bind
+                it on each agent to the front end or calling agent that needs it, instead of a project-wide role.
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+          - title: Keep deploy rights with the pipeline
+            body:
+              - Grant reasoningEngines.create, update and delete only to the release pipeline's service account;
+                Agent Platform User (roles/aiplatform.user) includes create, so keep it off people in agent projects.
+            url: https://docs.cloud.google.com/iam/docs/roles-permissions/aiplatform
+        note: >-
+          Native on the authorisation rule: Google Cloud IAM administers who may query, deploy, change or delete each
+          agent, per resource, with deny policies that win over grants, and the same IAM governs what the agent's own
+          principal may reach. Boundary: project-level grants (Agent Platform User or Viewer) let any holder query
+          every agent in the project, so per-agent scoping holds only once those are removed; end-user authorisation
+          inside a session is the agent code's.
+        verified: "2026-10-30"
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          Per-agent max_instances (default 100, range 1–1000), resource_limits (default 4 vCPU, 4 GiB) and
+          container_concurrency (default 9); sandbox config.ttl; project quotas
+        steps:
+          - title: Cap the agent's scale-out
+            body:
+              - Set max_instances in the runtimes.create / update config to the agent's expected load (e.g. 10) and
+                keep resource_limits at the default unless the agent needs more.
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+          - title: Expire sandboxes
+            body:
+              - Set config.ttl when creating a sandbox so it is removed when the TTL expires, even if the agent never
+                calls delete().
+            url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/manage-sandboxes
+        note: >-
+          Partial on the resource-consumption rule: the deployer caps how many containers an agent can scale to and
+          how large each is, and sandboxes can be made to expire, but there is no per-session or per-user budget for
+          model tokens, tool calls or run time — a single query may run for up to 7 days — and model spend is bounded
+          only by project quotas and billing alerts outside the runtime.
+        verified: "2026-10-30"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Most are fields of the ReasoningEngine deployment (client.runtimes.create / update, set in the deploying
+    # pipeline's code) or Google Cloud IAM, org-policy and gateway resources in our organisation; none is a
+    # console toggle that reaches running agents by itself. Verified 2026-10-30.
+    settings:
+      - id: agentIdentity
+        name: identity_type=AGENT_IDENTITY
+        where: runtimes.create / update config → identity_type
+        setVia: [apiCli, code]
+        area: identity
+        default: The default identity (the Agent Platform service agent), unless a custom service_account is set
+        recommended: AGENT_IDENTITY on every agent
+        why: Each agent gets its own SPIFFE principal with certificate-bound tokens, so its grants, denials and log entries are its own rather than a shared service account's.
+        mitigations: [D3-CH, D3-CTS, AML.M0028, D3-APA]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+        verified: "2026-10-30"
+      - id: contextAwareAccessOptOut
+        name: GOOGLE_API_PREVENT_AGENT_TOKEN_SHARING_FOR_GCP_SERVICES
+        where: runtimes.create config → env_vars
+        setVia: [code]
+        area: identity
+        default: Unset (the Google-managed Context-Aware Access policy binds tokens to the runtime)
+        recommended: Unset — never False
+        why: Keeps the agent's tokens unusable outside its own runtime, so a token lifted from logs or a tool response can't be replayed.
+        mitigations: [D3-CTS, D3-CH]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+        verified: "2026-10-30"
+      - id: agentInvokerRole
+        name: Custom role with aiplatform.reasoningEngines.query and aiplatform.reasoningEngines.get
+        where: IAM policy on the agent resource (gcloud beta ai reasoning-engines add-iam-policy-binding)
+        setVia: [cloudPolicy, apiCli]
+        area: identity
+        default: Any principal with Agent Platform User or Viewer on the project can query
+        recommended: A narrow invoker role bound on each agent to the front end or calling agent that needs it, not project-wide
+        why: Only the named application or agent can query this agent; a project-wide user role lets any principal in the project drive every agent.
+        mitigations: [D3-APA, AML.M0028]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+        verified: "2026-10-30"
+      - id: deployPermissions
+        name: aiplatform.reasoningEngines.create / update / delete
+        where: IAM roles on the agent project
+        setVia: [cloudPolicy]
+        area: identity
+        default: Included in Agent Platform User (roles/aiplatform.user) as well as Admin and Editor
+        recommended: Held only by the release pipeline's service account and a named few administrators; people get a role without create, update or delete
+        why: Agent Platform User can deploy agents, so a broad user grant lets anyone ship an unreviewed agent; the pipeline then evaluates and records every revision.
+        mitigations: [cap-agent-tool-registry, cap-staged-rollout-gate, D3-APA]
+        url: https://docs.cloud.google.com/iam/docs/roles-permissions/aiplatform
+        verified: "2026-10-30"
+      - id: agentDenyPolicy
+        name: IAM deny policy on agent identities
+        where: IAM deny policy for principalSet://agents.global.org-ORGANIZATION_ID.system.id.goog/*
+        setVia: [cloudPolicy]
+        area: identity
+        default: None
+        recommended: Deny reasoningEngines.create, .delete and .update, and IAM role changes, to all agent identities
+        why: An agent steered by injected content can't deploy, alter or remove other agents or grant itself access; a per-agent deny is the fastest cut-off.
+        mitigations: [AML.M0028, cap-agent-kill-switch, D3-APA]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+        verified: "2026-10-30"
+      - id: principalAccessBoundary
+        name: Principal Access Boundary
+        where: Organization › IAM › principalAccessBoundaryPolicies, bound to the agent principal set
+        setVia: [cloudPolicy, apiCli]
+        area: identity
+        default: None
+        recommended: A boundary limiting agent identities to the agent's own projects
+        why: A role granted by mistake elsewhere in the organisation still can't be used by an agent outside its boundary.
+        mitigations: [AML.M0028, D3-APA]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-identity
+        verified: "2026-10-30"
+      - id: secretEnvVars
+        name: Secret Manager references in env_vars
+        where: runtimes.create config → env_vars → {"secret", "version"}
+        setVia: [code]
+        area: data
+        recommended: Every credential the agent's code reads referenced from Secret Manager, never a literal
+        why: Keys stay in Secret Manager under IAM and audit instead of in the deployment spec, its revisions and the pipeline's logs.
+        mitigations: [D3-CH]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+        verified: "2026-10-30"
+      - id: authManagerProviders
+        name: Auth providers (auth manager)
+        where: Agent Identity auth manager → auth provider per tool (3-legged OAuth, 2-legged OAuth or API key)
+        setVia: [cloudPolicy, apiCli]
+        area: identity
+        recommended: One provider per third-party tool, 3-legged OAuth where the tool acts for a user, each granted only to the agents that call it
+        why: Third-party tokens sit in a Google-managed vault gated by IAM on the agent's identity, not in code or environment variables.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://docs.cloud.google.com/iam/docs/auth-manager-overview
+        verified: "2026-10-30"
+      - id: cmek
+        name: encryption_spec (Customer-managed encryption keys)
+        where: runtimes.create config → encryption_spec.kms_key_name
+        setVia: [code, cloudPolicy]
+        area: data
+        default: Google-managed encryption keys
+        recommended: Google-managed keys; a Cloud KMS key only where a client contract requires key custody
+        why: Data at rest is encrypted either way; CMEK adds revocable key custody at the cost of key operations.
+        mitigations: []
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+        verified: "2026-10-30"
+      - id: memoryTtl
+        name: Memory Bank ttl_config (default_ttl)
+        where: Memory Bank configuration → ttl_config.default_ttl or granular_ttl
+        setVia: [code, apiCli]
+        area: data
+        default: No TTL (memories persist until deleted)
+        recommended: default_ttl of 30 days, longer only where the agent's purpose needs it
+        why: Memories, including anything an injected session wrote, expire instead of steering the agent indefinitely.
+        mitigations: [AML.M0031]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/memory-bank/setup
+        verified: "2026-10-30"
+      - id: memoryIamConditions
+        name: IAM Conditions on aiplatform.googleapis.com/memoryScope
+        where: IAM binding of roles/aiplatform.memoryViewer or memoryEditor with a condition on the memoryScope API attribute
+        setVia: [cloudPolicy]
+        area: data
+        recommended: Memory roles conditioned on the caller's own scope
+        why: One user's memories can't be read or rewritten through another user's session.
+        mitigations: [AML.M0031, D3-APA]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/memory-bank/iam-conditions
+        verified: "2026-10-30"
+      - id: agentGatewayBinding
+        name: agent_gateway_config (agent_to_anywhere_config)
+        where: runtimes.create config → agent_gateway_config.agent_to_anywhere_config.agent_gateway
+        setVia: [code]
+        area: network
+        default: Not set
+        recommended: Bound to your Agent-to-Anywhere gateway on every agent, with identity_type AGENT_IDENTITY
+        why: All of the agent's outbound calls, platform APIs included, pass the gateway's access policies and Model Armor.
+        mitigations: [cap-agent-egress-control, cap-agent-action-policy-enforcement]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy
+        verified: "2026-10-30"
+      - id: approvedGatewaysConstraint
+        name: Restrict Agent Runtime to approved Agent Gateways (custom constraint)
+        where: Organization policy → custom.allowlistedEgressAgentGatewaysForAgentEngine on aiplatform.googleapis.com/ReasoningEngine
+        setVia: [cloudPolicy]
+        area: network
+        default: Not set
+        recommended: Enforced at the organisation, listing your approved gateways
+        why: A deploy or update that omits the gateway, or names an unapproved one, is refused, so no agent ships with ungoverned egress.
+        mitigations: [cap-agent-egress-control, cap-agent-action-policy-enforcement]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/agent-gateway-runtime-deploy
+        verified: "2026-10-30"
+      - id: gatewayAccessAuthorization
+        name: Access Authorization (Audit-only / Enforce policies)
+        where: Agent Gateway › Governed Access Path Agent-to-Anywhere › Access Authorization; or iamEnforcementMode in the IAP authorization extension
+        setVia: [cloudPolicy, apiCli]
+        area: tools
+        recommended: Enforce policies, after an Audit-only period on new gateways; failOpen false
+        why: Requests with no explicit allow are blocked; in Audit-only the gateway lets everything through and only logs.
+        mitigations: [cap-agent-action-policy-enforcement, cap-agent-egress-control]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/gateways/set-up-agent-gateway
+        verified: "2026-10-30"
+      - id: unifiedAccessPolicies
+        name: IAM Unified Access Policies
+        where: Google Cloud console › Policies, or gcloud / Terraform, bound to the gateway project
+        setVia: [cloudPolicy, apiCli]
+        area: tools
+        default: None (an enforcing gateway denies everything)
+        recommended: Allow rules per agent for its MCP servers, tools and endpoints; deny rules on destructive tools
+        why: Each agent reaches only the servers, tools and hosts it was approved for, decided at the gateway rather than in the agent's code.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement, cap-agent-egress-control, D3-APA]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/policies/configure-iam-policies-uap
+        verified: "2026-10-30"
+      - id: modelArmorGateway
+        name: Model Armor templates on Agent Gateway
+        where: Agent Gateway › Client-to-Agent and Agent-to-Anywhere template settings
+        setVia: [cloudPolicy]
+        area: tools
+        default: None
+        recommended: Prompt-injection and jailbreak, malicious-URI and sensitive-data filters on both directions, blocking
+        why: Tool and MCP responses and user requests carrying injected instructions are screened at the gateway before the agent acts on them.
+        mitigations: [cap-input-guardrails]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/govern/configure-model-armor
+        verified: "2026-10-30"
+      - id: modelArmorFloor
+        name: Model Armor floor settings — Agent Platform (Inspect and block violations)
+        where: Model Armor › Floor settings › Agent Platform, at the project
+        setVia: [cloudPolicy]
+        area: tools
+        recommended: Inspect and block violations on agent projects, after an Inspect only period
+        why: Every Gemini call in the project is screened even when an agent isn't bound to a gateway.
+        mitigations: [cap-input-guardrails]
+        url: https://docs.cloud.google.com/model-armor/configure-floor-settings
+        verified: "2026-10-30"
+      - id: toolConfirmation
+        name: require_confirmation (ADK Tool Confirmation)
+        where: Agent code → FunctionTool(..., require_confirmation=True)
+        setVia: [code]
+        area: tools
+        default: "False"
+        recommended: True on tools that send, pay, delete or change permissions
+        why: The agent stops and waits for the user before a consequential tool runs; the feature is experimental, so test it on your session service.
+        mitigations: [AML.M0029]
+        url: https://adk.dev/tools-custom/confirmation/
+        verified: "2026-10-30"
+      - id: pscInterface
+        name: psc_interface_config
+        where: runtimes.create config → psc_interface_config.network_attachment
+        setVia: [code, cloudPolicy]
+        area: network
+        default: Not set (egress from Google's managed network)
+        recommended: Your network attachment where agents reach private systems or run inside VPC Service Controls
+        why: The agent's private traffic enters your VPC, where your firewall and proxy rules apply; it's required for internet access under VPC-SC.
+        mitigations: [cap-agent-egress-control]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/private-service-connect-interface
+        verified: "2026-10-30"
+      - id: sandboxTtl
+        name: config.ttl (Agent Platform sandboxes)
+        where: client.sandboxes.create → config.ttl
+        setVia: [code]
+        area: tools
+        default: Execution state kept up to 14 days (Code Execution)
+        recommended: The session's expected length
+        why: Generated code runs in a sandbox with no network, and its state and files are removed when the task ends, not two weeks later.
+        mitigations: [D3-EI]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/sandbox/manage-sandboxes
+        verified: "2026-10-30"
+      - id: managedAgentsNetwork
+        name: base_environment.network.allowlist (Managed Agents API)
+        where: Agents API → agent base_environment → network.allowlist
+        setVia: [apiCli, code]
+        area: network
+        default: Network access disabled
+        recommended: Disabled, or named domains only — never "*"
+        why: The managed harness's sandbox reaches only the hosts you list, so an injected instruction can't send data anywhere it likes.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        requires: Managed Agents API (Pre-GA)
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/managed-agents/create-manage
+        verified: "2026-10-30"
+      - id: maxInstances
+        name: max_instances
+        where: runtimes.create config → max_instances (with resource_limits and container_concurrency)
+        setVia: [code]
+        area: tools
+        default: "100"
+        recommended: Sized to expected load per agent (e.g. 10), with resource_limits left at the default
+        why: A looping or abused agent can't scale to a hundred containers and run up compute and model spend before anyone notices.
+        mitigations: [AML.M0036]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent
+        verified: "2026-10-30"
+      - id: trafficConfig
+        name: traffic_config (trafficSplitManual)
+        where: runtimes.update config → traffic_config.trafficSplitManual
+        setVia: [apiCli, code]
+        area: tools
+        default: trafficSplitAlwaysLatest
+        recommended: trafficSplitManual — a new revision takes a small share first
+        why: A bad revision reaches a slice of traffic and is rolled back by moving the split, not by redeploying.
+        mitigations: [cap-staged-rollout-gate]
+        requires: Preview (v1beta1)
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic
+        verified: "2026-10-30"
+      - id: registryManagementBoundary
+        name: Agent Registry management boundary
+        where: Agent Registry governance project → management boundary over the folder or organisation
+        setVia: [cloudPolicy]
+        area: audit
+        default: Project-level registration only
+        recommended: A boundary covering every project that deploys agents
+        why: Agents deployed in any project appear in one inventory, so none runs unregistered.
+        mitigations: [cap-agent-tool-registry]
+        url: https://docs.cloud.google.com/agent-registry/register-agents
+        verified: "2026-10-30"
+      - id: agentTelemetry
+        name: GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY
+        where: runtimes.create config → env_vars
+        setVia: [code]
+        area: audit
+        default: Off
+        recommended: '"true" on every agent, routed to your SIEM through a log sink'
+        why: Traces, logs and metrics of each run and tool call land in your project without prompt or response text.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/tracing
+        verified: "2026-10-30"
+      - id: captureMessageContent
+        name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+        where: runtimes.create config → env_vars
+        setVia: [code]
+        area: audit
+        default: Off (prompts and responses not logged)
+        recommended: Off; EVENT_ONLY on agents whose investigations or evaluations need the text, with notice to users
+        why: Prompts, responses and user IDs stay out of logs unless a team has a reason to keep them.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/tracing
+        verified: "2026-10-30"
+      - id: dataAccessAuditLogs
+        name: Data Access audit logs (aiplatform.googleapis.com)
+        where: Google Cloud console › IAM & Admin › Audit Logs › Agent Platform API
+        setVia: [cloudPolicy]
+        area: audit
+        default: Disabled (Data Access logs aren't written unless enabled)
+        recommended: DATA_READ and DATA_WRITE on for agent projects, routed to your SIEM
+        why: Records which principal queried, read sessions or changed memories, alongside the Admin Activity record of deploys and deletes.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/audit-logging
+        verified: "2026-10-30"
     advisories:
       - title: >-
           Unit 42 "Double Agents": code in a deployed Agent Engine agent read the Reasoning Engine service agent's
