@@ -670,6 +670,270 @@ tools:
           custody is the operator's; nothing forces agents onto an app rather than a PAT, which GitHub calls "not
           recommended for production automation".
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Two layers: how you run the server (flags, environment variables, or X-MCP-* headers on the remote
+    # endpoint) and the GitHub org controls that gate the tokens it relays. Verified 2026-10-30.
+    settings:
+      - id: toolsets
+        name: Toolsets
+        where: "Local: --toolsets / GITHUB_TOOLSETS; remote: X-MCP-Toolsets header or /x/{toolset} URL"
+        setVia: [configFile, apiCli]
+        area: tools
+        default: context, issues, pull_requests, repos, users
+        recommended: Only the toolsets the host's job needs — never all
+        why: Every tool the server exposes is one a prompt-injected agent can call with the caller's GitHub rights.
+        mitigations: [AML.M0028]
+        url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+        verified: "2026-10-30"
+      - id: excludeTools
+        name: Exclude Tools
+        where: "Local: --exclude-tools / GITHUB_EXCLUDE_TOOLS; remote: X-MCP-Exclude-Tools header"
+        setVia: [configFile, apiCli]
+        area: tools
+        default: None
+        recommended: Exclude the high-impact writes the host doesn't need (for example merge_pull_request, delete_file)
+        why: Excluded tools stay off even when their toolset is enabled or a client asks for them by name.
+        mitigations: [AML.M0028]
+        url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+        verified: "2026-10-30"
+      - id: readOnly
+        name: Read-Only Mode
+        where: "Local: --read-only / GITHUB_READ_ONLY; remote: X-MCP-Readonly header or /readonly URL"
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "Off"
+        recommended: On for every host that only reads (chat, research, review); off only for agents whose job is to write
+        why: Write tools are removed even if a toolset or tools list asks for them, so a read-only host cannot modify repositories, issues or pull requests.
+        mitigations: [AML.M0028, cap-data-access-governance]
+        url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+        verified: "2026-10-30"
+      - id: lockdownMode
+        name: Lockdown Mode
+        where: "Local: --lockdown-mode / GITHUB_LOCKDOWN_MODE; remote: X-MCP-Lockdown header"
+        setVia: [configFile, apiCli]
+        area: data
+        default: "Off"
+        recommended: "On"
+        why: Issues, comments and pull requests in public repositories from people without push access are withheld — a best-effort filter against injected instructions, not an access boundary.
+        mitigations: []
+        url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+        verified: "2026-10-30"
+      - id: insidersMode
+        name: Insiders Mode
+        where: "Local: --insiders / GITHUB_INSIDERS; remote: X-MCP-Insiders header or /insiders URL"
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "Off"
+        recommended: "Off"
+        why: Early-access experimental tools are off; production hosts get only the released tool set you have reviewed.
+        mitigations: [cap-mcp-tool-integrity]
+        url: https://github.com/github/github-mcp-server/blob/main/docs/server-configuration.md
+        verified: "2026-10-30"
+      - id: oauthScopes
+        name: "--oauth-scopes"
+        where: github-mcp-server stdio --oauth-scopes (local OAuth login)
+        setVia: [apiCli]
+        area: identity
+        default: The full supported set
+        recommended: Only the scopes the enabled toolsets need
+        why: The login token carries no scope the host's tools don't use, and the tool list is filtered to match.
+        mitigations: [D3-CTS, AML.M0028]
+        url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
+        verified: "2026-10-30"
+      - id: scopeChallenge
+        name: "--scope-challenge"
+        where: github-mcp-server http --scope-challenge (self-hosted HTTP)
+        setVia: [apiCli]
+        area: identity
+        default: "false"
+        recommended: "true"
+        why: Clients start with a narrow grant and are asked for a further scope only when a tool needs it.
+        mitigations: [D3-CTS]
+        url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
+        verified: "2026-10-30"
+      - id: githubAppAuth
+        name: "--app-id / --app-installation-id / --app-private-key-path"
+        where: github-mcp-server stdio flags or GITHUB_APP_* variables, key mounted read-only from your secret store
+        setVia: [apiCli, configFile]
+        area: identity
+        default: Unset (personal access token)
+        recommended: For unattended agents, a GitHub App installation on selected repositories instead of a person's PAT
+        why: The server mints short-lived installation tokens scoped to the app's repositories and permissions, with its own rate budget, and the private key never goes on the command line.
+        mitigations: [D3-AA, D3-CH, D3-CTS, AML.M0004]
+        url: https://github.com/github/github-mcp-server/blob/main/docs/github-app-auth.md
+        verified: "2026-10-30"
+      - id: listenHost
+        name: "--listen-host"
+        where: github-mcp-server http --listen-host
+        setVia: [apiCli]
+        area: network
+        default: Empty (all interfaces)
+        recommended: 127.0.0.1, or the private interface behind your MCP gateway
+        why: A self-hosted HTTP server is not reachable from the rest of the network except through the gateway that authenticates callers.
+        mitigations: []
+        url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
+        verified: "2026-10-30"
+      - id: commandLogging
+        name: "--log-file with --enable-command-logging"
+        where: github-mcp-server --log-file <path> --enable-command-logging
+        setVia: [apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, to a protected path shipped to your SIEM
+        why: Every MCP request and response is recorded locally — the tool-level record GitHub's audit log does not give you; it contains content, so restrict who can read it.
+        mitigations: [AML.M0024]
+        url: https://github.com/github/github-mcp-server/blob/main/cmd/github-mcp-server/main.go
+        verified: "2026-10-30"
+      - id: imagePin
+        name: ghcr.io/github/github-mcp-server
+        where: Your deployment's image reference
+        setVia: [configFile]
+        area: tools
+        default: Whatever tag you pull
+        recommended: A release tag pinned by digest, its cosign signature verified before rollout
+        why: Hosts run the release you reviewed, not whatever was pushed last; GitHub's publish workflow signs each image with cosign, so a tampered one fails verification.
+        mitigations: [cap-mcp-tool-integrity, D3-AVE]
+        url: https://github.com/github/github-mcp-server/blob/main/README.md
+        verified: "2026-10-30"
+      - id: dependabotAlerts
+        name: Dependabot alerts
+        where: Settings › Advanced Security › Dependabot alerts, on the repository that pins the server's version
+        setVia: [adminConsole]
+        area: tools
+        recommended: "On"
+        why: A new advisory against the github-mcp-server Go module you deploy raises an alert instead of waiting for someone to read the release notes.
+        mitigations: [D3-AVE, D3-SYSVA]
+        url: https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configure-dependabot-alerts
+        verified: "2026-10-30"
+      - id: requireSaml
+        name: Require SAML authentication
+        where: Enterprise › Settings › Authentication security › SAML single sign-on
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: On, with MFA enforced on the GitHub app in your IdP (Enterprise Managed Users sign in through the IdP by design)
+        why: OAuth and personal access tokens reach SSO-protected organisation data only when tied to a current SSO session; GitHub App installation tokens are exempt.
+        mitigations: [D3-APA, D3-CTS]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/using-saml-for-enterprise-iam/configuring-saml-single-sign-on-for-your-enterprise
+        verified: "2026-10-30"
+      - id: mcpServersInCopilot
+        name: MCP servers in Copilot
+        where: Enterprise › AI controls › MCP
+        setVia: [adminConsole]
+        area: tools
+        recommended: Enabled everywhere, with allowedMcpServers restricting which servers run
+        why: In Copilot hosts this one policy blocks the server, remote or local, whatever the authentication; it does not reach third-party hosts such as Claude or Cursor.
+        mitigations: [D3-APA]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/enterprise/mcp-management
+        verified: "2026-10-30"
+      - id: oauthAppAccessRestrictions
+        name: OAuth app access restrictions
+        where: Organization › Settings › Third-party access › OAuth app policy
+        setVia: [adminConsole]
+        area: tools
+        default: On for new organizations
+        recommended: On; approve each OAuth app on request
+        why: A third-party host's OAuth app reaches organisation data through the server only after an owner approves it.
+        mitigations: [D3-APA, cap-data-access-governance]
+        url: https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions
+        verified: "2026-10-30"
+      - id: githubAppRepositoryAccess
+        name: Only select repositories
+        where: Organization › Settings › GitHub Apps › (app) › Repository access
+        setVia: [adminConsole]
+        area: data
+        default: Chosen at installation
+        recommended: Only select repositories, with the least permissions the host needs
+        why: A host that signs in through a GitHub App can reach only the repositories the installation lists.
+        mitigations: [D3-APA, cap-data-access-governance, D3-CTS]
+        url: https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps
+        verified: "2026-10-30"
+      - id: classicPatRestriction
+        name: Restrict personal access tokens (classic) from accessing your organizations
+        where: Enterprise › Policies › Personal access tokens › Tokens (classic)
+        setVia: [adminConsole]
+        area: identity
+        default: Allow organizations to configure access requirements
+        recommended: Restrict access via personal access tokens (classic)
+        why: Broad, possibly non-expiring classic tokens pasted into MCP configs stop reaching organisation data; fine-grained tokens remain, under approval.
+        mitigations: [D3-CH, D3-APA]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
+      - id: fineGrainedPatApproval
+        name: Require approval of fine-grained personal access tokens
+        where: Enterprise › Policies › Personal access tokens › Fine-grained tokens
+        setVia: [adminConsole]
+        area: identity
+        default: Allow organizations to configure approval requirements
+        recommended: Require approval
+        why: A token a user creates for any MCP host reaches organisation repositories only after an owner approves its repositories and permissions.
+        mitigations: [D3-APA, D3-CTS]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
+      - id: patMaxLifetime
+        name: Set maximum lifetimes for personal access tokens
+        where: Enterprise › Policies › Personal access tokens › Fine-grained tokens and Tokens (classic)
+        setVia: [adminConsole]
+        area: identity
+        default: 366 days for fine-grained tokens; none for classic
+        recommended: 90 days for both token types
+        why: GitHub's own MCP guidance recommends 90 days at most; a leaked token in an MCP config expires rather than living for a year.
+        mitigations: [D3-CH]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
+      - id: revokeSsoAuthorizations
+        name: Revoke SSO authorizations
+        where: Enterprise › Settings › Authentication security › credentials (per member, per credential type, or all members)
+        setVia: [adminConsole]
+        area: identity
+        default: Not applicable (incident action)
+        recommended: Your incident runbook's step for a leaked token or compromised MCP host
+        why: Cuts every affected token's access to SSO-protected organisations at once; under Enterprise Managed Users you can delete the tokens outright.
+        mitigations: [D3-CR]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/respond-to-incidents/revoke-authorizations-or-tokens
+        verified: "2026-10-30"
+      - id: apiRequestEvents
+        name: Enable API Request Events
+        where: Enterprise › Settings › Audit log › Settings › API Requests
+        setVia: [adminConsole]
+        area: audit
+        default: "Off"
+        recommended: "On"
+        why: Security-relevant API calls the server makes for a user or app appear in the streamed audit log, attributed to the token and app.
+        mitigations: [AML.M0024]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: auditLogStreaming
+        name: Audit log streaming
+        where: Enterprise › Settings › Audit log › Log streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Off (GitHub keeps 180 days)
+        recommended: On, to your SIEM
+        why: MCP calls appear as ordinary API activity and OAuth or GitHub App events; streamed, they outlive GitHub's retention and can be alerted on.
+        mitigations: [AML.M0024]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: ghesRateLimiting
+        name: Enable HTTP API Rate Limiting
+        where: GitHub Enterprise Server › Management Console › Rate Limiting
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: On, with limits sized to your agents' expected call rate
+        why: A looping agent driving the local server against GHES is throttled instead of loading the appliance; github.com applies its own limits.
+        mitigations: [AML.M0004]
+        requires: GitHub Enterprise Server
+        url: https://docs.github.com/en/enterprise-server@3.22/admin/configuring-settings/configuring-user-applications-for-your-enterprise/configuring-rate-limits
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-48529 — self-hosted HTTP mode with lockdown on ran every user's repository-access checks on the

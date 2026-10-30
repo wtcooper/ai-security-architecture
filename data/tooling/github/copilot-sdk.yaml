@@ -1319,6 +1319,261 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://docs.github.com/en/copilot/how-tos/copilot-sdk
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The SDK has no admin console: its controls are client and session options in the host application's
+    # code (Node.js names shown; the other SDKs mirror them). Verified 2026-10-30.
+    settings:
+      - id: clientMode
+        name: 'mode: "empty"'
+        where: new CopilotClient({ mode })
+        setVia: [code]
+        area: tools
+        default: "\"copilot-cli\" (the CLI's host tools and defaults)"
+        recommended: '"empty"'
+        why: The application must name its tools, state directory and memory instead of inheriting the CLI's filesystem and shell tools, and exclusions win over inclusions.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
+        verified: "2026-10-30"
+      - id: availableTools
+        name: availableTools / excludedTools
+        where: createSession({ availableTools, excludedTools })
+        setVia: [code]
+        area: tools
+        default: Unset (every tool the runtime offers)
+        recommended: An explicit list (custom:*, mcp:<server>, the few built-ins the agent needs), with write and shell tools excluded where the task is read-only
+        why: The model can only call tools the session lists; excludedTools always wins over availableTools.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/types.ts
+        verified: "2026-10-30"
+      - id: onPermissionRequest
+        name: onPermissionRequest
+        where: createSession({ onPermissionRequest })
+        setVia: [code]
+        area: tools
+        default: Unset (requests stay pending)
+        recommended: A custom handler that rejects by kind and leaves managedApprovalRequired requests for a person — never approveAll in production
+        why: Every shell command, file write, URL fetch, MCP call and memory write is decided by your code with the exact command, path or URL in hand.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: onPreToolUse
+        name: onPreToolUse
+        where: "createSession({ hooks: { onPreToolUse } })"
+        setVia: [code]
+        area: tools
+        default: Unset
+        recommended: Deny secret paths and unapproved hosts; return modifiedArgs to strip credentials from arguments
+        why: Runs inline before each tool call and can deny, ask or rewrite it, including calls the model was talked into by injected content.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-input-guardrails]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/hooks/pre-tool-use
+        verified: "2026-10-30"
+      - id: onPostToolUse
+        name: onPostToolUse
+        where: "createSession({ hooks: { onPostToolUse } })"
+        setVia: [code]
+        area: data
+        default: Unset
+        recommended: Redact secrets and personal data from tool results, and screen web and MCP results, before the model sees them
+        why: The one point where a tool result can be cleaned or replaced before it enters the context window.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+        verified: "2026-10-30"
+      - id: onUserPromptSubmitted
+        name: onUserPromptSubmitted
+        where: "createSession({ hooks: { onUserPromptSubmitted } })"
+        setVia: [code]
+        area: data
+        default: Unset
+        recommended: Pass prompts through your DLP or input-screening service and return a modifiedPrompt
+        why: Secrets and client identifiers pasted by a user are stopped or masked before inference.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/hooks
+        verified: "2026-10-30"
+      - id: systemMessageMode
+        name: systemMessage
+        where: "createSession({ systemMessage: { mode, content } })"
+        setVia: [code]
+        area: tools
+        default: '"append"'
+        recommended: '"append" or "customize" — never "replace"'
+        why: '"replace" removes the SDK-managed sections, security guardrails included.'
+        mitigations: [cap-input-guardrails]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: managedSettings
+        name: managedSettings
+        where: "createSession({ managedSettings: { permissions } }), re-supplied on every resume"
+        setVia: [code]
+        area: tools
+        default: Unset
+        recommended: disableBypassPermissionsMode "disable" plus your deny and ask rules (Shell(), Read(), Edit(), Domain())
+        why: Host-injected policy composes restrictively with server and device policy, so application code cannot be asked to approve what the policy denies.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, AML.M0029]
+        url: https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md
+        verified: "2026-10-30"
+      - id: enableManagedSettings
+        name: enableManagedSettings
+        where: createSession({ enableManagedSettings })
+        setVia: [code]
+        area: tools
+        default: "false"
+        recommended: true for sessions running with an enterprise member's gitHubToken
+        why: The runtime fetches your enterprise's managed policy with the session's token, so the rules developers get in the CLI also bind the SDK; approveAll then throws.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: gitHubTokenProvider
+        name: gitHubTokenProvider
+        where: createSession({ gitHubTokenProvider })
+        setVia: [code]
+        area: identity
+        default: Unset (the client's token or logged-in user)
+        recommended: A provider returning the requesting user's short-lived token, never one shared service token
+        why: Retrieval, content exclusion and quotas follow the person the session serves, tokens rotate, and stopping the provider ends a user's sessions as their tokens expire.
+        mitigations: [D3-CH, D3-CTS, D3-AA, cap-data-access-governance, cap-agent-kill-switch]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: useLoggedInUser
+        name: useLoggedInUser
+        where: new CopilotClient({ useLoggedInUser })
+        setVia: [code]
+        area: identity
+        default: true (false when gitHubToken is given)
+        recommended: false on servers
+        why: A backend never falls back to whatever GitHub login happens to be on the host.
+        mitigations: [D3-CTS, D3-AA]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: connectionToken
+        name: connectionToken
+        where: RuntimeConnection.forTcp({ connectionToken }) / forUri(url, { connectionToken })
+        setVia: [code]
+        area: identity
+        default: Generated when the SDK spawns a TCP runtime; unset for an existing --headless server
+        recommended: A secret from your vault on every TCP connection, with the headless runtime bound to loopback or a private network
+        why: Without it, anything that reaches the runtime's port can drive every session on it with that runtime's token.
+        mitigations: [D3-APA]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: byokBearerTokenProvider
+        name: bearerTokenProvider
+        where: "createSession({ provider: { bearerTokenProvider } })"
+        setVia: [code]
+        area: identity
+        default: Unset (apiKey)
+        recommended: On BYOK deployments, a callback returning a managed-identity token (for example Azure)
+        why: Replaces a long-lived provider API key in configuration with a token that rotates.
+        mitigations: [D3-CH]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/byok
+        verified: "2026-10-30"
+      - id: mcpOAuthTokenStorage
+        name: mcpOAuthTokenStorage
+        where: createSession({ mcpOAuthTokenStorage })
+        setVia: [code]
+        area: identity
+        default: '"in-memory"'
+        recommended: "\"in-memory\" — don't switch to \"persistent\" on shared hosts"
+        why: MCP OAuth tokens are discarded with the session instead of being shared across sessions through the OS keychain.
+        mitigations: [D3-CH]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/src/types.ts
+        verified: "2026-10-30"
+      - id: mcpServers
+        name: mcpServers
+        where: createSession({ mcpServers }) and customAgents[].mcpServers, each with a tools list
+        setVia: [code]
+        area: tools
+        default: Servers discovered from the runtime's configuration
+        recommended: Only approved servers, each with an explicit tools list rather than ["*"]
+        why: The session reaches only servers your code names, and only their listed tools; nothing else verifies them.
+        mitigations: [cap-mcp-tool-integrity, AML.M0028, cap-agent-tool-registry]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
+        verified: "2026-10-30"
+      - id: sandboxConfig
+        name: sandboxConfig
+        where: "createSession({ sandboxConfig: { enabled, sandboxMcpServers } })"
+        setVia: [code]
+        area: tools
+        recommended: enabled true, sandboxMcpServers true
+        why: Shell commands and local MCP servers run in the OS sandbox from session start, before any discovered server launches.
+        mitigations: [D3-EI, cap-mcp-tool-integrity]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
+        verified: "2026-10-30"
+      - id: sandboxNetwork
+        name: sandboxConfig.userPolicy.network
+        where: "createSession({ sandboxConfig: { userPolicy: { network } } })"
+        setVia: [code]
+        area: network
+        default: Outbound allowed
+        recommended: allowedHosts limited to your source host, package mirror and the APIs the agent needs (or allowOutbound false)
+        why: Sandboxed commands cannot send data to hosts you have not listed.
+        mitigations: [cap-agent-egress-control]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/mcp
+        verified: "2026-10-30"
+      - id: sessionLimits
+        name: sessionLimits.maxAiCredits
+        where: "createSession({ sessionLimits: { maxAiCredits } })"
+        setVia: [code]
+        area: tools
+        default: Unset
+        recommended: A per-session cap sized to the task, with the exhausted-budget decision handled by your code
+        why: A looping session stops spending at the cap; it is checked after each model call, so one response can overshoot.
+        mitigations: [AML.M0036]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/session-limits
+        verified: "2026-10-30"
+      - id: sessionIdleTimeout
+        name: sessionIdleTimeoutSeconds
+        where: new CopilotClient({ sessionIdleTimeoutSeconds })
+        setVia: [code]
+        area: data
+        default: Unset (no idle timeout)
+        recommended: "900"
+        why: Idle sessions and their state are cleaned up instead of lingering on the host with client material in them.
+        mitigations: [AML.M0031]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/setup/multi-tenancy
+        verified: "2026-10-30"
+      - id: enableSessionStore
+        name: enableSessionStore
+        where: createSession({ enableSessionStore })
+        setVia: [code]
+        area: data
+        default: On in "copilot-cli" mode; off in "empty" mode
+        recommended: false on multi-user hosts
+        why: One user's past sessions cannot be searched or retrieved into another user's session through the cross-session store.
+        mitigations: [AML.M0031, cap-retrieval-grounding-checks, cap-data-access-governance]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: memory
+        name: memory
+        where: "createSession({ memory: { enabled } })"
+        setVia: [code]
+        area: data
+        default: Runtime default in "copilot-cli" mode; disabled in "empty" mode
+        recommended: enabled false unless the application scopes memory to one user
+        why: Nothing a session is told is carried into later sessions, so injected instructions cannot persist.
+        mitigations: [AML.M0031]
+        url: https://github.com/github/copilot-sdk/blob/main/nodejs/README.md
+        verified: "2026-10-30"
+      - id: telemetry
+        name: telemetry (TelemetryConfig)
+        where: "new CopilotClient({ telemetry: { otlpEndpoint, exporterType } })"
+        setVia: [code]
+        area: audit
+        default: Unset (no export)
+        recommended: otlpEndpoint set to your collector, exporterType otlp-http
+        why: The runtime's traces, metrics and events for each turn and tool call reach your collector, joined to your own traces through W3C trace context.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry
+        verified: "2026-10-30"
+      - id: captureContent
+        name: captureContent
+        where: "new CopilotClient({ telemetry: { captureContent } })"
+        setVia: [code]
+        area: audit
+        recommended: "false"
+        why: Prompts, responses and tool content stay out of the trace pipeline; turn it on only for a bounded investigation.
+        mitigations: [cap-agent-tracing, cap-sensitive-data-redaction]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry
+        verified: "2026-10-30"
     advisories: []
     sources:
       - title: Copilot SDK how-to index

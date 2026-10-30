@@ -1296,6 +1296,353 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://docs.github.com/en/copilot/how-tos/copilot-cli
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Managed keys reach the CLI from MDM (plist, HKLM\SOFTWARE\Policies\GitHubCopilot or a root-owned file) and
+    # from server-managed settings in .github-private, MDM winning per key; long sessions re-read them hourly. Verified 2026-10-30.
+    settings:
+      - id: requireSaml
+        name: Require SAML authentication
+        where: Enterprise › Settings › Authentication security › SAML single sign-on
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: On, with MFA enforced on the GitHub app in your IdP (Enterprise Managed Users sign in through the IdP by design)
+        why: Every Copilot sign-in is bound to an IdP session and its MFA, and tokens without a current SSO authorization stop reaching organisation data.
+        mitigations: [D3-MFA]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/using-saml-for-enterprise-iam/configuring-saml-single-sign-on-for-your-enterprise
+        verified: "2026-10-30"
+      - id: copilotLicences
+        name: Assign licenses (Enterprise Teams)
+        where: Enterprise › Billing and licensing › Licensing › Copilot › Manage › Enterprise Teams › Assign licenses
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: No seats assigned
+        recommended: Licences assigned to enterprise teams synced from the IdP group that grants Copilot
+        why: Joining or leaving the IdP group grants or removes the seat, so a leaver loses Copilot with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-access/grant-access
+        verified: "2026-10-30"
+      - id: forceLoginOrgs
+        name: forceLoginOrgs
+        where: managed-settings.json delivered by MDM (plist, registry or file) → forceLoginOrgs
+        setVia: [mdm]
+        area: identity
+        default: Unset (any account)
+        recommended: '["your-org-login"] — your organisation logins'
+        why: On managed devices the CLI runs only for accounts in your organisations; personal accounts and BYOK or API-key sign-in are refused.
+        mitigations: [D3-MFA, D3-CH, cap-shadow-ai-discovery]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+        verified: "2026-10-30"
+      - id: enterpriseAccessRestrictions
+        name: Enable enterprise access restrictions
+        where: Enterprise › Settings › Authentication security › Enterprise access restrictions; your proxy injects the sec-GitHub-allowed-enterprise header
+        setVia: [adminConsole]
+        area: network
+        default: "Off"
+        recommended: On, with the header injected by your break-and-inspect proxy on github.com, api.github.com and *.githubcopilot.com
+        why: On the corporate network Copilot works only with accounts your enterprise owns, so client code cannot leave under a personal or another company's licence.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Enterprise Managed Users
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/hardening-security-for-your-enterprise/restricting-access-to-githubcom-using-a-corporate-proxy
+        verified: "2026-10-30"
+      - id: copilotCliPolicy
+        name: Copilot CLI
+        where: Enterprise › AI controls › Copilot › Configure features & clients › Clients
+        setVia: [adminConsole]
+        area: tools
+        recommended: Enabled everywhere, set at enterprise level rather than delegated
+        why: A delegated policy lets the least restrictive organisation win; Disabled everywhere is the switch that stops the CLI for every seat (the Copilot app has its own policy).
+        mitigations: [cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/copilot-cli/administer-copilot-cli-for-your-enterprise
+        verified: "2026-10-30"
+      - id: storeTokenPlaintext
+        name: storeTokenPlaintext
+        where: ~/.copilot/settings.json → storeTokenPlaintext
+        setVia: [configFile]
+        area: identity
+        default: "false"
+        recommended: false — don't enable it
+        why: The OAuth token stays in the OS keychain; true writes it in plain text to config.json wherever no keychain exists, such as build servers and containers.
+        mitigations: [D3-CH]
+        url: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+        verified: "2026-10-30"
+      - id: patMaxLifetime
+        name: Set maximum lifetimes for personal access tokens
+        where: Enterprise › Policies › Personal access tokens › Fine-grained tokens and Tokens (classic)
+        setVia: [adminConsole]
+        area: identity
+        default: 366 days for fine-grained tokens; none for classic
+        recommended: 90 days for both token types
+        why: Tokens developers paste into MCP configs and environment files expire instead of living for a year, or for ever with classic tokens.
+        mitigations: [D3-CH]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
+      - id: contentExclusion
+        name: Content exclusion
+        where: Enterprise › AI controls › Copilot › Content exclusion (also organisation and repository Settings › Copilot › Content exclusion)
+        setVia: [adminConsole]
+        area: data
+        default: No exclusions
+        recommended: Secret and key-material paths ("*.pem", "*.key", "**/.env*", "secrets*") and client-restricted repositories, set at enterprise level
+        why: Excluded files are not used as context; GitHub's pages disagree on whether the CLI honours it, so test it before relying on it and pair it with Read() denies.
+        mitigations: [cap-sensitive-data-redaction]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
+        verified: "2026-10-30"
+      - id: mcpServersInCopilot
+        name: MCP servers in Copilot
+        where: Enterprise › AI controls › MCP
+        setVia: [adminConsole]
+        area: tools
+        recommended: Enabled everywhere, with allowedMcpServers restricting which servers run
+        why: GitHub's advice is to keep MCP on and restrict it; Disabled blocks every non-default MCP server in the CLI.
+        mitigations: [cap-mcp-tool-integrity, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/enterprise/mcp-management
+        verified: "2026-10-30"
+      - id: allowedMcpServers
+        name: allowedMcpServers
+        where: copilot/managed-settings.json in the enterprise's .github-private repository (or MDM) → allowedMcpServers
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (every server allowed)
+        recommended: Your approved servers matched by serverUrl or serverCommand, not serverName, plus the connector URLs you allow
+        why: A server not on the list never starts, whichever way the session is started (-p, --acp, --server); the built-in GitHub server is exempt.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#allowedmcpservers
+        verified: "2026-10-30"
+      - id: mcpRegistryRestriction
+        name: Restrict MCP access to registry servers
+        where: Enterprise › AI controls › MCP › MCP Registry URL and Restrict MCP access to registry servers
+        setVia: [adminConsole]
+        area: tools
+        default: Allow all
+        recommended: Registry only, with a registry listing exactly the servers in allowedMcpServers
+        why: A second, name-matched layer for discovery; the managed allowedMcpServers list is the boundary, since registry matching is bypassable by editing local config.
+        mitigations: [cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/restrict-based-on-registry
+        verified: "2026-10-30"
+      - id: strictKnownMarketplaces
+        name: strictKnownMarketplaces
+        where: managed-settings.json → strictKnownMarketplaces
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (built-in and user-added marketplaces)
+        recommended: Your organisation's marketplace repositories only
+        why: Plugins, which bundle agents, hooks and MCP servers, install only from your marketplaces; setting the key also turns off the built-in ones.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity, D3-FA]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#strictknownmarketplaces
+        verified: "2026-10-30"
+      - id: disableBypassPermissionsMode
+        name: permissions.disableBypassPermissionsMode
+        where: managed-settings.json → permissions.disableBypassPermissionsMode
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (allow-all mode available)
+        recommended: '"disable"'
+        why: Neutralises --yolo, --allow-all and /allow-all at startup and in session; account switches cannot undo it, and an unrecognised value fails closed.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: permissionsDeny
+        name: permissions.deny
+        where: managed-settings.json → permissions.deny
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset
+        recommended: "Deny secret paths: Read(~/.ssh/**), Read(~/.aws/**), Read(./.env*), Edit(//etc/**)"
+        why: Managed deny rules win over every mode, user rule and shell redirection the CLI can parse, so keys never enter the context.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-sensitive-data-redaction]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: permissionsAsk
+        name: permissions.ask
+        where: managed-settings.json → permissions.ask
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset
+        recommended: Shell(git push *) and Shell(gh pr merge *)
+        why: A fresh approval that allow-all, assisted approval, hooks and saved grants cannot satisfy, kept for actions that leave the machine.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: defaultMode
+        name: permissions.defaultMode
+        where: managed-settings.json → permissions.defaultMode
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (manual or assisted)
+        recommended: '"manual" — developers may still pick assisted for a session'
+        why: New sessions start by asking before edits and commands, and this managed default outranks the user's defaultPermissionMode.
+        mitigations: [AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: computerUse
+        name: features.computerUse
+        where: managed-settings.json → features.computerUse
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (users decide)
+        recommended: "false"
+        why: The agent cannot take over the desktop's mouse and keyboard, a reach that the shell, file and domain permission rules do not describe.
+        mitigations: [AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: policyHooks
+        name: Policy hooks
+        where: "/etc/github-copilot/policy.d/*.json (Windows: C:\\ProgramData\\GitHub\\Copilot\\policy.d or HKLM\\Software\\Policies\\GitHub\\Copilot)"
+        setVia: [mdm]
+        area: tools
+        default: None
+        recommended: An admin-owned preToolUse hook denying secret-path reads and uploads to unapproved hosts, plus postToolUse logging and redaction
+        why: Root-owned and machine-wide, loaded before user and repository hooks and immune to disableAllHooks; timeouts fail open, so it is one guard, not the only one.
+        mitigations: [cap-agent-action-policy-enforcement, cap-sensitive-data-redaction, cap-input-guardrails]
+        url: https://docs.github.com/en/copilot/reference/hooks-reference
+        verified: "2026-10-30"
+      - id: sandboxEnabled
+        name: sandbox.enabled with sandbox.failIfUnavailable
+        where: managed-settings.json → sandbox.enabled, sandbox.failIfUnavailable
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Off (sandboxing is opt-in)
+        recommended: true / true
+        why: Shell commands run under Seatbelt, Bubblewrap or ProcessContainer, and the CLI blocks model and tool execution if it cannot enforce one; allowBypass stays on for one-off approvals, which regulated teams turn off.
+        mitigations: [D3-EI]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#sandbox
+        verified: "2026-10-30"
+      - id: sandboxMcpServers
+        name: sandbox.sandboxMcpServers
+        where: managed-settings.json → sandbox.sandboxMcpServers
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: On in the user's sandbox settings; not enforced
+        recommended: "true"
+        why: Local MCP servers inherit the sandbox's filesystem and network limits instead of running with the developer's full rights.
+        mitigations: [D3-EI, cap-mcp-tool-integrity]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#sandbox
+        verified: "2026-10-30"
+      - id: sandboxAllowedHosts
+        name: sandbox.userPolicy.network.allowedHosts
+        where: managed-settings.json → sandbox.userPolicy.network.allowedHosts
+        setVia: [mdm, adminConsole]
+        area: network
+        default: Unset (outbound allowed to any host)
+        recommended: Your source host, package mirror and approved internal hosts
+        why: Sandboxed commands reach only listed hosts through the CLI's local proxy, so an injected curl to a paste site fails; Windows relies on programs honouring the proxy.
+        mitigations: [cap-agent-egress-control, D3-FA]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#sandbox
+        verified: "2026-10-30"
+      - id: permissionsLimitTo
+        name: permissions.limitTo
+        where: managed-settings.json → permissions.limitTo
+        setVia: [mdm, adminConsole]
+        area: network
+        default: Unset
+        recommended: Unset — web fetch stays open
+        why: A closed-world domain list that allow-all cannot widen; regulated teams set it to their approved domains, at the cost of general web research.
+        mitigations: []
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+        verified: "2026-10-30"
+      - id: telemetry
+        name: telemetry
+        where: managed-settings.json → telemetry (enabled, endpoint, capture)
+        setVia: [adminConsole, mdm]
+        area: audit
+        default: Unset (no export)
+        recommended: enabled true to your OTLP collector, capture.identity true, every content class false
+        why: Agent turns and tool calls reach your collector attributed to user and machine, without prompts or code in the pipeline.
+        mitigations: [cap-agent-tracing]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#telemetry
+        verified: "2026-10-30"
+      - id: auditLogStreaming
+        name: Audit log streaming
+        where: Enterprise › Settings › Audit log › Log streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Off (GitHub keeps 180 days)
+        recommended: On, to your SIEM
+        why: Policy and licence changes affecting the CLI outlive GitHub's 180 days; local prompts and tool calls are not in the audit log, which is why telemetry is separate.
+        mitigations: [cap-agent-tracing]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: usageRecordsStreaming
+        name: Copilot Usage Records Streaming
+        where: Enterprise › AI controls › Copilot › Copilot Usage Records Streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Not enabled
+        recommended: Enabled everywhere, into the audit-log stream, readable only by your investigations team
+        why: Request and response bodies of Copilot API calls reach your SIEM — the only server-side record of what an agent was asked and answered.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise Managed Users or data residency (public preview)
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: copilotMemory
+        name: Copilot Memory
+        where: Enterprise › AI controls › Copilot › Configure features & clients › Features
+        setVia: [adminConsole]
+        area: data
+        default: Let organizations decide (user-level preferences off)
+        recommended: Let organizations decide — off unless an organisation opts in
+        why: Stored preferences are injected into later sessions; repository facts are governed separately under Repository access, and /memory off disables both locally.
+        mitigations: [AML.M0031]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/copilot-memory/manage-as-administrator
+        verified: "2026-10-30"
+      - id: storeLocalSessionsInCloud
+        name: Store local sessions in the Cloud
+        where: Enterprise › AI controls › Copilot policies
+        setVia: [adminConsole]
+        area: data
+        default: Unconfigured (sessions stay local)
+        recommended: Disabled
+        why: Synced CLI session history sits on GitHub under each user's personal account, where administrators can neither see nor delete it.
+        mitigations: [AML.M0031]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/session-data
+        verified: "2026-10-30"
+      - id: remoteControl
+        name: remoteControl.mode
+        where: managed-settings.json → remoteControl.mode
+        setVia: [mdm, adminConsole]
+        area: sharing
+        recommended: '"disabled"'
+        why: Nobody can steer a CLI session on a developer's machine, or answer its approval prompts, from another device; requireSSO is the option for teams that need it.
+        mitigations: [AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
+        verified: "2026-10-30"
+      - id: forceRemoteSettingsRefresh
+        name: forceRemoteSettingsRefresh
+        where: managed-settings.json delivered by MDM or file → forceRemoteSettingsRefresh
+        setVia: [mdm]
+        area: tools
+        default: Unset (one-hour policy cache)
+        recommended: "true"
+        why: The CLI starts only with current policy instead of a cache up to an hour old, so a tightened allowlist reaches every new session; Copilot is unavailable offline.
+        mitigations: [cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#forceremotesettingsrefresh
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-29783 — Copilot CLI shell tool: bash parameter-expansion patterns bypass the read-only

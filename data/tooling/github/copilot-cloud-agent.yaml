@@ -1206,6 +1206,374 @@ tools:
           token to harden, and credentials for internal MCP servers are Agents secrets (COPILOT_MCP_*). A token
           obtained by OIDC in setup steps is short-lived but also lands in the sandbox.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Copilot in the cloud replaced the cloud agent and Chat in GitHub policies; managed-settings keys
+    # apply to cloud sandbox sessions, not to sessions on GitHub Actions. Verified 2026-10-30.
+    settings:
+      - id: requireSaml
+        name: Require SAML authentication
+        where: Enterprise › Settings › Authentication security › SAML single sign-on
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: On, with MFA enforced on the GitHub app in your IdP (Enterprise Managed Users sign in through the IdP by design)
+        why: Starting or resuming a session on an organisation's repositories needs a current SSO session, so a leaver's or a lapsed account cannot delegate work.
+        mitigations: [D3-APA]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/using-saml-for-enterprise-iam/configuring-saml-single-sign-on-for-your-enterprise
+        verified: "2026-10-30"
+      - id: copilotInTheCloud
+        name: Copilot in the cloud
+        where: Enterprise › AI controls › Copilot › Configure features & clients
+        setVia: [adminConsole, apiCli]
+        area: identity
+        default: Enabled
+        recommended: Enabled for selected organizations, chosen at enterprise level
+        why: Cloud sessions, issue assignment and cloud sandboxes reach only the organisations you chose; Disabled everywhere stops them for every licensed user.
+        mitigations: [D3-APA, cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-agents/enable-copilot-cloud-agent
+        verified: "2026-10-30"
+      - id: blockCloudAgent
+        name: Block Copilot cloud agent in all repositories owned by ENTERPRISE-NAME
+        where: Enterprise › AI controls › Agents › Copilot in the cloud
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: Off — the first step of your incident runbook
+        why: Unlike licence policies it applies to everyone, including users with a personal plan or another enterprise's seat, so it is the true enterprise-wide stop.
+        mitigations: [cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-agents/block-agentic-features
+        verified: "2026-10-30"
+      - id: cloudRepositoryAccess
+        name: Repository access
+        where: Organization › Settings › Copilot › Cloud › Repository access
+        setVia: [adminConsole]
+        area: tools
+        default: All repositories
+        recommended: Selected repositories — those with rulesets and setup steps reviewed for agents
+        why: Anyone with Copilot and write access can delegate work to the agent; the agent works only where you have prepared the guardrails.
+        mitigations: [D3-APA, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-organization/add-copilot-cloud-agent
+        verified: "2026-10-30"
+      - id: allowAutomations
+        name: Allow automations
+        where: Organization › Settings › Copilot › Cloud › Allow automations
+        setVia: [adminConsole]
+        area: tools
+        default: Allowed
+        recommended: Blocked, then allowed per organisation that needs scheduled or event-driven sessions
+        why: Automations start sessions unattended, on a schedule, an event or an API call, and are visible only to their creator.
+        mitigations: [cap-agent-tool-registry, AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-organization/add-copilot-cloud-agent
+        verified: "2026-10-30"
+      - id: partnerAgents
+        name: Allow Claude coding agent / Allow Codex coding agent
+        where: Enterprise › AI controls › Agents, then Organization › Settings › Copilot policies
+        setVia: [adminConsole]
+        area: tools
+        recommended: Off until each vendor has passed your AI vendor assessment
+        why: Each switch installs a partner GitHub App that works on your repositories with another vendor's model and data path.
+        mitigations: [cap-ai-vendor-assessment, cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/agents/about-third-party-coding-agents
+        verified: "2026-10-30"
+      - id: agentApps
+        name: Agent apps
+        where: Enterprise › AI controls › Agents (agent apps policy), then each app's organisation installation
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: Off; enable only for apps your vendor review has approved
+        why: An agent app is a partner GitHub App with its own prompt, tools and MCP servers calling back to the partner's systems, billed to your Copilot.
+        mitigations: [cap-ai-vendor-assessment, cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/agents/agent-apps
+        verified: "2026-10-30"
+      - id: runnerType
+        name: Runner type
+        where: Organization › Settings › Copilot › Cloud › Runner type
+        setVia: [adminConsole]
+        area: tools
+        default: Standard GitHub runner (ubuntu-latest)
+        recommended: Standard GitHub runner, or a labelled group of ephemeral self-hosted runners where private network access is needed
+        why: Each Actions session gets a fresh virtual machine, so nothing one session leaves behind is there for the next.
+        mitigations: [D3-EI]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-organization/configure-runner-for-coding-agent
+        verified: "2026-10-30"
+      - id: allowRepoRunnerCustomization
+        name: Allow repositories to customize the runner type
+        where: Organization › Settings › Copilot › Cloud
+        setVia: [adminConsole]
+        area: tools
+        default: Enabled
+        recommended: Disabled
+        why: A repository's copilot-setup-steps.yml cannot move the agent onto a long-lived or privileged runner.
+        mitigations: [D3-EI]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-organization/configure-runner-for-coding-agent
+        verified: "2026-10-30"
+      - id: enableFirewall
+        name: Enable firewall
+        where: Organization › Settings › Copilot › Internet access › Copilot in the cloud
+        setVia: [adminConsole]
+        area: network
+        default: Let repositories decide (firewall on)
+        recommended: Enabled
+        why: Repository admins cannot switch off the egress filter that stands between an injected instruction and an upload of your code; it covers the agent's Bash tool, not MCP servers or setup steps.
+        mitigations: [cap-agent-egress-control]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-the-firewall
+        verified: "2026-10-30"
+      - id: recommendedAllowlist
+        name: Recommended allowlist
+        where: Organization › Settings › Copilot › Internet access › Copilot in the cloud
+        setVia: [adminConsole]
+        area: network
+        default: Let repositories decide (enabled)
+        recommended: Disabled, with your package mirror in the organization custom allowlist
+        why: The default list opens every public package and container registry; routing installs through your mirror keeps dependencies scanned and egress narrow.
+        mitigations: [cap-agent-egress-control]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-the-firewall
+        verified: "2026-10-30"
+      - id: allowRepoCustomRules
+        name: Allow repository custom rules
+        where: Organization › Settings › Copilot › Internet access
+        setVia: [adminConsole]
+        area: network
+        default: Enabled
+        recommended: Disabled; hosts are added to the organisation list on request
+        why: A repository admin cannot quietly widen where the agent can send data.
+        mitigations: [cap-agent-egress-control]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-the-firewall
+        verified: "2026-10-30"
+      - id: orgCustomAllowlist
+        name: Organization custom allowlist
+        where: Organization › Settings › Copilot › Internet access › Organization custom allowlist
+        setVia: [adminConsole]
+        area: network
+        default: Empty
+        recommended: Your package mirror, internal registries and the external hosts your teams have justified
+        why: One allowlist the organisation maintains, which repositories cannot delete entries from.
+        mitigations: [cap-agent-egress-control]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-the-firewall
+        verified: "2026-10-30"
+      - id: requireApprovalWorkflowRuns
+        name: Require approval for workflow runs
+        where: Repository › Settings › Copilot › Cloud agent › Policies
+        setVia: [adminConsole]
+        area: tools
+        default: "On"
+        recommended: On — don't turn it off
+        why: Workflows on Copilot's branch wait for someone with write access, so unreviewed agent code cannot reach Actions secrets or a write token.
+        mitigations: [AML.M0029, D3-CTS]
+        url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/configuring-agent-settings
+        verified: "2026-10-30"
+      - id: unattributedCopilotApproval
+        name: Require an additional approval for unattributed Copilot pull requests
+        where: Repository or organisation ruleset › Require a pull request before merging
+        setVia: [adminConsole]
+        area: tools
+        default: "On"
+        recommended: On — don't clear it
+        why: "A pull request Copilot opens under its own identity still gets two humans: one more approval than the rule asks for."
+        mitigations: [AML.M0029]
+        url: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+        verified: "2026-10-30"
+      - id: allowCopilotApprove
+        name: Allow Copilot to approve pull requests
+        where: Enterprise › AI controls › Copilot › Configure features & clients › Copilot code review
+        setVia: [adminConsole]
+        area: tools
+        default: Disabled everywhere
+        recommended: Disabled everywhere
+        why: Copilot cannot approve, and so help merge, a pull request that Copilot wrote.
+        mitigations: [AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/set-up-copilot/configure-code-review
+        verified: "2026-10-30"
+      - id: codeOwnersForAgentConfig
+        name: Require review from Code Owners
+        where: Ruleset › Require a pull request before merging, with CODEOWNERS covering .github/copilot, .github/agents, .github/hooks and copilot-setup-steps.yml
+        setVia: [adminConsole, configFile]
+        area: tools
+        default: "Off"
+        recommended: On for the paths that configure agents, MCP servers and setup steps
+        why: A change to what the agent runs, which MCP servers it gets or which hooks fire needs the owning team's approval.
+        mitigations: [cap-agent-tool-registry, AML.M0028]
+        url: https://docs.github.com/en/copilot/tutorials/cloud-agent/build-guardrails
+        verified: "2026-10-30"
+      - id: agentsSecretsAccess
+        name: Agents secrets and variables › Repository access
+        where: Organization › Settings › Secrets and variables › Agents
+        setVia: [adminConsole, apiCli]
+        area: identity
+        default: Chosen per secret
+        recommended: Selected repositories, with MCP credentials prefixed COPILOT_MCP_
+        why: Each credential reaches only the repositories that need it, and COPILOT_MCP_ values reach MCP servers, not the agent's shell; Actions secrets stay out of reach.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/customize-cloud-agent/configure-secrets-and-variables
+        verified: "2026-10-30"
+      - id: mcpServersInCopilot
+        name: MCP servers in Copilot
+        where: Enterprise › AI controls › MCP
+        setVia: [adminConsole]
+        area: tools
+        recommended: Enabled everywhere, with allowedMcpServers restricting which servers run
+        why: GitHub's advice is to keep MCP on and restrict it; Disabled leaves the agent only its built-in GitHub and Playwright servers.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/enterprise/mcp-management
+        verified: "2026-10-30"
+      - id: allowedMcpServers
+        name: allowedMcpServers
+        where: copilot/managed-settings.json in the enterprise's .github-private repository (or MDM) → allowedMcpServers
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (every server allowed)
+        recommended: Your approved servers matched by serverUrl or serverCommand, not serverName, plus the connector URLs you allow
+        why: Enforced in cloud sandboxes, not on GitHub Actions or for servers in custom agent profiles, where the firewall is what stops them starting.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#allowedmcpservers
+        verified: "2026-10-30"
+      - id: disableBypassPermissionsMode
+        name: permissions.disableBypassPermissionsMode
+        where: managed-settings.json → permissions.disableBypassPermissionsMode
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (allow-all mode available)
+        recommended: '"disable"'
+        why: Cloud sandbox sessions cannot be switched to allow-all; sessions on GitHub Actions do not read managed settings.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: permissionsDeny
+        name: permissions.deny
+        where: managed-settings.json → permissions.deny
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset
+        recommended: "Deny secret paths: Read(~/.ssh/**), Read(~/.aws/**), Read(./.env*), Edit(//etc/**)"
+        why: Deny rules hold in cloud sandbox sessions whatever the user or repository sets; GitHub Actions sessions rely on the scoped token and rulesets instead.
+        mitigations: [AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: permissionsAsk
+        name: permissions.ask
+        where: managed-settings.json → permissions.ask
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset
+        recommended: Shell(git push *) and Shell(gh pr merge *)
+        why: In cloud sandbox sessions the user is asked afresh before each matching action; assisted approval and allow-all cannot answer for them.
+        mitigations: [AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: repositoryHooks
+        name: Repository-level hook files (.github/hooks/*.json)
+        where: Repository → .github/hooks/*.json, protected by CODEOWNERS
+        setVia: [configFile]
+        area: tools
+        default: None
+        recommended: A preToolUse deny for secret paths and a postToolUse hook that screens web and MCP results, from your template repository
+        why: The only place to inspect a tool result before the model reads it in a cloud session; policy hooks are not supported there.
+        mitigations: [cap-input-guardrails, AML.M0028]
+        url: https://docs.github.com/en/copilot/reference/hooks-reference
+        verified: "2026-10-30"
+      - id: contentExclusion
+        name: Content exclusion
+        where: Enterprise › AI controls › Copilot › Content exclusion (also organisation and repository Settings › Copilot › Content exclusion)
+        setVia: [adminConsole]
+        area: data
+        default: No exclusions
+        recommended: Secret and key-material paths ("*.pem", "*.key", "**/.env*", "secrets*") and client-restricted repositories, set at enterprise level
+        why: Excluded files are not used as context by cloud sessions; it narrows what the agent reads, not what its token can reach.
+        mitigations: []
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
+        verified: "2026-10-30"
+      - id: copilotMemory
+        name: Copilot Memory
+        where: Enterprise › AI controls › Copilot › Configure features & clients › Features
+        setVia: [adminConsole]
+        area: data
+        default: Let organizations decide (user-level preferences off)
+        recommended: Let organizations decide — off unless an organisation opts in
+        why: Stored preferences are injected into later sessions and administrators can export or delete them; repository facts are governed separately under Repository access.
+        mitigations: [AML.M0031]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/copilot-memory/manage-as-administrator
+        verified: "2026-10-30"
+      - id: userLevelBudget
+        name: Universal user-level budget
+        where: Enterprise › Billing and licensing › Budgets and alerts
+        setVia: [adminConsole]
+        area: tools
+        default: None
+        recommended: A monthly AI-credit cap per user, with individual overrides for power users
+        why: A runaway or looping session stops at the user's cap; user-level budgets are always a hard stop.
+        mitigations: [AML.M0036]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/billing-and-usage/organizations-and-enterprises/budgets
+        verified: "2026-10-30"
+      - id: stopUsageAtBudget
+        name: Stop usage when budget limit is reached
+        where: Enterprise › Billing and licensing › Budgets and alerts › (SKU-level budget for Copilot cloud agent)
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: "On"
+        why: Without it a budget only emails; with it, cloud agent spend stops at the limit you set.
+        mitigations: [AML.M0036]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/billing-and-usage/organizations-and-enterprises/budgets
+        verified: "2026-10-30"
+      - id: auditLogStreaming
+        name: Audit log streaming
+        where: Enterprise › Settings › Audit log › Log streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Off (GitHub keeps 180 days)
+        recommended: On, to your SIEM
+        why: Agent activity (actor:Copilot, agent_session_id) and policy changes outlive GitHub's 180 days and can be alerted on.
+        mitigations: [cap-agent-tracing]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: usageRecordsStreaming
+        name: Copilot Usage Records Streaming
+        where: Enterprise › AI controls › Copilot › Copilot Usage Records Streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Not enabled
+        recommended: Enabled everywhere, into the audit-log stream, readable only by your investigations team
+        why: Request and response bodies from cloud sessions reach your SIEM — the record of what the agent was asked, read and answered.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise Managed Users or data residency (public preview)
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: validationTools
+        name: Validation tools
+        where: Repository › Settings › Copilot › Cloud agent › Validation tools
+        setVia: [adminConsole]
+        area: tools
+        default: "On"
+        recommended: On — don't turn them off
+        why: The agent's own code is checked for security issues and secrets and reviewed by Copilot code review before its pull request is finished.
+        mitigations: []
+        url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/configuring-agent-settings
+        verified: "2026-10-30"
     advisories: []
     sources:
       - title: About GitHub Copilot cloud agent

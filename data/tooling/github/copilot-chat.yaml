@@ -923,6 +923,172 @@ tools:
                 The policy applies at the next request; a hand-off already running in the cloud agent is
                 stopped from that agent's session log, not from the chat policy.
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Chat on github.com now sits under the unified Copilot in the cloud policy; what it can read is
+    # decided by repository permissions and content exclusion, set in GitHub, not in Copilot. Verified 2026-10-30.
+    settings:
+      - id: requireSaml
+        name: Require SAML authentication
+        where: Enterprise › Settings › Authentication security › SAML single sign-on
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: On, with MFA enforced on the GitHub app in your IdP (Enterprise Managed Users sign in through the IdP by design)
+        why: Chat reads organisation repositories only with a current SSO session, so a leaver's or lapsed account cannot keep asking questions of client code.
+        mitigations: [D3-APA]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/using-saml-for-enterprise-iam/configuring-saml-single-sign-on-for-your-enterprise
+        verified: "2026-10-30"
+      - id: copilotLicences
+        name: Assign licenses (Enterprise Teams)
+        where: Enterprise › Billing and licensing › Licensing › Copilot › Manage › Enterprise Teams › Assign licenses
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: No seats assigned
+        recommended: Licences assigned to enterprise teams synced from the IdP group that grants Copilot
+        why: Joining or leaving the IdP group grants or removes the seat, so a leaver loses Copilot with their account rather than with a ticket.
+        mitigations: [D3-APA, cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-access/grant-access
+        verified: "2026-10-30"
+      - id: copilotInTheCloud
+        name: Copilot in the cloud
+        where: Enterprise › AI controls › Copilot › Configure features & clients
+        setVia: [adminConsole, apiCli]
+        area: identity
+        default: Enabled
+        recommended: Enabled for selected organizations, chosen at enterprise level
+        why: This one policy now gates chat on github.com and GitHub Mobile as well as cloud sessions; Disabled everywhere removes them for every seat you license.
+        mitigations: [D3-APA, cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-agents/enable-copilot-cloud-agent
+        verified: "2026-10-30"
+      - id: enterpriseAccessRestrictions
+        name: Enable enterprise access restrictions
+        where: Enterprise › Settings › Authentication security › Enterprise access restrictions; your proxy injects the sec-GitHub-allowed-enterprise header
+        setVia: [adminConsole]
+        area: network
+        default: "Off"
+        recommended: On, with the header injected by your break-and-inspect proxy on github.com, api.github.com and *.githubcopilot.com
+        why: On the corporate network Copilot works only with accounts your enterprise owns, so client code cannot leave under a personal or another company's licence.
+        mitigations: [D3-OTF, cap-shadow-ai-discovery]
+        requires: Enterprise Managed Users
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/hardening-security-for-your-enterprise/restricting-access-to-githubcom-using-a-corporate-proxy
+        verified: "2026-10-30"
+      - id: baseRepositoryPermissions
+        name: Base permissions
+        where: Organization › Settings › Member privileges › Base permissions
+        setVia: [adminConsole]
+        area: data
+        recommended: No permission, with access granted through teams per engagement
+        why: Chat retrieves as the requesting user, so every repository a member can read by default is one chat will summarise for them; internal repositories stay readable regardless.
+        mitigations: [cap-data-access-governance, D3-DI, AML.M0028]
+        url: https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/setting-base-permissions-for-an-organization
+        verified: "2026-10-30"
+      - id: repositoryClassification
+        name: Custom properties
+        where: Organization › Settings › Repository › Custom properties
+        setVia: [adminConsole, apiCli]
+        area: data
+        default: None defined
+        recommended: A required data-classification property (for example public, internal, client-confidential) on every repository
+        why: Gives you an inventory of which repositories hold client data, which content exclusion and rulesets can then target.
+        mitigations: [D3-DI]
+        url: https://docs.github.com/en/organizations/managing-organization-settings/managing-custom-properties-for-repositories-in-your-organization
+        verified: "2026-10-30"
+      - id: contentExclusion
+        name: Content exclusion
+        where: Enterprise › AI controls › Copilot › Content exclusion (also organisation and repository Settings › Copilot › Content exclusion)
+        setVia: [adminConsole]
+        area: data
+        default: No exclusions
+        recommended: Secret and key-material paths ("*.pem", "*.key", "**/.env*", "secrets*") and client-restricted repositories, set at enterprise level
+        why: Excluded files are not used to answer questions on github.com or in GitHub Mobile; third-party MCP servers are not bound by it.
+        mitigations: [cap-data-access-governance, cap-sensitive-data-redaction]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
+        verified: "2026-10-30"
+      - id: webSearch
+        name: Copilot can search the web
+        where: Enterprise › AI controls › Copilot › Configure features & clients
+        setVia: [adminConsole]
+        area: network
+        recommended: Enabled
+        why: Web grounding is part of the tool's value; the generated queries leave for the search provider, so regulated teams disable it at enterprise level.
+        mitigations: []
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/supported-surfaces-for-policies
+        verified: "2026-10-30"
+      - id: requirePullRequest
+        name: Require a pull request before merging
+        where: Organization or repository ruleset › Branch rules, targeting the default branch
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: No ruleset
+        recommended: On, with at least one approving review
+        why: Chat's write skills (create or update files, push, merge) still meet the branch's review requirement, so a confirmed chat action cannot land unreviewed code.
+        mitigations: [AML.M0029, AML.M0028]
+        url: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets
+        verified: "2026-10-30"
+      - id: oauthAppAccessRestrictions
+        name: OAuth app access restrictions
+        where: Organization › Settings › Third-party access › OAuth app policy
+        setVia: [adminConsole]
+        area: tools
+        default: On for new organizations
+        recommended: On; approve each OAuth app on request
+        why: Another chat product's GitHub connector reaches organisation data only after an owner approves its OAuth app.
+        mitigations: [D3-APA, cap-agent-tool-registry]
+        url: https://docs.github.com/en/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions
+        verified: "2026-10-30"
+      - id: fineGrainedPatApproval
+        name: Require approval of fine-grained personal access tokens
+        where: Enterprise › Policies › Personal access tokens › Fine-grained tokens
+        setVia: [adminConsole]
+        area: identity
+        default: Allow organizations to configure approval requirements
+        recommended: Require approval
+        why: A token a user pastes into another AI tool reaches organisation repositories only after an owner approves it.
+        mitigations: [D3-APA, D3-CH]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
+      - id: patMaxLifetime
+        name: Set maximum lifetimes for personal access tokens
+        where: Enterprise › Policies › Personal access tokens › Fine-grained tokens and Tokens (classic)
+        setVia: [adminConsole]
+        area: identity
+        default: 366 days for fine-grained tokens; none for classic
+        recommended: 90 days for both token types
+        why: Tokens used for Copilot administration and pasted into other AI tools expire instead of living for a year, or for ever with classic tokens.
+        mitigations: [D3-CH]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
+      - id: auditLogStreaming
+        name: Audit log streaming
+        where: Enterprise › Settings › Audit log › Log streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Off (GitHub keeps 180 days)
+        recommended: On, to your SIEM
+        why: Copilot policy, licence and content-exclusion changes and agent activity (actor:Copilot) outlive GitHub's 180 days; chat transcripts are not in it.
+        mitigations: [cap-agent-tracing]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: usageRecordsStreaming
+        name: Copilot Usage Records Streaming
+        where: Enterprise › AI controls › Copilot › Copilot Usage Records Streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Not enabled
+        recommended: Enabled everywhere, into the audit-log stream, readable only by your investigations team
+        why: Request and response bodies of Copilot API calls reach your SIEM; GitHub's pages do not say chat on github.com is covered, so confirm it in your stream.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise Managed Users or data residency (public preview)
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CamoLeak — hidden PR-comment prompt injection exfiltrates private repository content through

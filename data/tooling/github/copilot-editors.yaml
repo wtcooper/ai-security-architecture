@@ -1389,6 +1389,371 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://docs.github.com/en/copilot
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Three planes: GitHub enterprise policies (all IDEs), managed-settings.json (VS Code Agent Host and
+    # JetBrains) and VS Code device policies (ADMX/plist/policy.json); Visual Studio is ADMX-only. Verified 2026-10-30.
+    settings:
+      - id: requireSaml
+        name: Require SAML authentication
+        where: Enterprise › Settings › Authentication security › SAML single sign-on
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: On, with MFA enforced on the GitHub app in your IdP (Enterprise Managed Users sign in through the IdP by design)
+        why: Every Copilot sign-in is bound to an IdP session and its MFA, and tokens without a current SSO authorization stop reaching organisation data.
+        mitigations: [D3-MFA]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/managing-iam/using-saml-for-enterprise-iam/configuring-saml-single-sign-on-for-your-enterprise
+        verified: "2026-10-30"
+      - id: copilotLicences
+        name: Assign licenses (Enterprise Teams)
+        where: Enterprise › Billing and licensing › Licensing › Copilot › Manage › Enterprise Teams › Assign licenses
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: No seats assigned
+        recommended: Licences assigned to enterprise teams synced from the IdP group that grants Copilot
+        why: Joining or leaving the IdP group grants or removes the seat, so a leaver loses Copilot with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/manage-access/grant-access
+        verified: "2026-10-30"
+      - id: enterpriseAccessRestrictions
+        name: Enable enterprise access restrictions
+        where: Enterprise › Settings › Authentication security › Enterprise access restrictions; your proxy injects the sec-GitHub-allowed-enterprise header
+        setVia: [adminConsole]
+        area: network
+        default: "Off"
+        recommended: On, with the header injected by your break-and-inspect proxy on github.com, api.github.com and *.githubcopilot.com
+        why: On the corporate network Copilot works only with accounts your enterprise owns, so client code cannot leave under a personal or another company's licence.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Enterprise Managed Users
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/configuring-settings/hardening-security-for-your-enterprise/restricting-access-to-githubcom-using-a-corporate-proxy
+        verified: "2026-10-30"
+      - id: approvedAccountOrganizations
+        name: ChatApprovedAccountOrganizations
+        where: VS Code device policy (ADMX, macOS profile or /etc/vscode/policy.json) → ChatApprovedAccountOrganizations
+        setVia: [mdm]
+        area: identity
+        default: Unset (any GitHub account)
+        recommended: '["your-org-login"] — your organisation logins'
+        why: VS Code's AI features stay off until the signed-in account belongs to one of your organisations (fail-closed); JetBrains, Xcode and Eclipse have no equivalent.
+        mitigations: [D3-MFA, cap-shadow-ai-discovery]
+        url: https://code.visualstudio.com/docs/enterprise/ai-settings
+        verified: "2026-10-30"
+      - id: agentModePolicy
+        name: Copilot Agent Mode in IDE Chat
+        where: Enterprise › AI controls › Copilot › Configure features & clients
+        setVia: [adminConsole]
+        area: tools
+        recommended: Enabled everywhere, set at enterprise level rather than delegated
+        why: Across a user's organisations the least restrictive value wins, so only the enterprise setting holds — and Disabled everywhere is the switch that stops agent mode in every IDE.
+        mitigations: [cap-agent-kill-switch, AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/policy-conflicts
+        verified: "2026-10-30"
+      - id: contentExclusion
+        name: Content exclusion
+        where: Enterprise › AI controls › Copilot › Content exclusion (also organisation and repository Settings › Copilot › Content exclusion)
+        setVia: [adminConsole]
+        area: data
+        default: No exclusions
+        recommended: Secret and key-material paths ("*.pem", "*.key", "**/.env*", "secrets*") and client-restricted repositories, set at enterprise level
+        why: Excluded files never inform suggestions or chat answers; VS Code's edit and agent modes and Xcode and Eclipse chat ignore it, so it is minimisation, not a boundary.
+        mitigations: [cap-sensitive-data-redaction]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/configure-content-exclusion/exclude-content-from-copilot
+        verified: "2026-10-30"
+      - id: webSearch
+        name: Copilot can search the web
+        where: Enterprise › AI controls › Copilot › Configure features & clients
+        setVia: [adminConsole]
+        area: network
+        recommended: Enabled
+        why: Web grounding is part of the tool's value; the generated queries leave for the search provider, so regulated teams disable it at enterprise level.
+        mitigations: []
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/supported-surfaces-for-policies
+        verified: "2026-10-30"
+      - id: editorPreviewFeatures
+        name: Editor preview features
+        where: Enterprise › AI controls › Copilot › Configure features & clients
+        setVia: [adminConsole]
+        area: tools
+        recommended: Disabled everywhere; enabled for a pilot organisation once a preview has been reviewed
+        why: Copilot connectors, the unified plugin marketplace and GitHub Environments arrive as previews, often before their admin controls; turning the policy off forces them off in VS Code.
+        mitigations: [cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://code.visualstudio.com/docs/enterprise/ai-settings
+        verified: "2026-10-30"
+      - id: mcpServersInCopilot
+        name: MCP servers in Copilot
+        where: Enterprise › AI controls › MCP
+        setVia: [adminConsole]
+        area: tools
+        recommended: Enabled everywhere, with allowedMcpServers restricting which servers run
+        why: GitHub's advice is to keep MCP on and restrict it; Disabled blocks every MCP server and connector in the IDEs, GitHub's own included.
+        mitigations: [cap-mcp-tool-integrity, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/enterprise/mcp-management
+        verified: "2026-10-30"
+      - id: allowedMcpServers
+        name: allowedMcpServers
+        where: copilot/managed-settings.json in the enterprise's .github-private repository (or MDM) → allowedMcpServers
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (every server allowed)
+        recommended: Your approved servers matched by serverUrl or serverCommand, not serverName, plus the connector URLs you allow
+        why: A server or connector not on the list never starts in VS Code or JetBrains; name-only entries are spoofable, so identity is enforced on URL or command.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#allowedmcpservers
+        verified: "2026-10-30"
+      - id: chatAllowManagedMcpServersOnly
+        name: ChatAllowManagedMcpServersOnly
+        where: VS Code device policy → ChatAllowManagedMcpServersOnly
+        setVia: [mdm]
+        area: tools
+        default: Unset
+        recommended: "true"
+        why: VS Code decides which servers may run from the enterprise-managed allowlist alone, so a developer's own allow entries cannot widen it.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry]
+        url: https://code.visualstudio.com/docs/enterprise/policies
+        verified: "2026-10-30"
+      - id: mcpRegistryRestriction
+        name: Restrict MCP access to registry servers
+        where: Enterprise › AI controls › MCP › MCP Registry URL and Restrict MCP access to registry servers
+        setVia: [adminConsole]
+        area: tools
+        default: Allow all
+        recommended: Registry only, with a registry listing exactly the servers in allowedMcpServers
+        why: The only MCP allowlist Visual Studio, Eclipse and Xcode enforce; it matches names and is bypassable by editing local config, so managed settings stay the boundary where supported.
+        mitigations: [cap-agent-tool-registry]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/restrict-based-on-registry
+        verified: "2026-10-30"
+      - id: strictKnownMarketplaces
+        name: strictKnownMarketplaces
+        where: managed-settings.json → strictKnownMarketplaces
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (built-in and user-added marketplaces)
+        recommended: Your organisation's marketplace repositories only
+        why: Plugins, which bundle agents, hooks and MCP servers, install only from your marketplaces; setting the key also turns off the built-in ones.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity, D3-FA]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#strictknownmarketplaces
+        verified: "2026-10-30"
+      - id: chatAllowManagedHooksOnly
+        name: ChatAllowManagedHooksOnly
+        where: VS Code device policy → ChatAllowManagedHooksOnly
+        setVia: [mdm]
+        area: tools
+        default: Unset (hooks from every source run)
+        recommended: "true"
+        why: A cloned repository's hooks are commands that run on the developer's machine; only enterprise-managed hooks and policy-enabled plugins run.
+        mitigations: [cap-agent-action-policy-enforcement, cap-agent-tool-registry]
+        url: https://code.visualstudio.com/docs/enterprise/ai-settings
+        verified: "2026-10-30"
+      - id: allowedExtensions
+        name: AllowedExtensions
+        where: VS Code device policy → AllowedExtensions (extensions.allowed)
+        setVia: [mdm]
+        area: tools
+        default: Unset (any extension)
+        recommended: "Your approved extension list: GitHub Copilot Chat, and no other AI agent until it has been assessed"
+        why: Unvetted AI extensions, and the tools they contribute to agent mode, cannot be installed on managed VS Code.
+        mitigations: [cap-shadow-ai-discovery, cap-agent-tool-registry]
+        url: https://code.visualstudio.com/docs/enterprise/policies
+        verified: "2026-10-30"
+      - id: disableBypassPermissionsMode
+        name: permissions.disableBypassPermissionsMode
+        where: managed-settings.json → permissions.disableBypassPermissionsMode
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (allow-all mode available)
+        recommended: '"disable"'
+        why: Removes Allow all in VS Code and JetBrains and turns chat.tools.global.autoApprove off; a disable from any policy layer cannot be relaxed.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: chatToolsAutoApprove
+        name: ChatToolsAutoApprove
+        where: VS Code device policy → ChatToolsAutoApprove (chat.tools.global.autoApprove)
+        setVia: [mdm]
+        area: tools
+        default: Unset (developers can enable it)
+        recommended: "false"
+        why: Global auto-approval is off in every harness, including Local sessions that managed permission rules do not reach.
+        mitigations: [AML.M0029]
+        url: https://code.visualstudio.com/docs/enterprise/ai-settings
+        verified: "2026-10-30"
+      - id: permissionsDeny
+        name: permissions.deny
+        where: managed-settings.json → permissions.deny
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset
+        recommended: "Deny secret paths: Read(~/.ssh/**), Read(~/.aws/**), Read(./.env*), Edit(//etc/**)"
+        why: Managed deny rules beat every mode and user rule in Copilot harness (Agent Host) sessions; Local harness sessions do not apply them.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-sensitive-data-redaction]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: permissionsAsk
+        name: permissions.ask
+        where: managed-settings.json → permissions.ask
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset
+        recommended: Shell(git push *) and Shell(gh pr merge *)
+        why: A fresh approval that allow-all, assisted approval, hooks and saved grants cannot satisfy, kept for actions that leave the laptop.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: defaultMode
+        name: permissions.defaultMode
+        where: managed-settings.json → permissions.defaultMode
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Unset (manual or assisted)
+        recommended: '"manual" — developers may still pick assisted for a session'
+        why: New Agent Host sessions start by asking before edits and commands, rather than in whatever mode the developer last chose.
+        mitigations: [AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings
+        verified: "2026-10-30"
+      - id: policyHooks
+        name: Copilot Policy Hooks
+        where: Machine-wide policy hook files, loaded by Copilot harness sessions in VS Code
+        setVia: [mdm]
+        area: tools
+        default: None
+        recommended: An admin-owned preToolUse hook denying secret-path reads and uploads to unapproved hosts, plus postToolUse logging
+        why: Runs on the host before each tool call whatever the user or repository configures; Local harness sessions don't load it and timeouts fail open.
+        mitigations: [cap-agent-action-policy-enforcement, cap-sensitive-data-redaction, cap-input-guardrails]
+        url: https://code.visualstudio.com/docs/enterprise/ai-settings
+        verified: "2026-10-30"
+      - id: sandboxEnabled
+        name: sandbox.enabled with sandbox.failIfUnavailable
+        where: managed-settings.json → sandbox.enabled, sandbox.failIfUnavailable
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Off (sandboxing is opt-in)
+        recommended: true / true
+        why: Agent Host terminal commands run in the OS sandbox and are refused if it cannot be enforced; allowBypass stays on for one-off approvals, which regulated teams turn off.
+        mitigations: [D3-EI]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#sandbox
+        verified: "2026-10-30"
+      - id: sandboxAllowedHosts
+        name: sandbox.userPolicy.network.allowedHosts
+        where: managed-settings.json → sandbox.userPolicy.network.allowedHosts
+        setVia: [mdm, adminConsole]
+        area: network
+        default: Unset (outbound allowed to any host)
+        recommended: Your source host, package mirror and approved internal hosts
+        why: Sandboxed commands reach only listed hosts, so an injected curl to a paste site fails and installs go through your mirror; Windows relies on programs honouring the proxy.
+        mitigations: [cap-agent-egress-control, D3-FA]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#sandbox
+        verified: "2026-10-30"
+      - id: telemetry
+        name: telemetry
+        where: managed-settings.json → telemetry (enabled, endpoint, capture)
+        setVia: [adminConsole, mdm]
+        area: audit
+        default: Unset (no export)
+        recommended: enabled true to your OTLP collector, capture.identity true, every content class false
+        why: Each agent turn and tool call reaches your collector attributed to user and machine, without prompts or code in the pipeline; VS Code's CopilotOtel* policies carry the same keys.
+        mitigations: [cap-agent-tracing]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#telemetry
+        verified: "2026-10-30"
+      - id: auditLogStreaming
+        name: Audit log streaming
+        where: Enterprise › Settings › Audit log › Log streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Off (GitHub keeps 180 days)
+        recommended: On, to your SIEM
+        why: Copilot policy, licence, content-exclusion and agent events (action:copilot, actor:Copilot) outlive GitHub's 180 days and can be alerted on; client prompts are not in it.
+        mitigations: [cap-agent-tracing]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: usageRecordsStreaming
+        name: Copilot Usage Records Streaming
+        where: Enterprise › AI controls › Copilot › Copilot Usage Records Streaming
+        setVia: [adminConsole]
+        area: audit
+        default: Not enabled
+        recommended: Enabled everywhere, into the audit-log stream, readable only by your investigations team
+        why: Request and response bodies of Copilot API calls reach your SIEM — the only server-side record of what an agent was asked and answered.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise Managed Users or data residency (public preview)
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise
+        verified: "2026-10-30"
+      - id: copilotMemory
+        name: Copilot Memory
+        where: Enterprise › AI controls › Copilot › Configure features & clients › Features
+        setVia: [adminConsole]
+        area: data
+        default: Let organizations decide (user-level preferences off)
+        recommended: Let organizations decide — off unless an organisation opts in
+        why: Stored preferences are injected into later sessions (in VS Code, Local Agent Host sessions only); repository facts are governed separately under Repository access.
+        mitigations: [AML.M0031]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/copilot-memory/manage-as-administrator
+        verified: "2026-10-30"
+      - id: storeLocalSessionsInCloud
+        name: Store local sessions in the Cloud
+        where: Enterprise › AI controls › Copilot policies
+        setVia: [adminConsole]
+        area: data
+        default: Unconfigured (sessions stay local)
+        recommended: Disabled
+        why: Synced session transcripts sit on GitHub under each user's personal account, where administrators can neither see nor delete them; VS Code's CopilotSessionSync policy follows it.
+        mitigations: [AML.M0031]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/session-data
+        verified: "2026-10-30"
+      - id: remoteControl
+        name: remoteControl.mode
+        where: managed-settings.json → remoteControl.mode
+        setVia: [mdm, adminConsole]
+        area: sharing
+        recommended: '"disabled"'
+        why: Nobody can steer a VS Code session on a developer's laptop, or answer its approval prompts, from another device; requireSSO is the option for teams that need it.
+        mitigations: [AML.M0029]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#remotecontrol
+        verified: "2026-10-30"
+      - id: forceRemoteSettingsRefresh
+        name: forceRemoteSettingsRefresh
+        where: managed-settings.json delivered by MDM or file → forceRemoteSettingsRefresh
+        setVia: [mdm]
+        area: tools
+        default: Unset (one-hour policy cache)
+        recommended: "true"
+        why: VS Code starts Copilot only with current policy, so a tightened allowlist or bypass ban is not served from a stale cache; Copilot is unavailable offline.
+        mitigations: [cap-agent-kill-switch]
+        requires: Copilot Business or Enterprise
+        url: https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings#forceremotesettingsrefresh
+        verified: "2026-10-30"
+      - id: patMaxLifetime
+        name: Set maximum lifetimes for personal access tokens
+        where: Enterprise › Policies › Personal access tokens › Fine-grained tokens and Tokens (classic)
+        setVia: [adminConsole]
+        area: identity
+        default: 366 days for fine-grained tokens; none for classic
+        recommended: 90 days for both token types
+        why: Tokens developers paste into MCP configs and environment files expire instead of living for a year, or for ever with classic tokens.
+        mitigations: [D3-CH]
+        requires: GitHub Enterprise Cloud
+        url: https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-personal-access-tokens-in-your-enterprise
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2025-53773 — GitHub Copilot and Visual Studio command injection via prompt injection (settings
