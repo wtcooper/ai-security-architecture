@@ -268,9 +268,19 @@ tools:
           access_policies statements that deny addin.access on an open document, or file.upload of an attached
           file, by Microsoft Purview sensitivity label GUID (mip_label_guid), label name or file path, with an
           allow-list mode and fail-closed handling of unreadable labels (manifest or bootstrap); Microsoft's
-          Allow programmatic access = false label option keeps Outlook add-ins off encrypted mail; no content
-          detection, and Inference hooks do not cover the add-ins
+          Allow programmatic access = false label option keeps Outlook add-ins off encrypted mail; Inference
+          hooks (Enterprise, Claude-account sign-in) hold each add-in request, tool results and extracted
+          attachment text included, for an allow or deny verdict from the organisation's DLP server; nothing in
+          the add-in detects content itself
         steps:
+          - title: Put your DLP inline (Enterprise)
+            body:
+              - >-
+                At claude.ai Organization settings > Data and privacy > Inference hooks turn on Allow for your
+                organization, register your DLP server, set Failure handling to Block the request and turn on
+                Enforce verdicts; one hook governs Claude for Microsoft 365 with the organisation's other Claude
+                products.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
           - title: Block the add-in on labelled content
             body:
               - >-
@@ -298,11 +308,13 @@ tools:
           mail read through Graph (thread retrieval, search, attachments read inline), connector results and
           cross-app context are not documented as label-checked, and the key is documented for manifest and
           bootstrap delivery, not the AppSource install with Claude sign-in. Microsoft Purview lists DLP and
-          sensitivity labels as unsupported for Anthropic Claude interactions, Anthropic's Inference hooks
-          govern claude.ai, Cowork, Claude Code and Claude Tag but not the add-ins, and the OpenTelemetry
-          collector and Compliance API see prompts only after they were sent. Preventive inspection of typed
-          content is the endpoint DLP or SSE product's.
-        verified: "2026-09-25"
+          sensitivity labels as unsupported for Anthropic Claude interactions. Anthropic's Inference hooks now
+          name Claude for Microsoft 365 among the products one hook governs, so an Enterprise organisation's DLP
+          server can deny a request carrying typed, pasted or document content before inference — an attach
+          point that allows or denies only (no masking), never sees image bytes, and does not reach
+          third-party-platform deployments, where the organisation's gateway is the inline point. The
+          OpenTelemetry collector and Compliance API see prompts only after they were sent.
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAiDlp
@@ -340,29 +352,46 @@ tools:
                   url: https://claude.com/docs/office-agents/data-storage
               verified: 2026-09-10
       - mitigation: cap-input-guardrails
-        coverage: external
+        coverage: partial
         mechanism: >-
-          Nothing in the product: no documented screening of document, mail, attachment or connector content,
-          and Inference hooks do not cover the add-ins; on third-party platforms every model request passes the
-          organisation's LLM gateway (gateway_url, or azure_base_url for Foundry), the inline point for an AI
-          gateway's injection classifier
-        evidence:
-          - title: Use Claude for Outlook — prompt injection risks (user review only, no screening setting)
-            url: https://claude.com/docs/office-agents/outlook
-          - title: Inference hooks — governed surfaces are claude.ai, Cowork, Claude Code and Claude Tag
-            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
-          - title: Use Claude for M365 with third-party platforms — LLM gateway path and gateway requirements
+          No documented screening of document, mail, attachment or connector content by the add-in itself;
+          Inference hooks (Enterprise, Claude-account sign-in) hand each governed request, tool calls and tool
+          results included, to the organisation's AI security server before the next inference step; on
+          third-party platforms every model request passes the organisation's LLM gateway (gateway_url, or
+          azure_base_url for Foundry), the inline point for an AI gateway's injection classifier
+        steps:
+          - title: Put a screen on document, mail and tool content (Enterprise)
+            body:
+              - >-
+                At claude.ai Organization settings > Data and privacy > Inference hooks register an AI security
+                server that classifies tool results for injection, set Failure handling to Block the request and
+                turn on Enforce verdicts.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+          - title: Screen at your gateway on third-party platforms
+            body:
+              - >-
+                Point gateway_url (or azure_base_url for Foundry) at a gateway that runs your injection
+                classifier; every /v1/messages request from the add-in passes it.
             url: https://claude.com/docs/office-agents/third-party-platforms
+          - title: Know what the user is told to check
+            body:
+              - >-
+                The Outlook page tells users to review drafts from untrusted senders; there is no screening
+                setting in the add-in.
+            url: https://claude.com/docs/office-agents/outlook
         note: >-
-          External by the rule: nothing in the product screens returned content. An AI gateway placed on the
-          third-party gateway path sees every /v1/messages request — open-document content, email bodies and
-          tool results included — and can block it; the Claude-account path goes straight to api.anthropic.com
-          with no inspection point the organisation runs. The Excel, PowerPoint and Word pages say risky
+          Partial on the rule applied to every vendor, raised from external on 2026-10-30: the Inference hooks
+          page now names Claude for Microsoft 365 among the products one hook governs, an inline attach point
+          that is partial until the organisation's server does the classifying. It returns allow or deny only
+          (no strip or quarantine), never receives system prompts, tool definitions or image bytes, covers only
+          Enterprise organisations signed in with Claude accounts, and is not available on Bedrock or Google
+          Cloud. An AI gateway placed on the third-party gateway path sees every /v1/messages request —
+          open-document content, email bodies and tool results included — and can block it. The Excel, PowerPoint and Word pages say risky
           operations ask for confirmation and the Outlook page tells users to review drafts from untrusted
           senders; confirmation gates the action, not the input, and is credited under human approval.
           Turning off Let Claude work across apps (Organization settings > Office agents) stops an email's
           instructions steering an edit in another app — containment, not screening.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -450,9 +479,17 @@ tools:
           The add-in asks the user to confirm an operation it judges risky before it runs, and Outlook drafts
           and invites land unsent (no Mail.Send scope); OpenTelemetry records each tool call's
           tool.accept_decision (manual, auto_accept standing approval, deferred); connector Tool permissions
-          (Always allow / Needs approval / Blocked) are set org-wide on claude.ai; no add-in setting forces
-          per-action approval
+          (Always allow / Needs approval / Blocked) are set org-wide on claude.ai; in custom-manifest
+          deployments disabled_features permission_mode.accept_all_edits keeps users in "Ask before edits" and
+          permission_mode.dangerously_always_allow removes the "Dangerously always allow" button
         steps:
+          - title: Keep approvals on in custom-manifest deployments
+            body:
+              - >-
+                Deliver disabled_features with permission_mode.dangerously_always_allow (and
+                permission_mode.accept_all_edits where every edit should ask) through the manifest, Entra
+                extension attributes or a bootstrap endpoint.
+            url: https://claude.com/docs/office-agents/third-party-platforms
           - title: Set connector write tools to Needs approval
             body:
               - >-
@@ -473,14 +510,17 @@ tools:
                 offline_access, no Mail.Send): every draft and invite lands unsent for the user to send.
             url: https://claude.com/docs/office-agents/outlook
         note: >-
-          Partial by the rule: a present human confirms, but the administrator cannot require it and users can
-          hold a standing approval (auto_accept). The add-in decides which operations count as risky; Word's
+          Partial by the rule: a present human confirms, and in custom-manifest deployments the administrator
+          can keep users in "Ask before edits" and remove "Dangerously always allow", but connector "Always
+          allow" choices are unaffected by those slugs, and with a Claude-account install from AppSource the
+          administrator cannot require approval and users can hold a standing approval (auto_accept). The
+          add-in decides which operations count as risky; Word's
           tracked-changes mode is one the user enters, not a policy; Outlook's move and flag operations run
           through Graph under Mail.ReadWrite and whether they prompt is not documented. Connector Tool
           permissions are documented for claude.ai connectors; the add-in pages say connectors are enabled in
           Claude settings but do not state that Needs approval is enforced in the add-ins. On third-party
           platforms connectors are "coming soon" and admin-attached mcp_servers carry no approval setting.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityHitlControls
@@ -620,7 +660,8 @@ tools:
           Organization settings > Connectors enablement and per-tool Always allow / Needs approval / Blocked
           on claude.ai (enforcement in the add-ins not stated); Organization settings > Office agents "Let
           Claude work across apps" plus the per-device "Let Claude work across files"; disabled_features
-          (web_search, file.upload, skills.authoring) and admin-provisioned mcp_servers in custom-manifest
+          (web_search, file.upload, skills.authoring, permission_mode.accept_all_edits,
+          permission_mode.dangerously_always_allow) and admin-provisioned mcp_servers in custom-manifest
           deployments; a fixed Graph scope set for Outlook
         steps:
           - title: Enable only vetted connectors
@@ -650,7 +691,7 @@ tools:
           User.Read, offline_access), all-or-nothing at consent. disabled_features applies per user through
           Entra extension attributes or a bootstrap endpoint; access_policies only through the manifest or
           bootstrap.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -875,8 +916,15 @@ tools:
           Remove the add-in (or its assignment) in Integrated apps; deny addin.access through access_policies
           or disabled_features ("Kill switch: the add-in refuses to run") in custom-manifest or bootstrap
           deployments; disable the Claude for Office enterprise app (Enabled for users to sign-in? = No) and
-          revoke its admin consent in Entra; no claude.ai setting disables the add-ins
+          revoke its admin consent in Entra; an Inference hooks deny (Enterprise, Claude-account sign-in)
+          refuses a member's next governed request; no claude.ai switch disables the add-ins
         steps:
+          - title: Refuse inference for an account (Enterprise)
+            body:
+              - >-
+                With Enforce verdicts on at Organization settings > Data and privacy > Inference hooks, have your
+                AI security server deny that member's requests from the add-ins.
+            url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
           - title: Remove the add-in deployment
             body:
               - >-
@@ -910,11 +958,13 @@ tools:
           settings, which are re-read while it runs, are documented as applying mid-session, and they are
           preview. Disabling the Entra app stops new tokens; cached Graph access tokens run to expiry. Connector
           grants on each device cannot be revoked in bulk, and copies users installed themselves from AppSource
-          are not removed by Integrated apps. No claude.ai control disables the add-ins; removing a member's
-          seat or revoking the gateway token at your gateway is the practical stop for inference, though the
-          add-in pages do not document its effect. Local history, skills and credentials persist until the
+          are not removed by Integrated apps. No claude.ai switch disables the add-ins; an Inference hooks deny
+          refuses the next governed request, which halts a running task at its next step, but only on
+          Enterprise with Claude-account sign-in and only while the hook is enforcing. Otherwise removing a
+          member's seat or revoking the gateway token at your gateway is the practical stop for inference,
+          though the add-in pages do not document its effect. Local history, skills and credentials persist until the
           device profile is wiped.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityKillSwitch
@@ -1093,7 +1143,7 @@ tools:
         default: "Off"
         recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
         why: One hook now governs Claude for Microsoft 365 with the rest of the organisation, so prompts carrying document or mail content, and tool results, can be denied before inference.
-        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails]
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails, cap-agent-kill-switch]
         requires: Enterprise
         url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
         verified: "2026-10-30"
