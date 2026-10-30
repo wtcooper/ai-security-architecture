@@ -54,10 +54,12 @@ test("step 4 shows one pill per product and the picked product's settings, each 
 });
 
 test("a product not yet catalogued setting by setting falls back to its capability record", () => {
-  const arch = dataset.archetypes.find((a) => productsForArchetype(a.id).some((p) => !p.settings.length))!;
-  const product = productsForArchetype(arch.id).find((p) => !p.settings.length)!;
+  // Every registry product has its table today; a newly onboarded one may not, so strip one.
+  const arch = dataset.archetypes.find((a) => productsForArchetype(a.id)[0]?.kind === "tool")!;
+  const products = productsForArchetype(arch.id).map((p, i) => (i === 0 && p.kind === "tool" ? { ...p, settings: [] } : p));
+  const product = products.find((p) => p.kind === "tool" && !p.settings.length)!;
   const html = renderToStaticMarkup(
-    <ProductSettings archetype={arch} products={productsForArchetype(arch.id)} selected={product.id} onPick={() => {}} lit={null} onLight={() => {}} />,
+    <ProductSettings archetype={arch} products={products} selected={product.id} onPick={() => {}} lit={null} onLight={() => {}} />,
   );
   assert.match(html, /not catalogued row by row yet/);
 });

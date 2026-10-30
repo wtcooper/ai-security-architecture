@@ -8,7 +8,7 @@
  * and picking a chip opens its row.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EnablePanel } from "@/components/enable/EnablePanel";
 import { cloudById, clouds } from "@/lib/data";
@@ -19,6 +19,20 @@ import type { BlockService } from "./FlowDiagramRF";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
 import { WalkList } from "./rail-lists";
+
+/**
+ * Block id -> the cloud service drawn in it, cached per cloud and architecture so the drawing
+ * receives the same Map on every render and does not rebuild its nodes.
+ */
+const serviceMaps = new Map<string, Map<string, BlockService> | null>();
+function servicesFor(cloudId: string, archetypeId: string) {
+  const key = `${cloudId}|${archetypeId}`;
+  if (!serviceMaps.has(key)) {
+    const impl = cloudById.get(cloudId)?.implementations.find((i) => i.architecture === archetypeId);
+    serviceMaps.set(key, impl ? new Map(impl.bindings.map((b) => [b.block, { service: b.service, build: b.build, note: b.note }])) : null);
+  }
+  return serviceMaps.get(key)!;
+}
 
 export type Tab = "overview" | "flows" | "enable";
 export const TABS: Tab[] = ["overview", "flows", "enable"];
@@ -51,11 +65,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const implementedOn = clouds.filter((c) => c.implementations.some((i) => i.architecture === archetype.id));
   const [cloudView, setCloudView] = useState<string | null>(tool && cloudById.has(tool) ? tool : null);
   const viewCloud = implementedOn.find((c) => c.id === cloudView) ?? null;
-  const viewId = viewCloud?.id ?? null;
-  const services = useMemo(() => {
-    const impl = viewId ? cloudById.get(viewId)?.implementations.find((i) => i.architecture === archetype.id) : undefined;
-    return impl ? new Map<string, BlockService>(impl.bindings.map((b) => [b.block, { service: b.service, build: b.build, note: b.note }])) : null;
-  }, [viewId, archetype.id]);
+  const services = viewCloud ? servicesFor(viewCloud.id, archetype.id) : null;
   const pickProduct = (id: string | null) => {
     onPickTool(id);
     if (id && cloudById.has(id)) setCloudView(id);
