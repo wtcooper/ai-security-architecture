@@ -1503,6 +1503,16 @@ function checkTooling(
       fail(`${where}: architecture "${tool.architecture}" is not a reference architecture`);
     }
 
+    // A third-party SaaS architecture is the browser-based interface only. A vendor's desktop and
+    // mobile apps show the same synced chats and need no shell of their own there; whatever a
+    // desktop app runs or reaches locally is an endpoint product, recorded on an endpoint drawing.
+    const ENDPOINT_CLASSES = new Set(["endpointCli", "ideExtension", "desktopApp", "browserExtension", "agenticBrowser"]);
+    if (arch?.surface === "surfaceSaas") {
+      for (const c of tool.surfaceClasses ?? [])
+        if (ENDPOINT_CLASSES.has(c))
+          fail(`${where}: surface class ${c} on a SaaS architecture — SaaS drawings are browser-based; record the local app as its own entity on an endpoint architecture`);
+    }
+
     // The reference control set is the architecture's own pins. A tool cannot claim to
     // implement — or lack — a control the drawing does not show; the fix is a pin.
     const pinned = new Set(arch?.mitigations ?? []);
