@@ -4,6 +4,7 @@
 # 2026-09-25: re-verified all 16 rows (D3-MFA, D3-AA, D3-CH, D3-CTS, D3-EI, AML.M0028, AML.M0029, AML.M0031, cap-agent-tool-registry, cap-staged-rollout-gate, cap-agent-action-policy-enforcement, cap-input-guardrails, cap-ai-vendor-assessment, cap-agent-tracing, cap-agent-kill-switch, cap-agent-egress-control) against the MITRE capability rules; every platform.claude.com and support.claude.com page cited answered 200 with no redirect (read as .md via llms.txt); trust.anthropic.com renders client-side and was read in a browser; the Console login article confirms no Console-native MFA.
 # 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the workspace-scoped vault note is retagged as confused deputy.
 # 2026-10-30: added the settings table (25 rows) from secure-deployment and the pages it links (all 200, read as .md). Corrected: limited networking's allowed_hosts now also bounds web_search and web_fetch, and allow_mcp_servers false refuses a session whose MCP host is unlisted; the Console's organisation web search / web fetch settings now apply in sessions; the Compliance API is enabled at claude.ai Organization settings › API or the Console's Compliance page; the vendor's permission guidance is now auto on bash / write / edit / web_fetch; Claude Models on Google Cloud (Anthropic managed) added as a platform.
+# 2026-10-30 (controls): added the D3-APA and AML.M0036 rows the managed-runtime drawing pins, from workspaces, budgets, workload-identity-federation and cloud-sandboxes-reference (.md, 200) and the two support.claude.com SSO articles (200); both are delivered by existing settings rows.
 vendor: anthropic
 family: Claude Managed Agents
 tools:
@@ -1042,6 +1043,78 @@ tools:
                 through per-user vaults or per-user mcp_oauth, not the runtime's default. Where no credential
                 matches a server, the connection is attempted unauthenticated.
               verified: 2026-09-15
+      - mitigation: D3-APA
+        coverage: native
+        mechanism: >-
+          Workspace roles (Workspace User, Workspace Limited Developer, Workspace Developer, Workspace Admin)
+          assigned per workspace in the Claude Console; Require SSO for Console and SCIM provisioning through a
+          parent organisation; Restrict organization creation on verified domains; Workload Identity Federation
+          rules scoped by oauth_scope to the workspaces they are enabled in; API keys bound to one workspace
+        steps:
+          - title: Assign workspace roles deliberately
+            body:
+              - >-
+                In Claude Console › Settings › Workspaces › workspace › Members give Workspace Developer only to
+                the agent's authors and the pipeline's service account, Workspace User to everyone else, and
+                Workspace Admin to a named few.
+            url: https://platform.claude.com/docs/en/manage-claude/workspaces#workspace-roles-and-permissions
+          - title: Federate Console sign-in and membership
+            body:
+              - >-
+                Turn on Require SSO for Console under Organization and access › Authentication and drive
+                membership with SCIM from the IdP group that grants Console access.
+            url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+          - title: Keep staff inside your organisation
+            body:
+              - >-
+                Turn on Restrict organization creation under Organization and access › Security so nobody opens
+                a separate Console organisation on your verified domains.
+            url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+          - title: Bind each workload to one workspace
+            body:
+              - >-
+                Connect each agent workload under Settings › Workload identity with its own federation rule,
+                enabled in one workspace only, instead of a shared API key.
+            url: https://platform.claude.com/docs/en/manage-claude/workload-identity-federation
+        note: >-
+          Native on the authorisation rule (as on toolVertexAgentEngine): the organisation administers who can
+          use the API, create keys and define agents, environments and vaults, and Anthropic enforces it per
+          workspace. Boundary: the workspace is the smallest unit. No per-agent, per-vault or read-versus-write
+          permission is documented, so any key or token with workspace access can run, update or override every
+          agent and attach any vault in that workspace, and separate trust boundaries need separate workspaces.
+          Workspace Limited Developer limits only the Console, not the API; organisation admins hold Workspace
+          Admin in every workspace. Which end user a session acts for is the application's to authorise.
+        verified: "2026-10-30"
+      - mitigation: AML.M0036
+        coverage: native
+        mechanism: >-
+          Session budget (budget.max_list_cost, a hard dollar cap priced at list rates over model tokens, web
+          searches and session hours) set at session or deployment creation, which pauses every thread when
+          reached; workspace monthly spend limits and per-model rate limits set by Console administrators below
+          the organisation's; cloud sandbox capped at 8 GB memory and 10 GB disk
+        steps:
+          - title: Budget every session
+            body:
+              - >-
+                Pass budget {type limit, max_list_cost {amount, currency USD}} on every session and deployment
+                create; a budget cannot be added to a session created without one.
+            url: https://platform.claude.com/docs/en/managed-agents/budgets
+          - title: Cap the agent workspace
+            body:
+              - >-
+                On the Console's Workspaces page select the agent workspace, open Spend limits and set a monthly
+                cap and alerts; set requests and tokens per minute under Rate limits for its models.
+            url: https://platform.claude.com/docs/en/manage-claude/workspaces#workspace-limits
+        note: >-
+          Native on the resource-consumption rule (unlike toolVertexAgentEngine, which has no per-session
+          budget): the runtime enforces a per-session spend ceiling across every thread, including subagents,
+          and the workspace caps total spend and request rate. Boundaries: the budget is optional and set by
+          whoever creates the session, and it can be changed or removed at any time; it is checked between
+          model requests, so each thread can overshoot by one request and the tool calls it returns; it compares
+          list price, not contracted price; a session at its budget pauses idle rather than terminating. No turn
+          count or wall-clock limit is documented apart from the cost of session hours. Spend limits cannot be
+          set on the Default Workspace.
+        verified: "2026-10-30"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Organisation and workspace settings live in the Claude Console (or claude.ai Organization settings
     # for an Enterprise parent); everything else is a field on the agent, environment, vault or session the

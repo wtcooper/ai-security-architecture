@@ -19,6 +19,7 @@
 # IP allowlist, workload identity federation, admin APIs and data-controls guides (all .md 200); the record's
 # existing text still matched (web_search modes live / cached / disabled, no Agents permission in the RBAC table,
 # /v1/agents not ZDR-eligible and kept until deleted), so no rating or wording changed.
+# 2026-10-30 (controls): added the D3-APA and AML.M0036 rows from rbac, agents-api/environments/security, spend-limits, production-best-practices, agents-api/multi-agent and openai-hosted (.md, 200); added the projectSpendLimit and maxConcurrentSubagents settings behind AML.M0036.
 vendor: openai
 family: OpenAI Agents API
 tools:
@@ -706,6 +707,63 @@ tools:
           exposure, they do not classify. The vendor's misalignment monitoring is documented for the Responses
           API, not this API, and reviews actions asynchronously rather than screening input.
         verified: "2026-09-25"
+      - mitigation: D3-APA
+        coverage: native
+        mechanism: >-
+          Organisation and project roles, custom roles and IdP-synced groups (RBAC) in OpenAI Platform settings;
+          project membership; restricted project keys whose permissions (api.agents.read, api.agents.write,
+          api.vaults.*, api.responses.write) bound what an application may do
+        steps:
+          - title: Grant access through groups and custom roles
+            body:
+              - >-
+                In Organization settings › Roles and Groups create custom roles and assign them to IdP-synced
+                groups, keeping Owner to a named few; access is the union of every role a user holds.
+            url: https://developers.openai.com/api/docs/guides/rbac
+          - title: Keep each agent application in its own project
+            body:
+              - >-
+                Create a dedicated project per agent application and give its key only api.agents.read,
+                api.agents.write and api.responses.write, with the vault permissions only on the provisioning
+                service.
+            url: https://developers.openai.com/api/docs/guides/agents-api/environments/security
+        note: >-
+          Native on the authorisation rule: the organisation administers who may use and change each project and
+          what each key may do, and OpenAI enforces it. Boundary: the project is the smallest unit. The RBAC
+          permission table lists no Agents API area (only Agent Builder), so people's rights over agents,
+          sessions and vaults follow project roles, and any key with api.agents.write can start sessions on every
+          agent in the project; role changes take up to 30 minutes to apply. Which end user a session acts for
+          is the application's to authorise.
+        verified: "2026-10-30"
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          Project and organisation monthly spend limits with Enforce a hard limit (429 project_spend_limit_exceeded);
+          custom project rate limits; multi_agent.max_concurrent_subagents (default 6); environment.container_size
+          (small 1 vCPU / 1 GB to large 4 vCPU / 16 GB); hosted sandboxes deleted after an hour without activity or
+          keep-alives (not configurable)
+        steps:
+          - title: Enforce a hard spend limit on the agent project
+            body:
+              - >-
+                In Project settings › Limits › Spend select Edit spend limit, enter the Monthly spend limit and
+                turn on Enforce a hard limit, with spend alerts below it.
+            url: https://developers.openai.com/api/docs/guides/spend-limits
+          - title: Bound fan-out and sandbox size
+            body:
+              - >-
+                Set multi_agent max_concurrent_subagents to the number the task needs (or omit multi_agent) and
+                choose the smallest environment.container_size that runs it.
+            url: https://developers.openai.com/api/docs/guides/agents-api/multi-agent
+        note: >-
+          Partial on the resource-consumption rule (as on toolVertexAgentEngine): the organisation can cap a
+          project's monthly spend and request rate, and the session caps subagent concurrency and sandbox size,
+          but no per-session or per-turn budget for tokens, turns or run time is documented, so one runaway
+          session draws on the whole project's allowance until the monthly limit stops every session at once.
+          Hard limits are not instantaneous (a small amount of extra usage can pass while the state propagates);
+          spend alerts do not stop anything; the one-hour sandbox expiry needs inactivity and is not settable.
+          Per-session ceilings are the application's to enforce, for example by cancelling a turn.
+        verified: "2026-10-30"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Organisation and project controls are set in OpenAI Platform settings; everything about a run is code — the
     # agent definition, environment, tools and vaults sent with each session — so the application owner, not an
@@ -957,6 +1015,27 @@ tools:
         why: /v1/agents state is kept until deleted and is not eligible for zero data retention, so deletion is the only retention control.
         mitigations: [AML.M0031, cap-agent-kill-switch]
         url: https://developers.openai.com/api/docs/guides/agents-api/sessions/manage
+        verified: "2026-10-30"
+      - id: projectSpendLimit
+        name: Monthly spend limit (Enforce a hard limit)
+        where: platform.openai.com › Project settings › Limits › Spend › Edit spend limit
+        setVia: [adminConsole]
+        area: tools
+        recommended: A monthly limit on each agent project with Enforce a hard limit on, and spend alerts below it
+        why: A runaway or hijacked session cannot run up spend past the cap; requests then fail with project_spend_limit_exceeded, and alerts alone stop nothing.
+        mitigations: [AML.M0036]
+        url: https://developers.openai.com/api/docs/guides/spend-limits
+        verified: "2026-10-30"
+      - id: maxConcurrentSubagents
+        name: multi_agent.max_concurrent_subagents
+        where: Agent definition or session create › multi_agent
+        setVia: [code]
+        area: tools
+        default: "6 when delegation is enabled; delegation off when multi_agent is omitted"
+        recommended: Omitted unless the task delegates; otherwise the smallest number it needs
+        why: One session cannot fan out into many parallel subagents, each making its own model calls.
+        mitigations: [AML.M0036]
+        url: https://developers.openai.com/api/docs/guides/agents-api/multi-agent
         verified: "2026-10-30"
     sources:
       - title: Agents API overview

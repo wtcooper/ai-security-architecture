@@ -17,6 +17,7 @@
 # root. beyondtrust.com research returned 403 (not cited).
 # 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the token-passthrough note merged into the confused-deputy note.
 # 2026-10-30: added the settings table, each row re-read from the developer guide as .md (all 200); devguide/harness-limits.html and devguide/browser-create.html 404 (limits are on harness-operations). policy-enforcement-modes still says no key protects the mode while security-gateway-condition-keys lists bedrock-agentcore:PolicyEngineMode.
+# 2026-10-30 (controls): added the D3-APA and AML.M0036 rows from resource-based-policies, harness-security, security-gateway-condition-keys, harness-operations, runtime-lifecycle-settings and gateway-rate-limits (.md, 200); both are delivered by existing settings rows.
 vendor: aws
 family: Amazon Bedrock AgentCore
 tools:
@@ -645,6 +646,76 @@ tools:
           limits fail open on transient errors, ENIs can persist 8 hours after deletion, and nothing cancels work
           the agent handed to other agents.
         verified: "2026-09-25"
+      - mitigation: D3-APA
+        coverage: native
+        mechanism: >-
+          IAM identity policies and resource-based policies on runtimes (a harness runs on one) and their
+          endpoints, gateways and memory, with explicit Deny winning; inbound customJWTAuthorizer (discoveryUrl, allowedClients) on a harness
+          or gateway; SCP condition keys such as bedrock-agentcore:GatewayAuthorizerType that refuse
+          unauthenticated gateways across member accounts
+        steps:
+          - title: Authorise callers per agent
+            body:
+              - >-
+                Put a resource-based policy on each runtime and its endpoints that allows InvokeAgentRuntime only
+                to the front end or calling agent that needs it, with a Deny ready for incidents.
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
+          - title: Authenticate end users at the harness
+            body:
+              - >-
+                Set authorizerConfiguration customJWTAuthorizer with the firm's IdP discoveryUrl and the front
+                end's allowedClients on CreateHarness / UpdateHarness, so callers present a user token.
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+          - title: Refuse unauthenticated gateways
+            body:
+              - >-
+                In an SCP deny CreateGateway and UpdateGateway unless bedrock-agentcore:GatewayAuthorizerType is
+                CUSTOM_JWT or AWS_IAM.
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-gateway-condition-keys.html
+        note: >-
+          Native on the authorisation rule (as on toolVertexAgentEngine): AWS IAM, resource policies and SCPs
+          administer who may invoke, change or delete each agent and gateway, per resource, with explicit denies
+          that win over grants. Boundary: a caller allowed to call InvokeHarness can override model,
+          additionalParams, skills, tools and allowedTools per call and no condition key restricts those fields,
+          so the front end must strip them; JWT inbound auth proves the caller's identity but which records and
+          tools that user may reach is the agent's and the gateway policy engine's to decide.
+        verified: "2026-10-30"
+      - mitigation: AML.M0036
+        coverage: native
+        mechanism: >-
+          Harness limits maxIterations (default 75), timeoutSeconds (default 3600) and maxTokens (no default) per
+          invocation; lifecycleConfiguration idleRuntimeSessionTimeout (default 900 s) and maxLifetime (default
+          28800 s on microVMs); gateway rate limits per caller, target or tool; Runtime service quotas
+        steps:
+          - title: Set the harness limits
+            body:
+              - >-
+                Set limits maxIterations, timeoutSeconds and a maxTokens budget on CreateHarness / UpdateHarness,
+                and strip per-call limit overrides in the front end.
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+          - title: Shorten session lifetimes
+            body:
+              - >-
+                Set lifecycleConfiguration idleRuntimeSessionTimeout and a maxLifetime no longer than the
+                longest task the agent runs.
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+          - title: Rate-limit tools at the gateway
+            body:
+              - >-
+                Create gateway rate limits with dimension keys for the caller and the tool and a rate entry for
+                each, so one agent cannot exhaust a downstream tool.
+            url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-rate-limits.html
+        note: >-
+          Native on the resource-consumption rule (unlike toolVertexAgentEngine, which has no per-session
+          budget): the harness stops an invocation at an iteration, wall-clock and token ceiling, the runtime
+          reclaims idle and long-lived sessions, and the gateway bounds tool call rates. Boundaries: limits can be
+          overridden per invocation by any caller allowed to call InvokeHarness; maxTokens is unset by default;
+          a bring-your-own-code Runtime agent gets lifecycle limits and quotas but no iteration or token cap
+          unless its code sets one; maxLifetime ends the instance, and the session can continue on a newly
+          provisioned one; gateway rate limits fail open when the rate-limit service is unavailable and take up
+          to 30 seconds to change. No dollar budget exists in the runtime; spend ceilings are AWS Budgets
+          outside it.
+        verified: "2026-10-30"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # AgentCore has no admin console: rows are resource fields set over the control-plane API or
     # CLI, IAM and SCP condition keys (cloudPolicy) and code in the front end. Verified 2026-10-30.

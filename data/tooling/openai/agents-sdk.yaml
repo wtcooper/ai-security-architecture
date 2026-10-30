@@ -14,6 +14,7 @@
 # tools-shell, agent-evals, evals and your-data read as .md (200). GitHub: SECURITY.md in both repos; no
 # repository security advisories and no GitHub advisory-database entries for openai-agents (pip) or
 # @openai/agents* (npm); latest releases Python v0.22.3 (2026-09-17), TypeScript v0.18.0 (2026-09-10).
+# 2026-10-30 (controls): added the D3-EI row from sandbox/clients, sandbox_agents and human_in_the_loop (openai.github.io, 200) and developers.openai.com tools-shell (.md, 200); delivered by the sandboxClient, inheritHostEnvironment, dockerNetworkMode and shellApplyPatchApproval settings.
 vendor: openai
 family: OpenAI Agents SDK
 tools:
@@ -728,6 +729,43 @@ tools:
           scanning mirror and allow only its host in the hosted-shell allowlist and the egress proxy; pin the SDK
           in the lockfile. No model weights load in the SDK.
         verified: "2026-09-25"
+      - mitigation: D3-EI
+        coverage: partial
+        mechanism: >-
+          Sandbox agents run their shell and file tools through the sandbox client the application picks:
+          UnixLocalSandboxClient (no OS-level confinement on Linux; sandbox-exec filesystem restrictions without
+          network isolation on macOS), DockerSandboxClient (a container, network_mode "none") or a hosted provider
+          client (Blaxel, Cloudflare, Daytona, E2B, Modal, Vercel); hosted shell (container_auto) in an
+          OpenAI-provisioned container; function tools, local MCP servers and local ShellTool run in the
+          application's own process
+        steps:
+          - title: Run sandbox agents in Docker or a hosted provider
+            body:
+              - >-
+                Pass DockerSandboxClient (or a hosted provider client) in SandboxRunConfig for any agent whose
+                commands follow untrusted input; keep UnixLocalSandboxClient for trusted local development.
+            url: https://openai.github.io/openai-agents-python/sandbox/clients/
+          - title: Withhold the host environment from Unix-local
+            body:
+              - >-
+                Where Unix-local runs inside external isolation, set inherit_host_environment=False so commands
+                get only the default variable allowlist, not the application's keys.
+            url: https://openai.github.io/openai-agents-python/sandbox/clients/
+          - title: Keep one-off commands off the host
+            body:
+              - >-
+                Use ShellTool(environment={"type": "container_auto"}) so commands run in an OpenAI-provisioned
+                container; a local ShellTool runs on the host, so set needs_approval=True on it.
+            url: https://developers.openai.com/api/docs/guides/tools-shell
+        note: >-
+          Partial on the core sandbox rule (as on toolClaudeAgentSdk and toolCodexSdk): the SDK offers isolation
+          backends, but nothing is isolated unless the deployer picks one, and the local client is not a boundary
+          (on Linux, commands reach whatever the host process can). Inside a Docker or hosted sandbox: the sandbox
+          agent's shell and file tools. Outside: the agent loop, every function tool, local MCP servers and local
+          ShellTool / ApplyPatchTool, which run with the application's privileges and are the deployer's to
+          isolate. A Docker sandbox's boundary is its image, mounts and network;
+          a hosted provider's is that provider's to document.
+        verified: "2026-10-30"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # The SDK runs inside the application, so every row is a parameter, environment variable or function
     # call the deployer sets in its own code; identity for the model calls is set up in the OpenAI Platform.

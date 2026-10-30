@@ -5,6 +5,7 @@
 # and x.ai URLs 200; docs read through the .md variants, e.g. cursor.com/docs/grok-bot/teams.md).
 # 2026-10-03: persistent-agent mapping; Team Bot authority/approval and opt-in MCP Tool I/O refreshed.
 # Removed D3-AA, D3-EI and input-guardrail rows from this reference; assurance limits remain in items.
+# 2026-10-30 (controls): added D3-MFA and cap-input-guardrails rows after the persistent-agents drawing pinned them, from grok-bot/identity, grok-bot/security, grok-bot/inference-hooks and account/teams/sso (.md, 200); delivered by the deviceAwareSignIn and inferenceHooks settings.
 vendor: cursor
 family: Grok Bot
 tools:
@@ -789,6 +790,69 @@ tools:
           is issued, rotated and revoked in that vendor's console, not Cursor's. Team Secrets are dashboard-only
           (not in the Admin API).
         verified: "2026-09-25"
+      - mitigation: D3-MFA
+        coverage: partial
+        mechanism: >-
+          Grok Bot sign-in is the member's Cursor account through the team's SAML 2.0 SSO, which can be required
+          for every member (blocking password login); MFA and device-aware sign-in policy are set on the existing
+          Cursor app in the IdP; SCIM deprovisioning (Enterprise)
+        steps:
+          - title: Require SSO for the team
+            body:
+              - >-
+                In Team Settings › Single Sign-On (SSO) (Enterprise org admins use the Organization's Settings)
+                complete SSO-Provider Connection Settings and Domain Verification Settings so members on the
+                domain sign in through the IdP.
+            url: https://cursor.com/docs/account/teams/sso
+          - title: Enforce MFA on the Cursor app in the IdP
+            body:
+              - >-
+                In Okta or Entra ID require MFA and a managed device on the existing Cursor app (there is no
+                separate Grok Bot app), and add a separate higher-priority rule, password plus a second factor,
+                for the IdP apps the Bot's Linux computer browser opens.
+            url: https://cursor.com/docs/grok-bot/identity
+        note: >-
+          Partial by the rule applied to every vendor (as on toolCursor): Grok Bot inherits Cursor SSO, so the
+          IdP's MFA policy governs each member's interactive sign-in, but MFA is configured in the IdP, not in
+          Cursor, and a device-aware policy gates the member's device, not the hosted computer. Paths the IdP's
+          MFA does not see: work that starts without a sign-in (a routine's Slack listener or GitHub
+          notification, and messages from a linked Slack account, which rest on Slack's own sign-in); personal
+          paid plans outside the organisation's SSO; and sign-ins inside the computer's browser, where FastPass
+          and device-compliance rules cannot be met, so that session's rule is password plus a second factor.
+        verified: "2026-10-30"
+      - mitigation: cap-input-guardrails
+        coverage: partial
+        mechanism: >-
+          Inference Hooks (Enterprise, beta): each governed Grok Bot model request (every step of a turn,
+          subagents, conversation summaries and routines) is sent as a signed frame with the conversation so far
+          to the organisation's AI security server and held for an allow or deny verdict; Enforce Verdicts, Mode
+          (Shadow Mode default, Allow the Request fails open, Block the Request fails closed), Verdict Timeout and
+          Requests Inspected (%)
+        steps:
+          - title: Point the hook at your AI security server
+            body:
+              - >-
+                On the Grok Bot page › Security & Compliance › Inference Hooks select Set Up Endpoint, choose your
+                vendor or Custom Endpoint, enter the endpoint URL and headers, give the whsec_ signing secret to
+                the server and run Test Connection.
+            url: https://cursor.com/docs/grok-bot/inference-hooks
+          - title: Enforce after a shadow trial
+            body:
+              - >-
+                Turn on Enforce Verdicts, review denials in the audit log while in Shadow Mode, then set Failure
+                Handling › Mode to Allow the Request (Block the Request to fail closed) with Requests Inspected at
+                100%.
+            url: https://cursor.com/docs/grok-bot/inference-hooks
+        note: >-
+          Partial on the rule applied to every vendor (as on toolClaudeCowork): an inline attach point that
+          stops the model request on the server's deny, partial until the organisation's server does the
+          classifying. Tool results, fetched pages and connector returns are inspected only when they come back
+          in the next model request, after the tool has run; model responses, system prompts, tool definitions
+          and ancillary calls (Auto Review, memory saving, chat titles) are never sent; Shadow Mode, the default,
+          blocks nothing; Allow the Request fails open on timeouts and errors, and every mode fails open when
+          Cursor cannot load the settings or pauses hooks itself; a Requests Inspected share below 100% skips the
+          rest; Cloud Agents a Bot delegates to are not covered.
+        verified: "2026-10-30"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # Grok Bot is administered from the Grok Bot page of the Cursor dashboard; most switches are Enterprise
     # only, self-serve Teams cannot turn it off, and personal plans have no admin layer at all. Verified 2026-10-30.

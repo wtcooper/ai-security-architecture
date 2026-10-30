@@ -6,6 +6,10 @@
 # Add dots to Slack and Microsoft Teams and Use custom rules for dots beside it; the cloud capabilities are named Use
 # a browser, Allow network access and Allow computer use (shared with Work Cloud), plus Use password manager; role
 # grants add up, so Off in one role does not revoke access another grants; Pause stops only the main task.
+# 2026-10-30 (controls): added D3-MFA, D3-CTS, AML.M0036, cap-input-guardrails, cap-agent-tool-registry, cap-ai-vendor-assessment
+# and cap-agent-tracing rows from learn.chatgpt.com dots, dots/controls, dots/computers-and-apps, dots/channels, enterprise/dots-admin-guide,
+# work-admin-faq, cloud-local-access and chatgpt-work-cloud-security (.md, 200) and trust.openai.com (200); help.openai.com and
+# openai.com/index/introducing-dots refused automated reads (403). Added the sso, perUserUsageLimits and dotsUsageAnalytics settings.
 vendor: openai
 family: Dots
 tools:
@@ -163,6 +167,153 @@ tools:
             url: https://learn.chatgpt.com/docs/dots/controls
         note: Stop latency and atomic cancellation of independently running delegated tasks are not documented here.
         verified: "2026-10-30"
+      - mitigation: D3-MFA
+        coverage: partial
+        mechanism: >-
+          Enterprise and Business Premium members reach their dot through their ChatGPT workspace account, so the
+          workspace's SSO (Global Admin Console, after domain verification) and the IdP's MFA policy apply;
+          ChatGPT has no workspace-wide MFA switch
+        steps:
+          - title: Require SSO and enforce MFA in the IdP
+            body:
+              - >-
+                Manage SSO in the Global Admin Console for every verified domain and require MFA on the ChatGPT
+                app in your IdP; ChatGPT itself offers only account-level MFA a user turns on.
+            url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
+        note: >-
+          Partial by the rule applied to every vendor (as on toolCodex): sign-in to ChatGPT, where a dot is
+          created, directed and approved, goes through the IdP's MFA, but MFA is configured in the IdP, not the
+          product. Not covered: channels that authenticate the owner by another identity (Slack direct messages
+          and mentions rest on Slack's sign-in; texting, a Pro beta in the U.S., on a verified phone number);
+          Pro accounts, which have no organisation layer; and the websites the dot's cloud browser signs in to,
+          whose verification codes the member enters through the private sign-in form.
+        verified: "2026-10-30"
+      - mitigation: D3-CTS
+        coverage: unknown
+        mechanism: >-
+          Website credentials go through the private sign-in form to the remote browser outside the conversation;
+          Save to Passwords offers a matching saved login only after confirmation; connected apps use the owner's
+          ChatGPT plugin connections
+        evidence:
+          - title: Sign in to a website, saving and reusing a login
+            url: https://learn.chatgpt.com/docs/dots/computers-and-apps
+          - title: Manage dots permissions and capabilities (whose account a dot uses)
+            url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
+          - title: Dots privacy, security and safety FAQ (Help Center, 403 to automated reads on 2026-10-30)
+            url: https://help.openai.com/en/articles/20001529-dots-privacy-security-and-safety-faqs
+        note: >-
+          Unknown, on the same finding as toolGrokBot: the pages that resolved keep credentials out of the model
+          and require confirmation to reuse a saved login, which is credential hardening, but they do not say
+          that a credential or session can reach only the site it belongs to, and the privacy and security FAQ
+          refused automated reads. A signed-in website session stays usable by the dot until it expires or the
+          member signs out. Until recipient binding is documented, keep client systems and administrator accounts
+          out of the dot's browser and leave Use password manager off.
+        verified: "2026-10-30"
+      - mitigation: AML.M0036
+        coverage: partial
+        mechanism: >-
+          Monthly per-user usage limits for Enterprise and Edu (workspace default, group defaults, individual
+          overrides) bound the Work and Codex tasks a dot starts or manages; conversations with the dot itself
+          do not count toward ChatGPT usage limits and draw on a plan allowance OpenAI sets
+        steps:
+          - title: Set per-user limits for the dots pilot
+            body:
+              - >-
+                Set a monthly per-user usage limit as the workspace default with a group default for the pilot
+                group, so the Work and Codex tasks a dot delegates stop at a known level.
+            url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
+        note: >-
+          Partial on the resource-consumption rule: the organisation can bound the delegated Work and Codex tasks,
+          which "count toward those products' usage limits as usual", but nothing it sets bounds the main dot:
+          its own conversations do not count toward ChatGPT usage limits, the plan's allowance for deeper work is
+          the vendor's, and no limit on background agents run in parallel, run time or task frequency is
+          documented. Pause stops only the main task, so a runaway schedule is stopped in Scheduled. The
+          per-user limit procedure itself is on the Help Center, which refused automated reads.
+        verified: "2026-10-30"
+      - mitigation: cap-input-guardrails
+        coverage: none
+        mechanism: >-
+          Vendor-run safeguards against malicious instructions that can pause or stop work when monitoring
+          detects a safety concern; proactive research uses read-only tools; automatic action review
+        evidence:
+          - title: Dots FAQ (built-in safeguards, proactive research)
+            url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
+          - title: How action review works
+            url: https://learn.chatgpt.com/docs/dots/controls
+        note: >-
+          None that anyone can set (the rule applied on toolClaudeDuet and toolMetaMuse): the safeguards are
+          described in general terms with no setting, threshold, hook or event an administrator can use, and no
+          inference hook or gateway attach point is documented for dots. Automatic review judges proposed
+          actions, which is action policy, not input screening. What stands in is limiting what the dot reads
+          (connected apps and their allowed actions, Use a browser) and keeping approval on consequential
+          actions through custom rules.
+        verified: "2026-10-30"
+      - mitigation: cap-agent-tool-registry
+        coverage: partial
+        mechanism: >-
+          Use dots access through the workspace default and custom roles; the Usage Analytics API reports dots
+          use per user (client_id = DOTS); compliance records carry an agent object with the dot ID, name and
+          type
+        steps:
+          - title: Report who runs a dot
+            body:
+              - >-
+                Create an Admin key with enterprise.analytics.usage.read under Admin Console › Credentials ›
+                Admin keys and pull /v1/analytics/workspaces/{workspace_id}/usage filtered on client_id DOTS.
+            url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
+          - title: Limit who can have one
+            body:
+              - >-
+                Keep Use dots off in the workspace default and grant it through a custom role, checking every
+                role a member holds because grants add up.
+            url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
+        note: >-
+          Partial on the registry rule (as on toolGrokBot): the organisation decides who may have a dot and can
+          derive an inventory from usage and compliance records, but no admin list of dots, their scheduled
+          tasks, connected apps or Slack identities is documented, and there is no approval state for a dot or
+          its recurring work. The tasks a dot delegates appear in Work and Codex reporting, not under the
+          dot.
+        verified: "2026-10-30"
+      - mitigation: cap-ai-vendor-assessment
+        coverage: external
+        mechanism: >-
+          The organisation's TPRM platform, consuming OpenAI's trust portal and the dots eligibility and data
+          pages
+        evidence:
+          - title: OpenAI Trust Portal
+            url: https://trust.openai.com/
+          - title: Local computer access for Work Cloud and dots (dots residency and exclusions)
+            url: https://learn.chatgpt.com/docs/enterprise/cloud-local-access
+          - title: Manage dots permissions and capabilities (availability and data requirements)
+            url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
+        note: >-
+          External: the assessment is the organisation's TPRM process. Record that dots are an Enterprise beta
+          without data or inference residency, unavailable on FedRAMP, EKM and UAE-residency workspaces, that
+          Enterprise model controls do not apply to the main dot, and that the guide asks organisations needing residency, EKM or specific compliance
+          coverage to confirm dots support with their account team. Compliance Logs Platform records are kept 30
+          days at source (stated for Work Cloud).
+        verified: "2026-10-30"
+      - mitigation: cap-agent-tracing
+        coverage: partial
+        mechanism: >-
+          Compliance Logs Platform records for dots (client_id = DOTS): user prompts and responses, supported
+          tool-call events, and connected-app MCP calls and results, pulled with a CODEX_LOG admin key; the
+          member's Activity view of tasks
+        steps:
+          - title: Pull dots compliance records into the SIEM
+            body:
+              - >-
+                Create an Admin key with CODEX_LOG access under Admin Console › Credentials › Admin keys, list and
+                download the compliance JSONL files through the Admin API and keep records with client_id DOTS.
+            url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
+        note: >-
+          Partial on the tracing rule: messages, supported tool calls and connected-app calls with their results
+          reach the organisation, but the guide says to check which records exist before relying on them, and
+          the cloud browser's navigations, the cloud computer's commands and local-computer work are not
+          documented in the records. Compliance Logs Platform records stay at source for 30 days (stated for Work
+          Cloud), so pull them continuously; delegated Work
+          and Codex tasks are recorded under those products. The Activity view is the member's, not a trace.
+        verified: "2026-10-30"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # On Enterprise the workspace owner sets dots access and the cloud-computer capabilities (shared with Work Cloud)
     # in Admin Console › Permissions, where role grants add up; on a Pro account the member is the only admin, so the
@@ -313,6 +464,38 @@ tools:
         why: Removes the dot and its own context, but not changes it made in connected apps or messages it delivered; separately stored files and threads need their own deletion.
         mitigations: [AML.M0031]
         url: https://learn.chatgpt.com/docs/dots/controls
+        verified: "2026-10-30"
+      - id: sso
+        name: SSO
+        where: Global Admin Console (admin.openai.com) › SSO and related identity settings, after domain verification
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: Required for every verified domain, with MFA enforced on the ChatGPT app in your IdP
+        why: ChatGPT has no workspace-wide MFA switch, so the IdP's sign-in policy is the only place MFA is enforced for the people who direct and approve dots.
+        mitigations: [D3-MFA, D3-APA]
+        url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
+        verified: "2026-10-30"
+      - id: perUserUsageLimits
+        name: Monthly per-user usage limits
+        where: Workspace usage limits › workspace default, group defaults and individual overrides
+        setVia: [adminConsole]
+        area: tools
+        recommended: A workspace default with a group default for the dots pilot, increase requests reviewed by an admin
+        why: Work and Codex tasks a dot starts or manages stop at a known level; the dot's own conversations do not count toward these limits.
+        mitigations: [AML.M0036]
+        requires: Enterprise or Edu
+        url: https://learn.chatgpt.com/docs/enterprise/work-admin-faq
+        verified: "2026-10-30"
+      - id: dotsUsageAnalytics
+        name: Admin keys (enterprise.analytics.usage.read)
+        where: Admin Console › (workspace) › Credentials › Admin keys, then /v1/analytics/workspaces/{workspace_id}/usage
+        setVia: [adminConsole, apiCli]
+        area: audit
+        recommended: Pulled daily, filtered on client_id DOTS, and reconciled against the roles that grant Use dots
+        why: Shows who in the workspace runs a dot, so use outside the approved pilot group is found.
+        mitigations: [cap-agent-tool-registry]
+        requires: Enterprise
+        url: https://learn.chatgpt.com/docs/enterprise/dots-admin-guide
         verified: "2026-10-30"
     advisories: []
     sources:
