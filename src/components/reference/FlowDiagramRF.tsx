@@ -296,6 +296,28 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
             </span>
           )}
         </div>
+      ) : data.service && block.kind === "boundary" ? (
+        // A containment frame has no body of its own: one quiet line under its tab.
+        <div
+          onMouseEnter={(e) => data.onItemEnter(e, data.service!.service, data.service!.note ?? block.note)}
+          onMouseLeave={(e) => data.onItemEnter(e, block.title, block.note)}
+          style={{
+            position: "absolute",
+            left: 8,
+            right: 8,
+            top: 13,
+            textAlign: "center",
+            fontSize: 11,
+            fontWeight: 600,
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            color: "var(--ink-2, #444)",
+          }}
+        >
+          {data.service.service}
+        </div>
       ) : data.service ? (
         <div
           onMouseEnter={(e) => data.onItemEnter(e, data.service!.service, data.service!.note ?? block.note)}
