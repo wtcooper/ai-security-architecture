@@ -9,6 +9,9 @@
 # docs.ollama.com); nvd.nist.gov answered 403 to curl (CVE-2026-5530 read through the NVD API instead);
 # ollama.com/library pages answer 405 to HEAD and 200 to GET. Behaviour the docs do not state (pull-time digest
 # check, Host validation, default origins, the desktop app's Expose toggle) was read in the GitHub source on main.
+# 2026-10-30: settings added and AML.M0014 row added (pin had no row); github.com answered 403 from the session, so
+# source was read as raw.githubusercontent.com copies (envconfig/config.go, app/server/server.go, server/images.go, the
+# app's Settings.tsx), which show the app also has a hidden Browser setting that sets OLLAMA_ORIGINS=*.
 vendor: ollama
 family: Ollama
 tools:
@@ -264,7 +267,8 @@ tools:
           literals; a routable bind skips it. The origin check applies only to requests that carry an Origin header,
           and the default list (per source) also admits file://*, app://*, tauri://*, vscode-webview://* and
           vscode-file://*. Only the Linux systemd override is out of the user's reach; launchctl values are overridden
-          by the app's Expose toggle and Windows user variables are user-writable.
+          by the app's Expose toggle and Windows user variables are user-writable, and the app's stored Browser setting
+          (no Settings toggle; reset to off by "reset to defaults") sets OLLAMA_ORIGINS=* when true (source, 2026-10-30).
         verified: "2026-09-25"
       - mitigation: cap-output-guardrails
         coverage: external
@@ -463,6 +467,247 @@ tools:
           gate lives with the harness and the approval record, not the runtime. Refusal behaviour is whatever the
           weights carry, and abliterated or uncensored variants are one pull away.
         verified: "2026-09-25"
+      - mitigation: AML.M0014
+        coverage: partial
+        mechanism: >-
+          Built into the pull path: `ollama pull` / POST /api/pull reports "verifying sha256 digest", re-hashes each
+          newly downloaded layer against the digest in the registry's manifest and deletes a mismatched blob; no
+          signature is checked and nothing re-hashes at load
+        steps:
+          - title: Pull only over TLS
+            body:
+              - >-
+                Never set the pull request's insecure field ("Allow downloading over insecure connections"), so the
+                manifest and every layer arrive over HTTPS before they are hashed.
+            url: https://docs.ollama.com/api/pull
+          - title: Keep the pull-time digest check intact
+            body:
+              - >-
+                Run v0.32.10 or later, where the pull handler always verifies a layer whose digest is shared with the
+                config entry, and leave blob verification to the pull rather than copying blobs in by hand.
+            url: https://raw.githubusercontent.com/ollama/ollama/main/server/images.go
+        note: >-
+          Partial on this drawing's rule — a digest check on download, no signature and no verify-at-load. The
+          sha256 of each layer is compared with a manifest served by the same registry as the blob, so it proves the
+          transfer, not the publisher; layers already on disk are skipped, and a blob changed under models/blobs is
+          served on the next load. Ollama checks no model-signing bundle. Verification against an approved digest
+          (the promotion record) is external: an MDM or EDR job compares GET /api/tags digests with the approved list.
+          Same rule as toolVllm (pinned revisions, no verification) and toolLmStudio (no digest at all, external).
+        verified: "2026-10-30"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The operator is the admin: every row is an environment variable of `ollama serve` (systemd override.conf on
+    # Linux, launchctl or a system variable delivered by MDM on macOS and Windows) or a desktop-app toggle the
+    # user can change, so pair each with a compliance check. Verified 2026-10-30 against docs.ollama.com and source.
+    settings:
+      - id: ollamaHost
+        name: OLLAMA_HOST
+        where: Server environment → OLLAMA_HOST (Environment= in /etc/systemd/system/ollama.service.d/override.conf; launchctl setenv; Windows system variable)
+        setVia: [configFile, mdm]
+        area: network
+        default: 127.0.0.1:11434
+        recommended: 127.0.0.1:11434, set explicitly
+        why: The API authenticates no caller, so a routable bind hands pull, create, delete and push to anyone on the network; a team server goes behind an authenticating proxy instead.
+        mitigations: [D3-AA]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: exposeToNetwork
+        name: Expose Ollama to the network
+        where: Ollama app (macOS, Windows) › Settings › Expose Ollama to the network
+        setVia: [configFile]
+        area: network
+        default: "Off"
+        recommended: "Off"
+        why: When on, the app starts the server with OLLAMA_HOST=0.0.0.0 over any value you set; it is a per-user toggle, so check the listener stays on 127.0.0.1.
+        mitigations: [D3-AA]
+        url: https://raw.githubusercontent.com/ollama/ollama/main/app/server/server.go
+        verified: "2026-10-30"
+      - id: ollamaOrigins
+        name: OLLAMA_ORIGINS
+        where: Server environment → OLLAMA_ORIGINS
+        setVia: [configFile, mdm]
+        area: network
+        default: Unset (localhost, 127.0.0.1 and 0.0.0.0 on any port, plus app://, file://, tauri:// and vscode-webview:// origins)
+        recommended: Unset, or exact origins of approved local apps — never * or chrome-extension://*
+        why: A web page or any browser extension in the user's browser cannot drive the local API, which would let it pull, delete or push models.
+        mitigations: [D3-AA]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: dockerPublish
+        name: docker run -p 11434:11434
+        where: docker run / compose ports for the ollama/ollama image
+        setVia: [configFile]
+        area: network
+        default: The documented -p 11434:11434 (every host interface; the image sets OLLAMA_HOST=0.0.0.0:11434)
+        recommended: -p 127.0.0.1:11434:11434
+        why: The container listens on all its interfaces, so the publish rule is what keeps the unauthenticated port off the host's network.
+        mitigations: [D3-AA]
+        url: https://docs.ollama.com/docker
+        verified: "2026-10-30"
+      - id: ollamaNoCloud
+        name: OLLAMA_NO_CLOUD / disable_ollama_cloud
+        where: Server environment → OLLAMA_NO_CLOUD=1, or ~/.ollama/server.json → "disable_ollama_cloud" (app › Settings › Cloud then shows it forced off)
+        setVia: [configFile, mdm]
+        area: data
+        default: Unset (cloud models and web search available once signed in)
+        recommended: OLLAMA_NO_CLOUD=1 on managed devices
+        why: A -cloud model name or web search would otherwise send the prompt to Ollama's cloud through the same local API; teams approved for Ollama Cloud get an exception.
+        mitigations: [cap-ai-threat-modeling]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: ollamaRemotes
+        name: OLLAMA_REMOTES
+        where: Server environment → OLLAMA_REMOTES
+        setVia: [configFile, mdm]
+        area: network
+        default: ollama.com
+        recommended: Unset (ollama.com only)
+        why: Remote models can be forwarded only to the listed hosts, so no other inference host can be added through a model definition.
+        mitigations: [cap-ai-threat-modeling]
+        url: https://raw.githubusercontent.com/ollama/ollama/main/envconfig/config.go
+        verified: "2026-10-30"
+      - id: httpsProxy
+        name: HTTPS_PROXY
+        where: Server environment → HTTPS_PROXY, with the proxy CA installed as a system certificate
+        setVia: [configFile, mdm]
+        area: network
+        default: Unset (direct)
+        recommended: The corporate proxy, with ollama.com and hf.co pulls on its allowlist
+        why: Model pulls pass the proxy's source allowlist and logging; the FAQ says not to set HTTP_PROXY, which can break client connections.
+        mitigations: [cap-ai-threat-modeling, D3-FA]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: pullInsecure
+        name: insecure (Allow downloading over insecure connections)
+        where: POST /api/pull request body → insecure; ollama pull --insecure
+        setVia: [apiCli]
+        area: network
+        default: "false"
+        recommended: "false — never set"
+        why: Keeps the manifest and layers on TLS, so the pull-time sha256 check is against a manifest an on-path attacker could not rewrite.
+        mitigations: [AML.M0014, D3-FA]
+        url: https://docs.ollama.com/api/pull
+        verified: "2026-10-30"
+      - id: ollamaModels
+        name: OLLAMA_MODELS
+        where: Server environment → OLLAMA_MODELS (app › Settings › Model location sets the same)
+        setVia: [configFile, mdm]
+        area: data
+        default: ~/.ollama/models (macOS, Windows); /usr/share/ollama/.ollama/models (Linux service)
+        recommended: A directory only the serving account can write (sudo chown -R ollama:ollama on Linux)
+        why: Other users and processes cannot swap a blob or copy an organisation fine-tune out of the store; on macOS and Windows the user's own processes still can.
+        mitigations: [AML.M0005]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: serviceUser
+        name: User=ollama
+        where: /etc/systemd/system/ollama.service → [Service] User= and Group= (created by the standard installer)
+        setVia: [configFile]
+        area: identity
+        default: ollama (standard installer)
+        recommended: ollama — a dedicated non-login account
+        why: The server, its model store and its ed25519 key belong to a service account rather than to whoever is logged in.
+        mitigations: [AML.M0005]
+        url: https://docs.ollama.com/linux
+        verified: "2026-10-30"
+      - id: maxQueue
+        name: OLLAMA_MAX_QUEUE
+        where: Server environment → OLLAMA_MAX_QUEUE
+        setVia: [configFile, mdm]
+        area: tools
+        default: "512"
+        recommended: 512, set explicitly; lower on a shared server
+        why: Requests beyond the queue get HTTP 503 instead of piling up; it is one global queue, so per-caller limits need a gateway.
+        mitigations: [AML.M0004]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: numParallel
+        name: OLLAMA_NUM_PARALLEL
+        where: Server environment → OLLAMA_NUM_PARALLEL
+        setVia: [configFile, mdm]
+        area: tools
+        default: "1"
+        recommended: 1 on a workstation; sized to memory on a server
+        why: Memory scales with parallel requests × context length, so an unbounded value lets callers exhaust the host.
+        mitigations: [AML.M0004]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: maxLoadedModels
+        name: OLLAMA_MAX_LOADED_MODELS
+        where: Server environment → OLLAMA_MAX_LOADED_MODELS
+        setVia: [configFile, mdm]
+        area: tools
+        default: 3 × the number of GPUs, or 3 for CPU inference
+        recommended: Set explicitly to what the machine can hold
+        why: Bounds how many models callers can force into memory at once by naming them.
+        mitigations: [AML.M0004]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: contextLength
+        name: OLLAMA_CONTEXT_LENGTH
+        where: Server environment → OLLAMA_CONTEXT_LENGTH (app › Settings › Context length sets the same)
+        setVia: [configFile, mdm]
+        area: tools
+        default: 4096 per the FAQ; 4k, 32k or 256k by VRAM per the Context length page
+        recommended: Set explicitly for the hardware (for example 32768)
+        why: The vendor pages disagree on the default, so set it; callers can still raise num_ctx per request, so it is a default, not a ceiling.
+        mitigations: [AML.M0004]
+        url: https://docs.ollama.com/context-length
+        verified: "2026-10-30"
+      - id: debugLogRequests
+        name: OLLAMA_DEBUG_LOG_REQUESTS
+        where: Server environment → OLLAMA_DEBUG_LOG_REQUESTS
+        setVia: [configFile, mdm]
+        area: data
+        default: Unset (off)
+        recommended: Unset
+        why: When on, inference request bodies and replay curl commands are written to a temporary directory, putting prompts and client material on disk.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ollama/ollama/main/envconfig/config.go
+        verified: "2026-10-30"
+      - id: autoDownloadUpdates
+        name: Auto-download updates
+        where: Ollama app (macOS, Windows) › Settings › Auto-download updates
+        setVia: [configFile]
+        area: tools
+        default: "On"
+        recommended: "On"
+        why: Fixes for the GGUF-parser and API CVEs land without waiting for the user; the Windows updater's own signature gap (CVE-2026-42248) is fixed by updating past it.
+        mitigations: [cap-ai-threat-modeling]
+        url: https://raw.githubusercontent.com/ollama/ollama/main/app/ui/app/src/components/Settings.tsx
+        verified: "2026-10-30"
+      - id: ollamaVersion
+        name: OLLAMA_VERSION
+        where: Linux install script → curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=<version> sh
+        setVia: [apiCli]
+        area: tools
+        default: Unset (latest release)
+        recommended: The release your vulnerability management has approved
+        why: Servers run a version someone checked against the advisory stream, not whatever the script fetched that day.
+        mitigations: [cap-ai-threat-modeling]
+        url: https://docs.ollama.com/linux
+        verified: "2026-10-30"
+      - id: ollamaSignin
+        name: ollama signin
+        where: ollama signin / app › Settings › Ollama account; keys at ollama.com › Settings › Keys
+        setVia: [apiCli]
+        area: identity
+        default: Not signed in
+        recommended: Not signed in on managed devices outside teams approved for Ollama Cloud; remove the device key at ollama.com when it leaves
+        why: The device key is what lets the machine push models to ollama.com and run cloud models, so an unsigned device cannot publish an organisation fine-tune there.
+        mitigations: [AML.M0005]
+        url: https://docs.ollama.com/faq
+        verified: "2026-10-30"
+      - id: modelInventory
+        name: List models (GET /api/tags)
+        where: GET http://127.0.0.1:11434/api/tags (or ollama ls), called by the MDM or EDR agent on a schedule
+        setVia: [apiCli]
+        area: audit
+        default: Not collected
+        recommended: Collected from every device into the AI inventory, with digests compared to the approved list
+        why: The organisation sees which models, by sha256 digest, each device can serve, and spots one that was never approved.
+        mitigations: [AML.M0023, AML.M0014, cap-shadow-ai-discovery]
+        url: https://docs.ollama.com/api/tags
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-7482 "Bleeding Llama" — heap out-of-bounds read from a crafted GGUF via /api/create leaks process

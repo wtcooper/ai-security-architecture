@@ -9,6 +9,8 @@
 # /app-terms, /docs/app/plugins/mcp -> /docs/app/mcp, /docs/cli/server-start -> /docs/cli/serve/server-start;
 # lmstudio.ai/security is a Hub profile page, not a security page; /docs/enterprise 404; no SECURITY.md or
 # published advisories in the lmstudio-ai GitHub repos; NVD keyword "lmstudio" returned 0 CVEs.
+# 2026-10-30: settings added and AML.M0014 row added (pin had no row); every lmstudio.ai page cited answered 200;
+# current release 0.4.27 (2026-10-29) per the changelog.
 vendor: lmstudio
 family: LM Studio
 tools:
@@ -44,7 +46,7 @@ tools:
     summary:
       - >-
         Element Labs' desktop application for running open-weights models on the user's own machine (LM Studio
-        0.4.25, 2026-09-19): a GUI over the llama.cpp engine (GGUF) and, on Apple Silicon, Apple MLX, with a
+        0.4.27, 2026-10-29): a GUI over the llama.cpp engine (GGUF) and, on Apple Silicon, Apple MLX, with a
         local server that speaks OpenAI-compatible /v1, Anthropic-compatible /v1/messages and a native REST
         /api/v1, on port 1234 by default. The same core ships headless as llmster, driven by the lms CLI. Models are
         downloaded from Hugging Face (Discover tab, lms get, or the REST download endpoint) straight into
@@ -471,12 +473,182 @@ tools:
           chat-template behaviour to the evaluator. Catalog curation (staff picks, lmstudio-community uploads)
           is not an evaluation.
         verified: "2026-09-25"
+      - mitigation: AML.M0014
+        coverage: external
+        mechanism: >-
+          No checksum or signature is documented on download (Discover, lms get, POST /api/v1/models/download), on
+          lms import or at load; verification is a promotion job that hashes the file before it enters the models
+          directory, and file-integrity monitoring over that directory
+        evidence:
+          - title: LM Studio docs — Download a model (REST; no verification documented)
+            url: https://lmstudio.ai/docs/developer/rest/download
+          - title: LM Studio docs — lms import (moves or copies a file into the models layout)
+            url: https://lmstudio.ai/docs/cli/local-models/import
+          - title: LM Studio docs — Changing the models directory
+            url: https://lmstudio.ai/docs/app/basics/download-model
+        note: >-
+          External on this drawing's rule (partial needs at least a digest check on download, as toolOllama's pull
+          has; toolVllm pins hub revisions). LM Studio writes what Hugging Face served straight into the loadable
+          directory and never hashes it, and lms import trusts the file it is given. The organisation's job hashes
+          (or verifies the model-signing bundle of) each approved GGUF in quarantine, imports it with lms import
+          --copy into a models directory only that job can write, and file-integrity monitoring re-hashes the
+          directory against the approved list.
+        verified: "2026-10-30"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Most rows are per-user switches in the app (Developer › Server Settings, Settings) with no managed or
+    # locked settings file, MDM key or admin console at any tier; only the bind has a CLI and environment channel,
+    # so device management launches the server and checks for drift. Verified 2026-10-30 against lmstudio.ai/docs.
+    settings:
+      - id: requireAuthentication
+        name: Require Authentication
+        where: Developer › Server Settings › Require Authentication; tokens under Manage Tokens
+        setVia: [configFile]
+        area: identity
+        default: "Off"
+        recommended: On, with one named API token per consuming application
+        why: Every REST and SDK request must carry a token, so a stray local process or web page cannot load, download or call models, and a runaway caller can be found and its token deleted.
+        mitigations: [D3-AA, AML.M0004]
+        requires: LM Studio 0.4.0 or later
+        url: https://lmstudio.ai/docs/developer/core/authentication
+        verified: "2026-10-30"
+      - id: serveOnLocalNetwork
+        name: Serve on Local Network
+        where: Developer › Server Settings › Serve on Local Network
+        setVia: [configFile]
+        area: network
+        default: "Off"
+        recommended: "Off"
+        why: Keeps the API on localhost so other devices on the network cannot call it; a shared server goes behind an authenticating proxy instead.
+        mitigations: [D3-AA]
+        url: https://lmstudio.ai/docs/developer/core/server/serve-on-network
+        verified: "2026-10-30"
+      - id: serverBind
+        name: --bind / LMS_SERVER_HOST
+        where: lms server start --bind 127.0.0.1, or LMS_SERVER_HOST in the environment of the managed start script
+        setVia: [apiCli, mdm]
+        area: network
+        default: 127.0.0.1
+        recommended: 127.0.0.1, set explicitly by the managed launch
+        why: The one setting device management can deliver; the docs warn that any other bind exposes the server beyond localhost.
+        mitigations: [D3-AA]
+        url: https://lmstudio.ai/docs/cli/serve/server-start
+        verified: "2026-10-30"
+      - id: enableCors
+        name: Enable CORS
+        where: Developer › Server Settings › Enable CORS (lms server start --cors)
+        setVia: [configFile, apiCli]
+        area: network
+        default: "Off"
+        recommended: "Off"
+        why: Web pages open in the user's browser cannot read replies from the local API.
+        mitigations: [D3-AA]
+        url: https://lmstudio.ai/docs/developer/core/server/settings
+        verified: "2026-10-30"
+      - id: allowPerRequestMcps
+        name: Allow per-request MCPs
+        where: Developer › Server Settings › Allow per-request MCPs
+        setVia: [configFile]
+        area: tools
+        recommended: "Off"
+        why: An API caller cannot name an arbitrary remote MCP server for the runtime to call, which would carry the conversation off the machine.
+        mitigations: []
+        url: https://lmstudio.ai/docs/developer/core/server/settings
+        verified: "2026-10-30"
+      - id: allowMcpJsonServers
+        name: Allow calling servers from mcp.json
+        where: Developer › Server Settings › Allow calling servers from mcp.json (requires Require Authentication)
+        setVia: [configFile]
+        area: tools
+        recommended: Off unless an authenticated application needs those tools
+        why: API callers cannot use the user's own MCP servers, which the page warns may reach the file system or private data.
+        mitigations: [D3-AA]
+        url: https://lmstudio.ai/docs/developer/core/server/settings
+        verified: "2026-10-30"
+      - id: mcpJson
+        name: mcp.json
+        where: Program tab › Install › Edit mcp.json
+        setVia: [configFile]
+        area: tools
+        default: Empty
+        recommended: Only MCP servers the organisation has approved
+        why: The page says some MCP servers can run arbitrary code and reach local files and the network; never install them from untrusted sources.
+        mitigations: []
+        url: https://lmstudio.ai/docs/app/mcp
+        verified: "2026-10-30"
+      - id: toolCallConfirmations
+        name: Tool call confirmations
+        where: Tool call confirmation dialog in chat › allow once / always allow
+        setVia: [configFile]
+        area: tools
+        default: Confirmation shown for every tool call
+        recommended: Allow once — no "always allow" for tools that write files or reach the network
+        why: The user reviews, and can edit, each tool call's arguments before it runs; an always-allowed tool runs unseen.
+        mitigations: []
+        url: https://lmstudio.ai/blog/lmstudio-v0.3.17
+        verified: "2026-10-30"
+      - id: enableLmLink
+        name: Enable LM Link
+        where: Settings › LM Link › Enable LM Link (on llmster, lms link disable)
+        setVia: [configFile, apiCli]
+        area: sharing
+        default: "Off"
+        recommended: "Off"
+        why: Every device signed in to the same LM Studio account could otherwise use this machine's models over Tailscale, and the docs do not say Require Authentication applies to them.
+        mitigations: [D3-AA]
+        url: https://lmstudio.ai/docs/lmlink/basics/faq
+        verified: "2026-10-30"
+      - id: jitModelLoading
+        name: Just in Time Model Loading
+        where: Developer › Server Settings › Just in Time Model Loading, Auto Unload Unused JIT Models, Only Keep Last JIT Loaded Model
+        setVia: [configFile]
+        area: tools
+        recommended: On, with Auto Unload Unused JIT Models and Only Keep Last JIT Loaded Model on
+        why: Coding tools can load the model they ask for while no caller can fill memory with models; on a shared server turn JIT loading off.
+        mitigations: [AML.M0004]
+        url: https://lmstudio.ai/docs/developer/core/server/settings
+        verified: "2026-10-30"
+      - id: maxConcurrentPredictions
+        name: Max Concurrent Predictions
+        where: Model loader › Manually choose model load parameters › Show advanced settings › Max Concurrent Predictions
+        setVia: [configFile]
+        area: tools
+        default: "4"
+        recommended: 4, set explicitly for each model the server exposes
+        why: Bounds the parallel slots per loaded model and queues the rest; nothing limits a single caller, so per-caller quotas need a gateway.
+        mitigations: [AML.M0004]
+        url: https://lmstudio.ai/docs/app/advanced/parallel-requests
+        verified: "2026-10-30"
+      - id: modelsDirectory
+        name: Changing the models directory
+        where: My Models › models directory
+        setVia: [configFile]
+        area: data
+        default: ~/.lmstudio/models
+        recommended: A directory only the promotion job can write, filled by lms import --copy of scanned files
+        why: In-app and API downloads cannot land unreviewed beside approved models, and other processes cannot swap a file the runtime will load.
+        mitigations: [D3-FA, AML.M0005, AML.M0014]
+        url: https://lmstudio.ai/docs/app/basics/download-model
+        verified: "2026-10-30"
+      - id: serverOnLogin
+        name: Run the LLM server on login
+        where: App settings (Cmd/Ctrl + ,) › run the LLM server on login
+        setVia: [configFile]
+        area: network
+        default: "Off"
+        recommended: "Off"
+        why: Closing the app would otherwise leave the API server running in the tray, listening when the user thinks it is gone.
+        mitigations: [cap-shadow-ai-discovery]
+        url: https://lmstudio.ai/docs/developer/core/headless
+        verified: "2026-10-30"
     advisories:
       - title: >-
           Pillar Security — poisoned GGUF chat templates (class writeup across hubs and runtimes; no CVE; LM Studio
           replied 2025-06-20 that users are responsible for vetting models)
         url: https://www.pillar.security/blog/llm-backdoors-at-the-inference-level-the-threat-of-poisoned-templates
         date: "2025-07"
+      - title: LM Studio 0.4.26 — "Bug fixes and security hardening" (no advisory, CVE or detail published)
+        url: https://lmstudio.ai/changelog/lmstudio/lmstudio-v0.4.26
+        date: "2026-10"
       - title: LM Studio 0.4.16 — "Security hardening" (no advisory, CVE or detail published)
         url: https://lmstudio.ai/changelog/lmstudio/lmstudio-v0.4.16
         date: "2026-06"

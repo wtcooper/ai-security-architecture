@@ -162,18 +162,31 @@ organisation plan, so a control the person sets is rated partial at most and the
 levers (OAuth app approval at the connected services, OAuth-grant discovery, vendor assessment)
 are `external`.
 
+Settings pass, 2026-10-30. Every registry entity gained a `settings:` table — 1,170-odd rows
+across 52 products, each name checked on the vendor's live page that day, each Built-in or
+Partial rating backed by a row (the build enforces it) — and the pass corrected the record text
+it found out of date (renamed settings, moved consoles, retired toggles, changed defaults). Six
+exemplars were onboarded with full records: Microsoft Copilot in Edge and Gemini in Chrome
+(browser AI), the Gemini Enterprise app (enterprise chat), Gemini Enterprise Workflow Builder and
+Amazon Quick Automate (low-code runtime), and the llama.cpp server (local runtime). The Gemini
+Enterprise Agent Platform Managed Agents API is the same product as `toolVertexAgentEngine` and is
+recorded as its variant. The consumer rule changed with it: a vendor safeguard nobody can configure
+is described in the note and rated `none`, because a partial rating needs a settings row behind it.
+Pages that refuse automated reads (help.openai.com, help.salesforce.com, github.com from this
+environment) were not worked around; what is documented only there is left out or rated `unknown`.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.
 
 - October 2026 example-only additions — Google ADK, Atlassian Rovo A2A Gateway, NVIDIA NIM
-  and Hugging Face Transformers, plus Gemini Enterprise app/Workflow Builder, Amazon Quick
-  Automate and ChatGPT Work Cloud, have sourced architecture examples but no detailed control
-  assessment yet. Their examples explain the implementation role; they do not claim product
+  and Hugging Face Transformers, plus ChatGPT Work Cloud, have sourced architecture examples but
+  no detailed control assessment yet (Gemini Enterprise app, Workflow Builder and Amazon Quick
+  Automate were onboarded 2026-10-30). Their examples explain the implementation role; they do not claim product
   control coverage. Existing example-only exclusions below remain in effect. See
   `docs/refarch-review/2026-10-03/exemplar-refresh-notes.md` for selection and mode details.
 
-- Architecture exemplars not onboarded (scope decision 2026-09-25: existing entities plus one or two mainstream products per drawing) — Perplexity Comet, Dia, Microsoft Edge Copilot Mode, Gemini in Chrome (browser AI); Goose (first-party coding); llama.cpp server (local runtime); Zapier Agents (low-code); Sierra (single agent); Intercom Fin, Decagon (chat agent); Atlassian Remote MCP Server, Cloudflare remote MCP hosting (remote MCP); KServe, SGLang (self-hosted inference); Axolotl, Hugging Face PEFT (training); Temporal, LangGraph, Microsoft Agent Framework (multi-agent workflow); the A2A specification, A2A-enabled agent platforms and the identity-assertion grant (federation).
+- Architecture exemplars not onboarded (scope decision 2026-09-25: existing entities plus one or two mainstream products per drawing) — Perplexity Comet, Dia (browser AI — Microsoft Copilot in Edge, including Copilot Mode, and Gemini in Chrome were onboarded 2026-10-30); Goose (first-party coding); Zapier Agents (low-code); Sierra (single agent); Intercom Fin, Decagon (chat agent); Atlassian Remote MCP Server, Cloudflare remote MCP hosting (remote MCP); KServe, SGLang (self-hosted inference); Axolotl, Hugging Face PEFT (training); Temporal, LangGraph, Microsoft Agent Framework (multi-agent workflow); the A2A specification, A2A-enabled agent platforms and the identity-assertion grant (federation).
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.
 - OpenAI ChatGPT Atlas — winding down; browser features moved into the ChatGPT app's built-in browser (recorded as a variant of toolChatgptDesktop). The Help Center article "Evolving Atlas into ChatGPT" returned 403 to automated fetch on 2026-09-10.
 - OpenAI Agent Builder — scheduled shutdown 2026-11-30 per developers.openai.com/api/docs/guides/agent-builder; ChatKit and the Agents SDK are the replacement.

@@ -10,6 +10,9 @@
 # contributing/vulnerability_management.html -> contributing/vulnerability_management/. Behaviour the docs do not
 # state (API bind to all interfaces when --host is unset, prefix caching on by default, dev-mode gating of /pause
 # and /update_weights, /v1/models fields, torch.load weights_only) was read in the GitHub source at tag v0.30.0.
+# 2026-10-30: settings added against docs.vllm.ai/en/stable (CLI reference now for v0.32.x; v0.32.0 on PyPI
+# 2026-10-18); --allowed-origins now defaults to [] (cross-origin access off); the CLI help lists /v1, /v2 and
+# /inference as key-checked while the security guide adds /cohere; github.com answered 403, SECURITY.md read raw.
 vendor: vllm
 family: vLLM
 tools:
@@ -48,7 +51,7 @@ tools:
         from a Hugging Face Hub id or a local path onto the operator's accelerators and publishes an
         OpenAI-compatible HTTP API (plus Anthropic /v1/messages, Cohere /v2 and a SageMaker /invocations route) on
         port 8000, with continuous batching, automatic prefix caching, LoRA adapters and tensor, pipeline, data
-        and expert parallelism across GPUs and nodes. Current release v0.30.0 (2026-09-22).
+        and expert parallelism across GPUs and nodes. Current release v0.32.0 (2026-10-18, PyPI).
       - >-
         Inference runs entirely on infrastructure the organisation operates; no prompt goes to the project.
         Outbound traffic is model and tokenizer downloads from the Hub (HF_TOKEN for gated models), media URLs the
@@ -104,9 +107,9 @@ tools:
         url: https://github.com/vllm-project/vllm/security/policy
       - label: Release cadence
         value: >-
-          About every two weeks (v0.25.0 on 2026-07-11 through v0.30.0 on 2026-09-22), each with its own advisory
+          About every two weeks (v0.25.0 on 2026-07-11 through v0.32.0 on 2026-10-18), each with its own advisory
           fixes; the container image vllm/vllm-openai tracks the releases.
-        url: https://github.com/vllm-project/vllm/releases
+        url: https://pypi.org/project/vllm/
     items:
       - title: The reverse-proxy endpoint allowlist the security guide recommends
         body:
@@ -506,7 +509,7 @@ tools:
         mechanism: >-
           Safe defaults on the riskiest surfaces (VLLM_SERVER_DEV_MODE, VLLM_ALLOW_RUNTIME_LORA_UPDATING,
           --trust-remote-code, --grpc-port, profiler, --enable-tokenizer-info-endpoint and endpoint plugins all off)
-          but unsafe defaults elsewhere (no --api-key, --allowed-origins *, all-interface bind, shared prefix cache,
+          but unsafe defaults elsewhere (no --api-key, all-interface bind, shared prefix cache,
           unauthenticated /invocations and /scale_elastic_ep) and no flag that removes a route; per-request
           cache_salt, mixed into the hash of the first KV block so only requests with the same salt share cached
           prefixes, or --no-enable-prefix-caching
@@ -527,7 +530,8 @@ tools:
           - title: Tighten the unsafe defaults
             body:
               - >-
-                Set --allowed-origins to exact origins (default ['*']), --disable-fastapi-docs,
+                Leave --allowed-origins at its default [] (cross-origin browser access off; it was ['*'] in earlier
+                releases) or list exact origins, set --disable-fastapi-docs,
                 --allowed-media-domains with VLLM_MEDIA_URL_ALLOW_REDIRECTS=0, and keep --allowed-local-media-path
                 empty.
             url: https://docs.vllm.ai/en/stable/cli/serve/
@@ -594,6 +598,363 @@ tools:
           client and dashboard ports never exposed, and an mTLS sidecar or IPsec where encryption in transit is
           required.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The operator is the admin: every row is a `vllm serve` flag (on the command line or in its --config YAML),
+    # an environment variable of the server process, or a field the gateway sets on each request; nothing is
+    # set from a console. Verified 2026-10-30 against docs.vllm.ai/en/stable (CLI reference for v0.32.x).
+    settings:
+      - id: apiKey
+        name: --api-key
+        where: vllm serve --api-key, or VLLM_API_KEY from the platform's secret store
+        setVia: [configFile, apiCli]
+        area: identity
+        default: Unset (no authentication)
+        recommended: A key held only by the gateway in front, from a secret
+        why: Callers that reach the port without the gateway are refused on /v1, /v2 and /inference; the CLI help warns /invocations and the other routes stay open, so the proxy allowlist still matters.
+        mitigations: [D3-AA]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: sslClientCerts
+        name: --ssl-cert-reqs / --ssl-ca-certs
+        where: vllm serve --ssl-keyfile --ssl-certfile --ssl-ca-certs <CA bundle> --ssl-cert-reqs 2
+        setVia: [configFile, apiCli]
+        area: identity
+        default: "0 (no client certificate)"
+        recommended: 2 (required), with the CA that issues the gateway's certificate, where no service mesh provides mTLS
+        why: Only workloads holding a certificate from that CA complete the handshake, which covers every route on the HTTP port, not just the key-checked prefixes.
+        mitigations: [D3-AA]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: host
+        name: --host
+        where: vllm serve --host
+        setVia: [configFile, apiCli]
+        area: network
+        default: Unset (listens on every interface)
+        recommended: The address only the reverse proxy reaches (127.0.0.1 beside it, or the pod address behind NetworkPolicy)
+        why: The server's own routes, many unauthenticated, are reachable only through the proxy that allowlists endpoints.
+        mitigations: [D3-NI, D3-ACH]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: allowedOrigins
+        name: --allowed-origins
+        where: vllm serve --allowed-origins
+        setVia: [configFile, apiCli]
+        area: network
+        default: "[] (cross-origin browser access disabled)"
+        recommended: "[] — leave unset"
+        why: A web page in a user's browser cannot read responses from the API; copied examples that pass * reopen it.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: disableFastapiDocs
+        name: --disable-fastapi-docs
+        where: vllm serve --disable-fastapi-docs
+        setVia: [configFile, apiCli]
+        area: network
+        default: "False (OpenAPI schema, Swagger UI and ReDoc served)"
+        recommended: "True"
+        why: The server stops publishing a map of every route, including the unauthenticated ones, to whoever reaches it.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: grpcPort
+        name: --grpc-port
+        where: vllm serve --grpc-port (with VLLM_USE_RUST_FRONTEND=1)
+        setVia: [configFile, apiCli]
+        area: network
+        default: Unset (no gRPC server)
+        recommended: Unset
+        why: The security guide says the gRPC interface has no authentication or encryption and binds the same host as HTTP.
+        mitigations: [D3-ACH, D3-NI]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: serverDevMode
+        name: VLLM_SERVER_DEV_MODE
+        where: Server environment → VLLM_SERVER_DEV_MODE
+        setVia: [configFile]
+        area: tools
+        default: "0"
+        recommended: "0 — never set in production"
+        why: Dev mode adds /server_info, /collective_rpc, /sleep and /reset_prefix_cache, which the guide says should never be enabled in production.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: tokenizerInfoEndpoint
+        name: --enable-tokenizer-info-endpoint
+        where: vllm serve --enable-tokenizer-info-endpoint
+        setVia: [configFile, apiCli]
+        area: data
+        default: "False"
+        recommended: "False"
+        why: Keeps /tokenizer_info, which can expose chat templates and tokenizer configuration, unpublished.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: vllmPlugins
+        name: VLLM_PLUGINS
+        where: Server environment → VLLM_PLUGINS (comma-separated plugin names)
+        setVia: [configFile]
+        area: tools
+        default: Unset (every installed general plugin loads; endpoint plugins load none)
+        recommended: The exact reviewed plugin names; never lora_hf_hub_resolver
+        why: An installed package cannot load code into the server or add a route by being on the image, and requests cannot pull adapters from the Hub.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: trustRemoteCode
+        name: --trust-remote-code
+        where: vllm serve --trust-remote-code / --no-trust-remote-code
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "False"
+        recommended: "False — remove it from copied manifests"
+        why: Python shipped in a model repository is not imported into the server; the Kubernetes guide's example passes it, so check deployments.
+        mitigations: [D3-FA, D3-ACH]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: loadFormat
+        name: --load-format
+        where: vllm serve --load-format
+        setVia: [configFile, apiCli]
+        area: tools
+        default: auto (safetensors, falling back to PyTorch .bin)
+        recommended: safetensors
+        why: The engine refuses pickle-based weight files instead of falling back to them when a repository ships no safetensors.
+        mitigations: [D3-FA]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: revisionPins
+        name: --revision / --code-revision / --tokenizer-revision
+        where: vllm serve --revision <commit> --code-revision <commit> --tokenizer-revision <commit>
+        setVia: [configFile, apiCli]
+        area: tools
+        default: Unset (the repository's default branch)
+        recommended: The reviewed commit sha for all three, on hub-sourced loads
+        why: A push to the model repository's branch cannot change what the next restart loads, and the manifest records exactly which commit serves.
+        mitigations: [AML.M0014, AML.M0023]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: hfToken
+        name: --hf-token / HF_TOKEN
+        where: vllm serve --hf-token, or HF_TOKEN from the platform's secret store
+        setVia: [configFile, apiCli]
+        area: identity
+        default: Unset (or the token from hf auth login in ~/.cache/huggingface/token)
+        recommended: A read-only, fine-grained token scoped to the approved repositories, from a secret
+        why: A leaked server token can read only what the server may load, and cannot push to or read the organisation's other repositories.
+        mitigations: [AML.M0005]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: rayEnvDenylist
+        name: ray_non_carry_over_env_vars.json
+        where: $VLLM_CONFIG_ROOT/ray_non_carry_over_env_vars.json (default ~/.config/vllm/)
+        setVia: [configFile]
+        area: identity
+        default: Absent (driver environment copied to Ray workers)
+        recommended: Lists HF_TOKEN and every cloud storage key
+        why: Tokens and storage credentials in the driver's environment are not copied to every Ray worker, where other processes could read them.
+        mitigations: [AML.M0005]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: cacheRoot
+        name: VLLM_CACHE_ROOT
+        where: Server environment → VLLM_CACHE_ROOT
+        setVia: [configFile]
+        area: data
+        default: ~/.cache/vllm
+        recommended: A directory only the service account can write, never on shared storage
+        why: Compile and kernel caches load without integrity checks in formats that can execute code, so a writable cache is a code path into the server.
+        mitigations: [D3-ACH, AML.M0005]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: runtimeLoraUpdating
+        name: VLLM_ALLOW_RUNTIME_LORA_UPDATING
+        where: Server environment → VLLM_ALLOW_RUNTIME_LORA_UPDATING (with --enable-lora)
+        setVia: [configFile]
+        area: tools
+        default: Unset (off)
+        recommended: Unset — serve adapters named at start with --lora-modules
+        why: /v1/load_lora_adapter does not exist, so a caller cannot load weights from any path the server can read; the LoRA page says not to use it in production.
+        mitigations: [D3-ACH, D3-FA]
+        url: https://docs.vllm.ai/en/stable/features/lora/
+        verified: "2026-10-30"
+      - id: allowedLocalMediaPath
+        name: --allowed-local-media-path
+        where: vllm serve --allowed-local-media-path
+        setVia: [configFile, apiCli]
+        area: data
+        default: '"" (no local reads)'
+        recommended: '"" — leave empty'
+        why: API requests cannot read images or videos from the server's file system, which the flag's own help calls a security risk.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: allowedMediaDomains
+        name: --allowed-media-domains
+        where: vllm serve --allowed-media-domains
+        setVia: [configFile, apiCli]
+        area: network
+        default: Unset (any URL)
+        recommended: The domains the application's media come from
+        why: A multimodal request cannot make the server fetch from internal addresses or arbitrary hosts.
+        mitigations: [D3-ACH, D3-NI]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: mediaUrlRedirects
+        name: VLLM_MEDIA_URL_ALLOW_REDIRECTS
+        where: Server environment → VLLM_MEDIA_URL_ALLOW_REDIRECTS
+        setVia: [configFile]
+        area: network
+        default: "1"
+        recommended: "0"
+        why: An allowed domain cannot redirect the server's media fetch to a host outside the list.
+        mitigations: [D3-ACH, D3-NI]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: cacheSalt
+        name: cache_salt
+        where: Request body → cache_salt, set by the gateway on every request
+        setVia: [code]
+        area: data
+        default: Not passed (prefix cache shared by every request)
+        recommended: A random per-tenant secret of about 256 bits, overwriting any caller value
+        why: Only requests with the same salt share cached prefixes, closing the timing channel that reveals another tenant's prompt; --no-enable-prefix-caching where tenants may share nothing.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: prefixCachingHashAlgo
+        name: --prefix-caching-hash-algo
+        where: vllm serve --prefix-caching-hash-algo
+        setVia: [configFile, apiCli]
+        area: data
+        default: sha256
+        recommended: sha256
+        why: Keeps prefix-cache block hashes collision-resistant; the xxhash options trade that for speed.
+        mitigations: [D3-ACH]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: maxNumQueuedReqs
+        name: --max-num-queued-reqs
+        where: vllm serve --max-num-queued-reqs
+        setVia: [configFile, apiCli]
+        area: tools
+        default: None (unbounded)
+        recommended: Set — about data_parallel_size × max_num_seqs plus the queue depth you accept
+        why: Requests beyond the limit get HTTP 503 instead of joining an unbounded queue; per-tenant quotas still belong to the gateway.
+        mitigations: [AML.M0004]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: maxNSequences
+        name: VLLM_MAX_N_SEQUENCES
+        where: Server environment → VLLM_MAX_N_SEQUENCES
+        setVia: [configFile]
+        area: tools
+        default: "16384"
+        recommended: "128"
+        why: One request cannot ask for thousands of completions and stall the engine for everyone; the guide suggests 64 or 128 for public-facing deployments.
+        mitigations: [AML.M0004]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: maxModelLen
+        name: --max-model-len
+        where: vllm serve --max-model-len
+        setVia: [configFile, apiCli]
+        area: tools
+        default: Derived from the model config
+        recommended: Set explicitly for the accelerators serving the model
+        why: Bounds the context one request can occupy, so a caller cannot claim the model's full window on hardware sized for less.
+        mitigations: [AML.M0004]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: enableLogRequests
+        name: --enable-log-requests
+        where: vllm serve --enable-log-requests, with VLLM_LOGGING_LEVEL=INFO
+        setVia: [configFile, apiCli]
+        area: audit
+        default: "False"
+        recommended: True at INFO (request id, parameters, LoRA adapter; no prompt text)
+        why: Each request leaves a log line the gateway's record can be joined to; DEBUG would add prompt text, so keep INFO.
+        mitigations: [AML.M0024]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: enableLogOutputs
+        name: --enable-log-outputs
+        where: vllm serve --enable-log-outputs (requires --enable-log-requests)
+        setVia: [configFile, apiCli]
+        area: data
+        default: "False"
+        recommended: "False — capture completions at the gateway, with its redaction"
+        why: Output text would otherwise go to the process log unredacted; turn it on only where a log store is approved for completions, bounded with --max-log-len.
+        mitigations: [AML.M0024]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: otlpTracesEndpoint
+        name: --otlp-traces-endpoint
+        where: vllm serve --otlp-traces-endpoint, with OTEL_SERVICE_NAME
+        setVia: [configFile, apiCli]
+        area: audit
+        default: Unset
+        recommended: The organisation's OpenTelemetry collector
+        why: Each request produces a span with ids, token counts and latencies, without prompt text, in the caller's trace.
+        mitigations: [AML.M0024]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: requestIdHeaders
+        name: --enable-request-id-headers
+        where: vllm serve --enable-request-id-headers
+        setVia: [configFile, apiCli]
+        area: audit
+        default: "False"
+        recommended: "True"
+        why: Responses carry X-Request-Id, so the gateway's record and the engine's log line can be matched in an investigation.
+        mitigations: [AML.M0024]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: fingerprintMode
+        name: --fingerprint-mode
+        where: vllm serve --fingerprint-mode
+        setVia: [configFile, apiCli]
+        area: audit
+        default: full (vllm-<version>, parallelism and a config hash)
+        recommended: full
+        why: Every response names the engine version and configuration, so inventory and vulnerability tracking know what each instance runs.
+        mitigations: [AML.M0023, D3-AVE]
+        url: https://docs.vllm.ai/en/stable/cli/serve/
+        verified: "2026-10-30"
+      - id: usageStats
+        name: VLLM_NO_USAGE_STATS / DO_NOT_TRACK
+        where: Server environment → VLLM_NO_USAGE_STATS=1 or DO_NOT_TRACK=1, or ~/.config/vllm/do_not_track
+        setVia: [configFile]
+        area: data
+        default: Usage statistics sent to the project
+        recommended: VLLM_NO_USAGE_STATS=1
+        why: Hardware, model architecture and configuration details of the serving estate stay inside the organisation.
+        mitigations: []
+        url: https://docs.vllm.ai/en/stable/usage/usage_stats/
+        verified: "2026-10-30"
+      - id: vllmHostIp
+        name: VLLM_HOST_IP
+        where: Server environment → VLLM_HOST_IP on every node (with --kv-ip and the data-parallel addresses)
+        setVia: [configFile]
+        area: network
+        default: Unset (auto-detected)
+        recommended: An address on the isolated serving-plane network
+        why: Inter-node traffic, which the guide says is insecure by default and can carry code execution, stays off networks other workloads share.
+        mitigations: [D3-NI]
+        url: https://docs.vllm.ai/en/stable/usage/security/
+        verified: "2026-10-30"
+      - id: securityAdvisories
+        name: Prenotification policy
+        where: vllm-project security advisories feed into vulnerability management; prenotification requested from the vulnerability management team
+        setVia: [apiCli]
+        area: audit
+        default: Not subscribed
+        recommended: Feed ingested, and prenotification requested where the deployment qualifies
+        why: Critical and high fixes reach the operator when the patch ships, and before it for prenotified organisations.
+        mitigations: [D3-AVE]
+        url: https://raw.githubusercontent.com/vllm-project/vllm/main/SECURITY.md
+        verified: "2026-10-30"
     advisories:
       - title: >-
           GHSA-hhv2-872h-628q — incomplete artifact pin propagation in FunAudioChat and Tarsier2 (fixed 0.28.0; no

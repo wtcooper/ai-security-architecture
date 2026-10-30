@@ -10,6 +10,9 @@
 # through its .md variant listed in /docs/latest/llms.txt. Behaviour the docs do not state (per-experiment checks
 # on proxied artifact paths, the dataset digest algorithm, the client-supplied run user) was read in the GitHub
 # source on master. Advisories from the GitHub Advisory Database API; huntr no longer takes MLflow reports.
+# 2026-10-30: settings added; every mlflow.org/docs/latest page cited (and its .md variant) answered 200; 3.17.2 on
+# PyPI (2026-10-21); workspaces (--enable-workspaces, MLFLOW_RBAC_SEED_DEFAULT_ROLES) now documented;
+# MLFLOW_SERVER_ENABLE_JOB_EXECUTION is no longer on the tracking-server page and has no settings row.
 vendor: mlflow
 family: MLflow
 tools:
@@ -40,7 +43,7 @@ tools:
     summary:
       - >-
         Open-source (Apache-2.0) experiment tracking server and Model Registry, self-hosted by the organisation;
-        current release 3.16.1 (2026-09-16). It is the registry-and-promotion tier of this drawing: the training job
+        current release 3.17.2 (2026-10-21). It is the registry-and-promotion tier of this drawing: the training job
         logs runs, input datasets and the candidate model to it, the registry holds numbered versions of each
         registered model with aliases (champion), tags, descriptions, signatures and the link back to the run, and
         consumers load `models:/<name>@<alias>`. Model stages (Staging/Production/Archived) are deprecated since 2.9.0
@@ -59,7 +62,7 @@ tools:
     facts:
       - label: Plans
         value: >-
-          Free and open source (Apache-2.0) on PyPI as mlflow (3.16.1, 2026-09-16) and mlflow-skinny. Managed MLflow
+          Free and open source (Apache-2.0) on PyPI as mlflow (3.17.2, 2026-10-21) and mlflow-skinny. Managed MLflow
           is sold by Amazon SageMaker AI (MLflow Apps and Tracking Servers, MLflow 3.10 on Apps) and Databricks; those
           are out of scope here.
         url: https://pypi.org/project/mlflow/
@@ -106,7 +109,7 @@ tools:
     items:
       - title: Baseline for a self-hosted registry server
         body:
-          - "Run 3.15.0 or later (3.16.1 current): 35 GitHub advisories were published for mlflow in 2025–26, nine
+          - "Run 3.15.0 or later (3.17.2 current): 35 GitHub advisories were published for mlflow in 2025–26, nine
             critical, several of them authentication bypasses on servers with basic-auth enabled."
           - "Start with `--app-name basic-auth`, MLFLOW_FLASK_SERVER_SECRET_KEY set to a stable secret, the admin
             password from MLFLOW_AUTH_ADMIN_PASSWORD, and a basic_auth.ini (MLFLOW_AUTH_CONFIG_PATH) with
@@ -552,6 +555,330 @@ tools:
           the server's optional job execution (MLFLOW_SERVER_ENABLE_JOB_EXECUTION, CVE-2026-0545) — sit with the
           loaders and the server host, recorded in this entry's risk notes and items, not with this pin.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The operator is the admin: server rows are `mlflow server` flags, environment variables or basic_auth.ini
+    # keys, and grants are made in the server's /admin UI or AuthServiceClient; the pipeline rows are calls the
+    # training and promotion code makes. Verified 2026-10-30 against mlflow.org/docs/latest (3.17.x).
+    settings:
+      - id: basicAuthApp
+        name: --app-name basic-auth
+        where: mlflow server --app-name basic-auth
+        setVia: [configFile, apiCli]
+        area: identity
+        default: Off (no authentication; every visitor can read and write everything)
+        recommended: "On"
+        why: Every request to the UI, REST API and proxied artifacts needs a login and passes the per-experiment and per-model checks.
+        mitigations: [D3-AA, AML.M0005]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: authorizationFunction
+        name: authorization_function
+        where: basic_auth.ini (file named by MLFLOW_AUTH_CONFIG_PATH) → authorization_function = module:function
+        setVia: [configFile, identityProvider]
+        area: identity
+        default: HTTP basic auth against MLflow's own user store
+        recommended: A function that validates the corporate IdP's token (or the authenticating proxy's identity), so people sign in with SSO
+        why: People use the firm's SSO and MFA instead of a static MLflow password, and leavers lose access with their IdP account; service jobs keep their own users.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: defaultPermission
+        name: default_permission
+        where: basic_auth.ini → default_permission
+        setVia: [configFile]
+        area: identity
+        default: READ
+        recommended: NO_PERMISSIONS
+        why: An authenticated user reads only the experiments, run artifacts and registered models a role grants, not every candidate model.
+        mitigations: [AML.M0005]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: authDatabaseUri
+        name: database_uri
+        where: basic_auth.ini → database_uri
+        setVia: [configFile]
+        area: identity
+        recommended: The central, backed-up database
+        why: Users and grants survive a server rebuild and are not reset to an empty store that recreates the admin user.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: adminPassword
+        name: MLFLOW_AUTH_ADMIN_PASSWORD
+        where: Server environment → MLFLOW_AUTH_ADMIN_PASSWORD (and MLFLOW_AUTH_ADMIN_USERNAME), from the secret store
+        setVia: [configFile]
+        area: identity
+        default: None shipped (earlier releases' password1234 is now refused)
+        recommended: A generated secret held in the vault; admin rights for a named few
+        why: Admin users bypass every grant and can create users and change permissions, so the account starts with a secret nobody guesses.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: flaskSecretKey
+        name: MLFLOW_FLASK_SERVER_SECRET_KEY
+        where: Server environment → MLFLOW_FLASK_SERVER_SECRET_KEY, from the secret store
+        setVia: [configFile]
+        area: identity
+        default: Unset (required by the basic-auth app)
+        recommended: A stable random secret, the same on every replica
+        why: The basic-auth app's CSRF protection rests on it, so a guessable or per-restart key weakens browser sessions.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: roleGrants
+        name: Roles
+        where: /admin › Roles (or AuthServiceClient create_role, add_role_permission, assign_role)
+        setVia: [adminConsole, apiCli]
+        area: identity
+        default: No roles (default_permission applies)
+        recommended: Per-experiment and per-model roles — each training job EDIT on its experiment and dev.<team>.<model>, the promoter EDIT on prod.<team>.<model>
+        why: The training job can never write the release model, and only named people and services read the candidates; no wildcard READ grants.
+        mitigations: [AML.M0005, D3-AA, AML.M0013]
+        url: https://mlflow.org/docs/latest/self-hosting/security/role-based-access-control/
+        verified: "2026-10-30"
+      - id: seedDefaultRoles
+        name: MLFLOW_RBAC_SEED_DEFAULT_ROLES
+        where: Server environment → MLFLOW_RBAC_SEED_DEFAULT_ROLES (with --enable-workspaces)
+        setVia: [configFile]
+        area: identity
+        default: On (each new workspace gets admin and user roles; user is USE on every resource)
+        recommended: "Off"
+        why: A workspace member does not automatically read and use every model in the workspace; the docs say no lesser per-resource grant can take that back.
+        mitigations: [AML.M0005]
+        requires: Workspaces enabled
+        url: https://mlflow.org/docs/latest/self-hosting/workspaces/permissions/
+        verified: "2026-10-30"
+      - id: jobCredentials
+        name: MLFLOW_TRACKING_USERNAME / MLFLOW_TRACKING_PASSWORD
+        where: Training-job environment, injected from the secret store
+        setVia: [configFile, code]
+        area: identity
+        default: Unset
+        recommended: One MLflow user per training job, never a person's or the admin's login
+        why: What each job logged and registered is attributable, and its grants reach only its own experiment and candidate model.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/basic-http-auth/
+        verified: "2026-10-30"
+      - id: kubernetesAuth
+        name: MLFLOW_TRACKING_AUTH
+        where: Training-job environment → MLFLOW_TRACKING_AUTH=kubernetes, server behind kube-rbac-proxy or a custom auth plugin
+        setVia: [configFile]
+        area: identity
+        default: Unset (basic credentials if set)
+        recommended: kubernetes for jobs running in the cluster
+        why: Each request carries the pod's service-account token instead of a static password; MLflow only attaches it, so the proxy must validate it.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/kubernetes/
+        verified: "2026-10-30"
+      - id: serverHost
+        name: --host
+        where: mlflow server --host
+        setVia: [configFile, apiCli]
+        area: network
+        default: 127.0.0.1 (localhost only)
+        recommended: 0.0.0.0 only with --allowed-hosts and --cors-allowed-origins set, behind a TLS-terminating proxy
+        why: The server speaks plain HTTP and has no TLS of its own, so it is reached only through the proxy that encrypts and logs access.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        verified: "2026-10-30"
+      - id: allowedHosts
+        name: --allowed-hosts / MLFLOW_SERVER_ALLOWED_HOSTS
+        where: mlflow server --allowed-hosts, or MLFLOW_SERVER_ALLOWED_HOSTS
+        setVia: [configFile, apiCli]
+        area: network
+        default: localhost, private IPs
+        recommended: The server's own hostnames only
+        why: DNS-rebinding pages in a user's browser cannot reach the API under another name; never "*".
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/network/
+        verified: "2026-10-30"
+      - id: corsAllowedOrigins
+        name: --cors-allowed-origins / MLFLOW_SERVER_CORS_ALLOWED_ORIGINS
+        where: mlflow server --cors-allowed-origins, or MLFLOW_SERVER_CORS_ALLOWED_ORIGINS
+        setVia: [configFile, apiCli]
+        area: network
+        default: localhost:* (any localhost origin)
+        recommended: The exact origins of the firm's notebook and tooling front ends
+        why: Other web apps a user visits cannot call the registry with the user's session.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/network/
+        verified: "2026-10-30"
+      - id: disableSecurityMiddleware
+        name: --disable-security-middleware
+        where: mlflow server --disable-security-middleware, or MLFLOW_SERVER_DISABLE_SECURITY_MIDDLEWARE
+        setVia: [configFile, apiCli]
+        area: network
+        default: "false"
+        recommended: "false — and serve with uvicorn, not --gunicorn-opts or --waitress-opts"
+        why: Host, CORS and X-Frame-Options protection stay on; the middleware does not run under the other server options at all.
+        mitigations: [D3-AA]
+        url: https://mlflow.org/docs/latest/self-hosting/security/network/
+        verified: "2026-10-30"
+      - id: proxiedArtifacts
+        name: --artifacts-destination (proxied artifact access)
+        where: mlflow server --artifacts-destination <bucket> (default --serve-artifacts; no --default-artifact-root, no --no-serve-artifacts)
+        setVia: [configFile, apiCli]
+        area: data
+        default: Proxied, to ./mlartifacts on the server's disk
+        recommended: Proxied, to the organisation's bucket, with the storage credential held only by the server
+        why: Every artifact read and write passes the server's grant check and jobs never hold bucket credentials; the docs warn the server's credential reaches every artifact, so lock down the bucket itself.
+        mitigations: [AML.M0005]
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        verified: "2026-10-30"
+      - id: sourceValidationRegex
+        name: MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX
+        where: Tracking-server environment → MLFLOW_CREATE_MODEL_VERSION_SOURCE_VALIDATION_REGEX
+        setVia: [configFile]
+        area: tools
+        default: Unset (any source accepted)
+        recommended: '"^mlflow-artifacts:/.*$" (or the scanner''s cleared prefix)'
+        why: A model version cannot be registered from a path outside the tracked, proxied store, so every version links to a run's logged artifacts.
+        mitigations: [AML.M0023, D3-FA]
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        verified: "2026-10-30"
+      - id: backendStoreUri
+        name: --backend-store-uri
+        where: mlflow server --backend-store-uri
+        setVia: [configFile, apiCli]
+        area: data
+        default: sqlite:///mlflow.db
+        recommended: A managed PostgreSQL or MySQL database with backups and access logging
+        why: Run, dataset and version lineage lives in this database, so it must outlast the server and record who touched it.
+        mitigations: [AML.M0023, AML.M0025]
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/tracking-server/
+        verified: "2026-10-30"
+      - id: s3UploadExtraArgs
+        name: MLFLOW_S3_UPLOAD_EXTRA_ARGS
+        where: Server environment (and any client uploading directly) → MLFLOW_S3_UPLOAD_EXTRA_ARGS
+        setVia: [configFile]
+        area: data
+        default: Unset
+        recommended: '{"ServerSideEncryption": "aws:kms", "SSEKMSKeyId": "<organisation key>"}, backed by bucket default encryption'
+        why: Model and dataset artifacts are encrypted under a key the organisation holds and can revoke; the bucket policy enforces it for writers that skip the variable.
+        mitigations: [AML.M0012]
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+        verified: "2026-10-30"
+      - id: s3ExpectedBucketOwner
+        name: MLFLOW_S3_EXPECTED_BUCKET_OWNER
+        where: Server environment → MLFLOW_S3_EXPECTED_BUCKET_OWNER
+        setVia: [configFile]
+        area: data
+        default: Unset
+        recommended: The AWS account id that owns the artifact bucket
+        why: If the bucket is deleted and recreated by another account, MLflow refuses to write models into it.
+        mitigations: [AML.M0005]
+        url: https://mlflow.org/docs/latest/self-hosting/architecture/artifact-store/
+        verified: "2026-10-30"
+      - id: allowPickleDeserialization
+        name: MLFLOW_ALLOW_PICKLE_DESERIALIZATION
+        where: Environment of every process that loads registered models → MLFLOW_ALLOW_PICKLE_DESERIALIZATION
+        setVia: [configFile]
+        area: tools
+        default: "true"
+        recommended: "false"
+        why: Loading a pickle or cloudpickle model raises an error instead of running whatever code the file carries.
+        mitigations: [D3-FA]
+        url: https://mlflow.org/docs/latest/ml/tracking/pickle-free-models/
+        verified: "2026-10-30"
+      - id: skopsFormat
+        name: serialization_format="skops"
+        where: mlflow.sklearn.log_model(..., serialization_format="skops") in the training job
+        setVia: [code]
+        area: tools
+        default: Pickle-based
+        recommended: '"skops" for scikit-learn models, and the pickle-free option for each other flavor'
+        why: Models are saved in a format that loads without arbitrary code execution, so the loader switch above can stay off.
+        mitigations: [D3-FA]
+        url: https://mlflow.org/docs/latest/ml/tracking/pickle-free-models/
+        verified: "2026-10-30"
+      - id: logInput
+        name: mlflow.log_input
+        where: Training job → mlflow.log_input(dataset, context="training" | "validation" | "evaluation")
+        setVia: [code]
+        area: audit
+        default: Nothing logged
+        recommended: Every input dataset logged on the run, with source set to an immutable version
+        why: Each model version can be traced to the dataset versions, digests and schemas that trained and evaluated it.
+        mitigations: [AML.M0025, AML.M0023]
+        url: https://mlflow.org/docs/latest/ml/dataset/
+        verified: "2026-10-30"
+      - id: modelSignature
+        name: signature
+        where: mlflow.<flavor>.log_model(..., signature=..., input_example=...)
+        setVia: [code]
+        area: audit
+        default: Optional (inferred from an input example or type hints when one is given)
+        recommended: Logged with every model
+        why: The version records its input and output schema in MLmodel, which travels with the artifact.
+        mitigations: [cap-model-documentation, AML.M0023]
+        url: https://mlflow.org/docs/latest/ml/model/signatures/
+        verified: "2026-10-30"
+      - id: validateEvaluationResults
+        name: mlflow.validate_evaluation_results
+        where: Promotion pipeline → mlflow.validate_evaluation_results(candidate_result=..., baseline_result=..., validation_thresholds=...)
+        setVia: [code]
+        area: tools
+        default: Not called (the registry accepts any version)
+        recommended: Called on every candidate, with promotion run only when no ModelValidationFailedException is raised
+        why: A candidate that fails its thresholds is never aliased for release; the server itself would not block it.
+        mitigations: [AML.M0008]
+        url: https://mlflow.org/docs/latest/ml/evaluation/
+        verified: "2026-10-30"
+      - id: validationStatusTag
+        name: validation_status (model version tag)
+        where: client.set_model_version_tag(name, version, "validation_status", "approved") from the evaluation pipeline
+        setVia: [code]
+        area: audit
+        default: No tag
+        recommended: Set by the evaluation pipeline only, and checked by the promoter before it moves an alias
+        why: Each release version carries its approval state; it is a label the promoter must enforce, not a server gate.
+        mitigations: [cap-model-documentation, AML.M0008]
+        url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+        verified: "2026-10-30"
+      - id: releaseAlias
+        name: set_registered_model_alias
+        where: client.set_registered_model_alias(name, "champion", version), run by the promoter user only
+        setVia: [code, apiCli]
+        area: tools
+        default: Anyone with EDIT on the registered model
+        recommended: Called only by the promoter pipeline, after the validation_status tag and a current description are present
+        why: Consumers loading models:/<name>@champion get a version that passed the gate; the alias moves are the release record.
+        mitigations: [cap-model-documentation, AML.M0008]
+        url: https://mlflow.org/docs/latest/ml/model-registry/workflow/
+        verified: "2026-10-30"
+      - id: aliasWebhook
+        name: model_version_alias.created
+        where: Webhook on model_version_alias.created (and model_version.created), HTTPS endpoint with an HMAC secret
+        setVia: [apiCli]
+        area: audit
+        default: No webhooks
+        recommended: Subscribed by the release-monitoring service, which flags any alias move the promoter did not make
+        why: The organisation sees every release and new candidate as it happens; open-source MLflow keeps no audit log of its own.
+        mitigations: [cap-model-documentation, AML.M0013]
+        url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+        verified: "2026-10-30"
+      - id: webhookPrivateIps
+        name: MLFLOW_WEBHOOK_ALLOW_PRIVATE_IPS
+        where: Server environment → MLFLOW_WEBHOOK_ALLOW_PRIVATE_IPS
+        setVia: [configFile]
+        area: network
+        default: "false"
+        recommended: "false"
+        why: A webhook URL cannot point the server at internal addresses; the docs say not to enable it in production.
+        mitigations: [D3-NI]
+        url: https://mlflow.org/docs/latest/self-hosting/webhooks/
+        verified: "2026-10-30"
+      - id: disableTelemetry
+        name: MLFLOW_DISABLE_TELEMETRY
+        where: Server and client environment → MLFLOW_DISABLE_TELEMETRY=true (or DO_NOT_TRACK=true)
+        setVia: [configFile]
+        area: data
+        default: Telemetry on (since 3.2.0)
+        recommended: "true"
+        why: Usage events about the registry and its clients stay inside the organisation; on the server it also turns UI telemetry off globally.
+        mitigations: []
+        url: https://mlflow.org/docs/latest/community/usage-tracking/
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-2635 — hard-coded default admin password (password1234) in basic_auth.ini allowed authentication

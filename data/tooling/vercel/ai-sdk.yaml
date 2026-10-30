@@ -10,6 +10,8 @@
 # on npm); read with WebFetch and the pages' .md variants; https://ai-sdk.dev/docs redirects to
 # /docs/introduction; the approval, loop, telemetry, middleware, MCP and gateway pages all answered 200;
 # activeTools enforcement at parse time confirmed in the vercel/ai generateText source, not stated in docs.
+# 2026-10-30: settings added and a D3-EI row added (pin had no row) for ai 7.0.157; ai-sdk.dev .md pages all
+# answered 200; wrapMcpTools' default for uncovered tools is 'user-approval', 'denied' is the opt-in allowlist.
 vendor: vercel
 family: Vercel AI SDK
 tools:
@@ -79,8 +81,8 @@ tools:
         url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
       - label: Docs index
         value: >-
-          ai-sdk.dev/docs (llms.txt, a search endpoint and a .md variant of every page); AI SDK 7, ai 7.0.114 on npm
-          on 2026-09-25.
+          ai-sdk.dev/docs (llms.txt, a search endpoint and a .md variant of every page); AI SDK 7, ai 7.0.157 on npm
+          on 2026-10-29.
         url: https://ai-sdk.dev/docs/introduction
       - label: Version 7 changes that move controls
         value: >-
@@ -739,6 +741,373 @@ tools:
           registry at the scanning mirror, pin versions in the lockfile, and allow only the mirror on the egress
           path. No model weights load; inference is remote.
         verified: "2026-09-25"
+      - mitigation: D3-EI
+        coverage: partial
+        mechanism: >-
+          @ai-sdk/code-mode (experimental) runs model-generated JavaScript in a fresh QuickJS context per invocation,
+          with no Node globals, file system, module loader, fetch or eval, under executionPolicy limits; the
+          experimental_sandbox option hands an Experimental_SandboxSession (an isolation provider the deployer
+          chooses) to tools that delegate commands to it
+        steps:
+          - title: Run generated code only through code mode
+            body:
+              - >-
+                Expose model-written programs through codeModeTool with an executionPolicy (timeoutMs, cpuTimeoutMs,
+                memoryLimitBytes, maxBridgeRequests) instead of evaluating them in the application process.
+            url: https://ai-sdk.dev/docs/ai-sdk-core/code-mode
+          - title: Delegate command tools to an isolation provider
+            body:
+              - >-
+                Pass experimental_sandbox with a provider-backed Experimental_SandboxSession and have every command or
+                file tool call its run, readFile and writeFile methods rather than the host's.
+            url: https://ai-sdk.dev/docs/reference/ai-sdk-core/sandbox
+        note: >-
+          Partial on the core sandbox rule (an optional boundary the deployer must choose, as for toolClaudeAgentSdk,
+          toolCopilotSdk and toolCodexSdk): code mode confines generated code to QuickJS with no network or file access
+          of its own, but it is experimental, Node 22+ only, and "tools execute in your host application, outside the
+          QuickJS sandbox", so every capability a provided tool exposes is available to the program. The sandbox
+          option is only an interface: "Passing an experimental sandbox does not sandbox the tool itself", and the
+          isolation — its own file system, network policy and teardown — is the provider's (Vercel Sandbox is one). A
+          tool that does not delegate runs in the application process. Added 2026-10-30: the pin had no row.
+        verified: "2026-10-30"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The SDK runs inside the application, so almost every row is a call option, helper or environment variable
+    # the deployer sets in its own code; AI Gateway rows need that separate Vercel product. Verified 2026-10-30
+    # against ai-sdk.dev (.md variants) for ai 7.0.157.
+    settings:
+      - id: defaultProvider
+        name: AI_SDK_DEFAULT_PROVIDER
+        where: globalThis.AI_SDK_DEFAULT_PROVIDER = <provider> at application start-up
+        setVia: [code]
+        area: data
+        default: Vercel AI Gateway (plain model strings route there)
+        recommended: The organisation's approved provider or gateway, set explicitly
+        why: A bare model string cannot send prompts to a provider nobody approved; it otherwise routes through AI Gateway.
+        mitigations: []
+        url: https://ai-sdk.dev/docs/ai-sdk-core/provider-management
+        verified: "2026-10-30"
+      - id: gatewayAuthentication
+        name: OIDC Authentication (Vercel Deployments)
+        where: AI Gateway provider — the deployment's Vercel OIDC token, or apiKey / AI_GATEWAY_API_KEY elsewhere
+        setVia: [code, configFile]
+        area: identity
+        default: apiKey, then AI_GATEWAY_API_KEY, then OIDC
+        recommended: OIDC on Vercel deployments, with no AI_GATEWAY_API_KEY set; a vault-held key elsewhere
+        why: The model credential is short-lived and refreshed by the platform instead of a standing key in the environment.
+        mitigations: [D3-AA, D3-CH]
+        requires: Vercel AI Gateway
+        url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+        verified: "2026-10-30"
+      - id: gatewayDisallowPromptTraining
+        name: disallowPromptTraining
+        where: providerOptions.gateway.disallowPromptTraining
+        setVia: [code]
+        area: data
+        default: "false"
+        recommended: "true"
+        why: Requests route only to providers with a no-training agreement with Vercel; the filter is not applied to BYOK credentials, whose own terms must say so.
+        mitigations: []
+        requires: Vercel AI Gateway
+        url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+        verified: "2026-10-30"
+      - id: gatewayZeroDataRetention
+        name: zeroDataRetention
+        where: providerOptions.gateway.zeroDataRetention
+        setVia: [code]
+        area: data
+        default: "false"
+        recommended: true on routes that handle work for clients whose contracts require zero retention; otherwise off
+        why: Those requests go only to providers with ZDR agreements and fail rather than fall back to one without.
+        mitigations: []
+        requires: Vercel AI Gateway; request-level ZDR on Pro or Enterprise
+        url: https://ai-sdk.dev/providers/ai-sdk-providers/ai-gateway
+        verified: "2026-10-30"
+      - id: runtimeContext
+        name: runtimeContext
+        where: generateText / streamText runtimeContext, or ToolLoopAgent prepareCall, filled by the route from its authentication
+        setVia: [code]
+        area: identity
+        default: Empty
+        recommended: The authenticated user, role and tenant from the application's session, never from the request body
+        why: Tool approvals and policies decide on a principal the server verified, not one the client claimed.
+        mitigations: [D3-APA, AML.M0028]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/runtime-and-tool-context
+        verified: "2026-10-30"
+      - id: toolsContext
+        name: toolsContext with contextSchema
+        where: toolsContext on the call or agent; contextSchema on each tool
+        setVia: [code]
+        area: identity
+        default: No tool context
+        recommended: Each tool's credential (ideally the user's own token) passed in its validated context, never in the prompt or tool description
+        why: Secrets never enter the model's context, and each tool receives only its own credential.
+        mitigations: [D3-CH, cap-sensitive-data-redaction]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/runtime-and-tool-context
+        verified: "2026-10-30"
+      - id: mcpAuthProvider
+        name: authProvider
+        where: "createMCPClient({ transport: { type: 'http', url, authProvider } })"
+        setVia: [code]
+        area: identity
+        default: Unset (static headers, if any)
+        recommended: An OAuthClientProvider holding the requesting user's grant, one client per user
+        why: The MCP server sees the user's own delegated access instead of a shared service key.
+        mitigations: [D3-AA, D3-CH, cap-data-access-governance]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        verified: "2026-10-30"
+      - id: mcpRedirect
+        name: redirect
+        where: createMCPClient HTTP transport → redirect
+        setVia: [code]
+        area: network
+        default: "'error' (redirects refused)"
+        recommended: "'error'"
+        why: A server cannot redirect the client, and the token it sends, to another host; the default exists to prevent SSRF.
+        mitigations: [D3-CTS, cap-agent-egress-control]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        verified: "2026-10-30"
+      - id: toolApproval
+        name: toolApproval
+        where: toolApproval on ToolLoopAgent, generateText or streamText (per tool, per input, or one function)
+        setVia: [code]
+        area: tools
+        default: None — tools with an execute function run as soon as the model calls them
+        recommended: "'user-approval' for tools that write, send, delete or spend; automatic for read-only tools"
+        why: A person approves each consequential call before it runs, answered with addToolApprovalResponse.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://ai-sdk.dev/docs/agents/tool-approvals
+        verified: "2026-10-30"
+      - id: toolApprovalSecret
+        name: experimental_toolApprovalSecret
+        where: experimental_toolApprovalSecret on the agent or call, from the secret store
+        setVia: [code, configFile]
+        area: tools
+        default: Unset (approvals not signed)
+        recommended: Set, wherever history comes from the client
+        why: An approval is bound to the tool, call id and input, so a client cannot fabricate one in the history it sends; experimental.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://ai-sdk.dev/docs/agents/tool-approvals
+        verified: "2026-10-30"
+      - id: opaPolicy
+        name: opaPolicy
+        where: "@ai-sdk/policy-opa opaPolicy({ client, path }) as toolApproval"
+        setVia: [code]
+        area: tools
+        default: Not used
+        recommended: opaPolicy (fails closed), not optionalOpaPolicy, with the organisation's Rego policy
+        why: Every tool call is decided by a reviewed policy over principal, tool and arguments; optionalOpaPolicy approves everything when no policy loads.
+        mitigations: [cap-agent-action-policy-enforcement, D3-APA, AML.M0028]
+        url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        verified: "2026-10-30"
+      - id: wrapMcpToolsDefault
+        name: wrapMcpTools default
+        where: wrapMcpTools(tools, approval, { default })
+        setVia: [code]
+        area: tools
+        default: "'user-approval'"
+        recommended: "'denied'"
+        why: A discovered MCP tool the policy does not name is rejected rather than offered for approval, so the policy is an allowlist.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity, AML.M0028]
+        url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        verified: "2026-10-30"
+      - id: opaCapabilityMiddleware
+        name: opaCapabilityMiddleware
+        where: "wrapLanguageModel({ model, middleware: opaCapabilityMiddleware({ client, path }) })"
+        setVia: [code]
+        area: tools
+        default: Not used
+        recommended: On, with the same policy as toolApproval
+        why: Tools the policy does not allow are removed before the model is told they exist; it fails closed.
+        mitigations: [cap-agent-tool-registry, AML.M0028]
+        url: https://ai-sdk.dev/docs/agents/policy-tool-approvals
+        verified: "2026-10-30"
+      - id: activeTools
+        name: activeTools
+        where: activeTools on the call, or returned per step from prepareStep
+        setVia: [code]
+        area: tools
+        default: Every declared tool
+        recommended: Only the tools the step needs
+        why: The SDK rejects a call to a tool outside the active set, so a steered model cannot reach the rest.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://ai-sdk.dev/docs/agents/loop-control
+        verified: "2026-10-30"
+      - id: mcpToolSchemas
+        name: schemas
+        where: "mcpClient.tools({ schemas: { <tool>: { inputSchema } } })"
+        setVia: [code]
+        area: tools
+        default: Schema discovery (every tool the server lists, with its own schemas)
+        recommended: Named tools with schemas the application defines
+        why: Only reviewed tools load, validated against the application's schema rather than whatever the server serves.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        verified: "2026-10-30"
+      - id: toolDriftCheck
+        name: fingerprintTools / detectToolDrift
+        where: fingerprintTools(await mcpClient.tools()) stored at review; detectToolDrift before each use
+        setVia: [code]
+        area: tools
+        default: Not used (the SDK keeps no baseline and blocks nothing)
+        recommended: Baseline stored at review, tools withheld when any digest changed or a tool was added
+        why: A server that rewrites a tool's description or schema after review is caught before the model sees it.
+        mitigations: [cap-mcp-tool-integrity]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/mcp-tools
+        verified: "2026-10-30"
+      - id: stopWhen
+        name: stopWhen
+        where: "stopWhen: isStepCount(n) on ToolLoopAgent, generateText or streamText"
+        setVia: [code]
+        area: tools
+        default: isStepCount(20) on ToolLoopAgent; one step on generateText and streamText
+        recommended: isStepCount(20) or lower — never isLoopFinished() on user-facing routes
+        why: A loop the model keeps feeding ends at a known step count; isLoopFinished() removes the cap.
+        mitigations: [AML.M0036]
+        url: https://ai-sdk.dev/docs/agents/loop-control
+        verified: "2026-10-30"
+      - id: timeout
+        name: timeout
+        where: timeout { totalMs, stepMs, toolMs, <tool>Ms } on generateText, streamText or the agent
+        setVia: [code]
+        area: tools
+        default: Unset
+        recommended: totalMs and toolMs set for every agent route
+        why: A hung tool or a long run is cut off by wall clock instead of running until the platform kills the function.
+        mitigations: [AML.M0036, cap-agent-kill-switch]
+        url: https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text
+        verified: "2026-10-30"
+      - id: maxOutputTokens
+        name: maxOutputTokens
+        where: maxOutputTokens on the call, or per step from prepareStep
+        setVia: [code]
+        area: tools
+        default: Provider default
+        recommended: Set per route
+        why: Bounds what one step can generate and bill; a token or cost ceiling for the whole turn is a StopCondition the deployer writes.
+        mitigations: [AML.M0036]
+        url: https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text
+        verified: "2026-10-30"
+      - id: abortSignal
+        name: abortSignal
+        where: "abortSignal: req.signal on streamText and agent calls; tools honour the signal in their execute options"
+        setVia: [code]
+        area: tools
+        default: Unset
+        recommended: The request's signal forwarded on every call, and honoured by every long-running tool
+        why: A user's stop or a dropped connection ends the in-flight model call and the tools that listen, instead of running on unseen.
+        mitigations: [cap-agent-kill-switch]
+        url: https://ai-sdk.dev/docs/advanced/stopping-streams
+        verified: "2026-10-30"
+      - id: guardrailMiddleware
+        name: wrapLanguageModel (transformParams)
+        where: wrapLanguageModel({ model, middleware }) with transformParams calling the organisation's screening service
+        setVia: [code]
+        area: data
+        default: No middleware
+        recommended: Every model the application uses wrapped with input-screening and DLP middleware that blocks or masks
+        why: Each step's prompt, tool results included, is screened before the provider call; a model left unwrapped, or switched in by prepareStep, bypasses it.
+        mitigations: [cap-input-guardrails, cap-sensitive-data-redaction]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/middleware
+        verified: "2026-10-30"
+      - id: prepareSendMessagesRequest
+        name: prepareSendMessagesRequest
+        where: useChat transport → prepareSendMessagesRequest sending only the last message and the chat id
+        setVia: [code]
+        area: data
+        default: The whole message history sent from the browser every turn
+        recommended: Last message only, with history loaded server-side by chat id after an ownership check
+        why: A client cannot rewrite earlier turns or tool results that the model will trust.
+        mitigations: [AML.M0031]
+        url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+        verified: "2026-10-30"
+      - id: validateUIMessages
+        name: validateUIMessages
+        where: validateUIMessages({ messages, tools, ... }) on the server before each call
+        setVia: [code]
+        area: data
+        default: Not called
+        recommended: Called on stored and incoming messages
+        why: Malformed tool calls, metadata or data parts are rejected before they reach the model; it checks shape, not provenance.
+        mitigations: [AML.M0031]
+        url: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+        verified: "2026-10-30"
+      - id: registerTelemetry
+        name: registerTelemetry
+        where: registerTelemetry(new OpenTelemetry()) from @ai-sdk/otel at start-up, exporting to the organisation's collector
+        setVia: [code]
+        area: audit
+        default: Nothing emitted until an integration is registered
+        recommended: Registered, exporting to the firm's OpenTelemetry collector
+        why: Every turn, model step and tool execution leaves a span in the organisation's store; v6 experimental_telemetry code emits nothing after the v7 upgrade.
+        mitigations: [cap-agent-tracing]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+        verified: "2026-10-30"
+      - id: recordInputsOutputs
+        name: recordInputs / recordOutputs
+        where: telemetry { recordInputs, recordOutputs } on each call or agent
+        setVia: [code]
+        area: audit
+        default: "true (inputs and outputs recorded)"
+        recommended: false, unless the trace store is approved for prompts and tool results
+        why: Spans keep their structure and tool names without client material or secrets a tool returned.
+        mitigations: [cap-agent-tracing, cap-sensitive-data-redaction]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+        verified: "2026-10-30"
+      - id: includeContexts
+        name: includeRuntimeContext / includeToolsContext
+        where: telemetry { includeRuntimeContext, includeToolsContext }
+        setVia: [code]
+        area: audit
+        default: Off
+        recommended: Only non-secret identifiers (user and tenant id) named for correlation; never credentials
+        why: Traces can be tied to a principal without copying tokens from the context into span attributes.
+        mitigations: [cap-agent-tracing, D3-CH]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+        verified: "2026-10-30"
+      - id: telemetryFunctionId
+        name: functionId
+        where: telemetry { functionId } on each call or agent
+        setVia: [code]
+        area: audit
+        default: Unset
+        recommended: A stable id per agent and route
+        why: Investigators can find every span from one agent; isEnabled false on a call would opt it out of tracing.
+        mitigations: [cap-agent-tracing]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/telemetry
+        verified: "2026-10-30"
+      - id: codeModeExecutionPolicy
+        name: executionPolicy
+        where: "@ai-sdk/code-mode codeModeTool({ executionPolicy: { timeoutMs, cpuTimeoutMs, memoryLimitBytes, maxBridgeRequests } })"
+        setVia: [code]
+        area: tools
+        default: Built-in limits for runtime, memory, source, results and tool calls
+        recommended: Code mode for any model-written program, with limits set explicitly per route
+        why: Generated code runs in a fresh QuickJS context with no file system, network or eval and stops at its limits; the tools it calls still run on the host.
+        mitigations: [D3-EI, AML.M0036]
+        url: https://ai-sdk.dev/docs/ai-sdk-core/code-mode
+        verified: "2026-10-30"
+      - id: experimentalSandbox
+        name: experimental_sandbox
+        where: experimental_sandbox option on generateText, streamText or ToolLoopAgent, with command tools delegating to it
+        setVia: [code]
+        area: tools
+        default: Unset (tools run in the application process)
+        recommended: A provider-backed sandbox session with its own network policy, used by every command and file tool
+        why: Commands and file writes the model asks for land in the isolation provider, not on the application host; passing it alone sandboxes nothing.
+        mitigations: [D3-EI, cap-agent-egress-control]
+        url: https://ai-sdk.dev/docs/reference/ai-sdk-core/sandbox
+        verified: "2026-10-30"
+      - id: streamdownPrefixes
+        name: allowedImagePrefixes / allowedLinkPrefixes / allowDataImages
+        where: Streamdown (or AI Elements MessageResponse) props
+        setVia: [code]
+        area: data
+        default: '["*"] for images and links; data images allowed'
+        recommended: The organisation's own origins, and allowDataImages false
+        why: Model output cannot render an image or link that carries conversation data to an attacker's server.
+        mitigations: [cap-output-encoding]
+        url: https://streamdown.ai/docs/security
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-8769 (GHSA-866g-f22w-33x8) — @ai-sdk/provider-utils response handlers read bodies without a size

@@ -1,0 +1,903 @@
+# llama.cpp server — one entity per product × reference architecture. Facts are dated (asOf) and
+# cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Exclusions: the libllama / ggml libraries embedded in other products (Ollama's runner, LM Studio's engine pack,
+# llama-cpp-python, the LLaMA-Android JNI wrapper) are rated on those products, not here; the ggml RPC backend
+# (rpc-server) is recorded as a setting and advisories only; llama-bench, llama-perplexity and the quantize tools
+# are utilities, not serving surfaces. The Llama desktop app (llama.app, "by the llama.cpp team and Hugging Face")
+# runs the same `llama serve` on localhost:9931 and is a variant, not an entity.
+# 2026-10-30: onboarded toolLlamaCppServer on archLocalInference against the MITRE capability rules. github.com
+# pages answered 403 from this environment, so the repository's files were read as raw.githubusercontent.com
+# copies (tools/server/README.md, SECURITY.md, docs/docker.md and the server and download sources on master) and
+# the project's docs site llama.app/docs (.md variants) — every URL cited answered 200; llama.app/docs redirects to
+# /docs/introduction; llama.app/llms.txt 404. CVEs were read through the CVE Services API (cveawg.mitre.org) and
+# the NVD API; nvd.nist.gov detail pages answered 403, so advisories cite cve.org records.
+vendor: ggml
+family: llama.cpp
+tools:
+  - id: toolLlamaCppServer
+    name: llama.cpp server (llama-server)
+    surfaceClasses:
+      - selfHostedServer
+      - endpointCli
+      - desktopApp
+    variants:
+      - name: llama-server / llama serve (prebuilt binary, install.sh, package managers or source build)
+        class: selfHostedServer
+        url: https://llama.app/docs/serve
+        note: >-
+          The `llama` binary's `serve` subcommand (and the standalone llama-server) loads one GGUF from a path (-m),
+          a Hugging Face repository (-hf), a URL (-mu) or Docker Hub (-dr) and serves it on 127.0.0.1:9931 with a
+          built-in web UI. Started with no model it runs in router mode, loading and unloading models from the cache,
+          --models-dir or a --models-preset file on request. install.sh installs per user to ~/.llama-app and
+          ~/.local/bin/llama.
+      - name: llama cli (terminal chat)
+        class: endpointCli
+        url: https://llama.app/docs/cli
+        note: >-
+          Interactive chat over the same loader and the same -hf / -m model sources, with no listener; its risks are
+          the model-file ones of this entry.
+      - name: Llama app (macOS menu bar, Windows tray)
+        class: desktopApp
+        url: https://llama.app/docs/introduction
+        note: >-
+          A minimalist desktop app built on llama.cpp that downloads models, serves them through `llama serve` on
+          localhost:9931 and opens the web UI; its own settings are not documented on llama.app/docs.
+      - name: ghcr.io/ggml-org/llama.cpp:server container images
+        class: selfHostedServer
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/docs/docker.md
+        note: >-
+          Server-only images per backend (CPU, CUDA 12/13, ROCm, MUSA, SYCL, Vulkan, OpenVINO, s390x). The documented
+          `docker run` passes --host 0.0.0.0 and publishes -p 8080:8080 on every host interface; publish on
+          127.0.0.1 instead.
+    architecture: archLocalInference
+    status: ga
+    asOf: "2026-10"
+    summary:
+      - >-
+        Open-source (MIT, "The ggml authors") C/C++ inference engine for GGUF models and its HTTP server, maintained
+        by the ggml-org project, whose company ggml.ai was acquired by Hugging Face in 2026. `llama serve` /
+        llama-server exposes OpenAI-compatible /v1 (chat completions, completions, responses, embeddings, rerank),
+        Anthropic-compatible /v1/messages, native llama.cpp endpoints and a web UI on http://127.0.0.1:9931;
+        builds are numbered b<N> (b11941 current on 2026-10-30).
+      - >-
+        Inference runs on the device's CPU or GPU (CUDA, Metal, ROCm, Vulkan, SYCL and others) and no telemetry is
+        documented. What leaves the device is what the operator configures: model downloads from Hugging Face,
+        Docker Hub or a URL, remote image URLs the server fetches for multimodal requests, offload to remote ggml
+        rpc-servers (--rpc), and the experimental peer-to-peer tunnel (--connect).
+      - >-
+        Every control is a launch flag or its LLAMA_ARG_* environment variable, so whoever starts the process sets
+        policy: loopback bind by default, optional static API keys (--api-key, --api-key-file) checked on every route
+        except /health and web-UI assets, optional TLS, and CORS that by default reflects any origin with
+        credentials. The project's SECURITY.md says not to use llama-server on an untrusted network, and its private
+        disclosure program is disabled — fixes arrive as public pull requests.
+    facts:
+      - label: Plans
+        value: >-
+          Free and open source (MIT). No paid tier, licence key, account or vendor console; the operator runs and
+          configures everything. The Llama desktop app and llama.app installer are free.
+        url: https://ggml.ai
+      - label: Inference & routing
+        value: >-
+          On the local machine's CPU and GPUs; one model per server process, or router mode forwarding each request
+          to a child instance per model (model instances inherit the router's flags and environment). --rpc
+          host:port offloads tensors to remote ggml rpc-servers.
+        url: https://llama.app/docs/serve
+      - label: Data leaving the device
+        value: >-
+          Model files from Hugging Face (-hf, POST /models in router mode), a URL (-mu) or Docker Hub (-dr), through
+          HTTPS_PROXY when set; image_url parts given as remote URLs, which the server fetches; tensors and graphs sent
+          to --rpc servers; traffic over the experimental --connect tunnel; and stdio MCP servers started with
+          --mcp-servers-config. No usage telemetry is documented. --offline forces the cache and prevents network
+          access.
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+      - label: Retention & training
+        value: >-
+          No vendor receives prompts or data. Downloaded models stay in LLAMA_CACHE (default ~/Library/Caches/llama.cpp
+          on macOS, %LOCALAPPDATA%\llama.cpp on Windows, $XDG_CACHE_HOME or ~/.cache/llama.cpp on Linux) until deleted.
+          Prompt state reaches disk only through --slot-save-path (KV cache files), --log-prompts-dir (debugging) or
+          verbose logging; prompt caching otherwise lives in memory (--cache-ram, default 8192 MiB).
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+      - label: Docs index
+        value: >-
+          llama.app/docs (introduction, installation, CLI, server, web UI, API; .md variant of each page) and the
+          repository's tools/server/README.md, the generated reference of every server flag.
+        url: https://llama.app/docs/introduction
+      - label: Local endpoint
+        value: >-
+          http://127.0.0.1:9931 (--host and --port; LLAMA_ARG_HOST, LLAMA_ARG_PORT); the Docker guide's example still
+          uses --host 0.0.0.0 -p 8080:8080. GET /health answers without a key; requests without a valid key get 401
+          "Invalid API Key" once --api-key is set.
+        url: https://llama.app/docs/serve
+      - label: Security policy
+        value: >-
+          "The private security disclosure program is disabled until further notice" — patches go in as public PRs.
+          Covered topics exclude the Web UI, experimental features, features not recommended for untrusted
+          environments (router, MCP) and denial of service; the policy tells operators to sandbox untrusted models,
+          confirm the hash of downloaded weights and not to expose llama-server or the RPC backend to untrusted
+          networks.
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+      - label: Vendor ownership
+        value: >-
+          ggml-org on GitHub ("a team of volunteers on a reasonable-effort basis"); ggml.ai, founded in 2023 by Georgi
+          Gerganov to support ggml development, was acquired by Hugging Face in 2026.
+        url: https://ggml.ai
+      - label: Release cadence
+        value: >-
+          Builds are published continuously as b<N>; install.sh resolves "latest" from Hugging Face and LLAMA_VERSION
+          pins a build; it checks that the binary reports that build, not a signature.
+        url: https://llama.app/install.sh
+    items:
+      - title: Server baseline for a managed device or shared host
+        body:
+          - "Launch from a managed unit or script with --host 127.0.0.1 (the default, set explicitly), --api-key-file
+            pointing at a file only the service account reads, --cors-origins localhost and --no-cors-credentials,
+            and keep --tools, --agent, --mcp-servers-config, --ui-mcp-proxy, --connect, --props, --rpc and
+            --slot-save-path unset."
+          - "Bound the work any caller can ask for: -np (slots), -c (context), -n (tokens per request) and -to
+            (timeout), and in router mode --models-max; the API key is shared by every caller, so per-caller quotas
+            and identity belong to a gateway in front."
+          - "A server reached from other machines needs TLS (--ssl-key-file and --ssl-cert-file on an SSL build, or a
+            TLS-terminating proxy) and an authenticating reverse proxy, because SECURITY.md does not cover the web UI,
+            router or DoS and says not to expose llama-server to untrusted networks."
+        links:
+          - title: llama-server — Server-specific params
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: Running a server (llama.app)
+            url: https://llama.app/docs/serve
+          - title: llama.cpp SECURITY.md — Using llama.cpp securely
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+      - title: Model supply chain
+        body:
+          - "-hf, -mu, -dr and router POST /models download straight into the loadable cache with no digest check
+            (the download code stores the server's ETag for cache freshness only). For a promotion flow, fetch and
+            scan outside llama.cpp, record the sha256, place approved GGUFs in a directory only the promotion job can
+            write, and serve them with -m or --models-dir and --offline."
+          - "Each GGUF carries a Jinja chat template that runs on every request (--jinja is on by default); serve
+            reviewed models with --chat-template-file pointing at a reviewed template."
+        links:
+          - title: llama-server — Using multiple models (model sources, router download and delete)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: llama.cpp download code (ETag cache handling, offline mode)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/common/download.cpp
+    riskNotes:
+      - risk: riskMaliciousLoaderDeserialization
+        note: >-
+          GGUF only, so no pickle path; the live class is the native GGUF and vocabulary parser — CVE-2025-49847,
+          CVE-2025-53630, CVE-2026-27940 (a bypass of the 53630 fix) and CVE-2026-116840 (a second bypass) all turn a
+          crafted model file into heap corruption — plus the model's Jinja chat template, which runs on every request.
+          SECURITY.md says there is no reliable way to detect a malicious model and to sandbox untrusted ones.
+      - risk: riskModelSourceTampering
+        note: >-
+          -hf accepts any Hugging Face repository and falls back to the first file in the repo when the requested
+          quant is missing; nothing verifies a digest or signature, so the file is whatever the hub (or a proxy)
+          served. SECURITY.md leaves hash confirmation to the operator.
+      - risk: riskDenialOfMLService
+        note: >-
+          One slot pool (-np) and context are shared by every caller, -n defaults to unlimited, and SECURITY.md does
+          not treat denial-of-service bugs as vulnerabilities; several 2026 CVEs (CVE-2026-52130, CVE-2026-52132) are
+          request-triggered crashes.
+      - risk: riskModelExfiltration
+        note: >-
+          In router mode GET /models lists every cached model with its file path, and POST /models and DELETE /models
+          change the cache for anyone holding the shared key — or anyone at all when no key is set; --tools read_file
+          and the stdio MCP servers can read any file the process can.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          A fast-moving native codebase with about forty CVEs published in 2025–26, including critical memory-safety
+          bugs reachable over HTTP (CVE-2026-43632, CVE-2026-107183) and over the RPC backend (CVE-2026-34159,
+          CVE-2026-118375), and no private disclosure channel while the program is disabled.
+      - risk: riskExcessiveDataHandlingDuringInference
+        note: >-
+          Prompts reach disk through --slot-save-path, --log-prompts-dir or -v; leave the device through --rpc and
+          --connect; and remote image_url parts make the server fetch arbitrary URLs, with no domain allowlist flag
+          documented.
+      - risk: riskModelDeploymentTampering
+        note: >-
+          What is served can change at runtime: router POST /models downloads and /models/load loads any repository,
+          POST /lora-adapters rescales loaded adapters (and each request's lora field overrides it), and --props
+          enables POST /props; a GGUF swapped on disk is served on the next load with no check.
+    controls:
+      - mitigation: D3-FA
+        coverage: partial
+        mechanism: >-
+          Loader surface limited to GGUF (no pickle or Python model code); --check-tensors validates tensor data for
+          invalid values; --chat-template-file replaces the model's embedded Jinja template; no content scan,
+          quarantine or digest check
+        steps:
+          - title: Serve only promoted files
+            body:
+              - >-
+                Start the server with -m <path> or --models-dir <dir> on a directory only the promotion job can write,
+                with --offline, instead of -hf, -mu or -dr, so nothing reaches the loader without passing the scanner.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: Replace the embedded chat template
+            body:
+              - >-
+                Pass --chat-template-file with a reviewed Jinja template for each served model, so the template shipped
+                in the GGUF metadata does not run on every request.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: Check tensors at load
+            body:
+              - >-
+                Add --check-tensors so tensor data with invalid values is refused at load; it is a sanity check, not
+                malware detection.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        note: >-
+          Partial on this drawing's rule (native needs verification before load; partial covers safe formats without
+          it), the same rule as toolLmStudio. The pickle and remote-code axis is closed by construction — GGUF is the
+          only model format — but nothing inspects a file before load: -hf, -mu, -dr and the router's POST /models
+          download straight into the loadable cache, and the GGUF parser itself is the attack surface (four parser
+          CVEs in 2025–26, two of them bypasses of an earlier fix). The model's Jinja template executes on every
+          request unless replaced. SECURITY.md: "there are no reliable methods to detect malicious models" and
+          untrusted models belong in a sandbox. Format and content inspection at quarantine is an external model
+          scanner in the promotion pipeline.
+        verified: "2026-10-30"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          --api-key / --api-key-file (static bearer or x-api-key keys, checked on every route except /health,
+          /v1/health and web-UI assets) and loopback bind by default (--host 127.0.0.1); optional TLS
+          (--ssl-key-file, --ssl-cert-file); --cors-origins (default: reflect any origin with credentials)
+        steps:
+          - title: Require a key on every launch
+            body:
+              - >-
+                Start the server with --api-key-file pointing at a file of keys readable only by the service account
+                (LLAMA_ARG_API_KEY_FILE), one key per consuming application or the gateway's only.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: Pin the bind to loopback
+            body:
+              - >-
+                Pass --host 127.0.0.1 explicitly (the default) and never --host 0.0.0.0 as in the Docker example;
+                publish containers on 127.0.0.1 only.
+            url: https://llama.app/docs/serve
+          - title: Restrict browser origins
+            body:
+              - >-
+                Pass --cors-origins localhost (or the exact front-end origin) and --no-cors-credentials, because the
+                default reflects any Origin with credentials allowed.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        note: >-
+          Partial on this drawing's rule — a shared key is not per-caller identity (the toolVllm rule; toolLmStudio is
+          partial on its tokens too, toolOllama external with none). The operator can require a key at launch, and
+          whoever controls the launch (systemd unit, MDM-delivered script) controls the policy, so unlike a desktop
+          toggle it can be enforced; but the key admits a bearer without naming a caller, any key in the list is
+          accepted, /health and the web-UI assets skip the check, and with no key every route is open. The default
+          CORS policy reflects any origin with credentials — harmless only while the server is stateless, which
+          --tools, --agent and MCP undo (they switch the default to localhost). Host-header validation against DNS
+          rebinding is not documented. The Llama desktop app's own settings are not documented. Per-caller identity
+          is an authenticating reverse proxy or gateway that holds the only key (external).
+        verified: "2026-10-30"
+      - mitigation: cap-output-guardrails
+        coverage: external
+        mechanism: >-
+          A guardrail proxy or AI gateway on the request path, optionally calling a safety classifier served by a
+          second llama-server; the runtime ships no content classification
+        evidence:
+          - title: llama-server README (no guardrail, moderation or content-policy setting)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: llama.cpp SECURITY.md — Untrusted inputs (pre-analysis and sanitisation are the deployer's)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+        note: >-
+          External: llama-server returns the raw completion; grammars and JSON schemas constrain format, not content,
+          and a system prompt is an instruction to the model. SECURITY.md puts input validation, filtering and
+          prompt-injection detection on the deployer. Integration point: point applications at the gateway and keep
+          llama-server on loopback with the gateway holding the only API key; a caller that reaches the port directly
+          skips the classification.
+        verified: "2026-10-30"
+      - mitigation: AML.M0004
+        coverage: partial
+        mechanism: >-
+          Server-wide limits: -np slots (default auto), -c context, -n tokens per request (default unlimited), -to
+          read/write timeout (default 3600 s), --threads-http, and in router mode --models-max (default 4); nothing per
+          caller or key
+        steps:
+          - title: Bound slots and context
+            body:
+              - >-
+                Set -np (LLAMA_ARG_N_PARALLEL) and -c (LLAMA_ARG_CTX_SIZE) explicitly for the hardware instead of the
+                automatic values.
+            url: https://llama.app/docs/serve
+          - title: Cap tokens and time per request
+            body:
+              - >-
+                Set -n (LLAMA_ARG_N_PREDICT) to a ceiling instead of -1 (unlimited) and lower -to (LLAMA_ARG_TIMEOUT)
+                from its 3600-second default.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: Bound the router
+            body:
+              - >-
+                In router mode set --models-max so callers cannot load more models at once than the machine holds.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        note: >-
+          Partial on this drawing's rule: global slot, context, token and time limits, not per caller — the same rule
+          as toolOllama and toolLmStudio. One caller can occupy every slot, and the API key carries no quota.
+          SECURITY.md tells multi-tenant operators to add rate limits themselves and does not treat DoS bugs as
+          vulnerabilities. Per-caller or per-key quotas need an AI or API gateway in front (external).
+        verified: "2026-10-30"
+      - mitigation: AML.M0005
+        coverage: external
+        mechanism: >-
+          Model files in LLAMA_CACHE or the --models-dir directory with the OS's file permissions; not
+          content-addressed and not digest-checked; the API key gates the router's POST /models (download) and
+          DELETE /models
+        evidence:
+          - title: llama-server README — Using multiple models (cache, --models-dir, POST and DELETE /models)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: llama.cpp cache directory resolution (LLAMA_CACHE and per-OS defaults)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/common/common.cpp
+        note: >-
+          External on this drawing's rule (partial needs at least a digest on download or content-addressed storage,
+          which is what puts toolOllama at partial; toolLmStudio is external on the same rule). Files sit under the
+          user's cache directory by repository and file name, readable and replaceable by any process of that user,
+          and are loaded without a check. The product's contributions are the location (LLAMA_CACHE, --models-dir on a
+          directory the server account owns), the API key on the router's download and delete endpoints, and leaving
+          --slot-save-path unset so KV-cache state (conversation content, and the CVE-2026-43629 restore path) is not
+          written to disk. Permissions and swap detection are OS controls and file-integrity monitoring.
+        verified: "2026-10-30"
+      - mitigation: cap-ai-threat-modeling
+        coverage: external
+        mechanism: >-
+          The decision lives in the organisation's GRC / AI governance register; inputs are SECURITY.md's
+          covered-topics list and secure-use guidance, and the device settings that enforce it are --offline, the
+          model source flags, HTTPS_PROXY and LLAMA_VERSION
+        evidence:
+          - title: llama.cpp SECURITY.md (disclosure disabled; covered topics; using llama.cpp securely)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+          - title: ggml.ai (maintainer company, acquired by Hugging Face in 2026)
+            url: https://ggml.ai
+          - title: llama.app install.sh (LLAMA_VERSION pin)
+            url: https://llama.app/install.sh
+        note: >-
+          External: whether local inference may run, from which sources and on which machines is recorded in the GRC
+          or AI-governance platform. Vendor evidence is thin and specific: no assurance report or trust page; a
+          security policy whose private disclosure program is "disabled until further notice", which excludes the web
+          UI, router, MCP, experimental features and DoS from coverage, and which says not to expose llama-server or
+          the RPC backend to untrusted networks. CVEs reach NVD through the repository's earlier GitHub advisories,
+          VulnCheck and VulDB. Device settings that enforce the decision: --offline and -m / --models-dir in place of -hf,
+          HTTPS_PROXY so downloads pass a proxy allowlist, and LLAMA_VERSION on the installer.
+        verified: "2026-10-30"
+      - mitigation: D3-PA
+        coverage: external
+        mechanism: >-
+          Third-party EDR over the llama / llama-server process and router child instances; integration points are
+          TCP 9931, GET /health, --log-file / --log-jsonl, --metrics and the install paths
+        evidence:
+          - title: llama-server README — logging flags, /health, /metrics, /slots
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: llama.app install.sh (~/.llama-app and ~/.local/bin/llama)
+            url: https://llama.app/install.sh
+        note: >-
+          External: llama.cpp writes operational logs but no security telemetry and has no self-protection.
+          Integration points: the `llama serve` / llama-server process (and in router mode one child process per
+          loaded model, inheriting the router's environment); TCP 9931 by default; --log-file and --log-jsonl for
+          structured logs; --metrics for Prometheus counters; the Llama app in the menu bar or tray; ~/.llama-app and
+          ~/.local/bin/llama from install.sh; and stdio MCP children started with --mcp-servers-config, which run with
+          the server's privileges. -v and --log-prompts-dir write prompt content and should stay off.
+        verified: "2026-10-30"
+      - mitigation: AML.M0023
+        coverage: partial
+        mechanism: >-
+          Local list endpoints for fleet tooling to collect: router GET /models (id as <repo>:<quant>, file path,
+          status, load arguments), GET /v1/models (id defaults to the model file path), GET /props; no digest
+        steps:
+          - title: Collect each server's model list
+            body:
+              - >-
+                Have the MDM or EDR agent call GET /models (router mode) or GET /v1/models with the API key on a
+                schedule and ship id, path and status to the inventory.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+          - title: Hash what the paths point to
+            body:
+              - >-
+                Have the same job sha256 each file under the reported paths and LLAMA_CACHE, since llama.cpp records no
+                digest of its own.
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/common/common.cpp
+        note: >-
+          Partial on this drawing's rule, calibrated as toolVllm is: the server names the source (a Hugging Face
+          repository and quant in router mode, the file path otherwise) but no digest, revision or licence, so the
+          inventory job must hash the files itself; toolOllama is partial with digests, toolLmStudio external with
+          neither. --alias and --tags present any name, and a single-model server reports only the path it was
+          started with. Nothing aggregates across machines.
+        verified: "2026-10-30"
+      - mitigation: cap-shadow-ai-discovery
+        coverage: external
+        mechanism: >-
+          EDR/MDM software inventory and network scanning for the llama binary, the Llama app, the container images,
+          the model cache and TCP 9931 answering /health
+        evidence:
+          - title: llama.app installation (desktop app, install.sh, package managers, Docker, source)
+            url: https://llama.app/docs/installation
+          - title: llama.app install.sh (per-user install to ~/.llama-app and ~/.local/bin)
+            url: https://llama.app/install.sh
+          - title: llama-server — --connect peer-to-peer tunnel (experimental)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        note: >-
+          External: nothing registers an install with the organisation and no telemetry is documented. Discovery
+          points: the Llama app (macOS menu bar, Windows tray); ~/.llama-app and ~/.local/bin/llama from the
+          per-user, no-admin install.sh; brew and winget packages; ghcr.io/ggml-org/llama.cpp:server images; GGUF
+          files under the llama.cpp cache directory (~/Library/Caches/llama.cpp, %LOCALAPPDATA%\llama.cpp,
+          ~/.cache/llama.cpp); a listener on TCP 9931 (or 8080 in the Docker examples) answering GET /health; and
+          --connect tunnels, which reach the server from outside without an inbound port.
+        verified: "2026-10-30"
+      - mitigation: cap-staged-rollout-gate
+        coverage: external
+        mechanism: >-
+          An evaluation / red-team harness run against the candidate on a staging llama-server before its file and
+          digest are approved; llama.cpp's own utilities measure speed and perplexity, not behaviour
+        evidence:
+          - title: llama.app introduction (utilities for benchmarking, quantizing and evaluating models)
+            url: https://llama.app/docs/introduction
+          - title: llama.app API server (OpenAI-compatible /v1 for harnesses)
+            url: https://llama.app/docs/api
+        note: >-
+          External: nothing in llama.cpp tests weights for backdoor triggers, leakage or adversarial influence, and a
+          -hf pull makes any model servable at once. Integration point: a staging server started with the candidate's
+          exact flags (chat template, LoRA, quantization) behind its OpenAI-compatible API, called by the evaluation
+          harness, with the governance band approving the resulting file hash.
+        verified: "2026-10-30"
+      - mitigation: AML.M0014
+        coverage: external
+        mechanism: >-
+          No checksum or signature is verified on -hf, -mu, -dr or router downloads, or at load; the download code
+          keeps the server's ETag only to decide whether the cache is fresh. Verification is the operator's, as
+          SECURITY.md says
+        evidence:
+          - title: llama.cpp SECURITY.md — "Confirm the hash of any downloaded artifact ... matches a known-good value"
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+          - title: llama.cpp download code (ETag stored for cache freshness; no digest check)
+            url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/common/download.cpp
+        note: >-
+          External on this drawing's rule (partial needs at least a digest check on download, as toolOllama's pull
+          has; toolLmStudio is external on the same rule). The integration point is the promotion job: hash (or
+          verify the model-signing bundle of) each approved GGUF, place it in the directory the server loads with -m
+          or --models-dir, run with --offline so nothing else is fetched, and re-hash the directory with
+          file-integrity monitoring.
+        verified: "2026-10-30"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The operator is the admin: every row is a launch flag of `llama serve` / llama-server (or its LLAMA_ARG_*
+    # environment variable) set in the systemd unit, MDM-delivered launch script or container spec, so the managed
+    # launch is the policy. Verified 2026-10-30 against llama.app/docs and the repository's server README (raw copy).
+    settings:
+      - id: host
+        name: --host
+        where: llama serve / llama-server --host, or LLAMA_ARG_HOST
+        setVia: [configFile, apiCli]
+        area: network
+        default: 127.0.0.1
+        recommended: 127.0.0.1, set explicitly by the managed launch
+        why: Only processes on the device reach the API; a team server goes behind an authenticating proxy, never --host 0.0.0.0 as in the Docker example.
+        mitigations: [D3-AA]
+        url: https://llama.app/docs/serve
+        verified: "2026-10-30"
+      - id: apiKeyFile
+        name: --api-key-file
+        where: llama-server --api-key-file <file> (LLAMA_ARG_API_KEY_FILE), or --api-key (LLAMA_API_KEY)
+        setVia: [configFile, apiCli]
+        area: identity
+        default: None (every route open)
+        recommended: A key file readable only by the service account, one key per consuming application or the gateway's only
+        why: Every route but /health and the web-UI assets needs a key, so another local process or a web page cannot download, load or call models; a file keeps keys out of the process list.
+        mitigations: [D3-AA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: tls
+        name: --ssl-key-file / --ssl-cert-file
+        where: llama-server --ssl-key-file --ssl-cert-file (SSL build)
+        setVia: [configFile, apiCli]
+        area: network
+        default: Unset (plain HTTP)
+        recommended: Set whenever the server is reached from another machine without a TLS-terminating proxy
+        why: The API key and prompts are not sent in clear text across the network.
+        mitigations: [D3-AA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: corsOrigins
+        name: --cors-origins
+        where: llama-server --cors-origins, or LLAMA_ARG_CORS_ORIGINS
+        setVia: [configFile, apiCli]
+        area: network
+        default: "* (any Origin reflected, with credentials)"
+        recommended: localhost, or the exact origin of the approved front end
+        why: A web page open in the user's browser cannot drive the local API; the default is safe only while the server is stateless and read-only.
+        mitigations: [D3-AA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: corsCredentials
+        name: --cors-credentials / --no-cors-credentials
+        where: llama-server --no-cors-credentials, or LLAMA_ARG_CORS_CREDENTIALS=false
+        setVia: [configFile, apiCli]
+        area: network
+        default: Enabled
+        recommended: --no-cors-credentials
+        why: Cross-origin requests cannot ride the browser's credentials; clients send the API key as a header and do not need them.
+        mitigations: [D3-AA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: webUi
+        name: --ui / --no-ui (--webui / --no-webui)
+        where: llama-server --no-webui, or LLAMA_ARG_UI=false
+        setVia: [configFile, apiCli]
+        area: network
+        default: Enabled
+        recommended: --no-webui on servers that only feed applications
+        why: The web UI is outside the project's security coverage and its assets skip the API key; a person who chats in it on their own device can keep it on loopback.
+        mitigations: [D3-AA]
+        url: https://llama.app/docs/serve
+        verified: "2026-10-30"
+      - id: builtInTools
+        name: --tools
+        where: llama-server --tools, or LLAMA_ARG_TOOLS
+        setVia: [configFile, apiCli]
+        area: tools
+        default: No tools
+        recommended: Unset
+        why: The experimental tools (read_file, write_file, edit_file, exec_shell_command) expose file and shell access over the API; the flag says not to enable it in untrusted environments.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: agentMode
+        name: -ag, --agent
+        where: llama-server --agent, or LLAMA_ARG_AGENT
+        setVia: [configFile, apiCli]
+        area: tools
+        default: Disabled
+        recommended: Disabled
+        why: Turns on the MCP CORS proxy and every built-in tool at once, including shell commands on the host.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: mcpServersConfig
+        name: --mcp-servers-config / --mcp-servers-json
+        where: llama-server --mcp-servers-config <mcp.json>, or LLAMA_ARG_MCP_SERVERS_CONFIG
+        setVia: [configFile, apiCli]
+        area: tools
+        default: None
+        recommended: Unset
+        why: Each declared stdio server is a child process with the server's privileges that the model can call; experimental and outside the security policy's coverage.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: uiMcpProxy
+        name: --ui-mcp-proxy
+        where: llama-server --ui-mcp-proxy, or LLAMA_ARG_UI_MCP_PROXY
+        setVia: [configFile, apiCli]
+        area: network
+        default: Disabled
+        recommended: Disabled
+        why: The server does not act as a CORS proxy for the web UI to reach remote MCP servers; the flag says not to enable it in untrusted environments.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: connectTunnel
+        name: --connect
+        where: llama-server --connect, or LLAMA_ARG_CONNECT
+        setVia: [configFile, apiCli]
+        area: sharing
+        default: Disabled
+        recommended: Disabled
+        why: The experimental llama-connect tunnel would make the server reachable from outside the device without an inbound port or the organisation's proxy.
+        mitigations: [D3-AA, cap-shadow-ai-discovery]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: rpcServers
+        name: --rpc
+        where: llama-server --rpc host:port,..., or LLAMA_ARG_RPC
+        setVia: [configFile, apiCli]
+        area: network
+        default: Unset
+        recommended: Unset
+        why: Model tensors and prompts are not sent to remote rpc-servers, an unauthenticated channel SECURITY.md says not to use on untrusted networks.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+        verified: "2026-10-30"
+      - id: propsEndpoint
+        name: --props
+        where: llama-server --props, or LLAMA_ARG_ENDPOINT_PROPS
+        setVia: [configFile, apiCli]
+        area: tools
+        default: Disabled
+        recommended: Disabled
+        why: Callers cannot change the server's global properties through POST /props.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: slotsEndpoint
+        name: --slots / --no-slots
+        where: llama-server --no-slots, or LLAMA_ARG_ENDPOINT_SLOTS=false
+        setVia: [configFile, apiCli]
+        area: data
+        default: Enabled
+        recommended: --no-slots on servers with more than one consuming application
+        why: One caller cannot read the per-slot state and sampling parameters of other callers' requests.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: slotSavePath
+        name: --slot-save-path
+        where: llama-server --slot-save-path, or LLAMA_ARG_SLOT_SAVE_PATH
+        setVia: [configFile, apiCli]
+        area: data
+        default: Disabled
+        recommended: Unset
+        why: Conversation KV state is not written to disk by API callers, and crafted state files there were a heap-overflow path (CVE-2026-43629).
+        mitigations: [AML.M0005]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: mediaPath
+        name: --media-path
+        where: llama-server --media-path
+        setVia: [configFile, apiCli]
+        area: data
+        default: Disabled
+        recommended: Unset
+        why: Requests cannot read local files through file:// image URLs.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: logPromptsDir
+        name: --log-prompts-dir
+        where: llama-server --log-prompts-dir
+        setVia: [configFile, apiCli]
+        area: data
+        default: Disabled
+        recommended: Unset
+        why: Prompts and client material are not written to a directory on disk; the flag is for debugging only.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: logVerbosity
+        name: -lv, --verbosity / -v, --verbose
+        where: llama-server -lv N (LLAMA_ARG_LOG_VERBOSITY); never -v
+        setVia: [configFile, apiCli]
+        area: data
+        default: "3 (info)"
+        recommended: "3 (info)"
+        why: Logs stay operational; -v sets verbosity to infinity and logs every message, for debugging only.
+        mitigations: []
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: logJsonl
+        name: --log-jsonl / --log-file
+        where: llama-server --log-jsonl (stdout) or --log-file <path> (LLAMA_ARG_LOG_FILE), with --log-timestamps
+        setVia: [configFile, apiCli]
+        area: audit
+        default: Plain-text logs to the console
+        recommended: --log-jsonl with timestamps, collected by the platform's log shipper
+        why: Server events reach the EDR or SIEM as structured records with times, for investigation and version tracking.
+        mitigations: [D3-PA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: metricsEndpoint
+        name: --metrics
+        where: llama-server --metrics, or LLAMA_ARG_ENDPOINT_METRICS
+        setVia: [configFile, apiCli]
+        area: audit
+        default: Disabled
+        recommended: Enabled on shared servers, scraped by monitoring with the API key
+        why: Load and throughput counters show a caller saturating the server, without exposing prompt content.
+        mitigations: [D3-PA, AML.M0004]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: modelSource
+        name: -m, --model / --models-dir
+        where: llama-server -m <path> (LLAMA_ARG_MODEL) or --models-dir <dir> (LLAMA_ARG_MODELS_DIR), in place of -hf, -mu or -dr
+        setVia: [configFile, apiCli]
+        area: tools
+        default: Whatever the launch names, including Hugging Face repositories with -hf
+        recommended: A local path in a directory only the promotion job can write
+        why: Only files that passed the scanner and were hashed reach the GGUF parser; -hf would fetch any repository straight into the loadable cache.
+        mitigations: [D3-FA, AML.M0005, AML.M0014]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: offlineMode
+        name: --offline
+        where: llama-server --offline, or LLAMA_ARG_OFFLINE
+        setVia: [configFile, apiCli]
+        area: network
+        default: Off (downloads allowed)
+        recommended: On for managed servers
+        why: The server uses only cached or local files and makes no download, so a request or a flag cannot pull a new model.
+        mitigations: [D3-FA, AML.M0014, cap-ai-threat-modeling]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: httpsProxy
+        name: HTTPS_PROXY
+        where: Environment of commands that download models → HTTP_PROXY / HTTPS_PROXY (NO_PROXY for exceptions)
+        setVia: [configFile, mdm]
+        area: network
+        default: Unset (direct)
+        recommended: The corporate proxy, with huggingface.co on its allowlist
+        why: Any download that is allowed passes the proxy's source allowlist and logging.
+        mitigations: [cap-ai-threat-modeling]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: hfToken
+        name: -hft, --hf-token / HF_TOKEN
+        where: llama-server --hf-token, or HF_TOKEN from the secret store
+        setVia: [configFile, apiCli]
+        area: identity
+        default: The HF_TOKEN environment variable, if set
+        recommended: Unset on serving hosts; a read-only, fine-grained token only on the promotion job that downloads
+        why: A token on the serving host is exposed to anything that compromises the process, and is not needed once models are local.
+        mitigations: [AML.M0005]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: chatTemplateFile
+        name: --chat-template-file
+        where: llama-server --chat-template-file <reviewed.jinja>
+        setVia: [configFile, apiCli]
+        area: tools
+        default: The template from the model's GGUF metadata
+        recommended: A reviewed template for each served model
+        why: A poisoned template embedded in a downloaded GGUF does not run on every request.
+        mitigations: [D3-FA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: checkTensors
+        name: --check-tensors
+        where: llama-server --check-tensors
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "false"
+        recommended: "true"
+        why: A model with invalid tensor values is refused at load; it is a sanity check, not malware detection.
+        mitigations: [D3-FA]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: parallelSlots
+        name: -np, --parallel
+        where: llama-server -np N, or LLAMA_ARG_N_PARALLEL
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "-1 (auto)"
+        recommended: Set explicitly to what the hardware serves
+        why: Bounds concurrent requests; slots are shared by every caller, so per-caller limits need a gateway.
+        mitigations: [AML.M0004]
+        url: https://llama.app/docs/serve
+        verified: "2026-10-30"
+      - id: ctxSize
+        name: -c, --ctx-size
+        where: llama-server -c N, or LLAMA_ARG_CTX_SIZE
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "0 (loaded from the model)"
+        recommended: Set explicitly for the hardware
+        why: Bounds the context requests share, so callers cannot claim a model's full window on a machine sized for less.
+        mitigations: [AML.M0004]
+        url: https://llama.app/docs/serve
+        verified: "2026-10-30"
+      - id: nPredict
+        name: -n, --predict, --n-predict
+        where: llama-server -n N, or LLAMA_ARG_N_PREDICT
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "-1 (unlimited)"
+        recommended: A ceiling sized to the workload (for example 4096)
+        why: One request cannot generate without end and hold a slot from every other caller.
+        mitigations: [AML.M0004]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: timeout
+        name: -to, --timeout
+        where: llama-server -to N, or LLAMA_ARG_TIMEOUT
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "3600"
+        recommended: "600"
+        why: Slow or stalled connections are dropped after ten minutes instead of an hour.
+        mitigations: [AML.M0004]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: modelsMax
+        name: --models-max
+        where: llama-server --models-max N (router mode), or LLAMA_ARG_MODELS_MAX
+        setVia: [configFile, apiCli]
+        area: tools
+        default: "4"
+        recommended: Set to what the machine can hold, never 0 (unlimited)
+        why: Callers naming models cannot force more into memory than the host serves.
+        mitigations: [AML.M0004]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: modelInventory
+        name: GET /models (router) / GET /v1/models
+        where: Called with the API key by the MDM or EDR agent on a schedule
+        setVia: [apiCli]
+        area: audit
+        default: Not collected
+        recommended: Collected from every device and server into the AI inventory, with each reported file hashed
+        why: The organisation sees which repository, quant and file each server can serve, and spots one that was never approved.
+        mitigations: [AML.M0023, cap-shadow-ai-discovery]
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+        verified: "2026-10-30"
+      - id: llamaVersion
+        name: LLAMA_VERSION
+        where: curl -LsSf https://llama.app/install.sh | LLAMA_VERSION=b<N> sh
+        setVia: [apiCli, mdm]
+        area: tools
+        default: Unset (latest build)
+        recommended: The build your vulnerability management has approved, moved forward as fixes land
+        why: Devices run a build someone checked against the CVE stream, which is fast-moving and has no private disclosure channel.
+        mitigations: [cap-ai-threat-modeling]
+        url: https://llama.app/install.sh
+        verified: "2026-10-30"
+    advisories:
+      - title: >-
+          CVE-2026-118375 — out-of-bounds write in the ggml-rpc RDMA transport lets unauthenticated peers overflow the
+          rpc-server stack (critical; fixed b11865)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-118375
+        date: "2026-10"
+      - title: >-
+          CVE-2026-116840 — integer overflow in gguf_init_from_reader bypasses the CVE-2025-53630 size check with a
+          crafted GGUF (fixed b11275)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-116840
+        date: "2026-10"
+      - title: >-
+          CVE-2026-107183 — use-after-free and double free in common_chat_peg_mapper::map reachable by unauthenticated
+          POST /completion requests (critical; fixed b11393)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-107183
+        date: "2026-10"
+      - title: >-
+          CVE-2026-43632 — use-after-free in llama-server's tokenization endpoints (/tokenize, /detokenize, /infill,
+          /apply-template, /rerank, count_tokens) from a race with the main thread (critical)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-43632
+        date: "2026-08"
+      - title: >-
+          CVE-2026-43631 — use-after-free of the vocab pointer when --sleep-idle-seconds is enabled, remote code
+          execution by unauthenticated requests (critical)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-43631
+        date: "2026-08"
+      - title: >-
+          CVE-2026-43629 — heap buffer overflow restoring KV-cache state files from the slot_save_path directory
+          (critical)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-43629
+        date: "2026-08"
+      - title: >-
+          CVE-2026-34159 — RPC backend deserialize_tensor skips bounds checks, arbitrary memory read and write by
+          unauthenticated peers (critical; fixed b8492)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-34159
+        date: "2026-04"
+      - title: >-
+          CVE-2026-27940 — integer overflow in gguf_init_from_file_impl, a bypass of the CVE-2025-53630 fix, writes
+          past a heap buffer (fixed b8146)
+        url: https://www.cve.org/CVERecord?id=CVE-2026-27940
+        date: "2026-03"
+      - title: >-
+          CVE-2026-21869 — negative n_discard in the server's completion endpoints causes out-of-bounds writes
+        url: https://www.cve.org/CVERecord?id=CVE-2026-21869
+        date: "2026-01"
+      - title: >-
+          CVE-2025-53630 — integer overflow in gguf_init_from_file_impl leads to heap out-of-bounds read and write from
+          a crafted GGUF
+        url: https://www.cve.org/CVERecord?id=CVE-2025-53630
+        date: "2025-07"
+      - title: >-
+          CVE-2025-49847 — buffer overflow in vocabulary loading from an attacker-supplied GGUF (fixed b5662)
+        url: https://www.cve.org/CVERecord?id=CVE-2025-49847
+        date: "2025-06"
+    sources:
+      - title: llama.app documentation — Introduction
+        url: https://llama.app/docs/introduction
+      - title: llama.app — Running a server
+        url: https://llama.app/docs/serve
+      - title: llama.app — API server
+        url: https://llama.app/docs/api
+      - title: llama.app — Installation
+        url: https://llama.app/docs/installation
+      - title: llama-server README (generated flag reference, endpoints, router mode, CORS, MCP)
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/README.md
+      - title: llama.cpp SECURITY.md
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/SECURITY.md
+      - title: llama.cpp Docker images
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/docs/docker.md
+      - title: llama-server HTTP layer (API-key middleware and public endpoints)
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/tools/server/server-http.cpp
+      - title: llama.cpp download code (ETag handling, offline mode)
+        url: https://raw.githubusercontent.com/ggml-org/llama.cpp/master/common/download.cpp
+      - title: llama.app install.sh
+        url: https://llama.app/install.sh
+      - title: ggml.ai
+        url: https://ggml.ai
+      - title: Hugging Face — GGUF usage with llama.cpp
+        url: https://huggingface.co/docs/hub/gguf-llamacpp
