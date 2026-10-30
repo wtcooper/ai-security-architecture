@@ -66,7 +66,7 @@ tools:
         Inference runs on Cursor's hosted providers under Privacy Mode (Cloud Agents do not support Legacy
         Privacy Mode and never train on accessed code). Code is stored temporarily while a run executes;
         conversation state is retained indefinitely by default until deleted, VM snapshots are deleted after
-        90 days idle. Data at rest is AES-256 with per-agent keys, TLS 1.2+ in transit, and Enterprise teams
+        30 days unused (each start or resume extends that). Data at rest is AES-256 with per-agent keys, TLS 1.2+ in transit, and Enterprise teams
         can bring a customer-managed KMS key (CMEK/BYOK). Egress leaves from published CIDR ranges
         (docs/ips.json) and a fixed three-IP git proxy; AWS PrivateLink or Cloudflare Tunnel reach private git
         servers and registries.
@@ -75,8 +75,8 @@ tools:
         policy (Allow all / Default + allowlist / Allowlist only) that admins can lock org-wide, Runtime
         Secrets that are redacted from transcripts, tool output and commits, OIDC federation (issuer
         api.cursor.com, 5-minute RS256 tokens) so agents assume cloud roles without stored credentials,
-        Protected Git Scopes and Repository Blocklist, and per-team toggles for agent summaries in Slack, Team
-        follow-ups, Long running agents and Computer use. The default network policy is allow-all, and an
+        Protected Git Scopes (the editor's Repository Blocklist does not reach Cloud Agents), and admin toggles
+        for agent summaries in Slack, Team follow-ups, Computer use and self-hosted placement. The default network policy is allow-all, and an
         Approval Agent can be configured to approve low-risk pull requests itself — both defaults an
         organisation should decide on deliberately.
     facts:
@@ -104,7 +104,7 @@ tools:
         value: >-
           Privacy Mode always: Cursor never trains on code accessed by Cloud Agents or on their prompts and
           responses. Conversation state is retained indefinitely by default and deletable on demand; VM
-          snapshots auto-delete after 90 days of inactivity; the runtime workspace is recycled when idle.
+          snapshots auto-delete after 30 days of inactivity; the runtime workspace is recycled when idle.
           Secrets are KMS-encrypted at rest.
         url: https://cursor.com/docs/cloud-agent/security
       - label: Docs index
@@ -171,8 +171,8 @@ tools:
         coverage: partial
         mechanism: >-
           Source-control connection by a Cursor admin plus the Git provider admin's app install on chosen
-          repositories; Protected Git Scopes (dashboard Integrations tab) and Repository Blocklist; Team follow-ups;
-          Remote Control and Allow / Require Self-Hosted Machines under Dashboard → Cloud Agents → Self-Hosted
+          repositories; Protected Git Scopes (dashboard Integrations tab); Team follow-ups; Allow Personal Machines
+          (Remote Control) and Allow / Require Self-Hosted Machines under Dashboard → Cloud Agents → Self-Hosted
         steps:
           - title: Gate Cloud Agents behind the source-control connection
             body:
@@ -183,19 +183,20 @@ tools:
           - title: Lock the Git organisation to your Cursor organisation
             body:
               - Claim the scope under Protected Git Scopes from the dashboard's Integrations tab (a team admin who
-                is also a Git provider admin) so only your teams run Cloud Agents, automations and Bugbot on it,
-                and list sensitive repositories under Repository Blocklist (Enterprise).
+                is also a Git provider admin) so only your teams run Cloud Agents, automations and Bugbot on it;
+                the Repository Blocklist covers only the editor and CLI, not Cloud Agents, automations or Bugbot.
             url: https://cursor.com/docs/enterprise/model-and-integration-management
           - title: Decide who may steer a running agent
             body:
               - Set Team follow-ups in the Cloud Agents security settings to Disabled or Service accounts only;
                 All lets any teammate with repository access instruct an agent that holds another user's secrets.
             url: https://cursor.com/docs/cloud-agent/settings
-          - title: Keep Remote Control off until someone owns it
+          - title: Keep Allow Personal Machines off until someone owns it
             body:
-              - Leave Remote Control off under Cursor Dashboard → Cloud Agents → Self-Hosted; when an admin enables
-                it, Cursor also enables the team's self-hosted worker access.
-            url: https://cursor.com/docs/cloud-agent/mobile
+              - Leave Allow Personal Machines, the team's Remote Control setting, off under Cursor Dashboard → Cloud
+                Agents → Self-Hosted; while it and Allow Self-Hosted Machines are off, Cloud Agents cannot run on
+                members' machines.
+            url: https://cursor.com/docs/cloud-agent/self-hosted
         note: >-
           Rated partial on the hosted rule. Enablement is organisation-level only: the gate is the admin's
           source-control connection, and no per-role or per-group Cloud Agents switch is documented, so any paid
@@ -203,10 +204,10 @@ tools:
           in Slack, GitHub, Bitbucket and Linear admits any linked Cursor user with access to the repository,
           automation "Comment added" triggers name no restriction on the commenter, and Bugbot runs for all
           contributors to enabled repositories. The widening switches are admin-controlled and enforced by
-          Cursor's control plane: Remote Control, Allow / Require Self-Hosted Machines
+          Cursor's control plane: Allow Personal Machines (Remote Control), Allow / Require Self-Hosted Machines
           (https://cursor.com/docs/cloud-agent/self-hosted), Team follow-ups, Computer use and Sync Skills for
           Cloud Agents. Protected Git Scopes covers cloud and self-hosted GitHub and GitLab.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityIga
@@ -292,19 +293,19 @@ tools:
       - mitigation: AML.M0028
         coverage: partial
         mechanism: >-
-          Enterprise team hooks (preToolUse, beforeShellExecution with failClosed) as the only per-call gate;
-          Computer use and Long running agents team toggles; per-automation tools; Cursor app on chosen
-          repositories, Protected Git Scopes and Repository Blocklist
+          Enterprise team hooks (preToolUse, beforeShellExecution) as the only per-call gate; Computer use team
+          toggle; per-automation tools; Cursor app on Selected repositories and Protected Git Scopes
         steps:
           - title: Scope repository reach
             body:
-              - Give the Cursor app access only to the repositories agents need, list sensitive ones under
-                Repository Blocklist (Enterprise), and claim the Git organisation under Protected Git Scopes.
+              - Install the Cursor app on Selected repositories only and claim the Git organisation under
+                Protected Git Scopes; the Repository Blocklist does not apply to Cloud Agents, automations or
+                Bugbot.
             url: https://cursor.com/docs/enterprise/model-and-integration-management
           - title: Switch off built-in capabilities the team does not need
             body:
-              - In the Cloud Agents dashboard's Team feature settings turn off Computer use (Enterprise) and Long
-                running agents; changes apply to new agents immediately.
+              - In the Cloud Agents dashboard's Team feature settings turn off Computer use (Enterprise); changes
+                apply to new agents immediately.
             url: https://cursor.com/docs/cloud-agent/settings
           - title: Give each automation only the tools it needs
             body:
@@ -314,20 +315,22 @@ tools:
           - title: Distribute a deny hook from the dashboard
             body:
               - Publish an Enterprise team hook on preToolUse (Shell, Read, Write, MCP tools, Task) that returns
-                deny for disallowed tools or arguments, with failClosed true; any deny wins over project hooks.
+                deny for disallowed tools or arguments; any deny wins over project hooks. Dashboard hooks take no
+                failClosed, so a hook that crashes or times out lets the call through unless the repository's
+                .cursor/hooks.json sets it.
             url: https://cursor.com/docs/hooks
         note: >-
           Rated partial on the rule applied to every vendor. Cursor ships no declarative per-tool or per-argument
           permission rules for Cloud Agents and the agent auto-runs every terminal command, so per-call allow and
           deny exists only as org-written hook code (an attach point) distributed as Enterprise team hooks, which
           do not run during the read-only exploratory turns and cannot use beforeMCPExecution in the cloud. The
-          product-enforced levers bound repositories (app installation, Protected Git Scopes, Repository
-          Blocklist), network (Lock Network Access Policy) and whole capabilities (Computer use, Long running
-          agents, per-automation tools). Cursor does not scope the repository token to one branch; default-branch
+          product-enforced levers bound repositories (app installation, Protected Git Scopes; the editor's
+          Repository Blocklist does not apply here), network (Lock Network Access Policy) and whole capabilities
+          (Computer use, per-automation tools). Cursor does not scope the repository token to one branch; default-branch
           protection is the forge's branch protection. The Enterprise MCP allowlist page does not state that it
           applies to Cloud Agents, and users can add personal MCP servers at cursor.com/agents, so the connector
           allowlist is not credited here.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityToolPermissionScoping
@@ -463,14 +466,14 @@ tools:
       - mitigation: cap-input-guardrails
         coverage: partial
         mechanism: >-
-          Enterprise team hooks as the attach point (postToolUse updated_mcp_tool_output replaces MCP results,
-          beforeReadFile can block reads); vendor containment layers (egress allowlist, Runtime Secret redaction,
+          Enterprise team hooks as the attach point (postToolUse updated_mcp_tool_output replaces stdio MCP
+          results, beforeReadFile can block reads); vendor containment layers (egress allowlist, Runtime Secret redaction,
           .cursorignore, draft pull request)
         steps:
           - title: Screen MCP results with a team hook
             body:
-              - Distribute an Enterprise team hook on postToolUse that sends MCP output to your inspector and
-                returns updated_mcp_tool_output to replace a flagged result before the model sees it; use
+              - Distribute an Enterprise team hook on postToolUse that sends stdio MCP output to your inspector
+                and returns updated_mcp_tool_output to replace a flagged result before the model sees it; use
                 beforeReadFile to deny reads of untrusted paths.
             url: https://cursor.com/docs/hooks
           - title: Apply the vendor's containment layers
@@ -481,12 +484,13 @@ tools:
         note: >-
           Partial on the rule. Cursor classifies nothing it feeds a Cloud Agent: repository files, PR and issue
           threads, Slack messages and fetched pages enter context unscreened. The only screening point is
-          org-written hook code, and postToolUse can replace MCP output only (shell output and web content cannot
-          be replaced); hooks do not run during the read-only exploratory turns. The vendor's layers contain an
+          org-written hook code, and postToolUse can replace output only from stdio MCP servers in the VM: HTTP MCP
+          servers run on Cursor's backend, where postToolUse receives {"redacted": true} and cannot replace the
+          result, and shell output and web content cannot be replaced either; hooks do not run during the read-only exploratory turns. The vendor's layers contain an
           injection's effect rather than detect it. Automation pull-request triggers skip fork PRs; CODEOWNERS on
           .cursor/ is a forge process control. CVE-2026-61613 showed attacker web content reaching an
           unauthenticated agent endpoint inside the VM (fixed 2026-03-31).
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityPromptInjectionDefense
@@ -562,10 +566,11 @@ tools:
                   url: https://cursor.com/docs/cloud-agent
               verified: 2026-09-10
       - mitigation: cap-agent-tracing
-        coverage: partial
+        coverage: native
         mechanism: >-
           Team Settings → OpenTelemetry Export (cloud_agents, model_usage and tool_calls families; opt-in Allow
-          conversation content export); Cloud Agents API run stream; Enterprise audit log
+          conversation content export with Tool I/O, one record per side of every MCP and builtin tool call);
+          Cloud Agents API run stream; Enterprise audit log
         steps:
           - title: Export Cloud Agent telemetry
             body:
@@ -579,6 +584,13 @@ tools:
                 destination to stream scrubbed user prompts and final assistant responses; off by default, no
                 backfill.
             url: https://cursor.com/docs/enterprise/opentelemetry-export
+          - title: Export every tool call
+            body:
+              - On the destination turn on Conversation content and Tool I/O (Prompts and Responses can stay off);
+                every finished MCP and builtin call (shell, read, edit, grep, fetch, Task) arrives as
+                cursor.conversation.tool_io records with cursor.tool.name, scrubbed arguments and result, joined by
+                cursor.tool_call.id and cursor.conversation.id.
+            url: https://cursor.com/docs/enterprise/opentelemetry-export
           - title: Capture per-step tool calls at run time
             body:
               - Stream each run with GET /v1/agents/{id}/runs/{runId}/stream and archive its tool_call events
@@ -590,14 +602,16 @@ tools:
                 changes plus MCP configuration and Slack links; stream it to a SIEM, webhook or S3.
             url: https://cursor.com/docs/enterprise/compliance-and-monitoring
         note: >-
-          Partial on the hosted rule. The admin-set OTel export covers this surface at lifecycle, model-call and
-          prompt/final-response level only; individual tool calls arrive as a count metric, not as correlated
-          per-step records with arguments and results. The per-step trace exists in the run stream and the
-          transcript (team admins can read teammates' transcripts through the built-in Cursor Cloud MCP), but the
-          stream is a pull by the key that owns the agent, bounded by a retention window, so an org-wide per-step
-          export needs every run streamed by its owner or a service account. Audit logs are control-plane only
-          and exclude agent responses and code. Enterprise only.
-        verified: "2026-09-25"
+          Native on the hosted rule: an admin turns on server-side OTel export, and with the opt-in Tool I/O
+          toggle every finished MCP and builtin tool call a Cloud Agent makes (Task subagents included, under their
+          own bc- id) arrives as a per-call record with tool name, scrubbed arguments and result, correlated by
+          cursor.tool_call.id, cursor.conversation.id and turn id; members cannot switch it off. Limits: each side
+          is an 8 KiB excerpt, scrubbing is best effort, records are exported when the turn ends (order by record
+          timestamp), delivery is at-least-once with no backfill or trace ids, subagent prompts are not exported,
+          and no per-call allow or deny decision is recorded, so a hook that denies must log it itself. The run
+          stream and transcript remain a per-owner pull bounded by a retention window. Audit logs are
+          control-plane only and exclude agent responses and code. Enterprise only.
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentObservability
@@ -644,7 +658,7 @@ tools:
         coverage: partial
         mechanism: >-
           Conversation state kept indefinitely by default; Enterprise Cloud Agent retention policy (Indefinite or
-          90 days, early access); Delete Agent API; snapshots expire after 90 days idle; automation Memories;
+          90 days, early access); Delete Agent API; snapshots expire after 30 days unused; automation Memories;
           Sync Skills for Cloud Agents team switch
         steps:
           - title: Cap conversation retention
@@ -668,9 +682,9 @@ tools:
           personal-skill sync, and an automation's owner can disable or edit its memory, but memory writes are not
           validated or gated (the docs warn untrusted input can plant misleading memories), there is no team-wide
           memory switch, and instruction sources (.cursor rules, AGENTS.md, repository skills) are repository
-          content any committer can change. Snapshots, which can include .env.local files, persist until 90 days
-          of inactivity; transcripts are visible to teammates who have repository access.
-        verified: "2026-09-25"
+          content any committer can change. Snapshots, which can include .env.local files, persist until 30 days
+          of inactivity (each start or resume extends the window); transcripts are visible to teammates who have repository access.
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityMemoryProtection
@@ -697,31 +711,30 @@ tools:
       - mitigation: AML.M0036
         coverage: partial
         mechanism: >-
-          Spending tab team Monthly Limit with Only Admins Can Edit Usage Settings; Enterprise member and group
-          spend-limit overrides (/teams/user-spend-limit); Long running agents team toggle; vendor-fixed run
-          limits
+          Monthly additional usage limit (The X Subscription, admin-only on Teams) or, on legacy plans, the
+          Spending tab Monthly Limit with Only Admins Can Edit Usage Settings; Enterprise member and group
+          spend-limit overrides (/teams/user-spend-limit); vendor-fixed run limits
         steps:
           - title: Cap spend and lock the setting
             body:
-              - In the dashboard's Spending tab set the team monthly limit and enable Only Admins Can Edit Usage
-                Settings under Permissions; on Enterprise add member or group overrides.
+              - On The X Subscription set Monthly additional usage limit under Additional usage credits at
+                grok.com/dashboard/billing (fixed or per seat; only team admins can change it). On legacy plans set
+                the team limit in the Spending tab and enable Only Admins Can Edit Usage Settings under Permissions.
+                On Enterprise add member or group overrides.
             url: https://cursor.com/help/account-and-billing/spend-limits
           - title: Set member limits by API
             body:
               - Set or read per-member spend limits (Enterprise) through /teams/user-spend-limit.
             url: https://cursor.com/docs/account/teams/admin-api
-          - title: Restrict run length
-            body:
-              - Turn Long running agents off in the Cloud Agents team feature settings.
-            url: https://cursor.com/docs/cloud-agent/settings
         note: >-
           Partial on the hosted rule. The caps are financial and enforcement is not instant (the spend-limit page
           says usage can briefly exceed a limit); whether a Cloud Agent already running stops at the cap is not
-          documented. No admin-set run duration (Long running agents is on or off), concurrency, fan-out or
-          per-automation budget exists; the fixed limits are the vendor's (one active run per agent, at most 10
+          documented. No admin-set run duration, concurrency, fan-out or per-automation budget exists (the Long
+          running agents team toggle is gone from the settings page; long work is now started with /goal, which
+          no admin setting governs); the fixed limits are the vendor's (one active run per agent, at most 10
           automatic CI-fix follow-ups per PR, subscriptions that last at most 180 days). Automations that Run as a
           service account bill the team pool; Run as Me bills the creator.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityRateLimiting
@@ -808,7 +821,7 @@ tools:
         coverage: native
         mechanism: >-
           Firecracker microVM per agent in an AWS account separate from Cursor's production infrastructure;
-          runtime workspace recycled on idle timers, snapshots deleted after 90 days of inactivity
+          runtime workspace recycled on idle timers, snapshots deleted after 30 days of inactivity
         steps:
           - title: Rely on per-agent microVMs and let them recycle
             body:
@@ -818,11 +831,11 @@ tools:
         note: >-
           Native on the hosted rule: one microVM per agent, created for it and reclaimed on idle timers,
           documented by the vendor. Boundary: follow-up runs on the same agent reuse its VM and snapshot, and
-          snapshots (which can include .env.local files) persist until 90 days of inactivity. Inside: commands,
+          snapshots (which can include .env.local files) persist until 30 days of inactivity. Inside: commands,
           Docker builds, stdio MCP servers and computer use. Outside: the model and HTTP MCP servers, whose calls
           are proxied through Cursor's backend. Allow or Require Self-Hosted Machines moves tool execution onto
           your workers, where isolation is yours.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentSandboxing
