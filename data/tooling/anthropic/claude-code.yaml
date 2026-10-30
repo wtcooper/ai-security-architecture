@@ -1749,7 +1749,7 @@ tools:
         verified: "2026-10-30"
       - id: complianceApi
         name: Compliance API (session transcripts)
-        where: claude.ai Organization settings › Data and privacy, then an API key with compliance scope
+        where: claude.ai Organization settings › API, then a Compliance Access Key with read:compliance_user_data
         setVia: [adminConsole, apiCli]
         area: audit
         default: "Off"
@@ -1847,7 +1847,7 @@ tools:
       - name: claude --cloud from the CLI and cloud sessions from Claude Desktop
         class: cloudAgent
         url: https://code.claude.com/docs/en/desktop
-      - name: Routines (scheduled cloud sessions), Code Review and Ultrareview
+      - name: Cloud scheduled tasks (formerly Routines), Code Review and Ultrareview
         class: cloudAgent
         url: https://code.claude.com/docs/en/routines
         note: Features of the same cloud runtime; Code Review is Team/Enterprise only.
@@ -1874,14 +1874,14 @@ tools:
         Admin control is server-side only: device managed-settings files and MDM policies do not reach cloud
         sessions, so policy comes from server-managed settings (claude.ai Admin Settings > Claude Code >
         Managed settings), organisation-shared cloud environments (network access level, environment
-        variables, setup script) and the Claude Code admin toggles (Code in the web, allow_remote_sessions,
-        Quick web setup, Remote Control, Routines). Prompts, code and outputs follow the account's retention
+        variables, setup script), the Claude Code admin toggles (Cloud sessions — the allow_remote_sessions
+        policy — Quick setup, Remote Control) and the Scheduled tasks toggle under Capabilities. Prompts, code and outputs follow the account's retention
         policy; ZDR organisations cannot use cloud sessions at all, and the Compliance API does not return
         Claude Code web transcripts.
     facts:
       - label: Plans
         value: >-
-          Pro, Max and Team; Enterprise with premium or Chat + Claude Code seats (Routines and Code Review are
+          Pro, Max and Team; Enterprise with premium or Chat + Claude Code seats (scheduled tasks and Code Review are
           research previews; self-hosted environments are a public beta). Not
           available through Console API keys, Bedrock, Vertex, Foundry or ZDR organisations. Repositories must
           be on GitHub (GHES supported on Team/Enterprise); non-GitHub repos can be sent as a bundle but
@@ -1913,14 +1913,15 @@ tools:
       - risk: riskSensitiveDataDisclosure
         note: >-
           Through the Claude GitHub App a cloud session reaches public repositories and private ones the App is
-          installed on; through /web-setup (Quick web setup) it reaches every repository the member's gh token
+          installed on; through /web-setup (Quick setup) it reaches every repository the member's gh token
           can; restrict at GitHub. Shared environments'
-          variables are readable by every member's sessions, so secrets must not go there (API credentials
-          that stay outside the sandbox exist only on Pro/Max today).
+          variables are readable by every member's sessions, so secrets must not go there; keys belong in
+          network secrets, which the agent proxy attaches outside the sandbox on every plan.
       - risk: riskRogueActions
         note: >-
           Auto-fix replies to PR comments and pushes fixes under the user's GitHub account and can trigger
-          comment-driven automation such as Atlantis; git push is restricted to the working branch.
+          comment-driven automation such as Atlantis; the GitHub proxy rejects branch deletions and tag pushes
+          but doesn't limit which branches a push updates, so protected branches need GitHub rulesets.
       - risk: riskPromptInjection
         note: >-
           Sessions started from Slack read the whole thread as context; the earlier Claude Code in Slack docs
@@ -1928,37 +1929,39 @@ tools:
           environments defaults to Trusted (package registries and GitHub), which bounds exfiltration.
       - risk: riskShadowAndUnknownAgents
         note: >-
-          Any member with a seat can start cloud sessions once "Code in the web" is on; Routines run
-          unattended on a schedule. Admin toggles and organisation-default environments are the inventory
+          Any member with a seat can start cloud sessions once "Cloud sessions" is on; scheduled tasks run
+          unattended. Admin toggles and organisation-default environments are the inventory
           levers.
     controls:
       - mitigation: D3-APA
         coverage: partial
         mechanism: >-
-          Owner toggles at claude.ai/admin-settings/claude-code (the allow_remote_sessions policy, Quick web
-          setup, Remote Control, Routines), Allow self-hosted environments on the Cloud environments page, the
-          GitHub connector at Admin settings > Connectors, and the Claude Code capability in Enterprise custom
-          roles; who or what may trigger a session is not an admin policy
+          Owner toggles at claude.ai/admin-settings/claude-code (Cloud sessions — the allow_remote_sessions
+          policy — Quick setup, Remote Control), Scheduled tasks (Was Routines) under Organization settings >
+          Capabilities > Remote sessions, Allow self-hosted environments on the Cloud environments page, the
+          GitHub connector at Admin settings > Connectors, and the Cloud sessions and Scheduled tasks
+          capabilities in Enterprise custom roles; who or what may trigger a session is not an admin policy
         steps:
           - title: Decide whether cloud sessions exist
             body:
               - >-
                 An Owner turns cloud sessions on or off for the organisation with the allow_remote_sessions
-                policy at claude.ai/admin-settings/claude-code, and leaves Quick web setup off so members
-                can't hand a personal gh token to cloud sessions with /web-setup.
+                policy (the Cloud sessions toggle) at claude.ai/admin-settings/claude-code, and leaves Quick
+                setup off so members can't hand a personal gh token to cloud sessions with /web-setup.
             url: https://code.claude.com/docs/en/claude-code-on-the-web
-          - title: Grant Claude Code by role
+          - title: Grant cloud sessions by role
             body:
               - >-
-                On Enterprise, set members to the Custom role and grant the Claude Code capability only to the
-                groups that should run it, under Organization settings > Roles.
+                On Enterprise, grant the Cloud sessions capability (under Claude Code on a role's Capabilities
+                tab, Organization settings > Roles) only to the groups that should run them; roles that already
+                granted Claude Code have it on until you turn it off.
             url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
           - title: Keep unattended runs owned
             body:
               - >-
-                Turn the Routines toggle off at claude.ai/admin-settings/claude-code unless someone owns
-                scheduled, API and GitHub-triggered runs; turning it off stops existing routines and blocks
-                new ones.
+                Turn the Scheduled tasks (Was Routines) toggle off at Organization settings > Capabilities >
+                Remote sessions unless someone owns scheduled, API and GitHub-triggered runs (on Enterprise,
+                grant the role capability instead); turning it off stops existing tasks and blocks new ones.
             url: https://code.claude.com/docs/en/routines
           - title: Keep self-hosted execution off until owned
             body:
@@ -1967,13 +1970,13 @@ tools:
                 owns the runners.
             url: https://code.claude.com/docs/en/self-hosted-environments
         note: >-
-          Partial on the rule: enablement is organisation-wide (the custom-role capability covers all of
-          Claude Code, not cloud sessions specifically, and Team plans have no per-group control), and trigger
-          policy is not an admin setting: a routine's GitHub trigger fires on pull-request and release events
+          Partial on the rule: enablement is per role only on Enterprise (Team plans have only the
+          organisation-wide Cloud sessions and Scheduled tasks toggles), and trigger
+          policy is not an admin setting: a scheduled task's GitHub trigger fires on pull-request and release events
           in any repository where the Claude GitHub App is installed, narrowed only by filters its owner sets
           (such as Author); auto-fix acts on any reviewer comment or CI failure on a watched PR; an API
-          trigger admits whoever holds the routine's token. The widening switches are admin-controlled and off
-          by default on Team and Enterprise: Quick web setup, Remote Control, self-hosted environments and the
+          trigger admits whoever holds the task's token. The widening switches are admin-controlled and off
+          by default on Team and Enterprise: Quick setup, Remote Control, self-hosted environments and the
           GitHub connector itself.
         verified: "2026-09-25"
         migration:
@@ -2004,8 +2007,9 @@ tools:
         coverage: partial
         mechanism: >-
           Owner-managed organisation-shared and self-hosted environments on the Cloud environments admin page;
-          routines kept per user at claude.ai/code/routines; Compliance API Activity Feed events for cloud
-          sessions, session shares and managed-settings changes; the Routines toggle as the only enforcement
+          scheduled tasks kept per user at claude.ai/code/routines; Compliance API Activity Feed events for
+          cloud sessions, session shares and managed-settings changes; the Scheduled tasks toggle and role
+          capability as the only enforcement
         steps:
           - title: Centralise environments
             body:
@@ -2021,10 +2025,10 @@ tools:
                 claude_code_managed_settings activities to see who runs cloud sessions and what changed.
             url: https://platform.claude.com/docs/en/api/compliance/activities/list
         note: >-
-          Partial: environments have an Owner and a list, but routines belong to individual accounts and
-          aren't shared (no admin listing is documented), members' personal environments are approved by no
-          one, and nothing denies an unregistered routine or environment short of the organisation-wide
-          Routines and cloud-session switches. Sessions and GitHub App installations have no owner or approval
+          Partial: environments have an Owner and a list, but scheduled tasks belong to individual accounts
+          and aren't shared (no admin listing is documented), members' personal environments are approved by
+          no one, and nothing denies an unregistered task or environment short of the Scheduled tasks and
+          Cloud sessions switches. Sessions and GitHub App installations have no owner or approval
           record beyond who created them.
         verified: "2026-09-25"
         migration:
@@ -2053,8 +2057,8 @@ tools:
         mechanism: >-
           Server-managed permissions.deny / ask / allow with allowManagedPermissionRulesOnly and
           disableAutoMode (Bypass isn't offered in cloud sessions); allowedMcpServers / deniedMcpServers and
-          connector tool controls filter delivered connectors; the GitHub proxy limits push to the session
-          branch and API calls to attached repositories; network access is set per environment
+          connector tool controls filter delivered connectors; the GitHub proxy blocks branch deletions and
+          tag pushes and limits API calls to attached repositories; network access is set per environment
         steps:
           - title: Deliver the permission policy from the console
             body:
@@ -2086,9 +2090,10 @@ tools:
           Partial: tool rules are admin-locked (Bypass isn't offered, Auto is removable), but the rest of the
           locked environment isn't: members can create personal environments with Full network access and pick
           them, and the docs say there is no organisation-level allowlist admins can push. The GitHub proxy
-          restricts push to the session's branch and API calls to attached repositories, but nothing documents
-          that the session's GitHub grant can't merge, approve or mark a PR ready; with Quick web setup on,
-          /web-setup reaches every repository a member's gh token can; routines run with no permission-mode
+          limits API calls to attached repositories and rejects branch deletions and tag pushes, but doesn't
+          limit which branches a push updates (that is GitHub branch protection), and nothing documents that
+          the session's GitHub grant can't merge, approve or mark a PR ready; with Quick setup on, /web-setup
+          reaches every repository a member's gh token can; scheduled tasks run with no permission-mode
           picker; a single-repository session loads the repository's hooks and .mcp.json servers without
           asking unless managed settings say otherwise.
         verified: "2026-09-25"
@@ -2177,8 +2182,8 @@ tools:
         note: >-
           Partial by the rule: a merge gate approves the output, not the actions. Cloud sessions pre-approve
           file edits in every mode and Accept edits pushes the branch without stopping; ask rules and
-          connector ask settings do make a person approve named actions in interactive sessions, but routines
-          and GitHub-triggered runs have no permission-mode picker and run without stopping for approval, so
+          connector ask settings do make a person approve named actions in interactive sessions, but scheduled
+          tasks and GitHub-triggered runs have no permission-mode picker and run without stopping for approval, so
           no one is present. The auto-mode classifier and Code Review are not human approval; the reviewer's
           merge on GitHub comes after the actions ran.
         verified: "2026-09-25"
@@ -2213,7 +2218,7 @@ tools:
         mechanism: >-
           Organisation, group, per-user and pooled monthly spend limits under Organization settings > Usage
           (Enterprise); a monthly spend limit on usage credits (Team and seat-based Enterprise); vendor-fixed
-          seat limits, routine daily run caps and GitHub-trigger hourly caps
+          seat limits and scheduled-task hourly run and GitHub-event caps
         steps:
           - title: Set group, user and organisation spend limits
             body:
@@ -2232,9 +2237,9 @@ tools:
         note: >-
           Native on the rule: admin-set spend limits stop usage when exhausted — the consumption guide says
           members at their limit are blocked mid-task and usage can go slightly over before it pauses — and
-          routine runs past the limit are rejected without usage credits. Not admin-settable: session
-          duration, concurrency, fan-out or a per-session budget; the routine daily run cap, per-routine
-          GitHub event caps and the VM ceilings (about 4 vCPUs, 16 GB RAM, 30 GB disk) are vendor-fixed, and
+          scheduled runs past the limit are rejected without usage credits. Not admin-settable: session
+          duration, concurrency, fan-out or a per-session budget; the scheduled-task hourly run limits,
+          per-task GitHub event caps and the VM ceilings (about 4 vCPUs, 16 GB RAM, 30 GB disk) are vendor-fixed, and
           Team seats carry fixed included usage. Cloud sessions share the account's rate limits with all other
           Claude usage.
         verified: "2026-09-25"
@@ -2315,9 +2320,9 @@ tools:
       - mitigation: D3-CTS
         coverage: partial
         mechanism: >-
-          GitHub proxy (a scoped credential in the VM swapped for the user's token; push to the session
-          branch; API calls to attached repositories; a pinned GraphQL set); API credentials attached per host
-          by the agent proxy (Pro and Max only); every other secret an environment variable the session can
+          GitHub proxy (a scoped credential in the VM swapped for the user's token; no branch deletions or tag
+          pushes; API calls to attached repositories; GraphQL refused); network secrets attached per host by
+          the agent proxy (every plan); any key the proxy can't attach an environment variable the session can
           read
         steps:
           - title: Let the GitHub proxy hold the repository credential
@@ -2327,11 +2332,12 @@ tools:
                 the real credential outside the VM; a token you set is an ordinary variable everyone using the
                 environment can read.
             url: https://code.claude.com/docs/en/cloud-environments
-          - title: Keep other keys out of the VM where the plan allows
+          - title: Keep other keys out of the VM
             body:
               - >-
-                On Pro and Max, store keys as API credentials with allowed hosts so the agent proxy attaches
-                them after the request leaves the VM; Team and Enterprise don't have API credentials yet.
+                Store keys as network secrets with their hosts (Owners do it for shared environments from the
+                Cloud environments admin page) so the agent proxy attaches them after the request leaves the
+                VM.
             url: https://code.claude.com/docs/en/cloud-environments
           - title: Supply git credentials per session when self-hosting
             body:
@@ -2340,10 +2346,12 @@ tools:
                 wrapper script, instead of baking credentials into the runner image.
             url: https://code.claude.com/docs/en/self-hosted-environments-deploy
         note: >-
-          Partial by the rule: the repository credential stays outside the sandbox, but on Team and Enterprise
-          every other secret a session needs is an environment variable that the setup script, every command
-          and — through tool output — the model can read, as can every member sharing the environment;
-          setup-phase secrets aren't removed before the agent runs. Connector credentials stay on Anthropic's
+          Partial by the rule: the repository credential and network secrets stay outside the sandbox, but a
+          network secret is attached in every session in the environment, whoever started it, and never to
+          setup-script requests, package registries or the Anthropic API, so any key those need is an
+          environment variable that the setup script, every command and — through tool output — the model
+          can read, as can every member sharing the environment; setup-phase secrets aren't removed before the
+          agent runs. Connector credentials stay on Anthropic's
           side. The session exercises the user's GitHub grant; there is no on-behalf-of exchange.
         verified: "2026-09-25"
         migration:
@@ -2462,8 +2470,8 @@ tools:
           External: assessed in the organisation's TPRM platform. The Trust Center lists SOC 2 Type 2, ISO
           27001, ISO 42001, CSA STAR, HIPAA and NIST 800-171 for Claude Enterprise (Claude Team: all but
           HIPAA), with reports behind Request access; the security page's cloud execution section states the
-          isolation, credential-proxy, branch-restriction and audit-logging claims to assess. Re-assess when
-          the defaults move: network level, which plans get API credentials, and Compliance API coverage of
+          isolation, credential-proxy, push-restriction and audit-logging claims to assess. Re-assess when
+          the defaults move: network level, network-secret availability, and Compliance API coverage of
           cloud sessions.
         verified: "2026-09-25"
         migration:
@@ -2575,7 +2583,7 @@ tools:
           — members can create personal environments at Full and select them, and the docs say there is no
           organisation-level allowlist admins can push. Setup and agent phases share one network policy.
           Bypassing the allowlist at every level, None included: GitHub through its proxy, MCP connectors
-          through Anthropic's servers, API-credential hosts and the Anthropic API. The Trusted defaults
+          through Anthropic's servers, network-secret hosts and the Anthropic API. The Trusted defaults
           include write-capable hosts such as gist.github.com, npm and PyPI. In a self-hosted environment
           egress is your own boundary.
         verified: "2026-09-25"
@@ -2613,8 +2621,9 @@ tools:
         mechanism: >-
           Transcript and diff at claude.ai/code with Claude-Session commit trailers; Activity Feed
           control-plane events (ccr_session_created, session_share_created, managed-settings changes);
-          Inference hooks push each governed request's transcript (Enterprise, beta); self-hosted runners pin
-          an OTLP destination
+          Inference hooks push each governed request's transcript (Enterprise, beta); OpenTelemetry from the
+          server-managed env block, which reaches Anthropic-hosted sessions, and self-hosted runners' pinned
+          OTLP destination
         steps:
           - title: Link every commit to its session
             body:
@@ -2633,19 +2642,23 @@ tools:
               - >-
                 Have your Inference hooks server store each governed request's transcript and return allow.
             url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
-          - title: Export OpenTelemetry from self-hosted runners
+          - title: Export OpenTelemetry from cloud sessions
             body:
               - >-
-                Name the OTLP endpoint in the runner's environment; Claude Code pins it like a managed
-                setting.
+                Set CLAUDE_CODE_ENABLE_TELEMETRY and the OTEL_* exporter variables in the server-managed
+                settings env block, and add the collector's domain to each shared environment's allowlist;
+                filter on ccr.session.id. On self-hosted runners, name the endpoint in the runner's
+                environment.
             url: https://code.claude.com/docs/en/monitoring-usage
         note: >-
           Partial by the rule: nothing exports the Anthropic-hosted session record itself. The Compliance API
           session endpoints exclude Claude Code cloud sessions (the remote endpoints return Cowork only); the
           Activity Feed is control-plane; the Inference hooks feed is a beta pre-inference policy hook (prompt
           event only, so a session's final response isn't sent, and ancillary requests are skipped), not a
-          session export; OpenTelemetry export is documented for self-hosted runners, not Anthropic-hosted
-          sessions. The security page says cloud operations are logged for compliance; customer access to
+          session export; OpenTelemetry from server-managed settings reaches Anthropic-hosted sessions but
+          leaves through the session's network, so it arrives only where the environment's allowlist admits
+          the collector, and a member's personal environment can leave it out (Claude Tag sessions don't
+          receive server-managed settings). The security page says cloud operations are logged for compliance; customer access to
           those logs isn't documented.
         verified: "2026-09-25"
         migration:
@@ -2693,21 +2706,22 @@ tools:
       - mitigation: cap-agent-kill-switch
         coverage: partial
         mechanism: >-
-          Owner toggles (allow_remote_sessions, Routines), archiving a shared environment, seat removal,
+          Owner toggles (Cloud sessions, Scheduled tasks), archiving a shared environment, seat removal,
           owner-only session archive and delete; for self-hosted environments, environment-secret revocation
           and runner drain
         steps:
           - title: Turn cloud sessions off
             body:
               - >-
-                Turn the allow_remote_sessions policy off at claude.ai/admin-settings/claude-code; new cloud
-                sessions and CLI follow-ups then fail with a policy error.
+                Turn the Cloud sessions toggle (the allow_remote_sessions policy) off at
+                claude.ai/admin-settings/claude-code; new cloud sessions and CLI follow-ups then fail with a
+                policy error.
             url: https://code.claude.com/docs/en/claude-code-on-the-web
-          - title: Stop routines
+          - title: Stop scheduled tasks
             body:
               - >-
-                Turn the Routines toggle off; existing routines stop running and members can't create new
-                ones.
+                Turn the Scheduled tasks (Was Routines) toggle off at Organization settings > Capabilities >
+                Remote sessions; existing tasks stop running and members can't create new ones.
             url: https://code.claude.com/docs/en/routines
           - title: Retire an environment
             body:
@@ -2756,8 +2770,9 @@ tools:
       - mitigation: D3-CH
         coverage: partial
         mechanism: >-
-          Write-only API credentials on Pro and Max environments (unreadable after saving, attached by the
-          agent proxy); plain environment variables on Team and Enterprise; the user's GitHub token held by
+          Write-only network secrets on every plan (unreadable after saving, attached by the agent proxy,
+          Owner-managed on shared environments); plain environment variables for anything else; the user's
+          GitHub token held by
           the GitHub proxy, with /web-setup tokens stored encrypted with the account; for self-hosted
           environments a rotatable environment secret and short-lived session tokens
         steps:
@@ -2765,7 +2780,7 @@ tools:
             body:
               - >-
                 Don't put secrets in an environment's variables or setup script, which everyone using the
-                environment can read; on Pro and Max use API credentials, which can't be viewed after saving.
+                environment can read; use network secrets, which can't be viewed after saving.
             url: https://code.claude.com/docs/en/cloud-environments
           - title: Remove a stored GitHub token
             body:
@@ -2780,8 +2795,9 @@ tools:
                 the old one; each secret expires 365 days after creation.
             url: https://code.claude.com/docs/en/self-hosted-environments-quickstart
         note: >-
-          Partial by the rule: the write-only secret store exists only on Pro and Max; on Team and Enterprise
-          environment secrets are plain variables readable by every member sharing the environment, every
+          Partial by the rule: network secrets are a write-only store on every plan, but they rotate only by
+          delete and re-add and never reach setup-script requests, package registries or the Anthropic API,
+          so keys for those stay plain variables readable by every member sharing the environment, every
           command and the model through tool output. The repository credential sits outside the VM, but its
           lifetime is the connected GitHub grant — a /web-setup gh token is long-lived — and no shorter-lived
           repository credential is documented for Anthropic-hosted sessions. Tunnel: Anthropic offers no
@@ -2791,6 +2807,303 @@ tools:
           tunnel to GitHub Enterprise Server authenticates with it), runner inference tokens last about 30
           minutes, and session JWTs four hours with no revocation feed.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Device MDM files never reach Anthropic-hosted cloud sessions: policy comes only from the claude.ai
+    # admin console (server-managed settings, cloud environments, Claude Code and capability toggles)
+    # and from GitHub's own App installation scope. Verified 2026-10-30.
+    settings:
+      - id: requireSso
+        name: Require SSO for Claude
+        where: claude.ai Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: Every claude.ai login — the only credential cloud sessions accept — goes through the corporate IdP and its MFA.
+        mitigations: [D3-APA]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Claude Code
+        why: Removing someone in the IdP removes their seat, so a leaver can no longer start, steer or schedule cloud sessions.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: restrictOrgCreation
+        name: Restrict organization creation
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Stops staff creating side Claude organisations on your domains whose cloud sessions run outside your managed settings and environments.
+        mitigations: [D3-APA]
+        requires: Team or Enterprise, verified domain
+        url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        verified: "2026-10-30"
+      - id: cloudSessions
+        name: Cloud sessions
+        where: claude.ai Organization settings › Claude Code (the allow_remote_sessions policy)
+        setVia: [adminConsole]
+        area: identity
+        recommended: On, once the organisation default environment and server-managed settings are in place
+        why: The organisation-wide switch for every cloud session, CLI handoff and scheduled task; off, new sessions fail with a policy error.
+        mitigations: [D3-APA, cap-agent-kill-switch]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/desktop#admin-console-controls
+        verified: "2026-10-30"
+      - id: cloudSessionsCapability
+        name: Cloud sessions (custom role capability)
+        where: claude.ai Organization settings › Roles › role › Capabilities › Claude Code
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: On for roles that already granted Claude Code
+        recommended: Granted only to the engineering groups' roles
+        why: Members whose role lacks it can't run sessions on Anthropic's infrastructure or use Remote Control, so the surface follows the IdP group.
+        mitigations: [D3-APA]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: quickSetup
+        name: Quick setup
+        where: claude.ai Organization settings › Claude Code
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "Off"
+        why: Keeps /web-setup hidden, so no member hands a personal gh token to cloud sessions that then reach every repository it can.
+        mitigations: [D3-CTS, D3-APA]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/claude-code-on-the-web#quick-setup-for-team-and-enterprise
+        verified: "2026-10-30"
+      - id: githubAppRepositoryAccess
+        name: Repository access (Claude GitHub App installation)
+        where: GitHub › organization Settings › GitHub Apps › Claude › Repository access
+        setVia: [adminConsole]
+        area: tools
+        default: Chosen at installation
+        recommended: Only select repositories — those teams have approved for cloud sessions
+        why: A browser-connected session reaches private repositories only where the App's installation includes them, so the App scope is the repository allowlist.
+        mitigations: [D3-CTS, AML.M0028]
+        url: https://code.claude.com/docs/en/web-quickstart
+        verified: "2026-10-30"
+      - id: connectedGitHubAccounts
+        name: Connected GitHub accounts
+        where: claude.ai Organization settings › Git providers › GitHub
+        setVia: [adminConsole]
+        area: tools
+        recommended: Only the firm's GitHub organisations linked; personal accounts unlinked
+        why: Members' own GitHub accounts with the App installed link to the organisation automatically; reviewing the list keeps code sources inventoried.
+        mitigations: [cap-agent-tool-registry]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/admin-setup#connected-github-accounts
+        verified: "2026-10-30"
+      - id: allowSelfHostedEnvironments
+        name: Allow self-hosted environments
+        where: claude.ai Organization settings › Cloud environments
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: Off, unless a team owns and hardens the runners
+        why: Keeps sessions in Anthropic's per-session VMs; a self-hosted runner's isolation, egress and git credentials become yours to build.
+        mitigations: [D3-EI, D3-APA]
+        requires: Team or Enterprise (public beta)
+        url: https://code.claude.com/docs/en/self-hosted-environments
+        verified: "2026-10-30"
+      - id: defaultEnvironment
+        name: Default environment
+        where: claude.ai Organization settings › Claude Code
+        setVia: [adminConsole]
+        area: network
+        default: The member's own Default environment (Trusted network access)
+        recommended: An Owner-managed organisation-shared environment with Custom network access
+        why: Sessions members start without picking an environment run on the organisation's network policy and setup script, not one each person made.
+        mitigations: [cap-agent-egress-control, cap-agent-tool-registry]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/cloud-environments#organization-shared-environments
+        verified: "2026-10-30"
+      - id: sharedEnvironmentNetworkAccess
+        name: Network access
+        where: claude.ai Organization settings › Cloud environments › shared environment › Network access
+        setVia: [adminConsole]
+        area: network
+        default: Trusted
+        recommended: Custom — your source control, package mirror and approved domains in Allowed domains
+        why: Trusted is Anthropic's list and includes write-capable hosts such as gist.github.com; members can still pick personal Full environments, which no setting locks.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        url: https://code.claude.com/docs/en/cloud-environments#access-levels
+        verified: "2026-10-30"
+      - id: networkSecrets
+        name: Network secrets
+        where: claude.ai Organization settings › Cloud environments › shared environment › Network secrets
+        setVia: [adminConsole]
+        area: data
+        default: None (Environment variables readable by every session)
+        recommended: Every API key a shared environment needs, scoped to its hosts; no secrets in Environment variables or the setup script
+        why: The agent proxy attaches the key after the request leaves the VM, so neither the model nor a command can read it, as they can a variable.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://code.claude.com/docs/en/cloud-environments#add-network-secrets
+        verified: "2026-10-30"
+      - id: scheduledTasks
+        name: Scheduled tasks (Was Routines)
+        where: claude.ai Organization settings › Capabilities › Remote sessions (on Enterprise also the role's Remote sessions capability)
+        setVia: [adminConsole]
+        area: tools
+        recommended: On only for the roles that own unattended runs; off for everyone else
+        why: Scheduled, API and GitHub-triggered runs act with nobody present; off, existing tasks stop and none can be created. On Team the toggle is organisation-wide, so leave it off until someone owns them.
+        mitigations: [AML.M0029, cap-agent-kill-switch, D3-APA]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/routines
+        verified: "2026-10-30"
+      - id: permissionsDeny
+        name: permissions.deny
+        where: Organization settings › Claude Code › Managed settings → permissions.deny
+        setVia: [adminConsole]
+        area: tools
+        default: Unset
+        recommended: Deny reads of secret paths — Read(./.env*), Read(./secrets/**)
+        why: Server-managed deny rules are the only permission policy that reaches a cloud session, and they win over every mode.
+        mitigations: [AML.M0028]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/settings-reference#permissions-deny
+        verified: "2026-10-30"
+      - id: disableAutoMode
+        name: disableAutoMode
+        where: Organization settings › Claude Code › Managed settings → disableAutoMode
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (Auto offered where the model supports it)
+        recommended: Unset — Auto stays available; deny and ask rules still precede it
+        why: Cloud sessions already pre-approve edits and never offer Bypass; regulated teams set "disable" so sessions run only in Accept edits or Plan.
+        mitigations: [AML.M0029]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/settings-reference#disableautomode
+        verified: "2026-10-30"
+      - id: allowManagedHooksOnly
+        name: allowManagedHooksOnly
+        where: Organization settings › Claude Code › Managed settings → allowManagedHooksOnly
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (hooks from every scope run)
+        recommended: "true"
+        why: Hooks committed to the repository otherwise run in the VM with the environment's network and variables; move dependency installs to the environment's setup script.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/settings-reference#allowmanagedhooksonly
+        verified: "2026-10-30"
+      - id: strictPluginOnlyCustomization
+        name: strictPluginOnlyCustomization
+        where: Organization settings › Claude Code › Managed settings → strictPluginOnlyCustomization
+        setVia: [adminConsole]
+        area: tools
+        default: Unset (nothing locked)
+        recommended: '["hooks", "mcp"]'
+        why: A cloned repository's .mcp.json servers and hooks don't load in the session; project skills and agents stay available.
+        mitigations: [AML.M0031, AML.M0028, cap-agent-tool-registry]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/settings-reference#strictpluginonlycustomization
+        verified: "2026-10-30"
+      - id: claudeMd
+        name: claudeMd
+        where: Organization settings › Claude Code › Managed settings → claudeMd
+        setVia: [adminConsole]
+        area: tools
+        default: Unset
+        recommended: The organisation's standing rules (no secrets in commits, no pushes to protected branches)
+        why: Loads ahead of the repository's CLAUDE.md, so organisation instructions sit above anything a contributor commits.
+        mitigations: [AML.M0031]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/settings-reference#claudemd
+        verified: "2026-10-30"
+      - id: connectorToolPolicy
+        name: Organization-wide tool policy
+        where: claude.ai Organization settings › Connectors › connector › tool (Always allow / Needs approval / Blocked)
+        setVia: [adminConsole]
+        area: tools
+        recommended: Write and send tools set to Needs approval; tools no one uses Blocked
+        why: A tool set to ask prompts on every call even in Auto, and a blocked tool never reaches the session; connector traffic bypasses the environment allowlist.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: inferenceHooks
+        name: Inference hooks
+        where: claude.ai Organization settings › Data and privacy › Inference hooks
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
+        why: Each governed request from a cloud session, tool results included, is checked by your own service before inference, so injected issue text or secrets can be stopped centrally.
+        mitigations: [cap-input-guardrails]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+        verified: "2026-10-30"
+      - id: memberSpendLimit
+        name: Member limit
+        where: claude.ai Organization settings › Usage › By group/tier › Edit limits
+        setVia: [adminConsole]
+        area: tools
+        default: No member limit
+        recommended: A monthly per-member limit on each group that runs Claude Code
+        why: A runaway or looping cloud session stops when its owner's limit is spent, rather than drawing on the organisation's whole pool.
+        mitigations: [AML.M0036]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13799932-manage-groups-and-group-spend-limits-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: activityFeed
+        name: Compliance API (Activity Feed)
+        where: claude.ai Organization settings › API, then a Compliance Access Key
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your SIEM
+        why: Session creation, deletion and sharing and managed-settings changes (ccr_session_created, session_share_created) reach the SIEM; cloud-session transcripts are not in the Compliance API.
+        mitigations: [cap-agent-tracing, cap-agent-tool-registry]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-activity-feed
+        verified: "2026-10-30"
+      - id: otelTelemetry
+        name: CLAUDE_CODE_ENABLE_TELEMETRY with OTEL exporters
+        where: Organization settings › Claude Code › Managed settings → env.CLAUDE_CODE_ENABLE_TELEMETRY, OTEL_LOGS_EXPORTER, OTEL_EXPORTER_OTLP_ENDPOINT
+        setVia: [adminConsole]
+        area: audit
+        default: "Off"
+        recommended: '"1", exporting OTLP logs and metrics to your collector, with its domain in every shared environment''s Allowed domains'
+        why: Tool decisions and API requests from cloud sessions reach the SIEM keyed by ccr.session.id; the export leaves through the session's network, so an environment that can't reach the collector sends nothing.
+        mitigations: [cap-agent-tracing]
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/monitoring-usage#telemetry-from-cloud-sessions-and-claude-tag
+        verified: "2026-10-30"
+      - id: attributionSessionUrl
+        name: attribution.sessionUrl
+        where: Organization settings › Claude Code › Managed settings → attribution.sessionUrl
+        setVia: [adminConsole]
+        area: audit
+        default: "true"
+        recommended: "true — don't turn it off"
+        why: Every commit carries a Claude-Session trailer and every pull request links the transcript, so a reviewer can trace the run that produced it.
+        mitigations: [cap-agent-tracing]
+        url: https://code.claude.com/docs/en/settings-reference#attribution-sessionurl
+        verified: "2026-10-30"
+      - id: remoteControl
+        name: Remote Control
+        where: claude.ai Organization settings › Claude Code
+        setVia: [adminConsole]
+        area: sharing
+        default: "Off on Team and Enterprise until an Owner enables it"
+        recommended: "Off, unless a team needs to drive local sessions from claude.ai or a phone"
+        why: Stops a developer's local session — with their files and credentials — being steered from claude.ai/code alongside the cloud sessions.
+        mitigations: []
+        requires: Team or Enterprise
+        url: https://code.claude.com/docs/en/remote-control
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-39861 — sandbox symlink escape in Claude Code (affects the same agent runtime; fixed 2.1.64)

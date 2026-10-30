@@ -728,6 +728,271 @@ tools:
           scanning mirror and allow only its host in the hosted-shell allowlist and the egress proxy; pin the SDK
           in the lockfile. No model weights load in the SDK.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The SDK runs inside the application, so every row is a parameter, environment variable or function
+    # call the deployer sets in its own code; identity for the model calls is set up in the OpenAI Platform.
+    # Verified 2026-10-30 against openai.github.io/openai-agents-python and developers.openai.com.
+    settings:
+      - id: workloadIdentityFederation
+        name: Workload Identity Provider and service account mapping
+        where: OpenAI Platform › Organization Settings › Security › Workload Identity Provider, then the client built with set_default_openai_client(...)
+        setVia: [identityProvider, adminConsole, code]
+        area: identity
+        default: Unset (a standing OPENAI_API_KEY)
+        recommended: One mapping per agent workload to its own project service account, the short-lived token passed through set_default_openai_client
+        why: No long-lived API key sits in the deployment, each agent workload is a separate revocable principal, and removing the mapping stops its model calls.
+        mitigations: [D3-AA, D3-CH, cap-agent-kill-switch]
+        url: https://developers.openai.com/api/docs/guides/workload-identity-federation
+        verified: "2026-10-30"
+      - id: runContextGrant
+        name: context with is_enabled
+        where: Runner.run(agent, input, context=...); FunctionTool / Handoff is_enabled callables reading RunContextWrapper.context
+        setVia: [code]
+        area: identity
+        default: No context; every declared tool enabled
+        recommended: The authenticated caller and its grant as the run context, with is_enabled returning False for tools that grant does not cover
+        why: The model is never offered a tool, handoff or data source the requesting principal is not entitled to, and each data tool calls with that principal's token.
+        mitigations: [D3-APA, cap-data-access-governance, AML.M0028]
+        url: https://openai.github.io/openai-agents-python/context/
+        verified: "2026-10-30"
+      - id: setTraceProcessors
+        name: set_trace_processors
+        where: set_trace_processors([...]) at application start-up (TypeScript setTraceProcessors)
+        setVia: [code]
+        area: audit
+        default: Default processor exporting every trace to OpenAI's Traces dashboard
+        recommended: Your own exporter to the firm's collector, installed before the first run
+        why: Traces with prompts and tool arguments go to your store under your retention; add_trace_processor would keep the OpenAI exporter as well.
+        mitigations: [cap-agent-tracing]
+        url: https://openai.github.io/openai-agents-python/tracing/
+        verified: "2026-10-30"
+      - id: traceIncludeSensitiveData
+        name: trace_include_sensitive_data
+        where: RunConfig.trace_include_sensitive_data, or OPENAI_AGENTS_TRACE_INCLUDE_SENSITIVE_DATA
+        setVia: [code, configFile]
+        area: audit
+        default: "True"
+        recommended: "False, unless the trace store is approved for prompts and tool arguments"
+        why: Generation and function spans keep their structure without model inputs, outputs or tool payloads, so client material stays out of trace storage.
+        mitigations: [cap-agent-tracing]
+        url: https://openai.github.io/openai-agents-python/tracing/
+        verified: "2026-10-30"
+      - id: tracingDisabled
+        name: OPENAI_AGENTS_DISABLE_TRACING / set_tracing_disabled / RunConfig.tracing_disabled
+        where: Environment variable, set_tracing_disabled(True) at start-up, or RunConfig per run
+        setVia: [configFile, code]
+        area: audit
+        default: Tracing enabled
+        recommended: Leave tracing on, exported to your own processor
+        why: Disabling it loses the per-run record of model calls, tools, guardrails and handoffs; the docs state tracing is unavailable to organisations under Zero Data Retention.
+        mitigations: [cap-agent-tracing]
+        url: https://openai.github.io/openai-agents-python/tracing/
+        verified: "2026-10-30"
+      - id: dontLogData
+        name: OPENAI_AGENTS_DONT_LOG_MODEL_DATA / OPENAI_AGENTS_DONT_LOG_TOOL_DATA
+        where: Environment variables of the application process
+        setVia: [configFile]
+        area: data
+        default: "1 (model and tool data not logged)"
+        recommended: "1 — don't set 0 in production"
+        why: Debug logs and diagnostic exceptions do not carry model or tool inputs and outputs into the application's log pipeline.
+        mitigations: []
+        url: https://openai.github.io/openai-agents-python/config/
+        verified: "2026-10-30"
+      - id: encryptedSession
+        name: EncryptedSession (ttl)
+        where: EncryptedSession(session_id, underlying_session, encryption_key, ttl=...)
+        setVia: [code]
+        area: data
+        recommended: One session per case, encrypted with a key from your secret manager, ttl matched to the case's retention
+        why: Conversation history in the store is unreadable without the key, expired items are skipped, and one case's history never seeds another's run.
+        mitigations: [AML.M0031]
+        url: https://openai.github.io/openai-agents-python/sessions/encrypted_session/
+        verified: "2026-10-30"
+      - id: needsApproval
+        name: needs_approval
+        where: "@function_tool(needs_approval=...), Agent.as_tool(..., needs_approval=...) (TypeScript needsApproval)"
+        setVia: [code]
+        area: tools
+        default: "False (tools run unapproved)"
+        recommended: True, or a callable over the arguments, on every tool that changes records, moves money or sends data out
+        why: The run pauses with the tool name and arguments for a person to approve or reject that call; don't pass always_approve=True for these tools.
+        mitigations: [AML.M0029]
+        url: https://openai.github.io/openai-agents-python/human_in_the_loop/
+        verified: "2026-10-30"
+      - id: shellApplyPatchApproval
+        name: needs_approval (ShellTool, ApplyPatchTool)
+        where: ShellTool(..., needs_approval=True), ApplyPatchTool(..., needs_approval=True)
+        setVia: [code]
+        area: tools
+        default: "False"
+        recommended: "True"
+        why: Local shell commands and file edits run on a host the SDK does not sandbox, so each one waits for a decision.
+        mitigations: [AML.M0029, D3-EI]
+        url: https://openai.github.io/openai-agents-python/human_in_the_loop/
+        verified: "2026-10-30"
+      - id: mcpRequireApproval
+        name: require_approval
+        where: MCPServerStdio / MCPServerSse / MCPServerStreamableHttp(require_approval=...); HostedMCPTool tool_config require_approval
+        setVia: [code]
+        area: tools
+        recommended: A per-tool map approving write tools, "always" on hosted MCP connectors that change data
+        why: An MCP call that writes or sends pauses for a person, the same as a function tool.
+        mitigations: [AML.M0029, cap-mcp-tool-integrity]
+        url: https://openai.github.io/openai-agents-python/mcp/
+        verified: "2026-10-30"
+      - id: toolInputGuardrails
+        name: tool_input_guardrails
+        where: "@function_tool(tool_input_guardrails=[...]), or on a local MCP server for every tool it exposes"
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: A policy guardrail on every consequential tool that checks principal, tool and arguments
+        why: A call the policy forbids is skipped or rejected deterministically before it executes; hosted and built-in shell tools do not use this pipeline.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://openai.github.io/openai-agents-python/guardrails/
+        verified: "2026-10-30"
+      - id: preApprovalToolInputGuardrails
+        name: pre_approval_tool_input_guardrails
+        where: RunConfig(tool_execution=ToolExecutionConfig(pre_approval_tool_input_guardrails=True))
+        setVia: [code]
+        area: tools
+        default: "False (checks run after approval)"
+        recommended: "True"
+        why: A call the policy would reject never reaches an approver, who might otherwise approve it; it is checked again after approval.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0029]
+        url: https://openai.github.io/openai-agents-python/guardrails/
+        verified: "2026-10-30"
+      - id: inputGuardrailBlocking
+        name: run_in_parallel
+        where: "@input_guardrail(run_in_parallel=False) on the starting agent (TypeScript runInParallel: false)"
+        setVia: [code]
+        area: tools
+        default: "True (guardrail runs alongside the agent)"
+        recommended: False on the injection and policy guardrails
+        why: The run stops before any model call or tool executes when the guardrail trips, instead of after the agent may already have acted.
+        mitigations: [cap-input-guardrails]
+        url: https://openai.github.io/openai-agents-python/guardrails/
+        verified: "2026-10-30"
+      - id: toolOutputGuardrails
+        name: tool_output_guardrails
+        where: "@function_tool(tool_output_guardrails=[...]), or on a local MCP server"
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: Your injection classifier on every tool that returns external content
+        why: A tool result carrying injected instructions is replaced before the model reasons over it.
+        mitigations: [cap-input-guardrails]
+        url: https://openai.github.io/openai-agents-python/guardrails/
+        verified: "2026-10-30"
+      - id: staticToolFilter
+        name: create_static_tool_filter
+        where: MCP server tool_filter=create_static_tool_filter(allowed_tool_names=[...]) (TypeScript createMCPToolStaticFilter)
+        setVia: [code]
+        area: tools
+        default: Unset (every tool the server lists, re-fetched each run)
+        recommended: The approved tool names for each server
+        why: Tools a server adds or renames between runs are never exposed to the agent.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        url: https://openai.github.io/openai-agents-python/mcp/
+        verified: "2026-10-30"
+      - id: toolNotFoundBehavior
+        name: tool_not_found_behavior
+        where: RunConfig.tool_not_found_behavior
+        setVia: [code]
+        area: tools
+        default: Raise ModelBehaviorError
+        recommended: Leave at the default
+        why: A model-emitted call to a tool the current agent does not have ends the run rather than being fed back for the model to retry around.
+        mitigations: [cap-agent-tool-registry]
+        url: https://openai.github.io/openai-agents-python/running_agents/
+        verified: "2026-10-30"
+      - id: strictMode
+        name: strict_mode
+        where: "@function_tool(strict_mode=...)"
+        setVia: [code]
+        area: tools
+        default: "True"
+        recommended: "True — don't relax it"
+        why: Arguments must match the tool's JSON schema and constrained types, so malformed or out-of-range values never reach the function.
+        mitigations: [AML.M0028]
+        url: https://openai.github.io/openai-agents-python/ref/tool/
+        verified: "2026-10-30"
+      - id: maxTurns
+        name: max_turns
+        where: Runner.run(..., max_turns=...) (TypeScript maxTurns)
+        setVia: [code]
+        area: tools
+        default: "10"
+        recommended: An explicit number sized to the workflow — never None
+        why: A looping run ends with MaxTurnsExceeded instead of consuming model calls and tool actions without bound.
+        mitigations: [AML.M0036]
+        url: https://openai.github.io/openai-agents-python/running_agents/
+        verified: "2026-10-30"
+      - id: toolConcurrencyAndTimeout
+        name: max_function_tool_concurrency and timeout
+        where: RunConfig(tool_execution=ToolExecutionConfig(max_function_tool_concurrency=N)); @function_tool(timeout=...)
+        setVia: [code]
+        area: tools
+        default: Unlimited concurrency; no timeout
+        recommended: A concurrency cap and a timeout on every tool that calls a remote system
+        why: One turn cannot start an unbounded burst of calls against a downstream system or hang on a slow one.
+        mitigations: [AML.M0036]
+        url: https://openai.github.io/openai-agents-python/running_agents/
+        verified: "2026-10-30"
+      - id: sandboxClient
+        name: UnixLocalSandboxClient / DockerSandboxClient
+        where: The sandbox client the application constructs for sandbox agents (or a hosted provider client)
+        setVia: [code]
+        area: tools
+        recommended: Docker or a hosted sandbox client for any agent whose commands follow untrusted input
+        why: UnixLocalSandboxClient adds no OS-level confinement on Linux and no network isolation on macOS, so it is not a boundary.
+        mitigations: [D3-EI]
+        url: https://openai.github.io/openai-agents-python/sandbox/clients/
+        verified: "2026-10-30"
+      - id: inheritHostEnvironment
+        name: inherit_host_environment
+        where: UnixLocalSandboxClient(inherit_host_environment=False, host_environment_allowlist=...)
+        setVia: [code]
+        area: tools
+        default: True (the complete host process environment)
+        recommended: "False"
+        why: Sandbox commands get only a short allowlist of variables, not the application's API keys and tokens.
+        mitigations: [D3-CH, D3-EI]
+        url: https://openai.github.io/openai-agents-python/sandbox/clients/
+        verified: "2026-10-30"
+      - id: dockerNetworkMode
+        name: network_mode
+        where: DockerSandboxClientOptions(network_mode="none") (TypeScript networkMode)
+        setVia: [code]
+        area: network
+        default: Docker's default network
+        recommended: '"none" for sandboxes that need no network'
+        why: Commands in the container cannot reach the internet or internal hosts to exfiltrate data.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        url: https://openai.github.io/openai-agents-python/sandbox/clients/
+        verified: "2026-10-30"
+      - id: hostedShellNetworkPolicy
+        name: network_policy
+        where: 'ShellTool(environment={"type": "container_auto", "network_policy": {...}})'
+        setVia: [code]
+        area: network
+        default: No outbound access
+        recommended: '"allowlist" with your package mirror and the task''s hosts, secrets bound with domain_secrets'
+        why: The hosted container reaches only listed domains, and each secret is injected only for its own domain.
+        mitigations: [cap-agent-egress-control, D3-CH]
+        url: https://developers.openai.com/api/docs/guides/tools-shell
+        verified: "2026-10-30"
+      - id: runCancel
+        name: cancel()
+        where: RunResultStreaming.cancel() (or mode="after_turn"); TypeScript run(..., { signal }) with an AbortSignal
+        setVia: [code]
+        area: tools
+        recommended: Wired to an operator stop control and a run-time ceiling
+        why: A run that misbehaves stops at once or after its current turn, without killing the process.
+        mitigations: [cap-agent-kill-switch]
+        url: https://openai.github.io/openai-agents-python/streaming/
+        verified: "2026-10-30"
     sources:
       - title: OpenAI Agents SDK (Python) documentation
         url: https://openai.github.io/openai-agents-python/

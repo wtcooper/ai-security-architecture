@@ -156,7 +156,8 @@ tools:
       - risk: riskSensitiveDataDisclosure
         note: >-
           .cursorignore is a convenience filter that terminal and MCP tools bypass; beforeReadFile and
-          beforeSubmitPrompt hooks (failClosed) and the sandbox's protected paths are the controls that hold.
+          beforeSubmitPrompt hooks (failClosed, which only an MDM-placed or project hooks.json can set), Read
+          Controls in Workspace mode and the sandbox's protected paths are the controls that hold.
           ZDR is lost the moment a member uses a personal API key, which Model Access Control can block.
       - risk: riskInsecureIntegratedComponent
         note: >-
@@ -190,18 +191,25 @@ tools:
               - On teams not using SCIM turn on Restrict invites to verified domains in team settings, and
                 revoke invite links, which have a long expiry and admit anyone who holds them.
             url: https://cursor.com/docs/account/teams/members
+          - title: Stop personal API keys skipping the IdP
+            body:
+              - Turn off Allow Personal API Key Creation (Personal API Keys, Team tab under API keys at
+                grok.com/dashboard) so members cannot create or rotate personal Cursor API keys, then revoke the
+                existing ones from Members › View API keys (Enterprise); revoked keys fail immediately.
+            url: https://cursor.com/docs/account/teams/members
         note: >-
           Partial by the rule applied to every vendor: Cursor enforces SSO-only sign-in for users on a verified
           domain (Teams and Enterprise) and AllowedTeamId pins the device client to the org's teams (Enterprise
           MDM: macOS profile, Windows ADMX, Linux ~/.cursor/policy.json in the user's home directory), so the
           IdP's MFA policy governs every interactive login. MFA is configured in the IdP, not in Cursor, whose
           own account layer has no require-second-factor switch. Paths that skip the IdP's MFA: user API keys
-          from Dashboard → API Keys used by the CLI as CURSOR_API_KEY or --api-key (no expiry documented, and
-          no admin switch forbids them; Enterprise can only restrict which users may use the CLI), Enterprise
+          from Dashboard → API Keys used by the CLI as CURSOR_API_KEY or --api-key (no expiry documented;
+          turning off Allow Personal API Key Creation stops new ones, but existing keys keep working until an
+          admin revokes them from Members › View API keys on Enterprise), Enterprise
           service-account keys (rotate or archive to revoke), Admin API keys, the CLI's locally stored
           browser-login credential (lifetime not documented), and invite-link joins with non-domain emails.
           AllowedTeamId does not reach unmanaged devices.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityIga
@@ -232,19 +240,22 @@ tools:
         mechanism: >-
           Admin-distributed pre-tool hooks: Enterprise Team hooks (dashboard, cloud-synced) or an MDM-placed
           system hooks.json, with preToolUse / beforeShellExecution / beforeMCPExecution returning permission
-          deny and failClosed; the Enterprise Run Mode policy removes Run Everything
+          deny (failClosed only in the MDM-placed file; dashboard hooks take no per-hook options); the Enterprise
+          Run Mode policy removes Run Everything
         steps:
           - title: Distribute a deny-capable pre-tool hook
             body:
               - In the dashboard's Team hooks (team-content?section=hooks; Enterprise cloud distribution, synced
                 to clients every thirty minutes) add preToolUse, beforeShellExecution and beforeMCPExecution
-                hooks that call your policy service and return permission deny (or exit code 2), with
-                failClosed true so a crash or timeout blocks.
+                hooks that call your policy service and return permission deny (or exit code 2), and turn on
+                Block until hooks are ready. Dashboard hooks take no per-hook options such as failClosed or
+                matcher, so a crash or timeout there lets the call through.
             url: https://cursor.com/docs/hooks
           - title: Or place it system-wide by MDM
             body:
               - Write hooks.json to /Library/Application Support/Cursor/hooks.json, /etc/cursor/hooks.json or
-                C:\ProgramData\Cursor\hooks.json; hooks from every source run and any deny wins over ask and
+                C:\ProgramData\Cursor\hooks.json with failClosed true on each security-critical hook, the only
+                distributed copy that can fail closed; hooks from every source run and any deny wins over ask and
                 allow regardless of source.
             url: https://cursor.com/docs/hooks
           - title: Remove Run Everything
@@ -256,15 +267,16 @@ tools:
           Native on the rule applied to every vendor: an admin-locked pre-tool hook that can deny, evaluated by
           the harness before shell, file (Read, Write, Delete, Grep), MCP and Task calls, outside the model, in
           both the IDE and the CLI. The decision logic is the organisation's own hook: Cursor's declarative
-          lists are allowlists that skip approval, and the Auto-review classifier (Claude 4.5 Haiku or GPT-5.4
-          Mini) is documented as "not a security boundary", so neither is the policy decision point. Gaps: hooks
-          fail open unless failClosed is set; preToolUse accepts but does not enforce ask (escalate from
+          lists are allowlists that skip approval, and the Auto-review classifier (Gemini 3.5 Flash Lite, with
+          Claude 4.5 Haiku as the fallback) is documented as "not a security boundary", so neither is the policy
+          decision point. Gaps: hooks fail open unless failClosed is set, which only an MDM-placed (or project)
+          hooks.json can do, since dashboard hooks take no per-hook options; preToolUse accepts but does not enforce ask (escalate from
           beforeShellExecution / beforeMCPExecution instead); Tab completions use separate hooks; cloud
           distribution is Enterprise-only (Teams can place hooks by MDM only); the decision is exported only as
           cursor.hook.execution_complete in Enterprise OpenTelemetry Export unless the hook logs it itself; and
           a user-writable C:\ProgramData\Cursor\hooks.json on Windows (reported January 2026, unresolved) lets
           a local user replace the system hook.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentRuntimeEnforcement
@@ -356,7 +368,7 @@ tools:
             body:
               - Distribute beforeSubmitPrompt (return continue false) and beforeReadFile (receives the file
                 content; return permission deny) hooks that send the text to your DLP API, with failClosed true
-                on beforeReadFile.
+                on beforeReadFile in the MDM-placed hooks.json (dashboard hooks cannot fail closed).
             url: https://cursor.com/docs/hooks
           - title: Mask what tools send and return
             body:
@@ -379,7 +391,7 @@ tools:
           DLP on *.cursor.sh is the documented external alternative, and SSL inspection of those domains is a
           documented cause of agent failures. Cloud distribution of hooks is Enterprise; Teams places them by
           MDM.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAiDlp
@@ -479,7 +491,8 @@ tools:
         mechanism: >-
           OS sandbox for agent terminal commands (macOS Seatbelt; Linux Landlock + seccomp) shaped by sandbox.json
           with a team-admin layer local files cannot weaken; Agent Sandbox Mode enforceable org-wide on Enterprise;
-          per-server sandbox for stdio MCP servers. Credential paths: read-denies on the agent's own file tools
+          per-server sandbox for stdio MCP servers. Credential paths: Enterprise Read Controls (team read policy,
+          Workspace mode) for the agent's reads and sandboxed commands, read-denies on the agent's own file tools
           (beforeReadFile hooks, .cursorignore / Enterprise Cursor Ignore Configuration, CLI Read() denies) and the
           sandbox's filesystem limits on sandboxed commands; nothing holds credentials outside the agent or scopes
           them per destination
@@ -506,10 +519,17 @@ tools:
                 cursor-sandbox-apparmor package for the CLI and remote environments; otherwise Cursor falls back
                 to approval prompts.
             url: https://cursor.com/docs/agent/security/run-modes
+          - title: Narrow reads to the workspace
+            body:
+              - In Team Settings › Security & automation turn on Read Controls and pick Workspace (Enterprise,
+                Cursor 3.23+); reads outside the workspace ask first, searches stay inside it, and sandboxed
+                commands read only the workspace, the Read Allowlist and system paths, with only
+                ~/.ssh/known_hosts from ~/.ssh.
+            url: https://cursor.com/docs/agent/security/run-modes
           - title: Deny the agent's file tools on credential paths
             body:
-              - Distribute a beforeReadFile hook with failClosed true that denies reads of cloud CLI config,
-                kubeconfig, SSH keys, .env and key files by file_path.
+              - Place a beforeReadFile hook with failClosed true in the MDM-distributed hooks.json that denies
+                reads of cloud CLI config, kubeconfig, SSH keys, .env and key files by file_path.
             url: https://cursor.com/docs/hooks
           - title: Hide them from context
             body:
@@ -518,8 +538,9 @@ tools:
             url: https://cursor.com/docs/reference/ignore-file
           - title: Keep the sandbox's read set narrow
             body:
-              - Do not add credential directories to additionalReadonlyPaths or additionalReadwritePaths in any
-                sandbox policy, knowing ~/.ssh and SSL certificate paths are always readable.
+              - Do not add credential directories to additionalReadonlyPaths, additionalReadwritePaths or the
+                Read Allowlist in any sandbox policy, knowing ~/.ssh and SSL certificate paths stay readable under
+                the default System read boundary.
             url: https://cursor.com/docs/reference/sandbox
           - title: Deny them in the CLI
             body:
@@ -533,21 +554,25 @@ tools:
           forbids that escalation, and Linux without Landlock v3 falls back to approval prompts. The Run Modes page
           documents macOS and Linux only (Cursor's engineering blog says Windows runs the Linux sandbox inside WSL2).
           Inside: sandboxed terminal commands, workspace write, protected paths (.git/hooks, .git/config,
-          .cursor/*.json, .claude/*.json, .vscode, .cursorignore) write-denied, ~/.ssh always readable. Outside: MCP
+          .cursor/*.json, .claude/*.json, .vscode, .cursorignore) write-denied, ~/.ssh readable unless Read Controls
+          is Workspace. Outside: MCP
           tool calls (the deployment page says they do not run in the local sandbox; a stdio server process gets only
           its per-server mode, and No sandbox removes it), the extension host, the Cursor process itself, and CLI runs
           with --sandbox disabled or agent sandbox disable. Six sandbox-escape advisories Feb–Jul 2026 were fixed by
           3.1.2; keep the fleet current. Credential paths: the read-denies bind Cursor's own Read tool, not the shell
           (the docs say terminal and MCP tools cannot honour .cursorignore), and nothing holds credentials outside the
-          agent or injects them only for named destinations. The sandbox's additionalReadonlyPaths field implies reads
-          outside the workspace are otherwise limited, but the docs do not list which home-directory paths sandboxed
-          commands can read, and ~/.ssh is always readable. What the agent still inherits: ~/.ssh inside the sandbox,
-          and for commands run outside it, MCP servers and the extension host the developer's ssh-agent, git
+          agent or injects them only for named destinations. Under the default System read boundary the docs do not
+          list which home-directory paths sandboxed commands can read, and ~/.ssh is readable; Enterprise Read
+          Controls set to Workspace (Cursor 3.23+) limits sandboxed commands to the workspace, the Read Allowlist and
+          system paths (only ~/.ssh/known_hosts from ~/.ssh) and makes the agent ask before reading outside it, but a
+          member's approval or the Read Allowlist opens a path, so it narrows the boundary without making it
+          required. What the agent still inherits: ~/.ssh inside the sandbox under System, and for commands run
+          outside it, MCP servers and the extension host the developer's ssh-agent, git
           credential helper, cloud CLI configuration and browser profiles; the docs say "there is no security boundary
           between agents and your user account". Remote Control keeps credentials on the machine by design. The
           stronger fix is a named product class: a dev container or VM (Cursor's own advice is Cloud Agents in a
           separate VM) or a secretless broker such as 1Password Environments wired through a hook.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAgentSandboxing
@@ -735,8 +760,9 @@ tools:
       - mitigation: D3-CH
         coverage: partial
         mechanism: >-
-          Team Settings → Models BYOK restriction (Enterprise); Enterprise service accounts with key rotation
-          and archive; user API keys are static; .env* on the default ignore list
+          Team Settings → Models BYOK restriction (Enterprise); Allow Personal API Key Creation off to stop new
+          user API keys; Enterprise service accounts with key rotation and archive; Enterprise Read Controls
+          keeping home-directory credential files out of sandboxed reads; .env* on the default ignore list
         steps:
           - title: Block personal provider keys
             body:
@@ -749,6 +775,11 @@ tools:
                 rotate their keys on a schedule and archive an account to revoke all its keys, instead of
                 personal user API keys in CI.
             url: https://cursor.com/docs/account/enterprise/service-accounts
+          - title: Stop new personal Cursor API keys
+            body:
+              - Turn off Allow Personal API Key Creation (Personal API Keys, Team tab under API keys at
+                grok.com/dashboard) and revoke existing keys from Members › View API keys (Enterprise).
+            url: https://cursor.com/docs/account/teams/members
           - title: Watch and revoke user keys
             body:
               - Alert on the audit log's user_api_key and team_api_key events (create, revoke; Enterprise) and
@@ -756,14 +787,15 @@ tools:
             url: https://cursor.com/docs/enterprise/compliance-and-monitoring
         note: >-
           Partial by the rule applied to every vendor: rotation exists only for service-account keys, and it is
-          manual. User API keys (Dashboard → API Keys, used as CURSOR_API_KEY or --api-key) are static, have
-          no documented expiry and cannot be forbidden by an admin (Enterprise can restrict which users may use
-          the CLI); the CLI's browser-login credential is "securely stored locally" with no storage mechanism or
+          manual. User API keys (Dashboard → API Keys, used as CURSOR_API_KEY or --api-key) are static and have
+          no documented expiry; an admin can stop new ones with Allow Personal API Key Creation, but existing keys
+          keep working until revoked (Enterprise admins revoke them from Members › View API keys); the CLI's browser-login credential is "securely stored locally" with no storage mechanism or
           lifetime documented; MCP server secrets sit as env values in mcp.json. The API overview says keys
           "are unaffected by the original creator's account status", so offboarding must revoke them
           explicitly. Secrets out of model context: .env* is on the default ignore list and hooks can deny
-          reads, but terminal and MCP tools bypass both.
-        verified: "2026-09-25"
+          reads, but terminal and MCP tools bypass both; Read Controls in Workspace mode also keeps sandboxed
+          commands away from home-directory credential files.
+        verified: "2026-10-30"
         migration:
           from:
             - capabilitySecretsManagement
@@ -1034,11 +1066,11 @@ tools:
           a user cannot turn it off, but for the IDE and CLI it carries per-request model logs keyed by
           cursor.conversation.id and tool calls only as an aggregate metric (cursor.tool.calls by tool name and
           status, no conversation id, no arguments); per-call tool events and permission decisions are on the
-          wire for Grok Bot only, and prompt and response text covers Cloud Agents and Grok Bot, not the IDE or
-          CLI. The audit log is control plane only ("we do not log agent responses or generated code content");
+          wire for Grok Bot only, and prompt, response and tool I/O content (opt-in) covers Cloud Agents and Grok
+          Bot, not the IDE or CLI. The audit log is control plane only ("we do not log agent responses or generated code content");
           the dashboard page calls its records tamper-proof, the export makes no such claim. Hooks give
           per-call records but run on the endpoint and fail open by default. All three are Enterprise.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityAuditLogging
@@ -1072,7 +1104,8 @@ tools:
         coverage: partial
         mechanism: >-
           Remove the member (Members → Remove, SCIM unassignment, Enterprise Admin API /teams/remove-member);
-          Remote Control team switch (Dashboard → Cloud Agents → Self-Hosted); Team Settings → Models; no stop
+          Allow Personal Machines, the team's Remote Control switch (Dashboard → Cloud Agents → Self-Hosted); Team
+          Settings → Models; no stop
           for a running local session
         steps:
           - title: Remove the member
@@ -1087,9 +1120,10 @@ tools:
             url: https://cursor.com/docs/account/teams/admin-api
           - title: Cut remote steering
             body:
-              - Turn Remote Control off in Dashboard → Cloud Agents → Self-Hosted so members cannot hand local
-                sessions to other devices.
-            url: https://cursor.com/docs/cloud-agent/mobile
+              - Turn Allow Personal Machines (the team's Remote Control setting) off in Dashboard → Cloud Agents →
+                Self-Hosted so members cannot hand local sessions to Cursor's cloud and steer them from another
+                device.
+            url: https://cursor.com/docs/cloud-agent/self-hosted
           - title: Withdraw a model
             body:
               - Remove the model or provider from Team Settings → Models (Enterprise) so members can no longer
@@ -1104,7 +1138,7 @@ tools:
           external complement. The API overview says API keys "are unaffected by the original creator's
           account status", so revoke the member's keys as well; AllowedTeamId keeps a removed user from signing
           back in with a personal account on managed devices.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityKillSwitch
@@ -1297,6 +1331,385 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://cursor.com/docs/enterprise
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Device policies reach a laptop through MDM (macOS profile, Windows ADMX, Linux policy.json);
+    # the rest sit in the Teams / Enterprise dashboard, which outranks user and project files. Verified 2026-10-30.
+    settings:
+      - id: sso
+        name: Single Sign-On (SSO)
+        where: Team Settings › Single Sign-On (SSO) › SSO-Provider Connection Settings and Domain Verification Settings (Enterprise orgs › Organization's Settings)
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: SSO connection active with every corporate domain verified, and MFA enforced on the Cursor app in your IdP
+        why: Once the connection and domain are active every user on that domain must sign in through the IdP and its MFA; there is no separate enforcement toggle to forget.
+        mitigations: [D3-MFA]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/account/teams/sso
+        verified: "2026-10-30"
+      - id: scim
+        name: SCIM
+        where: Team Settings › SCIM (after SSO), with the Cursor SCIM app in your IdP
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Manual membership
+        recommended: SCIM, driven by the IdP group that grants Cursor
+        why: Unassigning someone in the IdP removes them from the team, so a leaver's access ends with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://cursor.com/docs/account/teams/scim
+        verified: "2026-10-30"
+      - id: allowedTeamId
+        name: AllowedTeamId
+        where: MDM policy AllowedTeamId (overrides cursorAuth.allowedTeamId)
+        setVia: [mdm]
+        area: identity
+        default: Unset (any account)
+        recommended: Your Enterprise team IDs, comma-separated
+        why: A sign-in to any other team, personal accounts without Privacy Mode included, is logged out immediately on managed devices.
+        mitigations: [D3-MFA]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/identity-and-access-management
+        verified: "2026-10-30"
+      - id: tenancyRestriction
+        name: x-cursor-allowed-tenants
+        where: TLS-terminating proxy → header on requests to api2.cursor.sh and cursor.com
+        setVia: [configFile]
+        area: identity
+        default: Unset (no restriction)
+        recommended: v1.orgs=<your organization id>
+        why: From the corporate network the app, CLI and API keys can only reach your organisation, which covers devices MDM does not; it needs TLS termination on those two hosts.
+        mitigations: [D3-MFA]
+        url: https://cursor.com/docs/enterprise/tenancy-restriction
+        verified: "2026-10-30"
+      - id: allowPersonalApiKeyCreation
+        name: Allow Personal API Key Creation
+        where: grok.com/dashboard › API keys › Team › Personal API Keys
+        setVia: [adminConsole]
+        area: identity
+        default: "On"
+        recommended: "Off, with Enterprise service accounts for CI and automation"
+        why: User API keys skip the IdP and its MFA and outlive the member's account; existing keys keep working, so revoke them from Members › View API keys.
+        mitigations: [D3-MFA, D3-CH]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/account/teams/members
+        verified: "2026-10-30"
+      - id: privacyMode
+        name: Privacy Mode
+        where: Team dashboard › Settings › Privacy Settings (enable, then enforce)
+        setVia: [adminConsole]
+        area: data
+        default: On for Enterprise teams, not enforced
+        recommended: On and enforced
+        why: Members cannot switch off zero data retention and the no-training commitment for Cursor-routed models.
+        mitigations: []
+        url: https://cursor.com/docs/enterprise/privacy-and-data-governance
+        verified: "2026-10-30"
+      - id: modelDataRetention
+        name: Models with data retention
+        where: Team dashboard › restricted models (for example Claude Fable 5.1)
+        setVia: [adminConsole]
+        area: data
+        default: Not approved (requests to these models fail)
+        recommended: Not approved
+        why: Every request stays under Cursor's zero-retention agreements; approving one opts the whole team into provider-side retention of inputs and outputs.
+        mitigations: []
+        url: https://cursor.com/docs/enterprise/privacy-and-data-governance
+        verified: "2026-10-30"
+      - id: modelAccessControl
+        name: Model access control
+        where: Team Settings › Models › Cursor Models, Other Models and Model Defaults
+        setVia: [adminConsole, apiCli]
+        area: data
+        default: New models are opt-in for Enterprise teams
+        recommended: The models your AI risk review approved, new models off by default, Claude 4.5 Haiku kept allowed
+        why: Members use only reviewed models, a model can be withdrawn team-wide in one place, and Auto-review keeps its classifier.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/model-and-integration-management
+        verified: "2026-10-30"
+      - id: byokRestriction
+        name: Personal API Keys (BYOK)
+        where: Team Settings › Models › Personal API Keys (BYOK)
+        setVia: [adminConsole]
+        area: data
+        recommended: Blocked
+        why: A member's own OpenAI, Anthropic, Azure or Bedrock key routes code outside Cursor's zero-retention terms and outside the organisation's key custody.
+        mitigations: [D3-CH]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/model-and-integration-management
+        verified: "2026-10-30"
+      - id: cursorIgnoreConfiguration
+        name: Cursor Ignore Configuration
+        where: Team dashboard › Settings › Cursor Ignore Configuration
+        setVia: [adminConsole]
+        area: data
+        default: .gitignore plus Cursor's default ignore list
+        recommended: .env*, *.pem, *.key, credentials and secrets directories, and regulated client data trees
+        why: Agent, Tab and @-mentions stop pulling secret files into context; terminal and MCP tools ignore it, so Read Controls and hooks carry the hard boundary.
+        mitigations: [cap-sensitive-data-redaction]
+        requires: Enterprise
+        url: https://cursor.com/docs/account/teams/dashboard
+        verified: "2026-10-30"
+      - id: repositoryBlocklist
+        name: Repository Blocklist
+        where: Team dashboard › Settings › Repository Blocklist
+        setVia: [adminConsole, apiCli]
+        area: data
+        default: Empty
+        recommended: Client repositories not cleared for AI assistance
+        why: The editor and CLI refuse to index or work in those repositories at all; it does not reach Cloud Agents or Bugbot.
+        mitigations: [cap-sensitive-data-redaction, AML.M0028]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/model-and-integration-management
+        verified: "2026-10-30"
+      - id: autoRunConfiguration
+        name: Auto Run Configuration
+        where: Team dashboard › Settings › Auto Run Configuration (team Run Mode controls)
+        setVia: [adminConsole]
+        area: tools
+        default: Auto-review, Allowlist and Run Everything all available to members
+        recommended: Auto-review and Allowlist only, sandboxing on; Run Everything removed
+        why: Members lose the mode that runs every tool call with no prompt, sandbox or classifier; team settings outrank user and project files.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement, D3-EI]
+        requires: Enterprise
+        url: https://cursor.com/docs/account/teams/dashboard
+        verified: "2026-10-30"
+      - id: runModeAllowlists
+        name: terminalAllowlist and mcpAllowlist
+        where: Team dashboard Run Mode allowlists, or ~/.cursor/permissions.json by MDM
+        setVia: [adminConsole, mdm]
+        area: tools
+        default: Editor-managed, user-editable
+        recommended: Admin-owned lists of build and test commands and read-only MCP tools; no git push, curl or publish commands
+        why: Allowlisted calls skip review entirely; an admin list replaces the file and editor lists and makes the in-app editor read-only.
+        mitigations: [AML.M0028, AML.M0029]
+        requires: Enterprise for the dashboard list
+        url: https://cursor.com/docs/reference/permissions
+        verified: "2026-10-30"
+      - id: readControls
+        name: Read Controls
+        where: Team Settings › Security & automation › Read Controls (with Read Allowlist and Read Control User Extensions)
+        setVia: [adminConsole]
+        area: tools
+        default: "Off (each member's Read Access, which defaults to System)"
+        recommended: On, mode Workspace, with a team Read Allowlist for shared toolchains
+        why: The agent asks before reading outside the workspace and sandboxed commands lose ~/.ssh, cloud CLI config and other home-directory secrets.
+        mitigations: [D3-EI, D3-CH, cap-sensitive-data-redaction]
+        requires: Enterprise, Cursor 3.23+
+        url: https://cursor.com/docs/agent/security/run-modes
+        verified: "2026-10-30"
+      - id: cloudDistributionHooks
+        name: Cloud Distribution (team hooks)
+        where: Web dashboard › Team content › Hooks
+        setVia: [adminConsole]
+        area: tools
+        default: None
+        recommended: preToolUse, beforeShellExecution and beforeMCPExecution hooks calling your policy service; beforeSubmitPrompt, beforeReadFile and postToolUse hooks calling your DLP and injection screening; post-call hooks logging to the SIEM
+        why: Your own deny logic runs in the harness before shell, file and MCP calls on every member's machine, synced every thirty minutes, and can block or rewrite prompts, reads and MCP results.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-sensitive-data-redaction, cap-input-guardrails, cap-agent-tracing]
+        requires: Enterprise
+        url: https://cursor.com/docs/hooks
+        verified: "2026-10-30"
+      - id: hooksFailClosed
+        name: failClosed
+        where: MDM-placed hooks.json → failClosed (/Library/Application Support/Cursor/hooks.json, /etc/cursor/hooks.json, C:\ProgramData\Cursor\hooks.json)
+        setVia: [mdm, configFile]
+        area: tools
+        default: "false"
+        recommended: true on the policy and DLP hooks
+        why: Dashboard hooks take no per-hook failClosed, so a crashed or timed-out policy hook lets the call through unless the MDM copy fails closed.
+        mitigations: [cap-agent-action-policy-enforcement, cap-sensitive-data-redaction]
+        url: https://cursor.com/docs/hooks
+        verified: "2026-10-30"
+      - id: blockUntilHooksReady
+        name: Block until hooks are ready
+        where: Web dashboard › Team content › Hooks › hook settings
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: "On"
+        why: The first prompt after a restart otherwise runs before enterprise, team and project hooks have loaded.
+        mitigations: [cap-agent-action-policy-enforcement]
+        requires: Enterprise
+        url: https://cursor.com/docs/hooks
+        verified: "2026-10-30"
+      - id: mcpConfiguration
+        name: MCP Configuration
+        where: Team dashboard › Settings › MCP Configuration (command and URL allowlist, per-server Tools)
+        setVia: [adminConsole]
+        area: tools
+        default: No allowlist (any server)
+        recommended: Approved servers only — stdio entries with a pinned package version, remote servers by exact URL, Tools limited per server
+        why: A server that matches no entry is blocked, and a version-pinned command stops a silent package swap on stdio servers.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/model-and-integration-management
+        verified: "2026-10-30"
+      - id: teamMarketplaceAccess
+        name: Marketplace Access
+        where: Dashboard › Plugins & MCPs › Team Marketplaces › Marketplace Settings › Marketplace Access, with Plugin Installation per plugin
+        setVia: [adminConsole]
+        area: tools
+        default: Everyone in the team
+        recommended: The firm's curated team marketplace as the distribution channel, security plugins set to Required
+        why: Plugins bundle MCP servers, rules and hooks; members get the reviewed set from one place and cannot uninstall the required ones.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/plugins
+        verified: "2026-10-30"
+      - id: allowMembersToPublish
+        name: Allow Members to Publish
+        where: Dashboard › Plugins & MCPs › Default marketplace › Marketplace Settings
+        setVia: [adminConsole]
+        area: tools
+        default: "On"
+        recommended: "Off"
+        why: Only admins publish skills to the team marketplace, so an unreviewed personal skill cannot spread to every teammate.
+        mitigations: [cap-agent-tool-registry]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/plugins
+        verified: "2026-10-30"
+      - id: allowLocalPluginImports
+        name: Allow Local Plugin Imports
+        where: Dashboard › Settings › Security & Identity › Marketplace and Plugins
+        setVia: [adminConsole]
+        area: tools
+        default: "Off on Enterprise"
+        recommended: "Off"
+        why: Plugins dropped into ~/.cursor/plugins/local or imported from disk would bypass the curated marketplace.
+        mitigations: [cap-agent-tool-registry, cap-mcp-tool-integrity]
+        requires: Enterprise
+        url: https://cursor.com/docs/plugins
+        verified: "2026-10-30"
+      - id: allowedExtensions
+        name: AllowedExtensions
+        where: MDM policy AllowedExtensions (or dashboard › Security & Identity, which MDM overrides)
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (any extension)
+        recommended: 'Your approved publishers and extension IDs, version-pinned where it matters, with no "*": true'
+        why: Extensions run with workspace access outside the agent sandbox; anything not listed cannot be installed.
+        mitigations: [cap-agent-tool-registry, D3-FA]
+        requires: Enterprise for MDM; Cursor 2.1+
+        url: https://cursor.com/docs/enterprise/identity-and-access-management
+        verified: "2026-10-30"
+      - id: extensionInstallControls
+        name: Marketplace Install Cooldown (hours) with Require Extension Signature Verification
+        where: Team settings › Security & automation
+        setVia: [adminConsole]
+        area: tools
+        default: "0 (disabled) / Off"
+        recommended: "72 / On"
+        why: A malicious extension version that is pulled within three days never reaches the fleet, and unsigned Open VSX packages are refused.
+        mitigations: [D3-FA]
+        requires: Teams or Enterprise; signature verification Enterprise
+        url: https://cursor.com/help/customization/extensions
+        verified: "2026-10-30"
+      - id: cursorDirectoryProtection
+        name: .cursor Directory Protection
+        where: Team dashboard › Settings › .cursor Directory Protection
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: "On"
+        why: An injected agent needs a person's approval to rewrite .cursor rules, MCP config or hooks that persist into the next session.
+        mitigations: [AML.M0031]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/llm-safety-and-controls
+        verified: "2026-10-30"
+      - id: teamRulesEnforce
+        name: Enforce this rule
+        where: Cursor dashboard › Team content › Team Rules › Enforce this rule
+        setVia: [adminConsole]
+        area: tools
+        default: Not enforced (members can toggle a rule off)
+        recommended: On for the firm's security and client-data rules
+        why: Members cannot switch the firm's instructions off, and Team Rules outrank project rules; they steer the model and do not replace hooks.
+        mitigations: [AML.M0031]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/rules
+        verified: "2026-10-30"
+      - id: workspaceTrust
+        name: WorkspaceTrustEnabled
+        where: MDM policy WorkspaceTrustEnabled (overrides security.workspace.trust.enabled)
+        setVia: [mdm]
+        area: tools
+        recommended: "true"
+        why: A cloned repository's project hooks and settings run only after the developer trusts the folder.
+        mitigations: [AML.M0031, cap-agent-action-policy-enforcement]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/identity-and-access-management
+        verified: "2026-10-30"
+      - id: cliPermissionsDeny
+        name: permissions.deny
+        where: ~/.cursor/cli-config.json → permissions.deny
+        setVia: [configFile, mdm]
+        area: tools
+        default: Empty
+        recommended: Read(.env*), Read(~/.ssh/**), Read(~/.aws/**), Write(**/*.key) and Shell(rm)
+        why: The CLI agent cannot read key and token files or run the listed commands; the file is user-editable, so pair it with hooks.
+        mitigations: [AML.M0028, D3-CH, cap-agent-action-policy-enforcement]
+        url: https://cursor.com/docs/cli/reference/permissions
+        verified: "2026-10-30"
+      - id: sandboxNetworkingRules
+        name: Sandbox networking rules
+        where: Web dashboard › team controls › sandbox networking rules (merged above ~/.cursor/sandbox.json and the repo's sandbox.json)
+        setVia: [adminConsole]
+        area: network
+        default: sandbox.json + Defaults (Cursor's package-manager list)
+        recommended: A team allowlist of your source control, package mirror and approved domains, networkPolicy.default deny
+        why: Sandboxed commands reach only listed hosts and installs go through the scanned mirror; a team allowlist replaces user and repo lists, which cannot widen it.
+        mitigations: [cap-agent-egress-control, D3-FA]
+        requires: Enterprise
+        url: https://cursor.com/docs/agent/security/run-modes
+        verified: "2026-10-30"
+      - id: mcpServerNetworkMode
+        name: Network mode (per-server network controls)
+        where: Team dashboard › MCP Configuration › each stdio server › network mode
+        setVia: [adminConsole]
+        area: network
+        recommended: Allowlist, or Deny all for servers that need no network; never No sandbox
+        why: A local MCP server, which runs outside the agent sandbox, can only reach the destinations its job needs.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/model-and-integration-management
+        verified: "2026-10-30"
+      - id: otelExport
+        name: OpenTelemetry Export
+        where: Team Settings › OpenTelemetry Export › destination
+        setVia: [adminConsole]
+        area: audit
+        default: No destination
+        recommended: A destination at your collector with every family on
+        why: Model requests, tool-call counts, hook executions and plugin installs reach the SIEM server-side, so a member cannot switch them off.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/opentelemetry-export
+        verified: "2026-10-30"
+      - id: auditLogStreaming
+        name: Streaming audit logs
+        where: Arranged with hi@cursor.com — Splunk HEC, Sumo Logic, HTTPS webhook or S3
+        setVia: [adminConsole]
+        area: audit
+        default: Dashboard and Admin API only
+        recommended: On, to your SIEM
+        why: Sign-ins, API key creation and revocation, and every settings change land in the SIEM rather than only on the dashboard page.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise
+        url: https://cursor.com/docs/enterprise/compliance-and-monitoring
+        verified: "2026-10-30"
+      - id: allowPersonalMachines
+        name: Allow Personal Machines (Remote Control)
+        where: Cursor Dashboard › Cloud Agents › Self-Hosted
+        setVia: [adminConsole]
+        area: sharing
+        default: "Off on Teams and Enterprise until an admin enables it"
+        recommended: "Off, unless a team needs to drive local sessions from a phone"
+        why: Stops a local session, with the developer's files and credentials, being steered through Cursor's cloud from another device.
+        mitigations: [cap-agent-kill-switch]
+        requires: Teams or Enterprise
+        url: https://cursor.com/docs/cloud-agent/self-hosted
+        verified: "2026-10-30"
     advisories:
       - title: >-
           Rules File Backdoor — hidden Unicode in rules files steers Cursor and Copilot (Pillar Security)
