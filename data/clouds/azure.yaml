@@ -1,0 +1,340 @@
+# Microsoft Azure: the first-party cloud architectures as built on Azure, and the security-relevant
+# settings that secure them. One settings library per cloud, so a setting used by several
+# architectures is one row with one status in data/status.yaml; each implementation binds the
+# drawing's blocks to services and lists the settings that apply to it.
+#
+# Every row follows data/tooling/BASELINE.md: the setting's name as Microsoft's page gives it, a
+# url that resolved on its verified date, the baseline value, and the capabilities on the drawing
+# it delivers. setVia "code" marks a control no Azure setting provides: the organisation builds it
+# into its own agent.
+id: cloudAzure
+name: Microsoft Azure
+short: Azure
+
+settings:
+  # --- Identity & access ---------------------------------------------------------------
+  - id: entraAssignmentRequired
+    name: Assignment required
+    where: Microsoft Entra admin center › Enterprise applications › (your app) › Properties
+    setVia: [identityProvider]
+    area: identity
+    default: "No"
+    recommended: "Yes — assigned to the groups that use the app"
+    why: Only assigned users and groups can get a token for the app at all, so access is a group decision rather than every account in the tenant.
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/application-properties
+    verified: "2026-10-30"
+  - id: appServiceRequireAuth
+    name: App Service authentication — Require authentication
+    where: App Service › Authentication › Restrict access
+    setVia: [cloudPolicy]
+    area: identity
+    default: Unauthenticated access allowed
+    recommended: Require authentication, Microsoft Entra ID as the provider
+    why: The front end rejects every unauthenticated request before your code runs, and binds each session to an Entra identity.
+    mitigations: [D3-APA]
+    url: https://learn.microsoft.com/en-us/azure/app-service/overview-authentication-authorization
+    verified: "2026-10-30"
+  - id: agentManagedIdentity
+    name: Managed identity on the agent's container app
+    where: Container Apps › (agent app) › Identity
+    setVia: [cloudPolicy]
+    area: identity
+    default: None
+    recommended: System-assigned, granted only the roles the agent needs
+    why: The agent authenticates to the gateway, the model and its stores with a platform-issued identity — no secret in its configuration to steal.
+    mitigations: [D3-AA, D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/managed-identity
+    verified: "2026-10-30"
+  - id: foundryDisableLocalAuth
+    name: disableLocalAuth
+    where: Foundry (Azure AI services) resource property, via Bicep, ARM, Terraform or PowerShell
+    setVia: [cloudPolicy, apiCli]
+    area: identity
+    default: "false (API keys allowed)"
+    recommended: "true"
+    why: Model calls need an Entra token; an API key copied from a config file opens nothing. Enforce it fleet-wide with Azure Policy.
+    mitigations: [D3-CH]
+    url: https://learn.microsoft.com/en-us/azure/ai-services/disable-local-auth
+    verified: "2026-10-30"
+  - id: apimValidateToken
+    name: validate-azure-ad-token policy
+    where: API Management › APIs and MCP servers › Inbound processing
+    setVia: [cloudPolicy]
+    area: identity
+    default: No policy
+    recommended: On every model API and MCP server, checking the agent's identity and the role each operation needs
+    why: The gateway verifies who is calling before any model or tool call goes through, and a tool the agent's role doesn't cover is refused.
+    mitigations: [D3-AA, AML.M0028]
+    url: https://learn.microsoft.com/en-us/azure/api-management/validate-azure-ad-token-policy
+    verified: "2026-10-30"
+  - id: apimCredentialManager
+    name: Credential manager (user-delegated connections)
+    where: API Management › Credential manager
+    setVia: [cloudPolicy]
+    area: identity
+    default: Not configured
+    recommended: Downstream OAuth tokens held by API Management per user; the agent never holds them
+    why: Calls to SaaS tools run with the signed-in user's own grant, exchanged at the gateway, so the agent cannot reuse one user's access for another.
+    mitigations: [D3-CTS]
+    url: https://learn.microsoft.com/en-us/azure/api-management/credentials-overview
+    verified: "2026-10-30"
+
+  # --- Data & retention ----------------------------------------------------------------
+  - id: cosmosConversationTtl
+    name: DefaultTimeToLive on the conversation container
+    where: Azure Cosmos DB › (container) › Settings › Time to Live
+    setVia: [cloudPolicy, apiCli]
+    area: data
+    default: Off (items never expire)
+    recommended: 30 days
+    why: Conversation state ages out instead of accumulating client material indefinitely in the agent's memory.
+    mitigations: [AML.M0031]
+    url: https://learn.microsoft.com/en-us/azure/cosmos-db/time-to-live
+    verified: "2026-10-30"
+  - id: searchDocumentAccess
+    name: Document-level access control (permission filters)
+    where: Azure AI Search › index definition › permission filter fields; queries carry x-ms-query-source-authorization
+    setVia: [apiCli, code]
+    area: data
+    default: "Off"
+    recommended: On for every index that holds permissioned content
+    why: Retrieval returns only documents the asking user may read, so the index cannot become a way round the source system's permissions.
+    mitigations: [cap-data-access-governance, cap-retrieval-grounding-checks]
+    url: https://learn.microsoft.com/en-us/azure/search/search-document-level-access-overview
+    verified: "2026-10-30"
+  - id: groundednessDetection
+    name: Groundedness detection
+    where: Azure AI Content Safety API, called on answers drawn from retrieved documents
+    setVia: [apiCli, code]
+    area: data
+    default: Not called
+    recommended: On for answers built from retrieval
+    why: An answer that strays from — or was steered away from — its sources is flagged before the user acts on it.
+    mitigations: [cap-retrieval-grounding-checks]
+    url: https://learn.microsoft.com/en-us/azure/ai-services/content-safety/concepts/groundedness
+    verified: "2026-10-30"
+  - id: piiRedaction
+    name: PII detection (Azure AI Language)
+    where: Azure AI Language API, called before a turn is written to memory
+    setVia: [apiCli, code]
+    area: data
+    default: Not called
+    recommended: Redact before storing conversation turns
+    why: Personal data a user pasted is not kept in the thread for every later turn — and every later reader — to see.
+    mitigations: [cap-sensitive-data-redaction]
+    url: https://learn.microsoft.com/en-us/azure/ai-services/language-service/personally-identifiable-information/overview
+    verified: "2026-10-30"
+
+  # --- Tools & extensions --------------------------------------------------------------
+  - id: apimContentSafety
+    name: llm-content-safety policy with shield-prompt
+    where: API Management › model APIs › Inbound processing
+    setVia: [cloudPolicy]
+    area: tools
+    default: No policy
+    recommended: shield-prompt="true" on every model API
+    why: Prompt Shields screen each request for jailbreak and injected instructions at the gateway, before the model sees it.
+    mitigations: [cap-input-guardrails]
+    url: https://learn.microsoft.com/en-us/azure/api-management/llm-content-safety-policy
+    verified: "2026-10-30"
+  - id: apimTokenLimit
+    name: llm-token-limit policy
+    where: API Management › model APIs › Inbound processing
+    setVia: [cloudPolicy]
+    area: tools
+    default: No limit
+    recommended: Tokens-per-minute and a token quota per subscription
+    why: A looping turn hits a ceiling at the gateway before it runs up cost or volume.
+    mitigations: [AML.M0036]
+    url: https://learn.microsoft.com/en-us/azure/api-management/llm-token-limit-policy
+    verified: "2026-10-30"
+  - id: apimMcpServers
+    name: MCP servers in API Management
+    where: API Management › MCP servers
+    setVia: [cloudPolicy]
+    area: tools
+    default: Agents call MCP servers directly
+    recommended: Every MCP server exposed only through API Management, with authentication and per-tool policies
+    why: Each tool call crosses one gateway that authenticates it, applies policy and logs it — no direct path from agent to server.
+    mitigations: [cap-mcp-tool-integrity, cap-agent-action-policy-enforcement]
+    url: https://learn.microsoft.com/en-us/azure/api-management/mcp-server-overview
+    verified: "2026-10-30"
+  - id: apiCenterInventory
+    name: MCP server inventory in API Center
+    where: Azure API Center › Inventory
+    setVia: [adminConsole]
+    area: tools
+    default: Not registered
+    recommended: Every MCP server and API the agent can call, registered with an owner
+    why: The list of tools an agent may be given is a governed registry, not whatever someone wired in.
+    mitigations: [cap-agent-tool-registry]
+    url: https://learn.microsoft.com/en-us/azure/api-center/register-discover-mcp-server
+    verified: "2026-10-30"
+  - id: agentToolApproval
+    name: Tool Approval (human in the loop)
+    where: Your agent code — Microsoft Agent Framework tool approval on write tools
+    setVia: [code]
+    area: tools
+    default: Tools run without approval
+    recommended: Approval required on every tool that writes to a system of record
+    why: A person confirms each consequential action in the conversation before it happens.
+    mitigations: [AML.M0029]
+    url: https://learn.microsoft.com/en-us/agent-framework/agents/tools/
+    verified: "2026-10-30"
+  - id: outputSanitisation
+    name: Sanitise rendered model output
+    where: Your front-end code
+    setVia: [code]
+    area: tools
+    default: Depends on your renderer
+    recommended: Render as text or sanitised markdown; strip HTML, block external images, set a Content Security Policy
+    why: A model-written image link or script cannot carry the conversation to an attacker the moment it renders.
+    mitigations: [cap-output-encoding]
+    url: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+    verified: "2026-10-30"
+  - id: sessionPoolEgress
+    name: Session pool network status
+    where: Container Apps session pool › --network-status
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: EgressDisabled
+    recommended: EgressDisabled
+    why: Code the agent writes runs in a Hyper-V-isolated session with no outbound network, so it cannot fetch or send anything.
+    mitigations: [D3-EI, cap-agent-egress-control]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/session-pool
+    verified: "2026-10-30"
+  - id: containerAppsTrafficSplit
+    name: Multiple revision mode with traffic splitting
+    where: Container Apps › (agent app) › Revisions and replicas
+    setVia: [cloudPolicy, apiCli]
+    area: tools
+    default: Single revision mode (all traffic to the latest)
+    recommended: Multiple revision mode; a new agent, prompt or model revision takes a small share of traffic after its evaluation passes
+    why: A change that behaves badly reaches a few users and rolls back by moving traffic, not by redeploying.
+    mitigations: [cap-staged-rollout-gate]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/traffic-splitting
+    verified: "2026-10-30"
+  - id: artifactsUpstream
+    name: Azure Artifacts upstream sources (externally sourced versions blocked)
+    where: Azure Artifacts › (feed) › Upstream sources; package upstream behavior
+    setVia: [adminConsole]
+    area: tools
+    default: External versions blocked once a package has an internal version
+    recommended: Keep the default; packages enter the feed from approved upstreams only
+    why: The agent's tools install from your feed, and a public package cannot shadow an internal one.
+    mitigations: [D3-FA]
+    url: https://learn.microsoft.com/en-us/azure/devops/artifacts/concepts/upstream-behavior
+    verified: "2026-10-30"
+
+  # --- Network -------------------------------------------------------------------------
+  - id: firewallEgress
+    name: Azure Firewall application rules (via user-defined routes)
+    where: Container Apps environment subnet route table → Azure Firewall › Application rules
+    setVia: [cloudPolicy]
+    area: network
+    default: Direct outbound internet
+    recommended: All outbound from the agent subnet through Azure Firewall, with an FQDN allowlist
+    why: The agent and its tools reach only the hosts you list; anything else is dropped and logged.
+    mitigations: [cap-agent-egress-control]
+    url: https://learn.microsoft.com/en-us/azure/container-apps/use-azure-firewall
+    verified: "2026-10-30"
+  - id: foundryPublicNetworkAccess
+    name: Public network access
+    where: Foundry, Azure AI Search and Azure Cosmos DB › Networking
+    setVia: [cloudPolicy]
+    area: network
+    default: Enabled
+    recommended: Disabled, private endpoints only
+    why: The model, the index and the memory store are reachable only from your virtual network, not from the internet.
+    mitigations: []
+    url: https://learn.microsoft.com/en-us/azure/foundry/how-to/configure-private-link
+    verified: "2026-10-30"
+  - id: wafRateLimit
+    name: WAF rate limit rule
+    where: Azure Front Door or Application Gateway WAF policy › Custom rules
+    setVia: [cloudPolicy]
+    area: network
+    default: No rate limit
+    recommended: Per-client rate limit on the chat endpoint
+    why: A runaway client or scripted abuse is throttled at the edge, before it spends tokens or triggers actions.
+    mitigations: [AML.M0004]
+    url: https://learn.microsoft.com/en-us/azure/web-application-firewall/afds/waf-front-door-rate-limit
+    verified: "2026-10-30"
+
+  # --- Audit & monitoring --------------------------------------------------------------
+  - id: appInsightsOtel
+    name: Azure Monitor OpenTelemetry (Application Insights)
+    where: Agent code with the Azure Monitor OpenTelemetry Distro; Log Analytics workspace connected to Microsoft Sentinel
+    setVia: [code, cloudPolicy]
+    area: audit
+    default: Not instrumented
+    recommended: On, tracing every agent turn and tool call, exported to Log Analytics and Sentinel
+    why: Each tool call, its arguments and its result are traceable per user and conversation when something goes wrong.
+    mitigations: [cap-agent-tracing]
+    url: https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable
+    verified: "2026-10-30"
+  - id: apimSubscriptionState
+    name: Subscription state (suspend)
+    where: API Management › Subscriptions › (agent's subscription)
+    setVia: [cloudPolicy, apiCli]
+    area: audit
+    default: Active
+    recommended: Active, with suspend as the first step of your incident runbook
+    why: Suspending the agent's subscription cuts its model and tool access at the gateway at once, without redeploying anything.
+    mitigations: [cap-agent-kill-switch]
+    url: https://learn.microsoft.com/en-us/azure/api-management/api-management-subscriptions
+    verified: "2026-10-30"
+
+implementations:
+  - architecture: archChatAgent
+    asOf: "2026-10"
+    reference:
+      - title: Baseline Microsoft Foundry chat reference architecture
+        url: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/baseline-microsoft-foundry-chat
+      - title: AI gateway capabilities in Azure API Management
+        url: https://learn.microsoft.com/en-us/azure/api-management/genai-gateway-capabilities
+    summary:
+      - >-
+        Your own agent on Azure Container Apps behind App Service, reaching models and tools through
+        API Management, inside a virtual network whose outbound traffic leaves through Azure
+        Firewall. Azure's baseline puts Foundry Agent Service in the harness's place; that managed
+        runtime is the API/SDK managed agent runtime drawing, so this one keeps the loop in your code.
+    bindings:
+      - { block: entry, service: App Service behind Application Gateway with WAF }
+      - { block: events, service: Azure Functions with Event Grid triggers }
+      - { block: agent, service: Your agent on Azure Container Apps (Microsoft Agent Framework), note: "Azure's baseline uses Foundry Agent Service here — the managed alternative." }
+      - { block: localTools, service: Container Apps dynamic sessions (code interpreter) }
+      - { block: memory, service: Azure Cosmos DB and Azure AI Search }
+      - { block: gateway, service: Azure API Management (AI gateway) }
+      - { block: provider, service: Azure OpenAI in Foundry Models }
+      - { block: internalTools, service: Your MCP servers and APIs, exposed through API Management }
+      - { block: orgData, service: Your systems of record, build: true, note: "Azure SQL, Blob Storage, SharePoint — whatever the tools act on." }
+      - { block: openWeb, service: Grounding with Bing Search }
+      - { block: sources, service: "Public registries (PyPI, npm)" }
+      - { block: registry, service: Azure Artifacts feed }
+    settings:
+      - entraAssignmentRequired
+      - appServiceRequireAuth
+      - agentManagedIdentity
+      - foundryDisableLocalAuth
+      - apimValidateToken
+      - apimCredentialManager
+      - cosmosConversationTtl
+      - searchDocumentAccess
+      - groundednessDetection
+      - piiRedaction
+      - apimContentSafety
+      - apimTokenLimit
+      - apimMcpServers
+      - apiCenterInventory
+      - agentToolApproval
+      - outputSanitisation
+      - sessionPoolEgress
+      - containerAppsTrafficSplit
+      - artifactsUpstream
+      - firewallEgress
+      - foundryPublicNetworkAccess
+      - wafRateLimit
+      - appInsightsOtel
+      - apimSubscriptionState

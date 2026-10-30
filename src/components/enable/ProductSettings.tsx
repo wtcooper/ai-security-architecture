@@ -169,13 +169,35 @@ function SettingRow({
 }
 
 /** Who makes it, when it was checked, and the short description; the long record stays a click away. */
-function ProductHeader({ product }: { product: Product }) {
+function ProductHeader({ product, archetype }: { product: Product; archetype: Archetype }) {
   if (product.kind === "cloud") {
     const { implementation: impl } = product;
+    const titleOf = new Map(archetype.blocks.map((b) => [b.id, b.title]));
     return (
       <div>
         <p className="eyebrow">{product.cloud.name} · verified {impl.asOf}</p>
         {impl.summary && <Prose blocks={impl.summary} className="mt-2" size="sm" />}
+        <details className="mt-3 rounded-lg border border-line bg-mist/40 px-3 py-2">
+          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
+            What plays each component on {product.cloud.short} <span className="font-normal text-ink-3">· {impl.bindings.length}</span>
+          </summary>
+          <dl className="mt-2 grid gap-x-5 gap-y-1.5 text-[12.5px] sm:grid-cols-[max-content_minmax(0,1fr)]">
+            {impl.bindings.map((b) => (
+              <div key={b.block} className="contents">
+                <dt className="text-ink-3">{titleOf.get(b.block) ?? b.block}</dt>
+                <dd className="text-ink">
+                  {b.url ? (
+                    <a href={b.url} target="_blank" rel="noreferrer" className="hover:underline">{b.service}</a>
+                  ) : (
+                    b.service
+                  )}
+                  {b.build && <span className="ml-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
+                  {b.note && <span className="block text-[11.5px] text-ink-3">{b.note}</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
         <p className="mt-2 text-[12px] text-ink-3">
           Follows{" "}
           {impl.reference.map((r, i) => (
@@ -228,7 +250,7 @@ export function ProductSettings({
     <div>
       <ProductPills products={products} selected={product.id} onPick={onPick} />
       <div className="mt-4 rounded-xl border border-line bg-paper px-4 py-4 sm:px-5">
-        <ProductHeader product={product} />
+        <ProductHeader product={product} archetype={archetype} />
         {product.settings.length ? (
           <>
             {!recorded && (

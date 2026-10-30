@@ -91,7 +91,14 @@ type BlockNodeData = {
   markStyle?: { stroke: string; fill: string };
   /** Shows the shared hover card — items use it so each icon can explain itself. */
   onItemEnter: (event: React.MouseEvent, title: string, body?: string) => void;
+  /** A cloud's service for this block: drawn in place of the generic items. */
+  service?: BlockService;
+  /** Where a container's children start, so a service label stays above them. */
+  kidTop?: number;
 };
+
+/** The cloud service that plays a block, or what the organisation builds where no service fills it. */
+export type BlockService = { service: string; build?: boolean; note?: string };
 
 const HANDLE_POS = {
   t: Position.Top,
@@ -286,6 +293,37 @@ function BlockNode({ data }: NodeProps<Node<BlockNodeData>>) {
                   {data.capNumber?.get(id) ?? "?"}
                 </span>
               ))}
+            </span>
+          )}
+        </div>
+      ) : data.service ? (
+        <div
+          onMouseEnter={(e) => data.onItemEnter(e, data.service!.service, data.service!.note ?? block.note)}
+          onMouseLeave={(e) => data.onItemEnter(e, block.title, block.note)}
+          style={{
+            position: "absolute",
+            left: 8,
+            right: 8,
+            top: data.kidTop ? 26 : 14,
+            height: (data.kidTop ?? h) - (data.kidTop ? 30 : 18),
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            // A container's label sits at its top, clear of the children drawn beneath it.
+            justifyContent: data.kidTop ? "flex-start" : "center",
+            gap: 4,
+            textAlign: "center",
+            fontSize: 12.5,
+            fontWeight: 600,
+            lineHeight: 1.25,
+            color: "var(--ink, #222)",
+          }}
+        >
+          <span>{data.service.service}</span>
+          {data.service.build && (
+            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-3, #777)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              You build this
             </span>
           )}
         </div>
@@ -614,8 +652,11 @@ export function FlowDiagramRF({
   className,
   height = "min(640px, 70vh)",
   scrollThrough = false,
+  services = null,
 }: {
   archetype: Archetype;
+  /** Block id -> the cloud service drawn in it; null draws the generic components. */
+  services?: Map<string, BlockService> | null;
   /** The selected sequence data flow, or null — the resting drawing carries no step numbers. */
   walk?: Scenario | null;
   /** A mitigation or risk picked from a list: its chips or tags stay, the rest go faint. */
@@ -937,6 +978,7 @@ export function FlowDiagramRF({
               highlight,
               mark,
               markStyle: mark !== undefined && overlay ? OVERLAY_STYLE[overlay.phase] : undefined,
+              service: n.type === "block" ? services?.get(n.id) : undefined,
             },
           };
         }
@@ -949,7 +991,7 @@ export function FlowDiagramRF({
         }
         return n;
       }),
-    [nodes, walkActive, walkBlocks, highlight, overlay, pins, onPickMitigation],
+    [nodes, walkActive, walkBlocks, highlight, overlay, pins, onPickMitigation, services],
   );
 
   const onNodesChange = useCallback(

@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Archetype, Phase, Scenario } from "@/lib/types";
 import { downloadArchetypeHtml } from "./export-html";
 import type { ChipPaint } from "./flow-style";
-import type { PinMode } from "./FlowDiagramRF";
+import type { BlockService, PinMode } from "./FlowDiagramRF";
 
 const FlowDiagramRFLazy = dynamic(() => import("./FlowDiagramRF").then((m) => m.FlowDiagramRF), {
   ssr: false,
@@ -57,8 +57,11 @@ export function FlowDiagram({
   pins = "all",
   onPickMitigation,
   className,
+  services = null,
 }: {
   archetype: Archetype;
+  /** Block id -> the cloud service drawn in it (a cloud implementation); null draws the generic components. */
+  services?: Map<string, BlockService> | null;
   /** The selected sequence data flow, or null for the resting view. */
   walk?: Scenario | null;
   highlight?: Highlight | null;
@@ -128,6 +131,7 @@ export function FlowDiagram({
         pins={pins}
         onPickMitigation={onPickMitigation}
         className={className}
+        services={services}
         height={expandedView ? "100%" : inlineHeight}
         scrollThrough={!expandedView}
       />

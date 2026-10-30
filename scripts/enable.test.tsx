@@ -99,3 +99,21 @@ test("an architecture opens on its overview; a tab or product link opens Enable"
   assert.match(linked, new RegExp(tool.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(linked, /role="tab"[^>]*>Risks/);
 });
+
+test("a cloud architecture lists its clouds first, binds every component and covers every pinned capability", () => {
+  for (const cloud of dataset.clouds) {
+    for (const impl of cloud.implementations) {
+      const arch = dataset.archetypes.find((a) => a.id === impl.architecture)!;
+      const products = productsForArchetype(arch.id);
+      assert.equal(products[0].kind, "cloud", `${arch.id}: clouds lead`);
+      const product = products.find((p) => p.id === cloud.id)!;
+      const delivered = new Set(product.settings.flatMap((s) => s.mitigations));
+      for (const id of arch.mitigations) assert.ok(delivered.has(id), `${cloud.id} ${arch.id}: ${id} has a row`);
+      const html = renderToStaticMarkup(
+        <ProductSettings archetype={arch} products={products} selected={cloud.id} onPick={() => {}} lit={null} onLight={() => {}} />,
+      );
+      assert.match(html, new RegExp(`What plays each component on ${cloud.short}`));
+      for (const b of impl.bindings) assert.ok(html.includes(b.service.replace(/&/g, "&amp;")), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
+    }
+  }
+});

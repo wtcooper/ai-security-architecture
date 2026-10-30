@@ -8,12 +8,14 @@
  * and picking a chip opens its row.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EnablePanel } from "@/components/enable/EnablePanel";
+import { cloudById, clouds } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
+import type { BlockService } from "./FlowDiagramRF";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
 import { WalkList } from "./rail-lists";
@@ -42,6 +44,22 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
+
+  // A first-party cloud architecture can be drawn as built on one cloud: each block shows the
+  // service that plays it. Picking a cloud here or its pill on Enable switches the drawing;
+  // "Generic" keeps the cloud-neutral components.
+  const implementedOn = clouds.filter((c) => c.implementations.some((i) => i.architecture === archetype.id));
+  const [cloudView, setCloudView] = useState<string | null>(tool && cloudById.has(tool) ? tool : null);
+  const viewCloud = implementedOn.find((c) => c.id === cloudView) ?? null;
+  const viewId = viewCloud?.id ?? null;
+  const services = useMemo(() => {
+    const impl = viewId ? cloudById.get(viewId)?.implementations.find((i) => i.architecture === archetype.id) : undefined;
+    return impl ? new Map<string, BlockService>(impl.bindings.map((b) => [b.block, { service: b.service, build: b.build, note: b.note }])) : null;
+  }, [viewId, archetype.id]);
+  const pickProduct = (id: string | null) => {
+    onPickTool(id);
+    if (id && cloudById.has(id)) setCloudView(id);
+  };
 
   const go = (next: Tab) => {
     onTab(next);
@@ -102,6 +120,24 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           </span>
         </button>
       )}
+      {drawingVisible && implementedOn.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-3" role="group" aria-label="Draw as built on">
+          <span>Drawn as</span>
+          {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              aria-pressed={cloudView === o.id || (o.id === null && !viewCloud)}
+              onClick={() => setCloudView(o.id)}
+              className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
+                (o.id === null ? !viewCloud : cloudView === o.id) ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
       {drawingVisible && (
         <>
           <div ref={drawingRef} className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
@@ -113,6 +149,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               // One kind of pin at a time: risk tags where a walk shows risk entering, capability chips everywhere else.
               pins={tab === "flows" ? "risks" : "capabilities"}
               onPickMitigation={pickChip}
+              services={services}
               className="w-full"
             />
           </div>
@@ -182,7 +219,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             onShowDrawing={scrollToDrawing}
             tool={tool}
             focus={focus}
-            onPickTool={onPickTool}
+            onPickTool={pickProduct}
           />
         )}
       </div>
