@@ -1,6 +1,7 @@
 # Claude Agent SDK — one entity per product × reference architecture. Facts are dated (asOf) and
 # cite the vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
 # 2026-09-25: re-verified toolClaudeAgentSdk (21 rows) against the MITRE capability rules; every code.claude.com/docs/en/agent-sdk page cited answered 200 with no redirect (read with WebFetch and the pages' .md variants); the Claude Code pages reused from claude-code.yaml were not re-fetched beyond the authentication page; GHSA-h4mw-j7qp-8mwm added from the Python SDK repository's security advisories.
+# 2026-10-30: added the settings table (25 rows; agent-sdk and env-vars pages fetched as .md, all 200). Corrected: the TypeScript managedSettings option now passes policy-tier settings (allowManagedDomainsOnly included) from the host process; omitting permissionMode starts in default, which denies unapproved calls when no canUseTool is set (Claude Code v2.1.302+).
 vendor: anthropic
 family: Claude Agent SDK
 tools:
@@ -20,7 +21,7 @@ tools:
         url: https://code.claude.com/docs/en/agent-sdk/overview
     architecture: archAgentWorkflow
     status: ga
-    asOf: "2026-09"
+    asOf: "2026-10"
     summary:
       - >-
         A library (Python and TypeScript) that runs the Claude Code agent loop inside the customer's own
@@ -35,7 +36,8 @@ tools:
         a canUseTool callback, programmatic PreToolUse hooks that run before every other check, settingSources
         to stop reading filesystem settings, mcpServers, maxTurns, and OpenTelemetry export inherited from the
         environment. Managed policy on the host (MDM, managed-settings.json) and server-managed settings
-        fetched with an organisation credential still apply and cannot be disabled from the SDK. Anthropic
+        fetched with an organisation credential still apply and cannot be disabled from the SDK; the
+        TypeScript managedSettings option passes policy-tier settings from the host process. Anthropic
         does not allow third parties to offer claude.ai login through SDK-built products.
     facts:
       - label: Plans
@@ -478,7 +480,8 @@ tools:
             body:
               - >-
                 Bake permissions.deny with allowManagedPermissionRulesOnly into a managed-settings file in the
-                image; managed policy loads whatever settingSources the code passes.
+                image, or pass them in the TypeScript managedSettings option; managed policy loads whatever
+                settingSources the code passes.
             url: https://code.claude.com/docs/en/permissions
           - title: Gate every call in a hook
             body:
@@ -1181,7 +1184,8 @@ tools:
           deployer's container and proxy block them. The sandbox proxy decides on the client-supplied hostname
           without TLS inspection (domain fronting). strictAllowlist is documented as honoured only from user,
           managed or --settings sources, so confirm it takes effect from the option or bake it into managed
-          settings; allowManagedDomainsOnly has no effect from SDK options.
+          settings; allowManagedDomainsOnly takes effect only through the TypeScript managedSettings option
+          or a managed-settings file.
         verified: "2026-09-25"
         migration:
           from:
@@ -1243,6 +1247,284 @@ tools:
                 - title: Vendor docs index, reviewed; no setting for this control (2026-09-10)
                   url: https://code.claude.com/docs/en/agent-sdk/overview
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # The deployer is the admin: every row is a query() option, an environment variable the CLI subprocess
+    # reads, or a managed-settings file baked into the container image, which loads whatever the code passes.
+    # Check them in code review and the image build. Verified 2026-10-30.
+    settings:
+      - id: workloadIdentityFederation
+        name: ANTHROPIC_FEDERATION_RULE_ID with ANTHROPIC_ORGANIZATION_ID
+        where: options.env (or the container environment), against a federation rule in Claude Console › Settings › Workload identity
+        setVia: [configFile, identityProvider]
+        area: identity
+        default: Unset (a standing ANTHROPIC_API_KEY)
+        recommended: One federation rule and service account per agent workload, with ANTHROPIC_API_KEY unset
+        why: No long-lived model key sits in the container, each workload is a separate revocable principal, and archiving its rule refuses the next token exchange.
+        mitigations: [D3-CH, D3-AA, cap-agent-kill-switch]
+        url: https://code.claude.com/docs/en/env-vars
+        verified: "2026-10-30"
+      - id: subagentMcpServers
+        name: mcpServers (AgentDefinition)
+        where: options.agents[name].mcpServers, with the server's headers or env
+        setVia: [code]
+        area: identity
+        recommended: A server a subagent needs defined inline on that subagent, with a token minted for it, and left out of the parent's mcpServers
+        why: The credential for that tool is held by the one agent that uses it, so a parent or sibling hijacked by injected text cannot call it.
+        mitigations: [D3-AA, D3-CTS]
+        url: https://code.claude.com/docs/en/agent-sdk/typescript#agentdefinition
+        verified: "2026-10-30"
+      - id: perUserMcpHeaders
+        name: mcpServers headers
+        where: options.mcpServers[name].headers on each query()
+        setVia: [code]
+        area: identity
+        recommended: The requesting user's own OAuth access token, obtained by the application, for every data server
+        why: Retrieval runs with that user's entitlements in the source system instead of a shared service credential that reaches everything.
+        mitigations: [cap-data-access-governance, D3-CTS]
+        url: https://code.claude.com/docs/en/agent-sdk/mcp
+        verified: "2026-10-30"
+      - id: settingSources
+        name: settingSources
+        where: options.settingSources (Python setting_sources)
+        setVia: [code]
+        area: data
+        default: Omitted, equivalent to ["user", "project", "local"]
+        recommended: "[] — the application passes everything the agent needs"
+        why: A repository's or host user's settings, hooks, CLAUDE.md, skills and subagents never enter the agent; managed policy still loads.
+        mitigations: [AML.M0031, cap-agent-tool-registry]
+        url: https://code.claude.com/docs/en/agent-sdk/claude-code-features#control-filesystem-settings-with-settingsources
+        verified: "2026-10-30"
+      - id: disableAutoMemory
+        name: CLAUDE_CODE_DISABLE_AUTO_MEMORY
+        where: options.env → CLAUDE_CODE_DISABLE_AUTO_MEMORY (or autoMemoryEnabled false in settings)
+        setVia: [configFile, code]
+        area: data
+        default: Auto memory on, loaded whatever settingSources says
+        recommended: '"1", unless the application deliberately keeps per-tenant memory'
+        why: Notes one run wrote are not loaded into the next run's system prompt as trusted context.
+        mitigations: [AML.M0031]
+        url: https://code.claude.com/docs/en/agent-sdk/claude-code-features#what-settingsources-does-not-control
+        verified: "2026-10-30"
+      - id: perTenantConfigDir
+        name: CLAUDE_CONFIG_DIR and cwd
+        where: options.env → CLAUDE_CONFIG_DIR, and options.cwd, per tenant
+        setVia: [code]
+        area: data
+        default: ~/.claude and the process directory, shared by every query
+        recommended: A per-tenant config directory and working directory on every query()
+        why: Tenants do not share the global config, local transcripts, auto memory or files, so one tenant's session cannot read or seed another's.
+        mitigations: [AML.M0031, cap-data-access-governance]
+        url: https://code.claude.com/docs/en/agent-sdk/hosting
+        verified: "2026-10-30"
+      - id: sessionStore
+        name: sessionStore (delete)
+        where: options.sessionStore, an adapter implementing delete, with expiry set in its backend
+        setVia: [code]
+        area: data
+        default: Local JSONL transcripts only
+        recommended: One store or key prefix per tenant, delete implemented, and the backend's retention at 30 days
+        why: Transcripts live in storage the firm governs, deleteSession() cascades to subagent transcripts, and nothing is kept past the retention you set — the SDK never deletes from the store.
+        mitigations: [AML.M0031]
+        url: https://code.claude.com/docs/en/agent-sdk/session-storage
+        verified: "2026-10-30"
+      - id: permissionMode
+        name: permissionMode
+        where: options.permissionMode (Python permission_mode)
+        setVia: [code]
+        area: tools
+        default: default (Claude Code v2.1.302 and later)
+        recommended: '"default" — calls that need approval reach canUseTool'
+        why: Nothing is auto-approved by mode; acceptEdits and auto are for sandboxed workers only, and dontAsk denies instead of asking.
+        mitigations: [AML.M0029]
+        url: https://code.claude.com/docs/en/agent-sdk/permissions#permission-modes
+        verified: "2026-10-30"
+      - id: allowDangerouslySkipPermissions
+        name: allowDangerouslySkipPermissions
+        where: options.allowDangerouslySkipPermissions (TypeScript)
+        setVia: [code]
+        area: tools
+        default: "false"
+        recommended: "false"
+        why: bypassPermissions cannot be set at startup or switched to later with setPermissionMode(), so no code path runs every tool unapproved.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://code.claude.com/docs/en/agent-sdk/typescript#options
+        verified: "2026-10-30"
+      - id: disallowedTools
+        name: disallowedTools
+        where: options.disallowedTools (Python disallowed_tools)
+        setVia: [code]
+        area: tools
+        default: "[]"
+        recommended: Bare names for tools the agent never needs, and scoped rules for secret paths and risky commands — Read(./.env*), Edit(//etc/**), Bash(git push *)
+        why: Deny rules hold in every permission mode, bypassPermissions included, for the main agent and every subagent.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028, cap-sensitive-data-redaction]
+        url: https://code.claude.com/docs/en/agent-sdk/permissions#allow-and-deny-rules
+        verified: "2026-10-30"
+      - id: canUseTool
+        name: canUseTool
+        where: options.canUseTool, with permissions.ask rules in options.settings
+        setVia: [code]
+        area: tools
+        default: Unset (calls that would prompt are denied)
+        recommended: A callback that shows the tool, final input and agentID to an authenticated approver and returns deny on timeout
+        why: Each call an ask rule or default mode routes there waits for a person; an allowedTools bare name skips it, so pre-approve with specifiers only.
+        mitigations: [AML.M0029]
+        url: https://code.claude.com/docs/en/agent-sdk/user-input
+        verified: "2026-10-30"
+      - id: preToolUseHook
+        name: hooks.PreToolUse
+        where: options.hooks.PreToolUse, a callback returning permissionDecision
+        setVia: [code]
+        area: tools
+        default: None
+        recommended: A policy callback on every consequential tool that checks the principal, tool and arguments and returns deny or ask
+        why: It runs before every other check, and its deny wins; a hook that times out leaves the tool unrun.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0028]
+        url: https://code.claude.com/docs/en/agent-sdk/hooks
+        verified: "2026-10-30"
+      - id: managedSettings
+        name: managedSettings
+        where: options.managedSettings (TypeScript), or managed-settings.json baked into the container image
+        setVia: [code, configFile]
+        area: tools
+        default: Unset
+        recommended: permissions.deny for secret paths, allowedMcpServers with allowManagedMcpServersOnly, and sandbox.network.allowManagedDomainsOnly
+        why: Policy-tier rules that a later setPermissionMode() or applyFlagSettings() call cannot loosen; on a host with admin-deployed managed settings they are ignored unless that policy sets parentSettingsBehavior merge.
+        mitigations: [cap-agent-action-policy-enforcement, cap-agent-tool-registry, cap-mcp-tool-integrity]
+        url: https://code.claude.com/docs/en/agent-sdk/typescript#options
+        verified: "2026-10-30"
+      - id: agentDefinitionTools
+        name: tools (AgentDefinition) with CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS
+        where: options.agents[name].tools; options.env → CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS
+        setVia: [code, configFile]
+        area: tools
+        default: A subagent with no tools inherits every tool; the general-purpose subagent is always available
+        recommended: An explicit tools list on every subagent, and "1"
+        why: Claude can spawn only the agents you defined, each holding only the tools its task needs.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://code.claude.com/docs/en/agent-sdk/subagents
+        verified: "2026-10-30"
+      - id: strictMcpConfig
+        name: strictMcpConfig
+        where: options.strictMcpConfig (Python strict_mcp_config)
+        setVia: [code]
+        area: tools
+        default: "false"
+        recommended: "true, with mcpServers built from your registry and stdio servers on pinned versions"
+        why: Project .mcp.json, user settings, plugin servers and claude.ai connectors cannot add servers the application did not declare.
+        mitigations: [cap-mcp-tool-integrity, cap-agent-tool-registry, AML.M0028]
+        url: https://code.claude.com/docs/en/agent-sdk/typescript#options
+        verified: "2026-10-30"
+      - id: sandbox
+        name: sandbox (enabled, failIfUnavailable, allowUnsandboxedCommands)
+        where: options.sandbox
+        setVia: [code]
+        area: tools
+        default: "false / true / true"
+        recommended: "true / true / false, with no excludedCommands"
+        why: Bash and its children run in the OS sandbox, a host that cannot sandbox stops, and the model cannot ask to run a command outside it; WebFetch, MCP servers and hooks stay outside.
+        mitigations: [D3-EI]
+        url: https://code.claude.com/docs/en/agent-sdk/typescript#sandboxsettings
+        verified: "2026-10-30"
+      - id: subprocessEnvScrub
+        name: CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
+        where: options.env → CLAUDE_CODE_SUBPROCESS_ENV_SCRUB
+        setVia: [configFile, code]
+        area: tools
+        default: Unset
+        recommended: '"1"'
+        why: Strips credentials from the environment of every Bash command, hook and stdio MCP server, so an injected command finds no keys to read.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://code.claude.com/docs/en/env-vars
+        verified: "2026-10-30"
+      - id: maxTurns
+        name: maxTurns
+        where: options.maxTurns (Python max_turns), and maxTurns on each AgentDefinition
+        setVia: [code]
+        area: tools
+        default: Unset (no limit)
+        recommended: A cap sized to the task on the query and on every subagent
+        why: A looping agent ends with error_max_turns instead of running on.
+        mitigations: [AML.M0036]
+        url: https://code.claude.com/docs/en/agent-sdk/configuration#limit-turns-and-spend
+        verified: "2026-10-30"
+      - id: maxBudgetUsd
+        name: maxBudgetUsd
+        where: options.maxBudgetUsd (Python max_budget_usd)
+        setVia: [code]
+        area: tools
+        default: Unset (no limit)
+        recommended: A cap sized to what one run should cost, with headroom
+        why: At the cap new subagents are refused, running background subagents stop and the query ends; the estimate is client-side and can pass the cap.
+        mitigations: [AML.M0036, cap-agent-kill-switch]
+        url: https://code.claude.com/docs/en/agent-sdk/configuration#limit-turns-and-spend
+        verified: "2026-10-30"
+      - id: postToolUseHook
+        name: hooks.PostToolUse (updatedToolOutput)
+        where: options.hooks.PostToolUse for WebFetch, WebSearch, Bash, Read and mcp__ tools
+        setVia: [code]
+        area: data
+        default: None
+        recommended: Your injection classifier and PII / secret detector on every tool that returns external content, replacing hits through updatedToolOutput
+        why: Injected instructions and sensitive spans are removed before the model reasons over the result; OpenTelemetry keeps the original.
+        mitigations: [cap-input-guardrails, cap-sensitive-data-redaction]
+        url: https://code.claude.com/docs/en/agent-sdk/hooks
+        verified: "2026-10-30"
+      - id: userPromptSubmitHook
+        name: hooks.UserPromptSubmit
+        where: options.hooks.UserPromptSubmit
+        setVia: [code]
+        area: data
+        default: None
+        recommended: A classifier on the initiator's prompt that blocks on a hit
+        why: An injected or policy-breaking request relayed from an end user is stopped before the first model call.
+        mitigations: [cap-input-guardrails]
+        url: https://code.claude.com/docs/en/agent-sdk/hooks
+        verified: "2026-10-30"
+      - id: sandboxNetwork
+        name: sandbox.network.allowedDomains with strictAllowlist
+        where: options.sandbox.network.allowedDomains, strictAllowlist (or the same keys in managedSettings)
+        setVia: [code, configFile]
+        area: network
+        default: "[] / false"
+        recommended: Your source control, package mirror and approved APIs / true
+        why: Sandboxed commands reach only listed hosts instead of prompting; strictAllowlist is honoured from managed or --settings sources and does not gate WebFetch.
+        mitigations: [cap-agent-egress-control]
+        url: https://code.claude.com/docs/en/agent-sdk/typescript#sandboxnetworkconfig
+        verified: "2026-10-30"
+      - id: anthropicBaseUrlProxy
+        name: ANTHROPIC_BASE_URL and HTTPS_PROXY
+        where: options.env, or the container environment
+        setVia: [configFile]
+        area: network
+        default: Direct to api.anthropic.com and the internet
+        recommended: A credential-injecting proxy outside the container, with the container on --network none or a subnet that reaches only the proxy
+        why: Keys for the model and other services are added after traffic leaves the agent, and every destination is allowlisted and logged at the proxy.
+        mitigations: [D3-CH, cap-agent-egress-control]
+        url: https://code.claude.com/docs/en/agent-sdk/secure-deployment#the-proxy-pattern
+        verified: "2026-10-30"
+      - id: otelTelemetry
+        name: CLAUDE_CODE_ENABLE_TELEMETRY with OTEL exporters
+        where: options.env → CLAUDE_CODE_ENABLE_TELEMETRY, CLAUDE_CODE_ENHANCED_TELEMETRY_BETA, OTEL_TRACES_EXPORTER, OTEL_LOGS_EXPORTER, OTEL_EXPORTER_OTLP_ENDPOINT
+        setVia: [configFile, code]
+        area: audit
+        default: "Off"
+        recommended: '"1", exporting traces, metrics and logs over OTLP to your collector, with enduser.id in OTEL_RESOURCE_ATTRIBUTES'
+        why: Every turn, model request, tool call and permission decision — subagents nested under the parent — lands in the SIEM keyed to the end user.
+        mitigations: [cap-agent-tracing]
+        url: https://code.claude.com/docs/en/agent-sdk/observability
+        verified: "2026-10-30"
+      - id: otelContentOptIns
+        name: OTEL_LOG_USER_PROMPTS, OTEL_LOG_TOOL_DETAILS, OTEL_LOG_TOOL_CONTENT, OTEL_LOG_RAW_API_BODIES
+        where: options.env
+        setVia: [configFile, code]
+        area: audit
+        default: Unset (content not exported)
+        recommended: Leave unset, unless the collector is approved to hold client material
+        why: Telemetry stays structural, so prompts, file contents and tool results do not land in the observability pipeline.
+        mitigations: [cap-sensitive-data-redaction, cap-agent-tracing]
+        url: https://code.claude.com/docs/en/agent-sdk/observability#control-sensitive-data-in-exports
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-96620 (GHSA-h4mw-j7qp-8mwm) — Python SDK passed the resume option to the CLI unvalidated,

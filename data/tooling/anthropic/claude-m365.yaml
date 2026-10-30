@@ -935,6 +935,227 @@ tools:
                 Withdrawing the add-in applies at the client's next add-in catalogue refresh, and seat removal
                 at the next request; the docs state no delay, so measure it.
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Three planes: the Microsoft 365 admin center, Exchange and Entra decide who runs the add-ins and
+    # what Outlook may reach; claude.ai Organization settings govern Claude-account sign-ins; configuration
+    # keys (manifest, Entra extension attributes, bootstrap) govern custom-manifest deployments. Verified 2026-10-30.
+    settings:
+      - id: deployAddinAssignment
+        name: Deploy Add-in (Specific users/groups)
+        where: Microsoft 365 admin center › Settings › Integrated apps › Add-ins › Deploy Add-in
+        setVia: [adminConsole]
+        area: identity
+        recommended: Specific users/groups — the Entra groups rolled out to Claude
+        why: Who gets the Excel, PowerPoint, Word and Outlook add-ins is a group decision you can audit and reverse, not everyone at once.
+        mitigations: [D3-APA, cap-agent-tool-registry]
+        url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-deployment-of-add-ins
+        verified: "2026-10-30"
+      - id: officeStoreAccess
+        name: Let users access the Office Store
+        where: Microsoft 365 admin center › Settings › Org settings › Services › User owned apps and services
+        setVia: [adminConsole]
+        area: tools
+        default: "On"
+        recommended: "Off"
+        why: Users can't install the Claude add-ins (or any other) from AppSource themselves, so only centrally deployed copies run in Word, Excel and PowerPoint.
+        mitigations: [cap-agent-tool-registry, D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-365/admin/manage/manage-addins-in-the-admin-center
+        verified: "2026-10-30"
+      - id: outlookAddinUserRoles
+        name: My Custom Apps, My Marketplace Apps and My ReadWriteMailbox Apps
+        where: Exchange admin center › Roles › User roles › Default Role Assignment Policy › Other roles
+        setVia: [adminConsole]
+        area: tools
+        default: All enabled for every user
+        recommended: All three removed from the default role assignment policy
+        why: The Office Store setting doesn't reach Outlook; this stops users installing an Outlook add-in that reads and writes their mailbox on their own.
+        mitigations: [cap-agent-tool-registry, D3-APA]
+        url: https://learn.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/add-ins-for-outlook/specify-who-can-install-and-manage-add-ins
+        verified: "2026-10-30"
+      - id: graphAdminConsent
+        name: Grant Microsoft Graph consent
+        where: Microsoft Entra admin consent link for Claude for Outlook (client ID c2995f31-11e7-4882-b7a7-ef9def0a0266), or your own single-tenant app via graph_client_id
+        setVia: [identityProvider]
+        area: identity
+        default: Not granted (users see "Need admin approval")
+        recommended: Granted by a Global Administrator once Outlook is approved — to your own single-tenant app where policy forbids multi-tenant consent
+        why: Outlook reads mail and calendar only through this delegated grant (Mail.ReadWrite, Calendars.Read, User.Read, offline_access, no Mail.Send), so drafts land unsent and the tenant owns the decision.
+        mitigations: [D3-APA, cap-data-access-governance]
+        url: https://claude.com/docs/office-agents/outlook
+        verified: "2026-10-30"
+      - id: entraAssignmentRequired
+        name: Assignment required
+        where: Microsoft Entra admin center › Enterprise apps › the add-in's app (c2995f31-11e7-4882-b7a7-ef9def0a0266, or your own) › Properties
+        setVia: [identityProvider]
+        area: identity
+        recommended: Yes, assigned to the same groups as the add-in deployment
+        why: Only assigned users can get a Graph token for the add-in, so a user who installed it outside the deployment can't reach mail.
+        mitigations: [D3-APA, cap-data-access-governance]
+        url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/application-properties
+        verified: "2026-10-30"
+      - id: entraEnabledForSignIn
+        name: Enabled for users to sign-in?
+        where: Microsoft Entra admin center › Enterprise apps › the add-in's app (c2995f31-11e7-4882-b7a7-ef9def0a0266, or your own) › Properties
+        setVia: [identityProvider]
+        area: identity
+        recommended: "Yes — set No to stop the add-in's Graph access in an incident"
+        why: No issues no further tokens for the app to anyone, which cuts Outlook's mailbox access without touching each device.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/application-properties
+        verified: "2026-10-30"
+      - id: requireSso
+        name: Require SSO for Claude
+        where: claude.ai Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: The Claude account each add-in signs in with goes through the corporate IdP and its MFA; personal email logins on your domain stop working.
+        mitigations: [D3-APA]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Claude
+        why: Removing someone in the IdP removes their seat, so a leaver's add-in sign-in stops working with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: restrictOrgCreation
+        name: Restrict organization creation
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Stops staff creating personal or side Claude organisations on your verified domains, which no admin can see.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Team or Enterprise, verified domain
+        url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        verified: "2026-10-30"
+      - id: migrateAccounts
+        name: Migrate accounts using your domain
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: On, after reviewing the personal accounts listed on your domain
+        why: No Free, Pro or Max account can exist on the verified domain, so nobody signs the add-in in to a personal plan with client workbooks; it can't be reversed.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Enterprise, enforced SSO
+        url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+        verified: "2026-10-30"
+      - id: tenantRestrictions
+        name: Tenant Restrictions (anthropic-allowed-org-ids)
+        where: Corporate TLS-inspecting proxy → anthropic-allowed-org-ids header on claude.ai, api.anthropic.com, claude.com and anthropic.com
+        setVia: [cloudPolicy]
+        area: identity
+        default: Not injected
+        recommended: Your organisation's UUID, injected and overwritten on every request from managed devices
+        why: A personal or other organisation's Claude account fails with tenant_restriction_violation on the corporate network; test it with an add-in sign-in, which the page doesn't name.
+        mitigations: [D3-OTF, cap-shadow-ai-discovery]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+        verified: "2026-10-30"
+      - id: letClaudeWorkAcrossApps
+        name: Let Claude work across apps
+        where: claude.ai Organization settings › Office agents
+        setVia: [adminConsole]
+        area: tools
+        recommended: Off, until a team's workflow needs one task to span Outlook and the other apps
+        why: Off, an email's instructions can't steer an edit in an open workbook or deck; the per-device "Let Claude work across files" already starts off on Team and Enterprise.
+        mitigations: [AML.M0028, cap-input-guardrails]
+        requires: Team or Enterprise
+        url: https://claude.com/docs/office-agents/work-across-apps
+        verified: "2026-10-30"
+      - id: connectorToolPolicy
+        name: Organization-wide tool policy
+        where: claude.ai Organization settings › Connectors › connector › tool (Always allow / Needs approval / Blocked)
+        setVia: [adminConsole]
+        area: tools
+        recommended: Write and send tools set to Needs approval; tools no one uses Blocked
+        why: The add-ins offer only connectors enabled in Claude settings, and this is the ceiling no member can widen; confirm Needs approval prompts in the add-in, which the pages don't state.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: inferenceHooks
+        name: Inference hooks
+        where: claude.ai Organization settings › Data and privacy › Inference hooks
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
+        why: One hook now governs Claude for Microsoft 365 with the rest of the organisation, so prompts carrying document or mail content, and tool results, can be denied before inference.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+        verified: "2026-10-30"
+      - id: accessPolicies
+        name: access_policies
+        where: Custom manifest, Entra ID extension attribute or bootstrap endpoint → access_policies
+        setVia: [configFile, identityProvider]
+        area: data
+        default: Unset (no document-scoped policy)
+        recommended: A deny statement for addin.access on files carrying your most restricted sensitivity labels
+        why: The add-in won't run on a document carrying those labels; it keys on the label, so an unlabelled file with the same content still passes.
+        mitigations: [cap-sensitive-data-redaction, cap-data-access-governance]
+        requires: Custom-manifest deployment
+        url: https://claude.com/docs/office-agents/third-party-platforms
+        verified: "2026-10-30"
+      - id: disabledFeatures
+        name: disabled_features
+        where: Custom manifest, Entra ID extension attribute or bootstrap endpoint → disabled_features
+        setVia: [configFile, identityProvider]
+        area: tools
+        default: Unset (every feature on)
+        recommended: permission_mode.dangerously_always_allow
+        why: Removes "Dangerously always allow", so no user can switch approvals off; addin.access in the same key is the per-user kill switch.
+        mitigations: [AML.M0029, cap-agent-kill-switch]
+        requires: Custom-manifest deployment
+        url: https://claude.com/docs/office-agents/third-party-platforms
+        verified: "2026-10-30"
+      - id: gatewayAuthSource
+        name: gateway_auth_source
+        where: Custom manifest → gateway_auth_source (with entra_sso and graph_client_id), or bootstrap_url
+        setVia: [configFile, identityProvider]
+        area: identity
+        default: Unset (static gateway_token or API key)
+        recommended: '"entra" — or a bootstrap_url that issues expiring tokens'
+        why: Each user sends their own short-lived Entra token to your gateway or Foundry resource instead of a shared key sitting in every device's browser storage.
+        mitigations: [D3-CH]
+        requires: Third-party platform deployment
+        url: https://claude.com/docs/office-agents/third-party-platforms
+        verified: "2026-10-30"
+      - id: otlpEndpoint
+        name: otlp_endpoint
+        where: claude.ai Organization settings › Office agents (otlp_endpoint, otlp_headers), or the same configuration keys
+        setVia: [adminConsole, configFile]
+        area: audit
+        default: Unset (only Anthropic's filtered collector)
+        recommended: An OpenTelemetry Collector you run, with CORS for pivot.claude.ai, forwarding to the SIEM
+        why: Add-in activity is not in Enterprise audit logs or data exports; spans carry prompts, tool inputs and outputs and document references unfiltered, so scope access to the collector as for client content.
+        mitigations: [cap-agent-tracing]
+        url: https://claude.com/docs/office-agents/opentelemetry
+        verified: "2026-10-30"
+      - id: complianceApi
+        name: Compliance API (session transcripts)
+        where: claude.ai Organization settings › API, then a Compliance Access Key with read:compliance_user_data
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your eDiscovery or SIEM
+        why: Add-in sessions (product_surface office_agents/*) are retrievable centrally after the fact, though deleting a conversation in the add-in doesn't remove them.
+        mitigations: [cap-agent-tracing]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-10-30"
     sources:
       - title: Claude for M365 overview
         url: https://claude.com/docs/office-agents/overview

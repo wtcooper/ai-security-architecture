@@ -494,31 +494,29 @@ tools:
                 gates.
               verified: 2026-09-10
       - mitigation: D3-DI
-        coverage: partial
+        coverage: external
         mechanism: >-
-          Each scope's panel on the Slack tab lists the Connectors, Repositories and Plugins a channel gets, with
-          origin lines; View memory files and the Audit page Memory tab show what Claude saved per scope; no
-          classification of what the service accounts can reach
-        steps:
-          - title: List what each channel can reach
-            body:
-              - >-
-                At claude.ai/admin-settings/claude-tag select each scope on the Slack tab and read its Connectors,
-                Repositories and Plugins sections, including rows inherited from the workspace or Default Slack.
+          No inventory or classification setting: each scope's page on the Channels tab lists the Connectors,
+          Repositories and Plugins a channel gets, with origin lines, and the Activity page Memory tab (or a
+          scope's View memory files) shows what Claude saved, as read-only views; what sits behind each service
+          account is classified by the organisation's DSPM
+        evidence:
+          - title: Configure per-channel access (Check or remove what a place has)
             url: https://claude.com/docs/claude-tag/admins/attach-to-scope
-          - title: Review and prune memory
-            body:
-              - >-
-                Open the Audit page Memory tab (or a scope's View memory files) to read, edit or delete what
-                Claude saved; workspace memory from public channels is shared workspace-wide.
+          - title: Review what Claude Tag has done (Activity page Memory tab)
             url: https://claude.com/docs/claude-tag/admins/audit
+          - title: Data lifecycle and deletion (transcripts not in data exports or the Compliance API)
+            url: https://claude.com/docs/claude-tag/concepts/data-lifecycle
         note: >-
-          Partial by the rule: the console lists the sources each channel reaches and the memory Claude kept,
-          without classification or an oversharing view of what sits behind each service account. Transcripts are
-          kept with no automatic retention period during the beta and cannot be exported; deletion (scope
-          removal, workspace disconnect) is lifecycle, not inventory. Classifying the data behind the connections
-          is the organisation's DSPM.
-        verified: "2026-09-25"
+          External, lowered from partial on 2026-10-30 when the settings table was written: no Claude Tag setting
+          delivers data inventory. The per-scope access lists and memory views are pages an Owner reads, not a
+          control an administrator switches on, and they carry no classification or oversharing view of the
+          drives, projects or repositories behind each service account. Transcripts are kept with no automatic
+          retention period during the beta and are excluded from data exports and the Compliance API, so no
+          DSPM product can consume them; deletion (scope removal, workspace disconnect) is lifecycle, not
+          inventory. Inventory and classification of the sources behind the connections is the organisation's
+          DSPM.
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityDspm
@@ -928,6 +926,253 @@ tools:
                 Setting a scope Off stops new sessions; a running session may hold a revoked credential
                 briefly, and the docs give no bound for that window — measure it.
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Claude Tag is administered at claude.ai/admin-settings/claude-tag (Claude's access › Channels, Connectors
+    # and Bundles, per scope: the Slack page, a workspace or a channel), alongside the shared claude.ai
+    # organisation settings, Slack's app management and the GitHub App's installation. Verified 2026-10-30.
+    settings:
+      - id: requireSso
+        name: Require SSO for Claude
+        where: claude.ai Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: The Claude account a member links from Slack, and runs direct messages on, signs in through the corporate IdP and its MFA.
+        mitigations: [D3-APA]
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Claude
+        why: A member removed in the IdP leaves the organisation and loses Claude Tag within minutes, and the routines they set up in direct messages are turned off.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: slackRequireApprovedApps
+        name: Require approved apps (Only allow pre-approved apps)
+        where: Slack › Admin › Apps and workflows › App Management Settings
+        setVia: [adminConsole]
+        area: identity
+        default: "Off (members install apps without approval)"
+        recommended: On, with the Claude app approved only for the workspaces your Claude organisation pairs
+        why: A member can't install Claude into another workspace and pair it with a different Claude organisation; installs go through a Slack admin who reviews the scopes.
+        mitigations: [D3-APA, cap-agent-tool-registry]
+        url: https://slack.com/help/articles/222386767-Manage-app-approval-for-your-workspace
+        verified: "2026-10-30"
+      - id: enableClaudeTagInSlack
+        name: Enable Claude Tag in Slack
+        where: claude.ai/admin-settings/claude-tag (top of the page)
+        setVia: [adminConsole]
+        area: identity
+        recommended: On, once access restriction, bundles and blocked channel patterns are in place
+        why: The organisation-wide off switch for every channel and direct message; turning it off deletes nothing, so it is safe to use in an incident.
+        mitigations: [cap-agent-kill-switch]
+        url: https://claude.com/docs/claude-tag/admins/workspaces
+        verified: "2026-10-30"
+      - id: restrictToRoles
+        name: Restrict to roles with Claude Tag access (Restrict to your organization on Team)
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Channels › Slack › Advanced › Access
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off (anyone in the paired Slack workspace can use Claude, even without a Claude account)"
+        recommended: On, with a custom role granting the Claude Tag in Slack capability to the groups rolled out
+        why: Only members with a seat can direct Claude; others' mentions get a private notice and their thread replies reach Claude as context, not requests.
+        mitigations: [D3-APA, cap-input-guardrails]
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-10-30"
+      - id: restrictToVerifiedDomains
+        name: Restrict to your verified domains
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Channels › Slack › Advanced › Access
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Slack users off your verified domains can't link a Claude account, and users on them can't link to an organisation outside your enterprise.
+        mitigations: [D3-APA]
+        requires: Enterprise (parent organisation)
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-10-30"
+      - id: claudeTagAdmin
+        name: Claude Tag Admin
+        where: claude.ai Organization settings › Roles › role › Admin permissions › Product admin
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: Can manage for a named few on the team that owns Claude Tag; channel managers for single channels
+        why: Bundles, credentials, domains and guest settings stay with people you chose, without making them organisation Owners.
+        mitigations: [D3-APA]
+        requires: Enterprise
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-10-30"
+      - id: guestChannels
+        name: How should Claude work in channels with guests
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Channels › Slack (or a workspace or channel) › Advanced › Access
+        setVia: [adminConsole]
+        area: sharing
+        default: Restrict
+        recommended: Restrict on the Slack page; Channel only on a client channel whose team asks, with nothing sensitive attached to it
+        why: Guests and Slack Connect partners can read what Claude posts and direct it; Restrict keeps them away, and Channel only drops inherited bundles, memory and search.
+        mitigations: [AML.M0028, cap-data-access-governance, cap-input-guardrails]
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-10-30"
+      - id: blockedChannelPatterns
+        name: Blocked channel patterns
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Channels › Slack (or a workspace) › Advanced › Channels
+        setVia: [adminConsole]
+        area: data
+        default: None
+        recommended: Your confidential channel naming patterns, for example *-confidential-*, hr-* and legal-*
+        why: Claude won't read or respond in a matching channel even if someone invites it, and a workspace can add patterns but not remove the organisation's.
+        mitigations: [AML.M0028, cap-data-access-governance]
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-10-30"
+      - id: channelsClaudeCanSearch
+        name: Channels Claude can search
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Channels › Slack (or a workspace or channel) › Advanced › Channels
+        setVia: [adminConsole]
+        area: data
+        default: All public channels
+        recommended: All public channels
+        why: Public channels are open to every member already and private ones are never searched; regulated teams choose Only channels Claude is in.
+        mitigations: [cap-data-access-governance]
+        url: https://claude.com/docs/claude-tag/admins/restrict-access
+        verified: "2026-10-30"
+      - id: autoModeAllowRules
+        name: Auto mode allow rules
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Channels › scope › Advanced › Sessions
+        setVia: [adminConsole]
+        area: tools
+        default: None
+        recommended: None on the Slack page or workspaces; narrow rules naming tool, action and environment on single channels
+        why: A rule pre-approves an action in every channel beneath its scope with nobody approving it; the permission checker keeps reviewing everything else.
+        mitigations: [AML.M0029, AML.M0028]
+        url: https://claude.com/docs/claude-tag/admins/customize
+        verified: "2026-10-30"
+      - id: allowedWebsites
+        name: Allowed websites
+        where: claude.ai/admin-settings/claude-tag › Claude's access › Connectors › connector › connect form
+        setVia: [adminConsole]
+        area: tools
+        recommended: The service's own API hosts only, with a dedicated service account per tool
+        why: Agent Proxy attaches the credential only for the listed hosts and the sandbox never holds it, so a prompt-injected request elsewhere goes out without it.
+        mitigations: [D3-CH, AML.M0028]
+        url: https://claude.com/docs/claude-tag/admins/add-connections
+        verified: "2026-10-30"
+      - id: restrictByPathOrMethod
+        name: Restrict by path or method
+        where: claude.ai/admin-settings/claude-tag › Connectors › connector › Access from › Edit connection
+        setVia: [adminConsole]
+        area: tools
+        recommended: GET only, and a path prefix, wherever the channel only needs to read
+        why: Everyone in a scope can make Claude act with its credentials; a read-only connection can't delete or post even if Claude is told to.
+        mitigations: [AML.M0028]
+        url: https://claude.com/docs/claude-tag/admins/add-connections
+        verified: "2026-10-30"
+      - id: allowAllHosts
+        name: Allow all hosts
+        where: claude.ai/admin-settings/claude-tag › Bundles › bundle › Add a domain (Domain `*`)
+        setVia: [adminConsole]
+        area: network
+        default: Not set (Limited access environment plus the hosts you add)
+        recommended: Not set — add Read-only domain entries one host at a time
+        why: Sandbox requests reach only hosts a connection, domain entry or environment allows; a `*` entry, or a Full access environment on a scope, opens every host.
+        mitigations: [AML.M0028]
+        url: https://claude.com/docs/claude-tag/admins/add-connections
+        verified: "2026-10-30"
+      - id: federatedAgentAccess
+        name: Federated agent access
+        where: claude.ai/admin-settings/claude-tag › Federated agent access
+        setVia: [adminConsole, cloudPolicy]
+        area: identity
+        default: None connected
+        recommended: A gateway, AWS role, Google Cloud identity or authorization server for every system that accepts one
+        why: Claude presents a 10-minute signed token your system checks, so no long-lived key is stored in Claude for those systems.
+        mitigations: [D3-CH]
+        url: https://claude.com/docs/claude-tag/admins/federated-access/overview
+        verified: "2026-10-30"
+      - id: githubEveryRepository
+        name: Every repository in (repository grant)
+        where: claude.ai/admin-settings/claude-tag › Bundles › bundle › Add › Repository
+        setVia: [adminConsole]
+        area: tools
+        default: Not selected
+        recommended: Not used — grant named repositories to each bundle or channel
+        why: The grant is every repository in the GitHub App installation, including ones added later; named grants keep a channel to the code it works on.
+        mitigations: [AML.M0028]
+        url: https://claude.com/docs/claude-tag/admins/configure-github
+        verified: "2026-10-30"
+      - id: githubTwoApprovals
+        name: Require two approving reviews
+        where: GitHub › repository › branch protection rule or ruleset on the branches Claude opens pull requests against
+        setVia: [adminConsole]
+        area: tools
+        recommended: Two approving reviews, with stale approvals dismissed on new commits
+        why: Claude authors its pull requests, so the person who asked for the change could otherwise approve and merge it alone.
+        mitigations: [AML.M0029]
+        url: https://claude.com/docs/claude-tag/admins/configure-github
+        verified: "2026-10-30"
+      - id: requireHumanReview
+        name: Require human review of every message
+        where: claude.ai/admin-settings/claude-tag › Personal connectors › Edit
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: Off — the sensitive-content check holds flagged results for the requester
+        why: Results of tasks run on a member's personal connectors are screened before posting; regulated teams turn it on so every result waits for the requester.
+        mitigations: [cap-sensitive-data-redaction, AML.M0029]
+        requires: Enterprise
+        url: https://claude.com/docs/claude-tag/concepts/personal-connectors
+        verified: "2026-10-30"
+      - id: additionalTopics
+        name: Additional topics (Sensitive information requiring review)
+        where: claude.ai/admin-settings/claude-tag › Personal connectors › Edit
+        setVia: [adminConsole]
+        area: data
+        default: Anthropic's examples only
+        recommended: Your own markers — client code names, deal names, board material
+        why: Personal-connector results touching those topics are held for the requester's review instead of posting to the channel.
+        mitigations: [cap-sensitive-data-redaction]
+        url: https://claude.com/docs/claude-tag/concepts/personal-connectors
+        verified: "2026-10-30"
+      - id: inferenceHooks
+        name: Inference hooks
+        where: claude.ai Organization settings › Data and privacy › Inference hooks
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
+        why: Each Claude Tag request, the Slack thread and tool results included, is checked by your own service before inference, so secrets and injected content can be stopped centrally.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails, cap-agent-tracing]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+        verified: "2026-10-30"
+      - id: spendLimit
+        name: Spend limit
+        where: claude.ai/admin-settings/usage/claude-tag (organisation, default and per-channel limits)
+        setVia: [adminConsole]
+        area: tools
+        recommended: A monthly organisation limit, and a default per-channel limit, sized from the pilot
+        why: A looping routine or channel stops when its limit is reached instead of drawing on the whole usage balance; a 0 default also stops direct messages from members without a seat.
+        mitigations: []
+        url: https://claude.com/docs/claude-tag/admins/set-spend-limit
+        verified: "2026-10-30"
+      - id: activityFeed
+        name: Compliance API (Activity Feed)
+        where: claude.ai Organization settings › API, then a Compliance Access Key
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your SIEM
+        why: Bindings, Slack access scopes, connector credentials and proxy rules (ccr_agent_* events) reach the SIEM; Claude Tag transcripts are not in the Compliance API during the beta.
+        mitigations: [cap-agent-tracing, cap-agent-tool-registry]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/api/compliance/activities/list
+        verified: "2026-10-30"
     sources:
       - title: Claude Tag overview
         url: https://claude.com/docs/claude-tag/overview

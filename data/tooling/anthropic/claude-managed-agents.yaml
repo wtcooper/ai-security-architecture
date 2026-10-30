@@ -3,6 +3,7 @@
 # 2026-09-15: added sandboxing, egress, runtime enforcement, credential isolation and MCP rows after the managed-runtime drawing pinned them; fetched environments, cloud-sandboxes-reference, self-hosted-sandboxes-security, permission-policies, mcp-connector, vaults, tools (all 200).
 # 2026-09-25: re-verified all 16 rows (D3-MFA, D3-AA, D3-CH, D3-CTS, D3-EI, AML.M0028, AML.M0029, AML.M0031, cap-agent-tool-registry, cap-staged-rollout-gate, cap-agent-action-policy-enforcement, cap-input-guardrails, cap-ai-vendor-assessment, cap-agent-tracing, cap-agent-kill-switch, cap-agent-egress-control) against the MITRE capability rules; every platform.claude.com and support.claude.com page cited answered 200 with no redirect (read as .md via llms.txt); trust.anthropic.com renders client-side and was read in a browser; the Console login article confirms no Console-native MFA.
 # 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the workspace-scoped vault note is retagged as confused deputy.
+# 2026-10-30: added the settings table (25 rows) from secure-deployment and the pages it links (all 200, read as .md). Corrected: limited networking's allowed_hosts now also bounds web_search and web_fetch, and allow_mcp_servers false refuses a session whose MCP host is unlisted; the Console's organisation web search / web fetch settings now apply in sessions; the Compliance API is enabled at claude.ai Organization settings › API or the Console's Compliance page; the vendor's permission guidance is now auto on bash / write / edit / web_fetch; Claude Models on Google Cloud (Anthropic managed) added as a platform.
 vendor: anthropic
 family: Claude Managed Agents
 tools:
@@ -22,7 +23,7 @@ tools:
           retention are yours. Environment-variable vault credentials are not yet supported here.
     architecture: archManagedAgentRuntime
     status: beta
-    asOf: "2026-09"
+    asOf: "2026-10"
     summary:
       - >-
         Anthropic's hosted agent harness (beta, enabled by default for API accounts; Managed Agents endpoints
@@ -34,12 +35,13 @@ tools:
         the session and sandbox state is checkpointed for 30 days, so Managed Agents is not ZDR- or
         HIPAA-BAA-eligible.
       - >-
-        Governance is API-native and workspace-scoped: permission_policy always_allow / always_ask per toolset
-        or per tool (MCP toolsets default to always_ask), tool enable flags, per-tool allowed_domains /
+        Governance is API-native and workspace-scoped: permission_policy always_allow / always_ask / auto per
+        toolset or per tool (MCP toolsets default to always_ask), tool enable flags, per-tool allowed_domains /
         blocked_domains, environment networking unrestricted / limited with allowed_hosts, vault credentials
         injected at egress so the agent never sees the secret, hard dollar session budgets, versioned agent
         definitions, memory stores with immutable version history and redaction, signed webhooks and a
-        persisted event stream. Also available on Claude Platform on AWS with differences.
+        persisted event stream. Also available on Claude Platform on AWS and Claude Models on Google Cloud
+        (Anthropic managed) with differences.
     facts:
       - label: Plans
         value: >-
@@ -49,7 +51,7 @@ tools:
         url: https://platform.claude.com/docs/en/managed-agents/budgets
       - label: Inference & routing
         value: >-
-          Anthropic API only (plus Claude Platform on AWS); model pinned per agent with optional inference_geo
+          Anthropic API, Claude Platform on AWS and Claude Models on Google Cloud (Anthropic managed); model pinned per agent with optional inference_geo
           "us" or "global", validated against the workspace's allowed_inference_geos when the agent is saved,
           when a session is created and on every turn.
         url: https://platform.claude.com/docs/en/managed-agents/agent-setup
@@ -82,11 +84,14 @@ tools:
       - risk: riskRogueActions
         note: >-
           The built-in agent toolset defaults to always_allow, including bash with unrestricted egress on
-          API-created environments; production guidance is limited networking and always_ask on bash or MCP
-          tools that write.
+          API-created environments; the vendor's guidance is limited networking, auto on bash, write, edit and
+          web_fetch, and always_ask on tools whose changes cannot be undone, on bash where end-user text is
+          relayed, and on MCP tools that write.
       - risk: riskToolSourceProvenance
         note: >-
-          MCP servers are declared by URL with no allowlist beyond the agent definition; MCP toolsets default
+          MCP servers are declared by URL with no workspace allowlist; in a limited environment with
+          allow_mcp_servers false, a session whose agent declares a host outside allowed_hosts fails to start.
+          MCP toolsets default
           to always_ask so newly added server tools do not run unapproved, and per-tool enabled flags can pin
           the set.
       - risk: riskSensitiveDataDisclosure
@@ -192,7 +197,9 @@ tools:
           - title: Record who changed each definition
             body:
               - >-
-                Turn on the Compliance API (Console Settings > Security) and pull platform_agent_created,
+                Turn on the Compliance API (claude.ai Organization settings › API for an Enterprise parent, or
+                the Compliance API toggle on the Console's Compliance page for a standalone Console
+                organisation) and pull platform_agent_created,
                 platform_agent_updated and platform_agent_archived from the Activity Feed, alongside the
                 agent.* webhooks.
             url: https://platform.claude.com/docs/en/api/compliance/activities/list
@@ -326,8 +333,9 @@ tools:
           - title: Switch the vendor's web tools off or bound them
             body:
               - >-
-                Set enabled false on web_search and web_fetch, or put allowed_domains or blocked_domains (1 to
-                64 each) on their configs entries; environment networking does not govern these tools.
+                Set enabled false on web_search and web_fetch, or put allowed_domains (1 to 64) on their configs
+                entries; a limited environment's allowed_hosts also bounds them, and the organisation's web
+                search and web fetch settings on the Console's Capabilities page apply on top.
             url: https://platform.claude.com/docs/en/managed-agents/tools
           - title: Enable only the MCP tools you reviewed
             body:
@@ -820,8 +828,10 @@ tools:
         mechanism: >-
           Environment networking type limited with allowed_hosts (bare hostnames or wildcard patterns),
           allow_mcp_servers and allow_package_managers (an Anthropic-maintained registry list), enforced
-          around the cloud sandbox; unrestricted (a general safety blocklist only) is the default; web_search
-          / web_fetch bounded separately by allowed_domains or blocked_domains on the tool
+          around the cloud sandbox and, in a limited environment, applied to web_search and web_fetch too;
+          unrestricted (a general safety blocklist only) is the default for an API request that omits
+          networking; allowed_domains on each web tool and the Console's organisation web settings narrow those
+          tools further
         steps:
           - title: Set limited networking with an explicit host list
             body:
@@ -830,11 +840,12 @@ tools:
                 agent needs; leave allow_package_managers false unless the environment installs packages, and
                 allow_mcp_servers false unless code in the sandbox must reach the agent's MCP endpoints.
             url: https://platform.claude.com/docs/en/managed-agents/environments
-          - title: Bound the vendor's web tools separately
+          - title: Bound the vendor's web tools as well
             body:
               - >-
-                The networking policy does not touch web_search or web_fetch, which run on Anthropic's
-                servers; set allowed_domains or blocked_domains on those tool entries, or disable them.
+                web_search and web_fetch run on Anthropic's servers; limited networking's allowed_hosts bounds
+                them, but an unrestricted or self-hosted environment does not, so set allowed_domains on both
+                tool entries in every environment type, or disable them.
             url: https://platform.claude.com/docs/en/managed-agents/tools
           - title: Firewall self-hosted workers yourself
             body:
@@ -845,10 +856,12 @@ tools:
         note: >-
           Native by the egress rule, for the cloud sandbox's own traffic. Access is per host, not per
           operation: an allowed host accepts uploads, git push and package publishing, and
-          allow_package_managers opens a list Anthropic can change. Paths it does not see: web_search and
-          web_fetch (their own lists), the MCP connector, which connects from Anthropic's side, and inference.
-          Environments start unrestricted, are not versioned, and can be updated by any workspace key, so the
-          least-privilege posture is set and re-checked deliberately.
+          allow_package_managers opens a list Anthropic can change; a host added for the web tools is open to
+          the sandbox too. The web tools are bounded only in a limited environment; the MCP connector connects
+          from Anthropic's side (allowed_hosts gates which MCP hosts a session may declare while
+          allow_mcp_servers is false), and inference is outside it. API-created environments start
+          unrestricted, are not versioned, and can be updated by any workspace key, so the least-privilege
+          posture is set and re-checked deliberately.
         verified: "2026-09-25"
         migration:
           from:
@@ -907,8 +920,8 @@ tools:
         note: >-
           Partial by the rule: per-tool allow / ask / auto in the definition, set by whoever can edit the
           agent. There is no declarative policy over arguments or target resources beyond the web tools'
-          domain lists, and no workspace or organisation floor a builder cannot lower (the Console's
-          organisation-level web settings apply to the Messages API only). auto is a model's judgement, not a
+          domain lists, and no workspace or organisation floor a builder cannot lower except the Console's
+          organisation web search and web fetch settings, which now apply in sessions. auto is a model's judgement, not a
           deterministic decision point: it reads user.message content as intent, so relayed end-user input can
           get a call allowed. Any workspace key can loosen a policy for one session with agent_with_overrides,
           or for an idle running session with a tools update; agent updates reach only sessions created
@@ -1029,6 +1042,287 @@ tools:
                 through per-user vaults or per-user mcp_oauth, not the runtime's default. Where no credential
                 matches a server, the connection is attempted unauthenticated.
               verified: 2026-09-15
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Organisation and workspace settings live in the Claude Console (or claude.ai Organization settings
+    # for an Enterprise parent); everything else is a field on the agent, environment, vault or session the
+    # API or the ant CLI writes, so check it in the deploy pipeline. Verified 2026-10-30.
+    settings:
+      - id: requireSsoConsole
+        name: Require SSO for Console
+        where: claude.ai Organization settings › Organization and access › Authentication (or Claude Console › Settings › Identity and access)
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: Every Console sign-in — the people who create keys, agents, environments and vaults — goes through the corporate IdP and its MFA.
+        mitigations: [D3-APA]
+        requires: SSO set up through a parent organisation (Enterprise, or arranged with Sales)
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning (or the Console's Identity and access page)
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Console access
+        why: Removing someone in the IdP removes their Console membership, and their personal API keys stop working with it.
+        mitigations: [D3-APA]
+        requires: Enterprise or a Console organisation with its own parent organisation
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: restrictOrgCreation
+        name: Restrict organization creation
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Stops staff opening their own Console organisations on your verified domains, where agents would run outside your workspaces, roles and audit.
+        mitigations: [D3-APA]
+        requires: Verified domain
+        url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        verified: "2026-10-30"
+      - id: workspaceRoles
+        name: Workspace roles
+        where: Claude Console › Settings › Workspaces › workspace › Members
+        setVia: [adminConsole, apiCli]
+        area: identity
+        recommended: Workspace Developer only for the agent's authors and its pipeline service account; Workspace User for everyone else; Workspace Admin for a named few
+        why: Any role that can use the API can create, update or override agents and attach any vault in the workspace; Workspace Limited Developer limits only the Console, not the API.
+        mitigations: [D3-APA, cap-agent-tool-registry]
+        url: https://platform.claude.com/docs/en/manage-claude/workspaces#workspace-roles-and-permissions
+        verified: "2026-10-30"
+      - id: workloadIdentityFederation
+        name: Federation rule (Connect workload)
+        where: Claude Console › Settings › Workload identity › Connect workload (oauth_scope, token_lifetime_seconds), then ANTHROPIC_FEDERATION_RULE_ID in the workload
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "workspace:developer, 3600-second tokens (the wizard prefills 600)"
+        recommended: One rule per agent workload, enabled in one workspace only, with token_lifetime_seconds 600
+        why: No long-lived Claude API key sits in the deployment, and archiving the rule refuses the next token exchange, so the token lifetime is the revocation delay.
+        mitigations: [D3-CH, D3-APA, cap-agent-kill-switch]
+        url: https://platform.claude.com/docs/en/manage-claude/workload-identity-federation
+        verified: "2026-10-30"
+      - id: apiKeyExpiration
+        name: Key expiration
+        where: Claude Console › API keys › Create key (expiration and Linked account)
+        setVia: [adminConsole]
+        area: identity
+        default: Chosen per key; Never is offered unless an organisation maximum expiration policy is set
+        recommended: 30 days or less, linked to a service account scoped to one workspace — never a legacy workspace key or Never
+        why: A key that leaks from a pipeline stops working on its own, and an identity-backed key dies with its service account.
+        mitigations: [D3-CH]
+        url: https://platform.claude.com/docs/en/manage-claude/authentication#key-expiration
+        verified: "2026-10-30"
+      - id: allowedInferenceGeos
+        name: allowed_inference_geos
+        where: Claude Console › workspace settings → allowed_inference_geos, default_inference_geo
+        setVia: [adminConsole]
+        area: data
+        default: All geos allowed
+        recommended: The geos your data-handling policy approves for that workspace (["us"] where client contracts require US processing)
+        why: An agent or session whose inference_geo is outside the list is rejected when it is saved, when a session starts and on every turn.
+        mitigations: []
+        url: https://platform.claude.com/docs/en/manage-claude/data-residency#workspace-level-restrictions
+        verified: "2026-10-30"
+      - id: environmentType
+        name: Cloud or self-hosted sandbox
+        where: Environment › config.type (cloud or self_hosted)
+        setVia: [apiCli, adminConsole]
+        area: tools
+        recommended: Cloud, unless tools must run on infrastructure you control
+        why: Keeps each session in Anthropic's per-session container; a self-hosted sandbox makes isolation, hardening and egress the firm's to build.
+        mitigations: [D3-EI]
+        url: https://platform.claude.com/docs/en/managed-agents/secure-deployment#choose-where-the-agent-runs
+        verified: "2026-10-30"
+      - id: environmentNetworking
+        name: networking (limited, allowed_hosts)
+        where: Environment › config.networking.type, config.networking.allowed_hosts
+        setVia: [apiCli, adminConsole]
+        area: network
+        default: unrestricted when an API request omits it; the Console form starts at Limited with nothing allowed
+        recommended: limited, with only the hosts the agent needs — set explicitly in every create request
+        why: Sandbox traffic, and in a limited environment web_search and web_fetch too, reaches only listed hosts; unrestricted lets an injected command post anything anywhere.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        url: https://platform.claude.com/docs/en/managed-agents/environments#networking
+        verified: "2026-10-30"
+      - id: allowPackageManagersMcpServers
+        name: allow_package_managers and allow_mcp_servers
+        where: Environment › config.networking.allow_package_managers, allow_mcp_servers
+        setVia: [apiCli, adminConsole]
+        area: network
+        default: "false / false"
+        recommended: "false / false — list package mirrors and MCP hosts in allowed_hosts instead"
+        why: allow_package_managers opens github.com and the public registries on a list Anthropic can change; with allow_mcp_servers false a session whose agent declares an unlisted MCP host fails to start.
+        mitigations: [cap-agent-egress-control, AML.M0028]
+        url: https://platform.claude.com/docs/en/managed-agents/environments#networking
+        verified: "2026-10-30"
+      - id: webToolAllowedDomains
+        name: allowed_domains (web_search, web_fetch)
+        where: Agent › tools › agent_toolset_20260401 › configs entry for web_fetch and web_search → allowed_domains
+        setVia: [apiCli]
+        area: network
+        default: Unset (any site)
+        recommended: On web_fetch, the sites the agent needs; on web_search, the sites you want results from
+        why: Any URL the agent fetches can carry data to that site; blocked_domains is not a security control, and the lists apply in every environment type.
+        mitigations: [cap-agent-egress-control, AML.M0028]
+        url: https://platform.claude.com/docs/en/managed-agents/tools-web-restrictions
+        verified: "2026-10-30"
+      - id: orgWebSearchFetch
+        name: Web search and web fetch (organization settings)
+        where: Claude Console › Settings › Capabilities
+        setVia: [adminConsole]
+        area: network
+        default: "On, no domain restrictions"
+        recommended: "On, with organisation-wide blocked domains only where a policy covers every workspace"
+        why: The one web-tool floor no agent definition can lower — a search result or fetched URL must pass both the organisation's lists and the tool's own.
+        mitigations: [cap-agent-egress-control, cap-agent-action-policy-enforcement]
+        url: https://platform.claude.com/docs/en/managed-agents/tools-web-restrictions
+        verified: "2026-10-30"
+      - id: agentToolsetEnabled
+        name: default_config.enabled (agent toolset)
+        where: Agent › tools › agent_toolset_20260401 › default_config.enabled, then configs per tool
+        setVia: [apiCli]
+        area: tools
+        default: "true (all eight built-in tools)"
+        recommended: false, then enable only the tools the agent needs
+        why: An agent that never needed bash or the web tools does not hold them when untrusted input tells it to use them.
+        mitigations: [AML.M0028]
+        url: https://platform.claude.com/docs/en/managed-agents/tools
+        verified: "2026-10-30"
+      - id: agentToolsetPermissionPolicy
+        name: permission_policy (agent toolset)
+        where: Agent › tools › agent_toolset_20260401 › default_config.permission_policy and configs[].permission_policy
+        setVia: [apiCli]
+        area: tools
+        default: always_allow
+        recommended: auto on bash, write, edit and web_fetch; always_allow on read, glob and grep; always_ask on bash where the agent relays end-user text
+        why: The server evaluates each consequential call instead of running all of them unreviewed; regulated teams set always_ask so a person approves every call.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://platform.claude.com/docs/en/managed-agents/secure-deployment#approve-risky-actions
+        verified: "2026-10-30"
+      - id: mcpToolsetEnabled
+        name: default_config.enabled (MCP toolset)
+        where: Agent › tools › mcp_toolset › default_config.enabled, then configs per tool
+        setVia: [apiCli]
+        area: tools
+        default: "true (every tool the server exposes)"
+        recommended: false, with each reviewed tool enabled by name
+        why: A tool the server operator adds later stays off until someone reviews it, instead of appearing in every session.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://platform.claude.com/docs/en/managed-agents/mcp-connector
+        verified: "2026-10-30"
+      - id: mcpToolsetPermissionPolicy
+        name: permission_policy (MCP toolset)
+        where: Agent › tools › mcp_toolset › default_config.permission_policy and configs[].permission_policy
+        setVia: [apiCli]
+        area: tools
+        default: always_ask
+        recommended: always_ask for tools that change data — keep the default; auto per tool for read-only tools
+        why: A write to a connected system pauses for your application's approval, and a newly added server tool still waits.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://platform.claude.com/docs/en/managed-agents/permission-policies
+        verified: "2026-10-30"
+      - id: credentialInjection
+        name: injection_location and networking (environment variable credential)
+        where: Vault › credential (environment_variable) › injection_location, networking
+        setVia: [apiCli, adminConsole]
+        area: data
+        default: "Both locations when an API create omits it (Console-created: header only)"
+        recommended: '{"header": true, "body": false}, with limited networking naming the exact hosts the key is for'
+        why: The real secret is substituted only into request headers to those hosts; a body location or unrestricted networking hands it to whatever the agent builds.
+        mitigations: [D3-CTS, D3-CH]
+        url: https://platform.claude.com/docs/en/managed-agents/vaults
+        verified: "2026-10-30"
+      - id: vaultIds
+        name: vault_ids
+        where: Session or deployment create → vault_ids
+        setVia: [apiCli]
+        area: identity
+        default: None attached
+        recommended: One vault per end user or workload, and only that one passed to its sessions; vaults of different trust levels in separate workspaces
+        why: A session presents only its caller's credentials, since anyone who can start sessions in a workspace can reference its vaults.
+        mitigations: [D3-CTS]
+        url: https://platform.claude.com/docs/en/managed-agents/vaults
+        verified: "2026-10-30"
+      - id: githubAuthorizationToken
+        name: authorization_token (github_repository resource)
+        where: Session resources › github_repository › authorization_token
+        setVia: [apiCli]
+        area: data
+        recommended: A fine-grained token for that repository with the minimum permissions — write only if the agent must push
+        why: Code in the sandbox can fetch from and push to the mounted repository with the token for the whole session.
+        mitigations: [D3-CTS, D3-CH]
+        url: https://platform.claude.com/docs/en/managed-agents/github#token-permissions
+        verified: "2026-10-30"
+      - id: memoryStoreAccess
+        name: access (memory store attachment)
+        where: Session resources › memory_store › access
+        setVia: [apiCli]
+        area: data
+        default: read_write
+        recommended: read_only, unless the agent must write to that store
+        why: An injected instruction cannot plant text that later sessions read as trusted memory; the filesystem rejects writes.
+        mitigations: [AML.M0031]
+        url: https://platform.claude.com/docs/en/managed-agents/memory
+        verified: "2026-10-30"
+      - id: sessionAgentVersion
+        name: agent (pinned version)
+        where: Session or deployment create → agent {type agent, id, version}
+        setVia: [apiCli]
+        area: tools
+        default: Latest version when the agent ID is passed as a string
+        recommended: A pinned version on every session and deployment; no agent_with_overrides outside testing
+        why: A newly saved definition runs only where the pipeline points a session at it, and rolling back is changing that number.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://platform.claude.com/docs/en/managed-agents/sessions
+        verified: "2026-10-30"
+      - id: sessionBudget
+        name: budget (max_list_cost)
+        where: Session or deployment create → budget.max_list_cost
+        setVia: [apiCli]
+        area: tools
+        default: No budget (cannot be added to a session created without one)
+        recommended: A cap sized to what you expect one run to cost
+        why: A looping or hijacked session pauses every thread at the cap instead of running on; spend can pass it by the requests already in flight.
+        mitigations: [AML.M0036]
+        url: https://platform.claude.com/docs/en/managed-agents/budgets
+        verified: "2026-10-30"
+      - id: workspaceSpendLimits
+        name: Spend limits
+        where: Claude Console › Settings › Workspaces › workspace › Spend limits
+        setVia: [adminConsole]
+        area: tools
+        default: The organisation's limits
+        recommended: A monthly cap and alert on each agent workspace
+        why: A session created without a budget, or many of them, stop at the workspace's cap rather than the organisation's.
+        mitigations: [AML.M0036]
+        url: https://platform.claude.com/docs/en/manage-claude/workspaces#workspace-limits
+        verified: "2026-10-30"
+      - id: webhooks
+        name: Webhooks (event types)
+        where: Claude Console › Settings › Workspaces › workspace › Webhooks
+        setVia: [adminConsole]
+        area: audit
+        default: No endpoints
+        recommended: An endpoint subscribed to session.status_idled, session.budget_reached, session.status_terminated and the agent.*, environment.* and vault_credential.* events
+        why: Idle, capped and failed sessions and every definition change raise an alert; webhooks drop after three attempts, so reconcile against the event list.
+        mitigations: [cap-agent-tracing, cap-agent-tool-registry]
+        url: https://platform.claude.com/docs/en/managed-agents/webhooks
+        verified: "2026-10-30"
+      - id: complianceActivityFeed
+        name: Compliance API (Activity Feed)
+        where: claude.ai Organization settings › API (Enterprise parent), or Claude Console › Settings › Compliance › Compliance API (standalone Console organisation), then a key with read:compliance_activities
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your SIEM
+        why: Agent, session, vault and memory-store changes with their actors (platform_agent_updated, platform_agent_session_created) reach the SIEM, retained six years; nothing is recorded while it is off.
+        mitigations: [cap-agent-tracing, cap-agent-tool-registry]
+        requires: Enterprise, or an eligible standalone Console organisation
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-api-access
+        verified: "2026-10-30"
     sources:
       - title: Claude Managed Agents overview
         url: https://platform.claude.com/docs/en/managed-agents/overview

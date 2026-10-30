@@ -9,6 +9,7 @@
 # Many governance pages are marked "standard harness"; the GitHub Copilot harness is kept as a variant until its
 # own governance pages diverge.
 # 2026-09-25: onboarded toolCopilotStudio against the MITRE capability rules; data-integration/gateway/service-gateway-tenant-level-admin -> power-platform/admin/onpremises-data-gateway-management; 404: power-platform/admin/inventory-schema-copilot-studio-agents (the agent schema is at microsoft-copilot-studio/admin-agent-inventory), data-integration/gateway/service-gateway-data-sources; msrc.microsoft.com/update-guide renders client-side (CVE titles and dates read from api.msrc.microsoft.com). Microsoft identity, Purview DLP-location and Service Trust Portal facts reused from toolM365Copilot (verified the same day).
+# 2026-10-30: added the settings table; every row re-read on learn.microsoft.com (all 200). The data-policy connector table on admin-data-loss-prevention no longer lists the knowledge connectors; Knowledge source with documents in Copilot Studio is named on knowledge-add-file-upload. power-platform/admin/copilot/copilot-data-movement 404 (data movement and Bing search are on geographical-availability-copilot).
 vendor: microsoft
 family: Microsoft Copilot Studio
 tools:
@@ -615,6 +616,360 @@ tools:
           bulk action; the maker-credential switch stops their use for tools. Quarantine and block do not cover
           classic chatbots. Deleting the agent removes its Entra Agent ID.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Most rows are Power Platform admin center data policies and environment or environment-group
+    # settings; set them on environment groups so local admins cannot loosen them. Verified 2026-10-30.
+    settings:
+      - id: copilotStudioAuthors
+        name: Copilot Studio authors
+        where: Power Platform admin center › Manage › Tenant settings › Copilot Studio authors
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: An Entra security group of makers who have taken the firm's agent-building training
+        why: Only people the firm has trained and can name build agents, instead of every licensed user.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/tenant-settings
+        verified: "2026-10-30"
+      - id: environmentSecurityGroup
+        name: Security group (environment)
+        where: Power Platform admin center › Manage › Environments › (environment) › Edit › Security group
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: The Entra group for the team that owns the environment, on every production and sandbox environment
+        why: Removing someone from the group disables them in the environment, so leavers and other teams cannot reach its agents or data; the default and developer environments cannot take a group.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/control-user-access
+        verified: "2026-10-30"
+      - id: requireAuthentication
+        name: Chat without Microsoft Entra ID authentication in Copilot Studio
+        where: Power Platform admin center › Security › Data and privacy › Data policy › (tenant-wide policy) › connector
+        setVia: [adminConsole]
+        area: identity
+        default: Not blocked (makers can pick No authentication)
+        recommended: Blocked, in a policy scoped to Add all environments
+        why: Makers can no longer publish an agent anyone with the link can chat with; only Authenticate with Microsoft or Authenticate manually remain.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-data-loss-prevention
+        verified: "2026-10-30"
+      - id: makerCredentials
+        name: Control maker credential options
+        where: Power Platform admin center › Manage › Environment groups › (group) › Settings › Product › Features › Copilot Studio agents
+        setVia: [adminConsole]
+        area: identity
+        default: End-user credentials and Maker-provided credentials both allowed
+        recommended: End-user credentials only, except an environment group set aside for reviewed autonomous agents
+        why: A tool can no longer lend its maker's access to every user of the agent; scheduled and autonomous agents fail without maker credentials, hence the separate group.
+        mitigations: [D3-APA, cap-data-access-governance, D3-CH]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/configure-no-maker-authentication
+        verified: "2026-10-30"
+      - id: agentSharingLimits
+        name: Only share with individuals (no security groups) › Limit number of viewers who can access each agent
+        where: Power Platform admin center › Manage › Environments › (managed environment) › Edit Managed Environments › Manage sharing › Agent sharing rules
+        setVia: [adminConsole, apiCli]
+        area: sharing
+        default: No limits
+        recommended: On with a limit of 20 viewers in the personal-developer environment group; production groups, which publish through pipelines, leave it off
+        why: An in-progress agent, possibly on maker credentials, cannot be shared to the whole firm before it has been through review; rules apply to new shares and take up to an hour.
+        mitigations: [D3-APA]
+        requires: Managed Environments
+        url: https://learn.microsoft.com/en-us/power-platform/admin/managed-environment-sharing-limits
+        verified: "2026-10-30"
+      - id: externalChannels
+        name: Direct Line channels in Copilot Studio, Facebook channel in Copilot Studio, WhatsApp channel in Copilot Studio
+        where: Power Platform admin center › Security › Data and privacy › Data policy › (tenant-wide policy) › connectors
+        setVia: [adminConsole]
+        area: sharing
+        default: Allowed (Direct Line channels allowed by default)
+        recommended: Blocked tenant-wide, with an excluded environment for approved public-facing agents
+        why: Agents reach only Teams, Microsoft 365 and SharePoint unless a public agent has been approved for a website or messaging channel.
+        mitigations: [D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-data-loss-prevention
+        verified: "2026-10-30"
+      - id: agentAccessChannels
+        name: Agent access channels
+        where: Power Platform admin center › Security › Identity and access › Agent access channels › (environment group)
+        setVia: [adminConsole]
+        area: sharing
+        recommended: Teams + Microsoft 365 and SharePoint only on every environment group except the public-agent one
+        why: Channels cannot be added by editing agent code, and a channel closed later makes agents already published there fail at runtime (preview).
+        mitigations: [D3-APA, cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/security/configure-channel-connected-agent-publishing
+        verified: "2026-10-30"
+      - id: connectorClassification
+        name: Data policy (Business, Non-business, Blocked)
+        where: Power Platform admin center › Security › Data and privacy › Data policy › New Policy › Assign connectors › Define scope › Add all environments
+        setVia: [adminConsole]
+        area: tools
+        default: No tenant policy; new connectors land in the default group (Non-business)
+        recommended: Tenant-wide policy with the firm's systems in Business, consumer storage and social connectors Blocked, and the default group set to Blocked
+        why: Connectors in different groups cannot be combined, so an agent reading client data cannot also post it to a consumer service, and a new connector stays unusable until reviewed.
+        mitigations: [AML.M0028, cap-data-access-governance]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-data-loss-prevention
+        verified: "2026-10-30"
+      - id: connectorActions
+        name: Connector actions › Default connector action settings
+        where: Data policy › (blockable connector) › Configure connector › Connector actions
+        setVia: [adminConsole, apiCli]
+        area: tools
+        default: Allow (new actions allowed)
+        recommended: Block for new actions; deny delete and send actions the firm's agents do not need on each Business connector
+        why: An agent can call only the operations someone approved, and an action the vendor adds later is blocked until reviewed; custom and unblockable connectors are out of scope.
+        mitigations: [AML.M0028]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/connector-action-control
+        verified: "2026-10-30"
+      - id: advancedConnectorPolicies
+        name: Advanced connector policies
+        where: Power Platform admin center › Manage › Environment groups › (group) › Rules › Advanced connector policies
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: On in mixed mode on production environment groups, listing only the approved certified and MCP connectors
+        why: Default-deny means a connector or MCP server nobody approved is blocked automatically; custom, HTTP and Copilot Studio virtual connectors still need the classic policy.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        requires: Managed Environments
+        url: https://learn.microsoft.com/en-us/power-platform/admin/advanced-connector-policies
+        verified: "2026-10-30"
+      - id: httpEndpoints
+        name: HTTP › Connector endpoints
+        where: Data policy › HTTP › Configure connector › Connector endpoints
+        setVia: [adminConsole]
+        area: network
+        default: "* Allow"
+        recommended: Allow the firm's approved API hosts, then * Deny
+        why: An HTTP request node can reach only listed hosts, closing the arbitrary-URL exfiltration path; dynamically built URLs are not evaluated (preview).
+        mitigations: [AML.M0028]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/connector-endpoint-filtering
+        verified: "2026-10-30"
+      - id: uploadedKnowledge
+        name: Knowledge source with documents in Copilot Studio
+        where: Data policy › (tenant-wide policy) › connector
+        setVia: [adminConsole]
+        area: data
+        default: Not blocked (no data policy)
+        recommended: Blocked in production environment groups; makers ground on SharePoint, which keeps the user's permissions
+        why: A file a maker uploads is answered to anyone who can use the agent, whatever its source permissions were.
+        mitigations: [cap-data-access-governance]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/knowledge-add-file-upload
+        verified: "2026-10-30"
+      - id: eventTriggers
+        name: Microsoft Copilot Studio (event triggers)
+        where: Data policy › (tenant-wide policy) › connector
+        setVia: [adminConsole]
+        area: tools
+        default: Not blocked (no data policy)
+        recommended: Blocked tenant-wide; allowed only in the environment group for reviewed autonomous agents
+        why: Agents that act on an event with nobody present exist only where someone reviewed what they can reach.
+        mitigations: [AML.M0028]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-data-loss-prevention
+        verified: "2026-10-30"
+      - id: hostedBrowser
+        name: Hosted browser in computer use
+        where: Power Platform admin center › Manage › Tenant settings › Hosted browser in computer use
+        setVia: [adminConsole]
+        recommended: "Off until a computer-use pilot has an owner and an access-control allow list"
+        area: tools
+        why: Computer use can act on any website, by default on the maker's stored credentials, from a Microsoft-hosted machine.
+        mitigations: [AML.M0028]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/tenant-settings
+        verified: "2026-10-30"
+      - id: externalThreatDetection
+        name: Allow Copilot Studio to share data with a threat detection provider
+        where: Power Platform admin center › Security › Threat detection › Additional threat detection › (environment) › Set up
+        setVia: [adminConsole]
+        area: tools
+        default: Not configured
+        recommended: On with Microsoft Defender for every environment that holds production agents
+        why: Each proposed tool call is checked by a classifier the firm runs before it executes; there is no tenant-wide switch, so new environments need it too (preview).
+        mitigations: [cap-input-guardrails]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/external-security-provider
+        verified: "2026-10-30"
+      - id: threatErrorBehavior
+        name: Set error behavior
+        where: Additional threat detection › (environment) › Set error behavior
+        setVia: [adminConsole]
+        area: tools
+        default: Allow the agent to respond
+        recommended: Block the query
+        why: A provider that is slow (over one second) or down blocks the tool call instead of letting it run unscreened.
+        mitigations: [cap-input-guardrails]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/external-security-provider
+        verified: "2026-10-30"
+      - id: sensitivityLabelDlp
+        name: DLP policy scoped to the Microsoft 365 Copilot location (sensitivity labels)
+        where: Microsoft Purview › Data loss prevention › Policies › location "Microsoft 365 Copilot and Copilot Chat" › Content contains › Sensitivity labels
+        setVia: [adminConsole]
+        area: data
+        default: No policy
+        recommended: Exclude the firm's highest label (e.g. Highly Confidential – client restricted) from processing
+        why: Agents grounded on SharePoint in Teams, SharePoint and Microsoft 365 Copilot do not use labelled content in their answers.
+        mitigations: [cap-data-access-governance]
+        requires: Microsoft 365 E5 or Purview add-on
+        url: https://learn.microsoft.com/en-us/purview/ai-copilot-studio
+        verified: "2026-10-30"
+      - id: transcriptsDataverse
+        name: Allow conversation transcripts and their associated metadata to be saved in Dataverse (required for enhanced reporting)
+        where: Power Platform admin center › Manage › Environment groups › (group) › Rules › Accessing transcripts from conversations in Copilot Studio agents
+        setVia: [adminConsole]
+        area: audit
+        default: "On"
+        recommended: "On"
+        why: Every conversation lands in the firm's own Dataverse where it can be exported; turning it off removes the record of what agents said and did.
+        mitigations: [cap-agent-tracing]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-transcript-controls
+        verified: "2026-10-30"
+      - id: transcriptViewers
+        name: Allow agent owners and editors to see session transcripts from conversation interactions in their agents
+        where: Same environment-group rule › Accessing transcripts from conversations in Copilot Studio agents
+        setVia: [adminConsole]
+        area: data
+        default: "On"
+        recommended: Off in production environment groups
+        why: Makers stop reading and downloading what colleagues typed to their agents, often client data; the security team still reads transcripts in Dataverse.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-transcript-controls
+        verified: "2026-10-30"
+      - id: transcriptRetention
+        name: Bulk Delete Conversation Transcript Records Older Than 1 Month
+        where: Power Apps › Settings › Advanced settings › Settings › Data Management › Bulk Record Deletion › Recurring Bulk Deletion System Jobs
+        setVia: [adminConsole]
+        area: audit
+        default: Transcripts older than 30 days deleted
+        recommended: Keep the 30-day job; export the ConversationTranscript table to the SIEM before it runs
+        why: Thirty days in Dataverse is the baseline retention, and the exported copy is the record investigations use.
+        mitigations: [cap-agent-tracing]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/analytics-transcripts-powerapps
+        verified: "2026-10-30"
+      - id: purviewAudit
+        name: Audit (Copilot Studio activities)
+        where: Microsoft Purview › Audit; collected through the Office 365 Management API
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: Administrative activities enabled on all tenants
+        recommended: On, streamed to the SIEM; alert on BotUpdateOperation-BotAuthUpdate and BotUpdateOperation-BotShare
+        why: Maker changes to an agent's authentication and sharing, and every user interaction, are searchable outside the platform.
+        mitigations: [cap-agent-tracing, cap-agent-tool-registry]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-logging-copilot-studio
+        verified: "2026-10-30"
+      - id: agentInventory
+        name: Inventory
+        where: Power Platform admin center › Manage › Inventory (Copilot Studio agents), or the Power Platform inventory API
+        setVia: [adminConsole, apiCli]
+        area: audit
+        recommended: Reviewed monthly for agents on maker credentials, with No authentication, shared tenant-wide or owned by leavers
+        why: Every agent, drafts included, is listed with owner, channels and per-connector credential mode, so the risky ones can be found before they are used.
+        mitigations: [cap-agent-tool-registry]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/power-platform-inventory
+        verified: "2026-10-30"
+      - id: blockAgent
+        name: Block
+        where: Power Platform admin center › Manage › Inventory › (published agent) › Block
+        setVia: [adminConsole]
+        area: audit
+        default: Agents unblocked
+        recommended: The incident runbook's first step for a misbehaving agent
+        why: Stops one agent on every channel except the maker's test chat, reversibly, without touching other agents.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/power-platform-inventory
+        verified: "2026-10-30"
+      - id: quarantineApi
+        name: SetAsQuarantined
+        where: Power Platform API › POST copilotstudio/environments/{EnvironmentId}/bots/{BotId}/api/botQuarantine/SetAsQuarantined
+        setVia: [apiCli]
+        area: audit
+        recommended: Wired into the SOAR playbook, with an app registration holding CopilotStudio.AdminActions.Invoke
+        why: The SOC can isolate an agent from an alert without opening the admin center; classic chatbots are not covered.
+        mitigations: [cap-agent-kill-switch]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-api-quarantine
+        verified: "2026-10-30"
+      - id: entraAgentIdMigration
+        name: Migrate Copilot Studio agents to Microsoft Entra Agent ID for enhanced agent governance
+        where: Power Platform admin center › Actions › Recommendations
+        setVia: [adminConsole, apiCli]
+        area: identity
+        default: Agents created before May 2026 keep app registrations
+        recommended: Migrate every legacy agent, a pilot batch first
+        why: Each agent gets a directory identity with a sponsor and its connector scopes visible in Entra, instead of an app registration nobody reviews (preview).
+        mitigations: [D3-AA]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/govern-migrate-api-entra-agent-identity
+        verified: "2026-10-30"
+      - id: agentConditionalAccess
+        name: Microsoft Entra Conditional Access (agent identity connector scopes)
+        where: Microsoft Entra admin center › Conditional Access › policy targeting the connector permissions on Copilot Studio agent identities
+        setVia: [identityProvider]
+        area: identity
+        default: No policy
+        recommended: Require a compliant network location and block high-risk agent sign-ins for connectors that write
+        why: Token issuance for a connector can be refused by Entra; today it is evaluated only when the agent runs in Teams.
+        mitigations: [D3-AA, D3-APA]
+        url: https://learn.microsoft.com/en-us/microsoft-copilot-studio/govern-agents-identities-overview
+        verified: "2026-10-30"
+      - id: environmentRouting
+        name: Environment routing
+        where: Power Platform admin center › Manage › Tenant settings › Environment routing
+        setVia: [adminConsole]
+        area: sharing
+        default: "Off"
+        recommended: On for new and existing makers, routed into a governed personal-developer environment group
+        why: Makers build in their own managed environment under group rules instead of the shared default environment everyone can see.
+        mitigations: [cap-staged-rollout-gate]
+        requires: Managed Environments
+        url: https://learn.microsoft.com/en-us/power-platform/admin/default-environment-routing
+        verified: "2026-10-30"
+      - id: delegatedDeployments
+        name: Is delegated deployment
+        where: Pipelines host › Deployment Pipeline Configuration › (production stage) › Is delegated deployment
+        setVia: [adminConsole]
+        area: tools
+        default: "Off"
+        recommended: On for the production stage, as a service principal, with an approval step in the OnApprovalStarted flow
+        why: An agent reaches production only after a named approver releases it, deployed as a service identity rather than the maker.
+        mitigations: [cap-staged-rollout-gate]
+        requires: Managed Environments (pipeline targets)
+        url: https://learn.microsoft.com/en-us/power-platform/alm/delegated-deployments-setup
+        verified: "2026-10-30"
+      - id: bingSearch
+        name: Bing search
+        where: Power Platform admin center › Manage › Environments › (environment) › Generative AI features › Edit
+        setVia: [adminConsole]
+        area: data
+        recommended: Selected
+        why: Web grounding is much of an agent's value; Bing-powered features fall under the Microsoft Services Agreement, so regulated teams leave it clear.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/power-platform/admin/geographical-availability-copilot
+        verified: "2026-10-30"
+      - id: externalModels
+        name: Enable External Models (Power Platform Anthropic, Power Platform Mistral AI, Power Platform XAI)
+        where: Microsoft 365 admin center (provider) then Power Platform admin center › Environment groups › (group) › Rules
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: Only the providers the firm's vendor assessment approved; Anthropic off where EU Data Boundary commitments apply
+        why: An agent's prompts reach a model provider only after the firm has assessed it; Anthropic is outside the EU Data Boundary and xAI is US-only.
+        mitigations: [cap-ai-vendor-assessment]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/allow-llm-generative-responses
+        verified: "2026-10-30"
+      - id: dataSharingMicrosoft
+        name: Data sharing for Dynamics 365 Copilot and Power Platform Copilot AI Features
+        where: Power Platform admin center › Manage › Tenant settings
+        setVia: [adminConsole]
+        area: data
+        default: Disabled
+        recommended: Disabled
+        why: Microsoft does not capture or human-review the firm's prompts and outputs to improve its models.
+        mitigations: []
+        url: https://learn.microsoft.com/en-us/power-platform/admin/tenant-settings
+        verified: "2026-10-30"
+      - id: gatewayInstallers
+        name: Restrict Users in your organization from installing gateways
+        where: Power Platform admin center › Manage › Data (preview) › On-premises data gateways › Manage gateway installers
+        setVia: [adminConsole]
+        area: network
+        default: "Off (anyone in the organisation can install a gateway)"
+        recommended: On, with named gateway administrators as the only installers
+        why: Nobody can stand up a relay from an on-premises system to Microsoft's cloud, holding that system's credential, without IT knowing.
+        mitigations: [D3-CH]
+        url: https://learn.microsoft.com/en-us/power-platform/admin/onpremises-data-gateway-management
+        verified: "2026-10-30"
     advisories:
       - title: "CVE-2026-21520 — Copilot Studio information disclosure (unauthenticated, network), fixed server-side"
         url: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-21520

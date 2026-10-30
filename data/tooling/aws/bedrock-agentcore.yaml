@@ -16,6 +16,7 @@
 # release-note links devguide/gateway-guardrails.html and devguide/web-search.html land on the dev guide
 # root. beyondtrust.com research returned 403 (not cited).
 # 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02); the token-passthrough note merged into the confused-deputy note.
+# 2026-10-30: added the settings table, each row re-read from the developer guide as .md (all 200); devguide/harness-limits.html and devguide/browser-create.html 404 (limits are on harness-operations). policy-enforcement-modes still says no key protects the mode while security-gateway-condition-keys lists bedrock-agentcore:PolicyEngineMode.
 vendor: aws
 family: Amazon Bedrock AgentCore
 tools:
@@ -644,6 +645,344 @@ tools:
           limits fail open on transient errors, ENIs can persist 8 hours after deletion, and nothing cancels work
           the agent handed to other agents.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # AgentCore has no admin console: rows are resource fields set over the control-plane API or
+    # CLI, IAM and SCP condition keys (cloudPolicy) and code in the front end. Verified 2026-10-30.
+    settings:
+      - id: harnessJwtAuthorizer
+        name: customJWTAuthorizer
+        where: CreateHarness / UpdateHarness › authorizerConfiguration (discoveryUrl, allowedClients)
+        setVia: [apiCli]
+        area: identity
+        default: IAM SigV4 callers only
+        recommended: The firm's IdP discovery URL and the front end's client ID
+        why: Callers present a user token, so the end user's identity reaches downstream tools instead of one shared service role.
+        mitigations: [D3-APA, D3-CTS]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+        verified: "2026-10-30"
+      - id: gatewayAuthorizerType
+        name: bedrock-agentcore:GatewayAuthorizerType
+        where: SCP or IAM policy › Deny CreateGateway / UpdateGateway unless the key is CUSTOM_JWT or AWS_IAM
+        setVia: [cloudPolicy]
+        area: identity
+        recommended: Deny NONE in every member account
+        why: No one can create a gateway with No Authorization that forwards any caller, signed or not, to its tools.
+        mitigations: [D3-APA]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-gateway-condition-keys.html
+        verified: "2026-10-30"
+      - id: invokeOverrides
+        name: InvokeHarness overrides (model, additionalParams, skills, allowedTools)
+        where: The application that calls InvokeHarness › forward only the user's message
+        setVia: [code]
+        area: tools
+        default: Callers can override model, additionalParams, skills, tools and allowedTools per call
+        recommended: Stripped by the front end; actorId and runtimeSessionId derived server-side from the signed-in user
+        why: A caller cannot widen the agent's tools, load its own skills or redirect inference with signed credentials; no condition key restricts these fields.
+        mitigations: [AML.M0028, D3-APA]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+        verified: "2026-10-30"
+      - id: allowedTools
+        name: allowedTools
+        where: CreateHarness / UpdateHarness › allowedTools
+        setVia: [apiCli]
+        area: tools
+        default: All tools, including the built-in shell and file_operations
+        recommended: The named entries the agent needs (for example "@builtin/file_operations", "@crm/read_*"); shell only where the task requires it
+        why: The model can select only the tools listed, so a prompt injection cannot reach a shell the use case never needed.
+        mitigations: [AML.M0028]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+        verified: "2026-10-30"
+      - id: invokeAgentRuntimeCommand
+        name: bedrock-agentcore:InvokeAgentRuntimeCommand
+        where: IAM identity policies and SCP
+        setVia: [cloudPolicy]
+        area: tools
+        recommended: Granted to no principal that fronts users; break-glass role only
+        why: The API runs commands in the session without the model, outside allowedTools and the gateway policy engine.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+        verified: "2026-10-30"
+      - id: policyEngineMode
+        name: policyEngineConfiguration › mode
+        where: CreateGateway / UpdateGateway › policyEngineConfiguration (arn, mode)
+        setVia: [apiCli]
+        area: tools
+        default: No policy engine
+        recommended: ENFORCE, after a LOG_ONLY period
+        why: Every tool call through the gateway is denied unless a Cedar policy permits it for that principal and those arguments.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-enforcement-modes.html
+        verified: "2026-10-30"
+      - id: policyEngineModeFloor
+        name: bedrock-agentcore:PolicyEngineMode
+        where: SCP › Deny CreateGateway / UpdateGateway unless the key is ENFORCE (with bedrock-agentcore:PolicyEngineArn on the approved engine)
+        setVia: [cloudPolicy]
+        area: tools
+        recommended: ENFORCE required in every member account
+        why: A builder cannot drop a gateway to LOG_ONLY or detach its engine; the enforcement-modes page says no key protects the mode, so test that the SCP refuses it.
+        mitigations: [cap-agent-action-policy-enforcement]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-gateway-condition-keys.html
+        verified: "2026-10-30"
+      - id: beforeToolCallHook
+        name: before_tool_call › failureMode
+        where: CreateHarness / UpdateHarness › lifecycle hooks › before_tool_call (Lambda target)
+        setVia: [apiCli, code]
+        area: tools
+        default: No hook; failureMode deny when a hook is set
+        recommended: A Lambda hook that denies consequential tools outside policy or routes them for approval, failureMode deny
+        why: Built-in, remote MCP and inline tools the gateway never sees get a check before they run, and callers cannot override hooks per invocation.
+        mitigations: [cap-agent-action-policy-enforcement, AML.M0029]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-lifecycle-hooks.html
+        verified: "2026-10-30"
+      - id: inlineFunctionApproval
+        name: Inline function tools
+        where: CreateHarness › tools › inline_function, answered by the application with toolResult on the same runtimeSessionId
+        setVia: [code]
+        area: tools
+        recommended: Consequential actions (payments, sends, deletions) defined as inline functions a person approves before the toolResult is returned
+        why: The loop pauses on the exact call and the model's input, and nothing happens until the application answers it.
+        mitigations: [AML.M0029]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html
+        verified: "2026-10-30"
+      - id: credentialProviderType
+        name: bedrock-agentcore:CredentialProviderType
+        where: SCP › Deny CreateGatewayTarget / UpdateGatewayTarget unless the key is on the approved list
+        setVia: [cloudPolicy]
+        area: identity
+        recommended: OAUTH, API_KEY and GATEWAY_IAM_ROLE allowed; JWT_PASSTHROUGH denied for targets outside the firm
+        why: A target outside the trust boundary never receives the caller's own token unmodified.
+        mitigations: [D3-CTS]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-gateway-condition-keys.html
+        verified: "2026-10-30"
+      - id: mcpTargetType
+        name: bedrock-agentcore:McpTargetConfigurationType
+        where: SCP › Deny CreateGatewayTarget / UpdateGatewayTarget for mcpServer outside the platform team's role
+        setVia: [cloudPolicy]
+        area: tools
+        recommended: mcpServer targets created only by the platform team's pipeline role
+        why: A remote MCP server becomes an agent tool only after the team that keeps the registry has reviewed it.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-gateway-condition-keys.html
+        verified: "2026-10-30"
+      - id: listingMode
+        name: ListingMode
+        where: CreateGatewayTarget › MCP server target › ListingMode
+        setVia: [apiCli]
+        area: tools
+        default: DEFAULT
+        recommended: DEFAULT, with SynchronizeGatewayTargets run only after the server's changed tools are reviewed
+        why: The gateway serves the catalog it indexed, so a server that changes its tool definitions does not change what agents see until someone re-syncs; DYNAMIC forwards live.
+        mitigations: [AML.M0028]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-target-MCPservers.html
+        verified: "2026-10-30"
+      - id: harnessNetworkMode
+        name: networkConfiguration › networkMode
+        where: CreateHarness / CreateAgentRuntime › environment › agentCoreRuntimeEnvironment.networkConfiguration
+        setVia: [apiCli]
+        area: network
+        default: PUBLIC
+        recommended: VPC, in private subnets whose egress passes the firm's firewall allowlist, with ECR, S3 and bedrock-runtime endpoints
+        why: Commands and code in the session reach only the hosts the firm allows, not the open internet.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-security.html
+        verified: "2026-10-30"
+      - id: subnetFloor
+        name: bedrock-agentcore:subnets / bedrock-agentcore:securityGroups
+        where: SCP › Deny CreateAgentRuntime, UpdateAgentRuntime, CreateCodeInterpreter, CreateBrowser when null or not approved
+        setVia: [cloudPolicy]
+        area: network
+        recommended: Approved subnets and security groups required in every member account
+        why: A builder cannot launch a runtime, code interpreter or browser on the public network; CreateHarness is not among the documented operations, so check harnesses separately.
+        mitigations: [cap-agent-egress-control]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/security-vpc-condition.html
+        verified: "2026-10-30"
+      - id: codeInterpreterNetwork
+        name: Network settings (Code Interpreter)
+        where: AgentCore console › Built-in Tools › Code Interpreter › Create › Network settings
+        setVia: [adminConsole, apiCli]
+        area: network
+        recommended: Sandbox, or VPC where the code must reach private data
+        why: Model-written code runs with limited external network access instead of on the public internet.
+        mitigations: [cap-agent-egress-control, D3-EI]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-create.html
+        verified: "2026-10-30"
+      - id: harnessMemory
+        name: memory (harness)
+        where: CreateHarness / UpdateHarness › memory (disabled, managedMemoryConfiguration or agentCoreMemoryConfiguration)
+        setVia: [apiCli]
+        area: data
+        default: Managed memory provisioned when the field is omitted
+        recommended: Set explicitly on every harness; managed memory with encryptionKeyArn and eventExpiryDuration 30 where the agent needs to remember, otherwise disabled
+        why: Conversations are not kept by accident, and what is kept expires on the firm's retention and under its key.
+        mitigations: [AML.M0031]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-memory.html
+        verified: "2026-10-30"
+      - id: memoryActorBinding
+        name: Fine-grained access control for Memory
+        where: AgentCore Gateway › Memory connector target › Cedar policy on actorId
+        setVia: [apiCli]
+        area: data
+        recommended: Event and record access permitted only when the request's actorId equals the token's sub
+        why: One user's agent cannot read or write another user's memories by passing their actorId.
+        mitigations: [AML.M0031]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory-gateway-fgac.html
+        verified: "2026-10-30"
+      - id: lifecycleConfiguration
+        name: lifecycleConfiguration › idleRuntimeSessionTimeout / maxLifetime
+        where: CreateAgentRuntime / UpdateAgentRuntime (harness lifecycle limits)
+        setVia: [apiCli]
+        area: tools
+        default: 900 s idle, 28800 s (8 hours) maximum
+        recommended: 900 s idle; maxLifetime the longest task the agent runs, at most 4 hours
+        why: A session, and the credentials in it, is reclaimed soon after its work ends instead of living for eight hours.
+        mitigations: [AML.M0036, D3-EI]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-lifecycle-settings.html
+        verified: "2026-10-30"
+      - id: harnessLimits
+        name: maxIterations / timeoutSeconds / maxTokens
+        where: CreateHarness / UpdateHarness › limits
+        setVia: [apiCli]
+        area: tools
+        default: 75 iterations, 3600 s, no token budget
+        recommended: A maxTokens budget per invocation and timeoutSeconds 1800; strip per-call overrides in the front end
+        why: A looping or hijacked agent stops at a cost and time ceiling instead of running for an hour.
+        mitigations: [AML.M0036]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-operations.html
+        verified: "2026-10-30"
+      - id: gatewayRateLimits
+        name: Rate limits (gateway)
+        where: AgentCore Gateway › rate limits › dimension keys and rate entries
+        setVia: [apiCli]
+        area: tools
+        recommended: A per-caller and per-tool rate on every production gateway
+        why: One caller or runaway agent cannot exhaust a tool, and a rate of zero blocks a specific caller at once.
+        mitigations: [AML.M0036, cap-agent-kill-switch]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-rate-limits.html
+        verified: "2026-10-30"
+      - id: tokenVaultKey
+        name: Customer managed key (token vault)
+        where: AgentCore Identity › token vault encryption
+        setVia: [apiCli]
+        area: identity
+        default: AWS owned key
+        recommended: A customer managed KMS key
+        why: The firm controls, audits and can revoke the key that protects every stored OAuth token and API key.
+        mitigations: [D3-CH]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity-data-encryption.html
+        verified: "2026-10-30"
+      - id: privateKeyJwt
+        name: Private Key JWT
+        where: CustomOauth2 credential provider › client authentication › asymmetric KMS signing key ARN
+        setVia: [apiCli]
+        area: identity
+        recommended: Private Key JWT wherever the authorisation server supports it
+        why: AgentCore signs client assertions in KMS, so there is no shared client secret to leak.
+        mitigations: [D3-CH]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/private-key-jwt.html
+        verified: "2026-10-30"
+      - id: scopeCredentialAccess
+        name: GetResourceOauth2Token / GetResourceApiKey
+        where: Execution-role IAM policy › exact credential-provider ARNs
+        setVia: [cloudPolicy]
+        area: identity
+        recommended: Each workload's role names only its own providers; gateway-injected credentials preferred to code retrieval
+        why: A compromised agent can fetch only the credentials it was built to use, not every secret in the vault.
+        mitigations: [D3-CH, D3-CTS]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/scope-credential-provider-access.html
+        verified: "2026-10-30"
+      - id: guardrailsInPolicies
+        name: Guardrails in policies (PromptAttack, ContentFilter, SensitiveInformation)
+        where: Policy in AgentCore › forbid and suppressOutput policies with a when guardrails block; gateway role holds bedrock:InvokeGuardrailChecks
+        setVia: [apiCli]
+        area: tools
+        recommended: PromptAttack over context.input and ContentFilter and SensitiveInformation over context.output on every production gateway, calibrated in LOG_ONLY
+        why: What agents send to tools and what tools return are screened with a logged decision; only gateway traffic is covered.
+        mitigations: [cap-input-guardrails]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy-guardrails-in-policies.html
+        verified: "2026-10-30"
+      - id: transactionSearch
+        name: Enable Transaction Search
+        where: CloudWatch console › Application Signals (APM) › Transaction search
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On in every account that runs agents, with log groups subscribed to the SIEM
+        why: Harness and gateway spans (model calls, tool calls, shell commands) appear with no further setup.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+        verified: "2026-10-30"
+      - id: contentExtraction
+        name: AWS_GENAI_CONTENT_EXTRACTION_OPT_OUT
+        where: Runtime environment variable (ADOT instrumentation)
+        setVia: [code]
+        area: data
+        recommended: Unset, so model payloads and tool data stay off spans
+        why: Prompts and tool results are not copied into CloudWatch for everyone with log access; set it only on a log group the firm treats as client data.
+        mitigations: []
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html
+        verified: "2026-10-30"
+      - id: cloudtrailDataEvents
+        name: CloudTrail data events (AgentCore Gateway)
+        where: CloudTrail › trail › advanced event selectors
+        setVia: [cloudPolicy]
+        area: audit
+        default: Not captured
+        recommended: On, delivered to an S3 bucket in a separate logging account
+        why: Each gateway request is recorded where the agent's own account cannot alter it.
+        mitigations: [cap-agent-tracing]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/enabling-cloudtrail-data-event-logging.html
+        verified: "2026-10-30"
+      - id: productionEndpoint
+        name: targetVersion (harness endpoint)
+        where: CreateHarnessEndpoint / UpdateHarnessEndpoint › targetVersion
+        setVia: [apiCli]
+        area: tools
+        default: DEFAULT endpoint follows every update
+        recommended: Production callers use a named endpoint pinned to a tested version; rollback moves the pointer back
+        why: An UpdateHarness reaches users only when someone moves the production endpoint, and moving it back is the rollback.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-versioning.html
+        verified: "2026-10-30"
+      - id: registryAutoDetection
+        name: Auto-detection (organization-scoped registry)
+        where: AWS Agent Registry › delegated administrator › organization-scoped registry
+        setVia: [adminConsole, apiCli]
+        area: audit
+        recommended: On, owned by a delegated administrator account
+        why: Every AgentCore Runtime and Gateway in member accounts is catalogued automatically, so unregistered agents show up.
+        mitigations: [cap-agent-tool-registry]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-organizations.html
+        verified: "2026-10-30"
+      - id: registryApproval
+        name: Record approval
+        where: AWS Agent Registry › create registry › Record approval
+        setVia: [adminConsole, apiCli]
+        area: audit
+        recommended: Manual approval (auto-approval off), with the submit event routed to the review workflow
+        why: A record is discoverable only after a curator approves it, and a detected change returns it to Draft.
+        mitigations: [cap-agent-tool-registry]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/registry-organizations.html
+        verified: "2026-10-30"
+      - id: stopRuntimeSession
+        name: StopRuntimeSession
+        where: bedrock-agentcore API › StopRuntimeSession (runtime ARN, qualifier, runtimeSessionId)
+        setVia: [apiCli]
+        area: audit
+        recommended: The SOC playbook's first step, rehearsed on a harness
+        why: Terminates the session and its streaming responses at once, instead of only refusing new ones.
+        mitigations: [cap-agent-kill-switch]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-stop-session.html
+        verified: "2026-10-30"
+      - id: resourcePolicyDeny
+        name: Resource-based policy (agent runtime and endpoint)
+        where: PutResourcePolicy on the runtime and its endpoints › Deny bedrock-agentcore:InvokeAgentRuntime
+        setVia: [cloudPolicy]
+        area: audit
+        recommended: A pre-written Deny statement ready to attach during an incident
+        why: An explicit deny on the resource refuses every new invocation whatever the callers' own policies allow.
+        mitigations: [cap-agent-kill-switch, D3-APA]
+        url: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/resource-based-policies.html
+        verified: "2026-10-30"
     advisories:
       - title: "CVE-2026-18830 — AgentCore harness InvokeHarness could dispatch a configured tool without the model"
         url: https://aws.amazon.com/security/security-bulletins/2026-073-aws/

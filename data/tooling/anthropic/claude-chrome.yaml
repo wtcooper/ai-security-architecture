@@ -1135,6 +1135,230 @@ tools:
                 2026-09-10; the certifications list above comes from privacy.claude.com. Reassess on each
                 extension release, since the store update channel is automatic.
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Claude in Chrome is governed from claude.ai Organization settings › Claude in Chrome and the shared
+    # organisation settings, from Chrome's own extension policy (Google Admin console or MDM, keyed on
+    # fcoeoabgfenejglbffodgkkbkcdhcgfn), and, for Claude Code's browser tools, managed settings. Verified 2026-10-30.
+    settings:
+      - id: requireSso
+        name: Require SSO for Claude
+        where: claude.ai Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: The claude.ai account the extension signs in with goes through the corporate IdP and its MFA; personal email logins on your domain stop working.
+        mitigations: [D3-MFA]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Claude
+        why: Removing someone in the IdP removes their seat, so a leaver's extension stops working with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: restrictOrgCreation
+        name: Restrict organization creation
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Stops staff creating personal or side Claude organisations on your verified domains, which no admin can see.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Team or Enterprise, verified domain
+        url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        verified: "2026-10-30"
+      - id: migrateAccounts
+        name: Migrate accounts using your domain
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: On, after reviewing the personal accounts listed on your domain
+        why: No Free, Pro or Max account can exist on the verified domain, so nobody runs the extension in their work browser on a personal plan; it can't be reversed.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Enterprise, enforced SSO
+        url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+        verified: "2026-10-30"
+      - id: tenantRestrictions
+        name: Tenant Restrictions (anthropic-allowed-org-ids)
+        where: Corporate TLS-inspecting proxy → anthropic-allowed-org-ids header on claude.ai, api.anthropic.com, claude.com and anthropic.com
+        setVia: [cloudPolicy]
+        area: identity
+        default: Not injected
+        recommended: Your organisation's UUID, injected and overwritten on every request from managed devices
+        why: The extension's chat traffic uses your existing Claude endpoints, so a personal or other organisation's account is refused on the corporate network.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+        verified: "2026-10-30"
+      - id: forceLoginOrgUUID
+        name: forceLoginOrgUUID
+        where: Chrome enterprise policy for the extension (fcoeoabgfenejglbffodgkkbkcdhcgfn), from the Google Admin console or MDM → forceLoginOrgUUID
+        setVia: [mdm, adminConsole]
+        area: identity
+        default: Unset (any organisation)
+        recommended: Your organisation's UUID
+        why: In managed browsers the extension works only with your organisation, so a personal account can't drive the user's signed-in sessions.
+        mitigations: [D3-MFA, cap-shadow-ai-discovery]
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-10-30"
+      - id: enableForYourTeam
+        name: Enable for your team
+        where: claude.ai Organization settings › Claude in Chrome
+        setVia: [adminConsole]
+        area: identity
+        default: On (Team; Enterprise unless an Owner already turned it off)
+        recommended: On, once the allowlist and blocklist are set and the extension is deployed to the pilot groups only
+        why: The organisation-wide off switch for the extension and for Claude Desktop tasks that drive the browser.
+        mitigations: [cap-agent-kill-switch]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-10-30"
+      - id: chromeRoleCapability
+        name: Claude in Chrome (custom role capability)
+        where: claude.ai Organization settings › Roles › role › Capabilities
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: Granted only to the roles of the groups piloting it
+        why: Claude in Chrome doesn't inherit Cowork access, so withholding the capability keeps everyone else off it; role changes take up to 15 minutes.
+        mitigations: [cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: siteAllowlist
+        name: Allowlist
+        where: claude.ai Organization settings › Claude in Chrome
+        setVia: [adminConsole]
+        area: network
+        recommended: The internal apps and approved SaaS teams use Claude on, widened as the pilot shows the need
+        why: Claude can navigate to and act only on listed sites, in the extension and the Cowork built-in browser, so an injected page can't send it to the user's other signed-in sessions.
+        mitigations: [cap-agent-egress-control, AML.M0028, D3-CTS, cap-agent-action-policy-enforcement]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-10-30"
+      - id: siteBlocklist
+        name: Blocklist
+        where: claude.ai Organization settings › Claude in Chrome
+        setVia: [adminConsole]
+        area: tools
+        default: Anthropic's default blocked categories only
+        recommended: Banking and payment sites, HR and payroll systems, and your admin consoles
+        why: Claude can't navigate to or act on those sites whatever the user allows, in Claude in Chrome or the Cowork built-in browser.
+        mitigations: [AML.M0028, cap-agent-action-policy-enforcement, cap-sensitive-data-redaction]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-10-30"
+      - id: passwordManagerAccess
+        name: Control password manager access (1Password for Claude)
+        where: claude.ai Organization settings › Claude in Chrome
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: Off, unless a team needs Claude to complete sign-in tasks
+        why: Keeps the agent from signing in to further sites on the user's behalf; when on, 1Password fills the credential without Claude seeing it.
+        mitigations: [D3-CTS]
+        requires: Team or Enterprise, macOS
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-10-30"
+      - id: extensionSettings
+        name: ExtensionSettings (installation_mode)
+        where: Chrome policy (Google Admin console or MDM) → ExtensionSettings › fcoeoabgfenejglbffodgkkbkcdhcgfn › installation_mode
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Self-service install from the Chrome Web Store
+        recommended: '"force_installed" for the organisational unit or profile used for agent work; "blocked" everywhere else'
+        why: Only the managed agent profile runs the extension; users can't remove it there or install it in the profile that holds their other sign-ins.
+        mitigations: [cap-agent-tool-registry, D3-CTS]
+        url: https://support.google.com/chrome/a/answer/7532015
+        verified: "2026-10-30"
+      - id: isLocalDevMcpEnabled
+        name: isLocalDevMcpEnabled
+        where: Claude Desktop policy (com.anthropic.claudefordesktop / HKLM\SOFTWARE\Policies\Claude) → isLocalDevMcpEnabled
+        setVia: [mdm]
+        area: tools
+        default: "true"
+        recommended: "false"
+        why: Stops tasks started in Claude Desktop driving the browser through the extension, along with other local MCP servers.
+        mitigations: [cap-agent-kill-switch]
+        url: https://support.claude.com/en/articles/13065128-claude-in-chrome-admin-controls
+        verified: "2026-10-30"
+      - id: deniedMcpServers
+        name: deniedMcpServers
+        where: Claude Code managed-settings.json → deniedMcpServers
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset (no servers blocked)
+        recommended: '[{"serverName": "claude-in-chrome"}] on devices outside the groups approved for Claude in Chrome'
+        why: Claude Code can't load its built-in browser tools there and stops offering the install prompt; built-in servers skip the allowedMcpServers check.
+        mitigations: [cap-agent-kill-switch, cap-agent-tool-registry]
+        url: https://code.claude.com/docs/en/chrome
+        verified: "2026-10-30"
+      - id: permissionsAsk
+        name: permissions.ask
+        where: Claude Code managed-settings.json → permissions.ask
+        setVia: [mdm, adminConsole]
+        area: tools
+        default: Unset
+        recommended: '["mcp__claude-in-chrome__*"]'
+        why: The only admin-enforced approval on browser actions — every Claude Code call into the user's browser asks first, auto mode included.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://code.claude.com/docs/en/settings-reference#permissions-ask
+        verified: "2026-10-30"
+      - id: memory
+        name: Memory
+        where: claude.ai Organization settings › Capabilities
+        setVia: [adminConsole]
+        area: data
+        default: "Off (each member opts in once an Owner allows it)"
+        recommended: "Off; projects keep their own context"
+        why: Memory is shared with cloud Cowork, which the side panel runs as, so page content from one session could steer a later one; turning it off deletes every entry.
+        mitigations: [AML.M0031]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context
+        verified: "2026-10-30"
+      - id: inferenceHooks
+        name: Inference hooks
+        where: claude.ai Organization settings › Data and privacy › Inference hooks
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
+        why: One hook now governs Claude in Chrome with the rest of the organisation, so page text and tool results carrying injected instructions or regulated data can be denied before inference.
+        mitigations: [cap-input-guardrails, cap-sensitive-data-redaction, cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks
+        verified: "2026-10-30"
+      - id: complianceApi
+        name: Compliance API (session transcripts)
+        where: claude.ai Organization settings › API, then a Compliance Access Key with read:compliance_user_data
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your eDiscovery or SIEM
+        why: Extension sessions (product_surface claude_in_chrome) with every navigation, click and form entry as a tool call are retrievable centrally; screenshots are omitted.
+        mitigations: [cap-agent-tracing, D3-WSAA]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-sessions
+        verified: "2026-10-30"
+      - id: chromeEventReporting
+        name: Enable event reporting
+        where: Google Admin console › Devices › Chrome › Settings › Browser reporting › Event reporting, then a reporting connector
+        setVia: [adminConsole]
+        area: audit
+        recommended: On for the agent profile's organisational unit, sent to your SIEM's reporting connector
+        why: The browser's own record of unsafe-site visits, transfers and data-protection events in the profile Claude acts in, beside the transcript the vendor exports.
+        mitigations: [D3-WSAA, cap-agent-tracing]
+        url: https://support.google.com/chrome/a/answer/11375053
+        verified: "2026-10-30"
     advisories:
       - title: >-
           ShadowPrompt — zero-click prompt injection via a trusted *.claude.ai subdomain and third-party

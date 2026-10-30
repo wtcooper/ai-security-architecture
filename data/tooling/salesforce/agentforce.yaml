@@ -8,6 +8,7 @@
 # recorded here. Agentforce DX (Salesforce CLI, VS Code) is a pro-code shell over the same metadata with no admin
 # surface of its own, recorded as a fact. Agent types (Employee, Service, Lead Nurturing) are facts, not variants.
 # 2026-09-25: onboarded toolAgentforce against the MITRE capability rules; help.salesforce.com renders client-side (WebFetch and curl return only the loading shell) and developer.salesforce.com answered 403 to curl and WebFetch, so both were read in a browser (Playwright) as the last resort; sf.* help ids redirect to xcloud.* (named_credentials_about, nc_named_creds_and_ext_creds, admin_monitorsetup, private_connect_overview); developer.salesforce.com/docs/einstein/genai/guide/* -> /docs/ai/agentforce/guide/*; www.salesforce.com pages append ?bc=OTH; compliance.salesforce.com documents need a login and trust.salesforce.com (200) was not read; help.salesforce.com/llms.txt 401, developer.salesforce.com/llms.txt 403.
+# 2026-10-30: added the settings table; help.salesforce.com still client-rendered (loading shell to curl and WebFetch) and was not read, while developer.salesforce.com now answers 200 to curl (pages also served as .md; developer.salesforce.com/docs/llms-genai.txt indexes the Agentforce guide) and Trailhead renders server-side, so rows cite those; resources.docs.salesforce.com PDFs failed TLS verification; cap-input-guardrails set to unknown pending a re-read of the Help toggle.
 vendor: salesforce
 family: Salesforce Agentforce
 tools:
@@ -326,7 +327,7 @@ tools:
           in the target org.
         verified: "2026-09-25"
       - mitigation: cap-input-guardrails
-        coverage: partial
+        coverage: unknown
         mechanism: >-
           Setup > Einstein Trust Layer > Safety & Security > prompt injection detection (Beta), an org-level toggle
           whose scores are logged to the audit trail in Data 360; built-in system policies (always on); MCP Risk
@@ -351,8 +352,19 @@ tools:
                 Refuse tools with a High (red) risk score or with the bidirectional, invisible or mixed-script
                 characters warning shown during registration.
             url: https://help.salesforce.com/s/articleView?id=ai.agent_mcp_registration_manage_risk_score.htm&type=5
+        evidence:
+          - title: Set Up Einstein Trust Layer prompt injection detection (Salesforce Help; client-rendered, not readable 2026-10-30)
+            url: >-
+              https://help.salesforce.com/s/articleView?id=ai.generative_ai_trust_configure_prompt_injection_detection.htm&type=5
+          - title: Agentforce Developer Guide — Trust Layer (no injection-detection setting listed)
+            url: https://developer.salesforce.com/docs/ai/agentforce/guide/trust.html
         note: >-
-          Partial on the input-screening rule, the same word as toolCopilotStudio. The administrator can switch on
+          Unknown since 2026-10-30: the earlier partial rating rested on the Safety & Security prompt injection
+          detection toggle, read in a browser on 2026-09-25. On 2026-10-30 help.salesforce.com returned only its
+          loading shell to automated fetch, and no developer.salesforce.com or Trailhead page names the toggle, so
+          the setting could not be re-verified and the settings table carries no row for it. Re-read the Help page
+          in a browser; if the toggle is unchanged, restore partial and add the row. The earlier finding, kept for
+          that re-check: the administrator can switch on
           an org-wide classifier that covers direct injection and injection arriving indirectly through data sources
           included in the prompt (role-play, rule changes, prompt leakage, encoding, privacy and malicious-code
           attacks), but it is beta and documented as scoring and logging to the audit trail, not blocking or
@@ -585,6 +597,205 @@ tools:
           dispatched by an action is not documented. Every holder of Manage AI Agents can deactivate and reactivate
           any agent.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # help.salesforce.com renders client-side and could not be read on 2026-10-30, so every row cites
+    # developer.salesforce.com or Trailhead, where the setting is named; Setup-only toggles documented
+    # only in Help (Einstein Trust Layer prompt injection detection, Configure Model Providers, Enable
+    # In-Region Model Requests Only) are left out until Help can be re-read. Verified 2026-10-30.
+    settings:
+      - id: agentAccess
+        name: Agent Access (Enabled Agents)
+        where: Setup › Permission Sets › (permission set) › Apps › Agent Access › Enabled Agents
+        setVia: [adminConsole]
+        area: identity
+        default: No one, administrators included, can use an Employee agent until granted
+        recommended: One permission set per Employee agent, assigned to the groups whose work needs it, a pilot group first
+        why: Who can use each internal agent is a grant someone made and can audit, and a new agent reaches a small group before everyone.
+        mitigations: [D3-APA, cap-staged-rollout-gate]
+        url: https://trailhead.salesforce.com/content/learn/projects/quick-start-create-employee-agents-in-agentforce/grant-access-and-use-the-agents
+        verified: "2026-10-30"
+      - id: agentUser
+        name: default_agent_user
+        where: Agent Script › access block › default_agent_user (the agent user created in Setup › Users)
+        setVia: [code, adminConsole]
+        area: identity
+        recommended: A dedicated agent user for each Service agent, holding only that agent's permission sets
+        why: A Service agent answers customers with its own principal's access, not a shared user's, and its grants can be reviewed on their own.
+        mitigations: [D3-AA, D3-APA]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-blocks.html
+        verified: "2026-10-30"
+      - id: agentUserDeployment
+        name: Agent user (target org)
+        where: Target org › Setup › Users › agent user › permission sets deployed with the agent
+        setVia: [adminConsole]
+        area: identity
+        recommended: Created in each target org and given only the deployed permission sets
+        why: The agent in production runs with the access tested in the sandbox, not with whatever a reused user already had.
+        mitigations: [D3-AA]
+        url: https://trailhead.salesforce.com/content/learn/modules/agentforce-deployment-quick-look/deploy-an-ai-agent-with-agentforce
+        verified: "2026-10-30"
+      - id: verificationFilters
+        name: available when
+        where: Agent Script › subagent and action definitions › available when (verification variables)
+        setVia: [code]
+        area: tools
+        recommended: Every subagent and action that reads or changes a customer's records gated on a verified flag
+        why: The model cannot call an action, however it is talked to, until the customer has been verified; prompt instructions alone can be argued around.
+        mitigations: [D3-APA, AML.M0028]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-patterns-filtering.html
+        verified: "2026-10-30"
+      - id: fileUpload
+        name: file_upload › mode
+        where: Agent Script › config block › file_upload
+        setVia: [code]
+        area: data
+        default: auto
+        recommended: error, with a message, on every agent with no file use case
+        why: Customers cannot hand an agent files it then reads and reasons over when nobody designed it to take them.
+        mitigations: [cap-data-access-governance]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-blocks.html
+        verified: "2026-10-30"
+      - id: thoughtChunks
+        name: runtime › thought_chunks
+        where: Agent Script › config block › runtime
+        setVia: [code]
+        area: data
+        recommended: "False on customer-facing channels"
+        why: The agent's internal reasoning, which can carry instructions and retrieved data, is not streamed to the customer.
+        mitigations: []
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-blocks.html
+        verified: "2026-10-30"
+      - id: mcpRegistry
+        name: Agentforce Registry
+        where: Setup › Agentforce Registry › register server › select the tools available in Agentforce
+        setVia: [adminConsole]
+        area: tools
+        recommended: Every external MCP server registered by an administrator, with only the tools agents need selected
+        why: Agents reach only servers and tools someone has registered and chosen, and a server-side change prompts a re-review of the registration.
+        mitigations: [cap-agent-tool-registry, AML.M0028]
+        url: https://trailhead.salesforce.com/content/learn/modules/mcp-for-agentforce-quick-look/discover-mcp-for-agentforce
+        verified: "2026-10-30"
+      - id: mcpAuthentication
+        name: Authentication protocol (OAuth 2.0, external (named) credentials, or No Authentication)
+        where: Agentforce Registry › register server › authentication
+        setVia: [adminConsole]
+        area: identity
+        recommended: External (named) credentials or OAuth 2.0; never No Authentication
+        why: The secret for each server lives in Salesforce's credential store, not in the agent, and an unauthenticated server cannot be registered by habit.
+        mitigations: [D3-CH]
+        url: https://trailhead.salesforce.com/content/learn/modules/mcp-for-agentforce-quick-look/discover-mcp-for-agentforce
+        verified: "2026-10-30"
+      - id: apiCatalogAllowlist
+        name: Add to Allowlist
+        where: Setup › API Catalog › MCP Server › (server) › discovered tools
+        setVia: [adminConsole]
+        area: tools
+        recommended: Only the tools an agent script uses
+        why: MuleSoft and Salesforce MCP tools become usable in Agent Script only after an administrator allowlists them.
+        mitigations: [AML.M0028]
+        url: https://developer.salesforce.com/blogs/2026/08/extending-agentforce-with-external-mcp-tools-via-mulesoft
+        verified: "2026-10-30"
+      - id: gatewayPolicies
+        name: Agentforce Gateway (MCP usage policies)
+        where: Setup › Agentforce Gateway › policies for specific agents and tools
+        setVia: [adminConsole]
+        area: tools
+        recommended: A per-agent tool policy and a call quota on every MCP server in use
+        why: Which agent may call which server tool, and how often, is enforced at the gateway rather than left to the prompt.
+        mitigations: [AML.M0028]
+        url: https://trailhead.salesforce.com/content/learn/modules/mcp-for-agentforce-quick-look/discover-mcp-for-agentforce
+        verified: "2026-10-30"
+      - id: agentApiRunAs
+        name: Run As (Username)
+        where: Setup › External Client Apps Manager › (Agent API app) › Policy › OAuth Flows and External Client App Enhancements
+        setVia: [adminConsole]
+        area: identity
+        recommended: A dedicated API Only user per integration, with only the agent's permissions
+        why: Every Agent API call runs as this user, so a leaked app credential reaches one narrowly scoped identity, not an administrator.
+        mitigations: [D3-APA, D3-CH]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html
+        verified: "2026-10-30"
+      - id: agentApiSecret
+        name: Consumer Key and Secret
+        where: External Client Apps Manager › (Agent API app) › Settings › OAuth Settings
+        setVia: [adminConsole]
+        area: identity
+        recommended: Held in the calling system's secret store and rotated on a schedule; one app per integration
+        why: The client-credentials secret is the whole of the Agent API's authentication, so it is never shared between systems or kept in code.
+        mitigations: [D3-CH]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-api-get-started.html
+        verified: "2026-10-30"
+      - id: commitVersion
+        name: Commit Version
+        where: Agentforce Builder › Commit Version (or sf agent publish authoring-bundle), then deploy by metadata
+        setVia: [adminConsole, apiCli]
+        area: tools
+        recommended: Versions committed in a sandbox and deployed to production by metadata from version control
+        why: Production receives only immutable, tested versions, and the previous version is there to reactivate.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-nga-publish.html
+        verified: "2026-10-30"
+      - id: testingCenter
+        name: Agentforce Testing Center
+        where: Agentforce Testing Center (or sf agent test create and run) in the development org
+        setVia: [adminConsole, apiCli]
+        area: tools
+        recommended: A test suite per agent, including manipulation and off-scope attempts, run on every version before deployment
+        why: A version that starts obeying injected instructions or reaching for restricted actions is caught before customers see it.
+        mitigations: [cap-staged-rollout-gate]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-test.html
+        verified: "2026-10-30"
+      - id: sessionTracing
+        name: Agentforce Session Tracing
+        where: Setup › Einstein Audit, Analytics, and Monitoring Setup
+        setVia: [adminConsole]
+        area: audit
+        recommended: "On"
+        why: Every turn, model call and action an agent takes is recorded in the firm's Data 360 for investigation.
+        mitigations: [cap-agent-tracing]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/otel-api.html
+        verified: "2026-10-30"
+      - id: auditFeedback
+        name: Audit and Feedback
+        where: Setup › Einstein Audit, Analytics, and Monitoring Setup
+        setVia: [adminConsole]
+        area: audit
+        recommended: "On"
+        why: Prompts, responses and feedback are kept with the session trace, so a conversation can be reconstructed end to end.
+        mitigations: [cap-agent-tracing]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/otel-api.html
+        verified: "2026-10-30"
+      - id: otelExport
+        name: Agentforce Session Trace OTel API
+        where: GET /services/data/v66.0/einstein/audit/otel/{session-id}, polled by an OTLP collector
+        setVia: [apiCli]
+        area: audit
+        recommended: Polled into the SIEM within the 72-hour window
+        why: Agent traces leave Salesforce for the firm's own monitoring, where they can be correlated and retained (beta, one session per call).
+        mitigations: [cap-agent-tracing]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/otel-api.html
+        verified: "2026-10-30"
+      - id: enhancedEventLogs
+        name: enable_enhanced_event_logs
+        where: Agent Script › config block
+        setVia: [code]
+        area: audit
+        default: "False"
+        recommended: "True"
+        why: Conversation-level logs for debugging and monitoring are kept for each agent.
+        mitigations: [cap-agent-tracing]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/ascript-blocks.html
+        verified: "2026-10-30"
+      - id: deactivateAgent
+        name: Deactivate
+        where: Agentforce Builder › Deactivate, or sf agent deactivate
+        setVia: [adminConsole, apiCli]
+        area: audit
+        recommended: The incident runbook's first step, scripted with the CLI
+        why: Deactivation ends the agent's open interactions and makes it unreachable on every connection.
+        mitigations: [cap-agent-kill-switch]
+        url: https://developer.salesforce.com/docs/ai/agentforce/guide/agent-dx-manage.html
+        verified: "2026-10-30"
     advisories:
       - title: >-
           ForcedLeak — indirect prompt injection via Web-to-Lead exfiltrating CRM data through an expired allowlisted

@@ -1049,6 +1049,324 @@ tools:
                 Seat removal and connector disable apply at the next request; a connector call in flight
                 completes. The docs state no propagation delay, so measure it.
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Two planes: the claude.ai console (Organization settings) for every surface, and Claude Desktop's
+    # device policy (com.anthropic.claudefordesktop / HKLM\SOFTWARE\Policies\Claude), which overrides the
+    # in-app allowlist; the Microsoft and Google tenants decide their connectors' consent. Verified 2026-10-30.
+    settings:
+      - id: requireSso
+        name: Require SSO for Claude
+        where: claude.ai Organization settings › Organization and access › Authentication
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: "Off"
+        recommended: "On, with MFA enforced on the Claude app in your IdP"
+        why: Every claude.ai, Claude Desktop and mobile login goes through the corporate IdP and its MFA; personal email logins on your domain stop working.
+        mitigations: [D3-APA]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13132885-set-up-single-sign-on-sso
+        verified: "2026-10-30"
+      - id: shortenedSessionLength
+        name: Shortened session length
+        where: claude.ai Organization settings › Organization and access › Session security
+        setVia: [adminConsole]
+        area: identity
+        default: Not enabled (sign-in kept while the user stays active)
+        recommended: 7 days
+        why: Web, desktop and mobile sign-ins expire weekly, so a stolen or stale session meets the IdP's MFA again.
+        mitigations: [D3-CH]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13163631-configuring-session-security-settings
+        verified: "2026-10-30"
+      - id: userProvisioning
+        name: User provisioning (SCIM)
+        where: claude.ai Organization settings › Organization and access › User provisioning
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Invite only
+        recommended: SCIM, driven by the IdP group that grants Claude
+        why: Removing someone in the IdP removes their seat, so a leaver's access ends with their account rather than with a ticket.
+        mitigations: [cap-agent-kill-switch, D3-APA]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13133195-set-up-jit-or-scim-provisioning
+        verified: "2026-10-30"
+      - id: restrictOrgCreation
+        name: Restrict organization creation
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: "On"
+        why: Stops staff creating personal or side Claude organisations on your verified domains, which no admin can see.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Team or Enterprise, verified domain
+        url: https://support.claude.com/en/articles/10276682-important-considerations-before-enabling-single-sign-on-sso-and-jit-scim-provisioning
+        verified: "2026-10-30"
+      - id: migrateAccounts
+        name: Migrate accounts using your domain
+        where: claude.ai Organization settings › Organization and access › Security
+        setVia: [adminConsole]
+        area: identity
+        default: "Off"
+        recommended: On, after reviewing the personal accounts listed on your domain
+        why: No Free, Pro or Max account can exist on the verified domain, so work chats can't sit in personal plans no admin sees; it can't be reversed.
+        mitigations: [cap-shadow-ai-discovery]
+        requires: Enterprise, enforced SSO
+        url: https://support.claude.com/en/articles/14625619-claim-and-migrate-accounts-on-your-domain
+        verified: "2026-10-30"
+      - id: forceLoginOrgUUID
+        name: forceLoginOrgUUID
+        where: Claude Desktop policy (com.anthropic.claudefordesktop / HKLM\SOFTWARE\Policies\Claude) → forceLoginOrgUUID
+        setVia: [mdm]
+        area: identity
+        default: Unset (any organisation)
+        recommended: Your organisation's UUID
+        why: On managed devices Claude Desktop refuses a login to any other organisation, personal accounts included.
+        mitigations: [D3-APA, cap-shadow-ai-discovery]
+        url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+        verified: "2026-10-30"
+      - id: tenantRestrictions
+        name: Tenant Restrictions (anthropic-allowed-org-ids)
+        where: Corporate TLS-inspecting proxy → anthropic-allowed-org-ids header on claude.ai, api.anthropic.com, claude.com and anthropic.com
+        setVia: [cloudPolicy]
+        area: identity
+        default: Not injected
+        recommended: Your organisation's UUID, injected and overwritten on every request from managed devices
+        why: Personal and other organisations' Claude accounts can't be used from the corporate network in any browser or the desktop app.
+        mitigations: [D3-OTF, cap-shadow-ai-discovery]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13198485-enforce-network-level-access-control-with-tenant-restrictions
+        verified: "2026-10-30"
+      - id: chatCapability
+        name: Chat (custom role capability)
+        where: claude.ai Organization settings › Roles › role › Capabilities
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: On for every custom role
+        recommended: Granted on the roles of the groups rolled out to Claude
+        why: Chat on web, desktop and mobile follows IdP group membership, and withholding it on a role stops that group's use; built-in roles keep it.
+        mitigations: [D3-APA, cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: customRetention
+        name: Custom data retention controls
+        where: claude.ai Organization settings › Data and privacy
+        setVia: [adminConsole]
+        area: data
+        default: Indefinite
+        recommended: "30 days for chats; projects and artifacts on your records-retention schedule, never indefinite"
+        why: Uploaded client files, connector results and artifacts otherwise stay with the chat forever; the minimum is 30 days, and a shorter period deletes at the next daily run.
+        mitigations: []
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/10440198-configure-custom-data-retention-controls-for-enterprise-plans
+        verified: "2026-10-30"
+      - id: memory
+        name: Memory
+        where: claude.ai Organization settings › Capabilities
+        setVia: [adminConsole]
+        area: data
+        default: "Off (each member opts in once an Owner allows it)"
+        recommended: "Off; projects keep their own context"
+        why: Account memory carries details across chats, so one engagement's material could resurface in another client's work; teams that want it get it per role.
+        mitigations: []
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context
+        verified: "2026-10-30"
+      - id: inferenceHooks
+        name: Inference hooks
+        where: claude.ai Organization settings › Data and privacy › Inference hooks
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: On, connected to your DLP or AI-security service, enforcing after a monitor-only period
+        why: Each chat request on web, desktop and mobile, connector results and extracted attachment text included, is checked by your own service before inference, so secrets and injected content can be stopped centrally.
+        mitigations: [cap-sensitive-data-redaction, cap-input-guardrails, cap-agent-kill-switch]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/inference-hooks-configuration
+        verified: "2026-10-30"
+      - id: connectorDomainRestriction
+        name: Restrict verified-domain connectors to your enterprise
+        where: claude.ai Organization settings › Organization and access › Connector domain restriction
+        setVia: [adminConsole]
+        area: data
+        default: "Off"
+        recommended: "On"
+        why: A work Gmail, Slack or Microsoft 365 account on your domain can be connected only from your organisation's Claude accounts, not a personal one.
+        mitigations: [cap-data-access-governance, cap-shadow-ai-discovery]
+        requires: Enterprise, verified domain
+        url: https://support.claude.com/en/articles/15402193-restrict-verified-domain-connectors-to-your-enterprise
+        verified: "2026-10-30"
+      - id: connectorToolPolicy
+        name: Organization-wide tool policy
+        where: claude.ai Organization settings › Connectors › connector › tool (Always allow / Needs approval / Blocked)
+        setVia: [adminConsole]
+        area: tools
+        recommended: Write and send tools set to Needs approval; tools no one uses Blocked
+        why: The ceiling no role or member can widen — Needs approval removes Always allow, so every send, create or delete is confirmed; Blocked hides the tool from Claude.
+        mitigations: [AML.M0029, AML.M0028]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: roleConnectorPermissions
+        name: Connector permissions (custom role Connectors tab)
+        where: claude.ai Organization settings › Roles › role › Connectors
+        setVia: [adminConsole, identityProvider]
+        area: tools
+        default: Needs approval on new roles
+        recommended: Each group's role granted only the connectors and tools its work needs
+        why: Connector reach follows IdP groups, and the stricter of role and organisation policy applies; members on built-in roles see every organisation connector.
+        mitigations: [D3-APA, AML.M0028]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans
+        verified: "2026-10-30"
+      - id: managedAuthorization
+        name: Managed authorization
+        where: claude.ai Organization settings › Connectors › connector › Configuration
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        default: Not set up (each member authorises with their own OAuth grant)
+        recommended: Set up for every supported connector, with the Scopes your roles need
+        why: The IdP issues and revokes connector access by group, so scopes are chosen centrally and de-provisioning ends it.
+        mitigations: [D3-CH, D3-APA, cap-agent-kill-switch]
+        requires: Team or Enterprise, Okta
+        url: https://support.claude.com/en/articles/15537633-authorize-mcp-connectors-for-your-entire-organization
+        verified: "2026-10-30"
+      - id: m365ConnectorAssignment
+        name: Assignment required? (M365 MCP Server for Claude and M365 MCP Client for Claude)
+        where: Microsoft Entra admin center › Enterprise applications › each app › Properties, then Users and groups
+        setVia: [identityProvider]
+        area: identity
+        recommended: Yes on both apps, assigned to the same Claude user group
+        why: Only the people you assign can authenticate the Microsoft 365 connector; revoke Graph permissions on the server app that no group needs.
+        mitigations: [D3-APA, cap-data-access-governance]
+        url: https://support.claude.com/en/articles/12542951-set-up-the-microsoft-365-connector
+        verified: "2026-10-30"
+      - id: googleWorkspaceTrust
+        name: Manage third-party app access (Claude set to Trusted)
+        where: Google Admin console › Security › Access and data control › API controls › Manage third-party app access
+        setVia: [identityProvider]
+        area: identity
+        recommended: Claude Trusted only once Google Workspace connectors are approved; blocked until then
+        why: Google Workspace decides whether the connectors may reach Drive, Gmail and Calendar at all, independently of Claude's own connector list.
+        mitigations: [D3-APA, cap-data-access-governance]
+        url: https://support.claude.com/en/articles/10166901-use-google-workspace-connectors
+        verified: "2026-10-30"
+      - id: desktopExtensionAllowlist
+        name: Allowlist (desktop extensions)
+        where: claude.ai Organization settings › Connectors › Desktop
+        setVia: [adminConsole]
+        area: tools
+        default: "Off (every extension in the registry installable)"
+        recommended: On, with only approved extensions added; leave isDesktopExtensionEnabled unset so the list populates
+        why: Desktop extensions are blocked by default, installed ones outside the list are removed, and members install only the .mcpb servers you list.
+        mitigations: [cap-agent-tool-registry, AML.M0028]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/12592343-enabling-and-using-the-desktop-extension-allowlist
+        verified: "2026-10-30"
+      - id: isLocalDevMcpEnabled
+        name: isLocalDevMcpEnabled
+        where: Claude Desktop policy → isLocalDevMcpEnabled
+        setVia: [mdm]
+        area: tools
+        default: "true"
+        recommended: "false"
+        why: Local MCP servers from claude_desktop_config.json run on the device with the user's permissions, outside the connector list and tool policy.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+        verified: "2026-10-30"
+      - id: isClaudeCodeForDesktopEnabled
+        name: isClaudeCodeForDesktopEnabled
+        where: Claude Desktop policy → isClaudeCodeForDesktopEnabled
+        setVia: [mdm]
+        area: tools
+        default: "true"
+        recommended: "false, except on devices of the groups that hold Claude Code"
+        why: The Code tab runs commands and edits files on the device; off, chat users don't get a coding agent their role was never meant to have.
+        mitigations: [AML.M0028]
+        url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+        verified: "2026-10-30"
+      - id: publishingPolicy
+        name: Publishing
+        where: claude.ai Organization settings › Plugins & skills › Policy
+        setVia: [adminConsole]
+        area: tools
+        default: Open on Team; Requires review on Enterprise (moving to Open where scanning is on)
+        recommended: Requires review
+        why: An Owner approves every skill and plugin, and each new version, before it reaches colleagues; set it explicitly so the default change doesn't apply.
+        mitigations: [cap-agent-tool-registry]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13119606-provision-and-manage-skills-for-your-organization
+        verified: "2026-10-30"
+      - id: userCreatedSkills
+        name: User-created skills
+        where: claude.ai Organization settings › Plugins & skills › Policy
+        setVia: [adminConsole]
+        area: tools
+        default: "On"
+        recommended: On, with Skill and plugin security scanning on
+        why: Members keep their own skills for personal use while uploads are scanned; regulated teams turn it off so only provisioned skills run.
+        mitigations: [cap-agent-tool-registry]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/13119606-provision-and-manage-skills-for-your-organization
+        verified: "2026-10-30"
+      - id: pluginScanning
+        name: Skill and plugin security scanning
+        where: claude.ai Organization settings › Plugins & skills › Policy
+        setVia: [adminConsole]
+        area: tools
+        default: On for Enterprise organisations that hadn't chosen before 2 October 2026
+        recommended: "On"
+        why: Every third-party skill and plugin uploaded or edited is scanned before it runs, and a failing one is blocked.
+        mitigations: [cap-agent-tool-registry]
+        requires: Enterprise
+        url: https://support.claude.com/en/articles/15927065-get-started-with-skill-and-plugin-scanning
+        verified: "2026-10-30"
+      - id: allowNetworkEgress
+        name: Allow network egress
+        where: claude.ai Organization settings › Capabilities › Code execution and file creation
+        setVia: [adminConsole]
+        area: network
+        default: Package managers only on Team; off for new Enterprise organisations
+        recommended: Package managers and specific domains — your package mirror and the hosts analysis needs
+        why: Code Claude runs in the chat sandbox reaches only the listed hosts; connector traffic and web search are outside this setting.
+        mitigations: [D3-OTF]
+        url: https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude
+        verified: "2026-10-30"
+      - id: artifactExternalSharing
+        name: External sharing and Email invitations outside your organization
+        where: claude.ai Organization settings › Artifacts
+        setVia: [adminConsole]
+        area: sharing
+        recommended: Both off; allow external sharing for a single artifact when a team asks
+        why: Artifacts open to anyone with the link, or to outside invitees, fall outside your IP allowlist and tenant; turning sharing off also stops existing public links.
+        mitigations: [cap-data-access-governance]
+        requires: Team or Enterprise
+        url: https://support.claude.com/en/articles/16994751-artifacts-admin-guide-for-team-and-enterprise-plans
+        verified: "2026-10-30"
+      - id: complianceApi
+        name: Compliance API
+        where: claude.ai Organization settings › API, then a Compliance Access Key with read:compliance_activities and read:compliance_user_data
+        setVia: [adminConsole, apiCli]
+        area: audit
+        default: "Off"
+        recommended: On, pulled into your SIEM and eDiscovery; delete scope on a separate key
+        why: Chats with each connector call's tool, arguments and result, files, projects and the Activity Feed reach your own store; while it is off nothing is recorded.
+        mitigations: [cap-agent-tracing, D3-DI]
+        requires: Enterprise
+        url: https://platform.claude.com/docs/en/manage-claude/compliance-api-access
+        verified: "2026-10-30"
+      - id: disableAutoUpdates
+        name: disableAutoUpdates
+        where: Claude Desktop policy → disableAutoUpdates, autoUpdaterEnforcementHours
+        setVia: [mdm]
+        area: tools
+        default: "false / 72"
+        recommended: "false, unless MDM pins and ships versions itself / 72"
+        why: Security fixes to Claude Desktop reach every device, restarting it within three days of a prepared update.
+        mitigations: []
+        url: https://support.claude.com/en/articles/12622667-enterprise-configuration-for-claude-desktop
+        verified: "2026-10-30"
     advisories:
       - title: >-
           CVE-2026-22561 — DLL search-order hijacking in the Claude for Windows installer (local privilege
