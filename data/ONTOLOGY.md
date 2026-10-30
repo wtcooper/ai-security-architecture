@@ -471,6 +471,13 @@ to any architecture can be checked against them without reading the whole docume
    edge (reverse legal on bidirectional edges, and on outbound edges as the reply); every
    `moves` statement is present; every
    mitigation a flow claims is pinned on the drawing.
+14. **Third-party SaaS drawings are browser-based.** A SaaS architecture shows the person's
+   browser and the vendor's service, and no endpoint application. The vendor's desktop and mobile
+   apps show the same synced sessions and add no path; anything a local application executes or
+   reaches — local tools, a local agent mode, a hand-off from a local session to the vendor's
+   cloud — is drawn on the endpoint architecture, and its product is an endpoint entity. *(Failed
+   as: a Local applications block and a hand-off edge on the coding & desktop session runtime, and
+   Claude Desktop and the ChatGPT desktop app recorded on enterprise AI chat.)*
 
 ### Families that must stay in step
 

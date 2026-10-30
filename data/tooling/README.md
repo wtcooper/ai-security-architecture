@@ -115,12 +115,17 @@ Applied by the `tooling-onboard` skill under `.claude/skills/`:
 2. Fetch each page; record only settings whose names appear on a page that resolved. A step
    that cannot be verified is `coverage: unknown`, never a guess.
 3. Choose the architecture by surface class (coding shells → third-party coding agent;
-   vendor-hosted coding sessions started from a local harness, the vendor's web or chat surfaces,
-   a repository event or a schedule → coding & desktop session managed agent runtime;
+   vendor-hosted coding sessions started from the vendor's web or chat surfaces, a repository
+   event or a schedule → coding & desktop session managed agent runtime;
    programmatic API/SDK runtimes → API/SDK managed agent runtime; chat and add-ins → enterprise AI chat;
    persistent vendor-hosted agents with continuing authority → persistent managed agents;
    self-operated personal agents → personal agent). Classify by execution and authority,
-   not the launcher's UI; write `controls[]` only for that reference's pins.
+   not the launcher's UI; write `controls[]` only for that reference's pins. A SaaS record is the
+   browser-based product: the vendor's desktop and mobile apps show the same synced chats and are
+   noted, not modelled, there; what a desktop app runs or reaches locally (local MCP servers,
+   extensions, computer use, local agent modes, device policy) is its own entity on an endpoint
+   architecture — `toolClaudeWeb` / `toolClaudeDesktop` and `toolChatgptWeb` / `toolChatgptDesktop`
+   are the pattern. The build fails an endpoint surface class on a SaaS architecture.
 4. Record `asOf`, a `verified` date per control, advisories from 2025–26, and the docs index.
 
 ## Coverage status
