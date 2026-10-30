@@ -26,7 +26,8 @@ description:
     For general desktop tasks, the completion gate is the permitted application or file action,
     not a pull request. Apply the supported tool, destination and approval controls before that
     effect. Saved files, browser sessions and connector grants need their own retention and
-    revocation rules. Local-computer access is a separate optional execution path.
+    revocation rules. Local-computer access — the agent acting on the user's own machine — is an
+    endpoint execution path, drawn on the third-party coding & desktop agents reference, not here.
   - >
     In the provider-hosted mode represented here, inference stays with the provider. A customer
     gateway governs only traffic actually routed through it. Shell network policy, repository
@@ -101,15 +102,16 @@ zones:
   - id: zoneUser
     owner: user
     note: >
-      The developer at the keyboard for the hand-off and the review, and the same person — or,
-      on a chat surface, not necessarily the same person — steering from a phone, a browser or
-      a channel while the session runs.
+      The developer who starts and reviews the session in the browser, and the same person — or,
+      on a chat surface, not necessarily the same person — steering from a phone or a channel
+      while the session runs.
   - id: zoneEndpoint
     owner: endpoint
     note: >
-      The local harness is only a door on this drawing: it pushes a branch and a conversation
-      summary up, and pulls the cloud branch back on teleport. Nothing on the machine executes
-      on the session's behalf.
+      The browser on a device we manage — the vendor's web app, where a session is started,
+      steered and reviewed. The vendor's desktop and mobile apps show the same synced sessions
+      and add nothing on this path. A hand-off from a local CLI or desktop session, and anything
+      the local application executes itself, is the third-party coding & desktop agents drawing.
   - id: zoneCloud
     owner: cloud
     note: >
@@ -158,16 +160,15 @@ blocks:
     col: 0
     row: 0
     note: >
-      The doors that start and steer a session with nobody at the machine: the vendor's web
-      and mobile apps (claude.ai/code, chatgpt.com/codex, GitHub's agents panel), and an
-      @-mention in a chat channel. Admission is the vendor's account
+      The doors that start and steer a session away from the managed device: the vendor's mobile
+      apps, and an @-mention in a chat channel. Admission is the vendor's account
       binding for the first and whoever the channel admits for the second — the widest
       admission decision on the drawing.
     items:
       - id: phoneWeb
         label: Vendor apps
         icon: phone
-        note: The vendor's phone and browser apps on the owner's device, signed into the vendor account the session is bound to.
+        note: The vendor's phone app on the owner's device, signed into the vendor account the session is bound to.
       - id: chatChannels
         label: Chat channels
         icon: chat
@@ -175,28 +176,23 @@ blocks:
           A session raised from Slack, Teams or Linear runs on the vendor's cloud under a
           shared channel identity on most products — not as the person who typed.
 
-  - id: harness
+  - id: browser
     kind: service
-    title: Local applications
-    cosaiComponent: componentApplication
+    title: Browser
+    cosaiComponent: componentAgentUserQuery
     zone: zoneEndpoint
     col: 1
     row: 1
     note: >
-      The vendor's application on the machine — CLI, editor extension or desktop app — drawn
-      only as far as this drawing uses it: the app that starts or hands off a session. "Continue in the cloud", a prefix on the prompt or a delegate command pushes the
-      working branch and a summary of the conversation up and starts a session from it;
-      teleport brings the cloud branch and its history back. The full anatomy — native tools,
-      memory, the local model path — is the endpoint drawing's, and nothing of it executes
-      on this drawing's path.
+      The vendor's web app on a device we manage — claude.ai/code, chatgpt.com/codex, cursor.com/agents,
+      GitHub's agents panel — where a task is written, a session is watched and its result is
+      reviewed. The desktop app shows the same synced session and is no different here; the loop
+      runs in the managed runtime whichever client the person uses.
     items:
-      - id: apps
-        label: Desktop, CLI & IDE apps
-        icon: code
-        note: >
-          The vendor's desktop app, CLI or editor extension starting or handing off a session —
-          choosing cloud for a task, "continue in the cloud", or a delegate command. The loop
-          itself runs in the managed runtime.
+      - id: session
+        label: Browser / client
+        icon: chat
+        note: Where the task is typed and the session is steered.
 
   - id: sourceControl
     kind: service
@@ -567,29 +563,26 @@ blocks:
 
 edges:
   - from: developer
-    to: harness
+    to: browser
     path: primary
     bidir: true
-    label: local session
-    note: >
-      The person at the keyboard, in the CLI, the editor or the desktop app — the same
-      pattern as the endpoint drawings, used here only as far as the hand-off.
+    label: web session
+    note: The person at the managed device, in the vendor's web app — or its desktop app, which shows the same session.
   - from: developer
     to: remoteDevice
     path: primary
     bidir: true
     label: away from the machine
     note: The same person on a phone or in a browser — or, on a chat surface, whoever the channel admits.
-  - from: harness
-    to: managedRuntime
+  - from: browser
+    to: vendorService
     path: external
     bidir: true
-    label: hand-off / teleport
+    label: start, steer & review
     note: >
-      The local conversation and the working branch become a hosted session; the cloud branch
-      and its history come back the same way. Asymmetric on most products: a terminal session
-      cannot be pushed up mid-task, but the desktop app can, and a finished cloud session can
-      be pulled down.
+      The browser talks to the vendor's control plane: the task, the chosen environment and
+      repository, steering while the session runs, and the result. Allowlisted because an
+      assessment cleared it; admission is the vendor's account binding behind our SSO.
   - from: remoteDevice
     to: vendorService
     path: external
@@ -897,14 +890,13 @@ walkthrough:
     and reaches our systems through our gateway, and a person merges what it made. This is the
     coding profile; general desktop work ends at an authorized application or file action instead.
   steps:
-    - follow: developer->harness
-      label: local session
-      note: The task starts at the keyboard, in the CLI, the editor or the desktop app.
-    - follow: harness->managedRuntime
-      label: hand-off
+    - follow: developer->browser
+      label: task in the web app
+      note: The task starts in the vendor's web app, naming the repository and the environment.
+    - follow: browser->vendorService
+      label: session requested
       note: >
-        The working branch and a summary of the conversation go up; a session starts from
-        them on the vendor's compute.
+        The control plane takes the task; a session starts from it on the vendor's compute.
     - follow: vendorService->managedRuntime
       label: environment applied
       note: >
@@ -1028,8 +1020,8 @@ scenarios:
           automation configured to approve low-risk pull requests approves its own.
   - title: "Variant: execution moves to a worker we run"
     steps:
-      - follow: harness->managedRuntime
-        label: same hand-off
+      - follow: vendorService->managedRuntime
+        label: placed on our runner
         note: >
           In this variant the environment names a self-hosted runner. Orchestration and
           inference stay with the vendor; the sandbox, drawn here in the Vendor band, would
@@ -1047,17 +1039,13 @@ scenarios:
           stays with the vendor.
 
 deviations:
-  - subject: The local harness is drawn as Local applications, a door rather than an anatomy
+  - subject: Desktop and mobile apps are clients of the same session, not endpoint applications
     reason: >
-      The endpoint drawings carry the full Agent harness — Native tools, Memory & state, the
-      local model path — and the registered data-chain pattern rightly requires any drawing
-      with that block to reach our data through the gateway. Here nothing on the machine
-      executes on the session's behalf: the local application appears because the hand-off
-      pushes a branch and a conversation up and teleport pulls the cloud branch back, which is
-      a real data crossing. It is drawn under the registered Local applications title with the
-      loop item only, so a reader flipping between the drawings sees that the engine moved
-      rather than that the endpoint lost something, and the pattern is not asserted of a block
-      that does not carry it.
+      A third-party SaaS drawing shows the browser-based interface and nothing that runs on the
+      machine. The vendor's desktop and mobile apps show the same synced sessions as the web app,
+      so they add no path here. What a local application does itself — run the loop, read local
+      files, hand a local conversation up to the cloud or teleport a cloud branch back down — is
+      the third-party coding & desktop agents drawing, where the local harness is drawn in full.
   - subject: Our source control is reached through a scoped GitHub App
     reason: >
       Our GitHub Enterprise Cloud tenant sits in our band: the policy on the data path — App
