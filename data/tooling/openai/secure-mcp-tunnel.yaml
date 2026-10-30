@@ -5,6 +5,11 @@
 # openai/tunnel-client repository. Placed on archEnterpriseAiChat because its job is to let
 # ChatGPT connectors (and the Responses API and Codex) reach private MCP servers.
 # 2026-09-25: re-verified toolOpenaiMcpTunnel against the MITRE capability rules; tunnel-client docs read through the GitHub API at master (release v0.0.15, published 2026-09-25; no published security advisories); developers.openai.com .../organization/subresources/audit_logs/methods/list and .../projects/subresources/api_keys/methods/delete redirect to .../admin/subresources/organization/...; learn.chatgpt.com/docs/enterprise/secure-mcp-tunnels 404 and no learn.chatgpt.com admin page mentions tunnels; platform.openai.com settings pages 403 (sign-in); help.openai.com developer-mode article 403 (plan policy unverified); trust.openai.com read from its server-rendered HTML.
+# 2026-10-30: added settings: to toolOpenaiMcpTunnel; guide re-read at developers.openai.com (.md, 200) and the
+# tunnel-client docs at raw.githubusercontent.com/openai/tunnel-client/master/docs (github.com pages 403 to this
+# session's proxy). Corrections: ChatGPT "developer mode" is now the Upload plugins with custom MCP servers / Create
+# plugins with MCPs permissions and tunnels attach at ChatGPT Plugins > Add custom MCP server > Connection: Tunnel;
+# tunnel-client now supports AWS workload identity in place of a static runtime key.
 vendor: openai
 family: Secure MCP Tunnel
 tools:
@@ -21,7 +26,7 @@ tools:
     asOf: "2026-09"
     summary:
       - >-
-        Secure MCP Tunnel lets a private or localhost MCP server serve ChatGPT developer-mode apps, the
+        Secure MCP Tunnel lets a private or localhost MCP server serve ChatGPT custom MCP plugins, the
         Responses API and Codex without inbound exposure: a customer-run tunnel-client polls api.openai.com
         (or mtls.api.openai.com) over outbound HTTPS, forwards each request to the local stdio or HTTP MCP
         server, and returns the response through the same tunnel.
@@ -40,8 +45,8 @@ tools:
     facts:
       - label: Plans
         value: >-
-          Platform organisation permissions (Tunnels Read / Read + Manage / Read + Use); ChatGPT
-          developer-mode access is granted separately by workspace admins.
+          Platform organisation permissions (Tunnels Read / Read + Manage / Read + Use); adding custom MCP
+          servers in ChatGPT is a separate workspace permission (Create plugins with MCPs).
         url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
       - label: Inference & routing
         value: >-
@@ -71,8 +76,8 @@ tools:
         coverage: partial
         mechanism: >-
           Platform RBAC: Tunnels Read, Use and Manage (api.organization.tunnel.read / use / write) in custom
-          organisation roles assigned to groups; ChatGPT developer-mode access granted separately by the
-          workspace admin
+          organisation roles assigned to groups; the ChatGPT custom-MCP permissions (Upload plugins with custom MCP
+          servers, Create plugins with MCPs) granted separately by the workspace admin
         steps:
           - title: Split managing from using
             body:
@@ -84,18 +89,18 @@ tools:
           - title: Gate who can build on a tunnel
             body:
               - >-
-                Grant ChatGPT developer mode only to the app creators who should attach tunnels (a workspace
-                admin grants it on Enterprise/Edu; the user then enables it in Settings → Security and login).
-            url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+                Grant Create plugins with MCPs (and Upload plugins with custom MCP servers) only to the app
+                creators who should attach tunnels; they add the server at ChatGPT Plugins > + > Add custom MCP
+                server and choose Tunnel under Connection.
+            url: https://learn.chatgpt.com/docs/enterprise/apps-and-connectors
         note: >-
           Partial by the rule (both halves needed for native): the product administers group-based
           authorisation over the tunnel itself — who creates and deletes it, who runs or attaches it, which
           organisations and workspaces see it — but documents no target-side admin-consent path. On this path
           the target is our own MCP server, and consent there is its OAuth authorisation server's: the tunnel
           preserves protected-resource and authorisation-server metadata so the flow works, but sets none of
-          its policy. Plan-specific developer-mode policy is in a Help Center article that returned 403 to
-          automated fetch, so it is unverified here.
-        verified: "2026-09-25"
+          its policy. The workspace side is the ChatGPT custom-MCP permissions, rated on toolChatgptDesktop.
+        verified: "2026-10-30"
         migration:
           from:
             - capabilityIga
@@ -400,6 +405,13 @@ tools:
                 runtime keys must expire; rotate by creating the replacement, restarting tunnel-client with it,
                 then deleting the old key.
             url: https://developers.openai.com/api/docs/guides/production-best-practices
+          - title: Drop the static key on AWS
+            body:
+              - >-
+                Where tunnel-client runs on AWS, set control_plane.aws_identity_provider_id and
+                aws_service_account_id (a project service account with Tunnels Read + Use) and leave the static
+                API key unset; the client exchanges its role for a short-lived token kept in memory.
+            url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
           - title: Bind the key to a certificate
             body:
               - >-
@@ -439,7 +451,7 @@ tools:
           without an expiry, under no enforced maximum, lives until revoked, so a forgotten tunnel keeps polling
           until its key is revoked or the tunnel is deleted. By default the tunnel does not authenticate to our
           MCP server at all; MCP-side mTLS or a static MCP_EXTRA_HEADERS value are opt-in and static.
-        verified: "2026-09-25"
+        verified: "2026-10-30"
         migration:
           from:
             - capabilitySecretsManagement
@@ -730,6 +742,203 @@ tools:
                       stop tunnel-client as well.
                   url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
               verified: 2026-09-10
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Tunnel records and permissions live in OpenAI Platform settings; everything else is tunnel-client's own
+    # configuration (profile YAML, flags or environment) on the host the organisation runs. Verified 2026-10-30
+    # at developers.openai.com and the openai/tunnel-client docs (read at raw.githubusercontent.com).
+    settings:
+      - id: tunnelPermissions
+        name: Tunnels — Read, Manage and Use
+        where: platform.openai.com › Organization settings › Roles (custom role, Tunnels row), assigned through Groups
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: Two roles on IdP-synced groups — tunnel managers Read + Manage, runtime users Read + Use — and nobody else
+        why: Only named managers can create or repoint a tunnel and only named principals can run tunnel-client or attach it to an app; role changes take up to 30 minutes.
+        mitigations: [D3-APA, AML.M0028]
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-10-30"
+      - id: tunnelAssociations
+        name: Associations (Platform organizations and ChatGPT workspaces)
+        where: Platform tunnel settings › (tunnel) › associated organizations and workspaces
+        setVia: [adminConsole]
+        area: tools
+        recommended: The owning Platform organization and the corporate ChatGPT workspace, plus only the organizations a reviewed Codex or API flow calls from
+        why: Every association is another OpenAI context that can list the tunnel and call the private MCP server behind it.
+        mitigations: [AML.M0028, D3-APA]
+        url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+        verified: "2026-10-30"
+      - id: runtimeApiKey
+        name: CONTROL_PLANE_API_KEY (control_plane.api_key)
+        where: Profile YAML control_plane.api_key, --control-plane.api-key, or the CONTROL_PLANE_API_KEY environment variable
+        setVia: [configFile]
+        area: identity
+        default: Falls back to OPENAI_API_KEY when unset
+        recommended: "A Restricted key with Tunnels Read + Use, referenced as a file: or env: reference — never an All key or admin key"
+        why: Anyone who reads the daemon's key can run the tunnel; a restricted key reaches nothing else in the organization and stays out of argv and profiles.
+        mitigations: [D3-CH]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/permissions.md
+        verified: "2026-10-30"
+      - id: awsWorkloadIdentity
+        name: control_plane.aws_identity_provider_id and control_plane.aws_service_account_id
+        where: Profile YAML, or CONTROL_PLANE_AWS_IDENTITY_PROVIDER_ID and CONTROL_PLANE_AWS_SERVICE_ACCOUNT_ID
+        setVia: [configFile]
+        area: identity
+        default: Unset (static API key)
+        recommended: Set wherever tunnel-client runs on AWS, mapped to a project service account with Tunnels Read + Use, static key settings unset
+        why: The client trades its AWS role for a short-lived token held in memory, so no long-lived key sits on the host.
+        mitigations: [D3-CH]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: maxApiKeyLifetime
+        name: Maximum API key lifetime
+        where: platform.openai.com › Platform settings (organization, or the project)
+        setVia: [adminConsole]
+        area: identity
+        recommended: 90 days
+        why: New runtime keys must expire, so a copied key stops working; rotate by creating the replacement, restarting the client, then deleting the old key.
+        mitigations: [D3-CH]
+        url: https://developers.openai.com/api/docs/guides/production-best-practices
+        verified: "2026-10-30"
+      - id: controlPlaneMtls
+        name: control_plane.client_cert and control_plane.client_key
+        where: Profile YAML or --control-plane.client-cert / --control-plane.client-key, with the trust anchor active under Organization settings › Security › Mutual TLS
+        setVia: [configFile, adminConsole]
+        area: identity
+        default: Unset (API key only)
+        recommended: On — a client certificate from your internal CA, its trust anchor active for the key's project
+        why: A leaked runtime key alone no longer connects; the control plane also requires the certificate.
+        mitigations: [D3-CH]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: mcpClientCert
+        name: MCP_CLIENT_CERT and MCP_CLIENT_KEY
+        where: --mcp.client-cert / --mcp.client-key, or per channel on --mcp.server-url (HTTP bindings only)
+        setVia: [configFile]
+        area: identity
+        default: Unset
+        recommended: On wherever the MCP server can validate client certificates
+        why: The MCP server accepts calls only from the tunnel host; the certificate identifies the tunnel, not the user, so OAuth still decides per user.
+        mitigations: [D3-CH]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: pollChannels
+        name: control_plane.poll_channels
+        where: Profile YAML, --control-plane.poll-channel or CONTROL_PLANE_POLL_CHANNELS
+        setVia: [configFile]
+        area: tools
+        default: Unset (legacy unscoped polling)
+        recommended: Set explicitly to the channels this client serves, e.g. [main]
+        why: Once set it is an allowlist, so a channel left out — Harpoon included — is never polled.
+        mitigations: [AML.M0028]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: mcpBindings
+        name: --mcp.server-url and --mcp.command
+        where: Flags (aliases --mcp-server-url, --mcp-command), MCP_SERVER_URL, or mcp.server_urls / mcp.commands in the profile
+        setVia: [configFile]
+        area: tools
+        recommended: Only the approved MCP servers, each over HTTPS, one binding per channel
+        why: tunnel-client forwards JSON-RPC unchanged, so its bindings are the whole set of servers OpenAI products can reach through it.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: harpoonTargets
+        name: --harpoon.target (HARPOON_TARGETS)
+        where: Flag, HARPOON_TARGETS, or harpoon.targets in the profile
+        setVia: [configFile]
+        area: network
+        default: No targets (the harpoon channel returns unsupported_channel)
+        recommended: None, unless a reviewed private REST endpoint needs it; then labelled targets only, plaintext HTTP left off
+        why: Each target is a private HTTP endpoint agents can call through the tunnel by label; with none registered the channel stays closed.
+        mitigations: [AML.M0028, D3-OTF]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: oauthTrustedOrigins
+        name: mcp.oauth_trusted_origins
+        where: Profile YAML, --mcp.oauth-trusted-origin or MCP_OAUTH_TRUSTED_ORIGINS
+        setVia: [configFile]
+        area: identity
+        default: Only the configured MCP server origin
+        recommended: The exact origin of your authorization server, nothing else
+        why: OAuth discovery follows only origins you trust, so altered metadata cannot send the sign-in flow to another host.
+        mitigations: []
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: outboundProxy
+        name: --http-proxy and --ca-bundle
+        where: --http-proxy (TUNNEL_CLIENT_HTTP_PROXY), --control-plane.http-proxy, --mcp.http-proxy and --ca-bundle (CA_BUNDLE)
+        setVia: [configFile]
+        area: network
+        default: Environment HTTP_PROXY / HTTPS_PROXY, system trust store
+        recommended: Through the corporate proxy, with its CA bundle added
+        why: The tunnel's egress to api.openai.com is inspected and logged like other outbound traffic; stdio bindings ignore proxy settings.
+        mitigations: [D3-OTF]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: healthListenAddr
+        name: --health.listen-addr (HEALTH_LISTEN_ADDR)
+        where: Flag, environment variable or health.listen_addr in the profile
+        setVia: [configFile]
+        area: network
+        default: 127.0.0.1:8080
+        recommended: 127.0.0.1:8080 — widen only for an orchestrator probe on a trusted network
+        why: /healthz, /readyz, /metrics and the embedded UI stay off the network.
+        mitigations: []
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: allowRemoteUi
+        name: --allow-remote-ui (ALLOW_REMOTE_UI)
+        where: Flag or environment variable
+        setVia: [configFile]
+        area: network
+        default: "false"
+        recommended: "false"
+        why: The admin UI, with its log export and live log-level control, answers only loopback clients.
+        mitigations: []
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: rawPayloadLogging
+        name: --log.http-raw-unsafe and --harpoon.capture-payloads
+        where: Flags, or LOG_HTTP_RAW_UNSAFE and HARPOON_CAPTURE_PAYLOADS
+        setVia: [configFile]
+        area: audit
+        default: "false"
+        recommended: "false — on only for a controlled debugging session"
+        why: Raw logging can write headers and bodies — bearer tokens and tool payloads — to the log and the admin UI.
+        mitigations: []
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: structuredLogs
+        name: --log.format and --log.file
+        where: Flags, LOG_FORMAT and LOG_FILE, or log.format / log.file in the profile
+        setVia: [configFile]
+        area: audit
+        default: Default logger to stdout
+        recommended: json to a file shipped to the SIEM, with /metrics scraped
+        why: The host's record of polling, failures and client_instance_id sits beside the Platform audit log for the same tunnel.
+        mitigations: [cap-agent-tracing]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/configuration.md
+        verified: "2026-10-30"
+      - id: platformAuditLogs
+        name: Audit logs (tunnel.created, tunnel.updated, tunnel.deleted)
+        where: Admin API GET /v1/organization/audit_logs with an admin key, filtered by event type
+        setVia: [apiCli]
+        area: audit
+        recommended: Pulled into the SIEM, alerting on tunnel.* and api_key.* events
+        why: A tunnel created, repointed or deleted outside the change process shows up on the next pull; tunnel traffic itself is not a Compliance Platform event.
+        mitigations: [cap-agent-tracing, cap-agent-tool-registry]
+        url: https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/audit_logs/methods/list
+        verified: "2026-10-30"
+      - id: deleteTunnel
+        name: tunnel-client admin tunnels delete
+        where: tunnel-client admin tunnels delete <tunnel_id> --confirm (admin key with Tunnels Manage), or Platform tunnel settings
+        setVia: [apiCli, adminConsole]
+        area: audit
+        recommended: Your incident runbook's first step for a misbehaving server, with the runtime key revoked alongside
+        why: Requests fail while the client is disconnected, and with the one tunnel record and its key gone no copy of the client can reconnect.
+        mitigations: [cap-agent-kill-switch]
+        url: https://raw.githubusercontent.com/openai/tunnel-client/master/docs/enterprise-customer-onboarding.md
+        verified: "2026-10-30"
     sources:
       - title: Secure MCP Tunnels guide
         url: https://developers.openai.com/api/docs/guides/secure-mcp-tunnels

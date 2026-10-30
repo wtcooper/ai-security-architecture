@@ -15,6 +15,10 @@
 # 2026-10-03: refreshed browser approval scope after September 29 computer-use announcement;
 # other rows retain their own verification dates.
 # 2026-10-04: removed the D3-MFA and D3-AA rows after the managed-runtime drawing pruned those pins (review MR-02).
+# 2026-10-30: added settings: to toolOpenaiAgentsApi from the Agents API, RBAC, production best practices,
+# IP allowlist, workload identity federation, admin APIs and data-controls guides (all .md 200); the record's
+# existing text still matched (web_search modes live / cached / disabled, no Agents permission in the RBAC table,
+# /v1/agents not ZDR-eligible and kept until deleted), so no rating or wording changed.
 vendor: openai
 family: OpenAI Agents API
 tools:
@@ -702,6 +706,258 @@ tools:
           exposure, they do not classify. The vendor's misalignment monitoring is documented for the Responses
           API, not this API, and reviews actions asynchronously rather than screening input.
         verified: "2026-09-25"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
+    # Organisation and project controls are set in OpenAI Platform settings; everything about a run is code — the
+    # agent definition, environment, tools and vaults sent with each session — so the application owner, not an
+    # admin console, holds most of these values. Verified 2026-10-30 at developers.openai.com/api/docs (.md, 200).
+    settings:
+      - id: dedicatedProject
+        name: Dedicated OpenAI project
+        where: platform.openai.com › Organization settings › Projects
+        setVia: [adminConsole]
+        area: identity
+        recommended: A dedicated project per agent application, holding its keys, vaults, environments and sessions
+        why: Agents, sessions and vaults are project-scoped, so one application's keys and stored credentials reach nothing else.
+        mitigations: [D3-EI, cap-agent-tool-registry]
+        url: https://developers.openai.com/api/docs/guides/agents-api/environments/security
+        verified: "2026-10-30"
+      - id: rbacGroups
+        name: Roles and Groups (RBAC)
+        where: platform.openai.com › Organization settings › Roles and Groups, and each project's roles; groups synced by SCIM
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: Custom roles assigned to IdP-synced groups; Owner held by a named few
+        why: Access is the union of every role a user holds, so grants go through groups you can audit; changes take up to 30 minutes.
+        mitigations: [D3-APA]
+        url: https://developers.openai.com/api/docs/guides/rbac
+        verified: "2026-10-30"
+      - id: applicationKeyPermissions
+        name: api.agents.read, api.agents.write and api.responses.write
+        where: Permissions of the application's restricted project key
+        setVia: [adminConsole]
+        area: identity
+        recommended: Only these on the application key; api.vaults.read and api.vaults.write only on the service that provisions vaults
+        why: A leaked application key can run sessions but cannot read or change the project's other resources.
+        mitigations: [D3-APA, D3-CH]
+        url: https://developers.openai.com/api/docs/guides/agents-api/environments/security
+        verified: "2026-10-30"
+      - id: apiKeyGovernance
+        name: API Key Governance
+        where: platform.openai.com › Platform settings › API Key Governance (organization or project)
+        setVia: [adminConsole]
+        area: identity
+        recommended: Service-account keys only
+        why: Agent applications authenticate as a project service account, not with a key tied to a person who may leave.
+        mitigations: [D3-CH]
+        url: https://developers.openai.com/api/docs/guides/production-best-practices
+        verified: "2026-10-30"
+      - id: maxApiKeyLifetime
+        name: Maximum API key lifetime
+        where: platform.openai.com › Platform settings (organization, or the project)
+        setVia: [adminConsole]
+        area: identity
+        recommended: 90 days
+        why: New keys must expire within the limit, so a copied key stops working; a project limit cannot exceed the organization's.
+        mitigations: [D3-CH]
+        url: https://developers.openai.com/api/docs/guides/production-best-practices
+        verified: "2026-10-30"
+      - id: workloadIdentityFederation
+        name: Workload Identity Provider (service account mapping)
+        where: platform.openai.com › Organization Settings › Security › Workload Identity Provider
+        setVia: [adminConsole, identityProvider]
+        area: identity
+        recommended: One mapping per application workload to its project service account, wherever it runs on a supported cloud or Kubernetes
+        why: The application trades its own OIDC, SPIFFE or X.509 identity for a short-lived token, so no stored API key exists to leak.
+        mitigations: [D3-CH]
+        url: https://developers.openai.com/api/docs/guides/workload-identity-federation
+        verified: "2026-10-30"
+      - id: ipAllowlist
+        name: IP allowlist
+        where: platform.openai.com › Settings › Security › IP allowlist (project or organization)
+        setVia: [adminConsole]
+        area: network
+        recommended: On for production agent projects, listing every egress address that calls the API
+        why: A leaked key fails with ip_not_authorized from anywhere else; it does not restrict platform.openai.com sign-in.
+        mitigations: [D3-CH]
+        url: https://developers.openai.com/api/docs/guides/ip-allowlist
+        verified: "2026-10-30"
+      - id: environmentKey
+        name: Environment key (CODEX_API_KEY)
+        where: platform.openai.com › Agents › Environments › Keys, passed into the self-hosted executor as CODEX_API_KEY
+        setVia: [adminConsole, code]
+        area: identity
+        recommended: A separate environment key per executor fleet; the application key never enters the sandbox
+        why: Agent-generated code can read the environment key, which only connects environments and authorizes no other API action.
+        mitigations: [D3-CH, D3-EI]
+        url: https://developers.openai.com/api/docs/guides/agents-api/environments/self-hosted
+        verified: "2026-10-30"
+      - id: environmentType
+        name: environment.type
+        where: Session or saved-agent environment — openai_hosted, self_hosted or none
+        setVia: [code]
+        area: tools
+        recommended: openai_hosted, one sandbox per session; none for agents that need no shell or files
+        why: Agent-written code runs in a sandbox OpenAI provisions and reclaims, not on your hosts; none removes the built-in Bash and apply-patch tools.
+        mitigations: [D3-EI, AML.M0028]
+        url: https://developers.openai.com/api/docs/guides/agents-api/architecture
+        verified: "2026-10-30"
+      - id: networkAccess
+        name: network.access and allowed_domains
+        where: environment.network on an openai_hosted environment or environment template
+        setVia: [code]
+        area: network
+        default: enabled
+        recommended: restricted, with allowed_domains listing your package mirror and the task's exact hosts
+        why: Sandbox code reaches only the listed hostnames (1–100, no wildcards), so injected instructions cannot send data to arbitrary hosts.
+        mitigations: [cap-agent-egress-control]
+        url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
+        verified: "2026-10-30"
+      - id: environmentTemplate
+        name: environment_template_id
+        where: Session create, referencing a saved environment template
+        setVia: [code]
+        area: network
+        recommended: Every production session starts from a template that holds the network policy
+        why: A session's network override cannot broaden the template's policy, so a caller cannot widen egress per request.
+        mitigations: [cap-agent-egress-control]
+        url: https://developers.openai.com/api/docs/guides/agents-api/environments/openai-hosted
+        verified: "2026-10-30"
+      - id: vaultIds
+        name: vault_ids (static_bearer and mcp_oauth credentials)
+        where: Session create; credentials stored in a vault and bound to the MCP server URL
+        setVia: [code, apiCli]
+        area: identity
+        recommended: One vault per end user or tenant, attached only to that user's sessions
+        why: OpenAI's service presents the token to the MCP server and the agent never sees it; one user's grant never serves another user's session.
+        mitigations: [D3-CTS, D3-CH]
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
+        verified: "2026-10-30"
+      - id: sandboxSecretHosts
+        name: auth.networking.allowed_hosts (environment_variable credential)
+        where: Vault credential of type environment_variable with auth.networking.type limited
+        setVia: [apiCli, code]
+        area: network
+        recommended: The exact API host that needs the secret, nothing broader
+        why: Sandbox code holds only a placeholder; the egress proxy supplies the real secret to the listed hosts over HTTPS.
+        mitigations: [D3-CTS, cap-agent-egress-control]
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/vaults
+        verified: "2026-10-30"
+      - id: mcpAllowedTools
+        name: allowed_tools
+        where: Each mcp entry in agent.tools
+        setVia: [code]
+        area: tools
+        default: Unset (every tool the server publishes)
+        recommended: The approved tool names for each server
+        why: The agent can discover and call only the listed tools, so a server that adds a tool later does not widen the agent.
+        mitigations: [AML.M0028, cap-agent-tool-registry]
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/mcp
+        verified: "2026-10-30"
+      - id: webSearch
+        name: web_search mode and allowed_domains
+        where: The web_search entry in agent.tools
+        setVia: [code]
+        area: network
+        default: live, with no domain filter, when web_search is included
+        recommended: Included only for agents whose task needs the web, live, with allowed_domains when the sources are known
+        why: Search results enter the loop unclassified; agents that do not need the web do not get that path.
+        mitigations: [AML.M0028]
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/web-search
+        verified: "2026-10-30"
+      - id: automationsTool
+        name: automations tool
+        where: '{"type": "automations"} in agent.tools'
+        setVia: [code]
+        area: tools
+        default: Not included
+        recommended: Left out unless the workflow needs the agent to schedule its own follow-ups
+        why: An agent holding it can schedule future runs that start with nobody present.
+        mitigations: [AML.M0028, AML.M0029]
+        url: https://developers.openai.com/api/docs/guides/agents-api/sessions/automations
+        verified: "2026-10-30"
+      - id: functionApproval
+        name: agent.session.requires_action (function tools)
+        where: The application's function-call handler
+        setVia: [code]
+        area: tools
+        recommended: Consequential functions run only after an authenticated person approves those arguments for that pending call
+        why: The session pauses until your code returns a result, so your application is the gate for every effect it implements.
+        mitigations: [AML.M0029, cap-agent-action-policy-enforcement]
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/functions
+        verified: "2026-10-30"
+      - id: computerUseApproval
+        name: computer_use_approval_request (browser_origin_access)
+        where: Session required_actions, answered with agent.session.input.computer_use_approval_request_result for the same request_id
+        setVia: [code]
+        area: network
+        recommended: Shown to the authorised user for each new origin; deny or cancel when nobody answers
+        why: The hosted browser reaches only origins a person approved; origin approval is not approval of each later action.
+        mitigations: [AML.M0029]
+        url: https://developers.openai.com/api/docs/guides/agents-api/tools/computer-use
+        verified: "2026-10-30"
+      - id: savedAgents
+        name: Saved agents (agent_id)
+        where: POST /v1/agents with name and metadata; sessions started with agent_id
+        setVia: [apiCli, code]
+        area: tools
+        recommended: Every production definition saved with owner and change reference in metadata, sessions started by agent_id
+        why: The project's agent list becomes a register to reconcile sessions against; inline definitions show up as unregistered.
+        mitigations: [cap-agent-tool-registry]
+        url: https://developers.openai.com/api/docs/guides/agents-api/configuration
+        verified: "2026-10-30"
+      - id: traceExport
+        name: Export session traces (GET /v1/agents/sessions/{session_id}/traces)
+        where: A project key with api.traces.read (or api.agents.read), paged as OTLP JSON
+        setVia: [apiCli]
+        area: audit
+        default: Tracing on for new sessions; export is pull-only
+        recommended: Every finished turn's trace pulled into your collector, triggered by session webhooks
+        why: Model inputs, tool calls and results land in your own store; the export does not set up automatic delivery.
+        mitigations: [cap-agent-tracing]
+        requires: Trace export enabled for the organization
+        url: https://developers.openai.com/api/docs/guides/agents-api/tracing
+        verified: "2026-10-30"
+      - id: sessionWebhooks
+        name: Session webhooks
+        where: Project webhook endpoint subscribed to Agents API events, verified with OPENAI_WEBHOOK_SECRET
+        setVia: [adminConsole, code]
+        area: audit
+        recommended: Subscribed to the session lifecycle events, signatures verified before processing
+        why: Trace and item collection runs when each turn ends, and an unsigned request cannot trigger your handler.
+        mitigations: [cap-agent-tracing]
+        url: https://developers.openai.com/api/docs/guides/agents-api/sessions/webhooks
+        verified: "2026-10-30"
+      - id: orgAuditLogs
+        name: Audit logs
+        where: Admin API GET /v1/organization/audit_logs with an admin key
+        setVia: [apiCli]
+        area: audit
+        recommended: Pulled into the SIEM by a collector that alone holds the admin key
+        why: Key, role, project and configuration changes around the agent application are recorded outside the project they govern.
+        mitigations: [cap-agent-tracing]
+        url: https://developers.openai.com/api/docs/guides/admin-apis
+        verified: "2026-10-30"
+      - id: cancelTurn
+        name: agent.session.input.cancel
+        where: Session events endpoint
+        setVia: [apiCli, code]
+        area: audit
+        recommended: Wired to an operator stop control in the application
+        why: The running turn ends as agent.session.turn.cancelled; deleting vault credentials or keys does not stop work already running.
+        mitigations: [cap-agent-kill-switch]
+        url: https://developers.openai.com/api/docs/guides/agents-api/sessions
+        verified: "2026-10-30"
+      - id: deleteSession
+        name: Delete a session
+        where: DELETE /v1/agents/sessions/{session_id}; published artifacts deleted through the session Artifacts API
+        setVia: [apiCli, code]
+        area: data
+        default: Sessions kept until deleted
+        recommended: Deleted when the conversation it serves ends, its artifacts first
+        why: /v1/agents state is kept until deleted and is not eligible for zero data retention, so deletion is the only retention control.
+        mitigations: [AML.M0031, cap-agent-kill-switch]
+        url: https://developers.openai.com/api/docs/guides/agents-api/sessions/manage
+        verified: "2026-10-30"
     sources:
       - title: Agents API overview
         url: https://developers.openai.com/api/docs/guides/agents-api/overview
