@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EnablePanel } from "@/components/enable/EnablePanel";
+import { ExperimentalDrawing } from "@/components/experimental/ExperimentalDrawing";
 import { cloudById, clouds } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -52,9 +53,11 @@ interface ArchetypeViewProps {
   tool: string | null;
   focus: string | null;
   onPickTool: (toolId: string | null, capabilityId?: string) => void;
+  /** The experimental section: the simplified drawing options replace the canvas. */
+  experimental?: boolean;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, experimental = false }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -130,7 +133,19 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           </span>
         </button>
       )}
-      {drawingVisible && implementedOn.length > 0 && (
+      {drawingVisible && experimental && (
+        <div ref={drawingRef} className="scroll-mt-20">
+          <ExperimentalDrawing
+            archetype={archetype}
+            walk={activeWalk}
+            highlight={highlight}
+            onHighlight={onHighlight}
+            pins={tab === "flows" ? "risks" : "capabilities"}
+            onPickMitigation={pickChip}
+          />
+        </div>
+      )}
+      {drawingVisible && !experimental && implementedOn.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-3" role="group" aria-label="Draw as built on">
           <span>Drawn as</span>
           {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
@@ -148,7 +163,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           ))}
         </div>
       )}
-      {drawingVisible && (
+      {drawingVisible && !experimental && (
         <>
           <div ref={drawingRef} className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
             <FlowDiagram

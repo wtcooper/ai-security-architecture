@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import { archetypesInOrder, surfaces } from "@/lib/data";
+import { EXPERIMENTS } from "@/components/experimental/experiments";
+import { archetypeById, archetypesInOrder, surfaces } from "@/lib/data";
 import type { Archetype, Paragraph } from "@/lib/types";
 
 const flat = (blocks?: Paragraph[]) =>
@@ -26,7 +27,8 @@ export function ArchPicker({
   onSelect,
   placeholder = "Choose an architecture",
 }: {
-  current: Archetype | null;
+  /** The architecture shown, or an experiment (its id and title stand in for the architecture's). */
+  current: Pick<Archetype, "id" | "title"> | null;
   onSelect: (id: string) => void;
   placeholder?: string;
 }) {
@@ -34,6 +36,9 @@ export function ArchPicker({
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const matches = archetypesInOrder.filter((a) => !q || haystack.get(a.id)?.includes(q));
+  const experiments = EXPERIMENTS.filter(
+    (e) => !q || `${e.title} experimental ${haystack.get(e.archetype) ?? ""}`.toLowerCase().includes(q),
+  );
 
   const close = () => {
     setOpen(false);
@@ -104,7 +109,31 @@ export function ArchPicker({
                   </li>
                 );
               })}
-              {!matches.length && (
+              {experiments.length > 0 && (
+                <li>
+                  <p className="eyebrow px-2.5 pb-1 pt-2">Experimental</p>
+                  <ul>
+                    {experiments.map((e) => (
+                      <li key={e.id}>
+                        <button
+                          role="option"
+                          aria-selected={e.id === current?.id}
+                          onClick={() => pick(e.id)}
+                          className={`block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] leading-snug transition-colors ${
+                            e.id === current?.id ? "bg-ink font-semibold text-white" : "text-ink-2 hover:bg-mist hover:text-ink"
+                          }`}
+                        >
+                          {e.title}
+                          <span className={`block text-[11px] ${e.id === current?.id ? "text-white/70" : "text-ink-3"}`}>
+                            {archetypeById.get(e.archetype)?.abbrev ?? ""} · {e.tagline}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              )}
+              {!matches.length && !experiments.length && (
                 <li className="px-3 py-2.5 text-[13px] text-ink-3">
                   Nothing matches &ldquo;{query}&rdquo; — try a product, component or scenario word.
                 </li>

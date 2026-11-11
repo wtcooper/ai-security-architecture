@@ -3,12 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { experimentById } from "@/components/experimental/experiments";
 import { PageHeader } from "@/components/Panel";
 import { archetypeById, archetypesInOrder, cloudById, surfaces, toolById } from "@/lib/data";
 import type { Scenario } from "@/lib/types";
 import { ArchetypeView, TABS, type Tab } from "./ArchetypeView";
 import { ArchPicker } from "./ArchPicker";
 import type { Highlight } from "./FlowDiagram";
+
+/** An architecture id, or an experiment drawing one. */
+const known = (id: string) => archetypeById.has(id) || experimentById.has(id);
 
 const SURFACE_TAGLINE: Record<string, string> = {
   surfaceEndpoint: "on the person's own device",
@@ -34,7 +38,7 @@ export function ArchitecturesBrowser() {
   });
 
   const [archetypeId, setArchetypeId] = useState(
-    (linkedArchetype && archetypeById.has(linkedArchetype) && linkedArchetype) || archetypesInOrder[0]?.id || "",
+    (linkedArchetype && known(linkedArchetype) && linkedArchetype) || archetypesInOrder[0]?.id || "",
   );
   // Opens on the overview with the whole drawing, unless the link names a tab or a product.
   const [tab, setTab] = useState<Tab>(linkedProduct || anchored ? "enable" : linkedTab && TABS.includes(linkedTab) ? linkedTab : "overview");
@@ -50,7 +54,7 @@ export function ArchitecturesBrowser() {
   const [seenKey, setSeenKey] = useState(linkKey);
   if (linkKey !== seenKey) {
     setSeenKey(linkKey);
-    if (linkedArchetype && linkedArchetype !== archetypeId && archetypeById.has(linkedArchetype)) {
+    if (linkedArchetype && linkedArchetype !== archetypeId && known(linkedArchetype)) {
       setArchetypeId(linkedArchetype);
       setWalkIndex(null);
       setHighlight(null);
@@ -60,7 +64,8 @@ export function ArchitecturesBrowser() {
     if (linkedProduct !== (selected?.tool ?? null)) setSelected(linkedProduct ? { tool: linkedProduct } : null);
   }
 
-  const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
+  const experiment = experimentById.get(archetypeId) ?? null;
+  const archetype = archetypeById.get(experiment?.archetype ?? archetypeId) ?? archetypesInOrder[0];
   const walks = useMemo(
     () => [archetype.walkthrough, ...(archetype.scenarios ?? [])].filter(Boolean) as Scenario[],
     [archetype],
@@ -79,8 +84,8 @@ export function ArchitecturesBrowser() {
     if (tab !== "overview") query.set("tab", tab);
     if (tab === "enable" && selected) query.set("tool", selected.tool);
     window.history.replaceState(null, "", `?${query}${window.location.hash}`);
-    document.title = `${archetype.title} · Reference architectures`;
-  }, [archetypeId, archetype.title, tab, selected]);
+    document.title = `${experiment?.title ?? archetype.title} · Reference architectures`;
+  }, [archetypeId, archetype.title, experiment, tab, selected]);
 
   const select = (id: string) => {
     setArchetypeId(id);
@@ -117,7 +122,7 @@ export function ArchitecturesBrowser() {
         lead="How each class of AI application is built, how data moves through it, where each capability goes, and how to enable it securely. Pick one, walk a sequence flow, then open Enable for what to put in place and which tools deliver it."
       >
         <div className="mt-6">
-          <ArchPicker current={archetype} onSelect={select} />
+          <ArchPicker current={experiment ?? archetype} onSelect={select} />
         </div>
       </PageHeader>
 
@@ -125,9 +130,11 @@ export function ArchitecturesBrowser() {
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div className="max-w-3xl">
             <p className="eyebrow">
-              {surfaces.find((s) => s.id === archetype.surface)?.title} · {SURFACE_TAGLINE[archetype.surface]}
+              {experiment
+                ? `Experimental · ${experiment.tagline}`
+                : `${surfaces.find((s) => s.id === archetype.surface)?.title} · ${SURFACE_TAGLINE[archetype.surface]}`}
             </p>
-            <h2 className="display mt-1 text-[20px] font-bold leading-tight text-ink">{archetype.title}</h2>
+            <h2 className="display mt-1 text-[20px] font-bold leading-tight text-ink">{experiment?.title ?? archetype.title}</h2>
             <p className="mt-1.5 text-[13.5px] leading-snug text-ink-2">
               {examples && `Examples include ${examples}. `}{summary}
             </p>
@@ -155,6 +162,7 @@ export function ArchitecturesBrowser() {
           tool={selected?.tool ?? null}
           focus={null}
           onPickTool={(id) => setSelected(id ? { tool: id } : null)}
+          experimental={Boolean(experiment)}
         />
       </div>
     </>
