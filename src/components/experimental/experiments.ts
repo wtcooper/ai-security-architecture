@@ -10,13 +10,7 @@ export interface Experiment {
   tagline: string;
 }
 
-export const EXPERIMENTS: Experiment[] = [
-  {
-    id: "expCodingAgentDrawings",
-    archetype: "archCodingAgentThirdParty",
-    title: "Third-party coding & desktop agents: simplified drawings",
-    tagline: "three cleaner drawings on trial",
-  },
-];
+/** Empty: the trust-boundary drawing on trial here became the standard (src/components/drawing). */
+export const EXPERIMENTS: Experiment[] = [];
 
 export const experimentById = new Map(EXPERIMENTS.map((e) => [e.id, e]));

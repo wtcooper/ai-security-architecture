@@ -17,6 +17,7 @@ import { loadControlCrosswalks } from "./lib/control-crosswalks";
 import { loadEnablement, loadStatus } from "./lib/enablement";
 import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
+import { CROSSING_KINDS } from "../src/lib/types";
 
 import type {
   Archetype,
@@ -733,6 +734,26 @@ function checkArchetypes(
       if (edge.route && !["hv", "vh", "hvh", "vhv", "under", "over"].includes(edge.route)) {
         fail(`${at}: route must be "hv", "vh", "hvh", "vhv", "under" or "over"`);
       }
+    }
+
+    // --- Boundary-drawing wording (optional, src/components/drawing) -----------
+    // A block's one-liner, a zone's gloss and an edge's crossing are authored here so the
+    // drawing's words live with the pattern, not in the renderer.
+    for (const block of arch.blocks ?? []) {
+      if (block.summary !== undefined && (typeof block.summary !== "string" || !block.summary.trim() || block.summary.length > 140))
+        fail(`${where} block ${block.id}: summary must be one short line (at most 140 characters)`);
+    }
+    for (const zone of arch.zones ?? []) {
+      if (zone.gloss !== undefined && (typeof zone.gloss !== "string" || !zone.gloss.trim() || zone.gloss.length > 40))
+        fail(`${where} zone ${zone.id}: gloss must be a few words (at most 40 characters)`);
+    }
+    for (const edge of arch.edges ?? []) {
+      if (edge.crossing === undefined) continue;
+      const at = `${where} edge ${edge.from}->${edge.to}`;
+      if (!CROSSING_KINDS.includes(edge.crossing.kind)) fail(`${at}: crossing.kind must be one of ${CROSSING_KINDS.join(", ")}`);
+      if (typeof edge.crossing.via !== "string" || !edge.crossing.via.trim()) fail(`${at}: crossing needs a via line`);
+      const zoneOfBlock = new Map((arch.blocks ?? []).map((b) => [b.id, b.zone]));
+      if (zoneOfBlock.get(edge.from) === zoneOfBlock.get(edge.to)) fail(`${at}: crossing is authored on an edge that stays inside one zone`);
     }
 
     // --- Pins ----------------------------------------------------------------
