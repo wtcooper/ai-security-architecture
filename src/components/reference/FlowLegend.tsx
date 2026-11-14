@@ -24,7 +24,7 @@ export function FlowLegend({ className = "", risks = true }: { className?: strin
         >
           1
         </span>
-        Capability
+        Control
       </span>
       {risks && <span className="flex items-center gap-1.5">
         <span

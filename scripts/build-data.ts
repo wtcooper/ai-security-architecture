@@ -334,6 +334,23 @@ async function main() {
     toolIds: new Set(tools.map((t) => t.id)),
   });
 
+  // --- What the pattern finder says about each pattern -----------------------------
+  {
+    const doc = await loadYaml<{ patterns?: Record<string, { useWhen?: string; keywords?: string[] }> }>(join(ROOT, "data", "overlay", "patterns.yaml"));
+    const fileOf = new Map(archetypeFiles.map(({ file, arch }) => [arch.id, file]));
+    const slugs = new Set<string>();
+    for (const a of archetypes) {
+      const entry = doc.patterns?.[a.id];
+      if (!entry?.useWhen?.trim()) fail(`patterns.yaml: ${a.id} needs a useWhen line`);
+      a.slug = fileOf.get(a.id)!.replace(/\.yaml$/, "");
+      if (!/^[a-z0-9-]+$/.test(a.slug) || slugs.has(a.slug)) fail(`architectures/${fileOf.get(a.id)}: the file name is the pattern's URL slug and must be unique, lower-case and hyphenated`);
+      slugs.add(a.slug);
+      a.useWhen = entry!.useWhen!.trim();
+      a.keywords = entry!.keywords ?? [];
+    }
+    for (const id of Object.keys(doc.patterns ?? {})) if (!archetypes.some((a) => a.id === id)) fail(`patterns.yaml: unknown architecture ${id}`);
+  }
+
   // --- Enable layers and the organisation's status file ----------------------------
   const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes, frameworkEntries["nist-csf"] ?? {});
   // The CSF crosswalk for controls is the Enable grouping itself, so the two cannot disagree.

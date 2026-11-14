@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/Panel";
 import { archetypeById, archetypesInOrder, incidents, surfaces } from "@/lib/data";
 import { categoryById, INCIDENT_CATEGORIES } from "@/lib/incident-categories";
+import { incidentHref } from "@/lib/routes";
 import { formatMonth, incidentsNewestFirst } from "./model";
 
 export function IncidentList() {
@@ -48,7 +49,7 @@ export function IncidentList() {
       <PageHeader
         eyebrow="Incidents"
         title="Real AI incidents, replayed"
-        lead={`${incidents.length} incidents from 2025–26, each walked step by step across the reference architecture it happened on, ending at the capabilities that would have broken the chain.`}
+        lead={`${incidents.length} incidents from 2025–26, each walked step by step across the pattern it happened on, ending at the controls that would have broken the chain.`}
       />
 
       <div className="mx-auto w-full max-w-5xl px-6 py-7">
@@ -73,13 +74,13 @@ export function IncidentList() {
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <label className="flex min-w-0 max-w-full items-center gap-2 text-[12.5px] text-ink-3">
-            Architecture
+            Pattern
             <select
               value={arch ?? ""}
               onChange={(e) => setArch(e.target.value || null)}
               className="min-w-0 max-w-full flex-1 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-[13px] font-medium text-ink focus:outline-none focus:ring-2 focus:ring-introduced sm:flex-none"
             >
-              <option value="">All architectures</option>
+              <option value="">All patterns</option>
               {surfaces.map((s) => {
                 const list = archetypesWithIncidents.filter((a) => a.surface === s.id);
                 return list.length ? (
@@ -102,7 +103,7 @@ export function IncidentList() {
             {shown.map((i) => (
               <li key={i.id}>
                 <Link
-                  href={`/incidents/${i.id}`}
+                  href={incidentHref(i.id)}
                   className="grid grid-cols-1 gap-x-5 gap-y-1.5 px-5 py-4 transition-colors hover:bg-mist/60 sm:grid-cols-[84px_minmax(0,1fr)_190px]"
                 >
                   <span className="ident pt-0.5 text-ink-3">{formatMonth(i.date)}</span>

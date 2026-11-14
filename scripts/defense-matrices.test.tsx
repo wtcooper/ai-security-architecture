@@ -6,60 +6,75 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { DefenseMatrix } from "../src/components/defenses/DefenseMatrix";
 import { matrixHref } from "../src/components/defenses/DefenseNavigation";
-import { mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
+import { GROUPING_META, mitigationMatrixItem, matchesMatrixFilters } from "../src/components/defenses/model";
 import { CapabilitiesBrowser } from "../src/components/capabilities/CapabilitiesBrowser";
 import { ControlsBrowser } from "../src/components/browse/ControlsBrowser";
-import { controls, controlStatusFor, mitigations, mitigationAliases, mitigationsForControl, status, statusFor } from "../src/lib/data";
+import { controls, controlStatusFor, enablement, enableGroupFor, mitigations, mitigationAliases, mitigationsForControl, status, statusFor } from "../src/lib/data";
 
 const all = { category: "", surface: "" };
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
 function page(path: string, query = "") {
   return renderToStaticMarkup(<AppRouterContext.Provider value={router}>
     <PathnameContext.Provider value={path}><SearchParamsContext.Provider value={new URLSearchParams(query)}>
-      {path === "/controls" ? <ControlsBrowser /> : <CapabilitiesBrowser />}
+      {path === "/reference/cosai-controls" ? <ControlsBrowser /> : <CapabilitiesBrowser />}
     </SearchParamsContext.Provider></PathnameContext.Provider>
   </AppRouterContext.Provider>);
 }
 const rows = (h: string) => [...h.matchAll(/data-id="/g)].length;
 const chips = (h: string) => [...h.matchAll(/<button[^>]*aria-pressed/g)].length;
 
-test("every capability appears in the matrix in its control group, on the surfaces where it applies", () => {
-  for (const capability of mitigations) {
-    const item = mitigationMatrixItem(capability);
-    assert.ok(item.placements.length, capability.id);
-    for (const p of item.placements) {
-      assert.equal(p.category, capability.category);
-      assert.ok(capability.surfaces[p.surface].applies, `${capability.id} ${p.surface}`);
+test("every control appears in the matrix once per surface it applies on, under its CSF category or its CoSAI group", () => {
+  for (const control of mitigations) {
+    for (const by of ["csf", "cosai"] as const) {
+      const item = mitigationMatrixItem(control, by);
+      assert.ok(item.placements.length, control.id);
+      for (const p of item.placements) {
+        assert.equal(p.category, by === "csf" ? enableGroupFor(control.id)!.id : control.category);
+        assert.ok(GROUPING_META[by].rows.some((r) => r.id === p.category), `${control.id}: ${p.category} is a row`);
+        assert.ok(control.surfaces[p.surface].applies, `${control.id} ${p.surface}`);
+      }
+      const html = renderToStaticMarkup(
+        <DefenseMatrix items={[item]} {...all} rows={GROUPING_META[by].rows} rowHeader={GROUPING_META[by].rowHeader} label="Controls" onSelect={() => {}} />,
+      );
+      assert.equal(chips(html), new Set(item.placements.map((p) => `${p.category}/${p.surface}`)).size, "no duplicate chips within a cell");
     }
-    const html = renderToStaticMarkup(<DefenseMatrix items={[item]} {...all} label="Capabilities" onSelect={() => {}} />);
-    assert.equal(chips(html), new Set(item.placements.map((p) => `${p.category}/${p.surface}`)).size, "no duplicate chips within a cell");
   }
+  assert.deepEqual(GROUPING_META.csf.rows.map((r) => r.id), enablement.groups.map((g) => g.id), "rows are the CSF categories, in CSF order");
 });
 
 test("shared filters require category and surface to match the same placement", () => {
   const item = { id: "test", title: "Test", placements: [{ category: "data", surface: "cloud" }, { category: "infra", surface: "endpoint" }] };
   assert.equal(matchesMatrixFilters(item, { category: "data", surface: "endpoint" }), false);
   assert.equal(matchesMatrixFilters(item, { category: "data", surface: "cloud" }), true);
-  assert.equal(matrixHref("/capabilities", "data", "cloud"), "/capabilities?group=data&surface=cloud");
-  assert.equal(matrixHref("/capabilities", "", ""), "/capabilities");
+  assert.equal(matrixHref("/controls", "data", "cloud"), "/controls?group=data&surface=cloud");
+  assert.equal(matrixHref("/controls", "", ""), "/controls");
 });
 
-test("controls is a master-detail page; capabilities is the pin matrix", () => {
-  const html = page("/controls");
+test("CoSAI controls is a master-detail page under Reference; the control catalogue is a matrix by CSF category", () => {
+  const html = page("/reference/cosai-controls");
   assert.equal(rows(html), controls.length);
   for (const control of controls) assert.ok(html.includes(control.title.replaceAll("&", "&amp;")), control.id);
-  assert.match(page("/controls", "control=controlInputValidationAndSanitization"), /Delivered by capabilities/);
+  assert.match(page("/reference/cosai-controls", "control=controlInputValidationAndSanitization"), /Delivered by controls in the catalogue/);
   assert.doesNotMatch(html, /Show org data/);
-  const matrix = page("/capabilities");
-  assert.match(matrix, /CoSAI control group/);
+  const matrix = page("/controls");
+  const table = (h: string) => h.match(/<table[\s\S]*?<\/table>/)![0];
+  assert.match(table(matrix), /NIST CSF category/);
+  for (const g of enablement.groups) assert.ok(table(matrix).includes(g.title), `${g.id} is a row`);
   assert.match(matrix, /Status/);
-  // The matrix shows the most granular capability: a parent with specialisations is represented by them.
+  // The matrix shows the most granular control: a parent with specialisations is represented by them.
   const specialised = new Set(mitigations.flatMap((m) => (m.parent ? [m.parent] : [])));
-  assert.equal(
-    chips(matrix.match(/<table[\s\S]*?<\/table>/)![0]),
-    mitigations.filter((m) => !specialised.has(m.id)).flatMap((m) => mitigationMatrixItem(m).placements).length,
-  );
-  assert.doesNotMatch(matrix.match(/<table[\s\S]*?<\/table>/)![0], /Generative AI Guardrails/);
+  const granular = mitigations.filter((m) => !specialised.has(m.id));
+  assert.equal(chips(table(matrix)), granular.flatMap((m) => mitigationMatrixItem(m).placements).length);
+  assert.doesNotMatch(table(matrix), /Generative AI Guardrails/);
+  // The CoSAI grouping is one switch away, with the same controls in it.
+  const cosai = page("/controls", "by=cosai");
+  assert.match(table(cosai), /CoSAI control group/);
+  assert.equal(chips(table(cosai)), granular.flatMap((m) => mitigationMatrixItem(m, "cosai").placements).length);
+  // A control's detail names its CSF category and the CoSAI controls it contributes to.
+  const detail = page("/controls", "control=D3-MFA");
+  assert.match(detail, /NIST CSF category/);
+  assert.match(detail, /PR\.AA/);
+  assert.match(detail, /Contributes to CoSAI controls/);
 });
 
 test("specialisations narrow their MITRE parent and restore retired capabilities", () => {
@@ -73,19 +88,19 @@ test("specialisations narrow their MITRE parent and restore retired capabilities
     assert.ok(s.legacy?.length, s.id);
     for (const legacy of s.legacy!) assert.ok(mitigationAliases[legacy]?.includes(s.parent!), `${legacy} was migrated onto ${s.parent}`);
   }
-  const html = page("/capabilities", "capability=cap-sensitive-data-redaction");
+  const html = page("/controls", "control=cap-sensitive-data-redaction");
   assert.match(html, /Authored specialisation of AML\.M0020/);
   assert.match(html, /Specialises/);
-  assert.match(page("/capabilities", "capability=AML.M0020"), /Specialised as/);
+  assert.match(page("/controls", "control=AML.M0020"), /Specialised as/);
 });
 
 test("native and legacy deep links retain their subjects", () => {
   const method = mitigations[0];
-  const html = page("/capabilities", `capability=${encodeURIComponent(method.id)}`);
+  const html = page("/controls", `control=${encodeURIComponent(method.id)}`);
   assert.match(html, /Upstream definition/);
   assert.ok(html.includes(method.id));
   const legacy = Object.entries(mitigationAliases).find(([, ids]) => ids.length)!;
-  const aliased = page("/capabilities", `capability=${encodeURIComponent(legacy[0])}`);
+  const aliased = page("/controls", `control=${encodeURIComponent(legacy[0])}`);
   assert.match(aliased, /This older link/);
   assert.ok(aliased.includes(legacy[1][0]));
 });
@@ -117,7 +132,7 @@ test("status comes from the status file: unset reads Not set, parents and contro
 });
 
 test("status tints matrix chips without changing them, and a display name renames everywhere", () => {
-  const items = mitigations.map(mitigationMatrixItem);
+  const items = mitigations.map((m) => mitigationMatrixItem(m, "cosai"));
   const render = () => renderToStaticMarkup(<DefenseMatrix items={items} {...all} label="Capabilities" onSelect={() => {}} statusFor={statusFor} />);
   const names = (html: string) => [...html.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
   const before = render();
@@ -129,7 +144,7 @@ test("status tints matrix chips without changing them, and a display name rename
   });
   withStatus({ "D3-MFA": { displayName: "Phishing-resistant sign-in" } }, () => {
     assert.ok(mitigationMatrixItem(mitigations.find((m) => m.id === "D3-MFA")!).title === "Phishing-resistant sign-in");
-    const detail = page("/capabilities", "capability=D3-MFA");
+    const detail = page("/controls", "control=D3-MFA");
     assert.match(detail, /Phishing-resistant sign-in/);
     assert.match(detail, /Multi-factor Authentication/);
   });

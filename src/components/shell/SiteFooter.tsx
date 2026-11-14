@@ -28,14 +28,13 @@ export function SiteFooter() {
           </a>
         </span>
         <span>
-          {meta.counts.risks} risks · {meta.counts.controls} controls · {meta.counts.mitigations}{" "}
-          capabilities · {meta.counts.archetypes} architectures · {meta.counts.tools} tools ·{" "}
-          {meta.counts.incidents} incidents
+          {meta.counts.archetypes} patterns · {meta.counts.mitigations} controls · {meta.counts.tools} tools ·{" "}
+          {meta.counts.incidents} incidents · {meta.counts.risks} risks
         </span>
         <span
           className="rounded-full border px-2 py-[2px] text-[10.5px] font-semibold"
           style={{ borderColor: "var(--band-data-rail)", color: "var(--band-data-rail)" }}
-          title="Mitigation definitions come from pinned MITRE D3FEND and ATLAS releases. CoSAI mappings, deployment scope, architecture pins and guidance are authored here and under review."
+          title="Control definitions come from pinned MITRE D3FEND and ATLAS releases. Their NIST CSF categories and CoSAI mappings, deployment scope, the patterns and the guidance are authored here and under review."
         >
           Authored layers under review
         </span>

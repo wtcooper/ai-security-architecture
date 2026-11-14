@@ -25,7 +25,7 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "AI Security Architecture",
   description:
-    "An interactive map of AI security risk: where each risk is introduced, exposed and mitigated across the components of an AI system.",
+    "Patterns for securely enabling AI: for each kind of AI tool or application, the enterprise controls to put in place and the settings of the product you chose.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

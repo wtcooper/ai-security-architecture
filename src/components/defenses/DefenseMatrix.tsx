@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
 import { controlCategories, surfaces } from "@/lib/data";
+
+/** A row of the matrix: a NIST CSF category or a CoSAI control group. */
+export interface MatrixRow {
+  id: string;
+  title: string;
+  /** A short identifier shown beside the title, e.g. the CSF category id. */
+  code?: string;
+}
 import { STATUS_META, STATUS_STYLE, type DisplayStatus } from "@/components/StatusPill";
 
 /** A chip with no status set: unanswered, neutral. */
@@ -11,7 +19,7 @@ export interface MatrixItem {
   placements: { category: string; surface: string }[];
 }
 
-export function DefenseMatrix({ items, selectedId, onSelect, category, surface, statusFor, label, cellExtra }: {
+export function DefenseMatrix({ items, selectedId, onSelect, category, surface, statusFor, label, cellExtra, rows = controlCategories, rowHeader = "CoSAI control group" }: {
   items: MatrixItem[];
   selectedId?: string | null;
   onSelect: (id: string) => void;
@@ -19,6 +27,9 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
   surface: string;
   statusFor?: (id: string) => DisplayStatus;
   label: string;
+  /** What the rows are; CoSAI control groups unless told otherwise. */
+  rows?: MatrixRow[];
+  rowHeader?: string;
   /** Rendered under the chips of a non-empty cell, e.g. the mitigations those items implement. */
   cellExtra?: (category: string, surface: string, items: MatrixItem[]) => ReactNode;
 }) {
@@ -26,11 +37,11 @@ export function DefenseMatrix({ items, selectedId, onSelect, category, surface, 
   return <div className="overflow-x-auto rounded-xl border border-line bg-paper">
     <table aria-label={label} className="w-full min-w-[700px] table-fixed border-collapse text-left">
       <thead><tr className="bg-ink text-white">
-        <th scope="col" className="w-[180px] px-4 py-3.5 text-sm">CoSAI control group</th>
+        <th scope="col" className="w-[200px] px-4 py-3.5 text-sm">{rowHeader}</th>
         {columns.map((s) => <th scope="col" key={s.id} className="border-l border-white/10 px-4 py-3.5 text-sm">{s.title}</th>)}
       </tr></thead>
-      <tbody>{controlCategories.filter((c) => !category || c.id === category).map((cat) => <tr key={cat.id} className="border-t border-line">
-        <th scope="row" className="bg-[#fbfcfe] px-4 py-3.5 align-top text-xs font-bold">{cat.title}</th>
+      <tbody>{rows.filter((c) => !category || c.id === category).map((cat) => <tr key={cat.id} className="border-t border-line">
+        <th scope="row" className="bg-[#fbfcfe] px-4 py-3.5 align-top text-xs font-bold">{cat.title}{cat.code && <span className="ident mt-1 block text-[10px] font-normal text-ink-3">{cat.code}</span>}</th>
         {columns.map((s) => {
           const cell = items.filter((item) => item.placements.some((p) => p.category === cat.id && p.surface === s.id));
           return <td key={s.id} className="border-l border-line px-3 py-3 align-top">

@@ -1,12 +1,13 @@
 import { Suspense } from "react";
-import { PersonasBrowser } from "@/components/browse/PersonasBrowser";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 
-export const metadata = { title: "Personas · AI Risk Map" };
+export const metadata = { title: "Moved · AI Security Architecture" };
 
-export default function PersonasPage() {
+/** Personas moved under Reference. */
+export default function Page() {
   return (
     <Suspense>
-      <PersonasBrowser />
+      <LegacyRedirect kind="path" to="/reference/personas" />
     </Suspense>
   );
 }

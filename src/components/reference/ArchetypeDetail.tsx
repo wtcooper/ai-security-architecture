@@ -19,7 +19,7 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
       </Section>
 
       {archetype.distinguishedBy?.length ? (
-        <Section title="Why this is its own archetype" count={null}>
+        <Section title="Why this is its own pattern" count={null}>
           <Prose blocks={archetype.distinguishedBy} size="sm" />
         </Section>
       ) : null}

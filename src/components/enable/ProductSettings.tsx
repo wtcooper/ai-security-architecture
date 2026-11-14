@@ -145,7 +145,7 @@ function SettingRow({
         {s.default && <p className="text-[11.5px] text-ink-3">Default: {s.default}</p>}
         <p className="mt-0.5 text-ink-2">{s.why}</p>
       </div>
-      <div className="flex flex-wrap content-start gap-1" aria-label="Capabilities on the drawing">
+      <div className="flex flex-wrap content-start gap-1" aria-label="Controls on the drawing">
         {chips.map((id) => (
           <button
             key={id}
@@ -267,8 +267,8 @@ export function ProductSettings({
         ) : product.kind === "tool" ? (
           <>
             <p className="mt-3 rounded-lg border border-line bg-mist/50 px-3 py-2 text-[12px] leading-snug text-ink-2">
-              {product.tool.name}&apos;s settings are not catalogued row by row yet. Until they are, this is how it covers each capability on{" "}
-              {archetypeById.get(product.tool.architecture)?.title ?? "this architecture"}.
+              {product.tool.name}&apos;s settings are not catalogued row by row yet. Until they are, this is how it covers each control on{" "}
+              {archetypeById.get(product.tool.architecture)?.title ?? "this pattern"}.
             </p>
             <div className="mt-4">
               <ToolRecord tool={product.tool} />

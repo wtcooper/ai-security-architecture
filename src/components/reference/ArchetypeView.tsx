@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * One architecture on the page: the drawing at full width, then one tab strip beneath it —
- * overview, sequence flows, enable. One panel is visible at a time. The drawing shows the
+ * One pattern on the page: the drawing at full width, then one tab strip beneath it — enable,
+ * how it works, risks and flows, incidents. One panel is visible at a time. The drawing shows the
  * capability chips at rest; the flows tab swaps them for the walk's numbers and the risk tags
  * where risk enters. On Enable every row is one of those chips: opening a row lights its chip,
  * and picking a chip opens its row.
@@ -12,7 +12,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EnablePanel } from "@/components/enable/EnablePanel";
 import { ExperimentalDrawing } from "@/components/experimental/ExperimentalDrawing";
-import { cloudById, clouds } from "@/lib/data";
+import { cloudById, clouds, incidents } from "@/lib/data";
+import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
 import { FlowDiagram, type Highlight } from "./FlowDiagram";
@@ -20,6 +21,7 @@ import type { BlockService } from "./FlowDiagramRF";
 import { FlowLegend } from "./FlowLegend";
 import { FlowSequence } from "./FlowSequence";
 import { WalkList } from "./rail-lists";
+import { PatternIncidents, PatternRisks } from "@/components/patterns/PatternPanels";
 
 /**
  * Block id -> the cloud service drawn in it, cached per cloud and architecture so the drawing
@@ -35,8 +37,8 @@ function servicesFor(cloudId: string, archetypeId: string) {
   return serviceMaps.get(key)!;
 }
 
-export type Tab = "overview" | "flows" | "enable";
-export const TABS: Tab[] = ["overview", "flows", "enable"];
+export type Tab = PatternTab;
+export const TABS: Tab[] = PATTERN_TABS;
 
 interface ArchetypeViewProps {
   archetype: Archetype;
@@ -88,7 +90,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
       go("enable");
       onHighlight({ kind: "mitigation", id });
       requestAnimationFrame(() =>
-        document.getElementById(`capability-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        document.getElementById(`control-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
       );
     };
   });
@@ -113,9 +115,10 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   };
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "flows", label: "Sequence flows", count: walks.length },
     { id: "enable", label: "Enable", count: archetype.mitigations.length },
+    { id: "overview", label: "How it works" },
+    { id: "flows", label: "Risks & flows", count: archetype.risks.length },
+    { id: "incidents", label: "Incidents", count: incidents.filter((i) => i.archetype === archetype.id).length },
   ];
 
   return (
@@ -182,7 +185,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
         </>
       )}
 
-      <div id="architecture-tabs" className="mt-5 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line" role="tablist">
+      <div id="pattern-tabs" className="mt-5 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -204,8 +207,19 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
       <div className="mt-5">
         {tab === "overview" && <ArchetypeDetail archetype={archetype} />}
 
+        {tab === "incidents" && <PatternIncidents archetype={archetype} />}
+
         {tab === "flows" && (
-          <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <PatternRisks
+            archetype={archetype}
+            lit={highlight?.kind === "risk" ? highlight.id : null}
+            onLight={(id) => onHighlight(id ? { kind: "risk", id } : null)}
+            onPickControl={pickChip}
+          />
+        )}
+
+        {tab === "flows" && (
+          <div className="mt-6 grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
             <div>
               <p className="text-[12px] leading-snug text-ink-3">
                 Select a flow to number its steps onto the drawing. The first is the complete walk;

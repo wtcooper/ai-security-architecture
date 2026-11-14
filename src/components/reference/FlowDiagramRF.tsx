@@ -50,7 +50,7 @@ interface HoverCard {
  */
 function pinBody(note: string | undefined, kind: "mitigations" | "risks", id: string): string | undefined {
   const renamed = kind === "mitigations" && statusFile[id]?.displayName;
-  const lines = [note, renamed && `Capability: ${mitigationById.get(id)?.title ?? id}`].filter(Boolean);
+  const lines = [note, renamed && `Control: ${mitigationById.get(id)?.title ?? id}`].filter(Boolean);
   return lines.length ? lines.join("\n") : undefined;
 }
 

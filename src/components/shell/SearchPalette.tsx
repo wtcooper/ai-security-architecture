@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * ⌘K over everything with a name: risks (with their R-codes), controls, mitigations (with
- * their abbreviations), components, personas, architectures, tools and incidents. The dataset is
+ * ⌘K over everything with a name: patterns (by title, product, cloud and everyday words), tools,
+ * clouds, controls, incidents, risks (with their R-codes), CoSAI controls, components and personas. The dataset is
  * already in the bundle, so the index is built once and matched in the browser; a result is
  * a plain link into the page that owns the entity, so navigation works under the GitHub
  * Pages base path exactly as every other link does.
@@ -13,7 +13,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { categoryById } from "@/lib/incident-categories";
 import {
   activePersonas,
+  archetypeById,
   archetypesInOrder,
+  clouds,
   capabilityName,
   mitigationsInOrder,
   componentTitle,
@@ -25,6 +27,9 @@ import {
   toolsInOrder,
   vendorById,
 } from "@/lib/data";
+import { SURFACE_SITUATION } from "@/components/patterns/labels";
+import { cloudsFor } from "@/components/patterns/model";
+import { ROUTES, patternHref, controlHref, cosaiControlHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
 
 interface Entry {
   kind: string;
@@ -42,66 +47,67 @@ function buildIndex(): Entry[] {
       kind: "Risk",
       title: r.title,
       hint: riskCode(r.id),
-      href: `/risks?risk=${r.id}`,
+      href: riskHref(r.id),
       text: norm(r.title, riskCode(r.id), r.id),
     })),
     ...controls.map((c) => ({
-      kind: "Control",
+      kind: "CoSAI control",
       title: c.title,
-      href: `/controls?control=${c.id}`,
+      href: cosaiControlHref(c.id),
       text: norm(c.title, c.id),
     })),
     ...mitigationsInOrder.map((c) => ({
-      kind: "Capability",
+      kind: "Control",
       title: capabilityName(c.id),
       hint: c.parent ? ` · specialisation` : c.id,
-      href: `/capabilities?capability=${c.id}`,
+      href: controlHref(c.id),
       text: norm(capabilityName(c.id), c.title, c.abbrev, c.id, c.parent),
     })),
     ...components.map((c) => ({
       kind: "Component",
       title: componentTitle(c.id),
       hint: componentTitle(c.id) === c.title ? undefined : c.title,
-      href: `/components?component=${c.id}`,
+      href: componentHref(c.id),
       text: norm(componentTitle(c.id), c.title, c.id),
     })),
     ...activePersonas.map((p) => ({
       kind: "Persona",
       title: p.title,
-      href: `/personas?persona=${p.id}`,
+      href: personaHref(p.id),
       text: norm(p.title, p.id),
     })),
     ...archetypesInOrder.map((a) => ({
-      kind: "Architecture",
+      kind: "Pattern",
       title: a.title,
-      hint: a.abbrev,
-      href: `/reference?archetype=${a.id}`,
-      text: norm(a.title, a.abbrev, a.id),
-    })),
-    ...archetypesInOrder.map((a) => ({
-      kind: "Enable",
-      title: `Enable ${a.title.charAt(0).toLowerCase()}${a.title.slice(1)}`,
-      href: `/reference?archetype=${a.id}&tab=enable`,
-      text: norm("enable", a.title, a.abbrev, a.id),
+      hint: SURFACE_SITUATION[a.surface],
+      href: patternHref(a.id),
+      text: norm(a.title, a.abbrev, a.id, a.useWhen, ...a.keywords, ...(a.exemplars ?? []).map((e) => e.name), ...cloudsFor(a.id).flatMap((c) => [c.name, c.short])),
     })),
     ...toolsInOrder.map((t) => ({
       kind: "Tool",
       title: t.name,
-      hint: vendorById.get(t.vendor)?.name ?? t.vendor,
-      href: `/reference?archetype=${t.architecture}&tab=enable&tool=${t.id}`,
+      hint: `${vendorById.get(t.vendor)?.name ?? t.vendor} · ${archetypeById.get(t.architecture)?.title ?? ""}`,
+      href: patternHref(t.architecture, { tool: t.id }),
       text: norm(t.name, t.family, t.vendor, t.id, ...(t.variants ?? []).map((v) => v.name)),
+    })),
+    ...clouds.map((c) => ({
+      kind: "Cloud",
+      title: c.name,
+      hint: `${c.implementations.length} patterns built on it`,
+      href: ROUTES.tools,
+      text: norm(c.name, c.short, c.id),
     })),
     ...incidents.map((i) => ({
       kind: "Incident",
       title: i.title,
       hint: `${categoryById.get(i.category)?.label ?? ""} · ${i.dateRange}`,
-      href: `/incidents/${i.id}`,
+      href: incidentHref(i.id),
       text: norm(i.title, i.id, i.subtitle, categoryById.get(i.category)?.label ?? "", ...(i.patterns ?? [])),
     })),
   ];
 }
 
-const KIND_ORDER = ["Architecture", "Enable", "Tool", "Risk", "Control", "Capability", "Component", "Incident", "Persona"];
+const KIND_ORDER = ["Pattern", "Tool", "Cloud", "Control", "Incident", "Risk", "CoSAI control", "Component", "Persona"];
 
 export function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const index = useMemo(() => buildIndex(), []);
@@ -180,7 +186,7 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Search risks, controls, mitigations, components, architectures, incidents…"
+          placeholder="Search patterns, tools, controls, risks, incidents…"
           aria-label="Search the site"
           className="w-full border-b border-line bg-paper px-4 py-3.5 text-[15px] text-ink placeholder:text-ink-3 focus:outline-none"
         />

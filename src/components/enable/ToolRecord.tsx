@@ -12,6 +12,7 @@ import type { Tool, ToolVariant } from "@/lib/types";
 import { CoverageMark } from "./CoverageMark";
 import { COVERAGE_WORD, coverageWord, SURFACE_CLASS_META } from "./labels";
 import { controlGroups, toolControlFor } from "./model";
+import { riskHref } from "@/lib/routes";
 
 const RELEASE_LABEL = { ga: "GA", beta: "Beta", preview: "Preview", announced: "Announced" } as const;
 
@@ -83,7 +84,7 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
       ) : null}
 
       <div className="mt-6">
-        <p className="eyebrow">How {tool.name} covers each capability</p>
+        <p className="eyebrow">How {tool.name} covers each control</p>
         <div className="mt-2 space-y-4">
           {controlGroups(arch).map(({ id, title, capabilities }) => (
             <div key={id}>
@@ -147,7 +148,7 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
                               ))}
                             </p>
                           ) : null}
-                          {!control && <p className="text-[12.5px] text-ink-3">No vendor record yet for this capability.</p>}
+                          {!control && <p className="text-[12.5px] text-ink-3">No vendor record yet for this control.</p>}
                           {coverageWord(control?.coverage) === "notInTool" && (
                             <p className="mt-1.5 text-[12px] text-ink-3">
                               Cover it with an enterprise control outside this product, or another product.
@@ -171,7 +172,7 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
           <ul className="mt-2 space-y-1.5">
             {tool.riskNotes.map((rn) => (
               <li key={rn.risk} className="text-[12.5px] leading-snug text-ink-2">
-                <Link href={`/risks?risk=${rn.risk}`} className="mr-1.5 hover:underline">
+                <Link href={riskHref(rn.risk)} className="mr-1.5 hover:underline">
                   <span className="ident rounded-sm border border-line-strong bg-mist px-1 py-px text-[9.5px] font-bold text-ink-2">
                     {riskCode(rn.risk)}
                   </span>{" "}

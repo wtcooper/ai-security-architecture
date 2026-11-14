@@ -1,12 +1,13 @@
 import { Suspense } from "react";
-import { EnableRedirect } from "@/components/enable/EnableRedirect";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 
-export const metadata = { title: "Enable · AI Security Architecture" };
+export const metadata = { title: "Moved · AI Security Architecture" };
 
-export default function EnablePage() {
+/** Enable is a tab on each pattern. */
+export default function Page() {
   return (
     <Suspense>
-      <EnableRedirect />
+      <LegacyRedirect kind="pattern" to="/patterns" defaultTab="enable" />
     </Suspense>
   );
 }

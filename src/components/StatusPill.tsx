@@ -25,9 +25,9 @@ export { STATUSES };
 
 /** What the ⓘ beside every Status heading says. */
 export const STATUS_HELP =
-  "Status is set by your organisation in data/status.yaml: Enabled, In progress or Gap for each capability. " +
-  "The same file can rename any capability to what your organisation calls it; the catalogue name stays beneath. " +
-  "Control status rolls up from its capabilities.";
+  "Status is set by your organisation in data/status.yaml: Enabled, In progress or Gap for each control. " +
+  "The same file can rename any control to what your organisation calls it; the catalogue name stays beneath. " +
+  "A CoSAI control's status rolls up from the controls that deliver it.";
 
 export function StatusPill({
   status,

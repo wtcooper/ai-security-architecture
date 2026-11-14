@@ -564,6 +564,12 @@ export interface ArchLayout {
 
 export interface Archetype {
   id: string;
+  /** The pattern's URL segment: its data file's name, e.g. "endpoint-coding-agent-third-party". */
+  slug: string;
+  /** One line on when the pattern applies, in the reader's words. From data/overlay/patterns.yaml. */
+  useWhen: string;
+  /** Search words a reader might type that the pattern's own text does not contain. */
+  keywords: string[];
   /** One of Surface.id — the deployment surface this architecture lives on. */
   surface: string;
   /** Display order within the surface, most common archetype first. Unique per surface. */

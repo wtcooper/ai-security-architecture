@@ -4,19 +4,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { EnablePanel } from "../src/components/enable/EnablePanel";
-import { ArchitecturesBrowser } from "../src/components/reference/ArchitecturesBrowser";
+import { PatternPage } from "../src/components/patterns/PatternPage";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
 import { baselineNotPinned, controlGroups } from "../src/components/enable/model";
 import { dataset, enablement, isBaseline, productsForArchetype, toolsForArchetype } from "../src/lib/data";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
-const page = (query = "") =>
+const page = (archetypeId: string, query = "") =>
   renderToStaticMarkup(
     <AppRouterContext.Provider value={router}>
-      <PathnameContext.Provider value="/reference">
+      <PathnameContext.Provider value="/patterns/x">
         <SearchParamsContext.Provider value={new URLSearchParams(query)}>
-          <ArchitecturesBrowser />
+          <PatternPage archetypeId={archetypeId} />
         </SearchParamsContext.Provider>
       </PathnameContext.Provider>
     </AppRouterContext.Provider>,
@@ -100,9 +100,9 @@ test("the Enable tab is two steps: the controls unfolded by domain, numbered as 
     assert.equal([...html.matchAll(/aria-controls="/g)].length, 2, `${arch.id}: two steps`);
     assert.doesNotMatch(html, /role="tab"/, `${arch.id}: no product is open`);
     for (const g of controlGroups(arch)) assert.match(html, new RegExp(`id="group-${g.id}"`), `${arch.id}: ${g.id} has a band`);
-    assert.equal([...html.matchAll(/id="capability-/g)].length, arch.mitigations.length, `${arch.id}: a row per pinned capability`);
+    assert.equal([...html.matchAll(/id="control-/g)].length, arch.mitigations.length, `${arch.id}: a row per pinned capability`);
     for (const [i, id] of arch.mitigations.entries()) {
-      const row = html.slice(html.indexOf(`id="capability-${id}"`));
+      const row = html.slice(html.indexOf(`id="control-${id}"`));
       assert.ok(row.slice(0, row.indexOf("</li>")).includes(`>${i + 1}</span>`), `${arch.id}: ${id} is chip ${i + 1}`);
     }
     assert.equal([...html.matchAll(/>Every AI deployment</g)].length, arch.mitigations.filter(isBaseline).length, `${arch.id}: baseline rows are tagged`);
@@ -110,15 +110,32 @@ test("the Enable tab is two steps: the controls unfolded by domain, numbered as 
   }
 });
 
-test("an architecture opens on its overview; a tab or product link opens Enable", () => {
+test("a pattern opens on Enable; a tab link opens that tab and a product link opens its settings", () => {
   const arch = dataset.archetypes.find((a) => toolsForArchetype(a.id).length)!;
-  assert.doesNotMatch(page(`archetype=${arch.id}`), /id="tools"/);
-  assert.match(page(`archetype=${arch.id}&tab=enable`), /id="tools"/);
+  const home = page(arch.id);
+  assert.match(home, /id="controls"/, "Enable is the default tab");
+  assert.match(home, /Use this pattern when: /);
+  assert.ok(home.includes(arch.useWhen.replace(/'/g, "&#x27;")), "the header says when the pattern applies");
+  assert.match(home, /role="tab"[^>]*aria-selected="true"[^>]*>Enable/);
+  assert.doesNotMatch(page(arch.id, "tab=overview"), /id="controls"/);
+  assert.match(page(arch.id, "tab=flows"), /Risks on this pattern/);
+  assert.match(page(arch.id, "tab=incidents"), /incident/i);
   const tool = toolsForArchetype(arch.id)[0];
-  const linked = page(`tool=${tool.id}`);
+  const linked = page(arch.id, `tool=${tool.id}`);
   assert.match(linked, /id="tools"/);
-  assert.match(linked, new RegExp(tool.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.doesNotMatch(linked, /role="tab"[^>]*>Risks/);
+  assert.match(linked, new RegExp(`id="setting-${tool.id}-|not catalogued row by row`), "the product's settings are open");
+});
+
+test("the Risks & flows tab lists every risk of the pattern, and the Incidents tab every incident on it", () => {
+  for (const arch of dataset.archetypes) {
+    const flows = page(arch.id, "tab=flows");
+    for (const id of arch.risks) assert.match(flows, new RegExp(`id="risk-${id}"`), `${arch.id}: ${id} is listed`);
+    assert.equal([...flows.matchAll(/id="risk-/g)].length, arch.risks.length, arch.id);
+    const incidents = page(arch.id, "tab=incidents");
+    for (const inc of dataset.incidents.filter((i) => i.archetype === arch.id)) {
+      assert.ok(incidents.includes(`/incidents/${inc.id}`), `${arch.id}: ${inc.id} is listed`);
+    }
+  }
 });
 
 test("a cloud architecture lists its clouds first, binds every component and covers every pinned capability", () => {

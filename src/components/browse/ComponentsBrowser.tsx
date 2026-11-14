@@ -23,6 +23,7 @@ import {
 import { HANDLING_EXPLAINER, notesFor } from "@/lib/deviations";
 import { ACTORS, GROUP_IDS, GROUPS, type Actor } from "@/lib/map-layout";
 import type { Phase } from "@/lib/types";
+import { cosaiControlHref, riskMapHref } from "@/lib/routes";
 
 const SUBCATEGORY_TITLES = new Map(
   componentCategories.flatMap((c) => (c.subcategory ?? []).map((s) => [s.id, s.title] as const)),
@@ -140,7 +141,7 @@ export function ComponentsBrowser() {
             <div className="mt-6">
               <ArchetypeLinks
                 archetypes={archetypesForComponent(selected)}
-                empty="No reference architecture draws a node anchored to this component yet."
+                empty="No pattern draws a block anchored to this component yet."
               />
             </div>
 
@@ -150,7 +151,7 @@ export function ComponentsBrowser() {
                 {risks.map(({ risk, phases }) => (
                   <li key={risk.id} className="flex items-start justify-between gap-3">
                     <Link
-                      href={`/map?risk=${risk.id}&phase=${phases[0]}`}
+                      href={riskMapHref(risk.id, phases[0])}
                       className="text-[13.5px] text-ink-2 hover:text-introduced transition-colors"
                     >
                       {risk.title}
@@ -174,7 +175,7 @@ export function ComponentsBrowser() {
               <p className="eyebrow">{controls.length} controls protect it</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {controls.map((c) => (
-                  <Link key={c.id} href={`/controls?control=${c.id}`}>
+                  <Link key={c.id} href={cosaiControlHref(c.id)}>
                     <Chip tone="mitigated">{c.title}</Chip>
                   </Link>
                 ))}

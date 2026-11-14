@@ -18,6 +18,7 @@ import {
   type FrameworkEntry,
 } from "@/lib/frameworks";
 import { PHASES, type Phase } from "@/lib/types";
+import { controlHref, cosaiControlHref, riskHref, personaHref } from "@/lib/routes";
 
 export function FrameworksBrowser() {
   const params = useSearchParams();
@@ -239,7 +240,7 @@ export function FrameworksBrowser() {
                         <p className="eyebrow">{entry.risks.length} risks</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.risks.map((r) => (
-                            <Link key={r.id} href={`/risks?risk=${r.id}`}>
+                            <Link key={r.id} href={riskHref(r.id)}>
                               <Chip tone="exposed">{r.title}</Chip>
                             </Link>
                           ))}
@@ -251,7 +252,7 @@ export function FrameworksBrowser() {
                         <p className="eyebrow">{entry.controls.length} controls</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.controls.map((c) => (
-                            <Link key={c.id} href={`/controls?control=${c.id}`}>
+                            <Link key={c.id} href={cosaiControlHref(c.id)}>
                               <Chip tone="mitigated">{c.title}</Chip>
                             </Link>
                           ))}
@@ -263,7 +264,7 @@ export function FrameworksBrowser() {
                         <p className="eyebrow">{entry.mitigations.length} mitigations</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.mitigations.map((c) => (
-                            <Link key={c.id} href={`/capabilities?capability=${c.id}`}>
+                            <Link key={c.id} href={controlHref(c.id)}>
                               <Chip tone="introduced">{c.title}</Chip>
                             </Link>
                           ))}
@@ -275,7 +276,7 @@ export function FrameworksBrowser() {
                         <p className="eyebrow">{entry.personas.length} personas</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {entry.personas.map((p) => (
-                            <Link key={p.id} href={`/personas?persona=${p.id}`}>
+                            <Link key={p.id} href={personaHref(p.id)}>
                               <Chip>{p.title}</Chip>
                             </Link>
                           ))}

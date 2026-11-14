@@ -42,10 +42,10 @@ test("a walk-through opens on step 1, and its last step names each break and lin
     const first = render(`/incidents/${inc.id}`, "", <IncidentWalkthrough id={inc.id} />);
     assert.match(first, new RegExp(`Step 1 of ${inc.steps.length}`), inc.id);
     const last = render(`/incidents/${inc.id}`, `step=${inc.steps.length}`, <IncidentWalkthrough id={inc.id} />);
-    assert.match(last, /Capabilities that break this chain/, inc.id);
+    assert.match(last, /Controls that break this chain/, inc.id);
     const arch = archetypeById.get(inc.archetype)!;
     for (const b of inc.breaks) {
-      assert.ok(last.includes(`#capability-${b.capability}`), `${inc.id}: ${b.capability} links to its Enable row`);
+      assert.ok(last.includes(`#control-${b.capability}`), `${inc.id}: ${b.capability} links to its Enable row`);
       assert.ok(last.includes(capabilityName(b.capability).replace(/&/g, "&amp;")), `${inc.id}: ${b.capability} named`);
       assert.ok(arch.mitigations.includes(b.capability), `${inc.id}: ${b.capability} pinned`);
     }

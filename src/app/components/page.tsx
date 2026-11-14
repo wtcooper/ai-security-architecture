@@ -1,12 +1,13 @@
 import { Suspense } from "react";
-import { ComponentsBrowser } from "@/components/browse/ComponentsBrowser";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 
-export const metadata = { title: "Components · AI Risk Map" };
+export const metadata = { title: "Moved · AI Security Architecture" };
 
-export default function ComponentsPage() {
+/** Components moved under Reference. */
+export default function Page() {
   return (
     <Suspense>
-      <ComponentsBrowser />
+      <LegacyRedirect kind="path" to="/reference/components" />
     </Suspense>
   );
 }

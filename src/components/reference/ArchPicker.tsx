@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { EXPERIMENTS } from "@/components/experimental/experiments";
-import { archetypeById, archetypesInOrder, surfaces } from "@/lib/data";
+import { archetypesInOrder, surfaces } from "@/lib/data";
+import { SURFACE_ORDER, SURFACE_SITUATION } from "@/components/patterns/labels";
 import type { Archetype, Paragraph } from "@/lib/types";
 
 const flat = (blocks?: Paragraph[]) =>
@@ -13,21 +13,21 @@ const flat = (blocks?: Paragraph[]) =>
 const haystack = new Map(
   archetypesInOrder.map((a): [string, string] => [
     a.id,
-    `${a.title} ${a.abbrev ?? ""} ${flat(a.summary)} ${flat(a.description)} ${(a.exemplars ?? []).map((ex) => `${ex.name} ${ex.note}`).join(" ")}`.toLowerCase(),
+    `${a.title} ${a.abbrev ?? ""} ${a.useWhen} ${a.keywords.join(" ")} ${flat(a.summary)} ${flat(a.description)} ${(a.exemplars ?? []).map((ex) => `${ex.name} ${ex.note}`).join(" ")}`.toLowerCase(),
   ]),
 );
 
 /**
- * The architecture selector on the Architectures page: one compact button opening a
- * searchable list grouped by surface. Pills for every name took a third of a phone screen; a
+ * The pattern switcher on a pattern page: one compact button opening a searchable list grouped
+ * by surface. Pills for every name took a third of a phone screen; a
  * combobox takes one row anywhere.
  */
 export function ArchPicker({
   current,
   onSelect,
-  placeholder = "Choose an architecture",
+  placeholder = "Choose a pattern",
 }: {
-  /** The architecture shown, or an experiment (its id and title stand in for the architecture's). */
+  /** The pattern shown. */
   current: Pick<Archetype, "id" | "title"> | null;
   onSelect: (id: string) => void;
   placeholder?: string;
@@ -36,10 +36,6 @@ export function ArchPicker({
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const matches = archetypesInOrder.filter((a) => !q || haystack.get(a.id)?.includes(q));
-  const experiments = EXPERIMENTS.filter(
-    (e) => !q || `${e.title} experimental ${haystack.get(e.archetype) ?? ""}`.toLowerCase().includes(q),
-  );
-
   const close = () => {
     setOpen(false);
     setQuery("");
@@ -50,12 +46,12 @@ export function ArchPicker({
   };
 
   return (
-    <div className="relative w-full sm:w-[380px]">
+    <div className="relative w-full sm:w-[340px]">
       <button
         onClick={() => (open ? close() : setOpen(true))}
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="flex w-full items-center justify-between gap-3 rounded-lg bg-ink px-4 py-2.5 text-left text-[13.5px] font-semibold text-white"
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-line-strong bg-paper px-3.5 py-2 text-left text-[13px] font-semibold text-ink"
       >
         <span className="truncate">{current?.title ?? placeholder}</span>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>
@@ -79,17 +75,17 @@ export function ArchPicker({
                   if (e.key === "Enter" && matches.length) pick(matches[0].id);
                 }}
                 placeholder="Search name, product or description…"
-                aria-label="Search architectures by name or description"
+                aria-label="Search patterns by name, product or description"
                 className="w-full rounded-md border border-line bg-mist px-3 py-1.5 text-[13px] text-ink placeholder:text-ink-3 focus:border-line-strong focus:outline-none"
               />
             </div>
             <ul role="listbox" className="max-h-[55vh] overflow-y-auto p-1.5">
-              {surfaces.map((s) => {
+              {SURFACE_ORDER.map((id) => surfaces.find((x) => x.id === id)!).map((s) => {
                 const group = matches.filter((a) => a.surface === s.id);
                 if (!group.length) return null;
                 return (
                   <li key={s.id}>
-                    <p className="eyebrow px-2.5 pb-1 pt-2">{s.title}</p>
+                    <p className="eyebrow px-2.5 pb-1 pt-2">{SURFACE_SITUATION[s.id] ?? s.title}</p>
                     <ul>
                       {group.map((a) => (
                         <li key={a.id}>
@@ -109,31 +105,7 @@ export function ArchPicker({
                   </li>
                 );
               })}
-              {experiments.length > 0 && (
-                <li>
-                  <p className="eyebrow px-2.5 pb-1 pt-2">Experimental</p>
-                  <ul>
-                    {experiments.map((e) => (
-                      <li key={e.id}>
-                        <button
-                          role="option"
-                          aria-selected={e.id === current?.id}
-                          onClick={() => pick(e.id)}
-                          className={`block w-full rounded-md px-2.5 py-1.5 text-left text-[13px] leading-snug transition-colors ${
-                            e.id === current?.id ? "bg-ink font-semibold text-white" : "text-ink-2 hover:bg-mist hover:text-ink"
-                          }`}
-                        >
-                          {e.title}
-                          <span className={`block text-[11px] ${e.id === current?.id ? "text-white/70" : "text-ink-3"}`}>
-                            {archetypeById.get(e.archetype)?.abbrev ?? ""} · {e.tagline}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              )}
-              {!matches.length && !experiments.length && (
+              {!matches.length && (
                 <li className="px-3 py-2.5 text-[13px] text-ink-3">
                   Nothing matches &ldquo;{query}&rdquo; — try a product, component or scenario word.
                 </li>

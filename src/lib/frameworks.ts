@@ -283,8 +283,8 @@ export function resolveFrameworkLink(frameworkId: string, entryId?: string) {
 
 export const KIND_LABEL: Record<EntityKind, string> = {
   risks: "risks",
-  controls: "controls",
-  mitigations: "capabilities",
+  controls: "CoSAI controls",
+  mitigations: "controls",
   personas: "personas",
 };
 

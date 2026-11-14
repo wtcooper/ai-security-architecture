@@ -18,6 +18,7 @@ import { archetypeById, capabilityName, incidentById, riskCode, riskTitle } from
 import { categoryById } from "@/lib/incident-categories";
 import type { Incident, IncidentSource, Phase } from "@/lib/types";
 import { stepOverlay } from "./model";
+import { patternHref, riskHref } from "@/lib/routes";
 
 /** Authored text marks file names and settings with backticks; show them as code, not as ticks. */
 function Text({ children }: { children: string }) {
@@ -113,7 +114,7 @@ export function IncidentWalkthrough({ id }: { id: string }) {
 
             {breaking ? (
               <div className="mt-5">
-                <p className="eyebrow">Capabilities that break this chain</p>
+                <p className="eyebrow">Controls that break this chain</p>
                 <ul className="mt-2 space-y-2.5">
                   {[...incident.breaks].sort((x, y) => pinNumber(x.capability) - pinNumber(y.capability)).map((b) => (
                     <li key={b.capability} className="flex gap-2.5">
@@ -122,7 +123,7 @@ export function IncidentWalkthrough({ id }: { id: string }) {
                       </span>
                       <span className="min-w-0 text-[13px] leading-snug">
                         <Link
-                          href={`/reference?archetype=${archetype.id}&tab=enable#capability-${b.capability}`}
+                          href={patternHref(archetype.id, { control: b.capability })}
                           className="font-semibold text-ink hover:text-introduced hover:underline"
                         >
                           {capabilityName(b.capability)}
@@ -133,7 +134,7 @@ export function IncidentWalkthrough({ id }: { id: string }) {
                   ))}
                 </ul>
                 <Link
-                  href={`/reference?archetype=${archetype.id}&tab=enable`}
+                  href={patternHref(archetype.id)}
                   className="mt-4 inline-block text-[13px] font-semibold text-mitigated hover:underline"
                 >
                   Enable {archetype.title} securely →
@@ -146,7 +147,7 @@ export function IncidentWalkthrough({ id }: { id: string }) {
                   {step.risks.map((r) => (
                     <Link
                       key={r}
-                      href={`/risks?risk=${r}`}
+                      href={riskHref(r)}
                       className="inline-flex items-center gap-1.5 rounded-full bg-exposed-soft px-2.5 py-[3px] text-[12px] font-medium text-exposed hover:underline"
                     >
                       <span className="ident text-[10px] font-bold">{riskCode(r)}</span>
@@ -209,8 +210,8 @@ export function IncidentWalkthrough({ id }: { id: string }) {
 
         <section aria-label="Drawing" className="min-w-0 rounded-xl border border-line bg-paper px-2 pb-3 pt-2">
           <p className="px-3 pt-2 text-[13px] text-ink-3">
-            {breaking ? "The capabilities that break it, lit on the " : "Where this step lands on the "}
-            <Link href={`/reference?archetype=${archetype.id}`} className="font-semibold text-introduced hover:underline">
+            {breaking ? "The controls that break it, lit on the " : "Where this step lands on the "}
+            <Link href={patternHref(archetype.id)} className="font-semibold text-introduced hover:underline">
               {archetype.title}
             </Link>{" "}
             architecture

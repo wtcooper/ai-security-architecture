@@ -14,6 +14,7 @@ import {
   risksForPersona,
 } from "@/lib/data";
 import type { Persona } from "@/lib/types";
+import { cosaiControlHref, riskHref } from "@/lib/routes";
 
 export function PersonasBrowser() {
   const params = useSearchParams();
@@ -103,7 +104,7 @@ export function PersonasBrowser() {
                 <p className="eyebrow">{risks.length} risks affect this persona</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {risks.map((r) => (
-                    <Link key={r.id} href={`/risks?risk=${r.id}`}>
+                    <Link key={r.id} href={riskHref(r.id)}>
                       <Chip tone="exposed">{r.title}</Chip>
                     </Link>
                   ))}
@@ -113,7 +114,7 @@ export function PersonasBrowser() {
                 <p className="eyebrow">{controls.length} controls they own</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {controls.map((c) => (
-                    <Link key={c.id} href={`/controls?control=${c.id}`}>
+                    <Link key={c.id} href={cosaiControlHref(c.id)}>
                       <Chip tone="mitigated">{c.title}</Chip>
                     </Link>
                   ))}

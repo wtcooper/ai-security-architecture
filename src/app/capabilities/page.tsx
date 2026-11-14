@@ -1,8 +1,13 @@
 import { Suspense } from "react";
-import { CapabilitiesBrowser } from "@/components/capabilities/CapabilitiesBrowser";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 
-export const metadata = { title: "Capabilities · AI Risk Map" };
+export const metadata = { title: "Moved · AI Security Architecture" };
 
-export default function CapabilitiesPage() {
-  return <Suspense><CapabilitiesBrowser /></Suspense>;
+/** The capability catalogue is now the control catalogue at /controls. */
+export default function Page() {
+  return (
+    <Suspense>
+      <LegacyRedirect kind="catalogue" />
+    </Suspense>
+  );
 }

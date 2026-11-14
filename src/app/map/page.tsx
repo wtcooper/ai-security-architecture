@@ -1,12 +1,13 @@
 import { Suspense } from "react";
-import { TourExplorer } from "@/components/tour/TourExplorer";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 
-export const metadata = { title: "Risk Map · AI Risk Map" };
+export const metadata = { title: "Moved · AI Security Architecture" };
 
-export default function MapPage() {
+/** The risk map moved under Reference. */
+export default function Page() {
   return (
     <Suspense>
-      <TourExplorer />
+      <LegacyRedirect kind="path" to="/reference/risk-map" />
     </Suspense>
   );
 }

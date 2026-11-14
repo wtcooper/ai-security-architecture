@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Chip } from "@/components/Chips";
 import { surfaceById } from "@/lib/data";
 import type { Archetype } from "@/lib/types";
+import { patternHref } from "@/lib/routes";
 
 /**
  * "Seen in these architectures" — the link back from the taxonomy into the drawings.
@@ -13,7 +14,7 @@ import type { Archetype } from "@/lib/types";
  */
 export function ArchetypeLinks({
   archetypes,
-  label = "Seen in these architectures",
+  label = "Seen in these patterns",
   empty,
 }: {
   archetypes: Archetype[];
@@ -37,7 +38,7 @@ export function ArchetypeLinks({
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {archetypes.map((a) => (
-          <Link key={a.id} href={`/reference?archetype=${a.id}`} title={surfaceById.get(a.surface)?.title}>
+          <Link key={a.id} href={patternHref(a.id)} title={surfaceById.get(a.surface)?.title}>
             <Chip>{a.abbrev ?? a.title}</Chip>
           </Link>
         ))}

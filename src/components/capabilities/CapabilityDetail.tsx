@@ -17,17 +17,18 @@ import {
   risksForMitigation,
   status as statusFile,
   statusFor,
-  surfaces,
-} from "@/lib/data";
+  surfaces, enableGroupFor } from "@/lib/data";
 import type { Mitigation } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
+import { controlHref, cosaiControlHref, riskHref, componentHref } from "@/lib/routes";
 
 export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitigation: Mitigation; onClose?: () => void; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
   const risks = risksForMitigation(mitigation.id);
   const components = componentsForMitigation(mitigation.id);
   const categoryTitle = controlCategories.find((c) => c.id === mitigation.category)?.title;
+  const family = enableGroupFor(mitigation.id);
   const own = statusFile[mitigation.id];
 
   return (
@@ -80,10 +81,10 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
           <p className="eyebrow">{mitigation.parent ? "Specialises" : "Specialised as"}</p>
           <p className="mt-1 text-xs text-ink-3">{mitigation.parent
             ? "An authored narrowing of one MITRE entry, kept where the parent is too coarse to pin or report on. The parent is the citable identifier."
-            : "Authored narrowings of this entry, each one actionable countermeasure; their records roll up here."}</p>
+            : "Authored narrowings of this entry, each one actionable control; their records roll up here."}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {mitigation.parent && <Link href={`/capabilities?capability=${mitigation.parent}`}><Chip tone="introduced">{mitigationById.get(mitigation.parent)?.title} <span className="text-ink-3">({mitigation.parent})</span></Chip></Link>}
-            {specializationsOf(mitigation.id).map((s) => <Link key={s.id} href={`/capabilities?capability=${s.id}`}><Chip tone="introduced">{s.title}</Chip></Link>)}
+            {mitigation.parent && <Link href={controlHref(mitigation.parent)}><Chip tone="introduced">{mitigationById.get(mitigation.parent)?.title} <span className="text-ink-3">({mitigation.parent})</span></Chip></Link>}
+            {specializationsOf(mitigation.id).map((s) => <Link key={s.id} href={controlHref(s.id)}><Chip tone="introduced">{s.title}</Chip></Link>)}
           </div>
         </div>
       )}
@@ -123,6 +124,17 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
         })}
       </div>
 
+      {family && (
+        <div className="mt-6">
+          <p className="eyebrow">NIST CSF category</p>
+          <p className="mt-1.5 text-[13px] text-ink">
+            <span className="ident mr-1.5 rounded-sm border border-line-strong bg-mist px-1 py-px text-[10px] font-bold text-ink-2">{family.id}</span>
+            {family.title} <span className="text-ink-3">· {family.function}</span>
+          </p>
+          <p className="mt-1 text-xs text-ink-3">The category this control is grouped under on every pattern. Authored here: NIST publishes no mapping to MITRE.</p>
+        </div>
+      )}
+
       <div className="mt-6">
         <p className="eyebrow">Contributes to CoSAI controls</p>
         <p className="mt-1 text-xs text-ink-3">Authored supporting relationships, scoped above. These do not establish control fulfillment.</p>
@@ -135,7 +147,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
                 {controls
                   .filter((c) => c.category === cat.id)
                   .map((c) => (
-                    <Link key={c.id} href={`/controls?control=${c.id}`}>
+                    <Link key={c.id} href={cosaiControlHref(c.id)}>
                       <Chip tone="mitigated">{c.title}</Chip>
                     </Link>
                   ))}
@@ -149,7 +161,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
           <p className="eyebrow">Related risks · authored mapping</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {risks.map((r) => (
-              <Link key={r.id} href={`/risks?risk=${r.id}`}>
+              <Link key={r.id} href={riskHref(r.id)}>
                 <Chip tone="exposed">{r.title}</Chip>
               </Link>
             ))}
@@ -159,7 +171,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
           <p className="eyebrow">Anchored components</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {components.map((c) => (
-              <Link key={c.id} href={`/components?component=${c.id}`}>
+              <Link key={c.id} href={componentHref(c.id)}>
                 <Chip>
                   <span
                     className="mr-1.5 inline-block h-2 w-2 rounded-full"
@@ -176,7 +188,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
       <div className="mt-6">
         <ArchetypeLinks
           archetypes={archetypesForMitigation(mitigation.id)}
-          empty="No reference architecture attaches this mitigation yet. Either the archetype it belongs to is not drawn, or nothing in the catalogue needs it."
+          empty="No pattern pins this control yet. Either the pattern it belongs to is not drawn, or nothing in the catalogue needs it."
         />
       </div>
 

@@ -14,6 +14,7 @@ import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { capabilityName, guidanceByArchetype, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
 import { placementsFor, type ControlGroup } from "./model";
+import { controlHref } from "@/lib/routes";
 
 /** The first sentence of the authored implementation scope, kept to a couple of lines: what the capability does. */
 const whatItDoes = (m: Mitigation) => {
@@ -27,7 +28,7 @@ const whatItDoes = (m: Mitigation) => {
 
 const GRID = "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.9fr)_112px]";
 
-export const BASELINE_HELP = "Needed by every AI deployment, whatever the architecture: set up once and reused.";
+export const BASELINE_HELP = "Needed by every AI deployment, whatever the pattern: set up once and reused.";
 
 const anyStatus = Object.values(statusFile).some((s) => s.status);
 
@@ -82,7 +83,7 @@ export function CapabilityTable({
           const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
           const own = statusFile[m.id];
           return (
-            <li key={m.id} id={`capability-${m.id}`} className="scroll-mt-24">
+            <li key={m.id} id={`control-${m.id}`} className="scroll-mt-24">
               <button
                 type="button"
                 onClick={() => onOpen(expanded ? null : m.id)}
@@ -115,7 +116,7 @@ export function CapabilityTable({
                   <p>{m.implementation}</p>
                   {where.notes.length ? (
                     <div>
-                      <p className="eyebrow">On this architecture</p>
+                      <p className="eyebrow">On this pattern</p>
                       <ul className="mt-1 space-y-1">
                         {where.notes.map((n) => <li key={n}>{n}</li>)}
                       </ul>
@@ -148,7 +149,7 @@ export function CapabilityTable({
                         ↑ See it on the drawing
                       </button>
                     )}
-                    <Link href={`/capabilities?capability=${m.id}`} className="text-[12px] font-semibold text-introduced hover:underline">
+                    <Link href={controlHref(m.id)} className="text-[12px] font-semibold text-introduced hover:underline">
                       Full definition →
                     </Link>
                   </span>

@@ -8,6 +8,7 @@ import { PHASE_META, PhaseRail } from "@/components/PhaseRail";
 import { Prose } from "@/components/Prose";
 import { componentTitle, controlsForRisk, overlayFor, riskCategories, risksInOrder } from "@/lib/data";
 import { PHASES, type Phase } from "@/lib/types";
+import { cosaiControlHref, riskHref } from "@/lib/routes";
 
 const FALLBACK = "Component highlights for this phase.";
 
@@ -167,7 +168,7 @@ export function TourExplorer() {
                 {controls.map((c) => (
                   <li key={c.id}>
                     <Link
-                      href={`/controls?control=${c.id}`}
+                      href={cosaiControlHref(c.id)}
                       className="flex items-start gap-2 text-[13.5px] text-ink-2 hover:text-mitigated transition-colors"
                     >
                       <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-mitigated" />
@@ -180,7 +181,7 @@ export function TourExplorer() {
           )}
 
           <Link
-            href={`/risks?risk=${risk.id}`}
+            href={riskHref(risk.id)}
             className="mt-6 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
           >
             Full risk detail →

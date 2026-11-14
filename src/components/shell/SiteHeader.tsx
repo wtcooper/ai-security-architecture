@@ -6,29 +6,38 @@ import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
 /**
- * One path, risk down to enablement: the risk map, the capabilities that reduce it, then each
- * architecture with its Enable tab. Incidents replay the risk; the taxonomy shares one menu.
+ * Patterns lead: what a reader is enabling, then the control catalogue and the tool index
+ * behind them, and the incidents that show why. The risk and framework material shares one
+ * Reference menu.
  */
 type NavItem =
   | { href: string; label: string }
   | { label: string; children: { href: string; label: string }[] };
 
 const NAV: NavItem[] = [
-  { href: "/map", label: "Risk map" },
-  { href: "/capabilities", label: "Capabilities" },
-  { href: "/reference", label: "Architectures" },
+  { href: "/patterns", label: "Patterns" },
+  { href: "/controls", label: "Controls" },
+  { href: "/tools", label: "Tools" },
   { href: "/incidents", label: "Incidents" },
   {
     label: "Reference",
     children: [
-      { href: "/risks", label: "Risks" },
-      { href: "/controls", label: "Controls" },
-      { href: "/components", label: "Components" },
-      { href: "/personas", label: "Personas" },
-      { href: "/frameworks", label: "Frameworks" },
+      { href: "/reference", label: "Overview" },
+      { href: "/reference/risk-map", label: "Risk map" },
+      { href: "/reference/risks", label: "Risks" },
+      { href: "/reference/cosai-controls", label: "CoSAI controls" },
+      { href: "/reference/components", label: "Components" },
+      { href: "/reference/personas", label: "Personas" },
+      { href: "/reference/frameworks", label: "Frameworks" },
     ],
   },
 ];
+
+/** Whether a nav link is the page shown. The Reference overview is active only on itself, not on its children. */
+const isActive = (pathname: string, href: string) => {
+  const at = pathname.replace(/\/$/, "") || "/";
+  return at === href || (href !== "/reference" && at.startsWith(`${href}/`));
+};
 
 /** The flat list, for the small-screen menu. */
 const ALL_LINKS = NAV.flatMap((item) => ("children" in item ? item.children : [item]));
@@ -126,10 +135,10 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  aria-current={pathname.startsWith(item.href) ? "page" : undefined}
+                  aria-current={isActive(pathname, item.href) ? "page" : undefined}
                   className={[
                     "px-3 py-2 text-[13.5px] rounded-md whitespace-nowrap transition-colors",
-                    pathname.startsWith(item.href)
+                    isActive(pathname, item.href)
                       ? "bg-ink text-white font-semibold"
                       : "text-ink-2 hover:text-ink hover:bg-mist font-medium",
                   ].join(" ")}
@@ -173,7 +182,7 @@ export function SiteHeader() {
             className="absolute inset-x-0 top-14 border-b border-line bg-paper p-2 shadow-lg lg:hidden"
           >
             {ALL_LINKS.map((tab) => {
-              const active = pathname.startsWith(tab.href);
+              const active = isActive(pathname, tab.href);
               return (
                 <Link
                   key={tab.href}
@@ -221,7 +230,7 @@ function Dropdown({
   open: boolean;
   onToggle: () => void;
 }) {
-  const activeChild = item.children.some((c) => pathname.startsWith(c.href));
+  const activeChild = item.children.some((c) => isActive(pathname, c.href));
   return (
     <div className="relative">
       <button
@@ -261,7 +270,7 @@ function Dropdown({
           className="absolute right-0 top-full z-40 mt-1 min-w-[11rem] rounded-lg border border-line bg-paper p-1.5 shadow-lg"
         >
           {item.children.map((c) => {
-            const active = pathname.startsWith(c.href);
+            const active = isActive(pathname, c.href);
             return (
               <Link
                 key={c.href}

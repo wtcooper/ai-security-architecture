@@ -24,6 +24,7 @@ import {
 import { mappingsForRisk } from "@/lib/frameworks";
 import { PHASES } from "@/lib/types";
 import { MasterDetail, useMasterSelection } from "./MasterDetail";
+import { cosaiControlHref, personaHref, riskMapHref } from "@/lib/routes";
 
 export const RISK_CATEGORY_ACCENT: Record<string, string> = {
   risksSupplyChainAndDevelopment: "var(--band-data-rail)",
@@ -133,7 +134,7 @@ export function RisksBrowser() {
           <p className="eyebrow">Controls</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {controls.map((c) => (
-              <Link key={c.id} href={`/controls?control=${c.id}`}>
+              <Link key={c.id} href={cosaiControlHref(c.id)}>
                 <Chip tone="mitigated">{c.title}</Chip>
               </Link>
             ))}
@@ -143,7 +144,7 @@ export function RisksBrowser() {
         <div className="mt-6">
           <ArchetypeLinks
             archetypes={archetypesForRisk(risk.id)}
-            empty="No reference architecture names this risk. Either it belongs to an archetype not yet drawn, or the catalogue has a gap."
+            empty="No pattern names this risk. Either it belongs to a pattern not yet drawn, or the catalogue has a gap."
           />
         </div>
 
@@ -171,7 +172,7 @@ export function RisksBrowser() {
             <p className="eyebrow">Personas affected</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {personasForRisk(risk.id).map((p) => (
-                <Link key={p.id} href={`/personas?persona=${p.id}`}>
+                <Link key={p.id} href={personaHref(p.id)}>
                   <Chip>{p.title}</Chip>
                 </Link>
               ))}
@@ -189,7 +190,7 @@ export function RisksBrowser() {
         </div>
 
         <Link
-          href={`/map?risk=${risk.id}&phase=introduced`}
+          href={riskMapHref(risk.id, "introduced")}
           className="mt-6 inline-block text-[13.5px] font-semibold text-introduced hover:underline"
         >
           See it on the map →

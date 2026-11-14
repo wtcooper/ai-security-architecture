@@ -8,6 +8,7 @@ import { CapabilityLinks } from "@/components/capabilities/CapabilityLinks";
 import { StatusPill } from "@/components/StatusPill";
 import { archetypesForControl, mitigationGaps, mitigationsForControl, componentsForControl, componentTitle, controlById, controlCategories, controlStatusFor, personaTitle, risksForControl } from "@/lib/data";
 import { mappingsForControl } from "@/lib/frameworks";
+import { riskHref, componentHref } from "@/lib/routes";
 
 export function ControlDetail({ controlId, onClose, framed = true }: { controlId: string; onClose?: () => void; framed?: boolean }) {
   const control = controlById.get(controlId)!;
@@ -18,11 +19,11 @@ export function ControlDetail({ controlId, onClose, framed = true }: { controlId
   return <section className={framed ? "rounded-xl border border-line bg-paper p-6" : undefined}>
     {onClose && <button onClick={onClose} className="float-right text-xs text-ink-3 hover:text-ink" aria-label="Close control detail">Close ×</button>}
     <p className="eyebrow">{controlCategories.find((c) => c.id === control.category)?.title}</p>
-    <h2 className="display mt-1.5 flex flex-wrap items-center gap-3 text-[27px] font-bold leading-tight text-ink">{control.title}{status !== "notSet" && <StatusPill status={status} title="Rolled up from the capabilities below; never set on the control itself." />}</h2>
+    <h2 className="display mt-1.5 flex flex-wrap items-center gap-3 text-[27px] font-bold leading-tight text-ink">{control.title}{status !== "notSet" && <StatusPill status={status} title="Rolled up from the controls below; never set on the CoSAI control itself." />}</h2>
 
     <Prose blocks={control.description} refs={control.externalReferences} className="mt-4" />
     <CapabilityLinks controls={[control.id]} />
-    {!mitigationsForControl(control.id).length && <p className="mt-4 text-sm text-ink-3">No capability in the catalogue delivers this control yet; it is met by process until one is authored.</p>}
+    {!mitigationsForControl(control.id).length && <p className="mt-4 text-sm text-ink-3">No control in the catalogue delivers this CoSAI control yet; it is met by process until one is authored.</p>}
     {mitigationGap && (
       <div className="mt-4 rounded-lg border border-line bg-mist p-4">
         <p className="eyebrow">MITRE coverage · {mitigationGap.assessment}</p>
@@ -40,7 +41,7 @@ export function ControlDetail({ controlId, onClose, framed = true }: { controlId
             <Chip>Every component</Chip>
           ) : (
             comps.map((c) => (
-              <Link key={c.id} href={`/components?component=${c.id}`}>
+              <Link key={c.id} href={componentHref(c.id)}>
                 <Chip>{componentTitle(c.id)}</Chip>
               </Link>
             ))
@@ -56,7 +57,7 @@ export function ControlDetail({ controlId, onClose, framed = true }: { controlId
             <Chip tone="exposed">Every risk</Chip>
           ) : (
             risks.map((r) => (
-              <Link key={r.id} href={`/risks?risk=${r.id}`}>
+              <Link key={r.id} href={riskHref(r.id)}>
                 <Chip tone="exposed">{r.title}</Chip>
               </Link>
             ))
@@ -75,7 +76,7 @@ export function ControlDetail({ controlId, onClose, framed = true }: { controlId
     <div className="mt-6">
       <ArchetypeLinks
         archetypes={archetypesForControl(control.id)}
-        empty="No reference architecture reaches this control through its mitigation set — a gap worth reading as a finding about the architectures, not about the control."
+        empty="No pattern reaches this CoSAI control through the controls it pins — a gap worth reading as a finding about the patterns, not about the control."
       />
     </div>
 

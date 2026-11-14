@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The Enable tab of an architecture: what an organisation needs in place to run this kind of
+ * The Enable tab of a pattern: what an organisation needs in place to run this kind of
  * tool or application safely, in two steps. First the enterprise controls, grouped by NIST CSF
  * category; then the products it is built on or bought as, each with its
  * own settings and the baseline value for each. Every control row is a numbered chip on the
@@ -149,10 +149,52 @@ export function EnablePanel({
   return (
     <div className="space-y-3">
       <p className="mb-4 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-        What your organisation needs in place to run {archetype.title} safely: the enterprise controls, then the settings of the{" "}
+        What your organisation needs in place to run this pattern safely: the enterprise controls, then the settings of the{" "}
         {built ? "cloud and tools it is built on" : "product you choose"}. Each control is a numbered chip on the drawing. Open one to
         light it and read how to put it in place, or pick a chip on the drawing to open its row.
       </p>
+
+      {guidance && guidance.items.length > 0 && (
+        <section id="what-to-do" aria-labelledby="what-to-do-title" className="rounded-xl border border-line bg-paper px-4 py-4">
+          <p id="what-to-do-title" className="display text-[16px] font-bold text-ink">
+            What to do
+            {guidance.status === "draft" && <span className="ml-2 text-[11.5px] font-normal text-ink-3">guidance in draft</span>}
+          </p>
+          <ol className="mt-2.5 gap-x-8 md:columns-2">
+            {guidance.items.map((item, i) => (
+              <li key={item.title} className="mb-2 flex break-inside-avoid gap-2.5 text-[13px] leading-snug text-ink">
+                <span className="ident mt-px w-4 shrink-0 text-right text-ink-3">{i + 1}</span>
+                <span className="min-w-0">
+                  {item.title}
+                  <span className="ml-1.5 inline-flex flex-wrap gap-1 align-middle">
+                    {item.mitigations.filter((id) => archetype.mitigations.includes(id)).map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        title={`${capabilityName(id)} — open its row`}
+                        onClick={() => {
+                          setLitFromTools(false);
+                          onOpen(id);
+                          requestAnimationFrame(() => document.getElementById(`control-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+                        }}
+                        className={`flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip text-[10px] font-bold transition-colors ${
+                          open === id ? "bg-chip text-white" : "bg-chip-soft text-chip hover:bg-chip hover:text-white"
+                        }`}
+                      >
+                        {archetype.mitigations.indexOf(id) + 1}
+                      </button>
+                    ))}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">How to govern this pattern</summary>
+            <div className="mt-2 max-w-3xl"><Prose blocks={guidance.overview} size="sm" /></div>
+          </details>
+        </section>
+      )}
 
       <Step
         n={1}
@@ -197,12 +239,6 @@ export function EnablePanel({
             <span className="font-semibold text-ink-2">Also needed by every AI deployment, not drawn here: </span>
             {alsoNeeded.map((m) => capabilityName(m.id)).join(" · ")}
           </p>
-        )}
-        {guidance && (
-          <details className="mt-4 rounded-xl border border-line bg-paper px-4 py-3">
-            <summary className="cursor-pointer text-[13px] font-semibold text-ink">How to govern this{guidance.status === "draft" ? " · draft" : ""}</summary>
-            <div className="mt-2"><Prose blocks={guidance.overview} size="sm" /></div>
-          </details>
         )}
       </Step>
 

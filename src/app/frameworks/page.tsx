@@ -1,12 +1,13 @@
 import { Suspense } from "react";
-import { FrameworksBrowser } from "@/components/browse/FrameworksBrowser";
+import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 
-export const metadata = { title: "Frameworks · AI Risk Map" };
+export const metadata = { title: "Moved · AI Security Architecture" };
 
-export default function FrameworksPage() {
+/** Frameworks moved under Reference. */
+export default function Page() {
   return (
     <Suspense>
-      <FrameworksBrowser />
+      <LegacyRedirect kind="path" to="/reference/frameworks" />
     </Suspense>
   );
 }

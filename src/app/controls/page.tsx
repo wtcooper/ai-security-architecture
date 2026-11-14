@@ -1,12 +1,12 @@
 import { Suspense } from "react";
-import { ControlsBrowser } from "@/components/browse/ControlsBrowser";
+import { CapabilitiesBrowser } from "@/components/capabilities/CapabilitiesBrowser";
 
-export const metadata = { title: "Controls · AI Risk Map" };
+export const metadata = { title: "Controls · AI Security Architecture" };
 
-export default function ControlsPage() {
+export default function Page() {
   return (
     <Suspense>
-      <ControlsBrowser />
+      <CapabilitiesBrowser />
     </Suspense>
   );
 }
