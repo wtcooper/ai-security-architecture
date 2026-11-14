@@ -9,10 +9,10 @@ Securely enabling AI, grounded in risk. The site reads as one path, from the ris
   components of an AI system — plus reference architectures for every class of AI application,
   with sequence flows that show how data moves and where risk enters, and twenty real 2025–26
   incidents walked step by step across the architecture each happened on.
-- **Enable it, per architecture.** Every architecture has an Enable tab: what to put in place,
-  in the order an organisation puts it in place — enterprise foundations every AI deployment
-  needs, what the surface adds, what the use case adds, then the tools, built or bought, and how
-  far each covers the rest. Every row is a numbered capability chip on the drawing above it.
+- **Enable it, per architecture.** Every architecture has an Enable tab: what an organisation
+  needs in place to run that kind of tool or application safely, in two steps — the enterprise
+  controls, grouped by security domain, then the settings of the tools and clouds it is bought
+  as or built on. Every control row is a numbered capability chip on the drawing above it.
 
 It began as a recreation of [Google's SAIF Map](https://saif.google/secure-ai-framework), rebuilt
 on the broader taxonomy that succeeded it — the
@@ -115,7 +115,7 @@ as reference — **Risk map** · **Capabilities** · **Architectures** · **Inci
 | --- | --- |
 | **Landing** | What this is, the path from risk to enablement in four steps, where the data comes from. |
 | **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **Architectures** | 18 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — four steps that open folded, each showing its pin numbers until unfolded: (1) the enterprise foundations this architecture draws on, (2) the surface baseline, (3) the use case's own additions, each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**; then (4) **Tools** — one pill per product, green when your organisation records it as enabled, and for the one picked its own security settings: where each is set, how (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the baseline value and why, the chips it delivers and a Status. On a cloud architecture the products are the three clouds, and the drawing can be **drawn as** Azure, AWS or Google Cloud, each block showing the service that plays it. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
+| **Architectures** | 18 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — two steps: (1) **Enterprise controls**, every capability the architecture pins in one table, a band per security domain (identity & access, endpoint or workload protection, AI gateway & guardrails, data protection, agent permissions & approvals, inventory, supply chain & release, monitoring & response), each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**, and a tag on the ones every AI deployment needs; then (2) **Tool settings** (Cloud & tool settings where the architecture is built) — one pill per product, green when your organisation records it as enabled, and for the one picked its own security settings: where each is set, how (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the baseline value and why, the chips it delivers and a Status. On a cloud architecture the products are the three clouds, and the drawing can be **drawn as** Azure, AWS or Google Cloud, each block showing the service that plays it. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
 | **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the capability pins that would have broken the chain — each a link to its row on the Enable tab. Old `/examples` links redirect. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › Controls** | The 35 CoSAI controls in six groups. A control's status rolls up from the capabilities that deliver it. |
@@ -248,15 +248,19 @@ by tool id (`toolClaudeCode`) or cloud id (`cloudAzure`): a `status` (`enabled`,
 its own status (and, optionally, the `value` you actually set). Anything not listed reads
 **Not enabled**.
 
-### Enable layers
+### Enable groups
 
-[`data/overlay/enablement.yaml`](data/overlay/enablement.yaml) puts capabilities in the order an
-organisation puts them in place: four groups of **enterprise foundations** every AI deployment
-needs (identity & access, AI gateway & data protection, inventory & supplier review, monitoring
-& response) and a **baseline per surface**. A use case's **additions** are derived — the
-capabilities its architecture pins that neither layer already holds — and the **tools** step
-shows each product's own security settings, every row naming the capabilities it delivers. A
-foundation must apply on every surface and nothing sits in two layers; the build checks both.
+[`data/overlay/enablement.yaml`](data/overlay/enablement.yaml) sorts capabilities into seven
+**security domains**, in the order an organisation usually puts them in place: identity &
+access, endpoint & workload protection, AI gateway & guardrails, data protection, agent
+permissions & approvals, inventory, supply chain & release, and monitoring & response. An
+architecture's **enterprise controls** are the capabilities it pins, shown under those domains;
+a domain can carry its own name per surface (endpoint protection on a device, workload
+protection in a cloud you run). The file's `baseline` list marks the capabilities **every AI
+deployment** needs, which are tagged on their rows. The **tool settings** step shows each
+product's own security settings, every row naming the capabilities it delivers. Every pinned
+capability must sit in exactly one domain and every baseline capability must apply on every
+surface; the build checks both.
 
 ### Why the capability layer looks the way it does
 
@@ -362,7 +366,7 @@ data/
 │   ├── specializations.yaml     ★ 17 authored specialisations (cap-*), one MITRE parent each,
 │   │                               with the retired ids they restore, an implementation scope
 │   │                               and optional control, surface, risk and process overrides
-│   ├── enablement.yaml          ★ Enable layers: foundations for all AI, a baseline per surface
+│   ├── enablement.yaml          ★ Enable groups: the security domains, and the baseline for all AI
 │   ├── risk-components.yaml      which components light up per risk × phase
 │   ├── saif-tour-seed.json       45 steps extracted from the public SAIF bundle
 │   └── frameworks-authored.yaml  OWASP Agentic, LLM Top 10 2026 and MCP Top 10 mappings
@@ -387,7 +391,7 @@ scripts/
 ├── audit.ts                      regenerates docs/AUDIT.md from the data
 ├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
 ├── extract-saif-tour.ts          re-extracts the SAIF tour seed
-├── lib/enablement.ts             loads and checks the Enable layers and the status file
+├── lib/enablement.ts             loads and checks the Enable groups and the status file
 └── lib/products.ts               checks settings rows, cloud implementations and product status
 
 src/
@@ -413,7 +417,7 @@ src/
     │                               CataloguePage.tsx is the shared master-detail shell
     ├── capabilities/             the Capabilities matrix (control group × surface) and detail
     ├── reference/                ★ flow diagram, sequence flows, picker, per-block styling
-    ├── enable/                   ★ an architecture's Enable tab: the layers, product pills and settings tables
+    ├── enable/                   ★ an architecture's Enable tab: the controls by domain, product pills and settings tables
     └── incidents/                the incident list and the per-incident walk-through
 
 docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
@@ -475,8 +479,9 @@ Everything is text. Clone the repository, and:
    MITRE parents roll up automatically. The `org-taxonomy-customize` skill walks through the
    mapping. Under `products:`, record the tools and clouds you use and which of their settings
    you have switched on.
-2. **Adjust the Enable layers if your order differs.** `data/overlay/enablement.yaml` decides
-   which capabilities are foundations and which a surface adds; use-case additions follow.
+2. **Adjust the Enable groups if your domains differ.** `data/overlay/enablement.yaml` decides
+   which security domain each capability sits under, what the domains are called, and which
+   capabilities are the baseline for every AI deployment.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
    `tooling-onboard` skill under `.claude/skills/` carries the research protocol. `npm run data`
    fails on any dangling id and `npm run audit` lists what each product entry has not yet

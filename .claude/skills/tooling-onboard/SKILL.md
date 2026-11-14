@@ -13,9 +13,9 @@ MITRE entry (`D3-OTF`) or an authored `cap-*` specialisation of one
 `mitigation`. The entry's job is to say, for each of those, whether the vendor lets an
 administrator switch it on and exactly where.
 
-The registry renders in exactly one place: step 4 (**Tools**) of the **Enable** tab on the
+The registry renders in exactly one place: step 2 (**Tool settings**) of the **Enable** tab on the
 reference architecture the product instantiates. That grid has one row per pinned capability, grouped by
-Enable layer (foundations, surface baseline, use-case additions), and one column per product;
+Enable security domain (identity & access, endpoint protection, and so on), and one column per product;
 a cell reads the product's `controls[]` row for that capability and shows it as one of three
 words — Built-in (`native`), Partial (`partial`), Not in tool (`external` or `none`). The
 product's full record opens beneath the grid.

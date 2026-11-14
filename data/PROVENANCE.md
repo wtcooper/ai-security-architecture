@@ -313,14 +313,14 @@ capability, and a `note`. Status is authored nowhere else: a parent mitigation w
 rolls up its specialisations, and control status is a rollup of the capabilities that support
 the control. The `org-taxonomy-customize` skill walks through it.
 
-## Enable layers
+## Enable groups
 
-`data/overlay/enablement.yaml` is original work: it groups capabilities into enterprise
-foundations every AI deployment needs (four groups, set up once) and a baseline per surface.
-A use case's additions are derived — its pinned capabilities that neither layer already holds.
-The grouping is this repository's judgement about the order an organisation puts controls in
-place; the build checks that every foundation applies on every surface, every baseline
-capability applies on its surface, and no capability sits in two layers.
+`data/overlay/enablement.yaml` is original work: it sorts capabilities into seven security
+domains (identity & access through monitoring & response) and marks the baseline every AI
+deployment needs. An architecture's enterprise controls are the capabilities it pins, shown
+under those domains. The grouping is this repository's judgement about which domain owns a
+control and the order an organisation puts them in place; the build checks that every pinned
+capability sits in exactly one domain and every baseline capability applies on every surface.
 
 ## Capabilities
 

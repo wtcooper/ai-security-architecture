@@ -11,7 +11,7 @@ import { archetypeById, capabilityName, riskById, riskCode, vendorById } from "@
 import type { Tool, ToolVariant } from "@/lib/types";
 import { CoverageMark } from "./CoverageMark";
 import { COVERAGE_WORD, coverageWord, SURFACE_CLASS_META } from "./labels";
-import { LAYER_META, pinnedByLayer, toolControlFor } from "./model";
+import { controlGroups, toolControlFor } from "./model";
 
 const RELEASE_LABEL = { ga: "GA", beta: "Beta", preview: "Preview", announced: "Announced" } as const;
 
@@ -85,11 +85,9 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
       <div className="mt-6">
         <p className="eyebrow">How {tool.name} covers each capability</p>
         <div className="mt-2 space-y-4">
-          {pinnedByLayer(arch).map(({ layer, capabilities }) => (
-            <div key={layer}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">
-                {LAYER_META[layer].n} · {LAYER_META[layer].title}
-              </p>
+          {controlGroups(arch).map(({ id, title, capabilities }) => (
+            <div key={id}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">{title}</p>
               <div className="mt-1 divide-y divide-line rounded-lg border border-line">
                 {capabilities.map((m) => {
                   const control = toolControlFor(tool, m.id);
@@ -152,7 +150,7 @@ export function ToolRecord({ tool, focus, onClose }: { tool: Tool; focus?: strin
                           {!control && <p className="text-[12.5px] text-ink-3">No vendor record yet for this capability.</p>}
                           {coverageWord(control?.coverage) === "notInTool" && (
                             <p className="mt-1.5 text-[12px] text-ink-3">
-                              Cover it with the {LAYER_META[layer].short.toLowerCase()} layer, or another product.
+                              Cover it with an enterprise control outside this product, or another product.
                             </p>
                           )}
                           {control?.verified && <p className="ident mt-2 text-[10.5px] text-ink-3">verified {control.verified}</p>}

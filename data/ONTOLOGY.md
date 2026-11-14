@@ -18,7 +18,7 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
 | Control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the capabilities that deliver it |
 | Capability (`mitigation` in data and code) | data/overlay/mitigations.yaml, data/overlay/specializations.yaml | A MITRE mitigation with its MITRE-native ID from pinned D3FEND/ATLAS, or an authored specialisation of one (`cap-*`, exactly one MITRE parent); the pin unit on every drawing, with per-diagram chip numbers and an authored per-surface decision; the only entity that carries authored status |
-| Enable layer | data/overlay/enablement.yaml | Foundations (once, for all AI) and a baseline per surface; a use case's own additions are derived from its pins |
+| Enable group | data/overlay/enablement.yaml | The security domain a capability sits under on the Enable tab (exactly one for every pinned capability), plus the baseline list every AI deployment needs |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |
 | Scenario walk | architecture `scenarios:` | steps follow real edges |
 | Guidance document | data/reference/guidance/*.yaml | one per architecture; `mode: build | use | hybrid` |

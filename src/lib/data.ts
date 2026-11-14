@@ -371,19 +371,13 @@ export function statusFor(id: string): DisplayStatus {
 export const controlStatusFor = (controlId: string): DisplayStatus =>
   rollup(mitigationsForControl(controlId).filter((m) => !m.parent).map((m) => statusFor(m.id)));
 
-// --- Enable layers ----------------------------------------------------------------
+// --- Enable groups ----------------------------------------------------------------
 
-export type Layer = "foundation" | "surface" | "useCase";
+const groupByCapability = new Map(enablement.groups.flatMap((g) => g.mitigations.map((id) => [id, g] as const)));
+const baselineIds = new Set(enablement.baseline);
 
-const foundationIds = new Set(enablement.foundations.flatMap((g) => g.mitigations));
+/** The security domain a capability is grouped under on Enable. Every pinned capability has one. */
+export const enableGroupFor = (capabilityId: string) => groupByCapability.get(capabilityId);
 
-/** Which layer a capability belongs to for one architecture: set up once, per surface, or for this use case. */
-export function layerFor(capabilityId: string, archetype: Archetype): Layer {
-  if (foundationIds.has(capabilityId)) return "foundation";
-  if (enablement.surfaces[archetype.surface]?.mitigations.includes(capabilityId)) return "surface";
-  return "useCase";
-}
-
-/** The capabilities this use case adds beyond the foundations and its surface baseline. */
-export const additionsFor = (archetype: Archetype): Mitigation[] =>
-  mitigationsForArchetype(archetype.id).filter((m) => layerFor(m.id, archetype) === "useCase");
+/** Whether every AI deployment needs this capability, whatever the architecture. */
+export const isBaseline = (capabilityId: string) => baselineIds.has(capabilityId);

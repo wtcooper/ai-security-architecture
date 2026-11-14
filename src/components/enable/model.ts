@@ -1,31 +1,35 @@
-/** What the Enable page derives from an architecture: its layers, where each capability sits, and tool coverage. */
-import { archetypeById, enablement, layerFor, mitigationById, mitigationsForArchetype, surfaceById, type Layer } from "@/lib/data";
+/** What the Enable tab derives from an architecture: its enterprise controls by security domain, and where each sits. */
+import { archetypeById, enablement, mitigationById, mitigationsForArchetype } from "@/lib/data";
 import type { Archetype, Mitigation, Tool, ToolControl } from "@/lib/types";
 
-export const LAYER_META: Record<Layer, { n: number; title: string; short: string }> = {
-  foundation: { n: 1, title: "Enterprise foundations", short: "Foundations" },
-  surface: { n: 2, title: "Surface baseline", short: "Surface" },
-  useCase: { n: 3, title: "Use-case additions", short: "Use case" },
-};
+export interface ControlGroup {
+  id: string;
+  /** The domain's name on this architecture's surface. */
+  title: string;
+  blurb: string;
+  capabilities: Mitigation[];
+}
 
-/** The foundations, every group, whether or not this architecture pins them: they are set up once for all AI. */
-export const foundationGroups = () =>
-  enablement.foundations.map((g) => ({ ...g, capabilities: g.mitigations.map((id) => mitigationById.get(id)!) }));
-
-/** What one surface adds on top of the foundations. */
-export const surfaceBaseline = (surfaceId: string) => ({
-  surface: surfaceById.get(surfaceId)!,
-  blurb: enablement.surfaces[surfaceId]?.blurb ?? "",
-  capabilities: (enablement.surfaces[surfaceId]?.mitigations ?? []).map((id) => mitigationById.get(id)!),
-});
-
-/** The architecture's pinned capabilities, in pin order, grouped by the layer each belongs to. */
-export function pinnedByLayer(archetype: Archetype): { layer: Layer; capabilities: Mitigation[] }[] {
+/**
+ * The architecture's enterprise controls: every capability it pins, in pin order, under the
+ * security domain that owns it. Domains the architecture pins nothing from are left out.
+ */
+export function controlGroups(archetype: Archetype): ControlGroup[] {
   const pinned = mitigationsForArchetype(archetype.id);
-  return (["foundation", "surface", "useCase"] as Layer[])
-    .map((layer) => ({ layer, capabilities: pinned.filter((m) => layerFor(m.id, archetype) === layer) }))
+  return enablement.groups
+    .map((g) => {
+      const own = g.surfaces?.[archetype.surface];
+      const ids = new Set(g.mitigations);
+      return { id: g.id, title: own?.title ?? g.title, blurb: own?.blurb ?? g.blurb, capabilities: pinned.filter((m) => ids.has(m.id)) };
+    })
     .filter((g) => g.capabilities.length);
 }
+
+/** Baseline capabilities this architecture does not draw: still needed, set up once for all AI. */
+export const baselineNotPinned = (archetype: Archetype): Mitigation[] => {
+  const pinned = new Set(archetype.mitigations);
+  return enablement.baseline.filter((id) => !pinned.has(id)).map((id) => mitigationById.get(id)!);
+};
 
 /** Where an architecture places a capability: every block it is pinned on, and both ends of a flow it is pinned on. */
 export function placementsFor(archetypeId: string, capabilityId: string): { blocks: string[]; notes: string[] } {

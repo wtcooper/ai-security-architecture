@@ -24,15 +24,15 @@ export const SURFACE_CLASS_ORDER = Object.keys(SURFACE_CLASS_META) as ToolSurfac
 /**
  * How far a product covers a capability, in three words a reader can act on. The registry keeps
  * finer grades (a third-party product, nothing offered); on the page both read "Not in tool",
- * because either way a foundation or another product has to cover it. A full, half or empty
+ * because either way an enterprise control or another product has to cover it. A full, half or empty
  * circle (CoverageMark) carries the meaning, so the words need no colour key.
  */
 export type CoverageWord = "builtIn" | "partial" | "notInTool" | "notApplicable" | "unverified";
 
 export const COVERAGE_WORD: Record<CoverageWord, { label: string; blurb: string }> = {
   builtIn: { label: "Built-in", blurb: "An administrator can switch this on in the product itself." },
-  partial: { label: "Partial", blurb: "Part of it is settable in the product; the rest needs a foundation, process or another product." },
-  notInTool: { label: "Not in tool", blurb: "The product does not provide this; a foundation or another product has to cover it." },
+  partial: { label: "Partial", blurb: "Part of it is settable in the product; the rest needs an enterprise control, process or another product." },
+  notInTool: { label: "Not in tool", blurb: "The product does not provide this; an enterprise control or another product has to cover it." },
   notApplicable: { label: "N/A", blurb: "The product has no surface for this; the objective belongs to another component or party." },
   unverified: { label: "Unverified", blurb: "Not yet confirmed against the vendor's documentation." },
 };

@@ -1,51 +1,125 @@
-# The Enable layers: what to put in place, in the order an organisation puts it in place.
+# The Enable tab: what an organisation needs in place for an architecture, in two steps.
 #
-#   1. foundations  enterprise controls every AI deployment needs, set up once
-#   2. surfaces     what one deployment surface adds on top of the foundations
-#   3. use case     derived, never authored: the capabilities an architecture pins that
-#                   neither layer above already holds
-#   4. tools        each product's own settings against every capability its architecture pins
+#   1. enterprise controls   every capability the architecture pins, grouped here by the
+#                            security domain that owns it, in the order an organisation
+#                            usually puts them in place
+#   2. tool settings         each product's (or cloud's) own settings, from data/tooling/ and
+#                            data/clouds/, every row naming the capabilities it delivers
 #
-# A foundation must apply on every surface, a baseline capability must apply on its surface,
-# and no capability sits in two layers. The build fails otherwise.
-foundations:
+# `groups` is the whole of step 1's structure. A group shows on an architecture when the
+# architecture pins at least one of its capabilities, and may carry a title and blurb per
+# surface where the same domain goes by a different name (endpoint protection on a laptop,
+# workload protection in a cloud you operate).
+#
+# `baseline` marks the capabilities every AI deployment needs, whatever it is: set up once,
+# reused by every architecture. They are tagged on their rows; they are not a separate step.
+#
+# The build fails unless every capability pinned on any architecture sits in exactly one
+# group, and every baseline capability is grouped and applies on every surface.
+groups:
   - id: identity
     title: Identity & access
     blurb: >-
       Every person, agent and workload signs in, holds only the access it needs, and never
       carries a credential it could leak into a prompt.
-    mitigations: [D3-MFA, D3-APA, D3-AA, D3-CH, D3-CTS]
+    mitigations: [D3-MFA, D3-APA, D3-AA, D3-CH, D3-CTS, D3-CR, D3-MAN]
+
+  - id: platform
+    title: Endpoint & workload protection
+    blurb: >-
+      Wherever the AI runs, contain what it executes and watch what it does there.
+    surfaces:
+      surfaceEndpoint:
+        title: Endpoint protection
+        blurb: >-
+          Agents on managed devices act with the user's own files, shell and credentials, so
+          the device has to contain what they run and watch what they do.
+      surfaceCloud:
+        title: Workload protection
+        blurb: >-
+          Agents and models you operate need the workload controls any production service
+          has: isolated execution, segmented networks, hardened and scanned hosts.
+      surfaceSaas:
+        title: Hosted runtime protection
+        blurb: >-
+          The vendor runs the agent, so the isolation is theirs to provide and yours to
+          require and verify.
+    mitigations: [D3-EI, D3-NI, D3-HBPI, D3-PA, D3-FA, D3-ACH, D3-SYSVA, D3-AVE]
+
   - id: gateway
-    title: AI gateway & data protection
+    title: AI gateway & guardrails
     blurb: >-
-      One governed path to models and the outside world: screen what goes in, redact what
-      should not leave, allow-list where agents may connect, and cap usage.
-    mitigations: [cap-input-guardrails, cap-sensitive-data-redaction, cap-agent-egress-control, AML.M0004]
-  - id: inventory
-    title: Inventory & supplier review
+      One governed path to models and the outside world: screen what goes in and what comes
+      out, allow-list where agents may connect, and cap usage.
+    mitigations:
+      - cap-input-guardrails
+      - cap-output-guardrails
+      - cap-output-encoding
+      - cap-agent-egress-control
+      - D3-OTF
+      - AML.M0004
+      - AML.M0036
+
+  - id: data
+    title: Data protection
     blurb: >-
-      Know which AI is in use, sanctioned or not, which agents and tool servers are approved,
-      and that each supplier has been assessed.
-    mitigations: [cap-agent-tool-registry, cap-shadow-ai-discovery, cap-ai-vendor-assessment]
+      Sensitive data is caught before it leaves, the AI reaches only what its user is entitled
+      to, what it retrieves and remembers can be trusted, and models and data are protected
+      where they are stored.
+    mitigations:
+      - cap-sensitive-data-redaction
+      - cap-data-access-governance
+      - cap-retrieval-grounding-checks
+      - AML.M0031
+      - AML.M0005
+      - AML.M0012
+      - D3-DI
+
+  - id: agent
+    title: Agent permissions & approvals
+    blurb: >-
+      Decide which tools and actions an agent may use, enforce that on every action, and keep
+      a person in the loop for the ones that matter.
+    mitigations: [AML.M0028, cap-agent-action-policy-enforcement, AML.M0029]
+
+  - id: supply
+    title: Inventory, supply chain & release
+    blurb: >-
+      Know which AI is in use, sanctioned or not; check each supplier, tool server, model and
+      dataset before it is trusted; and release changes through a gate that can roll them back.
+    mitigations:
+      - cap-agent-tool-registry
+      - cap-shadow-ai-discovery
+      - cap-ai-vendor-assessment
+      - cap-mcp-tool-integrity
+      - AML.M0014
+      - AML.M0013
+      - AML.M0023
+      - AML.M0025
+      - cap-model-documentation
+      - cap-ai-threat-modeling
+      - AML.M0007
+      - AML.M0008
+      - cap-staged-rollout-gate
+
   - id: monitoring
     title: Monitoring & response
     blurb: >-
       Record what every agent did, end to end, and be able to stop one immediately.
-    mitigations: [cap-agent-tracing, cap-agent-kill-switch]
+    mitigations: [cap-agent-tracing, AML.M0024, D3-WSAA, cap-agent-kill-switch]
 
-surfaces:
-  surfaceEndpoint:
-    blurb: >-
-      Agents running on managed devices act with the user's own files, shell and credentials,
-      so the device has to contain what they run and watch what they do.
-    mitigations: [D3-EI, D3-PA, D3-FA, cap-mcp-tool-integrity, cap-agent-action-policy-enforcement]
-  surfaceCloud:
-    blurb: >-
-      Agents and models you operate need the workload controls any production service has,
-      plus policy on every action, scoped retrieval and gated releases.
-    mitigations: [D3-EI, D3-NI, cap-mcp-tool-integrity, cap-agent-action-policy-enforcement, cap-data-access-governance, AML.M0036, cap-staged-rollout-gate]
-  surfaceSaas:
-    blurb: >-
-      With vendor-hosted AI the controls collapse to the edges: what its connectors may reach
-      on the user's behalf, and how much it may run and spend.
-    mitigations: [cap-data-access-governance, AML.M0036]
+baseline:
+  - D3-MFA
+  - D3-APA
+  - D3-AA
+  - D3-CH
+  - D3-CTS
+  - cap-input-guardrails
+  - cap-sensitive-data-redaction
+  - cap-agent-egress-control
+  - AML.M0004
+  - cap-agent-tool-registry
+  - cap-shadow-ai-discovery
+  - cap-ai-vendor-assessment
+  - cap-agent-tracing
+  - cap-agent-kill-switch

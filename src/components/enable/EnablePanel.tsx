@@ -1,20 +1,21 @@
 "use client";
 
 /**
- * The Enable tab of an architecture: what to put in place, in the order an organisation puts it
- * in place. The foundations every AI deployment needs, what the surface adds, what this use case
- * adds, then the products it is built on or bought as, each with its own settings and the
- * baseline value for each. Every capability row is a numbered chip on the drawing above, and
- * every setting names the chips it delivers, so the requirements and where they go read as one.
- * The four steps open folded, so the tab first reads as the plan; a step unfolds to its rows.
+ * The Enable tab of an architecture: what an organisation needs in place to run this kind of
+ * tool or application safely, in two steps. First the enterprise controls, grouped by the
+ * security domain that owns them; then the products it is built on or bought as, each with its
+ * own settings and the baseline value for each. Every control row is a numbered chip on the
+ * drawing above, and every setting names the chips it delivers, so the requirements and where
+ * they go read as one. The controls open unfolded, since they are the plan; the products fold
+ * until the reader picks one.
  */
 import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
-import { additionsFor, capabilityName, guidanceByArchetype, layerFor, productsForArchetype, status, statusFor } from "@/lib/data";
+import { capabilityName, guidanceByArchetype, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
-import { CapabilityTable } from "./CapabilityTable";
-import { foundationGroups, surfaceBaseline } from "./model";
+import { BASELINE_HELP, CapabilityTable } from "./CapabilityTable";
+import { baselineNotPinned, controlGroups } from "./model";
 import { ProductSettings } from "./ProductSettings";
 
 const anyStatus = Object.values(status).some((s) => s.status);
@@ -26,7 +27,7 @@ function Progress({ capabilities }: { capabilities: Mitigation[] }) {
   return <span className="text-[12px] font-normal text-ink-3">{enabled} of {capabilities.length} enabled</span>;
 }
 
-type StepId = "foundations" | "surface" | "use-case" | "tools";
+type StepId = "controls" | "tools";
 
 function Step({
   n,
@@ -34,7 +35,7 @@ function Step({
   title,
   lead,
   aside,
-  chips,
+  summary,
   expanded,
   onToggle,
   children,
@@ -44,8 +45,8 @@ function Step({
   title: string;
   lead: string;
   aside?: ReactNode;
-  /** The pin numbers this step covers, shown while it is folded. */
-  chips?: number[];
+  /** What the step holds, shown while it is folded. */
+  summary?: ReactNode;
   expanded: boolean;
   onToggle: () => void;
   children: ReactNode;
@@ -66,15 +67,7 @@ function Step({
             {aside}
           </span>
           <span className="mt-1 block max-w-3xl text-[13.5px] leading-relaxed text-ink-2">{lead}</span>
-          {!expanded && chips && chips.length > 0 && (
-            <span className="mt-2 flex flex-wrap gap-1" aria-label="Pins on the drawing">
-              {chips.map((c) => (
-                <span key={c} className="flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10px] font-bold text-chip">
-                  {c}
-                </span>
-              ))}
-            </span>
-          )}
+          {!expanded && summary}
         </span>
         <svg width="14" height="14" viewBox="0 0 12 12" className={`mt-2 shrink-0 text-ink-3 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden>
           <path d="M 2 4 L 6 8 L 10 4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -89,14 +82,16 @@ function Step({
   );
 }
 
-/** The layer's capabilities that are not drawn here, named in one line so nothing is silently dropped. */
-function AlsoNeeded({ capabilities, label }: { capabilities: Mitigation[]; label: string }) {
-  if (!capabilities.length) return null;
+/** The pin numbers a folded step covers. */
+function Chips({ numbers }: { numbers: number[] }) {
   return (
-    <p className="mt-2 text-[12px] leading-snug text-ink-3">
-      <span className="font-semibold text-ink-2">{label}: </span>
-      {capabilities.map((m) => capabilityName(m.id)).join(" · ")}
-    </p>
+    <span className="flex flex-wrap gap-1" aria-label="Pins on the drawing">
+      {numbers.map((c) => (
+        <span key={c} className="flex h-[19px] w-[19px] items-center justify-center rounded-full border border-chip bg-chip-soft text-[10px] font-bold text-chip">
+          {c}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -118,32 +113,25 @@ export function EnablePanel({
   focus?: string | null;
   onPickTool: (productId: string | null) => void;
 }) {
-  const pinned = new Set(archetype.mitigations);
-  const foundations = foundationGroups().flatMap((g) => g.capabilities);
-  const baseline = surfaceBaseline(archetype.surface);
-  const additions = additionsFor(archetype);
+  const groups = controlGroups(archetype);
+  const controls = groups.flatMap((g) => g.capabilities);
+  const shared = controls.filter((m) => isBaseline(m.id)).length;
+  const alsoNeeded = baselineNotPinned(archetype);
   const guidance = guidanceByArchetype.get(archetype.id);
   const products = productsForArchetype(archetype.id);
   const product = productId ? products.find((p) => p.id === productId) : undefined;
-  // In pin order, so the rows count up with the chips on the drawing.
-  const byPin = (list: Mitigation[]) => list.filter((m) => pinned.has(m.id)).sort((a, b) => archetype.mitigations.indexOf(a.id) - archetype.mitigations.indexOf(b.id));
-  const drawnFoundations = byPin(foundations.filter((m) => layerFor(m.id, archetype) === "foundation"));
-  const drawnBaseline = byPin(baseline.capabilities.filter((m) => layerFor(m.id, archetype) === "surface"));
-
-  const drawnAdditions = byPin(additions);
+  const built = products.some((p) => p.kind === "cloud");
   const pinNumber = (m: Mitigation) => archetype.mitigations.indexOf(m.id) + 1;
 
-  // Steps the reader unfolded. A step also stands open while it holds the lit capability or the
-  // open product, so a chip picked on the drawing or a product link always lands on a visible row.
-  const [unfolded, setUnfolded] = useState<Set<StepId>>(new Set());
-  // A chip lit from a setting row lights the drawing without unfolding the step that holds its
-  // capability row: the reader is working down a product's settings, not the capability list.
+  // The controls start unfolded and the products folded. A step also stands open while it holds
+  // the lit capability or the open product, so a chip picked on the drawing or a product link
+  // always lands on a visible row.
+  const [unfolded, setUnfolded] = useState<Set<StepId>>(new Set(["controls"]));
+  // A chip lit from a setting row lights the drawing without unfolding the controls: the reader
+  // is working down a product's settings, not the control list.
   const [litFromTools, setLitFromTools] = useState(false);
-  const fromRows = !litFromTools;
   const holds: Record<StepId, boolean> = {
-    foundations: fromRows && drawnFoundations.some((m) => m.id === open),
-    surface: fromRows && drawnBaseline.some((m) => m.id === open),
-    "use-case": fromRows && drawnAdditions.some((m) => m.id === open),
+    controls: !litFromTools && controls.some((m) => m.id === open),
     tools: Boolean(product),
   };
   const isOpen = (id: StepId) => unfolded.has(id) || holds[id];
@@ -158,61 +146,56 @@ export function EnablePanel({
     setUnfolded(next);
   };
 
-  const openRow = (id: string | null) => {
-    setLitFromTools(false);
-    onOpen(id);
-  };
-  const table = (capabilities: Mitigation[]) => (
-    <CapabilityTable capabilities={capabilities} archetype={archetype} open={open} onOpen={openRow} onShowDrawing={onShowDrawing} />
-  );
-
   return (
     <div className="space-y-3">
       <p className="mb-4 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-        Everything this architecture needs in place, in the order an organisation puts it in place. Open a step for its capabilities;
-        each is a numbered chip on the drawing. Open one to light it and read how to put it in place, or pick a chip on the drawing to
-        open its row.
+        What your organisation needs in place to run {archetype.title} safely: the enterprise controls, then the settings of the{" "}
+        {built ? "cloud and tools it is built on" : "product you choose"}. Each control is a numbered chip on the drawing. Open one to
+        light it and read how to put it in place, or pick a chip on the drawing to open its row.
       </p>
 
       <Step
         n={1}
-        id="foundations"
-        title="Enterprise foundations"
-        aside={<Progress capabilities={drawnFoundations} />}
-        chips={drawnFoundations.map(pinNumber)}
-        expanded={isOpen("foundations")}
-        onToggle={() => toggle("foundations")}
-        lead="Set up once, and every AI deployment inherits them. Most of the risk on this architecture is reduced here, before any tool is chosen."
+        id="controls"
+        title="Enterprise controls"
+        aside={
+          <>
+            <span className="text-[12px] font-normal text-ink-3">{controls.length} controls</span>
+            <Progress capabilities={controls} />
+          </>
+        }
+        summary={
+          <span className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-[max-content_minmax(0,1fr)]">
+            {groups.map((g) => (
+              <span key={g.id} className="contents">
+                <span className="text-[12px] font-semibold text-ink-2">{g.title}</span>
+                <Chips numbers={g.capabilities.map(pinNumber)} />
+              </span>
+            ))}
+          </span>
+        }
+        expanded={isOpen("controls")}
+        onToggle={() => toggle("controls")}
+        lead={`The security capabilities your organisation runs, whichever product is chosen, grouped by the domain that owns them.${
+          shared ? ` ${shared} of the ${controls.length} are needed by every AI deployment, so they are set up once and reused.` : ""
+        }`}
       >
-        {table(drawnFoundations)}
-        <AlsoNeeded label="Also org-wide, not drawn here" capabilities={foundations.filter((m) => !pinned.has(m.id))} />
-      </Step>
-
-      <Step
-        n={2}
-        id="surface"
-        title={`${baseline.surface.title} baseline`}
-        aside={<Progress capabilities={drawnBaseline} />}
-        chips={drawnBaseline.map(pinNumber)}
-        expanded={isOpen("surface")}
-        onToggle={() => toggle("surface")}
-        lead={baseline.blurb}
-      >
-        {drawnBaseline.length ? table(drawnBaseline) : <p className="text-[13px] text-ink-3">Nothing from the baseline is drawn on this architecture.</p>}
-        <AlsoNeeded label="Also in the baseline, not drawn here" capabilities={baseline.capabilities.filter((m) => !pinned.has(m.id))} />
-      </Step>
-
-      <Step
-        n={3}
-        id="use-case"
-        title="Use-case additions"
-        aside={<Progress capabilities={additions} />}
-        chips={drawnAdditions.map(pinNumber)}
-        expanded={isOpen("use-case")}
-        onToggle={() => toggle("use-case")}
-        lead={`What ${archetype.title} needs beyond the foundations and its surface baseline.`}
-      >
-        {additions.length ? table(drawnAdditions) : <p className="text-[13px] text-ink-3">Nothing beyond the foundations and the surface baseline.</p>}
+        <CapabilityTable
+          groups={groups}
+          archetype={archetype}
+          open={open}
+          onOpen={(id) => {
+            setLitFromTools(false);
+            onOpen(id);
+          }}
+          onShowDrawing={onShowDrawing}
+        />
+        {alsoNeeded.length > 0 && (
+          <p className="mt-2 text-[12px] leading-snug text-ink-3" title={BASELINE_HELP}>
+            <span className="font-semibold text-ink-2">Also needed by every AI deployment, not drawn here: </span>
+            {alsoNeeded.map((m) => capabilityName(m.id)).join(" · ")}
+          </p>
+        )}
         {guidance && (
           <details className="mt-4 rounded-xl border border-line bg-paper px-4 py-3">
             <summary className="cursor-pointer text-[13px] font-semibold text-ink">How to govern this{guidance.status === "draft" ? " · draft" : ""}</summary>
@@ -222,16 +205,16 @@ export function EnablePanel({
       </Step>
 
       <Step
-        n={4}
+        n={2}
         id="tools"
-        title="Tools"
+        title={built ? "Cloud & tool settings" : "Tool settings"}
         aside={products.length ? <span className="text-[12px] font-normal text-ink-3">{products.length} products</span> : undefined}
         expanded={isOpen("tools")}
         onToggle={() => toggle("tools")}
         lead={
           products.length
-            ? "The products this is built on or bought as. Pick one for its own security settings: where each is set, the baseline value to set it to and why, and the chips on the drawing it delivers. A pill is green once your organisation records it as enabled."
-            : "No product of this kind is catalogued yet. Build it to the capabilities above."
+            ? `${built ? "The clouds this is built on and the frameworks it is built with" : "The products this is bought as"}. Pick one for its own security settings: where each is set, the baseline value to set it to and why, and the chips on the drawing it delivers. A pill is green once your organisation records it as enabled.`
+            : "No product of this kind is catalogued yet. Build it to the controls above."
         }
       >
         {products.length > 0 && (

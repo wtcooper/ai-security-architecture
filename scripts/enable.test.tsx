@@ -7,8 +7,8 @@ import { EnablePanel } from "../src/components/enable/EnablePanel";
 import { ArchitecturesBrowser } from "../src/components/reference/ArchitecturesBrowser";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
-import { pinnedByLayer } from "../src/components/enable/model";
-import { dataset, enablement, layerFor, productsForArchetype, toolsForArchetype, additionsFor } from "../src/lib/data";
+import { baselineNotPinned, controlGroups } from "../src/components/enable/model";
+import { dataset, enablement, isBaseline, productsForArchetype, toolsForArchetype } from "../src/lib/data";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
 const page = (query = "") =>
@@ -22,20 +22,24 @@ const page = (query = "") =>
     </AppRouterContext.Provider>,
   );
 
-test("every pinned capability falls in exactly one layer, and use-case additions are what is left", () => {
-  const foundations = new Set(enablement.foundations.flatMap((g) => g.mitigations));
+test("every pinned capability falls in exactly one security domain, named for the architecture's surface", () => {
   for (const arch of dataset.archetypes) {
-    const layers = pinnedByLayer(arch);
-    assert.deepEqual(layers.flatMap((l) => l.capabilities.map((m) => m.id)).sort(), [...arch.mitigations].sort(), arch.id);
-    const baseline = new Set(enablement.surfaces[arch.surface].mitigations);
-    for (const m of additionsFor(arch)) {
-      assert.ok(!foundations.has(m.id) && !baseline.has(m.id), `${arch.id}: ${m.id} repeats an earlier layer`);
-      assert.equal(layerFor(m.id, arch), "useCase");
+    const groups = controlGroups(arch);
+    assert.deepEqual(groups.flatMap((g) => g.capabilities.map((m) => m.id)).sort(), [...arch.mitigations].sort(), arch.id);
+    for (const g of groups) {
+      const authored = enablement.groups.find((x) => x.id === g.id)!;
+      assert.equal(g.title, authored.surfaces?.[arch.surface]?.title ?? authored.title, `${arch.id}: ${g.id}`);
+      // Rows count up with the chips on the drawing.
+      const pins = g.capabilities.map((m) => arch.mitigations.indexOf(m.id));
+      assert.deepEqual(pins, [...pins].sort((x, y) => x - y), `${arch.id}: ${g.id} is in pin order`);
     }
+    // The baseline is either drawn here or named beneath the table, never dropped.
+    const named = new Set([...arch.mitigations.filter(isBaseline), ...baselineNotPinned(arch).map((m) => m.id)]);
+    assert.deepEqual([...named].sort(), [...enablement.baseline].sort(), arch.id);
   }
 });
 
-test("step 4 shows one pill per product and the picked product's settings, each naming its chips", () => {
+test("the tools step shows one pill per product and the picked product's settings, each naming its chips", () => {
   const arch = dataset.archetypes.find((a) => productsForArchetype(a.id).some((p) => p.id === "toolClaudeCode"))!;
   const products = productsForArchetype(arch.id);
   const html = renderToStaticMarkup(
@@ -72,22 +76,25 @@ test("coverage collapses to Built-in, Partial and Not in tool", () => {
   assert.equal(coverageWord(undefined), "unverified");
 });
 
-test("the Enable tab opens on four folded steps, and every pinned capability unfolds its own step, numbered as on the drawing", () => {
+test("the Enable tab is two steps: the controls unfolded by domain, numbered as on the drawing, and the products folded", () => {
   const panel = (arch: (typeof dataset.archetypes)[number], open: string | null) =>
     renderToStaticMarkup(
       <EnablePanel archetype={arch} open={open} onOpen={() => {}} onShowDrawing={() => {}} tool={null} focus={null} onPickTool={() => {}} />,
     );
   for (const arch of dataset.archetypes) {
-    const folded = panel(arch, null);
-    for (const id of ["foundations", "surface", "use-case", "tools"]) assert.match(folded, new RegExp(`id="${id}"`), arch.id);
-    assert.doesNotMatch(folded, /id="capability-/, `${arch.id}: steps open folded`);
-    assert.equal([...folded.matchAll(/aria-expanded="false"/g)].length, 4);
+    const html = panel(arch, null);
+    assert.match(html, /id="controls"[^>]*><button[^>]*aria-expanded="true"/, `${arch.id}: controls open`);
+    assert.match(html, /id="tools"[^>]*><button[^>]*aria-expanded="false"/, `${arch.id}: products folded`);
+    assert.equal([...html.matchAll(/aria-controls="/g)].length, 2, `${arch.id}: two steps`);
+    assert.doesNotMatch(html, /role="tab"/, `${arch.id}: no product is open`);
+    for (const g of controlGroups(arch)) assert.match(html, new RegExp(`id="group-${g.id}"`), `${arch.id}: ${g.id} has a band`);
+    assert.equal([...html.matchAll(/id="capability-/g)].length, arch.mitigations.length, `${arch.id}: a row per pinned capability`);
     for (const [i, id] of arch.mitigations.entries()) {
-      const html = panel(arch, id);
-      assert.match(html, new RegExp(`id="capability-${id.replace(/\./g, "\\.")}"`), `${arch.id}: ${id} has a row`);
-      assert.match(html, /Status/);
-      assert.ok(html.includes(`>${i + 1}</span>`), `${arch.id}: ${id} is chip ${i + 1}`);
+      const row = html.slice(html.indexOf(`id="capability-${id}"`));
+      assert.ok(row.slice(0, row.indexOf("</li>")).includes(`>${i + 1}</span>`), `${arch.id}: ${id} is chip ${i + 1}`);
     }
+    assert.equal([...html.matchAll(/>Every AI deployment</g)].length, arch.mitigations.filter(isBaseline).length, `${arch.id}: baseline rows are tagged`);
+    assert.match(html, /Status/);
   }
 });
 

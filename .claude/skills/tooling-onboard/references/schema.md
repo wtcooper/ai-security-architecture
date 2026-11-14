@@ -37,7 +37,7 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
   administrator performs the step on; the product record links each step title to it.
 - **The grid and the record share one id set.** The Enable Tools grid's rows are the
   capabilities pinned on the architecture — MITRE mitigations and `cap-*` specialisations of
-  them, the same ids your `controls[]` rows name — grouped by Enable layer. A cell collapses
+  them, the same ids your `controls[]` rows name — grouped by Enable security domain. A cell collapses
   `coverage` to three words: `native` → Built-in, `partial` → Partial, `external`/`none` → Not
   in tool; `notApplicable` → N/A and `unknown` or a missing row → Unverified. Keep the finer
   grade in the data: the record's note and evidence say which applies.

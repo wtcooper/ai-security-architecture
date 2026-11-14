@@ -16,7 +16,7 @@ import { visibleFrameworks } from "@/lib/frameworks";
 export const metadata = {
   title: "AI Security Architecture",
   description:
-    "Securely enabling AI, grounded in risk: learn where AI risk is introduced, exposed and mitigated, then put the foundations, controls and tools in place to reduce it.",
+    "Securely enabling AI, grounded in risk: learn where AI risk is introduced, exposed and mitigated, then put the enterprise controls and tool settings in place to reduce it.",
 };
 
 const specialisations = mitigations.filter((m) => m.parent).length;
@@ -49,7 +49,7 @@ const FLOW: Card[] = [
   {
     href: "/reference?tab=enable",
     label: "Enable",
-    blurb: "On each architecture: the foundations, the surface baseline and the use case's own additions, then how far each product covers them.",
+    blurb: "On each architecture: the enterprise controls it needs, grouped by security domain, then the settings of each product it is built on or bought as.",
     count: `${tools.length} products`,
     accent: "var(--chip)",
   },

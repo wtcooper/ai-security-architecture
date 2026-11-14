@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Step 4 of Enable: the products this architecture is built on or bought as, one pill each,
+ * Step 2 of Enable: the products this architecture is built on or bought as, one pill each,
  * coloured by whether the organisation has switched it on. Picking one shows its own settings —
  * every security-relevant switch the vendor or cloud exposes, how it is set, the baseline value
  * (data/tooling/BASELINE.md) and why, the chips on the drawing it delivers, and the

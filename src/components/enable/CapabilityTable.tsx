@@ -1,17 +1,19 @@
 "use client";
 
 /**
- * One layer's capabilities as rows, each led by the number of its chip on the drawing. Opening
- * a row lights that chip; picking a chip on the drawing opens its row. The open row is the
- * drawing's highlight, so the two can never disagree.
+ * An architecture's enterprise controls as one table, a band per security domain and a row per
+ * capability, each led by the number of its chip on the drawing. Opening a row lights that
+ * chip; picking a chip on the drawing opens its row. The open row is the drawing's highlight,
+ * so the two can never disagree.
  */
 import Link from "next/link";
+import { Fragment } from "react";
 
 import { Prose } from "@/components/Prose";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
-import { capabilityName, guidanceByArchetype, riskCode, risksForMitigation, status as statusFile, statusFor } from "@/lib/data";
+import { capabilityName, guidanceByArchetype, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
-import { placementsFor } from "./model";
+import { placementsFor, type ControlGroup } from "./model";
 
 /** The first sentence of the authored implementation scope, kept to a couple of lines: what the capability does. */
 const whatItDoes = (m: Mitigation) => {
@@ -25,14 +27,18 @@ const whatItDoes = (m: Mitigation) => {
 
 const GRID = "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.9fr)_112px]";
 
+export const BASELINE_HELP = "Needed by every AI deployment, whatever the architecture: set up once and reused.";
+
+const anyStatus = Object.values(statusFile).some((s) => s.status);
+
 export function CapabilityTable({
-  capabilities,
+  groups,
   archetype,
   open,
   onOpen,
   onShowDrawing,
 }: {
-  capabilities: Mitigation[];
+  groups: ControlGroup[];
   archetype: Archetype;
   /** The capability whose row is open, which is also the one lit on the drawing. */
   open: string | null;
@@ -52,8 +58,21 @@ export function CapabilityTable({
         <span>Where it goes</span>
         <StatusHeading />
       </div>
-      <ul className="divide-y divide-line">
-        {capabilities.map((m) => {
+      {groups.map((group) => (
+        <Fragment key={group.id}>
+          <div id={`group-${group.id}`} className="border-b border-line bg-mist/30 px-4 py-2">
+            <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2">
+              {group.title}
+              {anyStatus && (
+                <span className="font-normal normal-case tracking-normal text-ink-3">
+                  {group.capabilities.filter((m) => statusFor(m.id) === "enabled").length} of {group.capabilities.length} enabled
+                </span>
+              )}
+            </p>
+            <p className="mt-0.5 max-w-3xl text-[12px] leading-snug text-ink-3">{group.blurb}</p>
+          </div>
+          <ul className="divide-y divide-line border-b border-line last:border-b-0">
+            {group.capabilities.map((m) => {
           const expanded = open === m.id;
           const where = placementsFor(archetype.id, m.id);
           const items = guidance?.items.filter((i) => i.mitigations.includes(m.id)) ?? [];
@@ -76,6 +95,11 @@ export function CapabilityTable({
                 <span className="min-w-0">
                   <span className="block text-[13.5px] font-semibold leading-snug text-ink">{capabilityName(m.id)}</span>
                   {own?.displayName && <span className="block text-[11.5px] text-ink-3">{m.title}</span>}
+                  {isBaseline(m.id) && (
+                    <span title={BASELINE_HELP} className="mt-1 inline-block rounded border border-line px-1.5 text-[10.5px] font-normal text-ink-3">
+                      Every AI deployment
+                    </span>
+                  )}
                 </span>
                 <span className="col-start-2 text-[12.5px] leading-snug text-ink-2 md:col-start-auto">{whatItDoes(m)}</span>
                 <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.blocks.join(" · ")}</span>
@@ -129,8 +153,10 @@ export function CapabilityTable({
               )}
             </li>
           );
-        })}
-      </ul>
+            })}
+          </ul>
+        </Fragment>
+      ))}
     </div>
   );
 }

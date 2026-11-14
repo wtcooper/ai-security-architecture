@@ -204,21 +204,23 @@ export interface CapabilityCustomisation {
 }
 
 /**
- * The Enable layers. Foundations are the enterprise controls every AI deployment needs, set up
- * once; a surface baseline is what one surface adds. A use case's own additions are derived:
- * its pinned capabilities that no earlier layer already holds.
+ * The first step of Enable. An architecture's pinned capabilities are its enterprise controls,
+ * grouped by the security domain that owns them; a group shows wherever one of its capabilities
+ * is pinned. The baseline is the subset every AI deployment needs, set up once and reused.
  */
 export interface EnablementGroup {
   id: string;
   title: string;
   blurb: string;
+  /** The domain's own name and blurb on one surface, keyed by surface id, where they differ. */
+  surfaces?: Record<string, { title?: string; blurb?: string }>;
   mitigations: string[];
 }
 
 export interface Enablement {
-  foundations: EnablementGroup[];
-  /** Keyed by surface id. */
-  surfaces: Record<string, { blurb: string; mitigations: string[] }>;
+  groups: EnablementGroup[];
+  /** Capabilities every AI deployment needs, whatever the architecture. */
+  baseline: string[];
 }
 
 /** A deployment surface where AI is consumed: endpoint, cloud you operate, vendor SaaS. */
