@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * One pattern on the page: the drawing at full width, then one tab strip beneath it — enable,
- * how it works, risks and flows, incidents. One panel is visible at a time. The drawing shows the
- * capability chips at rest; the flows tab swaps them for the walk's numbers and the risk tags
+ * One pattern on the page: one tab strip — enable, how it works, risks and flows, incidents —
+ * then the drawing at full width and the tab's panel beneath it. The tabs sit above the drawing
+ * because they govern both: which pins the drawing carries and which panel is shown. The drawing is the
+ * trust-boundary view by default, with the item-level canvas one switch away. It shows the
+ * control chips at rest; the flows tab swaps them for the walk's numbers and the risk tags
  * where risk enters. On Enable every row is one of those chips: opening a row lights its chip,
  * and picking a chip opens its row.
  * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
@@ -11,7 +13,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EnablePanel } from "@/components/enable/EnablePanel";
-import { ExperimentalDrawing } from "@/components/experimental/ExperimentalDrawing";
+import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
+import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
 import { cloudById, clouds, incidents } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
@@ -55,11 +58,9 @@ interface ArchetypeViewProps {
   tool: string | null;
   focus: string | null;
   onPickTool: (toolId: string | null, capabilityId?: string) => void;
-  /** The experimental section: the simplified drawing options replace the canvas. */
-  experimental?: boolean;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, experimental = false }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
@@ -109,6 +110,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
     return () => mq.removeEventListener("change", update);
   }, []);
   const drawingVisible = !narrow || showDrawing;
+  // The boundary drawing is the standard; the detailed canvas keeps every item one switch away.
+  const [view, setView] = useState<"boundaries" | "detailed">("boundaries");
   const scrollToDrawing = () => {
     setShowDrawing(true);
     requestAnimationFrame(() => drawingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -123,69 +126,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
 
   return (
     <div className="mt-3">
-      {narrow && (
-        <button
-          type="button"
-          onClick={() => setShowDrawing((v) => !v)}
-          aria-expanded={showDrawing}
-          className="mb-3 w-full rounded-lg border border-line bg-paper px-4 py-2.5 text-left text-[13px] font-semibold text-ink"
-        >
-          {showDrawing ? "Hide the drawing" : "Show the drawing"}
-          <span className="ml-2 font-normal text-ink-3">
-            {archetype.blocks.length} blocks · pinch to zoom
-          </span>
-        </button>
-      )}
-      {drawingVisible && experimental && (
-        <div ref={drawingRef} className="scroll-mt-20">
-          <ExperimentalDrawing
-            archetype={archetype}
-            walk={activeWalk}
-            highlight={highlight}
-            onHighlight={onHighlight}
-            pins={tab === "flows" ? "risks" : "capabilities"}
-            onPickMitigation={pickChip}
-          />
-        </div>
-      )}
-      {drawingVisible && !experimental && implementedOn.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-3" role="group" aria-label="Draw as built on">
-          <span>Drawn as</span>
-          {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
-            <button
-              key={o.label}
-              type="button"
-              aria-pressed={cloudView === o.id || (o.id === null && !viewCloud)}
-              onClick={() => setCloudView(o.id)}
-              className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
-                (o.id === null ? !viewCloud : cloudView === o.id) ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {drawingVisible && !experimental && (
-        <>
-          <div ref={drawingRef} className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
-            <FlowDiagram
-              archetype={archetype}
-              walk={activeWalk}
-              highlight={highlight}
-              onHighlight={onHighlight}
-              // One kind of pin at a time: risk tags where a walk shows risk entering, capability chips everywhere else.
-              pins={tab === "flows" ? "risks" : "capabilities"}
-              onPickMitigation={pickChip}
-              services={services}
-              className="w-full"
-            />
-          </div>
-          <FlowLegend className="mt-3 px-1" />
-        </>
-      )}
-
-      <div id="pattern-tabs" className="mt-5 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line" role="tablist">
+      <div id="pattern-tabs" className="mb-4 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -203,6 +144,91 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           </button>
         ))}
       </div>
+
+      {narrow && (
+        <button
+          type="button"
+          onClick={() => setShowDrawing((v) => !v)}
+          aria-expanded={showDrawing}
+          className="mb-3 w-full rounded-lg border border-line bg-paper px-4 py-2.5 text-left text-[13px] font-semibold text-ink"
+        >
+          {showDrawing ? "Hide the drawing" : "Show the drawing"}
+          <span className="ml-2 font-normal text-ink-3">
+            {archetype.blocks.length} blocks · pinch to zoom
+          </span>
+        </button>
+      )}
+      {drawingVisible && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-ink-3">
+          {/* The same pattern, two drawings: boundaries to read it, the detailed canvas for every item. */}
+          <div className="flex items-center gap-2" role="group" aria-label="Drawing">
+            <span>Drawing</span>
+            {(["boundaries", "detailed"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+                title={v === "boundaries" ? "Trust boundaries and components, one line each" : "Every component's items, on the detailed canvas"}
+                className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
+                  view === v ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
+                }`}
+              >
+                {v === "boundaries" ? "Boundaries" : "Detailed"}
+              </button>
+            ))}
+          </div>
+          {implementedOn.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Draw as built on">
+              <span>Drawn as</span>
+              {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  aria-pressed={cloudView === o.id || (o.id === null && !viewCloud)}
+                  onClick={() => setCloudView(o.id)}
+                  className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
+                    (o.id === null ? !viewCloud : cloudView === o.id) ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {drawingVisible && (
+        <>
+          <div ref={drawingRef} className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
+            {view === "boundaries" ? (
+              <PatternDrawing
+                archetype={archetype}
+                walk={activeWalk}
+                highlight={highlight}
+                onHighlight={onHighlight}
+                // One kind of pin at a time: risk tags where a walk shows risk entering, control chips everywhere else.
+                pins={tab === "flows" ? "risks" : "capabilities"}
+                onPickMitigation={pickChip}
+                services={services}
+                className="w-full"
+              />
+            ) : (
+              <FlowDiagram
+                archetype={archetype}
+                walk={activeWalk}
+                highlight={highlight}
+                onHighlight={onHighlight}
+                pins={tab === "flows" ? "risks" : "capabilities"}
+                onPickMitigation={pickChip}
+                services={services}
+                className="w-full"
+              />
+            )}
+          </div>
+          {view === "boundaries" ? <DrawingLegend className="mt-3 px-1" risks={tab === "flows"} /> : <FlowLegend className="mt-3 px-1" />}
+        </>
+      )}
 
       <div className="mt-5">
         {tab === "overview" && <ArchetypeDetail archetype={archetype} />}
@@ -248,6 +274,15 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               )}
             </div>
           </div>
+        )}
+
+        {tab === "flows" && (
+          <section className="mt-8" aria-labelledby="crossings-title">
+            <h3 id="crossings-title" className="display text-[16px] font-bold text-ink">Boundary crossings</h3>
+            <div className="mt-2">
+              <CrossingsRegister archetype={archetype} onPickMitigation={pickChip} />
+            </div>
+          </section>
         )}
 
         {tab === "enable" && (

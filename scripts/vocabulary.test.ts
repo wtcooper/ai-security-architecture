@@ -35,8 +35,6 @@ test("no retired word reaches the page from the interface code", () => {
     if (file.includes("data/generated") || file.endsWith("lib/types.ts")) continue;
     // The legacy redirect names the old query parameter and anchor on purpose.
     if (file.endsWith("LegacyRedirect.tsx")) continue;
-    // Drawings on trial are not part of the app a reader navigates.
-    if (file.includes("components/experimental")) continue;
     for (const text of readerText(readFileSync(file, "utf8"))) {
       if (RETIRED.test(text) && !/^(text|bg|border|flex|grid|rounded|mt|px)-/.test(text)) offenders.push(`${file}: ${text.slice(0, 90)}`);
     }

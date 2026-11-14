@@ -322,5 +322,11 @@ Differences from the plan above:
   pattern's own file.
 - **"Archetype" was replaced by "pattern" in the authored prose** of the patterns, guidance and
   incidents (73 lines), since it is the retired word a reader would otherwise still meet.
+- **The tab strip sits above the drawing**, not beneath it, so a reader sees the four tabs on
+  the first screen; the tabs govern both the drawing's pins and the panel under it.
+- **The boundary drawing is laid out by one engine**, with spacing and emphasis varying by
+  surface, not three separate templates. Only the third-party coding agent has authored box
+  one-liners and crossing notes; the other 17 show item labels and derived crossings. The
+  decorative Sandbox frame was dropped because it had no data behind it.
 - **Phases 2 to 6 landed as one change**, because the pattern page, the routes and the wording
   touch the same files.

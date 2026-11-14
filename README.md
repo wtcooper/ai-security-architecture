@@ -310,12 +310,12 @@ segmentation and identity entries).
 The taxonomy answers *what to worry about* and the mitigations answer *what defensive function to
 deploy*. The architectures answer the question that comes next in every review: **"so what does
 a sound deployment actually look like?"** — one drawing per class of AI application, 18 in all,
-across the three deployment surfaces used by the capability matrix.
+across the three deployment surfaces used by the control matrix.
 
 The catalogue is original work: no published source offers "here are the classes of AI
 application, each with an architecture" — AWS ships worked scenarios, Google ships agent
-patterns, OWASP ships threat taxonomies, all orthogonal to it. The archetypes were derived from
-those catalogues plus the 2026 incident record, split or merged on one test: two archetypes are
+patterns, OWASP ships threat taxonomies, all orthogonal to it. The patterns were derived from
+those catalogues plus the 2026 incident record, split or merged on one test: two patterns are
 separate when their control sets differ, not when their vendors do.
 
 | Surface | Architectures |
@@ -324,10 +324,28 @@ separate when their control sets differ, not when their vendors do.
 | **Cloud & hosted** (8) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation |
 | **Third-party SaaS** (5) | Enterprise AI chat with connectors, and four managed agent runtimes: UI/low-code, coding & desktop sessions, API/SDK, and persistent agents |
 
-The drawing grammar is the one practitioners already read from vendor reference architectures
+A pattern has **two drawings of the same data**, switched above the drawing:
+
+- **Boundaries** (the default) is the trust-boundary view: each zone is a labelled outline
+  (managed endpoint, enterprise cloud, vendor platform, external), people stand outside every
+  boundary, the security and governance control plane runs beneath, and each component is a
+  plain box with a title, one line and a thin accent for its type. It is laid out automatically
+  for all 18 patterns by `src/components/drawing/layout.ts`; no pattern has coordinates in code.
+  Three optional fields in a pattern's file refine it: a `summary` on a block (its one line;
+  otherwise its item labels), a `gloss` on a zone (a friendly name beside the canonical one) and
+  a `crossing` on a flow (what it passes through on our side). So far only the third-party
+  coding agent has them authored.
+- **Detailed** is the original canvas described below, with every item, icon and per-item note.
+
+Both carry the same pins and take the same cloud relabelling ("Drawn as AWS / Azure / Google
+Cloud"). Under **Risks & flows**, a **boundary crossings** table lists every flow that crosses a
+trust boundary: what crosses, what it passes through on our side (a control point we run, the
+vendor, the person, or nothing of ours), and the controls held there.
+
+The detailed drawing's grammar is the one practitioners already read from vendor reference architectures
 (F5's AI reference architecture is the closest published relative): **mitigation blocks** with
 icon internals and a coloured title tab, **typed data paths** (data / external content &
-actions), **numbered capability chips** seated on the drawing where each of
+actions), **numbered control chips** seated on the drawing where each of
 the selected mitigations must be deployed, **coded risk tags** (`R01`–`R36`, stable across every
 architecture) pinned where each CoSAI risk surfaces, and **scenario walks** that replay a
 use case over the same canvas with everything else faded — *a stranger messages the agent*,
@@ -342,11 +360,11 @@ it marks the 2026 product categories the component list has not caught up to. Th
 say who runs each block: neutral grey bands for what you operate, a darker band with a dotted
 edge for a vendor's platform and the outside world. Every block border is solid; only a
 containment frame is dashed. Paths are dark grey and differ by dash alone (solid data path,
-dashed external content & actions), and capability chips are violet — so each colour on the
+dashed external content & actions), and control chips are violet — so each colour on the
 drawing means one thing.
 
-The drawing shows **one kind of pin at a time**: risk codes on Overview and Risks, numbered
-capability chips on Capabilities, step numbers on Sequence flows. Every pin stays authored and
+The drawing shows **one kind of pin at a time**: numbered control chips on Enable, How it works
+and Incidents; risk codes and a walk's step numbers on Risks & flows. Every pin stays authored and
 placed; only what is visible changes.
 
 The discipline matches the rest of the repository — architectures are authored as graphs, never
@@ -447,7 +465,8 @@ src/
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
     ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail
-    ├── reference/                ★ flow diagram, sequence flows, picker, per-block styling
+    ├── drawing/                  ★ the boundary drawing: automatic layout, crossings, the crossings table
+    ├── reference/                ★ the detailed canvas, sequence flows, switcher, per-block styling
     ├── enable/                   ★ a pattern's Enable tab: what to do, the controls by CSF category, product pills and settings tables
     └── incidents/                the incident list and the per-incident walk-through
 

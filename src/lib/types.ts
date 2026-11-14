@@ -356,6 +356,11 @@ export interface ArchZone {
    */
   owner: "user" | "endpoint" | "cloud" | "vendor" | "external" | "governance";
   note?: string;
+  /**
+   * A few plain words for what this zone is on this pattern, shown after the canonical title on
+   * the boundary drawing ("MANAGED ENDPOINT · developer's machine"). The title stays fixed.
+   */
+  gloss?: string;
 }
 
 /**
@@ -380,6 +385,11 @@ export interface ArchBlock {
    * expressible without breaking the flows.
    */
   parent?: string;
+  /**
+   * One short line for the boundary drawing's box, under the title. Where it is absent the box
+   * shows the block's item labels, so the drawing never says less than the data.
+   */
+  summary?: string;
   /** Authored coarse grid position, within the parent when there is one. */
   col: number;
   row: number;
@@ -432,7 +442,19 @@ export interface ArchEdge {
   route?: "hv" | "vh" | "hvh" | "vhv" | "under" | "over";
   label?: string;
   note?: string;
+  /**
+   * For an edge whose ends sit in different zones: what the crossing passes through on our
+   * side, where the derived answer (src/components/drawing/crossings.ts) is not the right one.
+   */
+  crossing?: { kind: CrossingKind; via: string };
 }
+
+/**
+ * What stands in the path where a flow crosses a trust boundary: a control point we run, the
+ * vendor's own governance, the person at the device, or nothing of ours at all.
+ */
+export type CrossingKind = "brokered" | "vendor" | "person" | "direct";
+export const CROSSING_KINDS: CrossingKind[] = ["brokered", "vendor", "person", "direct"];
 
 /** A risk tag pinned to a block or a flow, leader-lined like F5's OWASP tags. */
 export interface RiskPin {
