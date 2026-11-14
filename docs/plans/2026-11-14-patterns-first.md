@@ -120,7 +120,7 @@ within a band, and the rule that the build fails if a pinned control has no fami
 | `/incidents/`, `/incidents/<id>/` | Unchanged | — | `/examples` (already) |
 | `/reference/risk-map/` | SAIF walk | `/map` | `/map` |
 | `/reference/risks/` | Risks | `/risks` | `/risks?risk=…` |
-| `/reference/cosai-controls/` | CoSAI controls | `/controls` | none possible, see decision 2 |
+| `/reference/cosai-controls/` | CoSAI controls | `/controls` | `/controls?control=<CoSAI id>` is forwarded by the new `/controls` page; a bare `/controls` now opens the catalogue (decision 2) |
 | `/reference/components/` | Components | `/components` | `/components` |
 | `/reference/personas/` | Personas | `/personas` | `/personas` |
 | `/reference/frameworks/` | Crosswalks | `/frameworks` | `/frameworks` |
@@ -279,9 +279,10 @@ Raised by the usability review and worth doing, but separate from the restructur
 
 1. **"Control" for the MITRE-level items**, with the CoSAI layer always called "CoSAI control".
    The alternative is to keep "capability" and call the CSF bands "control families".
-2. **Reuse `/controls` for the new catalogue.** It is the natural URL, but old links to a CoSAI
-   control at `/controls?control=…` cannot be redirected, because the path is taken. The
-   alternative is `/catalogue` or keeping `/capabilities`.
+2. **Reuse `/controls` for the new catalogue.** It is the natural URL. Old links that name a
+   CoSAI control (`/controls?control=…`) can be forwarded to Reference, but a bare `/controls`
+   link will open the new catalogue instead of the CoSAI list. The alternative is keeping
+   `/capabilities` as the path.
 3. **The CSF mapping table above**, in particular the three weak fits.
 4. **Experimental drawings**: hide behind a flag for rollout, or keep them in the switcher.
 5. **Incidents stays in the top navigation** (draft), or moves under Reference.
