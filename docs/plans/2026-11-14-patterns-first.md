@@ -1,7 +1,8 @@
 # Patterns first: restructure the app around what a reader is enabling
 
 Date: 2026-11-14. Branch: `patterns-first` (cut from `ccr-6a653524-mevo2m`, which carries the
-two-step Enable tab). Status: plan, nothing below is built yet.
+two-step Enable tab). Status: accepted and built; see "As built" at the end for what changed
+along the way. The risk-first app is kept on the `v1` branch.
 
 ## Why
 
@@ -275,15 +276,51 @@ Raised by the usability review and worth doing, but separate from the restructur
 - Per-team or per-surface status instead of one global value in `data/status.yaml`.
 - A sticky or simplified drawing so a control row and its chip are on screen together.
 
-## Decisions needed
+## Decisions
 
-1. **"Control" for the MITRE-level items**, with the CoSAI layer always called "CoSAI control".
-   The alternative is to keep "capability" and call the CSF bands "control families".
-2. **Reuse `/controls` for the new catalogue.** It is the natural URL. Old links that name a
-   CoSAI control (`/controls?control=…`) can be forwarded to Reference, but a bare `/controls`
-   link will open the new catalogue instead of the CoSAI list. The alternative is keeping
-   `/capabilities` as the path.
-3. **The CSF mapping table above**, in particular the three weak fits.
-4. **Experimental drawings**: hide behind a flag for rollout, or keep them in the switcher.
-5. **Incidents stays in the top navigation** (draft), or moves under Reference.
-6. **"Pattern" as the word**, with "reference architecture" kept as the descriptive subtitle.
+All six were accepted as drafted on 2026-11-14:
+
+1. The MITRE-level items are **controls**; the CoSAI layer is always "CoSAI control".
+2. `/controls` is the new catalogue. A link that names a CoSAI control is forwarded to
+   Reference; a bare `/controls` opens the catalogue.
+3. The CSF mapping table above stands, weak fits included.
+4. The experimental boundary drawing becomes the standard for all 18 patterns (phase 8 below),
+   replacing "hide or keep".
+5. Incidents stays in the top navigation.
+6. "Pattern" is the word.
+
+## Phase 8: the boundary drawing
+
+Added after the review of the experimental drawing. The trust-boundary format replaces the
+column canvas as the default drawing on every pattern, with the canvas kept as a "Detailed"
+view so item-level detail is not lost.
+
+| Requirement | Check |
+| --- | --- |
+| Wording comes from the pattern files, not code | Box titles are block titles; one-liners fall back to item labels |
+| Canonical surface names on boundaries | Boundary label is the zone title |
+| Control-plane boxes show the controls they own | Per-pattern test |
+| Risk tags on the Risks & flows tab | Per-pattern test that every risk pin is drawn |
+| Component-type accent with a legend | Browser check |
+| Cloud relabelling ("Drawn as AWS / Azure / Google Cloud") | Browser check on a cloud pattern |
+| One numbering scheme | No enforcement discs; chips are controls, walk steps their own style |
+| Zoom, pan and export | Browser check |
+| Three layout templates by surface, no hand-laid coordinates | Layout test: no overlapping boxes, every box inside its boundary |
+| Crossings register as a table | Lists every boundary-crossing flow once |
+
+## As built
+
+Differences from the plan above:
+
+- **No buy / build tag.** Dropped at the owner's request: these are common patterns for
+  enabling a tool, whether it is a third party's or one you build, not things that are bought.
+- **Tab ids are unchanged** (`overview`, `flows`, `enable`, plus `incidents`); only their
+  labels and order changed, so old `?tab=` links keep their meaning.
+- **The CoSAI grouping of the catalogue stayed on `/controls`** as a "Group rows by" switch
+  instead of moving to Reference, so the two groupings can be compared in place.
+- **Use-when lines and search words live in `data/overlay/patterns.yaml`**, not in each
+  pattern's own file.
+- **"Archetype" was replaced by "pattern" in the authored prose** of the patterns, guidance and
+  incidents (73 lines), since it is the retired word a reader would otherwise still meet.
+- **Phases 2 to 6 landed as one change**, because the pattern page, the routes and the wording
+  touch the same files.

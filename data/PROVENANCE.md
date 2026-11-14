@@ -313,14 +313,20 @@ capability, and a `note`. Status is authored nowhere else: a parent mitigation w
 rolls up its specialisations, and control status is a rollup of the capabilities that support
 the control. The `org-taxonomy-customize` skill walks through it.
 
-## Enable groups
+## Control families
 
-`data/overlay/enablement.yaml` is original work: it sorts capabilities into seven security
-domains (identity & access through monitoring & response) and marks the baseline every AI
-deployment needs. An architecture's enterprise controls are the capabilities it pins, shown
-under those domains. The grouping is this repository's judgement about which domain owns a
-control and the order an organisation puts them in place; the build checks that every pinned
-capability sits in exactly one domain and every baseline capability applies on every surface.
+`data/overlay/enablement.yaml` is original work: it places every control in the catalogue under
+one NIST CSF 2.0 category and marks the baseline every AI deployment needs. Category names,
+identifiers and functions are NIST's, read from `data/frameworks/nist-csf.yaml`; the blurbs are
+authored here. NIST publishes no mapping from CSF to MITRE D3FEND or ATLAS, so the placement of
+each control is this repository's judgement, not a NIST or MITRE statement. A pattern's
+enterprise controls are the controls it pins, shown under those categories in CSF order, and
+the same placement is copied into the CSF crosswalk on the Frameworks page. The build checks
+that every control sits in exactly one category the CSF file declares and that every baseline
+control applies on every surface.
+
+`data/overlay/patterns.yaml` is original work too: one line per pattern on when it applies, and
+the search words a reader might use for it.
 
 ## Capabilities
 

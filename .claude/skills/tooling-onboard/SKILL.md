@@ -13,12 +13,12 @@ MITRE entry (`D3-OTF`) or an authored `cap-*` specialisation of one
 `mitigation`. The entry's job is to say, for each of those, whether the vendor lets an
 administrator switch it on and exactly where.
 
-The registry renders in exactly one place: step 2 (**Tool settings**) of the **Enable** tab on the
-reference architecture the product instantiates. That grid has one row per pinned capability, grouped by
-Enable security domain (identity & access, endpoint protection, and so on), and one column per product;
-a cell reads the product's `controls[]` row for that capability and shows it as one of three
-words — Built-in (`native`), Partial (`partial`), Not in tool (`external` or `none`). The
-product's full record opens beneath the grid.
+The registry renders in two places. On the pattern the product instantiates, step 2 (**Tool
+settings**) of the **Enable** tab shows one pill per product and, for the one picked, its own
+`settings[]` table; a product with no `settings[]` yet falls back to its `controls[]` record,
+one row per control the pattern pins, grouped by NIST CSF category, each reading Built-in
+(`native`), Partial (`partial`) or Not in tool (`external` or `none`). And the **Tools** page
+(`/tools/`) lists every product with its pattern, linking to those settings.
 Nothing in the taxonomy links back to a product, so an entry earns its place by being right
 about that drawing's pinned mitigations, not by being cross-referenced elsewhere.
 
@@ -117,7 +117,7 @@ architectures with their surface).
 5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-6. **Look at it.** `npm run dev`, open `/reference?tool=<id>`: the Enable tab's Tools step
+6. **Look at it.** `npm run dev`, open `/tools/` and pick your product (or `/patterns/<slug>/?tool=<id>`): the Enable tab's tool settings step
    with your product as a column and its record open beneath the grid. Check that each
    capability row shows the coverage word you expect from its row, and open a few rows in the
    record for the steps and their links. Without a browser, confirm the compiled entry instead:
@@ -154,4 +154,4 @@ about ninety wrong ones (`docs/VALIDATION-2026-09-10-TOOLING.md`). What it learn
 Re-fetch every URL in the entity under the rules above. Update facts that changed, bump `asOf`
 and each row's `verified`, and record retired surfaces as exclusions rather than deleting history
 silently. Keep the id — guidance documents reference it, and old
-`/reference?tool=<id>` and `/enable?…&tool=<id>` links open it on the Enable tab.
+`/reference?tool=<id>` and `/enable?…&tool=<id>` links forward to it on its pattern's Enable tab.

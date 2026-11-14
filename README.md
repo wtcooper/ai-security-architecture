@@ -2,24 +2,32 @@
 
 **[wtcooper.github.io/ai-security-architecture](https://wtcooper.github.io/ai-security-architecture/)**
 
-Securely enabling AI, grounded in risk. The site reads as one path, from the risk down to enabling a deployment:
+Patterns for securely enabling AI. Pick the pattern for the AI tool or application in front of
+you; it shows the controls your organisation needs in place and the settings of the product you
+chose. Everything else in the app is the evidence behind those two lists.
 
-- **Learn the risk.** An interactive map of AI security risk — where each risk is
-  **introduced**, where it is **exposed**, and where it can be **mitigated**, across the
-  components of an AI system — plus reference architectures for every class of AI application,
-  with sequence flows that show how data moves and where risk enters, and twenty real 2025–26
-  incidents walked step by step across the architecture each happened on.
-- **Enable it, per architecture.** Every architecture has an Enable tab: what an organisation
-  needs in place to run that kind of tool or application safely, in two steps — the enterprise
-  controls, grouped by security domain, then the settings of the tools and clouds it is bought
-  as or built on. Every control row is a numbered capability chip on the drawing above it.
+- **Patterns.** One for each kind of AI tool or application, 18 in all, grouped by where the AI
+  runs: tools on your devices, AI services you subscribe to, applications you build. Each is a
+  drawing of the components, data flows and trust boundaries, with every control numbered onto
+  it where it goes.
+- **Enable, per pattern.** Two steps: the **enterprise controls** the pattern needs, grouped by
+  NIST CSF category, then the **settings** of the tools and clouds it runs on. For a team
+  building on a cloud, the same list is the standard a design is reviewed against.
+- **Three taxonomies, one job each.** NIST CSF 2.0 groups the controls. MITRE D3FEND and ATLAS
+  name and identify each one. The CoSAI Risk Map and Google's SAIF explain the risks behind
+  them, and live under **Reference** with the framework crosswalks.
+
+The reader's words are **pattern**, **control**, **setting** and **risk**. In data and code a
+pattern is still an `archetype` and a control a `mitigation`; a CoSAI control is always written
+"CoSAI control".
 
 It began as a recreation of [Google's SAIF Map](https://saif.google/secure-ai-framework), rebuilt
 on the broader taxonomy that succeeded it — the
 [CoSAI Risk Map](https://github.com/cosai-oasis/secure-ai-tooling/tree/main/risk-map), which
-SAIF became after Google donated it to the Coalition for Secure AI at OASIS — with capabilities
-from MITRE D3FEND and ATLAS. [`docs/REFOCUS-INVENTORY.md`](docs/REFOCUS-INVENTORY.md) records
-what the October 2026 refocus kept, moved and cut.
+SAIF became after Google donated it to the Coalition for Secure AI at OASIS — and grew into
+reference architectures. The risk-first version is kept on the `v1` branch;
+[`docs/plans/2026-11-14-patterns-first.md`](docs/plans/2026-11-14-patterns-first.md) records the
+restructure around patterns and where every page went.
 
 ---
 
@@ -105,26 +113,34 @@ provenances:
   editorial judgements, marked as such, and listed in full in `docs/AUDIT.md` next to the prose
   they came from — the part of this repo most worth reviewing.
 
-## The tabs
+## The pages
 
-The nav follows one path, from the risk down to enabling a deployment, with the taxonomy kept
-as reference — **Risk map** · **Capabilities** · **Architectures** · **Incidents** · **Reference ▾**
-(Risks, Controls, Components, Personas, Frameworks).
+The nav leads with what a reader is enabling and keeps the reasoning one menu away —
+**Patterns** · **Controls** · **Tools** · **Incidents** · **Reference ▾** (Risk map, Risks,
+CoSAI controls, Components, Personas, Frameworks).
 
 | View | What it does |
 | --- | --- |
-| **Landing** | What this is, the path from risk to enablement in four steps, where the data comes from. |
-| **Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **Architectures** | 18 reference architectures, one per class of AI application. The drawing, with its numbered capability chips, then three tabs: Overview; Sequence flows (a walk numbered onto the drawing beside its sequence diagram, with the coded risk tags); and **Enable** — two steps: (1) **Enterprise controls**, every capability the architecture pins in one table, a band per security domain (identity & access, endpoint or workload protection, AI gateway & guardrails, data protection, agent permissions & approvals, inventory, supply chain & release, monitoring & response), each row a chip on the drawing with placement notes, governance guidance, the risks it reduces and a **Status ⓘ**, and a tag on the ones every AI deployment needs; then (2) **Tool settings** (Cloud & tool settings where the architecture is built) — one pill per product, green when your organisation records it as enabled, and for the one picked its own security settings: where each is set, how (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the baseline value and why, the chips it delivers and a Status. On a cloud architecture the products are the three clouds, and the drawing can be **drawn as** Azure, AWS or Google Cloud, each block showing the service that plays it. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. |
-| **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the capability pins that would have broken the chain — each a link to its row on the Enable tab. Old `/examples` links redirect. |
+| **Home** (`/`) and **Patterns** (`/patterns/`) | The pattern finder: every pattern as a card under its surface, with a one-line "use this when…", example products and counts. The search box understands product, cloud and everyday words ("copilot", "azure", "chatbot"). |
+| **Reference › Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
+| **A pattern** (`/patterns/<slug>/`) | One page per pattern. A header says when it applies and gives examples; the drawing carries its numbered control chips; then four tabs. **Enable** (default) leads with a short "What to do" list from the pattern's guidance, then (1) **Enterprise controls**, every control the pattern pins in one table with a band per NIST CSF category, each row a chip on the drawing with placement notes, guidance, the risks it reduces and a **Status ⓘ**, and a tag on the ones every AI deployment needs; then (2) **Tool settings** (Cloud & tool settings where the architecture is built) — one pill per product, green when your organisation records it as enabled, and for the one picked its own security settings: where each is set, how (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the baseline value and why, the chips it delivers and a Status. On a cloud architecture the products are the three clouds, and the drawing can be **drawn as** Azure, AWS or Google Cloud, each block showing the service that plays it. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. **How it works** is the long description, why it is its own pattern, and its sources. **Risks & flows** lists the risks that enter the pattern, where each enters and the controls here that reduce it, then the sequence flows numbered onto the drawing. **Incidents** lists the real incidents that happened on it. The tab, the open product and the open control ride in the address, so any view can be shared. |
+| **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
-| **Reference › Controls** | The 35 CoSAI controls in six groups. A control's status rolls up from the capabilities that deliver it. |
-| **Reference › Capabilities** | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a control group × deployment-surface matrix, tinted by status. A capability's detail shows the MITRE definition, the authored implementation scope, example technologies and where it is pinned. |
+| **Reference › CoSAI controls** | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
+| **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group. Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
+| **Tools** (`/tools/`) | Every product and cloud with catalogued settings: vendor, the pattern it belongs to, how many settings are catalogued and when they were verified. A row opens the product's settings on its pattern. |
+| **Reference** (`/reference/`) | What each reference page is for, how risk is described, and where the data comes from. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
 | **Reference › Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Reference › Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / OWASP MCP / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
 
 Every diagram supports pan and zoom.
+
+Addresses from before the restructure are forwarded: `/reference?archetype=…` (with its tab,
+product and control anchor), `/enable`, `/capabilities`, `/controls?control=<CoSAI id>`, `/map`,
+`/risks`, `/components`, `/personas`, `/frameworks` and `/examples`. The site is a static
+export, so each retired path keeps a small page that rewrites the address in the browser
+(`src/components/shell/LegacyRedirect.tsx`); `src/lib/routes.ts` holds every address in one place.
 
 ## Frameworks as a lens
 
@@ -196,17 +212,18 @@ across honestly.
 
 Every mapping badge elsewhere in the app links into this view.
 
-## Controls and capabilities
+## Controls, and the CoSAI controls above them
 
-Two countermeasure vocabularies sit at different altitudes:
+Two vocabularies sit at different altitudes. The app calls the MITRE-level item a **control**
+and always writes "CoSAI control" for the layer above it:
 
 | Layer | Source | Role | Status? |
 | --- | --- | --- | --- |
-| Controls | CoSAI, 35 | The function the business needs ("Agent Execution Bounds"); personas own them | rolled up |
-| **Capabilities** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable countermeasure at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing and the rows on its Enable tab | **yes** |
-| Tools | registry, 42 | Named products; each an instance of one reference architecture, with vendor coverage per capability | no |
+| CoSAI controls | CoSAI, 35 | The function the business needs ("Agent Execution Bounds"); personas own them | rolled up |
+| **Controls** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable control at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing and the rows on its Enable tab | **yes** |
+| Tools | registry, 52 | Named products; each an instance of one pattern, with its own security settings | adoption |
 
-A capability is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary; each
+A control is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary; each
 carries the CoSAI controls it supports, the risks it addresses, example technologies that
 deliver it, and an authored decision per surface (endpoint / cloud / third-party SaaS). Where
 one MITRE entry is too coarse to report on, an authored **specialisation** in
@@ -214,8 +231,8 @@ one MITRE entry is too coarse to report on, an authored **specialisation** in
 beside Generative AI Guardrails (`AML.M0020`) sit `cap-sensitive-data-redaction`, a DLP
 enforcement point, and `cap-retrieval-grounding-checks` on the retrieval path. A specialisation
 is a distinct enforcement point, never one technology split by risk type. In data and code the
-record is still called `mitigation`, because its identifier is MITRE's; the app calls the layer
-**Capabilities**.
+record is still called `mitigation`, because its identifier is MITRE's; the app calls it a
+**control**.
 
 Canonical identifiers, names and definitions come from checksum-pinned snapshots in
 `data/mitre/` (D3FEND 1.6.0, ATLAS 2026.09). The selection, implementation guidance, example
@@ -231,14 +248,14 @@ visible, including unmapped ones.
 
 ### Status and your own names
 
-Status is set in one file, [`data/status.yaml`](data/status.yaml), keyed by capability id, and
-nothing ships with one: every capability reads **Not set** until listed there. Each entry takes
+Status is set in one file, [`data/status.yaml`](data/status.yaml), keyed by control id, and
+nothing ships with one: every control reads **Not set** until listed there. Each entry takes
 a `status` (`enabled`, `inProgress` or `gap`), optionally a `displayName` — the organisation's
-own name for the capability, shown first with the catalogue name beneath — and a `note`. Every
+own name for the control, shown first with the catalogue name beneath — and a `note`. Every
 Status heading carries an ⓘ saying so.
 
-Status is set only on capabilities. A MITRE parent with no entry rolls up its specialisations,
-and a control rolls up the capabilities that support it: Enabled only when every part is, a Gap
+Status is set only on controls. A MITRE parent with no entry rolls up its specialisations,
+and a CoSAI control rolls up the controls that support it: Enabled only when every part is, a Gap
 when nothing is under way, In progress otherwise. A rollup describes deployment, not control
 compliance or mitigation effectiveness.
 
@@ -248,27 +265,34 @@ by tool id (`toolClaudeCode`) or cloud id (`cloudAzure`): a `status` (`enabled`,
 its own status (and, optionally, the `value` you actually set). Anything not listed reads
 **Not enabled**.
 
-### Enable groups
+### Control families: NIST CSF
 
-[`data/overlay/enablement.yaml`](data/overlay/enablement.yaml) sorts capabilities into seven
-**security domains**, in the order an organisation usually puts them in place: identity &
-access, endpoint & workload protection, AI gateway & guardrails, data protection, agent
-permissions & approvals, inventory, supply chain & release, and monitoring & response. An
-architecture's **enterprise controls** are the capabilities it pins, shown under those domains;
-a domain can carry its own name per surface (endpoint protection on a device, workload
-protection in a cloud you run). The file's `baseline` list marks the capabilities **every AI
-deployment** needs, which are tagged on their rows. The **tool settings** step shows each
-product's own security settings, every row naming the capabilities it delivers. Every pinned
-capability must sit in exactly one domain and every baseline capability must apply on every
-surface; the build checks both.
+[`data/overlay/enablement.yaml`](data/overlay/enablement.yaml) puts every one of the 76 controls
+under exactly one **NIST CSF 2.0 category**, and that grouping is used everywhere a list of
+controls is shown: the bands of a pattern's Enable tab (in CSF order: Govern, Identify, Protect,
+Detect, Respond, Recover) and the rows of the control catalogue. Category names and functions
+come from `data/frameworks/nist-csf.yaml`; only a one-line blurb is authored per category, with
+an optional blurb per surface.
 
-### Why the capability layer looks the way it does
+NIST publishes no mapping from CSF to MITRE D3FEND or ATLAS, so which category a control sits in
+is this repository's judgement. Three fits are weak and were decided on purpose: input and
+output guardrails sit under Data Security (PR.DS); agent permissions, action policy and human
+approval under Identity Management, Authentication, and Access Control (PR.AA), because CSF has
+no category for what an agent may do; and release controls are split between Platform Security
+(PR.PS) and Risk Assessment (ID.RA). The build copies the grouping into the CSF crosswalk on the
+Frameworks page, so the two cannot disagree.
+
+The file's `baseline` list marks the controls **every AI deployment** needs, which are tagged on
+their rows. Every control must sit in exactly one category that the CSF framework file declares,
+and every baseline control must apply on every surface; the build checks all three.
+
+### Why the control layer looks the way it does
 
 Both frameworks stop at the control *strategy*. CoSAI names "User Data Management"; leadership
 asks which tool does that, and on what — the laptop, the cloud service we run, or the vendor AI
 we merely subscribe to. The answer differs on all three, and neither framework models the
-difference. That is why each capability records its own per-surface decision, and why a blank
-cell in the capabilities matrix is a finding, not missing data.
+difference. That is why each control records its own per-surface decision, and why a blank
+cell in the control matrix is a finding, not missing data.
 
 Two findings from the original survey are worth keeping in view because they change what a
 control mapping can claim: **ISO/IEC 42001's Annex A names no security control at all** — no
@@ -366,7 +390,8 @@ data/
 │   ├── specializations.yaml     ★ 17 authored specialisations (cap-*), one MITRE parent each,
 │   │                               with the retired ids they restore, an implementation scope
 │   │                               and optional control, surface, risk and process overrides
-│   ├── enablement.yaml          ★ Enable groups: the security domains, and the baseline for all AI
+│   ├── enablement.yaml          ★ control families: each control's NIST CSF category, and the baseline for all AI
+│   ├── patterns.yaml            ★ the pattern finder: a use-when line and search words per pattern
 │   ├── risk-components.yaml      which components light up per risk × phase
 │   ├── saif-tour-seed.json       45 steps extracted from the public SAIF bundle
 │   └── frameworks-authored.yaml  OWASP Agentic, LLM Top 10 2026 and MCP Top 10 mappings
@@ -383,7 +408,7 @@ data/
 │   └── <vendor>/<family>.yaml      (BASELINE.md is the rubric), dated and verified
 ├── clouds/                       ★ Azure, AWS and Google Cloud: each cloud's security settings,
 │   └── <cloud>.yaml                and every first-party cloud architecture as built on it
-├── status.yaml                   ★ YOUR status per capability, product and setting (see "Adopt this" below)
+├── status.yaml                   ★ YOUR status per control, product and setting (see "Adopt this" below)
 └── PROVENANCE.md                 pinned SHA, extraction record, what is original work
 
 scripts/
@@ -391,7 +416,7 @@ scripts/
 ├── audit.ts                      regenerates docs/AUDIT.md from the data
 ├── fetch-cosai.ts                refreshes the vendored CoSAI snapshot
 ├── extract-saif-tour.ts          re-extracts the SAIF tour seed
-├── lib/enablement.ts             loads and checks the Enable groups and the status file
+├── lib/enablement.ts             loads and checks the control families and the status file
 └── lib/products.ts               checks settings rows, cloud implementations and product status
 
 src/
@@ -403,21 +428,27 @@ src/
 │   ├── flow-layout.ts            ★ build-time geometry + pin placement for the architectures
 │   ├── bands.ts                  component → stack band
 │   ├── deviations.ts             declared divergences from CoSAI
-│   └── frameworks.ts             framework lens logic
+│   ├── frameworks.ts             framework lens logic
+│   └── routes.ts                 ★ every internal address, and the helpers that build them
 ├── app/                          one route per tab (App Router, static export)
-│   ├── page.tsx                  landing
+│   ├── page.tsx                  home: the pattern finder
+│   ├── patterns/[slug]/          one static page per pattern
+│   ├── controls/ · tools/        the control catalogue and the tool index
 │   ├── incidents/[id]/           one static page per incident
-│   └── map|reference|incidents|examples|enable|risks|controls|capabilities|components|personas|frameworks/
-│                                   (enable/ and examples/ only redirect)
+│   ├── reference/                the index, and risk-map|risks|cosai-controls|components|personas|frameworks/
+│   └── map|risks|components|personas|frameworks|capabilities|enable|examples/
+│                                   retired paths: each only forwards to its new address
 └── components/
-    ├── shell/SiteHeader.tsx      nav: Risk map · Capabilities · Architectures · Incidents · Reference ▾
+    ├── shell/SiteHeader.tsx      nav: Patterns · Controls · Tools · Incidents · Reference ▾
+    ├── shell/LegacyRedirect.tsx  forwards every address the site used before patterns led
+    ├── patterns/                 ★ the finder, the pattern page, its risk and incident panels, the tool index
     ├── map/RiskMap.tsx           the SVG map
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
-    ├── capabilities/             the Capabilities matrix (control group × surface) and detail
+    ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail
     ├── reference/                ★ flow diagram, sequence flows, picker, per-block styling
-    ├── enable/                   ★ an architecture's Enable tab: the controls by domain, product pills and settings tables
+    ├── enable/                   ★ a pattern's Enable tab: what to do, the controls by CSF category, product pills and settings tables
     └── incidents/                the incident list and the per-incident walk-through
 
 docs/AUDIT.md                     generated: every deviation and authored mapping, with reasons
@@ -459,7 +490,7 @@ npm run dev      # http://localhost:3000
 | Script | Purpose |
 | --- | --- |
 | `npm run data` | Compile `data/**` → the typed dataset, with every integrity check |
-| `npm test` | Run the capability, matrix, Enable and Incidents tests |
+| `npm test` | Run the control, matrix, Enable, incident, route, vocabulary and drawing tests |
 | `npm run audit` | Regenerate `docs/AUDIT.md` |
 | `npm run fetch:cosai` | Refresh the vendored CoSAI snapshot from its pinned commit |
 | `npm run extract:saif` | Re-extract the SAIF tour seed from the public SAIF bundle |
@@ -472,16 +503,17 @@ overlay phase with no components, a map that has drifted from CoSAI.
 
 Everything is text. Clone the repository, and:
 
-1. **Set status, and your own names.** List capabilities in [`data/status.yaml`](data/status.yaml)
+1. **Set status, and your own names.** List controls in [`data/status.yaml`](data/status.yaml)
    by id — a MITRE mitigation (`D3-MFA`, `AML.M0020`) or a `cap-*` specialisation
    (`cap-sensitive-data-redaction`) — with a `status` (`enabled`, `inProgress`, `gap`) and,
    where you have one, a `displayName`. Anything not listed reads **Not set**. Control status and
    MITRE parents roll up automatically. The `org-taxonomy-customize` skill walks through the
    mapping. Under `products:`, record the tools and clouds you use and which of their settings
    you have switched on.
-2. **Adjust the Enable groups if your domains differ.** `data/overlay/enablement.yaml` decides
-   which security domain each capability sits under, what the domains are called, and which
-   capabilities are the baseline for every AI deployment.
+2. **Adjust the control families if you disagree with a fit.** `data/overlay/enablement.yaml`
+   decides which NIST CSF category each control sits under and which controls are the baseline
+   for every AI deployment; `data/overlay/patterns.yaml` holds each pattern's use-when line and
+   search words.
 3. **Add or refresh products.** `data/tooling/<vendor>/<family>.yaml` is the registry; the
    `tooling-onboard` skill under `.claude/skills/` carries the research protocol. `npm run data`
    fails on any dangling id and `npm run audit` lists what each product entry has not yet

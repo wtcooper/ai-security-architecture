@@ -48,6 +48,6 @@ pinned risk; every link/source/advisory has title + url; ≥1 source. Steps are 
   on each row; `advisories[].date` as `"2025-10"`.
 - **Header comment** of each file: the two-line schema pointer, then exclusions specific to the
   family, then a short fetch log of URLs that redirected or failed during the last verification.
-- **Ids are stable**: guidance documents reference them, and old `/reference?tool=<id>` links
-  redirect to them on Enable. The organisation records no per-tool status; its capability
+- **Ids are stable**: guidance documents reference them, `/patterns/<slug>/?tool=<id>` opens
+  them, and old `/reference?tool=<id>` links forward there. The organisation records no per-tool status; its capability
   status lives in `data/status.yaml`.

@@ -1,5 +1,4 @@
-/** How the finder and the pattern page name a surface and a buy/build mode, in the reader's words. */
-import type { GuidanceMode } from "@/lib/types";
+/** How the finder and the pattern page name a surface, in the reader's words. */
 
 /** A surface as the reader's situation, not the catalogue's term. */
 export const SURFACE_SITUATION: Record<string, string> = {
@@ -16,9 +15,3 @@ export const SURFACE_BLURB: Record<string, string> = {
 
 /** The order a reader meets the surfaces in: what they are most often asked to enable comes first. */
 export const SURFACE_ORDER = ["surfaceEndpoint", "surfaceSaas", "surfaceCloud"];
-
-export const MODE_META: Record<GuidanceMode, { label: string; blurb: string }> = {
-  use: { label: "Buy", blurb: "You adopt a product: the work is configuring it and the enterprise controls around it." },
-  build: { label: "Build", blurb: "Your teams build it: the pattern is the standard a design is reviewed against." },
-  hybrid: { label: "Buy & build", blurb: "Part is a product you configure and part is yours to build or assemble." },
-};

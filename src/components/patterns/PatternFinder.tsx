@@ -12,11 +12,10 @@ import Link from "next/link";
 import { archetypesInOrder, toolsForArchetype } from "@/lib/data";
 import { patternHref } from "@/lib/routes";
 import type { Archetype } from "@/lib/types";
-import { MODE_META, SURFACE_BLURB, SURFACE_ORDER, SURFACE_SITUATION } from "./labels";
-import { cloudsFor, findPatterns, modeOf } from "./model";
+import { SURFACE_BLURB, SURFACE_ORDER, SURFACE_SITUATION } from "./labels";
+import { cloudsFor, findPatterns } from "./model";
 
 function PatternCard({ pattern }: { pattern: Archetype }) {
-  const mode = modeOf(pattern.id);
   const examples = (pattern.exemplars ?? []).map((e) => e.name);
   const tools = toolsForArchetype(pattern.id).length;
   const builtOn = cloudsFor(pattern.id);
@@ -27,14 +26,7 @@ function PatternCard({ pattern }: { pattern: Archetype }) {
         data-pattern={pattern.id}
         className="group flex h-full flex-col rounded-xl border border-line bg-paper p-4 transition-colors hover:border-ink-3"
       >
-        <span className="flex items-start justify-between gap-3">
-          <span className="display text-[15.5px] font-semibold leading-snug text-ink group-hover:text-introduced">{pattern.title}</span>
-          {mode && (
-            <span className="mt-0.5 shrink-0 rounded-full border border-line-strong px-2 py-px text-[10.5px] font-semibold text-ink-2" title={MODE_META[mode].blurb}>
-              {MODE_META[mode].label}
-            </span>
-          )}
-        </span>
+        <span className="display text-[15.5px] font-semibold leading-snug text-ink group-hover:text-introduced">{pattern.title}</span>
         <span className="mt-1.5 flex-1 text-[13px] leading-snug text-ink-2">{pattern.useWhen}</span>
         {examples.length > 0 && (
           <span className="mt-2.5 text-[12px] leading-snug text-ink-3">

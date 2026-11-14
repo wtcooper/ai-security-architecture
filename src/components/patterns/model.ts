@@ -1,5 +1,5 @@
 /** What the pattern finder searches: everything a reader might type to mean a pattern. */
-import { archetypesInOrder, clouds, guidanceByArchetype, toolsForArchetype, vendorById } from "@/lib/data";
+import { archetypesInOrder, clouds, toolsForArchetype, vendorById } from "@/lib/data";
 import type { Archetype, Paragraph } from "@/lib/types";
 
 const flat = (blocks?: Paragraph[]) => (blocks ?? []).map((b) => (Array.isArray(b) ? b.join(" ") : b)).join(" ");
@@ -60,5 +60,3 @@ export function findPatterns(query: string): Archetype[] {
   });
   return scored.sort((x, y) => y.score - x.score).map((s) => s.a);
 }
-
-export const modeOf = (archetypeId: string) => guidanceByArchetype.get(archetypeId)?.mode;

@@ -14,10 +14,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArchetypeView } from "@/components/reference/ArchetypeView";
 import { ArchPicker } from "@/components/reference/ArchPicker";
 import type { Highlight } from "@/components/reference/FlowDiagram";
-import { archetypeById, archetypesInOrder, cloudById, guidanceByArchetype, productsForArchetype, surfaces, toolById } from "@/lib/data";
+import { archetypeById, archetypesInOrder, cloudById, productsForArchetype, surfaces, toolById } from "@/lib/data";
 import { PATTERN_TABS, ROUTES, patternHref, type PatternTab } from "@/lib/routes";
 import type { Scenario } from "@/lib/types";
-import { MODE_META, SURFACE_SITUATION } from "./labels";
+import { SURFACE_SITUATION } from "./labels";
 
 export function PatternPage({ archetypeId }: { archetypeId: string }) {
   const archetype = archetypeById.get(archetypeId) ?? archetypesInOrder[0];
@@ -104,7 +104,6 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   };
 
   const surface = surfaces.find((s) => s.id === archetype.surface);
-  const mode = guidanceByArchetype.get(archetype.id)?.mode;
   const examples = (archetype.exemplars ?? []).map((e) => e.name);
   const cloudsHere = productsForArchetype(archetype.id).filter((p) => p.kind === "cloud" && cloudById.has(p.id));
 
@@ -123,14 +122,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
 
       <div className="mx-auto w-full max-w-[1500px] px-6 py-6">
         <div className="max-w-4xl">
-          <p className="eyebrow flex flex-wrap items-center gap-x-2 gap-y-1">
-            {SURFACE_SITUATION[archetype.surface] ?? surface?.title}
-            {mode && (
-              <span className="rounded-full border border-line-strong bg-paper px-2 py-[1px] text-[10.5px] font-semibold normal-case tracking-normal text-ink-2" title={MODE_META[mode].blurb}>
-                {MODE_META[mode].label}
-              </span>
-            )}
-          </p>
+          <p className="eyebrow">{SURFACE_SITUATION[archetype.surface] ?? surface?.title}</p>
           <h1 className="display mt-1.5 text-[26px] font-bold leading-tight text-ink">{archetype.title}</h1>
           <p className="mt-2 text-[15px] leading-snug text-ink">
             <span className="font-semibold">Use this pattern when: </span>
