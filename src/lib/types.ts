@@ -204,22 +204,27 @@ export interface CapabilityCustomisation {
 }
 
 /**
- * The first step of Enable. An architecture's pinned capabilities are its enterprise controls,
- * grouped by the security domain that owns them; a group shows wherever one of its capabilities
- * is pinned. The baseline is the subset every AI deployment needs, set up once and reused.
+ * Control families. Every control sits under exactly one NIST CSF 2.0 category; a pattern's
+ * enterprise controls are the ones it pins, shown under those categories in CSF order. The
+ * baseline is the subset every AI deployment needs, set up once and reused.
  */
 export interface EnablementGroup {
+  /** The CSF category id, e.g. "PR.AA". */
   id: string;
+  /** The category's name, from data/frameworks/nist-csf.yaml. */
   title: string;
+  /** The CSF function it belongs to: Govern, Identify, Protect, Detect, Respond or Recover. */
+  function: string;
   blurb: string;
-  /** The domain's own name and blurb on one surface, keyed by surface id, where they differ. */
-  surfaces?: Record<string, { title?: string; blurb?: string }>;
+  /** The blurb on one surface, keyed by surface id, where it reads differently there. */
+  surfaces?: Record<string, { blurb?: string }>;
   mitigations: string[];
 }
 
 export interface Enablement {
+  framework: "nist-csf";
   groups: EnablementGroup[];
-  /** Capabilities every AI deployment needs, whatever the architecture. */
+  /** Controls every AI deployment needs, whatever the pattern. */
   baseline: string[];
 }
 

@@ -335,7 +335,12 @@ async function main() {
   });
 
   // --- Enable layers and the organisation's status file ----------------------------
-  const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes);
+  const enablement = await loadEnablement(ROOT, mitigationsDoc.mitigations, mitigationsDoc.surfaces, archetypes, frameworkEntries["nist-csf"] ?? {});
+  // The CSF crosswalk for controls is the Enable grouping itself, so the two cannot disagree.
+  authoredMappings["nist-csf"] = {
+    ...authoredMappings["nist-csf"],
+    mitigations: Object.fromEntries(enablement.groups.flatMap((g) => g.mitigations.map((id) => [id, [g.id]]))),
+  };
   const status = await loadStatus(ROOT, mitigationsDoc.mitigations);
   const productStatus = await loadProductStatus(ROOT, tools, clouds);
 

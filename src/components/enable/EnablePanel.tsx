@@ -2,8 +2,8 @@
 
 /**
  * The Enable tab of an architecture: what an organisation needs in place to run this kind of
- * tool or application safely, in two steps. First the enterprise controls, grouped by the
- * security domain that owns them; then the products it is built on or bought as, each with its
+ * tool or application safely, in two steps. First the enterprise controls, grouped by NIST CSF
+ * category; then the products it is built on or bought as, each with its
  * own settings and the baseline value for each. Every control row is a numbered chip on the
  * drawing above, and every setting names the chips it delivers, so the requirements and where
  * they go read as one. The controls open unfolded, since they are the plan; the products fold
@@ -168,7 +168,9 @@ export function EnablePanel({
           <span className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-[max-content_minmax(0,1fr)]">
             {groups.map((g) => (
               <span key={g.id} className="contents">
-                <span className="text-[12px] font-semibold text-ink-2">{g.title}</span>
+                <span className="text-[12px] font-semibold text-ink-2">
+                  {g.title} <span className="ident ml-1 text-[10px] font-normal text-ink-3">{g.id}</span>
+                </span>
                 <Chips numbers={g.capabilities.map(pinNumber)} />
               </span>
             ))}
@@ -176,7 +178,7 @@ export function EnablePanel({
         }
         expanded={isOpen("controls")}
         onToggle={() => toggle("controls")}
-        lead={`The security capabilities your organisation runs, whichever product is chosen, grouped by the domain that owns them.${
+        lead={`The security controls your organisation runs, whichever product is chosen, grouped by NIST CSF category.${
           shared ? ` ${shared} of the ${controls.length} are needed by every AI deployment, so they are set up once and reused.` : ""
         }`}
       >

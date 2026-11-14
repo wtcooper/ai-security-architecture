@@ -22,17 +22,20 @@ const page = (query = "") =>
     </AppRouterContext.Provider>,
   );
 
-test("every pinned capability falls in exactly one security domain, named for the architecture's surface", () => {
+test("every pinned control falls in exactly one NIST CSF category, shown in CSF order", () => {
   for (const arch of dataset.archetypes) {
     const groups = controlGroups(arch);
     assert.deepEqual(groups.flatMap((g) => g.capabilities.map((m) => m.id)).sort(), [...arch.mitigations].sort(), arch.id);
     for (const g of groups) {
       const authored = enablement.groups.find((x) => x.id === g.id)!;
-      assert.equal(g.title, authored.surfaces?.[arch.surface]?.title ?? authored.title, `${arch.id}: ${g.id}`);
+      assert.equal(g.title, dataset.frameworkEntries["nist-csf"][g.id].label, `${arch.id}: ${g.id} carries the CSF name`);
+      assert.equal(g.blurb, authored.surfaces?.[arch.surface]?.blurb ?? authored.blurb, `${arch.id}: ${g.id}`);
       // Rows count up with the chips on the drawing.
       const pins = g.capabilities.map((m) => arch.mitigations.indexOf(m.id));
       assert.deepEqual(pins, [...pins].sort((x, y) => x - y), `${arch.id}: ${g.id} is in pin order`);
     }
+    const order = groups.map((g) => enablement.groups.findIndex((x) => x.id === g.id));
+    assert.deepEqual(order, [...order].sort((x, y) => x - y), `${arch.id}: families in CSF order`);
     // The baseline is either drawn here or named beneath the table, never dropped.
     const named = new Set([...arch.mitigations.filter(isBaseline), ...baselineNotPinned(arch).map((m) => m.id)]);
     assert.deepEqual([...named].sort(), [...enablement.baseline].sort(), arch.id);
@@ -74,6 +77,15 @@ test("coverage collapses to Built-in, Partial and Not in tool", () => {
   assert.equal(coverageWord("external"), "notInTool");
   assert.equal(coverageWord("none"), "notInTool");
   assert.equal(coverageWord(undefined), "unverified");
+});
+
+test("every control in the catalogue has one CSF category, and the Frameworks crosswalk is the same mapping", () => {
+  const family = new Map(enablement.groups.flatMap((g) => g.mitigations.map((id) => [id, g.id] as const)));
+  assert.equal(family.size, enablement.groups.reduce((n, g) => n + g.mitigations.length, 0), "no control is listed twice");
+  for (const m of dataset.mitigations) {
+    assert.ok(family.has(m.id), `${m.id} has a CSF category`);
+    assert.deepEqual(dataset.authoredMappings["nist-csf"].mitigations?.[m.id], [family.get(m.id)], `${m.id} crosswalk`);
+  }
 });
 
 test("the Enable tab is two steps: the controls unfolded by domain, numbered as on the drawing, and the products folded", () => {

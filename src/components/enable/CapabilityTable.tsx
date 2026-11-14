@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * An architecture's enterprise controls as one table, a band per security domain and a row per
- * capability, each led by the number of its chip on the drawing. Opening a row lights that
+ * A pattern's enterprise controls as one table, a band per NIST CSF category and a row per
+ * control, each led by the number of its chip on the drawing. Opening a row lights that
  * chip; picking a chip on the drawing opens its row. The open row is the drawing's highlight,
  * so the two can never disagree.
  */
@@ -53,7 +53,7 @@ export function CapabilityTable({
     <div className="overflow-hidden rounded-xl border border-line bg-paper">
       <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
         <span aria-label="Pin" />
-        <span>Capability</span>
+        <span>Control</span>
         <span>What it does</span>
         <span>Where it goes</span>
         <StatusHeading />
@@ -63,6 +63,9 @@ export function CapabilityTable({
           <div id={`group-${group.id}`} className="border-b border-line bg-mist/30 px-4 py-2">
             <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2">
               {group.title}
+              <span className="ident rounded-sm border border-line-strong bg-paper px-1 py-px text-[9.5px] font-bold tracking-normal text-ink-3" title={`NIST CSF 2.0 · ${group.function} · ${group.id}`}>
+                {group.id}
+              </span>
               {anyStatus && (
                 <span className="font-normal normal-case tracking-normal text-ink-3">
                   {group.capabilities.filter((m) => statusFor(m.id) === "enabled").length} of {group.capabilities.length} enabled

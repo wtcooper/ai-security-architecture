@@ -1,18 +1,20 @@
-/** What the Enable tab derives from an architecture: its enterprise controls by security domain, and where each sits. */
+/** What the Enable tab derives from an architecture: its enterprise controls by NIST CSF category, and where each sits. */
 import { archetypeById, enablement, mitigationById, mitigationsForArchetype } from "@/lib/data";
 import type { Archetype, Mitigation, Tool, ToolControl } from "@/lib/types";
 
 export interface ControlGroup {
   id: string;
-  /** The domain's name on this architecture's surface. */
+  /** The CSF category's name. */
   title: string;
+  /** The CSF function: Govern, Identify, Protect, Detect, Respond or Recover. */
+  function: string;
   blurb: string;
   capabilities: Mitigation[];
 }
 
 /**
  * The architecture's enterprise controls: every capability it pins, in pin order, under the
- * security domain that owns it. Domains the architecture pins nothing from are left out.
+ * NIST CSF category that owns it, in CSF order. Categories it pins nothing from are left out.
  */
 export function controlGroups(archetype: Archetype): ControlGroup[] {
   const pinned = mitigationsForArchetype(archetype.id);
@@ -20,7 +22,7 @@ export function controlGroups(archetype: Archetype): ControlGroup[] {
     .map((g) => {
       const own = g.surfaces?.[archetype.surface];
       const ids = new Set(g.mitigations);
-      return { id: g.id, title: own?.title ?? g.title, blurb: own?.blurb ?? g.blurb, capabilities: pinned.filter((m) => ids.has(m.id)) };
+      return { id: g.id, title: g.title, function: g.function, blurb: own?.blurb ?? g.blurb, capabilities: pinned.filter((m) => ids.has(m.id)) };
     })
     .filter((g) => g.capabilities.length);
 }

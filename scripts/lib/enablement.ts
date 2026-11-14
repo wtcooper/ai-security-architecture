@@ -1,37 +1,55 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { STATUSES, type Archetype, type CapabilityCustomisation, type Enablement, type Mitigation, type Surface } from "../../src/lib/types";
+import { STATUSES, type Archetype, type CapabilityCustomisation, type Enablement, type EnablementGroup, type Mitigation, type Surface } from "../../src/lib/types";
+
+/** A CSF category as the framework file declares it. */
+type CsfEntry = { label?: string; group?: string };
 
 /**
- * The Enable tab's first step: the security domains that group an architecture's capabilities,
- * and the baseline every AI deployment needs. Every pinned capability must sit in exactly one group.
+ * The control families: every control in the catalogue under the NIST CSF category that owns it,
+ * and the baseline every AI deployment needs. Names and functions come from the CSF framework
+ * file, so a family can only be a category that file declares.
  */
-export async function loadEnablement(root: string, catalogue: Mitigation[], surfaces: Surface[], archetypes: Archetype[]): Promise<Enablement> {
-  const doc = parse(await readFile(join(root, "data/overlay/enablement.yaml"), "utf8")) as Enablement;
+export async function loadEnablement(
+  root: string,
+  catalogue: Mitigation[],
+  surfaces: Surface[],
+  archetypes: Archetype[],
+  csf: Record<string, CsfEntry>,
+): Promise<Enablement> {
+  type Authored = { framework?: string; groups?: (Omit<EnablementGroup, "title" | "function">)[]; baseline?: string[] };
+  const doc = parse(await readFile(join(root, "data/overlay/enablement.yaml"), "utf8")) as Authored;
   const check = (ok: unknown, message: string) => { if (!ok) throw new Error(`enablement.yaml: ${message}`); };
+  check(doc.framework === "nist-csf", "framework must be nist-csf");
   const byId = new Map(catalogue.map((m) => [m.id, m]));
   const surfaceIds = new Set(surfaces.map((s) => s.id));
+  const order = Object.keys(csf);
   const grouped = new Map<string, string>();
   const groupIds = new Set<string>();
   check(doc.groups?.length, "needs groups");
-  for (const group of doc.groups) {
+  const groups: EnablementGroup[] = [];
+  let last = -1;
+  for (const group of doc.groups!) {
     check(group.id && !groupIds.has(group.id), `duplicate or missing group id ${group.id}`);
     groupIds.add(group.id);
-    check(group.title?.trim() && group.blurb?.trim() && group.mitigations?.length, `group ${group.id}: needs a title, a blurb and mitigations`);
+    const entry = csf[group.id];
+    check(entry?.label && entry.group, `group ${group.id} is not a category in data/frameworks/nist-csf.yaml`);
+    check(order.indexOf(group.id) > last, `group ${group.id} is out of CSF order`);
+    last = order.indexOf(group.id);
+    check(group.blurb?.trim() && group.mitigations?.length, `group ${group.id}: needs a blurb and mitigations`);
     for (const [surface, own] of Object.entries(group.surfaces ?? {})) {
       check(surfaceIds.has(surface), `group ${group.id}: unknown surface ${surface}`);
-      check(own?.title?.trim() || own?.blurb?.trim(), `group ${group.id}: surfaces.${surface} needs a title or a blurb`);
+      check(own?.blurb?.trim(), `group ${group.id}: surfaces.${surface} needs a blurb`);
     }
     for (const id of group.mitigations) {
-      check(byId.has(id), `group ${group.id}: unknown capability ${id}`);
+      check(byId.has(id), `group ${group.id}: unknown control ${id}`);
       check(!grouped.has(id), `group ${group.id}: ${id} is already in group ${grouped.get(id)}`);
       grouped.set(id, group.id);
     }
+    groups.push({ ...group, title: entry!.label!, function: entry!.group! });
   }
-  for (const arch of archetypes) {
-    for (const id of arch.mitigations) check(grouped.has(id), `${id}, pinned on ${arch.id}, is in no group`);
-  }
+  for (const m of catalogue) check(grouped.has(m.id), `${m.id} (${m.title}) is in no group`);
   const baseline = new Set<string>();
   for (const id of doc.baseline ?? []) {
     check(!baseline.has(id), `baseline: ${id} is listed twice`);
@@ -41,9 +59,9 @@ export async function loadEnablement(root: string, catalogue: Mitigation[], surf
   }
   const pinned = new Set(archetypes.flatMap((a) => a.mitigations));
   for (const id of baseline) {
-    if (!pinned.has(id)) console.warn(`  ~ enablement: baseline capability ${id} is not pinned on any architecture`);
+    if (!pinned.has(id)) console.warn(`  ~ enablement: baseline control ${id} is not pinned on any pattern`);
   }
-  return { groups: doc.groups, baseline: [...baseline] };
+  return { framework: "nist-csf", groups, baseline: [...baseline] };
 }
 
 /** The organisation's status file. Every key must be a catalogue capability. */
