@@ -15,6 +15,7 @@ import { parse as parseYaml } from "yaml";
 import { loadMitigations } from "./lib/mitigations";
 import { loadControlCrosswalks } from "./lib/control-crosswalks";
 import { loadEnablement, loadStatus } from "./lib/enablement";
+import { standIn } from "../src/components/drawing/crossings";
 import { checkSettings, loadClouds, loadProductStatus } from "./lib/products";
 import { loadSpecializations } from "./lib/specializations";
 import { CROSSING_KINDS } from "../src/lib/types";
@@ -780,8 +781,10 @@ function checkArchetypes(
       const at = `${where} edge ${edge.from}->${edge.to}`;
       if (!CROSSING_KINDS.includes(edge.crossing.kind)) fail(`${at}: crossing.kind must be one of ${CROSSING_KINDS.join(", ")}`);
       if (typeof edge.crossing.via !== "string" || !edge.crossing.via.trim()) fail(`${at}: crossing needs a via line`);
-      const zoneOfBlock = new Map((arch.blocks ?? []).map((b) => [b.id, b.zone]));
-      if (zoneOfBlock.get(edge.from) === zoneOfBlock.get(edge.to)) fail(`${at}: crossing is authored on an edge that stays inside one zone`);
+      // A person or caller stands outside whatever zone its block names, so its flows cross.
+      const ownerOfZone = new Map((arch.zones ?? []).map((z) => [z.id, z.owner as string]));
+      const standOfBlock = new Map((arch.blocks ?? []).map((b) => [b.id, standIn(b, ownerOfZone)]));
+      if (standOfBlock.get(edge.from) === standOfBlock.get(edge.to)) fail(`${at}: crossing is authored on an edge that stays inside one zone`);
     }
 
     // --- Pins ----------------------------------------------------------------

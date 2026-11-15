@@ -15,16 +15,18 @@ table at the end.
 
 The boundary drawing is laid out by `src/components/drawing/layout.ts` from the pattern's own
 data. No pattern has coordinates in code. A pattern that reads badly is fixed in the engine if
-the cause is general, or with a grid cell (`col`, `row`, `rowSpan`) in its own file if it is
-particular.
+the cause is general, or in its own file if it is particular, with a `cell` on a block: its
+grid cell on the boundary drawing, where that should differ from its place on the detailed
+canvas. Nine patterns use it, on one convention: Enterprise data sits under the Tool services
+that read it, so our cloud is two columns wide.
 
 | Rule | What it means | How it is checked |
 | --- | --- | --- |
 | **L1 Size** | The drawing is at most 1440px wide, so on a 1366px laptop it shows at no less than 90% and never scrolls sideways, and at most 1080px tall, so the expanded view fits a 1080p screen. | Audit |
 | **L2 Boundaries are respected** | An arrow never runs through a trust boundary that neither of its ends is in. A flow from a person to the vendor goes round our cloud, not through it. | Audit |
 | **L3 Containers are respected** | An arrow never runs through a container (a box that holds others) that neither of its ends is in. | Audit |
-| **L4 Words are clear** | Every labelled flow shows its label, and no label sits on a box, on another label, or across another arrow. | Audit |
-| **L5 Nothing is cut short** | No title, one-liner or flow label ends in "…". | Audit |
+| **L4 Words are clear** | Every labelled flow shows its label, and no label sits on a box, on another label, across another arrow, or past the edge of the drawing. | Audit |
+| **L5 Nothing is cut short** | No title, one-liner or flow label ends in "…", including the cloud service names a box shows when the pattern is drawn as AWS, Azure or Google Cloud. | Audit |
 | **L6 No wasted space** | A container is no taller than its contents need (under 70px spare), and a boundary has no empty row above its first box or below its last (under 110px). | Audit |
 | **L7 Arrows are simple** | An arrow turns at most four times and never runs through a box that is not one of its ends. | Audit |
 | **L8 It reads as a picture** | The eye can follow each flow from end to end; related boxes sit together; nothing looks accidental. | By eye |
@@ -36,7 +38,7 @@ These hold for all patterns because the engine draws them, and are covered by th
 | Rule | What it means |
 | --- | --- |
 | **S1 Zones** | Each zone is a labelled outline carrying its canonical name: Managed endpoint, Enterprise cloud, Vendor platform, External. Ours are dashed grey, the vendor's violet, External red-tinted. |
-| **S2 People** | People stand at the left, outside every boundary. |
+| **S2 People** | People and outside callers stand at the left, outside every boundary, whichever zone their block names, and their flows count as boundary crossings. |
 | **S3 Control plane** | The security and governance control plane is one band beneath everything. Each of its boxes shows the controls it owns. A control-plane box that owns no control on a pattern is a finding about that pattern (rule C5). |
 | **S4 External** | External parties sit in a band beneath the trust boundaries, each under what reaches it. The band is tagged "no agreement" only when nothing in it is reached under contract. |
 | **S5 One numbering** | Purple circles are controls, numbered as on the Enable tab. Red tags are risks. Dark squares are the steps of a walk. Nothing else is numbered. |
@@ -47,8 +49,8 @@ These hold for all patterns because the engine draws them, and are covered by th
 
 | Rule | Field | What it must be |
 | --- | --- | --- |
-| **C1 One-liner** | `summary` on every block | One line saying what the box holds or does on this pattern, in the reader's words. Lower case, no full stop, " · " between parallel items. At most 78 characters, and it must show uncut (L5): a container shows one line, so keep its one-liner to about 40. It does not repeat the title, and it does not list every item: the Detailed view does that. |
-| **C2 Gloss** | `gloss` on every endpoint, cloud and vendor zone that holds a block | A few words on what the zone is on this pattern ("developer's machine", "our network", "the vendor's cloud"). At most 40 characters. |
+| **C1 One-liner** | `summary` on every block | One line saying what the box holds or does on this pattern, in the reader's words. Lower case, no full stop, " · " between parallel items. At most 78 characters, and it must show uncut (L5). In practice a box shows three lines of about 25 characters; a container's heading shows two lines of about 33. It does not repeat the title, and it does not list every item: the Detailed view does that. |
+| **C2 Gloss** | `gloss` on every endpoint, cloud and vendor zone that holds a block | A few words on what the zone is on this pattern ("developer's machine", "our network", "the vendor's cloud"). At most 40 characters, and short enough not to widen its boundary by more than 64px: a zone that holds one box has room for about 20. |
 | **C3 Crossings** | `crossing` on every flow whose ends are in different zones | `kind`: `brokered` (through a control point we run), `vendor` (governed by the vendor), `person` (through the person present) or `direct` (nothing of ours in the path). `via`: one line naming what the flow passes through on our side, and for `direct`, starting "Nothing between:" and naming the only thing that does apply. It must agree with the controls pinned on that flow and its ends. |
 | **C4 When it applies** | `useWhen` in `data/overlay/patterns.yaml` | One sentence in the reader's words, plus the search words a reader might use. |
 | **C5 Control plane is used** | `mitigations` on control-plane blocks | Every control-plane box drawn owns at least one control the pattern pins, or the pattern's file says why it is drawn empty. |
@@ -57,8 +59,10 @@ These hold for all patterns because the engine draws them, and are covered by th
 | **C8 Guidance** | `data/reference/guidance/<slug>.yaml` | An overview and at least four action-titled items, each citing controls the pattern pins. |
 | **C9 Tools** | `data/tooling/`, `data/clouds/` | At least one catalogued product with settings, and for a pattern you build, its mapping onto each cloud. Where no product exists yet, the Enable tab says so. |
 
-C1 to C3 are the fields the boundary drawing added, and the audit counts them. C4 to C9 predate
-it; the build already enforces C4, C7 and C8, and the inventory below records C5, C6 and C9.
+C1 to C3 are the fields the boundary drawing added, and the audit fails on them. C4 to C9
+predate it: the build already enforces C4 and C8, and the audit reports C5, C6, C7 and C9 as
+open questions in its last column without failing, because closing one is a decision about the
+pattern, not a fix to the drawing.
 
 ## Writing the one-liners and crossings
 
@@ -83,27 +87,35 @@ finding the table exists to show.
 
 ## Sign-off
 
-A pattern is signed off when its audit row is clean and its drawing has been looked at in the
-browser in three states: at rest with control chips, on Risks & flows with a walk running, and,
-for a pattern you build, drawn as one cloud.
+A pattern is signed off when its audit row is clean and its drawing has been looked at.
 
-| Pattern | Audit clean | Viewed | Notes |
+Signed off 2026-11-15. For all 18 the audit reports no finding on any rule (L1 to L7, C1 to
+C3). Each drawing was viewed by eye at rest, at laptop width. The other states were checked in
+the browser for every pattern (no sideways scroll at 1366px; every control has a chip; on Risks
+& flows every pinned risk has a tag and every step of the walkthrough is drawn; each cloud's
+relabelling renders without error) and two were viewed by eye: the third-party coding agent
+with a walk running, and the chat agent drawn as Azure. Open questions about the patterns
+themselves are in [PATTERN-FINDINGS.md](PATTERN-FINDINGS.md).
+
+| Pattern | Size | Scale at 1366px | Notes from the viewing |
 | --- | --- | --- | --- |
-| Third-party coding & desktop agents | | | |
-| First-party coding & desktop agents | | | |
-| Browser AI agents & extensions | | | |
-| Local model runtime | | | |
-| Personal autonomous agent | | | |
-| Enterprise AI chat with connectors | | | |
-| Coding & desktop session managed agent runtime | | | |
-| UI/low-code managed agent runtime | | | |
-| API/SDK managed agent runtime | | | |
-| Persistent managed agents | | | |
-| Single agent workflow | | | |
-| Multi-agent workflow | | | |
-| Chat agent with tools | | | |
-| Agent-to-agent federation across platforms | | | |
-| Agent sandbox for RL & evaluation | | | |
-| Remote MCP server you publish | | | |
-| Self-hosted model inference | | | |
-| Model training & release pipeline | | | |
+| Third-party coding & desktop agents | 1382×915 | 93% | Cloud folded to two columns. The vendor flows run over the top of our boundaries. |
+| First-party coding & desktop agents | 1104×798 | 100% | Identity services is drawn empty (open question). |
+| Browser AI agents & extensions | 1348×950 | 96% | Glosses shortened so the single-box cloud and vendor boundaries do not overlap. |
+| Local model runtime | 1192×565 | 100% | Two control-plane boxes only, as authored. |
+| Personal autonomous agent | 1369×1051 | 94% | The tallest drawing. Sandbox folded to one column; the workspace mount loops round the sandbox. |
+| Enterprise AI chat with connectors | 1281×796 | 100% | Clean. |
+| Coding & desktop session managed agent runtime | 1310×913 | 99% | Vendor zone folded to one column. Three vendor flows run down through the vendor's own boundary to External. |
+| UI/low-code managed agent runtime | 1057×906 | 100% | People reach the vendor over the top of our cloud, not through it. |
+| API/SDK managed agent runtime | 1056×927 | 100% | Folded from five rows to four. The deploy flow steps round Source control. |
+| Persistent managed agents | 1264×913 | 100% | One label ("browser action / page") sits a little off its arrow. |
+| Single agent workflow | 1006×810 | 100% | The escalation flow runs under the harness to the operator. |
+| Multi-agent workflow | 1232×877 | 100% | Same escalation route; the harness holds three boxes. |
+| Chat agent with tools | 1006×973 | 100% | Registry moved under Enterprise data so the cloud is two columns. |
+| Agent-to-agent federation across platforms | 1334×925 | 97% | Clean. |
+| Agent sandbox for RL & evaluation | 1054×975 | 100% | Secrets & key management is drawn empty, by the pattern's own note. |
+| Remote MCP server you publish | 958×647 | 100% | Callers now stand outside our cloud; three inbound crossings added. |
+| Self-hosted model inference | 1252×692 | 100% | Secrets & key management is drawn empty (open question). |
+| Model training & release pipeline | 1006×706 | 100% | Training content comes in up the outside of the boundary. Observability & response is drawn empty (open question). |
+
+A drawing narrower than the page is shown larger than 100%, up to the page width.

@@ -8,7 +8,7 @@
  */
 import { capabilityName } from "@/lib/data";
 import type { Archetype, CrossingKind } from "@/lib/types";
-import { CROSSING_LABEL, crossingsOf } from "./crossings";
+import { OUTSIDE, CROSSING_LABEL, crossingsOf } from "./crossings";
 
 const KIND_COLOR: Record<CrossingKind, string> = {
   brokered: "var(--ink)",
@@ -19,7 +19,7 @@ const KIND_COLOR: Record<CrossingKind, string> = {
 
 export function CrossingsRegister({ archetype, onPickMitigation }: { archetype: Archetype; onPickMitigation?: (id: string) => void }) {
   const crossings = crossingsOf(archetype);
-  const zoneTitle = new Map((archetype.zones ?? []).map((z) => [z.id, z.title ?? z.owner]));
+  const zoneTitle = new Map<string, string>([...(archetype.zones ?? []).map((z): [string, string] => [z.id, z.title ?? z.owner]), [OUTSIDE, "Outside"]]);
   if (!crossings.length) return <p className="text-[13px] text-ink-3">No flow on this pattern crosses a trust boundary.</p>;
   const direct = crossings.filter((c) => c.kind === "direct").length;
   return (

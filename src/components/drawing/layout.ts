@@ -15,6 +15,7 @@
  *
  * Pure and deterministic: tests and audits call it without a browser.
  */
+import { clouds } from "@/lib/data";
 import type { Archetype, ArchBlock, ArchZone } from "@/lib/types";
 
 export type Pt = [number, number];
@@ -358,6 +359,14 @@ function compute(a: Archetype): ViewSpec {
   // A component many flows meet is drawn wider, so each flow has its own place to land.
   const degree = (id: string) => a.edges.filter((e) => e.from === id || e.to === id).length;
 
+  // Everything a box may have to show under its title: its one-liner, and each cloud's service for it.
+  const wordsOf = (b: ArchBlock): { text: string; build?: boolean }[] => [
+    ...(summaryOf(b) ? [{ text: summaryOf(b) }] : []),
+    ...clouds.flatMap((c) =>
+      (c.implementations.find((i) => i.architecture === a.id)?.bindings ?? []).filter((x) => x.block === b.id).map((x) => ({ text: x.service, build: x.build })),
+    ),
+  ];
+
   // Sizes, innermost first. A container is as large as the grid of what it holds.
   const inner = new Map<string, ReturnType<typeof grid>>();
   const sizes = new Map<string, { w: number; h: number }>();
@@ -375,12 +384,18 @@ function compute(a: Archetype): ViewSpec {
       inner.set(b.id, g);
       const w = Math.max(g.w, LEAF_W) + 2 * KID_PAD;
       // A container's heading is its title and a one-liner of up to two lines.
-      const sub = summaryOf(b);
-      const header = HEADER + (sub && wrap(sub, w - 24, 10.5, 2).length > 1 ? 13 : 0);
+      const header = HEADER + (wordsOf(b).some((t) => wrap(t.text, w - 24, 10.5, 2).length > 1) ? 13 : 0);
       headers.set(b.id, header);
       s = { w, h: header + g.h + KID_PAD };
     } else if (isPerson(b)) s = { w: ACTOR_W, h: summaryOf(b) ? ACTOR_H : 40 };
-    else s = { w: LEAF_W + 16 * Math.max(0, degree(b.id) - 4), h: LEAF_H };
+    else {
+      // As tall as its words need: a title of one or two lines, then the longest thing it will
+      // ever show beneath it, which is its one-liner or the name of a cloud service that plays it.
+      const w = LEAF_W + 16 * Math.max(0, degree(b.id) - 4);
+      const title = wrap(b.title, w - 22, 13.2, 2).length;
+      const slots = Math.max(3, ...wordsOf(b).map((t) => title - 1 + wrap(t.text, w - 24, 10.5, 4).length + (t.build ? 1 : 0)));
+      s = { w, h: Math.max(LEAF_H, 27 + Math.min(slots, 5) * 12.5 + 4) };
+    }
     sizes.set(b.id, s);
     return s;
   };
@@ -393,13 +408,16 @@ function compute(a: Archetype): ViewSpec {
   // The trust row: one grid across people, our boundaries and the vendor's, so rows line up
   // across boundaries. A change of zone between two columns opens room for both outlines.
   const zoneOfCol = new Map<number, string>();
-  for (const b of trust) if (!zoneOfCol.has(colOf(b))) zoneOfCol.set(colOf(b), b.zone ?? "");
+  // People and outside callers stand outside every boundary, whichever zone their block names.
+  const PEOPLE = "@people";
+  const standOf = (b: ArchBlock) => (isPerson(b) ? PEOPLE : b.zone ?? "");
+  const outside = (z?: string) => z === PEOPLE || ownerOfZone.get(z ?? "") === "user";
+  for (const b of trust) if (!zoneOfCol.has(colOf(b))) zoneOfCol.set(colOf(b), standOf(b));
   const gapBetween = (c1: number, c2: number) => {
     const z1 = zoneOfCol.get(c1);
     const z2 = zoneOfCol.get(c2);
     if (z1 === z2) return template.colGap;
-    const people = ownerOfZone.get(z1 ?? "") === "user" || ownerOfZone.get(z2 ?? "") === "user";
-    if (people) return PEOPLE_GAP + PAD_X;
+    if (outside(z1) || outside(z2)) return PEOPLE_GAP + PAD_X;
     // Every flow between two boundaries is labelled in the gap between them: more flows, more room.
     const zoneOf = (id: string) => a.blocks.find((b) => b.id === id)?.zone;
     const between = a.edges.filter((e) => new Set([zoneOf(e.from), zoneOf(e.to)]).size === 2 && [z1, z2].every((z) => [zoneOf(e.from), zoneOf(e.to)].includes(z))).length;
@@ -414,7 +432,7 @@ function compute(a: Archetype): ViewSpec {
   const minColW = new Map<number, number>();
   for (const z of zones) {
     if (!["endpoint", "cloud", "vendor"].includes(z.owner)) continue;
-    const cols = [...new Set(trust.filter((b) => b.zone === z.id).map(colOf))].sort((x, y) => x - y);
+    const cols = [...new Set(trust.filter((b) => standOf(b) === z.id).map(colOf))].sort((x, y) => x - y);
     if (!cols.length) continue;
     const natural = (c: number) => Math.max(...trust.filter((b) => colOf(b) === c).map((b) => sizeOf(b).w));
     const have = cols.reduce((sum, c) => sum + natural(c), 0) + template.colGap * (cols.length - 1) + 2 * PAD_X;
@@ -433,7 +451,7 @@ function compute(a: Archetype): ViewSpec {
   const firstZone = zoneOfCol.get(Math.min(...zoneOfCol.keys()));
   // With no people at the left, the first boundary stands a little in from the edge, so a flow
   // from the band beneath can run up the outside of it instead of through what it holds.
-  const originX = MARGIN + (ownerOfZone.get(firstZone ?? "") === "user" || !trust.length ? 0 : PAD_X + 10);
+  const originX = MARGIN + (outside(firstZone) || !trust.length ? 0 : PAD_X + 10);
   const originY = TOP + PAD_TOP;
   const place = (id: string, r: Rect, dx: number, dy: number) => {
     const abs = { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h };
@@ -453,7 +471,7 @@ function compute(a: Archetype): ViewSpec {
   const trustBottom = originY + tg.h + PAD_BOTTOM;
   for (const z of zones) {
     if (!["endpoint", "cloud", "vendor"].includes(z.owner)) continue;
-    const members = trust.filter((b) => b.zone === z.id).map((b) => rects.get(b.id)!);
+    const members = trust.filter((b) => standOf(b) === z.id).map((b) => rects.get(b.id)!);
     if (!members.length) continue;
     let x = Math.min(...members.map((r) => r.x)) - PAD_X;
     let right = Math.max(...members.map((r) => r.x + r.w)) + PAD_X;
@@ -954,7 +972,7 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
     paths.set(keyOf(e), simplify(pts));
   }
 
-  return label(a, paths, boxes, boundaries, control);
+  return label(a, paths, boxes, boundaries, width, control);
 }
 
 /** Drop the points a straight run does not need. */
@@ -971,7 +989,7 @@ function simplify(pts: Pt[]): Pt[] {
 const overlap = (p: Rect, q: Rect) => Math.max(0, Math.min(p.x + p.w, q.x + q.w) - Math.max(p.x, q.x)) * Math.max(0, Math.min(p.y + p.h, q.y + q.h) - Math.max(p.y, q.y));
 
 /** Give every arrow its pin point and its words, clear of boxes, headings and each other. */
-function label(a: Archetype, paths: Map<string, Pt[]>, boxes: ViewBox[], boundaries: ViewBoundary[], control?: ViewBoundary): ViewLine[] {
+function label(a: Archetype, paths: Map<string, Pt[]>, boxes: ViewBox[], boundaries: ViewBoundary[], width: number, control?: ViewBoundary): ViewLine[] {
   const solid: Rect[] = [
     ...boxes.filter((b) => b.tone !== "container").map((b) => ({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 })),
     ...boxes.filter((b) => b.tone === "container").map((b) => ({ x: b.x, y: b.y, w: b.w, h: (b.header ?? HEADER) - 6 })),
@@ -1035,6 +1053,9 @@ function label(a: Archetype, paths: Map<string, Pt[]>, boxes: ViewBox[], boundar
     let best: { score: number; label: ViewLabel; rect: Rect } | null = null;
     const consider = (lab: ViewLabel, rect: Rect, bias: number) => {
       let score = bias;
+      // Words stay on the canvas: off its edge they are cut.
+      const off = Math.max(0, 6 - rect.x) + Math.max(0, rect.x + rect.w - (width - 6));
+      if (off) score += 400 + off * 20;
       for (const r of solid) score += overlap(rect, r) * 4;
       for (const r of placed) score += overlap(rect, r) * 4;
       for (const s of strokes) score += overlap(rect, s.r) * 2;

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BoxDiagram } from "../src/components/drawing/BoxDiagram";
 import { CrossingsRegister } from "../src/components/drawing/CrossingsRegister";
-import { crossingsOf } from "../src/components/drawing/crossings";
+import { crossingsOf, standIn } from "../src/components/drawing/crossings";
 import { PatternDrawing } from "../src/components/drawing/PatternDrawing";
 import { boundaryLayout, ownedControls, type Rect } from "../src/components/drawing/layout";
 import { dataset, riskCode } from "../src/lib/data";
@@ -71,7 +71,7 @@ test(
       const r = box.get(b.id)!;
       assert.ok(inside(r, { x: 0, y: 0, w: spec.width, h: spec.height }), `${a.id}: ${b.id} is on the canvas`);
       if (b.parent) assert.ok(inside(r, box.get(b.parent)!), `${a.id}: ${b.id} sits inside ${b.parent}`);
-      if (owner.get(b.zone ?? "") === "user") {
+      if (owner.get(b.zone ?? "") === "user" || b.kind === "actor" || b.kind === "origin") {
         // People stand outside every boundary.
         for (const z of spec.boundaries) assert.ok(!overlaps(r, z), `${a.id}: ${b.id} is outside ${z.zone}`);
       } else {
@@ -173,7 +173,9 @@ test("a lit control and a lit risk are marked, and a cloud's services relabel th
 test(
   "the crossings register lists every flow that crosses a trust boundary once",
   each((a) => {
-    const zone = new Map(a.blocks.map((b) => [b.id, b.zone]));
+    // A person or an outside caller stands outside whatever zone its block names, so its flows cross.
+    const owners = new Map((a.zones ?? []).map((z) => [z.id, z.owner as string]));
+    const zone = new Map(a.blocks.map((b) => [b.id, standIn(b, owners)]));
     const crossing = a.edges.filter((e) => zone.get(e.from) !== zone.get(e.to)).map(keyOf);
     assert.deepEqual(crossingsOf(a).map((c) => c.key), crossing, a.id);
     const html = renderToStaticMarkup(<CrossingsRegister archetype={a} />);
