@@ -305,7 +305,7 @@ export function BoxDiagram({
             // A long title takes a second line and the one-liner gives one up.
             const titleLines = wrap(block.title, bx.w - 22, 13.2, 2);
             const room = Math.max(1, bx.lines - (titleLines.length - 1) - (service?.build ? 1 : 0));
-            const subLines = sub ? wrap(sub, bx.w - 24, 10.5, bx.tone === "container" ? bx.lines : bx.tone === "governance" ? 2 : room) : [];
+            const subLines = sub ? wrap(sub, bx.w - 24, 10.5, bx.tone === "container" ? bx.lines : bx.tone === "governance" ? 3 : room) : [];
             const subY = bx.y + 35 + (titleLines.length - 1) * 14;
             const accent = bx.tone === "actor" || bx.tone === "governance" ? null : blockTab(block);
             const fill = bx.tone === "actor" ? "var(--mist)" : "var(--paper)";

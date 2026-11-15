@@ -245,6 +245,10 @@ const T2 = 24;
 /** Two parallel arrows are never drawn closer than this. */
 const CLEAR = 9;
 const BEND = 30;
+/** What running across another arrow's words costs, per step: worth a detour. */
+const WORDS = 160;
+/** What crossing another arrow costs: more than a bend, so a flow goes round where it reasonably can. */
+const CROSS = 48;
 /** What a step inside a boundary that is neither end's costs, per pixel: enough to go round it. */
 const FOREIGN_ZONE = 6;
 
@@ -407,7 +411,9 @@ function compute(a: Archetype): ViewSpec {
 
   const rects = new Map<string, Rect>();
   const firstZone = zoneOfCol.get(Math.min(...zoneOfCol.keys()));
-  const originX = MARGIN + (ownerOfZone.get(firstZone ?? "") === "user" || !trust.length ? 0 : PAD_X);
+  // With no people at the left, the first boundary stands a little in from the edge, so a flow
+  // from the band beneath can run up the outside of it instead of through what it holds.
+  const originX = MARGIN + (ownerOfZone.get(firstZone ?? "") === "user" || !trust.length ? 0 : PAD_X + 10);
   const originY = TOP + PAD_TOP;
   const place = (id: string, r: Rect, dx: number, dy: number) => {
     const abs = { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h };
@@ -471,9 +477,9 @@ function compute(a: Archetype): ViewSpec {
         const ns = neighbours(b.id);
         return { b, s: sizeOf(b), want: ns.length ? ns.reduce((s, v) => s + v, 0) / ns.length : Number.POSITIVE_INFINITY, depth: depthOf(b.id) };
       })
-      // Of two parties that want the same spot, the one whose target is nearer the band takes
-      // it and has a straight run; the other stands beside it and goes up the gutter.
-      .sort((p, q) => p.want - q.want || q.depth - p.depth || rowOf(p.b) - rowOf(q.b) || colOf(p.b) - colOf(q.b));
+      // Of two parties that want the same spot, the one whose target is further up stands to
+      // the outside, where it can run up beside the boundary; the nearer one goes straight in.
+      .sort((p, q) => p.want - q.want || p.depth - q.depth || rowOf(p.b) - rowOf(q.b) || colOf(p.b) - colOf(q.b));
     const bandX = trustLeft;
     const xs: number[] = [];
     let cursor = bandX + PAD_X;
@@ -529,7 +535,7 @@ function compute(a: Archetype): ViewSpec {
     const textH = Math.max(
       ...governance.map((b) => {
         const sub = summaryOf(b);
-        return 20 + (wrap(b.title, boxW - 22, 13.2, 2).length - 1) * 14 + (sub ? wrap(sub, boxW - 24, 10.5, 2).length * 12.5 + 3 : 0);
+        return 20 + (wrap(b.title, boxW - 22, 13.2, 2).length - 1) * 14 + (sub ? wrap(sub, boxW - 24, 10.5, 3).length * 12.5 + 3 : 0);
       }),
     );
     const chipTop = textH + 19;
@@ -552,7 +558,7 @@ function compute(a: Archetype): ViewSpec {
       label: labelOf(zone, bandX, bandY),
     });
     height = bandY + 32 + boxH + 16 + MARGIN - 10;
-    for (const b of governance) boxes.push({ id: b.id, ...rects.get(b.id)!, tone: "governance", lines: 2, chipRows, chipTop });
+    for (const b of governance) boxes.push({ id: b.id, ...rects.get(b.id)!, tone: "governance", lines: 3, chipRows, chipTop });
   }
 
   for (const b of a.blocks) {
@@ -564,7 +570,16 @@ function compute(a: Archetype): ViewSpec {
     boxes.push({ id: b.id, ...r, tone, lines: tone === "container" ? (header > HEADER ? 2 : 1) : Math.max(1, Math.floor((r.h - 27) / 12.5)), chipRows: 0, header: tone === "container" ? header : undefined });
   }
 
-  const routed = route(a, boxes, boundaries, width, height);
+  // Arrows are routed before their words are placed, so an arrow can end up across another's
+  // label. Route again with the labels as ground to avoid, and keep the result if it is cleaner.
+  let routed = route(a, boxes, boundaries, width, height);
+  for (let pass = 0; pass < 2; pass++) {
+    const before = wordsCrossed(routed);
+    if (!before) break;
+    const again = route(a, boxes, boundaries, width, height, routed.flatMap((l) => { const r = labelRect(l); return r ? [{ key: l.key, r }] : []; }));
+    if (wordsCrossed(again) >= before) break;
+    routed = again;
+  }
   return { width, height, boundaries, boxes, lines: routed };
 }
 
@@ -583,7 +598,34 @@ function glossOf(z: ArchZone, a: Archetype): string | undefined {
   return undefined;
 }
 
-function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width: number, height: number): ViewLine[] {
+/** The space a line's label takes on the drawing. */
+export function labelRect(l: ViewLine): Rect | null {
+  if (!l.label) return null;
+  const w = Math.max(...l.label.lines.map((t) => textWidth(t, 10)));
+  const h = l.label.lines.length * 12;
+  const x = l.label.anchor === "middle" ? l.label.x - w / 2 : l.label.anchor === "end" ? l.label.x - w : l.label.x;
+  return { x, y: l.label.y - 9, w, h };
+}
+
+/** How many times an arrow runs across the words of another. */
+function wordsCrossed(lines: ViewLine[]): number {
+  let n = 0;
+  for (const l of lines) {
+    const r = labelRect(l);
+    if (!r) continue;
+    for (const o of lines) {
+      if (o.key === l.key) continue;
+      for (let i = 1; i < o.pts.length; i++) {
+        const p = o.pts[i - 1];
+        const q = o.pts[i];
+        if (Math.min(p[0], q[0]) < r.x + r.w - 3 && Math.max(p[0], q[0]) > r.x + 3 && Math.min(p[1], q[1]) < r.y + r.h - 2 && Math.max(p[1], q[1]) > r.y + 2) n++;
+      }
+    }
+  }
+  return n;
+}
+
+function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width: number, height: number, avoid: { key: string; r: Rect }[] = []): ViewLine[] {
   const box = new Map(boxes.map((b) => [b.id, b]));
   const control = boundaries.find((b) => b.tone === "control");
   const floor = control ? control.y - 8 : height - 8;
@@ -665,6 +707,20 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
     }
     return near < 16 ? 0.7 : near < 26 ? 0.3 : 0;
   };
+  // Words already placed by an earlier pass: the steps that would run across each.
+  const wordsOf = (x1: number, y1: number, x2: number, y2: number): number[] => {
+    let out = NONE;
+    avoid.forEach(({ r }, k) => {
+      const hit =
+        y1 === y2
+          ? y1 > r.y - 2 && y1 < r.y + r.h + 2 && Math.min(x2, r.x + r.w) - Math.max(x1, r.x) > 0
+          : x1 > r.x - 2 && x1 < r.x + r.w + 2 && Math.min(y2, r.y + r.h) - Math.max(y1, r.y) > 0;
+      if (hit) out = out === NONE ? [k] : [...out, k];
+    });
+    return out;
+  };
+  const hWords: number[][] = new Array(NX * NY).fill(NONE);
+  const vWords: number[][] = new Array(NX * NY).fill(NONE);
   const hHits: number[][] = new Array(NX * NY);
   const vHits: number[][] = new Array(NX * NY);
   const hCrowd = new Float32Array(NX * NY);
@@ -674,6 +730,8 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
       // -1 marks a step that runs along an outline: closed to every arrow.
       hHits[i * NY + j] = i + 1 < NX ? (onRail(X[i], Y[j], X[i + 1], Y[j]) ? [-1] : hitsOf(X[i], Y[j], X[i + 1], Y[j])) : NONE;
       vHits[i * NY + j] = j + 1 < NY ? (onRail(X[i], Y[j], X[i], Y[j + 1]) ? [-1] : hitsOf(X[i], Y[j], X[i], Y[j + 1])) : NONE;
+      if (avoid.length && i + 1 < NX) hWords[i * NY + j] = wordsOf(X[i], Y[j], X[i + 1], Y[j]);
+      if (avoid.length && j + 1 < NY) vWords[i * NY + j] = wordsOf(X[i], Y[j], X[i], Y[j + 1]);
       if (i + 1 < NX) hCrowd[i * NY + j] = crowding(X[i], Y[j], X[i + 1], Y[j]);
       if (j + 1 < NY) vCrowd[i * NY + j] = crowding(X[i], Y[j], X[i], Y[j + 1]);
     }
@@ -757,6 +815,7 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
   for (const { e, from, to } of order) {
     const ends = [from, to];
     const own = new Set(obstacles.flatMap((o, k) => (o.box === from.id || o.box === to.id ? [k] : [])));
+    const edgeKey = keyOf(e);
     const home = new Set([...lineage(from.id), ...lineage(to.id)]);
     const homeFences = new Set(fences.flatMap((f, k) => (f.zone === zoneOfBlock.get(from.id) || f.zone === zoneOfBlock.get(to.id) ? [k] : [])));
     // An arrow touches its own ends at one point only: it may not run along them or through them.
@@ -816,7 +875,8 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
       const body = (d < 2 ? hBody : vBody)[segKey];
       const fence = (d < 2 ? hFence : vFence)[segKey];
       const foreign = (body >= 0 && !home.has(body) ? 1.6 : 0) + (fence >= 0 && !homeFences.has(fence) ? FOREIGN_ZONE : 0);
-      const step = c + length * (1 + (d < 2 ? hCrowd : vCrowd)[segKey] + foreign) + (shared ? 90 + length * 5 : 0) + (crossing ? 16 : 0);
+      const words = (d < 2 ? hWords : vWords)[segKey].some((k) => avoid[k].key !== edgeKey) ? WORDS : 0;
+      const step = c + length * (1 + (d < 2 ? hCrowd : vCrowd)[segKey] + foreign) + (shared ? 90 + length * 5 : 0) + (crossing ? CROSS : 0) + words;
       const goal = goals.get(nn);
       if (goal) {
         const total = step + goal.cost + (usedPorts.get(goal.key) ?? 0) * 260;

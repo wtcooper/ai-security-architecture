@@ -7,7 +7,7 @@
  *   npm run drawing:audit              every pattern
  *   npm run drawing:audit -- <slug>    one pattern, with every finding spelled out
  */
-import { boundaryLayout, summaryOf, wrap, type Rect, type ViewLine, type ViewSpec } from "../src/components/drawing/layout";
+import { boundaryLayout, labelRect, summaryOf, wrap, type Rect, type ViewLine, type ViewSpec } from "../src/components/drawing/layout";
 import { crossingsOf } from "../src/components/drawing/crossings";
 import { dataset } from "../src/lib/data";
 import type { Archetype } from "../src/lib/types";
@@ -35,14 +35,6 @@ const through = (p: [number, number], q: [number, number], r: Rect, m = 3) => {
   const x1 = Math.min(p[0], q[0]), x2 = Math.max(p[0], q[0]), y1 = Math.min(p[1], q[1]), y2 = Math.max(p[1], q[1]);
   return x1 < r.x + r.w - m && x2 > r.x + m && y1 < r.y + r.h - m && y2 > r.y + m;
 };
-const labelRect = (l: ViewLine): Rect | null => {
-  if (!l.label) return null;
-  const w = Math.max(...l.label.lines.map((t) => t.length * 10 * 0.54));
-  const h = l.label.lines.length * 12;
-  const x = l.label.anchor === "middle" ? l.label.x - w / 2 : l.label.anchor === "end" ? l.label.x - w : l.label.x;
-  return { x, y: l.label.y - 9, w, h };
-};
-
 export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; stats: Record<string, number> } {
   const spec = boundaryLayout(a);
   const findings: Finding[] = [];
@@ -106,7 +98,7 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; stat
     if (title.at(-1)?.endsWith("…")) add("L5 title cut", bl.title);
     const sub = summaryOf(bl);
     if (!sub) continue;
-    const room = b.tone === "container" ? b.lines : b.tone === "governance" ? 2 : Math.max(1, b.lines - (title.length - 1));
+    const room = b.tone === "container" ? b.lines : b.tone === "governance" ? 3 : Math.max(1, b.lines - (title.length - 1));
     if (wrap(sub, b.w - 24, 10.5, room).at(-1)?.endsWith("…")) add("L5 one-liner cut", `${bl.title}: "${sub}"`);
   }
   for (const l of spec.lines) if (l.label?.lines.at(-1)?.endsWith("…")) add("L5 label cut", l.key);
