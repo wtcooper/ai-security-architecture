@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * The prose below the diagram. The diagram and the rail carry the security content — this panel
- * carries the reading: how the architecture works, why it is its own archetype, and where
- * the claims come from. Product examples sit above the drawing. Collapsed except the narrative,
+ * The prose below the diagram. The diagram carries the security content — this panel carries
+ * the reading: how the pattern works, why it is its own pattern, the products that are examples
+ * of it, where its drawing departs from the catalogue's rules, and where the claims come from. Collapsed except the narrative,
  * because the earlier version of this tab taught that showing everything at once reads as noise.
  */
 import { useState, type ReactNode } from "react";
@@ -21,6 +21,39 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
       {archetype.distinguishedBy?.length ? (
         <Section title="Why this is its own pattern" count={null}>
           <Prose blocks={archetype.distinguishedBy} size="sm" />
+        </Section>
+      ) : null}
+
+      {archetype.exemplars?.length ? (
+        <Section title="Examples" count={archetype.exemplars.length}>
+          <ul className="space-y-2.5">
+            {archetype.exemplars.map((e) => (
+              <li key={e.name} className="text-[13px] leading-snug text-ink-2">
+                {e.url ? (
+                  <a href={e.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:text-introduced hover:underline">
+                    {e.name} ↗
+                  </a>
+                ) : (
+                  <span className="font-semibold text-ink">{e.name}</span>
+                )}
+                {e.asOf && <span className="ident ml-2 text-[10.5px] text-ink-3">as of {e.asOf}</span>}
+                {e.note && <span className="mt-0.5 block">{e.note.trim()}</span>}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      {archetype.deviations?.length ? (
+        <Section title="Where this drawing departs from the catalogue's rules" count={archetype.deviations.length}>
+          <ul className="space-y-3">
+            {archetype.deviations.map((d) => (
+              <li key={d.subject} className="text-[13px] leading-snug text-ink-2">
+                <span className="font-semibold text-ink">{d.subject}</span>
+                <span className="mt-0.5 block">{d.reason.trim()}</span>
+              </li>
+            ))}
+          </ul>
         </Section>
       ) : null}
 

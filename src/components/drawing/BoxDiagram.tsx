@@ -22,6 +22,8 @@ export type DrawingPins = "risks" | "capabilities" | "all";
 export interface HoverCard {
   title: string;
   body?: string;
+  /** What a box holds: its sub-components, which the box itself sums up in one line. */
+  holds?: string[];
   x: number;
   y: number;
 }
@@ -110,13 +112,13 @@ export function BoxDiagram({
   const lineLit = (k: string) => !walk || steps.has(k);
   const dim = (lit: boolean) => (lit ? 1 : 0.22);
 
-  const hover = (title: string, body?: string) => ({
-    onMouseEnter: (e: MouseEvent) => onHover?.({ title, body, x: e.clientX, y: e.clientY }),
-    onMouseMove: (e: MouseEvent) => onHover?.({ title, body, x: e.clientX, y: e.clientY }),
+  const hover = (title: string, body?: string, holds?: string[]) => ({
+    onMouseEnter: (e: MouseEvent) => onHover?.({ title, body, holds, x: e.clientX, y: e.clientY }),
+    onMouseMove: (e: MouseEvent) => onHover?.({ title, body, holds, x: e.clientX, y: e.clientY }),
     onMouseLeave: () => onHover?.(null),
     onFocus: (e: FocusEvent) => {
       const r = (e.target as Element).getBoundingClientRect();
-      onHover?.({ title, body, x: r.left + r.width / 2, y: r.bottom });
+      onHover?.({ title, body, holds, x: r.left + r.width / 2, y: r.bottom });
     },
     onBlur: () => onHover?.(null),
   });
@@ -315,7 +317,7 @@ export function BoxDiagram({
                 key={bx.id}
                 data-block={bx.id}
                 style={{ opacity: dim(boxLit(bx.id)), transition: "opacity 150ms" }}
-                {...hover(block.title, (service?.note ?? block.note)?.trim())}
+                {...hover(block.title, (service?.note ?? block.note)?.trim(), (block.items ?? []).map((i) => i.label))}
               >
                 <rect x={bx.x} y={bx.y} width={bx.w} height={bx.h} rx={6} fill={fill} stroke={stroke} strokeWidth={bx.tone === "container" ? 1.3 : 1} />
                 {accent && <rect x={bx.x + 1} y={bx.y + 7} width={3} height={Math.min(bx.h - 14, 54)} rx={1.5} fill={accent} />}

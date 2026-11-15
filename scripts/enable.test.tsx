@@ -126,6 +126,23 @@ test("a pattern opens on Enable; a tab link opens that tab and a product link op
   assert.match(linked, new RegExp(`id="setting-${tool.id}-|not catalogued row by row`), "the product's settings are open");
 });
 
+test("nothing version 1 showed about a pattern is missing: its summary, how it works, examples, deviations and sources", () => {
+  const text = (blocks: unknown) => (Array.isArray(blocks) ? blocks.map((b) => (Array.isArray(b) ? b.join(" ") : String(b))).join(" ") : String(blocks ?? "")).replace(/\s+/g, " ").trim();
+  const seen = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ");
+  for (const arch of dataset.archetypes) {
+    const enable = seen(page(arch.id));
+    assert.ok(enable.includes(text(arch.summary).slice(0, 80)), `${arch.id}: the summary is in the header`);
+    for (const e of arch.exemplars ?? []) assert.ok(enable.includes(e.name), `${arch.id}: example ${e.name} is named in the header`);
+    const how = page(arch.id, "tab=overview");
+    assert.ok(seen(how).includes(text(arch.description).slice(0, 80)), `${arch.id}: how it works`);
+    // The other sections fold; each is present with its count, and opens to the full text.
+    assert.match(how, /Why this is its own pattern/, arch.id);
+    if (arch.exemplars?.length) assert.match(how, new RegExp(`Examples[^<]*(<[^>]+>\\s*)*${arch.exemplars.length}`), `${arch.id}: examples section`);
+    if (arch.deviations?.length) assert.match(how, /Where this drawing departs from the catalogue/, `${arch.id}: deviations section`);
+    assert.match(how, /Sources/, arch.id);
+  }
+});
+
 test("the Risks & flows tab lists every risk of the pattern, and the Incidents tab every incident on it", () => {
   for (const arch of dataset.archetypes) {
     const flows = page(arch.id, "tab=flows");

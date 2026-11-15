@@ -105,6 +105,8 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
 
   const surface = surfaces.find((s) => s.id === archetype.surface);
   const examples = (archetype.exemplars ?? []).map((e) => e.name);
+  // The pattern's one-paragraph description: what it is, in the author's words.
+  const summary = (archetype.summary ?? []).map((b) => (Array.isArray(b) ? b.join(" ") : b)).join(" ").trim();
   const cloudsHere = productsForArchetype(archetype.id).filter((p) => p.kind === "cloud" && cloudById.has(p.id));
 
   return (
@@ -128,6 +130,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
             <span className="font-semibold">Use this pattern when: </span>
             {archetype.useWhen}
           </p>
+          {summary && <p className="mt-2 text-[13.5px] leading-relaxed text-ink-2">{summary}</p>}
           {examples.length > 0 && (
             <p className="mt-1.5 text-[13px] leading-snug text-ink-2">
               <span className="font-semibold text-ink-2">Examples: </span>

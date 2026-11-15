@@ -228,6 +228,12 @@ export function PatternDrawing({
       style={{ left: Math.min(card.x + 14, (typeof window === "undefined" ? 1200 : window.innerWidth) - 336), top: card.y + 16 }}
     >
       <p className="font-semibold text-ink">{card.title}</p>
+      {card.holds && card.holds.length > 0 && (
+        <p className="mt-1 text-ink">
+          <span className="text-ink-3">Holds: </span>
+          {card.holds.join(" · ")}
+        </p>
+      )}
       {card.body && <p className="mt-1">{card.body.length > 360 ? `${card.body.slice(0, 357).trimEnd()}…` : card.body}</p>}
     </div>
   );
