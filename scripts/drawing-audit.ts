@@ -20,6 +20,8 @@ export const STANDARD = {
   maxHeight: 1080,
   /** Characters of authored one-liner a box can show without cutting it short. */
   summaryMax: 78,
+  /** A gloss may widen its boundary by at most this much: a few words beside the name, not a sentence. */
+  glossStretch: 64,
 };
 
 export interface Finding {
@@ -137,6 +139,7 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; stat
   }
   // C2 every boundary we or a vendor run says what it is on this pattern
   for (const z of a.zones ?? []) if (["endpoint", "cloud", "vendor"].includes(z.owner) && a.blocks.some((b) => b.zone === z.id) && !z.gloss) add("C2 gloss", `${z.title ?? z.id} has no gloss`);
+  for (const b of spec.boundaries) if ((b.stretched ?? 0) > STANDARD.glossStretch && b.gloss) add("C2 gloss", `"${b.gloss}" is too long for ${b.title}: it widens the boundary by ${Math.round(b.stretched!)}px`);
   // C3 every boundary crossing is authored
   for (const c of crossingsOf(a)) if (!c.authored) add("C3 crossing", `${c.key} is derived, not authored`);
 

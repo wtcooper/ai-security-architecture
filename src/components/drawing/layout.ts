@@ -38,6 +38,8 @@ export interface ViewBoundary extends Rect {
   tone: BoundaryTone;
   /** The surface this pattern is about: drawn a little stronger. */
   primary: boolean;
+  /** How much wider the boundary is than what it holds, because its label needed the room. */
+  stretched?: number;
   /** The label's drawn extent, kept clear of arrows. */
   label: Rect;
 }
@@ -182,10 +184,10 @@ interface Cell {
 }
 
 /** Lay cells on a grid: a column is as wide as its widest cell, a row as tall as its tallest. */
-function grid(cells: Cell[], colGap: (a: number, b: number) => number, rowGap: number) {
+function grid(cells: Cell[], colGap: (a: number, b: number) => number, rowGap: number, minColW?: Map<number, number>) {
   const cols = [...new Set(cells.map((c) => c.col))].sort((a, b) => a - b);
   const rows = [...new Set(cells.flatMap((c) => Array.from({ length: c.span }, (_, i) => c.row + i)))].sort((a, b) => a - b);
-  const colW = new Map(cols.map((c) => [c, Math.max(...cells.filter((x) => x.col === c).map((x) => x.w))]));
+  const colW = new Map(cols.map((c) => [c, Math.max(minColW?.get(c) ?? 0, ...cells.filter((x) => x.col === c).map((x) => x.w))]));
   const rowH = new Map(rows.map((r) => [r, Math.max(0, ...cells.filter((x) => x.row === r && x.span === 1).map((x) => x.h))]));
   const spanOf = (c: Cell) => rows.filter((r) => r >= c.row && r < c.row + c.span);
   for (const c of cells.filter((x) => x.span > 1)) {
@@ -403,10 +405,28 @@ function compute(a: Archetype): ViewSpec {
     const between = a.edges.filter((e) => new Set([zoneOf(e.from), zoneOf(e.to)]).size === 2 && [z1, z2].every((z) => [zoneOf(e.from), zoneOf(e.to)].includes(z))).length;
     return ZONE_GAP + 2 * PAD_X + Math.min(54, 18 * Math.max(0, between - 2));
   };
+  // A boundary is at least as wide as its own label. Where what it holds is narrower, its last
+  // column is given the difference, so the label never reaches into the boundary beside it.
+  const labelWidth = (z: ArchZone) => {
+    const gloss = glossOf(z, a);
+    return textWidth((z.title ?? z.owner).toUpperCase(), 10.5) * 1.18 + (gloss ? textWidth(gloss, 10.5) + 10 : 0) + 12;
+  };
+  const minColW = new Map<number, number>();
+  for (const z of zones) {
+    if (!["endpoint", "cloud", "vendor"].includes(z.owner)) continue;
+    const cols = [...new Set(trust.filter((b) => b.zone === z.id).map(colOf))].sort((x, y) => x - y);
+    if (!cols.length) continue;
+    const natural = (c: number) => Math.max(...trust.filter((b) => colOf(b) === c).map((b) => sizeOf(b).w));
+    const have = cols.reduce((sum, c) => sum + natural(c), 0) + template.colGap * (cols.length - 1) + 2 * PAD_X;
+    const short = labelWidth(z) + 16 - have;
+    const last = cols[cols.length - 1];
+    if (short > 0) minColW.set(last, natural(last) + short);
+  }
   const tg = grid(
     trust.map((b) => ({ id: b.id, col: colOf(b), row: rowOf(b), span: spanOf(b), ...sizeOf(b), stretch: false })),
     gapBetween,
     template.rowGap,
+    minColW,
   );
 
   const rects = new Map<string, Rect>();
@@ -435,8 +455,16 @@ function compute(a: Archetype): ViewSpec {
     if (!["endpoint", "cloud", "vendor"].includes(z.owner)) continue;
     const members = trust.filter((b) => b.zone === z.id).map((b) => rects.get(b.id)!);
     if (!members.length) continue;
-    const x = Math.min(...members.map((r) => r.x)) - PAD_X;
-    const right = Math.max(...members.map((r) => r.x + r.w)) + PAD_X;
+    let x = Math.min(...members.map((r) => r.x)) - PAD_X;
+    let right = Math.max(...members.map((r) => r.x + r.w)) + PAD_X;
+    // Wider than what it holds only to fit its label, and then evenly on both sides.
+    const need = labelWidth(z) + 16;
+    const stretched = Math.max(0, need - (right - x));
+    if (right - x < need) {
+      const extra = (need - (right - x)) / 2;
+      x -= extra;
+      right += extra;
+    }
     // Every boundary hugs what it holds, so no outline encloses an empty row.
     const y = Math.min(...members.map((r) => r.y)) - PAD_TOP;
     const bottom = Math.max(...members.map((r) => r.y + r.h)) + PAD_BOTTOM;
@@ -449,8 +477,9 @@ function compute(a: Archetype): ViewSpec {
       gloss: glossOf(z, a),
       x,
       y,
-      w: Math.max(right - x, label.w + 16),
+      w: right - x,
       h: bottom - y,
+      stretched,
       tone: z.owner === "vendor" ? "vendor" : "ours",
       primary: z.owner === template.primary,
       label,
@@ -586,7 +615,8 @@ function compute(a: Archetype): ViewSpec {
 /** A boundary's gloss: the pattern's own words, else what its owner implies where that is certain. */
 function glossOf(z: ArchZone, a: Archetype): string | undefined {
   const ours = z.owner === "endpoint" || z.owner === "cloud";
-  if (z.gloss) return ours ? `${z.gloss} · ours` : z.gloss;
+  // The pattern's own words stand alone: the outline's colour already says whose it is.
+  if (z.gloss) return z.gloss;
   if (ours) return "ours";
   if (z.owner === "vendor") return "vendor-run, under agreement";
   if (z.owner === "governance") return "ours · applies across every boundary";
