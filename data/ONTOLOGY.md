@@ -138,7 +138,11 @@ customer-owned component on it is an audit finding.
   retired (2026-09-02) as a legend entry nothing drew. Labels appear only where the flow's
   nature is not obvious from its endpoints.
 - **Boundaries** (sandboxes, shipped applications, tenants) are **containers** — a
-  `kind: boundary` block that other blocks name as their `parent` (see §4a). Sandboxing has
+  `kind: boundary` block that other blocks name as their `parent` (see §4a). A sandbox is
+  defined by what it does, not how it is built: a boundary around running code, enforced
+  from outside that code, that denies everything it does not explicitly grant. The technique
+  (process sandbox, container, user-space kernel, virtual machine) sets its strength and is
+  named only in a cloud's or a tool's own mapping. Sandboxing has
   three canonical forms, chosen by criteria: a **boundary container** when it wraps a set of
   components; a **Sandboxed tools item** when it is a contained execution path inside one
   application; a **Managed sandbox block** when it is a provider-operated product you buy.

@@ -7,7 +7,7 @@ Thirty-seven inconsistencies were reported inside the pattern files while their 
 crossings were written. Each was then checked against its file. Eighteen were real and fixed
 with a prose-only edit, twelve need a design decision and are listed below with their options,
 and seven were not issues. Onboarding a product for two patterns raised two more decisions,
-one of which (the sandbox technique) is now settled. No pin, block, flow or zone was changed by that pass.
+one of which (the sandbox technique) is now settled, as is the local runtime's egress question. No pin, block, flow or zone was changed by that pass.
 
 ## Closed
 
@@ -22,7 +22,8 @@ one of which (the sandbox technique) is now settled. No pin, block, flow or zone
 | Remote MCP server: callers drawn inside our cloud | Callers stand outside it; three inbound crossings authored. |
 | Agent federation and agent sandbox had no catalogued product | Google ADK (12 settings) and Inspect (19 settings) onboarded, every row read on the vendor's page on 2026-11-15. Neither covers every pinned control: five of federation's 13 and four of the sandbox's 11 have no row, because the vendor pages did not support one. The two patterns' example notes were corrected to match the vendors' pages. |
 | Version 1's header summary was missing from the pattern page | Restored. See [V1-COMPARISON.md](V1-COMPARISON.md). |
-| Agent sandbox: the drawing asserted a microVM round each rollout, which its example does not provide | The sandbox is now technique-neutral: compute locked down in a contained space, fresh per task, by whichever technique the operating system or provider offers. Kata Containers and gVisor stay as examples of techniques, and each cloud's mapping still names that cloud's own. |
+| Agent sandbox: the drawing asserted a microVM round each rollout, which its example does not provide | A sandbox is now defined by what it does: a boundary around running code, enforced from outside that code, that denies everything it does not explicitly grant. The technique sets its strength, not whether it is one. The definition is in the vocabulary and is used by the sandbox and personal-agent patterns; Kata Containers and gVisor stay as examples, and each cloud's mapping still names that cloud's own technique. |
+| Local model runtime: a risk note and a deviation relied on a device firewall rule that no control pinned | Removed. Running a local model needs no network rule of its own: the runtime's cloud features and model sources are controlled by the tool's own settings, and network controls belong to whatever calls the model, on that caller's pattern. |
 
 ## By design, not gaps
 
@@ -43,7 +44,6 @@ Each would change what a pattern claims, so nothing was changed.
 
 | Pattern | Question | Options |
 | --- | --- | --- |
-| Local model runtime | The data-handling risk and a deviation rely on a device firewall and a local-only switch, but no egress control is pinned. | Pin an egress or network-isolation control on the runtime; or keep it as target-state configuration and soften the risk note. |
 | Personal autonomous agent | Egress control and Execution Isolation are pinned on the sandbox, so the tools-to-open-web crossing shows no control. | Keep them on the sandbox and accept the empty row (or have the table inherit from the enclosing box); or pin egress control on the tools, as the coding-agent patterns do. |
 | Enterprise AI chat | Identity services describes domain capture, but its only pin is admin consent on the vendor's connectors. | Add an access-policy pin for domain capture; or leave it as a vendor-tenant setting and reword the box to lead with admin consent. |
 | Persistent managed agents | The source-control note relies on the vendor's git proxy holding the credential, but credential scoping is pinned only on the connector flow. | Pin credential scoping for the repository credential; or treat it as vendor-internal and soften the note to "verify per product". |
