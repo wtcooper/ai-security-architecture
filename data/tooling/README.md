@@ -180,18 +180,28 @@ is described in the note and rated `none`, because a partial rating needs a sett
 Pages that refuse automated reads (help.openai.com, help.salesforce.com, github.com from this
 environment) were not worked around; what is documented only there is left out or rated `unknown`.
 
+Onboarded 2026-11-15, one product on each of the two drawings that had none: `toolGoogleAdk` (ADK's
+A2A integration) on agent-to-agent federation and `toolInspect` (Inspect with its Docker sandbox and
+the Kubernetes sandbox provider) on the agent sandbox for RL & evaluation. Both are short on
+purpose: a row exists only where a vendor page read that day supports it, so `toolGoogleAdk` has
+rows for 8 of its drawing's 13 pins and `toolInspect` for 7 of 11, every one rated partial, and the
+pins left without a row are listed with the reason in each file's header. They show as Unverified
+in the grid and under "Unaddressed" in `docs/AUDIT.md` section 5b; that is the finding, not an
+omission to fill from memory.
+
 ## Exclusions
 
 Recorded here when a surface is deliberately left out, with the reason.
 
-- October 2026 example-only additions — Google ADK, Atlassian Rovo A2A Gateway, NVIDIA NIM
+- October 2026 example-only additions — Atlassian Rovo A2A Gateway, NVIDIA NIM
   and Hugging Face Transformers, plus ChatGPT Work Cloud, have sourced architecture examples but
   no detailed control assessment yet (Gemini Enterprise app, Workflow Builder and Amazon Quick
-  Automate were onboarded 2026-10-30). Their examples explain the implementation role; they do not claim product
+  Automate were onboarded 2026-10-30; Google ADK on 2026-11-15). Their examples explain the implementation role; they do not claim product
   control coverage. Existing example-only exclusions below remain in effect. See
   `docs/refarch-review/2026-10-03/exemplar-refresh-notes.md` for selection and mode details.
 
 - Architecture exemplars not onboarded (scope decision 2026-09-25: existing entities plus one or two mainstream products per drawing) — Perplexity Comet, Dia (browser AI — Microsoft Copilot in Edge, including Copilot Mode, and Gemini in Chrome were onboarded 2026-10-30); Goose (first-party coding); Zapier Agents (low-code); Sierra (single agent); Intercom Fin, Decagon (chat agent); Atlassian Remote MCP Server, Cloudflare remote MCP hosting (remote MCP); KServe, SGLang (self-hosted inference); Axolotl, Hugging Face PEFT (training); Temporal, LangGraph, Microsoft Agent Framework (multi-agent workflow); the A2A specification, A2A-enabled agent platforms and the identity-assertion grant (federation).
+- Federation and sandbox exemplars not chosen on 2026-11-15 (one product per drawing) — Atlassian Rovo A2A Gateway: its pages document one administrator setting (Atlassian Administration › Rovo › Agent2Agent › Enable A2A connections, off by default) and fixed OAuth scopes, too few for an entry; Microsoft Agent Framework: its A2A pages document an `auth_interceptor`, `forwarded_kwargs` and server-side accepted-kwargs allowlists and a `timeout`, a narrower fit to the federation pins than ADK's registry client, interceptors and Model Armor plugin; Kata Containers and gVisor: each is one wall (the runtime) with settings for isolation and its own network, where Inspect's settings reach the sandbox choice, egress list, tool approval, the stop and the trace. gVisor is recorded on `toolInspect` as the default runtime class of its Kubernetes chart.
 - Cursor Origin (git forge, early beta 2026-08-17) — code hosting rather than an agent runtime; the admin disable switch and the code-egress concern are recorded as facts on `toolCursorCloudAgents`.
 - OpenAI ChatGPT Atlas — winding down; browser features moved into the ChatGPT app's built-in browser (recorded as a variant of toolChatgptDesktop). The Help Center article "Evolving Atlas into ChatGPT" returned 403 to automated fetch on 2026-09-10.
 - OpenAI Agent Builder — scheduled shutdown 2026-11-30 per developers.openai.com/api/docs/guides/agent-builder; ChatKit and the Agents SDK are the replacement.

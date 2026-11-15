@@ -1,0 +1,569 @@
+# Inspect — one entity per product × reference architecture. Facts are dated (asOf) and cite the
+# vendor's own documentation; re-verify before enforcing. Schema: data/tooling/README.md.
+# Scope: Inspect as the orchestrator that provisions and drives sandboxes for agent evaluations — the
+# inspect_ai package with its built-in Docker sandbox, and the UK AI Security Institute's Kubernetes sandbox
+# provider (inspect-k8s-sandbox) with its built-in Helm chart. The other sandbox providers the Sandboxing page
+# lists (daytona, modal, ec2, proxmox, vagrant, openshell) are separate packages and are not assessed.
+# Exclusions: four of the drawing's eleven pins have no row because the pages read say nothing that could be
+# verified for them — D3-HBPI (no page describes placing rollouts on separate hosts, cores or caches), D3-FA
+# (the Sandboxing page tells the operator to pin image digests and states that Inspect's prerequisite checks
+# "do not check whether security updates are installed"; nothing scans what enters an image or a mirror),
+# AML.M0005 (weights sit with the model provider or inference tier, not with Inspect; scorer code is
+# documented as running in the evaluation process rather than the container, recorded as a risk note, but no
+# setting controls who reads graders) and D3-SYSVA (Inspect runs evaluations; no page describes red teaming
+# the containment before a run).
+# 2026-11-15: onboarded. Read as Markdown from inspect.aisi.org.uk (<page>.html.md, 200; the <page>.html URL
+# is cited): llms.txt, index, sandboxing, approval, review, setting-limits, control-channel, options,
+# eval-logs, tools-standard, extensions-sandboxes, intervention; tools-custom, handling-errors, parallelism,
+# tracing, agents, agent-bridge and tools-mcp were fetched and are not cited. errors-and-limits.html.md
+# answers 200 with a redirect stub (the content is at setting-limits.html); tool-custom.html.md and
+# security.html.md answer 404 (no such pages). Read as HTML from k8s-sandbox.aisi.org.uk (200): /,
+# security/container-runtime/, security/kubernetes-workloads/, security/network-access/,
+# helm/built-in-chart/, helm/compose-to-helm/, tips/configuration/, design/limitations/. GitHub was not
+# read (it refuses automated reads from this environment), so no advisories are recorded and the chart's
+# values.yaml was not opened: defaults are quoted from the documentation pages only.
+vendor: aisi
+family: Inspect
+tools:
+  - id: toolInspect
+    name: Inspect
+    surfaceClasses:
+      - sdkFramework
+    variants:
+      - name: inspect_ai (Python package and inspect CLI, Docker sandbox built in)
+        class: sdkFramework
+        url: https://inspect.aisi.org.uk/sandboxing.html
+      - name: inspect-k8s-sandbox (Kubernetes sandbox provider, built-in agent-env Helm chart)
+        class: sdkFramework
+        url: https://k8s-sandbox.aisi.org.uk/
+    architecture: archAgentSandbox
+    asOf: "2026-11"
+    summary:
+      - >-
+        An open-source framework for model evaluations, developed by the UK AI Security Institute and Meridian
+        Labs. A task gives a model tools; the tool, agent and scorer code runs in the Inspect process, and the
+        work that code requests through sandbox() — shell commands, Python, file reads and writes — runs in a
+        sandbox provisioned per sample. Docker is built in; the Kubernetes provider installs a Helm release for
+        each sandbox in a cluster while the Inspect process stays on the operator's machine.
+      - >-
+        Inspect is the orchestrator on this drawing, not the wall. It decides which sandbox a sample gets, what
+        network that sandbox has, which tool calls run, when a sample stops and where the transcript is written;
+        the isolation itself is Docker's or, on Kubernetes, the cluster's runtime class (gVisor by default in
+        the built-in chart) and Cilium network policies. The host network, the cloud perimeter, the package
+        mirror and the inference tier are outside it.
+    facts:
+      - label: Plans
+        value: >-
+          Open-source framework for large language model evaluations (pip install inspect-ai); the Kubernetes
+          sandbox is the separate inspect-k8s-sandbox package, created by the UK AI Security Institute.
+        url: https://inspect.aisi.org.uk/
+      - label: Inference & routing
+        value: >-
+          The model under evaluation is called from the Inspect process, with provider API keys and defaults
+          read from the command line, environment variables or a .env file.
+        url: https://inspect.aisi.org.uk/options.html
+      - label: Data leaving the device
+        value: >-
+          Model requests go from the Inspect process to the model provider; an evaluation log is written for
+          each task to the log directory, ./logs by default or a remote filesystem such as an S3 bucket.
+        url: https://inspect.aisi.org.uk/eval-logs.html
+      - label: Retention & training
+        value: >-
+          Logs are files in the directory the operator chooses and are kept until removed there; the pages read
+          describe no vendor-side storage of evaluation data and state no training policy.
+        url: https://inspect.aisi.org.uk/eval-logs.html
+      - label: Docs index
+        value: inspect.aisi.org.uk (index at /llms.txt) and k8s-sandbox.aisi.org.uk for the Kubernetes provider
+        url: https://inspect.aisi.org.uk/llms.txt
+    items:
+      - title: A custom Compose file replaces the no-network default
+        body:
+          - >-
+            The Compose configuration Inspect generates sets network_mode none. Supplying your own compose.yaml
+            or ComposeConfig replaces that configuration rather than extending it, and Docker Compose's default
+            is a network with outbound Internet access, so write network_mode none into every service yourself.
+        links:
+          - title: Sandboxing — Task Configuration
+            url: https://inspect.aisi.org.uk/sandboxing.html
+      - title: The sandbox does not contain the evaluation process
+        body:
+          - >-
+            Provisioning a sandbox does not run tools, agents or scorers in the container; that code runs in the
+            Inspect process and may reach the internet. Only what it requests through sandbox() is contained,
+            and tools that do not use the sandbox, such as web_search(), are unaffected by network_mode none.
+        links:
+          - title: Sandboxing
+            url: https://inspect.aisi.org.uk/sandboxing.html
+    riskNotes:
+      - risk: riskRogueActions
+        note: >-
+          The Docker checks block writable host mounts only: the page states that privileged containers, host
+          devices or Docker sockets can still give an agent access to the host, and that custom tools, agents
+          and scorers run outside the sandbox with the evaluation process's network.
+      - risk: riskEvaluationBenchmarkManipulation
+        note: >-
+          Scorer code runs in the Inspect process rather than the container, but Sample files and the setup
+          script are copied into the sandbox the agent works in, and a scorer that reads the sandbox reads state
+          the agent could have changed.
+      - risk: riskInsecureIntegratedComponent
+        note: >-
+          The default Docker sandbox and several examples use mutable image tags such as python:3.12-bookworm,
+          and Inspect's prerequisite checks do not check whether security updates are installed on Docker, the
+          container runtime or the host.
+    controls:
+      - mitigation: D3-EI
+        coverage: partial
+        mechanism: >-
+          A sandbox instance per sample (Docker container, or a Helm release of pods on Kubernetes whose runtime
+          class defaults to gvisor), with writable host mounts blocked on Docker and resources cleaned up when
+          the task completes; the wall is the container runtime's, not Inspect's
+        steps:
+          - title: Give every tool-using task a real sandbox
+            body:
+              - >-
+                Set sandbox="docker" or sandbox="k8s" on the Task (or --sandbox on the command line); the local
+                type runs in the evaluation's own file system and is documented as no sandbox.
+            url: https://inspect.aisi.org.uk/sandboxing.html
+          - title: Keep the gVisor runtime class on Kubernetes
+            body:
+              - >-
+                Leave runtimeClassName at its default gvisor in the built-in chart's values; do not set runc or
+                CLUSTER_DEFAULT unless a task cannot run under gVisor.
+            url: https://k8s-sandbox.aisi.org.uk/helm/built-in-chart/
+          - title: Leave writable host mounts blocked
+            body:
+              - >-
+                Do not set unsafe_allow_writable_host_mounts under x-inspect_docker_sandbox; share a host
+                directory read-only with :ro, or copy inputs with Sample.files.
+            url: https://inspect.aisi.org.uk/sandboxing.html
+        note: >-
+          Partial on the SDK sandbox rule used elsewhere in the registry (the framework offers isolation
+          backends; nothing is isolated unless the operator picks one, and the code that drives the sandbox runs
+          outside it). Inside the boundary: commands and file operations requested through sandbox(). Outside:
+          tool, agent and scorer code in the Inspect process, and tools that do not use the sandbox. Docker is a
+          container on a shared kernel, not the microVM this drawing puts around each rollout; the Kubernetes
+          chart's default is gVisor, a user-space kernel, where the cluster has that RuntimeClass. Docker's
+          mount checks do not cover privileged containers, host devices or Docker sockets. Patching Docker, the
+          runtime and the host is stated to be the operator's.
+        verified: "2026-11-15"
+      - mitigation: D3-NI
+        coverage: partial
+        mechanism: >-
+          network_mode none on the Docker container (set in the configuration Inspect generates), and on
+          Kubernetes Cilium Network Policies rendered by the built-in chart that confine pods to their own Helm
+          release
+        steps:
+          - title: Keep containers off the network
+            body:
+              - >-
+                Include network_mode none in every service of a custom compose.yaml or ComposeConfig; a custom
+                configuration replaces the generated one, including its network_mode none.
+            url: https://inspect.aisi.org.uk/sandboxing.html
+          - title: Keep the chart's network policies on
+            body:
+              - >-
+                Leave networkPolicy.enabled at its default in the cluster-wide values file named by
+                INSPECT_SANDBOX_VALUES; with it false the chart restricts nothing.
+            url: https://k8s-sandbox.aisi.org.uk/security/network-access/
+        note: >-
+          Partial: this is the sandbox's own network, the innermost of the layers this drawing pins. Inspect
+          sets nothing on the host network, cloud firewalls or security groups, which are the wall the drawing
+          means to hold when the sandbox has fallen. On Kubernetes the policies need Cilium in the cluster; the
+          chart confines pods to their Helm release, which is isolation between samples at pod level, not between
+          sandbox hosts.
+        verified: "2026-11-15"
+      - mitigation: cap-agent-egress-control
+        coverage: partial
+        mechanism: >-
+          On Kubernetes, the built-in chart denies internet access by default and admits only allowDomains
+          (TCP 80/443 unless allowDomainsPorts adds more), allowCIDR and allowEntities, with DNS lookups
+          restricted to services in the namespace and the allowDomains list; on Docker, network_mode none or
+          a Compose internal network, with no destination allowlist
+        steps:
+          - title: List the destinations a run may reach
+            body:
+              - >-
+                Leave allowDomains empty, or populate it in the task's values.yaml with only the mirror and
+                service hosts the run needs; never set allowDomains to ["*"] or allowEntities to "all".
+            url: https://k8s-sandbox.aisi.org.uk/helm/built-in-chart/
+          - title: Use an internal network on Docker
+            body:
+              - >-
+                Where services only need to reach each other, use a Compose internal network, which allows
+                service-to-service traffic without external connectivity.
+            url: https://inspect.aisi.org.uk/sandboxing.html
+        note: >-
+          Partial: an allowlist with DNS confined to it exists on the Kubernetes provider's built-in chart only,
+          enforced by Cilium in the cluster (a cluster with networkPolicy.enabled false gets none of it, and a
+          custom Helm chart carries whatever policies its author writes). The Docker provider is all-or-nothing: the page says
+          there is no native way to specify which domains are accessible in Docker Compose. The documentation
+          notes that domain fronting through ECH remains possible in extreme cases and recommends against
+          allowing internet access at all. The list covers the sandbox pods, not the Inspect process.
+        verified: "2026-11-15"
+      - mitigation: AML.M0028
+        coverage: partial
+        mechanism: >-
+          Approval policies (--approval or approval=) name an approver per tool and per argument glob; once a
+          policy is active a tool call no approver handles is rejected. Tools take a user parameter for the
+          account their commands run as
+        steps:
+          - title: Put an approval policy on agentic tasks
+            body:
+              - >-
+                Pass --approval with a policy file whose approvers list covers every tool: a custom approver for
+                bash and python, and auto with tools "*" last only if the remaining tools are to run unapproved.
+            url: https://inspect.aisi.org.uk/approval.html
+          - title: Run tools as an unprivileged user
+            body:
+              - >-
+                Pass user to bash(), bash_session() and the read-only file tools (read_file(), list_files(),
+                grep()), so they run as a named account rather than the sandbox's default user.
+            url: https://inspect.aisi.org.uk/tools-standard.html
+        note: >-
+          Partial: the policy decides which tool calls run, seeing the call's arguments; what a permitted bash or
+          python call then does inside the sandbox is bounded by the sandbox, not by the policy. The Sandboxing page
+          adds that if the sandbox's default user is root, omitting user still gives root access. Approval is off
+          unless enabled, a remote MCP server raises an error while a policy is active because its calls are
+          made by the model provider, and for bridged agents an approval records that a call was permitted, not
+          that it ran. The human approver needs a person, which a rollout at scale does not have, so in practice
+          the control is a custom approver the operator writes. This drawing's own pin — the package mirror
+          read-only to a rollout — is a property of the mirror, outside Inspect.
+        verified: "2026-11-15"
+      - mitigation: D3-AA
+        coverage: partial
+        mechanism: >-
+          On Kubernetes, serviceAccountName selects an externally managed ServiceAccount for cloud workload
+          identity, and the service-account API token is not mounted unless automountServiceAccountToken is set
+          to true; the Docker provider documents no workload identity
+        steps:
+          - title: Keep the Kubernetes API token out of sandboxes
+            body:
+              - >-
+                Leave automountServiceAccountToken at its default of disabled; if a sandbox must hold an
+                identity, set serviceAccountName to a dedicated, least-privileged ServiceAccount that no
+                controller shares.
+            url: https://k8s-sandbox.aisi.org.uk/security/kubernetes-workloads/
+        note: >-
+          Partial: the chart lets the operator attach an identity to a sandbox and withholds the cluster API
+          credential by default, but it issues nothing per rollout — the page states that concurrent samples
+          selecting the same ServiceAccount share one Kubernetes identity. A short-lived token per rollout,
+          scoped to the calls that rollout needs and verified by each platform service, is the cluster's workload
+          identity and the services' own check.
+        verified: "2026-11-15"
+      - mitigation: cap-agent-tracing
+        coverage: partial
+        mechanism: >-
+          An evaluation log per task written by the Inspect process to --log-dir (./logs by default, or a remote
+          filesystem such as S3), holding each sample's transcript, with approval decisions, operator
+          interventions and mid-run configuration changes recorded in it
+        steps:
+          - title: Write logs off the evaluation host
+            body:
+              - >-
+                Set --log-dir or INSPECT_LOG_DIR to a bucket URL such as s3://<bucket>; the page describes S3 as
+                a more permanent and secure store than the local filesystem.
+            url: https://inspect.aisi.org.uk/eval-logs.html
+          - title: Keep sample details in the log
+            body:
+              - >-
+                Do not pass --no-log-samples, which stops sample details being logged.
+            url: https://inspect.aisi.org.uk/options.html
+        note: >-
+          Partial: trajectories only. The log is written by the Inspect process, outside the container, so a
+          sandboxed agent does not write it; whether it can be altered afterwards is the bucket's access policy,
+          which Inspect does not set. Host telemetry under the sandbox is not described as collected. Automatic
+          approvals by the auto approver are not shown in the transcript for bridged agents.
+        verified: "2026-11-15"
+      - mitigation: cap-agent-kill-switch
+        coverage: partial
+        mechanism: >-
+          Stops enforced by the Inspect process: per-sample time, working, token, message and cost limits; a
+          terminate decision from an approver (before a tool call) or a reviewer (on its result); and inspect ctl
+          task cancel, sample cancel and process pause --now from a second terminal
+        steps:
+          - title: Bound every sample
+            body:
+              - >-
+                Set --time-limit and --token-limit (or time_limit and token_limit on the Task), and a timeout on
+                bash() and python(), so a sample ends without anyone watching it.
+            url: https://inspect.aisi.org.uk/setting-limits.html
+          - title: Stop on what a tool call does
+            body:
+              - >-
+                Add a reviewer to the review policy that returns terminate when a tool result shows prohibited
+                activity; the sample ends and parallel tool calls still running are cancelled.
+            url: https://inspect.aisi.org.uk/review.html
+          - title: Cancel from outside the run
+            body:
+              - >-
+                Run inspect ctl task cancel <task> to interrupt in-flight samples and finalise the log, or
+                inspect ctl process pause --now to hold them at their next model call.
+            url: https://inspect.aisi.org.uk/control-channel.html
+        note: >-
+          Partial on the registry's kill-switch rule (state whether active work stops, and the delay). The stop
+          is taken by the orchestrator, outside every sandbox, and reaches running samples: a lowered time limit
+          cancels a sample past its deadline immediately, and task cancel interrupts in-flight samples. But the
+          automatic trigger for serious-risk activity is a custom approver or reviewer the operator writes — the
+          shipped limits fire on time, tokens, messages and cost — and both act only at a tool call or its result.
+          Cancelling one tool call is cooperative and "not a guarantee the tool stops"; a hard pause holds
+          in-flight samples at their next model call rather than interrupting what is already running. The
+          control endpoint is a Unix socket for the same user on the evaluation host, not a remote
+          switch, and whether sandbox processes are killed at the moment of cancel, rather than at the cleanup
+          when the task completes, is not stated.
+        verified: "2026-11-15"
+    # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md). The first group
+    # is inspect_ai itself (task code, the inspect CLI, the Compose file of the Docker sandbox); the second is
+    # the Kubernetes provider's built-in Helm chart values. Verified 2026-11-15 against inspect.aisi.org.uk and
+    # k8s-sandbox.aisi.org.uk.
+    settings:
+      - id: sandboxType
+        name: --sandbox
+        where: inspect eval --sandbox, or sandbox= on eval(), a Task or a Sample
+        setVia: [apiCli, code]
+        area: tools
+        default: None; a sandbox must be specified if any tool, agent or scorer calls sandbox()
+        recommended: docker or k8s on every task whose tools run commands; never local outside another sandbox
+        why: Commands and file operations the tools request run in a per-sample container instead of the file system of the machine running the evaluation.
+        mitigations: [D3-EI]
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: networkModeNone
+        name: "network_mode: none"
+        where: Each service in compose.yaml, or ComposeService(network_mode="none") in a ComposeConfig
+        setVia: [configFile, code]
+        area: network
+        default: Set in the Compose configuration Inspect generates; a custom configuration replaces it, and Docker Compose's default has outbound Internet access
+        recommended: "network_mode: none on every service, unless the evaluation requires networking"
+        why: Processes inside the container have no network at run time; the evaluation process and tools that do not use the sandbox are not restricted by it.
+        mitigations: [D3-NI, cap-agent-egress-control]
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: composeInternalNetwork
+        name: internal network
+        where: The networks section of compose.yaml, for services that only need to reach each other
+        setVia: [configFile]
+        area: network
+        default: Not used
+        recommended: An internal network for multi-service task environments, instead of omitting network_mode
+        why: Services reach each other without external connectivity; omitting network_mode would give the project outbound access.
+        mitigations: [D3-NI, cap-agent-egress-control]
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: unsafeWritableHostMounts
+        name: unsafe_allow_writable_host_mounts
+        where: x-inspect_docker_sandbox in the Compose file
+        setVia: [configFile]
+        area: tools
+        default: Not set; Inspect blocks volume mounts that give Docker sandboxes write access to files or directories on the host
+        recommended: Not set; share host directories with :ro, copy inputs with Sample.files or use a Docker-managed volume
+        why: An agent with write access to a host directory can change files outside the sandbox, such as rewriting compose.yml to give later samples more privileges.
+        mitigations: [D3-EI]
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: containerResources
+        name: cpus / mem_limit
+        where: Each service in compose.yaml (or ComposeService); on Kubernetes, resources in the built-in chart's values
+        setVia: [configFile, code]
+        area: tools
+        default: None stated for Docker; the built-in Helm chart assigns each service limits and requests of 2Gi memory and 500m CPU
+        recommended: A CPU and memory limit on every service
+        why: A container cannot consume more of the host's CPU and memory than its limit.
+        mitigations: [D3-EI]
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: sandboxCleanup
+        name: --no-sandbox-cleanup
+        where: inspect eval --no-sandbox-cleanup, or sandbox_cleanup=False on eval(); inspect sandbox cleanup <provider> removes what is left
+        setVia: [apiCli, code]
+        area: tools
+        default: Off; Inspect cleans up the sandbox's containers, images and networks when a task completes
+        recommended: Off, with inspect sandbox cleanup run after any interrupted evaluation
+        why: Sandboxes an agent has worked in are removed rather than left running on the host after the task.
+        mitigations: [D3-EI]
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: imageDigest
+        name: image
+        where: The image key of each service in compose.yaml, written as <image>:<tag>@sha256:<digest>
+        setVia: [configFile]
+        area: tools
+        default: Mutable tags; with no configuration the sandbox is built on the official python:3.12-bookworm image
+        recommended: A pinned digest for every sandbox image, updated deliberately
+        why: A tag can refer to a different image when the publisher releases updates; a digest fixes which image a rollout runs in.
+        mitigations: []
+        url: https://inspect.aisi.org.uk/sandboxing.html
+        verified: "2026-11-15"
+      - id: toolUser
+        name: user
+        where: The user parameter of bash(), bash_session(), read_file(), list_files() and grep()
+        setVia: [code]
+        area: tools
+        default: The sandbox's default user
+        recommended: A named unprivileged user for the agent's tools
+        why: The agent's commands and file reads run as that account rather than as the sandbox's default user.
+        mitigations: [AML.M0028]
+        url: https://inspect.aisi.org.uk/tools-standard.html
+        verified: "2026-11-15"
+      - id: approvalPolicy
+        name: --approval
+        where: inspect eval --approval <policy file or approver>, approval= on eval(), or approval= on a Task
+        setVia: [apiCli, configFile, code]
+        area: tools
+        default: Not enabled
+        recommended: A policy file with an approver for every tool — a custom approver for bash and python — and no blanket auto approval of shell tools
+        why: Once a policy is active a tool call that no approver handles is rejected, and an approver can reject a call or terminate the sample.
+        mitigations: [AML.M0028, cap-agent-kill-switch]
+        url: https://inspect.aisi.org.uk/approval.html
+        verified: "2026-11-15"
+      - id: reviewPolicy
+        name: --review
+        where: inspect eval --review, review= on eval(), or a review policy at the task level naming each reviewer and the tools it covers
+        setVia: [apiCli, configFile, code]
+        area: audit
+        default: Not enabled; a result no policy covers continues
+        recommended: A custom reviewer over the shell and network-capable tools that returns terminate on prohibited activity
+        why: The reviewer sees each tool result before the model does and can end the sample on evidence that exists only in tool output.
+        mitigations: [cap-agent-kill-switch]
+        url: https://inspect.aisi.org.uk/review.html
+        verified: "2026-11-15"
+      - id: sampleLimits
+        name: --time-limit / --working-limit / --token-limit / --message-limit / --cost-limit
+        where: inspect eval options, or time_limit, working_limit, token_limit, message_limit and cost_limit on a Task or eval()
+        setVia: [apiCli, code]
+        area: tools
+        default: None stated; a limit applies only when set
+        recommended: A time limit and a token limit on every agentic task, with a working limit only alongside a time limit
+        why: A sample that exceeds a limit exits early without an operator; working time can undercount, so the page says to always set a time limit with it.
+        mitigations: [cap-agent-kill-switch]
+        url: https://inspect.aisi.org.uk/setting-limits.html
+        verified: "2026-11-15"
+      - id: controlServer
+        name: --ctl-server
+        where: inspect eval --ctl-server, or INSPECT_EVAL_CTL_SERVER; the inspect ctl commands connect to it
+        setVia: [apiCli, configFile]
+        area: audit
+        default: On; the endpoint is a Unix domain socket not reachable over the network or by other users on the machine
+        recommended: On, so inspect ctl task cancel, sample cancel and process pause --now are available during a run
+        why: A running task or sample can be cancelled, or held at its next model call, from outside the evaluation without killing the process.
+        mitigations: [cap-agent-kill-switch]
+        url: https://inspect.aisi.org.uk/control-channel.html
+        verified: "2026-11-15"
+      - id: logDir
+        name: --log-dir / INSPECT_LOG_DIR
+        where: inspect eval --log-dir, or INSPECT_LOG_DIR in the environment or a .env file
+        setVia: [apiCli, configFile]
+        area: audit
+        default: ./logs
+        recommended: A bucket URL (for example s3://<bucket>) that sandboxes hold no credentials for
+        why: Each task's log leaves the evaluation host for a store the page describes as more permanent and secure than the local filesystem.
+        mitigations: [cap-agent-tracing]
+        url: https://inspect.aisi.org.uk/eval-logs.html
+        verified: "2026-11-15"
+      - id: logSamples
+        name: --no-log-samples
+        where: inspect eval --no-log-samples
+        setVia: [apiCli]
+        area: audit
+        default: Off (sample details are logged)
+        recommended: "Off"
+        why: With the flag set the log has no sample details, so what an agent did in a rollout could not be read afterwards.
+        mitigations: [cap-agent-tracing]
+        url: https://inspect.aisi.org.uk/options.html
+        verified: "2026-11-15"
+      - id: k8sRuntimeClassName
+        name: runtimeClassName
+        where: services.<name>.runtimeClassName in the built-in chart's values.yaml
+        setVia: [configFile]
+        area: tools
+        default: gvisor
+        recommended: gvisor; an explicit other class only for a task that cannot run under it, never CLUSTER_DEFAULT
+        why: Untrusted model-generated code runs under gVisor's runsc runtime rather than runc on the node's kernel.
+        mitigations: [D3-EI]
+        requires: inspect-k8s-sandbox, and a RuntimeClass named gvisor in the cluster
+        url: https://k8s-sandbox.aisi.org.uk/helm/built-in-chart/
+        verified: "2026-11-15"
+      - id: k8sAllowDomains
+        name: allowDomains
+        where: allowDomains (with allowDomainsPorts) in the built-in chart's values.yaml
+        setVia: [configFile]
+        area: network
+        default: Empty; containers cannot access the internet, and DNS lookups are restricted to services in the namespace
+        recommended: Empty, or only the internal mirror and service hosts a run needs; never ["*"]
+        why: Egress and DNS lookups are limited to the listed domains, on TCP 80/443 unless allowDomainsPorts adds a port, which closes exfiltration through DNS queries to other names.
+        mitigations: [cap-agent-egress-control, D3-NI]
+        requires: inspect-k8s-sandbox on a cluster running Cilium
+        url: https://k8s-sandbox.aisi.org.uk/helm/built-in-chart/
+        verified: "2026-11-15"
+      - id: k8sAllowCidrEntities
+        name: allowCIDR / allowEntities
+        where: allowCIDR and allowEntities in the built-in chart's values.yaml
+        setVia: [configFile]
+        area: network
+        default: Not set
+        recommended: Not set; never allowEntities "world" or "all"
+        why: Each entry becomes a toCIDRs or toEntities rule in the Cilium Network Policy, so a broad value opens the sandbox to the internet.
+        mitigations: [cap-agent-egress-control]
+        requires: inspect-k8s-sandbox on a cluster running Cilium
+        url: https://k8s-sandbox.aisi.org.uk/helm/built-in-chart/
+        verified: "2026-11-15"
+      - id: k8sNetworkPolicyEnabled
+        name: networkPolicy.enabled
+        where: networkPolicy.enabled in the built-in chart's values; cluster-wide through the values file named by INSPECT_SANDBOX_VALUES
+        setVia: [configFile]
+        area: network
+        default: Policies rendered; the built-in chart uses Cilium Network Policies and restricts pods to their own Helm release
+        recommended: Left enabled; false only on a cluster whose own runtime enforces egress and isolation
+        why: With it false the chart renders no network policies and restricts nothing, and a task that declares an allowlist, networks or network_mode none fails at install.
+        mitigations: [D3-NI, cap-agent-egress-control]
+        requires: inspect-k8s-sandbox on a cluster running Cilium
+        url: https://k8s-sandbox.aisi.org.uk/security/network-access/
+        verified: "2026-11-15"
+      - id: k8sServiceAccountToken
+        name: automountServiceAccountToken
+        where: automountServiceAccountToken, with serviceAccountName, in the built-in chart's values.yaml
+        setVia: [configFile]
+        area: identity
+        default: Disabled; sandbox pods do not mount a Kubernetes service-account API token
+        recommended: Disabled; where a sandbox needs an identity, serviceAccountName set to a dedicated least-privileged ServiceAccount
+        why: Untrusted sandbox code does not hold the cluster's API credentials, and any identity it is given is one no controller shares.
+        mitigations: [D3-AA]
+        requires: inspect-k8s-sandbox
+        url: https://k8s-sandbox.aisi.org.uk/security/kubernetes-workloads/
+        verified: "2026-11-15"
+    sources:
+      - title: Inspect — welcome
+        url: https://inspect.aisi.org.uk/
+      - title: Inspect — Sandboxing
+        url: https://inspect.aisi.org.uk/sandboxing.html
+      - title: Inspect — Tool Approval
+        url: https://inspect.aisi.org.uk/approval.html
+      - title: Inspect — Tool Result Review
+        url: https://inspect.aisi.org.uk/review.html
+      - title: Inspect — Setting Limits
+        url: https://inspect.aisi.org.uk/setting-limits.html
+      - title: Inspect — Control Channel
+        url: https://inspect.aisi.org.uk/control-channel.html
+      - title: Inspect — Options
+        url: https://inspect.aisi.org.uk/options.html
+      - title: Inspect — Log Files
+        url: https://inspect.aisi.org.uk/eval-logs.html
+      - title: Inspect — Standard Tools
+        url: https://inspect.aisi.org.uk/tools-standard.html
+      - title: Inspect — Sandbox extensions
+        url: https://inspect.aisi.org.uk/extensions-sandboxes.html
+      - title: Inspect K8s Sandbox — introduction
+        url: https://k8s-sandbox.aisi.org.uk/
+      - title: Inspect K8s Sandbox — Built-in Helm Chart
+        url: https://k8s-sandbox.aisi.org.uk/helm/built-in-chart/
+      - title: Inspect K8s Sandbox — Container Runtime
+        url: https://k8s-sandbox.aisi.org.uk/security/container-runtime/
+      - title: Inspect K8s Sandbox — Kubernetes Workloads
+        url: https://k8s-sandbox.aisi.org.uk/security/kubernetes-workloads/
+      - title: Inspect K8s Sandbox — Network Access
+        url: https://k8s-sandbox.aisi.org.uk/security/network-access/
+      - title: Inspect K8s Sandbox — Compose to Helm
+        url: https://k8s-sandbox.aisi.org.uk/helm/compose-to-helm/
+      - title: Inspect K8s Sandbox — Advanced Configuration
+        url: https://k8s-sandbox.aisi.org.uk/tips/configuration/
+      - title: Inspect K8s Sandbox — Limitations
+        url: https://k8s-sandbox.aisi.org.uk/design/limitations/
