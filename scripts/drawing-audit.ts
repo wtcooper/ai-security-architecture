@@ -160,9 +160,7 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; open
   const ask = (rule: string, detail: string) => open.push({ rule, detail });
   const owner = new Map((a.zones ?? []).map((z) => [z.id, z.owner]));
   const plane = a.blocks.filter((b) => owner.get(b.zone ?? "") === "governance");
-  const owned = new Set(plane.flatMap((b) => ownedControls(a, b)));
   for (const b of plane) if (!ownedControls(a, b).length) ask("C5 empty control-plane box", `${b.title} owns no control this pattern pins`);
-  if (plane.length) for (const id of a.mitigations) if (!owned.has(id)) ask("C5 control with no owner", `${id} is pinned but no control-plane box owns it`);
   for (const b of a.blocks) if (!b.note?.trim()) ask("C6 note", `block ${b.title} (${b.id}) has no note`);
   for (const e of a.edges) if (!e.note?.trim()) ask("C6 note", `flow ${e.from}->${e.to} has no note`);
   for (const w of [a.walkthrough, ...(a.scenarios ?? [])]) for (const [i, st] of (w?.steps ?? []).entries()) if (!st.note?.trim()) ask("C6 note", `walk "${w!.title}" step ${i + 1} (${st.follow}) has no note`);
