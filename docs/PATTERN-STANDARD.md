@@ -20,7 +20,7 @@ particular.
 
 | Rule | What it means | How it is checked |
 | --- | --- | --- |
-| **L1 Size** | The drawing is at most 1440px wide and 980px tall, so on a 1366px laptop it shows at no less than 90% and without scrolling sideways. | Audit |
+| **L1 Size** | The drawing is at most 1440px wide, so on a 1366px laptop it shows at no less than 90% and never scrolls sideways, and at most 1080px tall, so the expanded view fits a 1080p screen. | Audit |
 | **L2 Boundaries are respected** | An arrow never runs through a trust boundary that neither of its ends is in. A flow from a person to the vendor goes round our cloud, not through it. | Audit |
 | **L3 Containers are respected** | An arrow never runs through a container (a box that holds others) that neither of its ends is in. | Audit |
 | **L4 Words are clear** | Every labelled flow shows its label, and no label sits on a box, on another label, or across another arrow. | Audit |

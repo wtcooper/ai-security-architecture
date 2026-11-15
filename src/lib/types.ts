@@ -395,6 +395,11 @@ export interface ArchBlock {
   row: number;
   /** Vertical span, for tall side columns like a governance plane. */
   rowSpan?: number;
+  /**
+   * The block's grid cell on the boundary drawing, where it should differ from `col` and `row`
+   * (which place it on the detailed canvas). Used to fold a wide zone into fewer columns.
+   */
+  cell?: { col: number; row: number; rowSpan?: number };
   note?: string;
   /** Risk-map anchor, so the block links back to the component it instantiates. */
   cosaiComponent?: string;

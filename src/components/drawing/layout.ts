@@ -50,6 +50,8 @@ export interface ViewBox extends Rect {
   lines: number;
   /** Controls the box owns, drawn inside it (control-plane boxes only). */
   chipRows: number;
+  /** A container's heading height: its title and one-liner, above what it holds. */
+  header?: number;
 }
 
 export interface ViewLabel {
@@ -92,11 +94,11 @@ interface Template {
 
 export const TEMPLATES: Record<string, Template> = {
   // A tool on a managed device: the device leads, and most crossings drop to the internet beneath it.
-  surfaceEndpoint: { primary: "endpoint", colGap: 86, rowGap: 52, externalGap: 64 },
+  surfaceEndpoint: { primary: "endpoint", colGap: 76, rowGap: 48, externalGap: 60 },
   // An application we build: one wide boundary of ours, read left to right.
-  surfaceCloud: { primary: "cloud", colGap: 92, rowGap: 50, externalGap: 60 },
+  surfaceCloud: { primary: "cloud", colGap: 80, rowGap: 48, externalGap: 58 },
   // A vendor-hosted service: the vendor's boundary leads, ours sits beside it.
-  surfaceSaas: { primary: "vendor", colGap: 88, rowGap: 50, externalGap: 60 },
+  surfaceSaas: { primary: "vendor", colGap: 78, rowGap: 48, externalGap: 58 },
 };
 
 const LEAF_W = 166;
@@ -107,12 +109,12 @@ const HEADER = 52;
 const KID_PAD = 24;
 const KID_COL_GAP = 60;
 const KID_ROW_GAP = 40;
-const PAD_X = 24;
+const PAD_X = 20;
 const PAD_TOP = 38;
 const PAD_BOTTOM = 24;
-const ZONE_GAP = 64;
-const PEOPLE_GAP = 74;
-const MARGIN = 30;
+const ZONE_GAP = 56;
+const PEOPLE_GAP = 58;
+const MARGIN = 26;
 /** Clear space above the boundaries, for arrows that go over the top. */
 const TOP = 62;
 const EXT_BOX_GAP = 40;
@@ -161,6 +163,11 @@ export const summaryOf = (block: ArchBlock) => block.summary ?? (block.items ?? 
 
 const keyOf = (e: { from: string; to: string }) => `${e.from}->${e.to}`;
 
+/** A block's cell on this drawing: its own `cell` where the pattern gives one, else the canvas's. */
+const colOf = (b: ArchBlock) => b.cell?.col ?? b.col;
+const rowOf = (b: ArchBlock) => b.cell?.row ?? b.row;
+const spanOf = (b: ArchBlock) => (b.cell ? b.cell.rowSpan ?? 1 : b.rowSpan ?? 1);
+
 // --- Placement -------------------------------------------------------------------
 
 interface Cell {
@@ -170,7 +177,7 @@ interface Cell {
   span: number;
   w: number;
   h: number;
-  /** A container fills the rows it spans; a leaf centres in them. */
+  /** Fill the rows it spans. Nothing does today: a container is as tall as its contents. */
   stretch: boolean;
 }
 
@@ -205,7 +212,8 @@ function grid(cells: Cell[], colGap: (a: number, b: number) => number, rowGap: n
     const height = rowY.get(rs[rs.length - 1])! + rowH.get(rs[rs.length - 1])! - top;
     const w = c.stretch ? colW.get(c.col)! : c.w;
     const h = c.stretch ? height : c.h;
-    at.set(c.id, { x: colX.get(c.col)! + (colW.get(c.col)! - w) / 2, y: top + (height - h) / 2, w, h });
+    // One row: centred in it. Several: level with the first, so a container starts where its row does.
+    at.set(c.id, { x: colX.get(c.col)! + (colW.get(c.col)! - w) / 2, y: c.span > 1 ? top : top + (height - h) / 2, w, h });
   }
   const last = cols[cols.length - 1];
   const lastRow = rows[rows.length - 1];
@@ -237,6 +245,8 @@ const T2 = 24;
 /** Two parallel arrows are never drawn closer than this. */
 const CLEAR = 9;
 const BEND = 30;
+/** What a step inside a boundary that is neither end's costs, per pixel: enough to go round it. */
+const FOREIGN_ZONE = 6;
 
 type LineKind = "edge" | "port" | "soft";
 
@@ -345,20 +355,26 @@ function compute(a: Archetype): ViewSpec {
   // Sizes, innermost first. A container is as large as the grid of what it holds.
   const inner = new Map<string, ReturnType<typeof grid>>();
   const sizes = new Map<string, { w: number; h: number }>();
+  const headers = new Map<string, number>();
   const sizeOf = (b: ArchBlock): { w: number; h: number } => {
     const known = sizes.get(b.id);
     if (known) return known;
     let s: { w: number; h: number };
     if (isContainer(b)) {
       const g = grid(
-        kids.get(b.id)!.map((k) => ({ id: k.id, col: k.col, row: k.row, span: k.rowSpan ?? 1, ...sizeOf(k), stretch: isContainer(k) })),
+        kids.get(b.id)!.map((k) => ({ id: k.id, col: colOf(k), row: rowOf(k), span: spanOf(k), ...sizeOf(k), stretch: false })),
         () => KID_COL_GAP,
         KID_ROW_GAP,
       );
       inner.set(b.id, g);
-      s = { w: Math.max(g.w, LEAF_W) + 2 * KID_PAD, h: HEADER + g.h + KID_PAD };
+      const w = Math.max(g.w, LEAF_W) + 2 * KID_PAD;
+      // A container's heading is its title and a one-liner of up to two lines.
+      const sub = summaryOf(b);
+      const header = HEADER + (sub && wrap(sub, w - 24, 10.5, 2).length > 1 ? 13 : 0);
+      headers.set(b.id, header);
+      s = { w, h: header + g.h + KID_PAD };
     } else if (isPerson(b)) s = { w: ACTOR_W, h: summaryOf(b) ? ACTOR_H : 40 };
-    else s = { w: LEAF_W + 34 * Math.max(0, degree(b.id) - 4), h: LEAF_H };
+    else s = { w: LEAF_W + 16 * Math.max(0, degree(b.id) - 4), h: LEAF_H };
     sizes.set(b.id, s);
     return s;
   };
@@ -366,12 +382,12 @@ function compute(a: Archetype): ViewSpec {
   const top = a.blocks.filter((b) => !b.parent);
   const trust = top.filter((b) => ["user", "endpoint", "cloud", "vendor"].includes(ownerOf(b)));
   const external = top.filter((b) => ownerOf(b) === "external");
-  const governance = top.filter((b) => ownerOf(b) === "governance").sort((x, y) => x.col - y.col);
+  const governance = top.filter((b) => ownerOf(b) === "governance").sort((x, y) => colOf(x) - colOf(y));
 
   // The trust row: one grid across people, our boundaries and the vendor's, so rows line up
   // across boundaries. A change of zone between two columns opens room for both outlines.
   const zoneOfCol = new Map<number, string>();
-  for (const b of trust) if (!zoneOfCol.has(b.col)) zoneOfCol.set(b.col, b.zone ?? "");
+  for (const b of trust) if (!zoneOfCol.has(colOf(b))) zoneOfCol.set(colOf(b), b.zone ?? "");
   const gapBetween = (c1: number, c2: number) => {
     const z1 = zoneOfCol.get(c1);
     const z2 = zoneOfCol.get(c2);
@@ -381,10 +397,10 @@ function compute(a: Archetype): ViewSpec {
     // Every flow between two boundaries is labelled in the gap between them: more flows, more room.
     const zoneOf = (id: string) => a.blocks.find((b) => b.id === id)?.zone;
     const between = a.edges.filter((e) => new Set([zoneOf(e.from), zoneOf(e.to)]).size === 2 && [z1, z2].every((z) => [zoneOf(e.from), zoneOf(e.to)].includes(z))).length;
-    return ZONE_GAP + 2 * PAD_X + Math.min(96, 26 * Math.max(0, between - 2));
+    return ZONE_GAP + 2 * PAD_X + Math.min(54, 18 * Math.max(0, between - 2));
   };
   const tg = grid(
-    trust.map((b) => ({ id: b.id, col: b.col, row: b.row, span: b.rowSpan ?? 1, ...sizeOf(b), stretch: isContainer(b) })),
+    trust.map((b) => ({ id: b.id, col: colOf(b), row: rowOf(b), span: spanOf(b), ...sizeOf(b), stretch: false })),
     gapBetween,
     template.rowGap,
   );
@@ -397,7 +413,7 @@ function compute(a: Archetype): ViewSpec {
     const abs = { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h };
     rects.set(id, abs);
     const g = inner.get(id);
-    if (g) for (const [kid, kr] of g.at) place(kid, kr, abs.x + (abs.w - g.w) / 2, abs.y + HEADER);
+    if (g) for (const [kid, kr] of g.at) place(kid, kr, abs.x + (abs.w - g.w) / 2, abs.y + (headers.get(id) ?? HEADER));
   };
   for (const [id, r] of tg.at) place(id, r, originX, originY);
 
@@ -408,7 +424,6 @@ function compute(a: Archetype): ViewSpec {
     return { x: x + 8, y: y + 4, w: w + 12, h: 20 };
   };
   const boundaries: ViewBoundary[] = [];
-  const trustTop = originY - PAD_TOP;
   const trustBottom = originY + tg.h + PAD_BOTTOM;
   for (const z of zones) {
     if (!["endpoint", "cloud", "vendor"].includes(z.owner)) continue;
@@ -416,10 +431,9 @@ function compute(a: Archetype): ViewSpec {
     if (!members.length) continue;
     const x = Math.min(...members.map((r) => r.x)) - PAD_X;
     const right = Math.max(...members.map((r) => r.x + r.w)) + PAD_X;
-    // What we run shares one height; the vendor's boundary hugs what the vendor runs.
-    const own = z.owner === "vendor";
-    const y = own ? Math.min(...members.map((r) => r.y)) - PAD_TOP : trustTop;
-    const bottom = own ? Math.max(...members.map((r) => r.y + r.h)) + PAD_BOTTOM : trustBottom;
+    // Every boundary hugs what it holds, so no outline encloses an empty row.
+    const y = Math.min(...members.map((r) => r.y)) - PAD_TOP;
+    const bottom = Math.max(...members.map((r) => r.y + r.h)) + PAD_BOTTOM;
     const title = z.title ?? z.owner;
     const label = labelOf(z, x, y);
     boundaries.push({
@@ -455,7 +469,7 @@ function compute(a: Archetype): ViewSpec {
         const ns = neighbours(b.id);
         return { b, s: sizeOf(b), want: ns.length ? ns.reduce((s, v) => s + v, 0) / ns.length : Number.POSITIVE_INFINITY };
       })
-      .sort((p, q) => p.want - q.want || p.b.row - q.b.row || p.b.col - q.b.col);
+      .sort((p, q) => p.want - q.want || rowOf(p.b) - rowOf(q.b) || colOf(p.b) - colOf(q.b));
     const bandX = trustLeft;
     const xs: number[] = [];
     let cursor = bandX + PAD_X;
@@ -533,7 +547,8 @@ function compute(a: Archetype): ViewSpec {
     const r = rects.get(b.id);
     if (!r) continue;
     const tone: BoxTone = isContainer(b) ? "container" : isPerson(b) ? "actor" : "plain";
-    boxes.push({ id: b.id, ...r, tone, lines: tone === "container" ? 1 : Math.max(1, Math.floor((r.h - 27) / 12.5)), chipRows: 0 });
+    const header = headers.get(b.id) ?? HEADER;
+    boxes.push({ id: b.id, ...r, tone, lines: tone === "container" ? (header > HEADER ? 2 : 1) : Math.max(1, Math.floor((r.h - 27) / 12.5)), chipRows: 0, header: tone === "container" ? header : undefined });
   }
 
   const routed = route(a, boxes, boundaries, width, height);
@@ -564,7 +579,7 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
   const obstacles: Obstacle[] = [];
   for (const b of boxes) {
     if (b.tone === "governance") continue;
-    if (b.tone === "container") obstacles.push({ x: b.x, y: b.y, w: b.w, h: HEADER - 8, box: b.id });
+    if (b.tone === "container") obstacles.push({ x: b.x, y: b.y, w: b.w, h: (b.header ?? HEADER) - 8, box: b.id });
     else obstacles.push({ x: b.x, y: b.y, w: b.w, h: b.h, box: b.id });
   }
   for (const b of boundaries) if (b.tone !== "control") obstacles.push(b.label);
@@ -690,6 +705,18 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
       if (i + 1 < NX) hBody[i * NY + j] = bodyOf((X[i] + X[i + 1]) / 2, Y[j]);
       if (j + 1 < NY) vBody[i * NY + j] = bodyOf(X[i], (Y[j] + Y[j + 1]) / 2);
     }
+  // Which trust boundary each step runs inside, if any: a flow keeps out of a boundary neither
+  // of its ends is in, and goes over or round it instead.
+  const fences = boundaries.filter((b) => b.tone !== "control");
+  const fenceOf = (x: number, y: number) => fences.findIndex((f) => x > f.x && x < f.x + f.w && y > f.y && y < f.y + f.h);
+  const hFence = new Int16Array(NX * NY).fill(-1);
+  const vFence = new Int16Array(NX * NY).fill(-1);
+  for (let i = 0; i < NX; i++)
+    for (let j = 0; j < NY; j++) {
+      if (i + 1 < NX) hFence[i * NY + j] = fenceOf((X[i] + X[i + 1]) / 2, Y[j]);
+      if (j + 1 < NY) vFence[i * NY + j] = fenceOf(X[i], (Y[j] + Y[j + 1]) / 2);
+    }
+  const zoneOfBlock = new Map(a.blocks.map((b) => [b.id, b.zone ?? ""]));
   const parentOf = new Map(a.blocks.map((b) => [b.id, b.parent]));
   const lineage = (id: string) => {
     const out = new Set<number>();
@@ -718,6 +745,7 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
     const ends = [from, to];
     const own = new Set(obstacles.flatMap((o, k) => (o.box === from.id || o.box === to.id ? [k] : [])));
     const home = new Set([...lineage(from.id), ...lineage(to.id)]);
+    const homeFences = new Set(fences.flatMap((f, k) => (f.zone === zoneOfBlock.get(from.id) || f.zone === zoneOfBlock.get(to.id) ? [k] : [])));
     // An arrow touches its own ends at one point only: it may not run along them or through them.
     const grazes = (x1: number, y1: number, x2: number, y2: number) =>
       ends.some((r) =>
@@ -773,7 +801,8 @@ function route(a: Archetype, boxes: ViewBox[], boundaries: ViewBoundary[], width
       const shared = (d < 2 ? usedH : usedV).has(segKey);
       const crossing = (d < 2 ? usedV : usedH).has(nn) || (d < 2 ? nj > 0 && usedV.has(nn - 1) : ni > 0 && usedH.has(nn - NY));
       const body = (d < 2 ? hBody : vBody)[segKey];
-      const foreign = body >= 0 && !home.has(body) ? 1.6 : 0;
+      const fence = (d < 2 ? hFence : vFence)[segKey];
+      const foreign = (body >= 0 && !home.has(body) ? 1.6 : 0) + (fence >= 0 && !homeFences.has(fence) ? FOREIGN_ZONE : 0);
       const step = c + length * (1 + (d < 2 ? hCrowd : vCrowd)[segKey] + foreign) + (shared ? 90 + length * 5 : 0) + (crossing ? 16 : 0);
       const goal = goals.get(nn);
       if (goal) {
@@ -842,7 +871,7 @@ const overlap = (p: Rect, q: Rect) => Math.max(0, Math.min(p.x + p.w, q.x + q.w)
 function label(a: Archetype, paths: Map<string, Pt[]>, boxes: ViewBox[], boundaries: ViewBoundary[], control?: ViewBoundary): ViewLine[] {
   const solid: Rect[] = [
     ...boxes.filter((b) => b.tone !== "container").map((b) => ({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 })),
-    ...boxes.filter((b) => b.tone === "container").map((b) => ({ x: b.x, y: b.y, w: b.w, h: HEADER - 6 })),
+    ...boxes.filter((b) => b.tone === "container").map((b) => ({ x: b.x, y: b.y, w: b.w, h: (b.header ?? HEADER) - 6 })),
     ...boundaries.filter((b) => b.tone !== "control").map((b) => b.label),
     ...(control ? [control as Rect] : []),
   ];

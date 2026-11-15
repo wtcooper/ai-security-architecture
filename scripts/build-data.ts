@@ -762,6 +762,12 @@ function checkArchetypes(
     // A block's one-liner, a zone's gloss and an edge's crossing are authored here so the
     // drawing's words live with the pattern, not in the renderer.
     for (const block of arch.blocks ?? []) {
+      if (block.cell !== undefined) {
+        const { col, row, rowSpan } = block.cell;
+        const whole = (v: unknown) => Number.isInteger(v) && (v as number) >= 0;
+        if (!whole(col) || !whole(row) || (rowSpan !== undefined && (!whole(rowSpan) || rowSpan < 1)))
+          fail(`${where} block ${block.id}: cell needs whole-number col and row (and rowSpan of at least 1)`);
+      }
       if (block.summary !== undefined && (typeof block.summary !== "string" || !block.summary.trim() || block.summary.length > 140))
         fail(`${where} block ${block.id}: summary must be one short line (at most 140 characters)`);
     }

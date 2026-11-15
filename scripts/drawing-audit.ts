@@ -16,8 +16,8 @@ import type { Archetype } from "../src/lib/types";
 export const STANDARD = {
   /** A drawing fits a 1366px laptop at no less than this scale (the page gives it 1292px). */
   maxWidth: 1440,
-  /** Taller than this and the drawing no longer fits a laptop screen at a readable size. */
-  maxHeight: 980,
+  /** The expanded drawing fits a 1080p screen without scrolling. */
+  maxHeight: 1080,
   /** Characters of authored one-liner a box can show without cutting it short. */
   summaryMax: 78,
 };
@@ -85,7 +85,7 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; stat
   for (const { l, r } of rects) {
     for (const b of spec.boxes) {
       if (b.tone === "container") {
-        if (overlap(r, { x: b.x, y: b.y, w: b.w, h: 44 }) > 12) add("L4 label on box", `"${l.label!.lines.join(" ")}" over the heading of ${block.get(b.id)?.title}`);
+        if (overlap(r, { x: b.x, y: b.y, w: b.w, h: (b.header ?? 52) - 8 }) > 12) add("L4 label on box", `"${l.label!.lines.join(" ")}" over the heading of ${block.get(b.id)?.title}`);
       } else if (overlap(r, b) > 12) add("L4 label on box", `"${l.label!.lines.join(" ")}" over ${block.get(b.id)?.title}`);
     }
     for (const o of spec.lines) {
@@ -106,7 +106,7 @@ export function audit(a: Archetype): { spec: ViewSpec; findings: Finding[]; stat
     if (title.at(-1)?.endsWith("…")) add("L5 title cut", bl.title);
     const sub = summaryOf(bl);
     if (!sub) continue;
-    const room = b.tone === "container" ? 1 : b.tone === "governance" ? 2 : Math.max(1, b.lines - (title.length - 1));
+    const room = b.tone === "container" ? b.lines : b.tone === "governance" ? 2 : Math.max(1, b.lines - (title.length - 1));
     if (wrap(sub, b.w - 24, 10.5, room).at(-1)?.endsWith("…")) add("L5 one-liner cut", `${bl.title}: "${sub}"`);
   }
   for (const l of spec.lines) if (l.label?.lines.at(-1)?.endsWith("…")) add("L5 label cut", l.key);
