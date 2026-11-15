@@ -50,6 +50,8 @@ export interface ViewBox extends Rect {
   lines: number;
   /** Controls the box owns, drawn inside it (control-plane boxes only). */
   chipRows: number;
+  /** Where a control-plane box's first row of chips sits, below its text. */
+  chipTop?: number;
   /** A container's heading height: its title and one-liner, above what it holds. */
   header?: number;
 }
@@ -120,8 +122,6 @@ const TOP = 62;
 const EXT_BOX_GAP = 40;
 const GOV_GAP = 34;
 const CHIP_PITCH = 19;
-/** The extra height a control-plane box gives its one-liner's second line. */
-export const GOV_SUB = 13;
 
 export const textWidth = (s: string, size: number) => s.length * size * 0.54;
 
@@ -464,12 +464,16 @@ function compute(a: Archetype): ViewSpec {
     const zone = zones.find((z) => z.owner === "external")!;
     const neighbours = (id: string) =>
       a.edges.flatMap((e) => (e.from === id ? [e.to] : e.to === id ? [e.from] : [])).map(centre).filter((v): v is number => v !== undefined);
+    const depthOf = (id: string) =>
+      Math.max(0, ...a.edges.flatMap((e) => (e.from === id ? [e.to] : e.to === id ? [e.from] : [])).map((n) => { const r = rects.get(n); return r ? r.y + r.h : 0; }));
     const wanted = external
       .map((b) => {
         const ns = neighbours(b.id);
-        return { b, s: sizeOf(b), want: ns.length ? ns.reduce((s, v) => s + v, 0) / ns.length : Number.POSITIVE_INFINITY };
+        return { b, s: sizeOf(b), want: ns.length ? ns.reduce((s, v) => s + v, 0) / ns.length : Number.POSITIVE_INFINITY, depth: depthOf(b.id) };
       })
-      .sort((p, q) => p.want - q.want || rowOf(p.b) - rowOf(q.b) || colOf(p.b) - colOf(q.b));
+      // Of two parties that want the same spot, the one whose target is nearer the band takes
+      // it and has a straight run; the other stands beside it and goes up the gutter.
+      .sort((p, q) => p.want - q.want || q.depth - p.depth || rowOf(p.b) - rowOf(q.b) || colOf(p.b) - colOf(q.b));
     const bandX = trustLeft;
     const xs: number[] = [];
     let cursor = bandX + PAD_X;
@@ -520,7 +524,16 @@ function compute(a: Archetype): ViewSpec {
     const rowsOf = (b: ArchBlock) => Math.max(1, Math.ceil(Math.max(ownedControls(a, b).length, a.pins.risks.filter((p) => p.at === b.id).length * 1.5) / perRow));
     const chipRows = Math.max(...governance.map(rowsOf));
     // Room for a title, a one-liner of up to two lines, then the chips the box owns.
-    const boxH = 44 + GOV_SUB + chipRows * 21 + 8;
+    // Each box is a title of one or two lines, a one-liner of up to two, then the chips it owns.
+    // The chips start below the tallest text in the band, so every row of chips lines up.
+    const textH = Math.max(
+      ...governance.map((b) => {
+        const sub = summaryOf(b);
+        return 20 + (wrap(b.title, boxW - 22, 13.2, 2).length - 1) * 14 + (sub ? wrap(sub, boxW - 24, 10.5, 2).length * 12.5 + 3 : 0);
+      }),
+    );
+    const chipTop = textH + 19;
+    const boxH = chipTop + (chipRows - 1) * 21 + 17;
     const bandY = cursorY + GOV_GAP;
     const total = governance.length * boxW + gap * (governance.length - 1);
     const startX = bandX + (bandW - total) / 2;
@@ -539,7 +552,7 @@ function compute(a: Archetype): ViewSpec {
       label: labelOf(zone, bandX, bandY),
     });
     height = bandY + 32 + boxH + 16 + MARGIN - 10;
-    for (const b of governance) boxes.push({ id: b.id, ...rects.get(b.id)!, tone: "governance", lines: 2, chipRows });
+    for (const b of governance) boxes.push({ id: b.id, ...rects.get(b.id)!, tone: "governance", lines: 2, chipRows, chipTop });
   }
 
   for (const b of a.blocks) {

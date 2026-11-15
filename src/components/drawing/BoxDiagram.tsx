@@ -14,7 +14,7 @@ import type { BlockService } from "@/components/reference/FlowDiagramRF";
 import { blockTab, chipColors } from "@/components/reference/flow-style";
 import { capabilityName, riskById, riskCode, statusFor } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
-import { GOV_SUB, ownedControls, summaryOf, wrap, type BoundaryTone, type ViewBox, type ViewLine, type ViewSpec } from "./layout";
+import { ownedControls, summaryOf, wrap, type BoundaryTone, type ViewBox, type ViewLine, type ViewSpec } from "./layout";
 
 export type DrawingPins = "risks" | "capabilities" | "all";
 
@@ -239,7 +239,7 @@ export function BoxDiagram({
           x = bx.x + 12;
           used = 0;
         }
-        const node = it.draw(x + it.w / 2, bx.y + 52 + GOV_SUB + row * 21);
+        const node = it.draw(x + it.w / 2, bx.y + (bx.chipTop ?? 65) + row * 21);
         x += it.w;
         used += it.w;
         return node;
