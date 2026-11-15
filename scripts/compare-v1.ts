@@ -12,6 +12,8 @@
 import { readFileSync } from "node:fs";
 import { dataset } from "../src/lib/data";
 
+// The v1 dataset is read as untyped JSON: its shapes are older than the current types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = Record<string, any>;
 const v1: Any = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const quiet = process.argv.includes("--quiet");
