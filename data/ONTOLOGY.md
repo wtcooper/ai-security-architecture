@@ -18,6 +18,7 @@ records what content is allowed to look like. When the two disagree, this one wi
 | Container | architecture `blocks:` via `parent` | a `boundary` block, or any block with children; nests without limit |
 | Control | data/cosai/ | CoSAI control identifiers; required protections; status is a rollup of the capabilities that deliver it |
 | Capability (`mitigation` in data and code) | data/overlay/mitigations.yaml, data/overlay/specializations.yaml | A MITRE mitigation with its MITRE-native ID from pinned D3FEND/ATLAS, or an authored specialisation of one (`cap-*`, exactly one MITRE parent); the pin unit on every drawing, with per-diagram chip numbers and an authored per-surface decision; the only entity that carries authored status |
+| Boundary-drawing fields | architecture `blocks:`, `zones:`, `edges:` | `summary` (a block's one line), `gloss` (a few words on a zone), `crossing` (kind and via, on every flow between zones) and `cell` (a block's grid cell on the boundary drawing); the rules are in docs/PATTERN-STANDARD.md |
 | Control family | data/overlay/enablement.yaml | The NIST CSF 2.0 category a control sits under, on every pattern's Enable tab and in the control catalogue (exactly one for every control), plus the baseline list every AI deployment needs |
 | Pattern (`archetype` in data and code) | data/reference/architectures/*.yaml, data/overlay/patterns.yaml | One reference architecture; its URL slug is its file name, and patterns.yaml carries its use-when line and search words |
 | Risk | data/overlay/*.yaml | catalogue-stable `R##` codes |

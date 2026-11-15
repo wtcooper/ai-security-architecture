@@ -27,8 +27,8 @@ why it is drawn empty.
 | First-party coding & desktop agents | Identity services | No identity control is pinned; the third-party sibling's MFA sits on a vendor service that does not exist here. |
 
 **Controls pinned on the drawing but grouped under no control-plane function.** Twenty-seven
-pins across fourteen patterns. Most are isolation controls enforced where the workload runs
-(Execution Isolation on eleven patterns, Network Isolation, Hardware-based Process Isolation),
+pins across thirteen patterns. Most are isolation controls enforced where the workload runs
+(Execution Isolation on ten patterns, Network Isolation, Hardware-based Process Isolation),
 which the control-plane grouping in `data/reference/vocabulary.yaml` does not assign to any
 function. If that is intended, nothing changes; if every control should have an owner in the
 band, the grouping needs an entry for them. The rest: Retrieval Trust and Grounding Checks

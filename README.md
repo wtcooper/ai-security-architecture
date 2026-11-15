@@ -331,11 +331,18 @@ A pattern has **two drawings of the same data**, switched above the drawing:
   boundary, the security and governance control plane runs beneath, and each component is a
   plain box with a title, one line and a thin accent for its type. It is laid out automatically
   for all 18 patterns by `src/components/drawing/layout.ts`; no pattern has coordinates in code.
-  Three optional fields in a pattern's file refine it: a `summary` on a block (its one line;
-  otherwise its item labels), a `gloss` on a zone (a friendly name beside the canonical one) and
-  a `crossing` on a flow (what it passes through on our side). So far only the third-party
-  coding agent has them authored.
+  Four fields in a pattern's file feed it: a `summary` on every block (its one line), a `gloss`
+  on a zone (a few words beside the canonical name), a `crossing` on every flow that crosses a
+  boundary (what it passes through on our side), and, where a wide zone should fold into fewer
+  columns, a `cell` on a block. All 18 patterns have the first three authored. People and
+  outside callers stand outside every boundary, and their flows count as crossings.
 - **Detailed** is the original canvas described below, with every item, icon and per-item note.
+
+[`docs/PATTERN-STANDARD.md`](docs/PATTERN-STANDARD.md) states what a complete pattern must
+meet: seven measured layout rules, the structure every drawing shares, and the content a
+pattern's file must carry. `npm run drawing:audit` scores every pattern against it and the
+tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) lists the open
+questions about the patterns themselves that the audit and the review turned up.
 
 Both carry the same pins and take the same cloud relabelling ("Drawn as AWS / Azure / Google
 Cloud"). Under **Risks & flows**, a **boundary crossings** table lists every flow that crosses a
@@ -511,6 +518,7 @@ npm run dev      # http://localhost:3000
 | `npm run data` | Compile `data/**` → the typed dataset, with every integrity check |
 | `npm test` | Run the control, matrix, Enable, incident, route, vocabulary and drawing tests |
 | `npm run audit` | Regenerate `docs/AUDIT.md` |
+| `npm run drawing:audit` | Score every pattern against the pattern standard; add `-- <slug>` for one pattern's findings |
 | `npm run fetch:cosai` | Refresh the vendored CoSAI snapshot from its pinned commit |
 | `npm run extract:saif` | Re-extract the SAIF tour seed from the public SAIF bundle |
 
