@@ -6,7 +6,8 @@ and what was done about it. Nothing here fails the build.
 Thirty-seven inconsistencies were reported inside the pattern files while their one-liners and
 crossings were written. Each was then checked against its file. Eighteen were real and fixed
 with a prose-only edit, twelve need a design decision and are listed below with their options,
-and seven were not issues. Onboarding a product for two patterns raised two more decisions. No pin, block, flow or zone was changed by that pass.
+and seven were not issues. Onboarding a product for two patterns raised two more decisions,
+one of which (the sandbox technique) is now settled. No pin, block, flow or zone was changed by that pass.
 
 ## Closed
 
@@ -21,6 +22,7 @@ and seven were not issues. Onboarding a product for two patterns raised two more
 | Remote MCP server: callers drawn inside our cloud | Callers stand outside it; three inbound crossings authored. |
 | Agent federation and agent sandbox had no catalogued product | Google ADK (12 settings) and Inspect (19 settings) onboarded, every row read on the vendor's page on 2026-11-15. Neither covers every pinned control: five of federation's 13 and four of the sandbox's 11 have no row, because the vendor pages did not support one. The two patterns' example notes were corrected to match the vendors' pages. |
 | Version 1's header summary was missing from the pattern page | Restored. See [V1-COMPARISON.md](V1-COMPARISON.md). |
+| Agent sandbox: the drawing asserted a microVM round each rollout, which its example does not provide | The sandbox is now technique-neutral: compute locked down in a contained space, fresh per task, by whichever technique the operating system or provider offers. Kata Containers and gVisor stay as examples of techniques, and each cloud's mapping still names that cloud's own. |
 
 ## By design, not gaps
 
@@ -53,7 +55,6 @@ Each would change what a pattern claims, so nothing was changed.
 | Agent sandbox | The kill switch is pinned on Observability & response, though the orchestrator enforces the stop. | Keep it there, as every other pattern does; or move it to the orchestrator. |
 | Self-hosted inference | Observability & response's note describes the serving inventory and red teaming, which Supply-chain assurance owns, and not its own pin, the request log. | Rewrite the note around the log; or keep red teaming as an Observability duty and pin a control for it. |
 | Training pipeline | Agent Authentication is pinned only on job-to-storage, though it is also checked at the corpus store. | Keep the one pin as representative; or add a second on the corpus flow. |
-| Agent sandbox | The drawing puts a microVM round each rollout. Inspect, its example, provisions a Docker container, or gVisor on Kubernetes, with no microVM. | Keep the drawing as the target state and say the example falls short of it; or draw what the example provides. |
 | Agent federation | Atlassian's Rovo A2A Gateway, a named example, authenticates the user by OAuth with PKCE, not the per-agent key or mTLS identity the pattern draws. | Keep it as an example and note the difference; or drop it. |
 
 ## Fixed in the prose

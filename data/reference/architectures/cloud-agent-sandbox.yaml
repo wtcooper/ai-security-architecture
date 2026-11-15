@@ -21,8 +21,11 @@ description:
     companies. The design question is containment, not accuracy.
   - >
     Containment is layered, and each layer is designed on the assumption that the one inside it
-    has already failed. The rollout runs in a container inside a microVM with its own kernel, and
-    GPU tasks in a user-space sandbox. Outside that, the host's network reaches only the services
+    has already failed. The rollout runs in a sandbox: compute locked down inside a contained
+    space of its own, created for the task and destroyed after it. How that space is built
+    depends on the operating system and the provider — a hardened container, a user-space
+    kernel, a virtual machine, the operating system's own sandbox — and the drawing does not
+    choose between them. Outside that, the host's network reaches only the services
     the run needs, so an agent that owns the host still has nowhere to go. Outside that, cloud
     firewalls, security groups and identity policy hold the line if the host network does not.
     The live web is not on the list at all: rollouts browse an offline copy of it, which is what
@@ -79,14 +82,14 @@ exemplars:
     asOf: "2026-11"
   - name: Kata Containers
     note: >
-      Runs each container inside a lightweight VM with its own kernel — the inner wall this
-      drawing puts around every rollout.
+      Runs each container inside a lightweight VM with its own kernel. One way to build the
+      sandbox this drawing puts around every rollout.
     url: https://katacontainers.io/
     asOf: "2026-10"
   - name: gVisor
     note: >
-      A user-space kernel that intercepts a container's system calls. The sandbox form used
-      where a full VM per task is impractical, such as GPU-backed tasks.
+      A user-space kernel that intercepts a container's system calls. Another way to build the
+      sandbox, often used where a full VM per task is impractical, such as GPU-backed tasks.
     url: https://gvisor.dev/
     asOf: "2026-10"
 zones:
@@ -213,18 +216,20 @@ blocks:
   - id: sandbox
     kind: boundary
     title: Sandbox
-    summary: "one rollout: container in a fresh microVM"
+    summary: "one rollout: contained, fresh per task"
     zone: zoneCloud
     col: 2
     row: 1
     rowSpan: 2
     note: >
-      One rollout's boundary, drawn once for the thousands that run in parallel: a restricted
-      container inside a lightweight VM with its own kernel, behind a hypervisor; GPU tasks in a
-      user-space sandbox; macOS and Windows tasks in their own virtual machines. Chained escapes
-      through every one of those layers have been found and patched, which is why the host
-      network and the cloud perimeter outside it are built to hold on their own. Fresh per task,
-      destroyed after, and sharing a host only with rollouts it may safely share one with.
+      One rollout's boundary, drawn once for the thousands that run in parallel: compute locked
+      down in a contained space with its own filesystem, processes and network, and nothing of
+      the host's in reach. The technique is the platform's — a hardened container, a user-space
+      kernel, a virtual machine, or the sandbox an operating system provides — and several are
+      often stacked. Escapes through every one of those techniques have been found and patched,
+      which is why the host network and the cloud perimeter outside it are built to hold on
+      their own. Fresh per task, destroyed after, and sharing a host only with rollouts it may
+      safely share one with.
 
   - id: harness
     kind: service
@@ -280,7 +285,7 @@ blocks:
       - id: computer
         label: Computer use
         icon: eye
-        note: A desktop inside the sandbox's own virtual machine.
+        note: A desktop that exists only inside the sandbox.
 
   - id: storage
     kind: external
@@ -607,8 +612,9 @@ pins:
     - mitigation: D3-EI
       at: sandbox
       note: >-
-        The inner wall: a fresh container inside a microVM with its own kernel per rollout, a user-space
-        sandbox for GPU tasks, destroyed after. Escape paths tested against it, not assumed.
+        The inner wall: a fresh sandbox per rollout, by whichever isolation technique the platform provides —
+        container, user-space kernel, virtual machine or the operating system's own — destroyed after. Escape
+        paths tested against it, not assumed.
     - mitigation: D3-NI
       at: sandbox
       note: >-
