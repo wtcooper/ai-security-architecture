@@ -7,6 +7,7 @@ import { crossingsOf } from "../src/components/drawing/crossings";
 import { PatternDrawing } from "../src/components/drawing/PatternDrawing";
 import { boundaryLayout, ownedControls, type Rect } from "../src/components/drawing/layout";
 import { dataset, riskCode } from "../src/lib/data";
+import { audit } from "./drawing-audit";
 import type { Archetype } from "../src/lib/types";
 
 const each = (fn: (a: Archetype) => void) => () => {
@@ -191,3 +192,12 @@ test("the coding agent's crossings are the ones its pattern file states", () => 
   assert.ok(crossings.every((c) => c.authored));
   assert.equal(crossings.find((c) => c.key === "toolPlane->openWeb")!.kind, "direct");
 });
+
+// The pattern standard (docs/PATTERN-STANDARD.md), enforced: every measured rule, on every pattern.
+test(
+  "every pattern meets the standard: the drawing's layout rules and the content the drawing needs",
+  each((a) => {
+    const { findings } = audit(a);
+    assert.deepEqual(findings.map((f) => `${f.rule}: ${f.detail}`), [], `${a.slug} (npm run drawing:audit -- ${a.slug})`);
+  }),
+);
