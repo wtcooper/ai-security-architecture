@@ -118,6 +118,8 @@ const TOP = 62;
 const EXT_BOX_GAP = 40;
 const GOV_GAP = 34;
 const CHIP_PITCH = 19;
+/** The extra height a control-plane box gives its one-liner's second line. */
+export const GOV_SUB = 13;
 
 export const textWidth = (s: string, size: number) => s.length * size * 0.54;
 
@@ -503,7 +505,8 @@ function compute(a: Archetype): ViewSpec {
     const perRow = Math.max(1, Math.floor((boxW - 22) / CHIP_PITCH));
     const rowsOf = (b: ArchBlock) => Math.max(1, Math.ceil(Math.max(ownedControls(a, b).length, a.pins.risks.filter((p) => p.at === b.id).length * 1.5) / perRow));
     const chipRows = Math.max(...governance.map(rowsOf));
-    const boxH = 44 + chipRows * 21 + 8;
+    // Room for a title, a one-liner of up to two lines, then the chips the box owns.
+    const boxH = 44 + GOV_SUB + chipRows * 21 + 8;
     const bandY = cursorY + GOV_GAP;
     const total = governance.length * boxW + gap * (governance.length - 1);
     const startX = bandX + (bandW - total) / 2;
@@ -522,7 +525,7 @@ function compute(a: Archetype): ViewSpec {
       label: labelOf(zone, bandX, bandY),
     });
     height = bandY + 32 + boxH + 16 + MARGIN - 10;
-    for (const b of governance) boxes.push({ id: b.id, ...rects.get(b.id)!, tone: "governance", lines: 1, chipRows });
+    for (const b of governance) boxes.push({ id: b.id, ...rects.get(b.id)!, tone: "governance", lines: 2, chipRows });
   }
 
   for (const b of a.blocks) {
