@@ -221,7 +221,7 @@ and always writes "CoSAI control" for the layer above it:
 | --- | --- | --- | --- |
 | CoSAI controls | CoSAI, 35 | The function the business needs ("Agent Execution Bounds"); personas own them | rolled up |
 | **Controls** | MITRE D3FEND + ATLAS, 59, plus 17 authored specialisations (`cap-*`) | The actionable control at a place in the data flow ("Outbound Traffic Filtering on the sandbox egress"); the pins on every drawing and the rows on its Enable tab | **yes** |
-| Tools | registry, 52 | Named products; each an instance of one pattern, with its own security settings | adoption |
+| Tools | registry, 54 | Named products; each an instance of one pattern, with its own security settings | adoption |
 
 A control is a MITRE mitigation. The 59 MITRE entries are the citable vocabulary; each
 carries the CoSAI controls it supports, the risks it addresses, example technologies that
