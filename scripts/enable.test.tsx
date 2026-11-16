@@ -129,6 +129,9 @@ test("a pattern opens on Enable; a tab link opens that tab and a product link op
   // The drawing comes first and the tabs sit beneath it; there is one drawing, with no second view to switch to.
   assert.ok(home.indexOf('id="pattern-drawing"') < home.indexOf('id="pattern-tabs"'), "the tabs are under the drawing");
   assert.doesNotMatch(home, />Detailed</);
+  // The mouse is the page's until the drawing is clicked into; the drawing says so.
+  assert.match(home, /Click the drawing to zoom and pan with the mouse/);
+  assert.doesNotMatch(home, /data-drawing="boundaries" data-active/, "the drawing does not take the wheel until clicked");
   const tool = toolsForArchetype(arch.id)[0];
   const linked = page(arch.id, `tool=${tool.id}`);
   assert.match(linked, /id="tools"/);

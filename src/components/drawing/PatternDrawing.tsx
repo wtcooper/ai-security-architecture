@@ -4,6 +4,10 @@
  * The drawing of a pattern: trust boundaries, plain boxes, numbered controls. The layout is
  * computed from the pattern's data (layout.ts); this component adds what a reader does with it:
  * zoom and pan, a hover card, expanding to the window, and export.
+ *
+ * The mouse belongs to the page until the reader clicks the drawing. From then the wheel zooms
+ * about the pointer and a drag pans, and a click anywhere else (or Esc) hands the wheel back to
+ * the page. Without that hand-over a drawing this tall would trap the scroll on the way past it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -55,8 +59,11 @@ export function PatternDrawing({
   const spec = useMemo(() => boundaryLayout(archetype), [archetype]);
   const [view, setView] = useState<View>(FIT);
   const [expanded, setExpanded] = useState(false);
+  /** Clicked into: the wheel zooms and a drag pans, until a click elsewhere or Esc. */
+  const [active, setActive] = useState(false);
   const [card, setCard] = useState<HoverCard | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; view: View } | null>(null);
 
   // A different pattern starts fitted. Adjusted during render, as the page's other resets are.
@@ -64,6 +71,7 @@ export function PatternDrawing({
   if (shown !== archetype.id) {
     setShown(archetype.id);
     setView(FIT);
+    setActive(false);
   }
 
   const clamp = useCallback(
@@ -92,21 +100,41 @@ export function PatternDrawing({
     return { x: (clientX - r.left - (r.width - spec.width * scale) / 2) / scale, y: (clientY - r.top - (r.height - spec.height * scale) / 2) / scale, scale };
   };
 
-  // Wheel zooms with Ctrl or ⌘ held, or freely once expanded, so the page still scrolls past the drawing.
+  // The wheel zooms once the drawing has been clicked into or expanded (and with Ctrl or ⌘ held,
+  // which is also how a trackpad pinch arrives). Otherwise it is the page's, so it scrolls past.
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!expanded && !e.ctrlKey && !e.metaKey) return;
+      if (!expanded && !active && !e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const p = toDrawing(e.clientX, e.clientY);
-      zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, p.x, p.y);
+      // Proportional to the turn of the wheel, so a notched mouse and a smooth trackpad both feel right.
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+      zoom(Math.exp(-Math.max(-240, Math.min(240, delta)) * 0.0016), p.x, p.y);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
     // toDrawing reads refs and the spec only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, zoom, spec]);
+  }, [expanded, active, zoom, spec]);
+
+  // Clicked into, the drawing keeps the mouse until a click anywhere else, or Esc.
+  useEffect(() => {
+    if (!active) return;
+    const release = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setActive(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActive(false);
+    };
+    document.addEventListener("pointerdown", release, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", release, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [active]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -151,8 +179,16 @@ export function PatternDrawing({
   };
 
   const button = "rounded-md border border-ink-3/40 bg-paper px-2.5 py-1 text-[11px] text-ink-2 hover:bg-mist disabled:opacity-40";
+  const engaged = active || expanded;
   const toolbar = (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <span className={`mr-auto text-[11.5px] ${active && !expanded ? "font-semibold text-introduced" : "text-ink-3"}`} data-zoom-hint>
+        {expanded
+          ? "Scroll to zoom · drag to pan · Esc to collapse"
+          : active
+            ? "Scroll to zoom · drag to pan · click outside the drawing to release"
+            : "Click the drawing to zoom and pan with the mouse"}
+      </span>
       <button type="button" className={button} onClick={() => zoom(1 / 1.3)} disabled={view.k <= 1} aria-label="Zoom out" title="Zoom out">
         −
       </button>
@@ -194,16 +230,20 @@ export function PatternDrawing({
       className={expanded ? "h-full w-full" : "w-full"}
       style={{
         minWidth: expanded ? undefined : Math.round(spec.width * minScale),
-        cursor: view.k > 1 ? "grab" : undefined,
+        cursor: view.k > 1 ? "grab" : engaged ? "zoom-in" : undefined,
         touchAction: view.k > 1 ? "none" : undefined,
+        userSelect: engaged ? "none" : undefined,
       }}
     />
   );
 
-  // Drag pans once zoomed in; at fit the drawing leaves the pointer to the page.
+  // A click on the drawing itself (not on a chip, a tag or a button) takes the mouse. A drag
+  // pans once zoomed in; at fit there is nowhere to pan to.
   const panHandlers = {
     onPointerDown: (e: React.PointerEvent) => {
-      if (view.k <= 1 || (e.target as Element).closest("[role=button]")) return;
+      if ((e.target as Element).closest("[role=button], button")) return;
+      if (e.pointerType === "mouse" && e.button === 0) setActive(true);
+      if (view.k <= 1) return;
       drag.current = { x: e.clientX, y: e.clientY, view };
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
       setCard(null);
@@ -240,7 +280,12 @@ export function PatternDrawing({
   );
 
   return (
-    <div className={`relative ${className ?? ""}`} data-drawing="boundaries">
+    <div
+      ref={rootRef}
+      className={`relative rounded-[inherit] transition-shadow ${active && !expanded ? "shadow-[inset_0_0_0_2px_var(--introduced)]" : ""} ${className ?? ""}`}
+      data-drawing="boundaries"
+      data-active={active || undefined}
+    >
       <div className="px-2 pt-2">{!expanded && toolbar}</div>
       {expanded ? (
         <div aria-hidden style={{ aspectRatio: `${spec.width} / ${spec.height}` }} />
@@ -253,7 +298,6 @@ export function PatternDrawing({
         <div role="dialog" aria-modal="true" aria-label={`${archetype.title}: expanded drawing`} className="fixed inset-0 z-50 flex flex-col bg-paper">
           <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2">
             <span className="display text-[14px] font-bold text-ink">{archetype.title}</span>
-            <span className="hidden text-[11.5px] text-ink-3 sm:inline">Scroll to zoom · drag to pan · Esc to collapse</span>
             <div className="ml-auto">{toolbar}</div>
           </div>
           <div className="min-h-0 flex-1 p-4" {...panHandlers}>

@@ -337,6 +337,11 @@ on a block. People and outside callers stand outside every boundary, and their f
 crossings. An earlier second view (the "detailed" canvas, which drew every item with an icon)
 was retired on 2026-11-16; incident replays use the same boundary drawing.
 
+The mouse belongs to the page until the drawing is clicked. Click it and the wheel zooms about
+the pointer and a drag pans; click anywhere else, or press Esc, and the wheel scrolls the page
+again. The − / + / Fit buttons and Ctrl or ⌘ with the wheel work at any time, and Expand opens
+the drawing across the whole window.
+
 [`docs/PATTERN-STANDARD.md`](docs/PATTERN-STANDARD.md) states what a complete pattern must
 meet: seven measured layout rules, the structure every drawing shares, and the content a
 pattern's file must carry. `npm run drawing:audit` scores every pattern against it and the
