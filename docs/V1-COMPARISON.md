@@ -2,7 +2,7 @@
 
 Version 1 is the risk-first app as it was deployed before the restructure, kept on the `v1`
 branch. This is the check that moving to patterns did not drop anything along the way. It was
-run on 2026-11-15 and can be run again:
+last run on 2026-11-16 and can be run again:
 
 ```bash
 git show v1:src/data/generated/dataset.json > /tmp/v1.json
@@ -28,10 +28,10 @@ archetype to pattern.
 | Components | 301 | 301 |
 | Sub-components | 425 | 425 |
 | Flows | 198 | 198 |
-| Control pins | 294 | 297 |
+| Control pins | 294 | 299 |
 | Risk pins | 229 | 229 |
 | Walks, and their steps | 95, 731 | 95, 731 |
-| Guidance items | 127 | 127 |
+| Guidance items | 127 | 128 |
 | Tools, and their settings | 52, 1,243 | 54, 1,274 |
 | Cloud settings | 236 | 238 |
 | Cloud component bindings | 246 | 246 |
@@ -40,13 +40,18 @@ archetype to pattern.
 | Controls in the catalogue | 76 | 76 |
 
 - **Dropped: none.** No component, sub-component, flow, pin, walk step, guidance item, tool,
-  setting, cloud binding, incident or catalogue entry is gone.
-- **Chip numbers: unchanged.** No pattern's controls were reordered. The three patterns that
+  setting, cloud binding, incident or catalogue entry is gone. The script lists two items as
+  dropped because their titles changed: the sandbox's first guidance item (no longer "VM-backed")
+  and the local runtime's deviation about its undrawn egress. Both are still there.
+- **Chip numbers: unchanged.** No pattern's controls were reordered. The four patterns that
   gained a control gained it at the end, so every existing chip keeps its number.
-- **Changed: 43 passages of text**, all from the prose review: notes, one flow label's note,
-  walk steps and two example notes brought into line with the rest of their own file or with
-  the vendor's page. [PATTERN-FINDINGS.md](PATTERN-FINDINGS.md) lists them.
-- **Added:** three control pins and the cloud settings that deliver them; five control-plane
+- **Changed: 60 passages of text.** Forty-three are from the prose review: notes, one flow
+  label's note, walk steps and two example notes brought into line with the rest of their own
+  file or with the vendor's page. The rest are the two decisions made on 2026-11-16: the
+  sandbox defined without naming a technique, and the local runtime's outbound calls filtered
+  at the proxy. [PATTERN-FINDINGS.md](PATTERN-FINDINGS.md) lists them.
+- **Added:** five control pins (two of them outbound traffic filtering on the local runtime)
+  and the cloud settings that deliver the first three; one guidance item; five control-plane
   notes on agent federation; five walk notes on persistent managed agents; one deviation; two
   tools (Google ADK, Inspect) and a vendor. Not counted by the script because version 1 had no
   such fields: a one-liner on all 301 components, a few words on 33 zones, and what each of 101

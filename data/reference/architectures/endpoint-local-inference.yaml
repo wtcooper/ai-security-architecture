@@ -8,13 +8,15 @@ summary:
   - >
     An open-weights model served on the user's own machine, listening on a local port so other
     local processes can call it. Chosen to keep data off a vendor's infrastructure, which succeeds
-    once the runtime's own cloud features are switched off — and moves every control the vendor
+    once the runtime's own cloud features are switched off and its outbound calls are held to
+    the model mirror — and moves every control the vendor
     was providing onto the device.
 
 description:
   - >
     The reason people run this is sound: prompts and documents can stay on the machine — provided
-    the runtime's own cloud models and web search are switched off — there is no per-token cost,
+    the runtime's own cloud models and web search are switched off, and blocked at the proxy in
+    case the switch is not — there is no per-token cost,
     and it works offline. The architectural consequence is that the guardrails,
     rate limiting, abuse monitoring and content policy a hosted API applies on the way in and out
     are simply absent, and nothing replaces them by default. Guardrails here are a control the
@@ -40,6 +42,13 @@ description:
     past every static scan. The target sequencing is fetch-to-quarantine: the artifact is
     acquired without being loaded, verified and scanned at rest, then promoted to approved
     local storage the runtime loads from — never fetched and opened in one step.
+  - >
+    The model makes no network calls; the application serving it does. A runtime pulls models
+    from public registries, can push them to a registry any caller of its port names, and in
+    some products forwards prompts to its vendor's cloud. Those calls are filtered where
+    outbound traffic already is, at the organisation's proxy: model sources held to the
+    internal mirror, the vendor's cloud refused. What the model's output goes on to cause is a
+    different question and belongs to the harness that calls it.
   - >
     The common install has no governance at all: no model inventory, no weight scanning
     pipeline, no policy on binding or sources. The target state adds exactly what this page's
@@ -302,14 +311,16 @@ edges:
   - from: hub
     to: weights
     crossing:
-      kind: direct
-      via: "Nothing between: lands in quarantine unopened; scanned at rest before promotion"
+      kind: brokered
+      via: "Egress proxy & model mirror: public hubs reached only by the quarantine fetch"
     path: external
     label: weight fetch
     note: >
       The artifact is pulled to quarantine without being opened — by the management tooling in
       the target state, by the runtime's own downloader in the common install, where fetch and
-      load collapse into one step and the whole promotion story disappears. Transport is
+      load collapse into one step and the whole promotion story disappears. The proxy is what
+      makes the first the only way in: devices reach the internal mirror, and the public hubs
+      answer only the quarantine fetch. Transport is
       authenticated and the publisher may be verifiable; neither says anything about what the
       artifact does when the loader opens it.
 pins:
@@ -357,7 +368,8 @@ pins:
       note: >
         A model-name suffix or a search flag routes the prompt to the vendor's cloud through the
         same local API — unless the runtime's own cloud features are switched off, a setting on
-        the tool that device management delivers and the Enable tab lists per runtime.
+        the tool that device management delivers, and the vendor's cloud is refused at the proxy,
+        because the setting is the user's to change.
     - risk: riskModelDeploymentTampering
       at: weights->runtime
       note: >
@@ -427,6 +439,19 @@ pins:
       note: >-
         Weights load only after their digest matches the approved artifact, so a swapped model file is
         refused rather than served.
+    - mitigation: D3-OTF
+      at: hub->weights
+      note: >-
+        Model sources held to the internal mirror at the organisation's existing proxy: managed devices do not
+        reach the public hubs, and only the quarantine fetch does. Without it a runtime's own pull fetches and
+        loads in one step and the scan never happens.
+    - mitigation: D3-OTF
+      at: runtime
+      note: >-
+        The serving application's own outbound calls refused at the same proxy: its vendor's cloud models and
+        web search, and any registry but the mirror, so a caller of the local port cannot have it push a model
+        out or pull one in. The tool's own switches come first; this holds when one is changed. Not a rule
+        about the model, which makes no calls, nor about the harness, whose egress is its own pattern's.
 
 walkthrough:
   title: An application asks for a completion
@@ -495,20 +520,22 @@ deviations:
       tooling runs the scan (D3-FA), and the API wrapper absorbs caller identity (D3-AA) and
       per-caller ceilings (AML.M0004). Recorded here because each is an inline duty a simple endpoint drawing folds
       into the nearest real tier.
-  - subject: The runtime's own distribution channel is not drawn
+  - subject: The runtime's own egress and the proxy that filters it are not drawn
     reason: >
       The serving binary updates itself over its vendor's channel — attack surface the
       insecure-component risk note names, but a single outbound updater hop that a standing
       edge would overstate. The same process's cloud-model offload and web-search calls ride
       the same undrawn egress. An organisation that mirrors the runtime binary through its
-      package registry closes the first at the mirror. The rest is closed on the tool itself:
+      package registry closes the first at the mirror. The rest is closed twice. On the tool:
       whichever runtime or downloader is used, its own settings switch off its cloud models
-      and web search and fix where it may fetch from, and model acquisition stays the separate
-      fetch to quarantine. Where a tool has no such setting, its entry on the Enable tab says
-      so and the organisation's existing proxy and application controls are what apply. This
-      pattern adds no network rule of its own. Network controls
-      belong to whatever calls the model — the harness, or the sandbox the harness runs in —
-      and are drawn on that caller's pattern.
+      and web search and fix where it may fetch from, where it has such settings. And at the
+      organisation's existing egress proxy, which is enterprise foundation and no block of
+      this drawing: D3-OTF is absorbed there, pinned on the weight fetch and on the runtime
+      and embodied by no component here. It holds model sources to the internal mirror and
+      refuses the runtime vendor's cloud, because a tool's switch is the user's to change and
+      some tools have none. Egress for what the model's output causes belongs to whatever
+      calls the model — the harness, or the sandbox the harness runs in — and is drawn on
+      that caller's pattern.
   - subject: Guardrails are a control on the request path, not a block
     reason: >
       Input and output classification (cap-output-guardrails) is something the device owner deploys, not a component of

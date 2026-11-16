@@ -12,6 +12,8 @@
 # 2026-10-30: settings added and AML.M0014 row added (pin had no row); github.com answered 403 from the session, so
 # source was read as raw.githubusercontent.com copies (envconfig/config.go, app/server/server.go, server/images.go, the
 # app's Settings.tsx), which show the app also has a hidden Browser setting that sets OLLAMA_ORIGINS=*.
+# 2026-11-16: D3-OTF row added (the pattern now pins outbound traffic filtering), external; the page it cites
+# was read the same day.
 vendor: ollama
 family: Ollama
 tools:
@@ -494,6 +496,25 @@ tools:
           (the promotion record) is external: an MDM or EDR job compares GET /api/tags digests with the approved list.
           Same rule as toolVllm (pinned revisions, no verification) and toolLmStudio (no digest at all, external).
         verified: "2026-10-30"
+      - mitigation: D3-OTF
+        coverage: external
+        mechanism: >-
+          The organisation's egress proxy: Ollama sends pulls through HTTPS_PROXY, so the proxy allows the internal
+          model mirror and refuses ollama.com and hf.co; OLLAMA_NO_CLOUD and OLLAMA_REMOTES are the tool-side half
+        evidence:
+          - title: Ollama FAQ — behind a proxy; disable cloud features
+            url: https://docs.ollama.com/faq
+          - title: Ollama environment variables (OLLAMA_NO_CLOUD, OLLAMA_REMOTES), printed by `ollama serve --help`
+            url: https://github.com/ollama/ollama/blob/main/envconfig/config.go
+        note: >-
+          External: Ollama has no destination allowlist of its own. What it reaches: the ollama.com library and
+          hf.co for pulls, ollama.com for cloud models and web search once the machine is signed in, a registry any
+          caller of the port names for a push, and update downloads on macOS and Windows. The FAQ says to set
+          HTTPS_PROXY for outbound requests and that pulls use HTTPS only, so the proxy sees them; confirm the
+          exact hostnames from the proxy's own logs before writing the rule. OLLAMA_NO_CLOUD=1 and OLLAMA_REMOTES
+          narrow the same calls from inside the tool, but both are variables or a file the user can change, which
+          is why the proxy rule is the control and they are the first line.
+        verified: "2026-11-16"
     # The security-relevant settings, each with the baseline value (data/tooling/BASELINE.md).
     # The operator is the admin: every row is an environment variable of `ollama serve` (systemd override.conf on
     # Linux, launchctl or a system variable delivered by MDM on macOS and Windows) or a desktop-app toggle the
@@ -551,7 +572,7 @@ tools:
         default: Unset (cloud models and web search available once signed in)
         recommended: OLLAMA_NO_CLOUD=1 on managed devices
         why: A -cloud model name or web search would otherwise send the prompt to Ollama's cloud through the same local API; teams approved for Ollama Cloud get an exception.
-        mitigations: [cap-ai-threat-modeling]
+        mitigations: [cap-ai-threat-modeling, D3-OTF]
         url: https://docs.ollama.com/faq
         verified: "2026-10-30"
       - id: ollamaRemotes
@@ -562,7 +583,7 @@ tools:
         default: ollama.com
         recommended: Unset (ollama.com only)
         why: Remote models can be forwarded only to the listed hosts, so no other inference host can be added through a model definition.
-        mitigations: [cap-ai-threat-modeling]
+        mitigations: [cap-ai-threat-modeling, D3-OTF]
         url: https://raw.githubusercontent.com/ollama/ollama/main/envconfig/config.go
         verified: "2026-10-30"
       - id: httpsProxy
@@ -573,7 +594,7 @@ tools:
         default: Unset (direct)
         recommended: The corporate proxy, with ollama.com and hf.co pulls on its allowlist
         why: Model pulls pass the proxy's source allowlist and logging; the FAQ says not to set HTTP_PROXY, which can break client connections.
-        mitigations: [cap-ai-threat-modeling, D3-FA]
+        mitigations: [cap-ai-threat-modeling, D3-FA, D3-OTF]
         url: https://docs.ollama.com/faq
         verified: "2026-10-30"
       - id: pullInsecure

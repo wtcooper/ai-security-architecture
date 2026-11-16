@@ -23,7 +23,7 @@ one of which (the sandbox technique) is now settled, as is the local runtime's e
 | Agent federation and agent sandbox had no catalogued product | Google ADK (12 settings) and Inspect (19 settings) onboarded, every row read on the vendor's page on 2026-11-15. Neither covers every pinned control: five of federation's 13 and four of the sandbox's 11 have no row, because the vendor pages did not support one. The two patterns' example notes were corrected to match the vendors' pages. |
 | Version 1's header summary was missing from the pattern page | Restored. See [V1-COMPARISON.md](V1-COMPARISON.md). |
 | Agent sandbox: the drawing asserted a microVM round each rollout, which its example does not provide | A sandbox is now defined by what it does: a boundary around running code, enforced from outside that code, that denies everything it does not explicitly grant. The technique sets its strength, not whether it is one. The definition is in the vocabulary and is used by the sandbox and personal-agent patterns; Kata Containers and gVisor stay as examples, and each cloud's mapping still names that cloud's own technique. |
-| Local model runtime: a risk note and a deviation relied on a device firewall rule that no control pinned | Removed. Running a local model needs no network rule of its own: the runtime's cloud features and model sources are controlled by the tool's own settings, and network controls belong to whatever calls the model, on that caller's pattern. |
+| Local model runtime: a risk note and a deviation relied on a device firewall rule that no control pinned | Outbound Traffic Filtering is now pinned on the weight fetch and on the runtime, delivered by the organisation's existing egress proxy and not by a per-process firewall rule. Model sources are held to the internal mirror, so quarantine is the only way in, and the runtime vendor's cloud is refused, because a tool's own switch is the user's to change. The model itself makes no calls, and the calling harness's egress stays on its own pattern. Ollama, LM Studio and llama.cpp each gained a row, read on the vendor's page on 2026-11-16. |
 
 ## By design, not gaps
 
@@ -31,7 +31,7 @@ one of which (the sandbox technique) is now settled, as is the local runtime's e
   Hardware-based Process Isolation and Application Configuration Hardening are enforced where
   the workload runs, so they show where they are pinned and not in the control-plane band.
 - **The local model runtime draws two control-plane boxes.** Its zone note says why: there is no
-  gateway, vendor or identity on the data path. The four controls whose function has no box
+  gateway, vendor or identity on the data path. The five controls whose function has no box
   there are shown where they are pinned.
 - **Agent sandbox: Secrets & key management is drawn empty.** Its own note says it is kept out
   on purpose. This is the one open question the audit still reports, and it is settled.
