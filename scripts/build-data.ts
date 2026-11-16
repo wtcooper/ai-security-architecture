@@ -34,7 +34,6 @@ import type {
   Guidance,
   Incident,
   Persona,
-  Rect,
   Risk,
   RiskOverlay,
   Surface,
@@ -50,7 +49,7 @@ import {
 } from "../src/lib/types";
 import { categoryById, INCIDENT_CATEGORIES } from "../src/lib/incident-categories";
 import { BAND_DEVIATIONS, bandFor, cosaiBandFor, type BandId } from "../src/lib/bands";
-import { chipSpots, flowBadgeSpots, ICON_NAMES, layoutArchetype, placeTags, TAG_W_EST } from "../src/lib/flow-layout";
+import { ICON_NAMES } from "../src/lib/icon-names";
 import {
   ACTOR_IDS,
   BANDS,
@@ -1035,10 +1034,7 @@ function checkArchetypes(
         );
     }
 
-    const resolved = { ...arch, risks, mitigations };
-    const layout = layoutArchetype(resolved);
-    checkDiagramCollisions(where, resolved, layout);
-    return { ...resolved, layout } satisfies Archetype;
+    return { ...arch, risks, mitigations } satisfies Archetype;
   });
 
   // The catalogue is being rebuilt flow-style one architecture at a time (the zone-style set is
@@ -1176,7 +1172,7 @@ type PatternSpec = {
  * services.
  */
 function checkPatterns(
-  arch: Omit<Archetype, "layout">,
+  arch: Archetype,
   patterns: Record<string, PatternSpec>,
 ): string[] {
   if (!arch.zones?.length) return []; // patterns are expressed in band terms
@@ -1245,7 +1241,7 @@ function checkPatterns(
   return out;
 }
 
-function checkVocabulary(archs: Omit<Archetype, "layout">[]) {
+function checkVocabulary(archs: Archetype[]) {
   let vocab: {
     components?: {
       title: string;
@@ -1626,292 +1622,6 @@ function checkTooling(
   console.log(`tooling: ${loaded.tools.length} tools across ${vendorIds.size} vendors`);
   return loaded.tools.map((e) => ({ ...e.tool, items: e.tool.items ?? [], controls: e.tool.controls ?? [] }));
 }
-
-/**
- * The drawings must stay legible without a human squinting at 28 screenshots: the build
- * re-runs the exact placement maths the renderer uses (flow-layout.ts exports it to both
- * sides) and fails when a flow would pass through a block, or a chip or risk tag would land
- * on one, or a tag stack would run off the top of the canvas. The fix is always authored —
- * a route hint, a different grid cell, or fewer pins on one target.
- */
-function checkDiagramCollisions(
-  where: string,
-  arch: Omit<Archetype, "layout">,
-  layout: ReturnType<typeof layoutArchetype>,
-): void {
-  const inflate = (r: Rect, by: number): Rect => ({
-    x: r.x - by,
-    y: r.y - by,
-    w: r.w + 2 * by,
-    h: r.h + 2 * by,
-  });
-  const hits = (r: Rect, s: Rect) =>
-    r.x < s.x + s.w && s.x < r.x + r.w && r.y < s.y + s.h && s.y < r.y + r.h;
-  const blockRects = Object.entries(layout.blocks);
-  // Is `outer` an ancestor of `inner`? A container's rect covers its children by construction,
-  // so it can never be said to obstruct an edge that starts or ends inside it.
-  const parentOf = new Map(arch.blocks.map((b) => [b.id, b.parent]));
-  const encloses = (outer: string, inner: string) => {
-    for (let p = parentOf.get(inner); p; p = parentOf.get(p)) if (p === outer) return true;
-    return false;
-  };
-
-  // Flows through blocks. Path data is our own "M x y L x y ..." — parse the segments back.
-  for (const edge of layout.edges) {
-    const nums = edge.d.match(/-?[\d.]+/g)!.map(Number);
-    for (let i = 0; i + 3 < nums.length; i += 2) {
-      const seg: Rect = {
-        x: Math.min(nums[i], nums[i + 2]) - 1,
-        y: Math.min(nums[i + 1], nums[i + 3]) - 1,
-        w: Math.abs(nums[i + 2] - nums[i]) + 2,
-        h: Math.abs(nums[i + 3] - nums[i + 1]) + 2,
-      };
-      for (const [id, rect] of blockRects) {
-        if (id === edge.from || id === edge.to) continue;
-        if (encloses(id, edge.from) || encloses(id, edge.to)) continue;
-        if (hits(seg, inflate(rect, -2))) {
-          fail(
-            `${where}: flow ${edge.from}->${edge.to} passes through block ${id} — ` +
-              `move a block, or set route: ${
-                (archEdgeOf(arch, edge)?.route ?? "hv") === "hv" ? "vh" : "hv"
-              }`,
-          );
-        }
-      }
-    }
-  }
-
-  const edgeGeoOf = (ref: string) => {
-    const found =
-      layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
-      layout.edges.find((e) => `${e.to}->${e.from}` === ref);
-    return found ? { midX: found.midX, midY: found.midY, horizontal: found.horizontal, extent: found.extent } : undefined;
-  };
-
-  const checkSpots = (kind: string, at: string, rects: Rect[], ownBlock?: string) => {
-    // Whatever the pin is anchored to — a block, or an edge's two endpoints — a container of
-    // any of those necessarily overlaps the pin and cannot be said to obstruct it.
-    const anchors = ownBlock ? [ownBlock] : at.split("->");
-    for (const r of rects) {
-      if (r.y < 2) fail(`${where}: ${kind} at ${at} runs off the top of the canvas — fewer pins there, or move the block down a row`);
-      for (const [id, rect] of blockRects) {
-        if (id === ownBlock) continue;
-        if (anchors.some((a) => encloses(id, a))) continue;
-        if (hits(r, inflate(rect, -2))) {
-          fail(`${where}: ${kind} at ${at} lands on block ${id} — pin it elsewhere or adjust the grid`);
-        }
-      }
-    }
-  };
-
-  const chipGroups = new Map<string, number>();
-  for (const pin of arch.pins.mitigations) {
-    chipGroups.set(pin.at, (chipGroups.get(pin.at) ?? 0) + 1);
-  }
-  for (const [at, n] of chipGroups) {
-    const spots = chipSpots(n, layout.blocks[at], edgeGeoOf(at), layout.blockChipXs?.[at]);
-    checkSpots(
-      "mitigation chip",
-      at,
-      spots.map((s) => ({ x: s.x - 10, y: s.y - 10, w: 20, h: 20 })),
-      layout.blocks[at] ? at : undefined,
-    );
-  }
-
-  // Where an edge-anchored pin may legibly sit. The first version of this check demanded the
-  // midpoint fall inside some band, and it fired on all four of the catalogue's crossings —
-  // which is the one place a control most belongs, since a band crossing is by construction
-  // the gutter between two bands. The check was contradicting its own stated intent ("inside a
-  // band, or on a band's edge"). What it should test is that the pin sits somewhere along the
-  // run the edge actually covers: between the outer edges of its two endpoints' bands. A pin
-  // outside that span has drifted off its own arrow, which is the real defect.
-  const ZONE_PAD = 16;
-  const BAND_GUTTER = 12;
-  const cols = layout.columns ?? [];
-  const spanOfZone = new Map<string, { x0: number; x1: number }>();
-  for (const z of arch.zones ?? []) {
-    const cs = arch.blocks.filter((b) => b.zone === z.id && !b.parent).map((b) => b.col);
-    if (!cs.length || !cols.length) continue;
-    const lo = cols[Math.min(...cs)];
-    const hi = cols[Math.max(...cs)];
-    if (lo && hi) spanOfZone.set(z.id, { x0: lo.x - ZONE_PAD - (lo.padL ?? 0), x1: hi.x + hi.w + ZONE_PAD + (hi.padR ?? 0) });
-  }
-  // Every gutter between two neighbouring bands is the same width. Room a seam needs (for a
-  // gutter route or a hop's pins) goes inside a band as padding, never into the gutter, where an
-  // odd-width gap reads as a mistake.
-  const ownership = (arch.zones ?? []).filter((z) => z.owner !== "governance" && spanOfZone.has(z.id));
-  const spans = ownership.map((z) => ({ owner: z.owner, ...spanOfZone.get(z.id)! })).sort((p, q) => p.x0 - q.x0);
-  for (let i = 1; i < spans.length; i++) {
-    const gutter = spans[i].x0 - spans[i - 1].x1;
-    if (Math.abs(gutter - BAND_GUTTER) > 0.5)
-      fail(`${where}: the gutter between the ${spans[i - 1].owner} and ${spans[i].owner} bands is ${Math.round(gutter)}px, not ${BAND_GUTTER}px — every gutter between bands is the same width`);
-  }
-  if (spanOfZone.size) {
-    const zoneOfBlock = new Map(arch.blocks.map((b) => [b.id, b.zone ?? ""]));
-    const pinnedEdges = new Set(
-      [...arch.pins.mitigations, ...arch.pins.risks].map((p) => p.at).filter((at) => at.includes("->")),
-    );
-    for (const e of layout.edges) {
-      const ref = `${e.from}->${e.to}`;
-      if (!pinnedEdges.has(ref) && !pinnedEdges.has(`${e.to}->${e.from}`)) continue;
-      const ends = [e.from, e.to]
-        .map((id) => spanOfZone.get(zoneOfBlock.get(id) ?? ""))
-        .filter(Boolean) as { x0: number; x1: number }[];
-      if (ends.length < 2) continue;
-      const x0 = Math.min(...ends.map((s) => s.x0));
-      const x1 = Math.max(...ends.map((s) => s.x1));
-      if (e.midX >= x0 && e.midX <= x1) continue;
-      fail(
-        `${where}: pin on ${ref} sits outside the bands its edge connects — move a block so the edge's midpoint falls on the run, or re-anchor the pin`,
-      );
-    }
-  }
-
-  const tagGroups = new Map<string, number>();
-  for (const pin of arch.pins.risks) {
-    tagGroups.set(pin.at, (tagGroups.get(pin.at) ?? 0) + 1);
-  }
-  // Tag width depends on the code ("R01"), which is constant-width here. Placed in one pass,
-  // exactly as the renderers place them, so the collision check sees the merged stacks.
-  const placedTags = placeTags(
-    [...tagGroups.entries()].map(([at, n]) => ({ at, widths: Array.from({ length: n }, () => TAG_W_EST) })),
-    layout,
-  );
-  for (const [at] of tagGroups) {
-    const rects = placedTags.get(at)?.rects ?? [];
-    checkSpots("risk tag", at, rects, layout.blocks[at] ? at : undefined);
-  }
-
-  // Pins must never hide each other, or an arrow. Chips and risk tags show together, so a tag
-  // over a chip (or a chip over a tag, or two stacks from neighbouring arrows meeting) hides a
-  // number the reader needs; and a pin sitting on another arrow's line hides where that arrow
-  // goes. A pin on its own arrow is by design.
-  type Pin = { kind: string; at: string; r: Rect };
-  const pins: Pin[] = [
-    ...[...chipGroups].flatMap(([at, n]) =>
-      chipSpots(n, layout.blocks[at], edgeGeoOf(at), layout.blockChipXs?.[at]).map((sp) => ({ kind: "mitigation chip", at, r: { x: sp.x - 10, y: sp.y - 10, w: 20, h: 20 } })),
-    ),
-    ...[...tagGroups.keys()].flatMap((at) => (placedTags.get(at)?.rects ?? []).map((r) => ({ kind: "risk tag", at, r }))),
-  ];
-  const segsOf = (e: (typeof layout.edges)[number]) => {
-    const pts = [...e.d.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: +m[1], y: +m[2] }));
-    return pts.slice(1).map((p, k) => ({
-      x: Math.min(p.x, pts[k].x) - 1,
-      y: Math.min(p.y, pts[k].y) - 1,
-      w: Math.abs(p.x - pts[k].x) + 2,
-      h: Math.abs(p.y - pts[k].y) + 2,
-    }));
-  };
-  const sameEdge = (a: string, b: string) => a === b || a === b.split("->").reverse().join("->");
-  const reported = new Set<string>();
-  const once = (msg: string) => {
-    if (!reported.has(msg)) fail(msg);
-    reported.add(msg);
-  };
-  for (let i = 0; i < pins.length; i++) {
-    for (let j = i + 1; j < pins.length; j++) {
-      const p = pins[i];
-      const q = pins[j];
-      if (p.kind === q.kind && sameEdge(p.at, q.at)) continue; // laid out together by design
-      if (hits(inflate(p.r, -1), inflate(q.r, -1))) once(`${where}: ${p.kind} at ${p.at} overlaps ${q.kind} at ${q.at}`);
-    }
-  }
-  for (const p of pins) {
-    for (const e of layout.edges) {
-      const key = `${e.from}->${e.to}`;
-      if (sameEdge(p.at, key)) continue;
-      // A block's own pins may sit beside the arrows that leave it.
-      if (!p.at.includes("->") && (e.from === p.at || e.to === p.at)) continue;
-      if (segsOf(e).some((sg) => hits(sg, inflate(p.r, 2)))) once(`${where}: ${p.kind} at ${p.at} sits on the line of flow ${key}`);
-    }
-  }
-
-  // Flow badges were the one pin class nobody checked, and it showed: the personal agent had an
-  // F4 sitting across the Downstream services title bar. Their geometry is fixed by the
-  // renderer — a 28x17 pill at the edge midpoint, stepping right for each additional flow on
-  // the same edge — so the same collision test applies.
-  // Step badges. Every walk is checked, not just the walkthrough, because selecting a scenario
-  // re-numbers the canvas and its badges have to land somewhere legible too. A walk that visits
-  // one edge twice — a round trip — stacks two numbers there, which is correct and why the
-  // stacking geometry stays.
-  const resolveLeg = (ref: string) => {
-    const found =
-      layout.edges.find((e) => `${e.from}->${e.to}` === ref) ??
-      layout.edges.find((e) => `${e.to}->${e.from}` === ref);
-    return found ? `${found.from}->${found.to}` : undefined;
-  };
-  for (const walk of [arch.walkthrough, ...(arch.scenarios ?? [])]) {
-    if (!walk) continue;
-    const per = new Map<string, number>();
-    for (const st of walk.steps ?? []) {
-      const key = resolveLeg(st.follow);
-      if (key) per.set(key, (per.get(key) ?? 0) + 1);
-    }
-    const badges: { at: string; r: Rect }[] = [];
-    for (const [key, n] of per) {
-      const spots = flowBadgeSpots(n, edgeGeoOf(key)!, Object.values(layout.blocks));
-      checkSpots("step badge", key, spots);
-      for (const r of spots) badges.push({ at: key, r });
-    }
-    // A walk's numbers show without the chips and tags, so they only have to clear each other.
-    for (let i = 0; i < badges.length; i++) {
-      for (let j = i + 1; j < badges.length; j++) {
-        if (badges[i].at === badges[j].at) continue;
-        if (hits(inflate(badges[i].r, -1), inflate(badges[j].r, -1)))
-          once(`${where}: step badges on ${badges[i].at} and ${badges[j].at} overlap in "${walk.title}"`);
-      }
-    }
-  }
-
-  // Two arrows must never share a line. A run drawn on top of another's, or a bend that
-  // lands on another arrow, cannot be followed — the reader sees one line with three ends.
-  // The third-party coding agent's remote-device and harness arrows into the vendor block
-  // were drawn exactly so, and a data change (route hints) fixed it; this keeps it fixed.
-  type Seg = { x0: number; y0: number; x1: number; y1: number; edge: string };
-  const segs: Seg[] = [];
-  const ends: { x: number; y: number; edge: string; what: string }[] = [];
-  for (const e of layout.edges) {
-    const pts = [...e.d.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g)].map((m) => ({ x: +m[1], y: +m[2] }));
-    const key = `${e.from}->${e.to}`;
-    for (let i = 1; i < pts.length; i++) {
-      segs.push({ x0: pts[i - 1].x, y0: pts[i - 1].y, x1: pts[i].x, y1: pts[i].y, edge: key });
-    }
-    pts.forEach((p, i) =>
-      ends.push({ ...p, edge: key, what: i === 0 ? "start" : i === pts.length - 1 ? "end" : "bend" }),
-    );
-  }
-  const H = (s: Seg) => Math.abs(s.y0 - s.y1) < 0.5;
-  const V = (s: Seg) => Math.abs(s.x0 - s.x1) < 0.5;
-  const lo = (a: number, b: number) => Math.min(a, b);
-  const hi = (a: number, b: number) => Math.max(a, b);
-  for (let i = 0; i < segs.length; i++) {
-    for (let j = i + 1; j < segs.length; j++) {
-      const a = segs[i];
-      const b = segs[j];
-      if (a.edge === b.edge) continue;
-      if (H(a) && H(b) && Math.abs(a.y0 - b.y0) < 6) {
-        const shared = lo(hi(a.x0, a.x1), hi(b.x0, b.x1)) - hi(lo(a.x0, a.x1), lo(b.x0, b.x1));
-        if (shared > 12) fail(`${where}: flows ${a.edge} and ${b.edge} run on the same line for ${Math.round(shared)}px — route one of them differently`);
-      }
-      if (V(a) && V(b) && Math.abs(a.x0 - b.x0) < 6) {
-        const shared = lo(hi(a.y0, a.y1), hi(b.y0, b.y1)) - hi(lo(a.y0, a.y1), lo(b.y0, b.y1));
-        if (shared > 12) fail(`${where}: flows ${a.edge} and ${b.edge} run on the same line for ${Math.round(shared)}px — route one of them differently`);
-      }
-    }
-  }
-  for (const p of ends) {
-    for (const s of segs) {
-      if (s.edge === p.edge) continue;
-      const on = H(s)
-        ? Math.abs(p.y - s.y0) < 4 && p.x > lo(s.x0, s.x1) + 4 && p.x < hi(s.x0, s.x1) - 4
-        : Math.abs(p.x - s.x0) < 4 && p.y > lo(s.y0, s.y1) + 4 && p.y < hi(s.y0, s.y1) - 4;
-      if (on) fail(`${where}: the ${p.what} of flow ${p.edge} lands on flow ${s.edge} — the two read as one line`);
-    }
-  }
-}
-
-const archEdgeOf = (arch: Omit<Archetype, "layout">, geo: { from: string; to: string }) =>
-  arch.edges.find((e) => e.from === geo.from && e.to === geo.to);
 
 /**
  * CoSAI declares risk categories only in the risks JSON Schema enum, not in risks.yaml,

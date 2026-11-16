@@ -1,20 +1,17 @@
 "use client";
 
 /**
- * The standard drawing of a pattern: trust boundaries, plain boxes, numbered controls. It takes
- * what the detailed canvas takes (FlowDiagram), so the page can show either. The layout is
+ * The drawing of a pattern: trust boundaries, plain boxes, numbered controls. The layout is
  * computed from the pattern's data (layout.ts); this component adds what a reader does with it:
  * zoom and pan, a hover card, expanding to the window, and export.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Highlight } from "@/components/reference/FlowDiagram";
-import type { BlockService } from "@/components/reference/FlowDiagramRF";
-import { downloadArchetypeHtml } from "@/components/reference/export-html";
 import { REF_LAYERS } from "@/components/reference/flow-style";
 import type { Archetype, Scenario } from "@/lib/types";
 import { BOUNDARY_TONE, BoxDiagram, type DrawingPins, type HoverCard } from "./BoxDiagram";
 import { boundaryLayout } from "./layout";
+import type { BlockService, Highlight, StepOverlay } from "./types";
 
 interface View {
   k: number;
@@ -32,9 +29,11 @@ export function PatternDrawing({
   walk = null,
   highlight = null,
   onHighlight,
+  overlay = null,
   pins = "capabilities",
   onPickMitigation,
   services = null,
+  minScale = MIN_SCALE,
   className,
 }: {
   archetype: Archetype;
@@ -42,11 +41,15 @@ export function PatternDrawing({
   walk?: Scenario | null;
   highlight?: Highlight | null;
   onHighlight?: (h: Highlight | null) => void;
+  /** An incident step replayed on the drawing. */
+  overlay?: StepOverlay | null;
   /** Which pins show: the numbered controls, the coded risk tags, or both. */
   pins?: DrawingPins;
   onPickMitigation?: (id: string) => void;
   /** Block id -> the cloud service that plays it; null draws the generic components. */
   services?: Map<string, BlockService> | null;
+  /** The smallest share of natural size to draw at inline before scrolling sideways. Lower where seeing the whole drawing matters more than reading it. */
+  minScale?: number;
   className?: string;
 }) {
   const spec = useMemo(() => boundaryLayout(archetype), [archetype]);
@@ -162,9 +165,6 @@ export function PatternDrawing({
       <button type="button" className={button} onClick={exportSvg} title="Download this drawing as an SVG image">
         Export SVG
       </button>
-      <button type="button" className={button} onClick={() => void downloadArchetypeHtml(archetype)} title="Download the detailed drawing as a standalone interactive HTML file">
-        Export HTML
-      </button>
       {expanded ? (
         <button type="button" autoFocus className={button} onClick={() => setExpanded(false)} title="Collapse back into the page (Esc)">
           Collapse ⤡
@@ -183,6 +183,7 @@ export function PatternDrawing({
       spec={spec}
       walk={walk}
       highlight={highlight}
+      overlay={overlay}
       pins={pins}
       services={services}
       onPickMitigation={onPickMitigation}
@@ -192,7 +193,7 @@ export function PatternDrawing({
       svgRef={svgRef}
       className={expanded ? "h-full w-full" : "w-full"}
       style={{
-        minWidth: expanded ? undefined : Math.round(spec.width * MIN_SCALE),
+        minWidth: expanded ? undefined : Math.round(spec.width * minScale),
         cursor: view.k > 1 ? "grab" : undefined,
         touchAction: view.k > 1 ? "none" : undefined,
       }}

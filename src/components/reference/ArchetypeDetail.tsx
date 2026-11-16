@@ -2,13 +2,15 @@
 
 /**
  * The prose below the diagram. The diagram carries the security content — this panel carries
- * the reading: how the pattern works, why it is its own pattern, the products that are examples
+ * the reading: how the pattern works, every component and what it holds (the drawing shows one
+ * line per box; this is the full list), why it is its own pattern, the products that are examples
  * of it, where its drawing departs from the catalogue's rules, and where the claims come from. Collapsed except the narrative,
  * because the earlier version of this tab taught that showing everything at once reads as noise.
  */
 import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
+import { summaryOf } from "@/components/drawing/layout";
 import type { Archetype } from "@/lib/types";
 
 export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
@@ -16,6 +18,13 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
     <div className="rounded-xl border border-line bg-paper">
       <Section title="How it works" count={null} defaultOpen>
         <Prose blocks={archetype.description} size="sm" />
+      </Section>
+
+      <Section title="Components" count={archetype.blocks.length}>
+        <p className="mb-3 text-[12.5px] leading-snug text-ink-3">
+          Every box on the drawing, by the boundary it sits in, with what it holds.
+        </p>
+        <ComponentList archetype={archetype} />
       </Section>
 
       {archetype.distinguishedBy?.length ? (
@@ -75,6 +84,48 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
       </Section>
     </div>
   );
+}
+
+/** Every box of the pattern with its note and everything it holds: the full list behind the drawing's one-liners. */
+export function ComponentList({ archetype }: { archetype: Archetype }) {
+  return (
+      <div className="space-y-5">
+        {componentGroups(archetype).map((g) => (
+          <div key={g.zone}>
+            <p className="ident text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-3">{g.title}</p>
+            <ul className="mt-2 grid gap-x-8 gap-y-3 md:grid-cols-2">
+              {g.blocks.map((b) => (
+                <li key={b.id} data-component={b.id} className="text-[13px] leading-snug text-ink-2">
+                  <span className="font-semibold text-ink">{b.title}</span>
+                  {summaryOf(b) && <span className="text-ink-3"> · {summaryOf(b)}</span>}
+                  {b.note && <span className="mt-0.5 block">{b.note.trim()}</span>}
+                  {b.items?.length ? (
+                    <ul className="mt-1.5 space-y-1 border-l border-line pl-3">
+                      {b.items.map((it) => (
+                        <li key={it.label} className="text-[12.5px] leading-snug">
+                          <span className="font-medium text-ink">{it.label}</span>
+                          {it.note && <span className="text-ink-2">: {it.note.trim()}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+  );
+}
+
+/** The pattern's boxes under the boundary each sits in, boundaries in the pattern's own order. */
+function componentGroups(archetype: Archetype) {
+  const zones = archetype.zones ?? [];
+  const title = (id: string) => zones.find((z) => z.id === id)?.title ?? "Components";
+  const order = [...zones.map((z) => z.id), ...new Set(archetype.blocks.map((b) => b.zone ?? "").filter((z) => !zones.some((x) => x.id === z)))];
+  return order
+    .map((zone) => ({ zone, title: title(zone), blocks: archetype.blocks.filter((b) => (b.zone ?? "") === zone) }))
+    .filter((g) => g.blocks.length);
 }
 
 /** Collapsible prose section, shared with the guidance panel below this component. */

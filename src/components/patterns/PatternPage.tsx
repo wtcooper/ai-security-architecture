@@ -2,8 +2,8 @@
 
 /**
  * One pattern: what it is and when it applies, its drawing, then the tabs beneath. Enable comes
- * first because it is what a reader came for; how the pattern works, where risk enters and the
- * incidents that happened on it sit behind it. The pattern itself is fixed by the address
+ * first because it is what a reader came for; how the pattern works, where risk enters, how
+ * data flows and the incidents that happened on it sit behind it. The pattern itself is fixed by the address
  * (`/patterns/<slug>/`); the tab and the open product ride in the query, the open control in
  * the anchor, so every view of a pattern can be shared.
  */
@@ -13,7 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { ArchetypeView } from "@/components/reference/ArchetypeView";
 import { ArchPicker } from "@/components/reference/ArchPicker";
-import type { Highlight } from "@/components/reference/FlowDiagram";
+import type { Highlight } from "@/components/drawing/types";
 import { archetypeById, archetypesInOrder, cloudById, productsForArchetype, surfaces, toolById } from "@/lib/data";
 import { PATTERN_TABS, ROUTES, patternHref, type PatternTab } from "@/lib/routes";
 import type { Scenario } from "@/lib/types";
@@ -72,7 +72,7 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
         setHighlight({ kind: "mitigation", id: control });
       }
       setArrived(true);
-      const target = control ? `control-${control}` : linkedProduct ? "tools" : linkedTab ? "pattern-tabs" : null;
+      const target = control ? `control-${control}` : linkedProduct ? "tools" : linkedTab ? "pattern-drawing" : null;
       // A further frame, so the opened row has been painted before it is measured.
       if (target) requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: control ? "center" : "start" }));
     });

@@ -156,7 +156,7 @@ security leadership actually read: vendor-neutral mitigation blocks connected by
 paths, with the risk and requirement mapping pinned onto the drawing rather than kept beside it.
 
 An architecture is authored as a graph — blocks on a coarse grid, edges with a path class — and
-never as a picture; `src/lib/flow-layout.ts` computes the geometry at build time, so what is
+never as a picture; `src/components/drawing/layout.ts` computes the geometry from that data, so what is
 reviewed is the claim rather than the drawing. The F5 grammar maps onto this framework directly:
 
 - **Blocks** are CoSAI components wherever CoSAI names one, anchored via `cosaiComponent` on the
@@ -218,7 +218,7 @@ reviewed is the claim rather than the drawing. The F5 grammar maps onto this fra
   an agent harness and a tool surface pins `AML.M0028` (AI Agent Tools Permissions Configuration) on the crossing
   between them — the OS permission layer, per-tool grants and action-catalogue validation are
   all this one control in surface-specific dress. Sandboxing is drawn as containment (a
-  labelled frame in the React Flow view, a Sandboxed tools item where it lives inside an
+  labelled frame on the drawing, a Sandboxed tools item where it lives inside an
   application), never as a standalone facility block.
 - **Typed paths** follow F5's legend, simplified to two classes: one data path for flows
   inside the system, and external content and actions. F5's dotted governance relationship

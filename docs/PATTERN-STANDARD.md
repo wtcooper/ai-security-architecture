@@ -16,8 +16,7 @@ table at the end.
 The boundary drawing is laid out by `src/components/drawing/layout.ts` from the pattern's own
 data. No pattern has coordinates in code. A pattern that reads badly is fixed in the engine if
 the cause is general, or in its own file if it is particular, with a `cell` on a block: its
-grid cell on the boundary drawing, where that should differ from its place on the detailed
-canvas. Nine patterns use it, on one convention: Enterprise data sits under the Tool services
+grid cell on the drawing, where that should differ from its authored `col` and `row`. Nine patterns use it, on one convention: Enterprise data sits under the Tool services
 that read it, so our cloud is two columns wide.
 
 | Rule | What it means | How it is checked |
@@ -43,13 +42,13 @@ These hold for all patterns because the engine draws them, and are covered by th
 | **S4 External** | External parties sit in a band beneath the trust boundaries, each under what reaches it. The band is tagged "no agreement" only when nothing in it is reached under contract. |
 | **S5 One numbering** | Purple circles are controls, numbered as on the Enable tab. Red tags are risks. Dark squares are the steps of a walk. Nothing else is numbered. |
 | **S6 Type accent** | A box's left edge says what it is: application, model, data, control point, person. |
-| **S7 Same data, two views** | The Boundaries view and the Detailed canvas carry the same blocks, flows, pins and cloud relabelling. |
+| **S7 One drawing** | The boundary drawing is the only drawing of a pattern. It shows one kind of marker at a time (controls, risks, or a flow's steps), takes each cloud's relabelling, and replays incident steps. What a box holds is in its hover card and listed in full under How it works. |
 
 ## Content: what a pattern's file must carry
 
 | Rule | Field | What it must be |
 | --- | --- | --- |
-| **C1 One-liner** | `summary` on every block | One line saying what the box holds or does on this pattern, in the reader's words. Lower case, no full stop, " · " between parallel items. At most 78 characters, and it must show uncut (L5). In practice a box shows three lines of about 25 characters; a container's heading shows two lines of about 33. It does not repeat the title, and it does not list every item: the Detailed view does that. |
+| **C1 One-liner** | `summary` on every block | One line saying what the box holds or does on this pattern, in the reader's words. Lower case, no full stop, " · " between parallel items. At most 78 characters, and it must show uncut (L5). In practice a box shows three lines of about 25 characters; a container's heading shows two lines of about 33. It does not repeat the title, and it does not list every item: How it works does that. |
 | **C2 Gloss** | `gloss` on every endpoint, cloud and vendor zone that holds a block | A few words on what the zone is on this pattern ("developer's machine", "our network", "the vendor's cloud"). At most 40 characters, and short enough not to widen its boundary by more than 64px: a zone that holds one box has room for about 20. |
 | **C3 Crossings** | `crossing` on every flow whose ends are in different zones | `kind`: `brokered` (through a control point we run), `vendor` (governed by the vendor), `person` (through the person present) or `direct` (nothing of ours in the path). `via`: one line naming what the flow passes through on our side, and for `direct`, starting "Nothing between:" and naming the only thing that does apply. It must agree with the controls pinned on that flow and its ends. |
 | **C4 When it applies** | `useWhen` in `data/overlay/patterns.yaml` | One sentence in the reader's words, plus the search words a reader might use. |

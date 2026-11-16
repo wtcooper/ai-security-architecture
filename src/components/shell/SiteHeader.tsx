@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 import { SearchPalette } from "./SearchPalette";
 
 /**
- * Patterns lead: what a reader is enabling, then the control catalogue and the tool index
- * behind them, and the incidents that show why. The risk and framework material shares one
+ * Patterns lead: what a reader is enabling, then the control catalogue behind them and the
+ * incidents that show why. A tool has no page of its own: it is reached on its pattern. The risk and framework material shares one
  * Reference menu.
  */
 type NavItem =
@@ -17,7 +17,6 @@ type NavItem =
 const NAV: NavItem[] = [
   { href: "/patterns", label: "Patterns" },
   { href: "/controls", label: "Controls" },
-  { href: "/tools", label: "Tools" },
   { href: "/incidents", label: "Incidents" },
   {
     label: "Reference",

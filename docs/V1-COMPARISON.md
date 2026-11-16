@@ -61,27 +61,29 @@ archetype to pattern.
 
 | Version 1 showed | Now |
 | --- | --- |
-| Landing page: the three-phase framing, a four-step path, reference links, data sources | The home page is the pattern finder. The framing and the data sources are on the Reference index; the four destinations are all in the navigation. |
+| Landing page: the three-phase framing, a four-step path, reference links, data sources | The home page opens with how to read a pattern, then the pattern finder: one situation at a time, a short list and a preview with the drawing. The framing and the data sources are on the Reference index. |
 | Risk map | Reference › Risk map, unchanged |
 | Capabilities matrix and detail | Controls, grouped by NIST CSF category, with the CoSAI grouping one switch away. The detail gained the control's CSF category. |
 | Architecture header: surface, title, examples, **summary** | Pattern header: situation, title, use-when line, **summary**, examples. The summary was missing after the restructure and has been put back; a test now fails without it. |
-| The drawing: components with their sub-components and icons, flows, control chips, risk tags, cloud relabelling, export | Two drawings of the same data. **Boundaries** (the default) shows each component with a one-line description; its sub-components appear when you point at it. **Detailed** is version 1's drawing, unchanged. |
-| Overview tab: how it works, why it is its own archetype, sources | How it works: the same three, plus the examples with their notes and the recorded deviations, which were in the data and never shown. |
-| Sequence flows tab: the walks, with risk tags on the drawing | Risks & flows: the same, plus the pattern's risks as a list and the boundary-crossings table. |
+| The drawing: components with their sub-components and icons, flows, control chips, risk tags, cloud relabelling, export | One drawing, the trust-boundary view: each component with a one-line description, and its sub-components in its hover card. Version 1's canvas was kept as a second "Detailed" view until 2026-11-16 and then retired; the icons went with it. |
+| Overview tab: how it works, why it is its own archetype, sources | How it works: the same three, plus every component listed with everything it holds and each item's note, the examples with their notes, and the recorded deviations. |
+| Sequence flows tab: the walks, with risk tags on the drawing | Two tabs. Risks: the pattern's risks as a list, tagged on the drawing. Flows: the walks numbered onto the drawing, the sequence diagram and the boundary-crossings table. |
 | Enable tab: foundations, surface baseline, use-case additions, tools | Enable: "What to do", then enterprise controls by CSF category, then tool settings. Every row and every setting is still there. |
 | Incidents, Risks, Controls (CoSAI), Components, Personas, Frameworks | Unchanged. Risks, CoSAI controls, components, personas and frameworks moved under Reference; incidents also appear on their pattern. |
-| The experimental drawings | Removed on purpose: one of them became the Boundaries drawing. |
+| The experimental drawings | Removed on purpose: one of them became the drawing. |
 
 Every address version 1 used is forwarded to its new one.
 
-## What the default drawing no longer shows at a glance
+## What the drawing no longer shows at a glance
 
 This is the one deliberate trade. Version 1's drawing printed all 425 sub-components on the
-canvas, which is what made it hard to read at laptop size. The Boundaries drawing replaces them
-with one line per component. By a word-matching count, about 120 sub-components are not named
+canvas, each with an icon, which is what made it hard to read at laptop size. The drawing now
+shows one line per component. By a word-matching count, about 120 sub-components are not named
 in their component's one-liner: for example "Computer use" under the personal agent's native
 tools, "Skills catalogue" under several AI gateways, "A2A peer agents" under tool services.
 
-They are not lost. Each is listed in the component's hover card on the Boundaries drawing, and
-all are drawn with their icons and notes on the Detailed drawing. But a reader who looks only at
-the default drawing and never points at a box will not see them.
+They are not lost. Each is listed in the component's hover card on the drawing, and all 425
+are listed with their notes under **How it works › Components**, which a test checks for every
+pattern. What is gone is the icon beside each one, the standalone HTML export of the old
+canvas, and the Tools index page (every tool is still reached from its pattern and from
+search).

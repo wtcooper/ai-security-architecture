@@ -121,14 +121,13 @@ CoSAI controls, Components, Personas, Frameworks).
 
 | View | What it does |
 | --- | --- |
-| **Home** (`/`) and **Patterns** (`/patterns/`) | The pattern finder: every pattern as a card under its surface, with a one-line "use this when…", example products and counts. The search box understands product, cloud and everyday words ("copilot", "azure", "chatbot"). |
+| **Home** (`/`) and **Patterns** (`/patterns/`) | Home opens with what the site is for and the three steps of reading a pattern, then the pattern finder: one situation at a time (tools on your devices, AI services you subscribe to, applications you build), a short list of its patterns, and beside it a preview of the one the pointer is on — when it applies, its examples and its drawing. A click opens the pattern. The search box understands product, cloud and everyday words ("copilot", "azure", "chatbot") and searches every situation at once. |
 | **Reference › Risk map** | Step through 36 risks × 3 phases. Each phase highlights a different set of components; the mitigated step names the controls that break the chain. |
-| **A pattern** (`/patterns/<slug>/`) | One page per pattern. A header says when it applies and gives examples; the drawing carries its numbered control chips; then four tabs. **Enable** (default) leads with a short "What to do" list from the pattern's guidance, then (1) **Enterprise controls**, every control the pattern pins in one table with a band per NIST CSF category, each row a chip on the drawing with placement notes, guidance, the risks it reduces and a **Status ⓘ**, and a tag on the ones every AI deployment needs; then (2) **Tool settings** (Cloud & tool settings where the architecture is built) — one pill per product, green when your organisation records it as enabled, and for the one picked its own security settings: where each is set, how (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the baseline value and why, the chips it delivers and a Status. On a cloud architecture the products are the three clouds, and the drawing can be **drawn as** Azure, AWS or Google Cloud, each block showing the service that plays it. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. **How it works** is the long description, why it is its own pattern, and its sources. **Risks & flows** lists the risks that enter the pattern, where each enters and the controls here that reduce it, then the sequence flows numbered onto the drawing. **Incidents** lists the real incidents that happened on it. The tab, the open product and the open control ride in the address, so any view can be shared. |
+| **A pattern** (`/patterns/<slug>/`) | One page per pattern. A header says when it applies and gives examples; the drawing carries its numbered control chips; beneath it sit five tabs, each of which changes what the drawing shows and the panel under it: Enable, How it works, Risks, Flows and Incidents. **Enable** (default) leads with a short "What to do" list from the pattern's guidance, then (1) **Enterprise controls**, every control the pattern pins in one table with a band per NIST CSF category, each row a chip on the drawing with placement notes, guidance, the risks it reduces and a **Status ⓘ**, and a tag on the ones every AI deployment needs; then (2) **Tool settings** (Cloud & tool settings where the architecture is built) — one pill per product, green when your organisation records it as enabled, and for the one picked its own security settings: where each is set, how (MDM, admin console, config file, API/CLI, IdP, cloud policy or your own code), the baseline value and why, the chips it delivers and a Status. On a cloud architecture the products are the three clouds, and the drawing can be **drawn as** Azure, AWS or Google Cloud, each block showing the service that plays it. Opening a row lights its chip; picking a chip opens its row. Old `/enable` links redirect to the tab. **How it works** is the long description, why it is its own pattern, and its sources. **Risks & flows** lists the risks that enter the pattern, where each enters and the controls here that reduce it, then the sequence flows numbered onto the drawing. **Incidents** lists the real incidents that happened on it. The tab, the open product and the open control ride in the address, so any view can be shared. |
 | **Incidents** | A list of real 2025–26 incidents, newest first, filtered by attack type and architecture. Each opens its own page: a step-by-step walk across its reference architecture, every step sourced, ending at the controls that would have broken the chain — each a link to its row on the pattern's Enable tab. |
 | **Reference › Risks** | All 36 by category: causes, impact, personas, lifecycle / impact / attacker-access facets, framework mappings, linked controls. |
 | **Reference › CoSAI controls** | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
 | **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group. Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
-| **Tools** (`/tools/`) | Every product and cloud with catalogued settings: vendor, the pattern it belongs to, how many settings are catalogued and when they were verified. A row opens the product's settings on its pattern. |
 | **Reference** (`/reference/`) | What each reference page is for, how risk is described, and where the data comes from. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
 | **Reference › Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
@@ -324,19 +323,19 @@ separate when their control sets differ, not when their vendors do.
 | **Cloud & hosted** (8) | Single agent workflow, multi-agent workflow, chat agent with tools, remote MCP server you publish, self-hosted model inference, model training & release pipeline, agent sandbox for RL & evaluation, agent-to-agent federation |
 | **Third-party SaaS** (5) | Enterprise AI chat with connectors, and four managed agent runtimes: UI/low-code, coding & desktop sessions, API/SDK, and persistent agents |
 
-A pattern has **two drawings of the same data**, switched above the drawing:
-
-- **Boundaries** (the default) is the trust-boundary view: each zone is a labelled outline
-  (managed endpoint, enterprise cloud, vendor platform, external), people stand outside every
-  boundary, the security and governance control plane runs beneath, and each component is a
-  plain box with a title, one line and a thin accent for its type. It is laid out automatically
-  for all 18 patterns by `src/components/drawing/layout.ts`; no pattern has coordinates in code.
-  Four fields in a pattern's file feed it: a `summary` on every block (its one line), a `gloss`
-  on a zone (a few words beside the canonical name), a `crossing` on every flow that crosses a
-  boundary (what it passes through on our side), and, where a wide zone should fold into fewer
-  columns, a `cell` on a block. All 18 patterns have the first three authored. People and
-  outside callers stand outside every boundary, and their flows count as crossings.
-- **Detailed** is the original canvas described below, with every item, icon and per-item note.
+Every pattern has **one drawing**, the trust-boundary view: each zone is a labelled outline
+(managed endpoint, enterprise cloud, vendor platform, external), people stand outside every
+boundary, the security and governance control plane runs beneath, and each component is a
+plain box with a title, one line and a thin accent for its type. Pointing at a box shows what
+it holds, and the **How it works** tab lists every component with everything it holds, so
+nothing is hover-only. The drawing is laid out automatically for all 18 patterns by
+`src/components/drawing/layout.ts`; no pattern has coordinates in code. Four fields in a
+pattern's file feed it: a `summary` on every block (its one line), a `gloss` on a zone (a few
+words beside the canonical name), a `crossing` on every flow that crosses a boundary (what it
+passes through on our side), and, where a wide zone should fold into fewer columns, a `cell`
+on a block. People and outside callers stand outside every boundary, and their flows count as
+crossings. An earlier second view (the "detailed" canvas, which drew every item with an icon)
+was retired on 2026-11-16; incident replays use the same boundary drawing.
 
 [`docs/PATTERN-STANDARD.md`](docs/PATTERN-STANDARD.md) states what a complete pattern must
 meet: seven measured layout rules, the structure every drawing shares, and the content a
@@ -344,49 +343,45 @@ pattern's file must carry. `npm run drawing:audit` scores every pattern against 
 tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) lists the open
 questions about the patterns themselves that the audit and the review turned up.
 
-Both carry the same pins and take the same cloud relabelling ("Drawn as AWS / Azure / Google
-Cloud"). Under **Risks & flows**, a **boundary crossings** table lists every flow that crosses a
-trust boundary: what crosses, what it passes through on our side (a control point we run, the
-vendor, the person, or nothing of ours), and the controls held there.
+The drawing takes cloud relabelling ("Drawn as AWS / Azure / Google Cloud"). Under **Flows**, a
+**boundary crossings** table lists every flow that crosses a trust boundary: what crosses, what
+it passes through on our side (a control point we run, the vendor, the person, or nothing of
+ours), and the controls held there.
 
-The detailed drawing's grammar is the one practitioners already read from vendor reference architectures
-(F5's AI reference architecture is the closest published relative): **mitigation blocks** with
-icon internals and a coloured title tab, **typed data paths** (data / external content &
-actions), **numbered control chips** seated on the drawing where each of
-the selected mitigations must be deployed, **coded risk tags** (`R01`–`R36`, stable across every
-architecture) pinned where each CoSAI risk surfaces, and **scenario walks** that replay a
-use case over the same canvas with everything else faded — *a stranger messages the agent*,
-*a step replays after a crash*, *a skill is installed*.
+What is drawn: **typed data paths** (data / external content & actions), **numbered control
+chips** seated where each of the pattern's controls must be deployed, **coded risk tags**
+(`R01`–`R36`, stable across every pattern) pinned where each CoSAI risk surfaces, and
+**sequence flows** that replay a use case over the same drawing with everything else faded —
+*a stranger messages the agent*, *a step replays after a crash*, *a skill is installed*.
 
-Tab colour answers "what is this thing" in three layers plus grey: **Application** (running
+A box's accent answers "what is this thing" in three layers plus grey: **Application** (running
 code), **Model** (the model and its serving infrastructure, one green), **Data** (anything at
 rest — records, memory files, indexes, registries), and a quiet grey for the security and
 governance machinery CoSAI has no component for — gateways, identity edges, sandboxes, the
 governance plane itself. That grey is a finding about the taxonomy, not a gap in the drawings:
-it marks the 2026 product categories the component list has not caught up to. The **zones**
-say who runs each block: neutral grey bands for what you operate, a darker band with a dotted
-edge for a vendor's platform and the outside world. Every block border is solid; only a
-containment frame is dashed. Paths are dark grey and differ by dash alone (solid data path,
-dashed external content & actions), and control chips are violet — so each colour on the
+it marks the 2026 product categories the component list has not caught up to. The **boundaries**
+say who runs each block: dashed grey for what you operate, violet for a vendor's platform,
+red-tinted for the outside world. Paths are dark grey and differ by dash alone (solid data
+path, dashed external content & actions), and control chips are violet — so each colour on the
 drawing means one thing.
 
-The drawing shows **one kind of pin at a time**: numbered control chips on Enable, How it works
-and Incidents; risk codes and a walk's step numbers on Risks & flows. Every pin stays authored and
+The drawing shows **one kind of marker at a time**: numbered control chips on Enable, How it
+works and Incidents; risk codes on Risks; a flow's step numbers on Flows. Every pin stays authored and
 placed; only what is visible changes.
 
 The discipline matches the rest of the repository — architectures are authored as graphs, never
 as pictures:
 
-- Blocks sit on a coarse authored grid; `src/lib/flow-layout.ts` computes every pixel at build
-  time. The client renders coordinates and runs no layout algorithm.
+- Blocks sit on a coarse authored grid (`col`, `row`); `src/components/drawing/layout.ts`
+  turns it into the drawing, routing every arrow, and no pattern carries coordinates.
 - **Every risk and mitigation on a page is pinned to a specific block or flow.** The
   architecture-level lists are derived from the pins, so the side rail can never claim
   something the drawing does not show.
 - A pinned mitigation must apply on the architecture's surface per `mitigations.yaml` — the
   two taxonomy layers cannot drift into contradiction.
-- The build **re-runs the renderer's own placement geometry** and fails if a flow passes
-  through a block, a chip or tag lands on one, a tag stack runs off the canvas, or a title
-  overflows its tab. Legibility is checked, not hoped for.
+- The tests **run the drawing's own layout** for every pattern and fail if an arrow passes
+  through a box or a boundary it does not belong to, a label is cut or lands on something, or
+  the drawing outgrows a laptop screen. Legibility is checked, not hoped for.
 - Named products appear only in each architecture's dated `exemplars`; the drawings themselves
   are vendor-neutral.
 
@@ -450,7 +445,7 @@ src/
 │   ├── types.ts                  every shape, including Mitigation and Surface
 │   ├── data.ts                   the typed accessors the whole app reads
 │   ├── map-layout.ts             hand-authored SVG geometry for the map
-│   ├── flow-layout.ts            ★ build-time geometry + pin placement for the architectures
+│   ├── icon-names.ts             the icons a component's items may use
 │   ├── bands.ts                  component → stack band
 │   ├── deviations.ts             declared divergences from CoSAI
 │   ├── frameworks.ts             framework lens logic
@@ -458,22 +453,22 @@ src/
 ├── app/                          one route per tab (App Router, static export)
 │   ├── page.tsx                  home: the pattern finder
 │   ├── patterns/[slug]/          one static page per pattern
-│   ├── controls/ · tools/        the control catalogue and the tool index
+│   ├── controls/                 the control catalogue
 │   ├── incidents/[id]/           one static page per incident
 │   ├── reference/                the index, and risk-map|risks|cosai-controls|components|personas|frameworks/
 │   └── map|risks|components|personas|frameworks|capabilities|enable|examples/
 │                                   retired paths: each only forwards to its new address
 └── components/
-    ├── shell/SiteHeader.tsx      nav: Patterns · Controls · Tools · Incidents · Reference ▾
+    ├── shell/SiteHeader.tsx      nav: Patterns · Controls · Incidents · Reference ▾
     ├── shell/LegacyRedirect.tsx  forwards every address the site used before patterns led
-    ├── patterns/                 ★ the finder, the pattern page, its risk and incident panels, the tool index
+    ├── patterns/                 ★ the finder (browse with a preview), the pattern page, its risk and incident panels
     ├── map/RiskMap.tsx           the SVG map
     ├── tour/TourExplorer.tsx     the three-phase walkthrough
     ├── browse/                   components, risks, controls, personas, frameworks;
     │                               CataloguePage.tsx is the shared master-detail shell
     ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail
     ├── drawing/                  ★ the boundary drawing: automatic layout, crossings, the crossings table
-    ├── reference/                ★ the detailed canvas, sequence flows, switcher, per-block styling
+    ├── reference/                ★ the pattern view (drawing, tabs, panels), sequence flows, switcher, per-block styling
     ├── enable/                   ★ a pattern's Enable tab: what to do, the controls by CSF category, product pills and settings tables
     └── incidents/                the incident list and the per-incident walk-through
 

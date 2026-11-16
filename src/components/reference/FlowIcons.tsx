@@ -1,7 +1,7 @@
 /**
  * The line-icon vocabulary for block internals, in the spirit of F5's diagrams. Every glyph is
  * hand-drawn strokes in a 24x24 box so the set stays visually uniform; ICON_NAMES in
- * flow-layout.ts is the authoritative list the build validates against.
+ * icon-names.ts is the authoritative list the build validates against.
  */
 import type { JSX } from "react";
 

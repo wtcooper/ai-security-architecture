@@ -1,4 +1,4 @@
-import type { StepOverlay } from "@/components/reference/FlowDiagram";
+import type { StepOverlay } from "@/components/drawing/types";
 import { incidents } from "@/lib/data";
 import type { Archetype, Incident, IncidentStep } from "@/lib/types";
 

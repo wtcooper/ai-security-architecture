@@ -6,6 +6,7 @@ import { CrossingsRegister } from "../src/components/drawing/CrossingsRegister";
 import { crossingsOf, standIn } from "../src/components/drawing/crossings";
 import { PatternDrawing } from "../src/components/drawing/PatternDrawing";
 import { boundaryLayout, ownedControls, type Rect } from "../src/components/drawing/layout";
+import { stepOverlay } from "../src/components/incidents/model";
 import { dataset, riskCode } from "../src/lib/data";
 import { audit } from "./drawing-audit";
 import type { Archetype } from "../src/lib/types";
@@ -203,3 +204,19 @@ test(
     assert.deepEqual(findings.map((f) => `${f.rule}: ${f.detail}`), [], `${a.slug} (npm run drawing:audit -- ${a.slug})`);
   }),
 );
+
+test("an incident step is replayed on the boundary drawing: its boxes numbered, the controls and risks hidden", () => {
+  for (const incident of dataset.incidents) {
+    const a = dataset.archetypes.find((x) => x.id === incident.archetype)!;
+    const spec = boundaryLayout(a);
+    for (const step of incident.steps) {
+      const overlay = stepOverlay(a, step);
+      const html = renderToStaticMarkup(<BoxDiagram archetype={a} spec={spec} overlay={overlay} />);
+      const drawn = new Set(spec.boxes.map((b) => b.id));
+      const expected = Object.keys(overlay.marks).filter((id) => drawn.has(id)).length;
+      assert.equal([...html.matchAll(/data-step="/g)].length, expected, `${incident.id} step ${step.n}: one number per box it lands in`);
+      assert.ok(expected > 0, `${incident.id} step ${step.n}: lands somewhere on the drawing`);
+      assert.doesNotMatch(html, /data-control=|data-risk=/, `${incident.id} step ${step.n}: pins are hidden during a replay`);
+    }
+  }
+});

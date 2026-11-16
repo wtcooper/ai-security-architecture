@@ -5,6 +5,9 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { EnablePanel } from "../src/components/enable/EnablePanel";
 import { PatternPage } from "../src/components/patterns/PatternPage";
+import { PatternFinder } from "../src/components/patterns/PatternFinder";
+import { ComponentList } from "../src/components/reference/ArchetypeDetail";
+import HomePage from "../src/app/page";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
 import { baselineNotPinned, controlGroups } from "../src/components/enable/model";
@@ -118,8 +121,14 @@ test("a pattern opens on Enable; a tab link opens that tab and a product link op
   assert.ok(home.includes(arch.useWhen.replace(/'/g, "&#x27;")), "the header says when the pattern applies");
   assert.match(home, /role="tab"[^>]*aria-selected="true"[^>]*>Enable/);
   assert.doesNotMatch(page(arch.id, "tab=overview"), /id="controls"/);
-  assert.match(page(arch.id, "tab=flows"), /Risks on this pattern/);
+  assert.match(page(arch.id, "tab=risks"), /Risks on this pattern/);
+  assert.doesNotMatch(page(arch.id, "tab=risks"), /Boundary crossings/, "risks and flows are separate tabs");
+  assert.match(page(arch.id, "tab=flows"), /Boundary crossings/);
+  assert.doesNotMatch(page(arch.id, "tab=flows"), /Risks on this pattern/);
   assert.match(page(arch.id, "tab=incidents"), /incident/i);
+  // The drawing comes first and the tabs sit beneath it; there is one drawing, with no second view to switch to.
+  assert.ok(home.indexOf('id="pattern-drawing"') < home.indexOf('id="pattern-tabs"'), "the tabs are under the drawing");
+  assert.doesNotMatch(home, />Detailed</);
   const tool = toolsForArchetype(arch.id)[0];
   const linked = page(arch.id, `tool=${tool.id}`);
   assert.match(linked, /id="tools"/);
@@ -143,11 +152,11 @@ test("nothing version 1 showed about a pattern is missing: its summary, how it w
   }
 });
 
-test("the Risks & flows tab lists every risk of the pattern, and the Incidents tab every incident on it", () => {
+test("the Risks tab lists every risk of the pattern, and the Incidents tab every incident on it", () => {
   for (const arch of dataset.archetypes) {
-    const flows = page(arch.id, "tab=flows");
-    for (const id of arch.risks) assert.match(flows, new RegExp(`id="risk-${id}"`), `${arch.id}: ${id} is listed`);
-    assert.equal([...flows.matchAll(/id="risk-/g)].length, arch.risks.length, arch.id);
+    const risks = page(arch.id, "tab=risks");
+    for (const id of arch.risks) assert.match(risks, new RegExp(`id="risk-${id}"`), `${arch.id}: ${id} is listed`);
+    assert.equal([...risks.matchAll(/id="risk-/g)].length, arch.risks.length, arch.id);
     const incidents = page(arch.id, "tab=incidents");
     for (const inc of dataset.incidents.filter((i) => i.archetype === arch.id)) {
       assert.ok(incidents.includes(`/incidents/${inc.id}`), `${arch.id}: ${inc.id} is listed`);
@@ -173,4 +182,29 @@ test("a cloud architecture lists its clouds first, binds every component and cov
       for (const b of impl.bindings) assert.ok(html.includes(escape(b.service)), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
     }
   }
+});
+
+test("How it works lists every component and everything each one holds, so nothing is hover-only", () => {
+  const seen = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ");
+  for (const arch of dataset.archetypes) {
+    assert.match(page(arch.id, "tab=overview"), new RegExp(`Components[^<]*(<[^>]+>\\s*)*${arch.blocks.length}`), `${arch.id}: components section`);
+    const html = renderToStaticMarkup(<ComponentList archetype={arch} />);
+    const text = seen(html);
+    assert.equal([...html.matchAll(/data-component="/g)].length, arch.blocks.length, `${arch.id}: every box once`);
+    for (const b of arch.blocks) for (const item of b.items ?? []) assert.ok(text.includes(item.label), `${arch.id}: ${b.id} holds ${item.label}`);
+  }
+});
+
+test("the landing page explains how to read a pattern before the finder, and the finder shows one situation with a preview", () => {
+  const home = renderToStaticMarkup(<HomePage />);
+  assert.ok(home.indexOf("How to read a pattern") > 0 && home.indexOf("How to read a pattern") < home.indexOf('role="tablist"'), "how to read comes first");
+  assert.doesNotMatch(home, /href="\/tools/, "there is no tools page");
+  const finder = renderToStaticMarkup(<PatternFinder />);
+  const listed = [...finder.matchAll(/data-pattern="([^"]+)"/g)].map((m) => m[1]);
+  const first = dataset.archetypes.filter((a) => a.surface === "surfaceEndpoint").map((a) => a.id);
+  assert.deepEqual([...listed].sort(), [...first].sort(), "only the selected situation is listed");
+  assert.equal([...finder.matchAll(/role="tab"/g)].length, 3, "one tab per situation");
+  const preview = finder.match(/data-preview="([^"]+)"/)?.[1];
+  assert.equal(preview, listed[0], "the first listed pattern is previewed");
+  assert.match(finder, /trust-boundary drawing/, "the preview carries the pattern's drawing");
 });

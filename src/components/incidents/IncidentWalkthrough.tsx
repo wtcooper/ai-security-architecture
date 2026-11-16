@@ -12,8 +12,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { PHASE_META } from "@/components/PhaseRail";
-import { FlowDiagram } from "@/components/reference/FlowDiagram";
-import { FlowLegend } from "@/components/reference/FlowLegend";
+import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { archetypeById, capabilityName, incidentById, riskCode, riskTitle } from "@/lib/data";
 import { categoryById } from "@/lib/incident-categories";
 import type { Incident, IncidentSource, Phase } from "@/lib/types";
@@ -216,13 +215,15 @@ export function IncidentWalkthrough({ id }: { id: string }) {
             </Link>{" "}
             architecture
           </p>
-          <FlowDiagram
+          <PatternDrawing
             archetype={archetype}
             overlay={breaking ? null : stepOverlay(archetype, step)}
             pins="capabilities"
+            // Beside the step text the drawing has a narrower column: show all of it, smaller.
+            minScale={0.55}
             highlight={breaking && breakIds.length ? { kind: "mitigation", id: breakIds[0], with: breakIds.slice(1) } : null}
           />
-          <FlowLegend className="mt-2 px-3" risks={false} />
+          <DrawingLegend className="mt-2 px-3" />
         </section>
       </div>
 

@@ -330,3 +330,22 @@ Differences from the plan above:
   decorative Sandbox frame was dropped because it had no data behind it.
 - **Phases 2 to 6 landed as one change**, because the pattern page, the routes and the wording
   touch the same files.
+
+## Changed after review, 2026-11-16
+
+Four things in the plan above were reversed once the site was live and read by its owner.
+
+- **One drawing.** The "Detailed" canvas is retired, with its layout engine, its build checks
+  and its HTML export. Incident replays moved onto the boundary drawing. Every component and
+  everything it holds is listed under How it works, so nothing depends on hovering.
+- **Tabs under the drawing.** The strip sits beneath the drawing again, sticks under the site
+  header once scrolled past, and brings the drawing back into view when a tab is chosen from
+  there.
+- **Risks and Flows are separate tabs.** Risks carries the risk tags and the risk list; Flows
+  carries the walks, the sequence diagram and the boundary-crossings table.
+- **No Tools page.** `/tools/` and its navigation entry are gone. A tool is reached from its
+  pattern's Enable tab and from search.
+
+The landing page was also redesigned: how to read a pattern comes first, and the finder shows
+one situation at a time as a short list with a preview, in place of eighteen cards.
+

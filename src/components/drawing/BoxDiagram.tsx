@@ -5,16 +5,16 @@
  * in SVG from a computed ViewSpec (layout.ts). Every word on it comes from the pattern's data:
  * a box is the block's title and its one-liner, a boundary is the zone's canonical title, an
  * arrow carries the edge's label. Numbered chips are the pattern's controls; in risk mode they
- * give way to the coded risk tags; a walk numbers its steps onto the arrows.
+ * give way to the coded risk tags; a walk numbers its steps onto the arrows; an incident step
+ * lights the boxes and arrows it touches in its phase colour.
  */
 import { Fragment, type MouseEvent, type FocusEvent, type ReactNode } from "react";
 
-import { isLit, type Highlight } from "@/components/reference/FlowDiagram";
-import type { BlockService } from "@/components/reference/FlowDiagramRF";
-import { blockTab, chipColors } from "@/components/reference/flow-style";
+import { blockTab, chipColors, OVERLAY_STYLE } from "@/components/reference/flow-style";
 import { capabilityName, riskById, riskCode, statusFor } from "@/lib/data";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ownedControls, summaryOf, wrap, type BoundaryTone, type ViewBox, type ViewLine, type ViewSpec } from "./layout";
+import { isLit, type BlockService, type Highlight, type StepOverlay } from "./types";
 
 export type DrawingPins = "risks" | "capabilities" | "all";
 
@@ -44,6 +44,7 @@ export function BoxDiagram({
   spec,
   walk = null,
   highlight = null,
+  overlay = null,
   pins = "capabilities",
   services = null,
   onPickMitigation,
@@ -58,6 +59,8 @@ export function BoxDiagram({
   spec: ViewSpec;
   walk?: Scenario | null;
   highlight?: Highlight | null;
+  /** An incident step replayed on the drawing; hides pins and walks while it is set. */
+  overlay?: StepOverlay | null;
   /** Which pins show: the numbered controls, the coded risk tags, or both. */
   pins?: DrawingPins;
   /** Block id -> the cloud service that plays it; null draws the generic components. */
@@ -74,8 +77,8 @@ export function BoxDiagram({
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
   const blocks = new Map(archetype.blocks.map((b) => [b.id, b]));
   const edges = new Map(archetype.edges.map((e) => [`${e.from}->${e.to}`, e]));
-  const showControls = pins !== "risks" && !walk;
-  const showRisks = pins !== "capabilities";
+  const showControls = pins !== "risks" && !walk && !overlay;
+  const showRisks = pins !== "capabilities" && !overlay;
 
   // Controls and risks per place: a block id or an edge key.
   const controlsAt = new Map<string, string[]>();
@@ -108,8 +111,13 @@ export function BoxDiagram({
     for (const id of s.follow.split("->")) touched.add(id);
   });
   for (const id of [...touched]) for (let p = blocks.get(id)?.parent; p; p = blocks.get(p)?.parent) touched.add(p);
-  const boxLit = (id: string) => !walk || touched.has(id);
-  const lineLit = (k: string) => !walk || steps.has(k);
+  // An incident step: the boxes it marks (and what holds them) and the arrows it rides.
+  const marked = new Set<string>(Object.keys(overlay?.marks ?? {}));
+  for (const id of [...marked]) for (let p = blocks.get(id)?.parent; p; p = blocks.get(p)?.parent) marked.add(p);
+  const ridden = new Set<string>((overlay?.edges ?? []).flatMap((k) => [k, reverse(k)]));
+  const phase = overlay ? OVERLAY_STYLE[overlay.phase] : null;
+  const boxLit = (id: string) => (overlay ? marked.has(id) : !walk || touched.has(id));
+  const lineLit = (k: string) => (overlay ? ridden.has(k) : !walk || steps.has(k));
   const dim = (lit: boolean) => (lit ? 1 : 0.22);
 
   const hover = (title: string, body?: string, holds?: string[]) => ({
@@ -188,9 +196,9 @@ export function BoxDiagram({
     );
   };
 
-  const stepDisc = (n: number, key: string, cx: number, cy: number) => (
-    <g key={`s-${key}-${n}`} aria-label={`Step ${n}`}>
-      <rect x={cx - 8.5} y={cy - 8.5} width={17} height={17} rx={4} fill={STEP} />
+  const stepDisc = (n: number, key: string, cx: number, cy: number, fill: string = STEP) => (
+    <g key={`s-${key}-${n}`} aria-label={`Step ${n}`} data-step={n}>
+      <rect x={cx - 8.5} y={cy - 8.5} width={17} height={17} rx={4} fill={fill} />
       <text x={cx} y={cy + 3.4} textAnchor="middle" fontSize={9.5} fontWeight={700} fill="#fff">
         {n}
       </text>
@@ -272,6 +280,11 @@ export function BoxDiagram({
         <marker id="pd-arrow-walk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--ink)" />
         </marker>
+        {phase && (
+          <marker id="pd-arrow-step" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill={phase.stroke} />
+          </marker>
+        )}
       </defs>
       <g transform={transform}>
         {/* Boundaries */}
@@ -310,8 +323,9 @@ export function BoxDiagram({
             const subLines = sub ? wrap(sub, bx.w - 24, 10.5, bx.tone === "container" ? bx.lines : bx.tone === "governance" ? 3 : room) : [];
             const subY = bx.y + 35 + (titleLines.length - 1) * 14;
             const accent = bx.tone === "actor" || bx.tone === "governance" ? null : blockTab(block);
-            const fill = bx.tone === "actor" ? "var(--mist)" : "var(--paper)";
-            const stroke = bx.tone === "container" ? "var(--ink-3)" : bx.tone === "governance" ? "#B9C7BE" : "var(--line-strong)";
+            const hit = Boolean(phase && overlay && bx.id in overlay.marks);
+            const fill = hit ? phase!.fill : bx.tone === "actor" ? "var(--mist)" : "var(--paper)";
+            const stroke = hit ? phase!.stroke : bx.tone === "container" ? "var(--ink-3)" : bx.tone === "governance" ? "#B9C7BE" : "var(--line-strong)";
             return (
               <g
                 key={bx.id}
@@ -319,7 +333,7 @@ export function BoxDiagram({
                 style={{ opacity: dim(boxLit(bx.id)), transition: "opacity 150ms" }}
                 {...hover(block.title, (service?.note ?? block.note)?.trim(), (block.items ?? []).map((i) => i.label))}
               >
-                <rect x={bx.x} y={bx.y} width={bx.w} height={bx.h} rx={6} fill={fill} stroke={stroke} strokeWidth={bx.tone === "container" ? 1.3 : 1} />
+                <rect x={bx.x} y={bx.y} width={bx.w} height={bx.h} rx={6} fill={fill} stroke={stroke} strokeWidth={hit ? 2 : bx.tone === "container" ? 1.3 : 1} />
                 {accent && <rect x={bx.x + 1} y={bx.y + 7} width={3} height={Math.min(bx.h - 14, 54)} rx={1.5} fill={accent} />}
                 {titleLines.map((t, i) => (
                   <text key={i} x={bx.x + 12} y={bx.y + 20 + i * 14} fontSize={12.5} fontWeight={650} fill="var(--ink)">
@@ -344,8 +358,9 @@ export function BoxDiagram({
         {spec.lines.map((l) => {
           const e = edges.get(l.key);
           if (!e) return null;
-          const inWalk = Boolean(walk && steps.has(l.key));
-          const head = inWalk ? "url(#pd-arrow-walk)" : "url(#pd-arrow)";
+          const onStep = Boolean(phase && ridden.has(l.key));
+          const inWalk = Boolean(!overlay && walk && steps.has(l.key));
+          const head = onStep ? "url(#pd-arrow-step)" : inWalk ? "url(#pd-arrow-walk)" : "url(#pd-arrow)";
           const d = l.pts.map((p, i) => `${i ? "L" : "M"} ${p[0]} ${p[1]}`).join(" ");
           return (
             <g key={l.key} data-edge={l.key} style={{ opacity: dim(lineLit(l.key)), transition: "opacity 150ms" }} {...hover(e.label ?? l.key.replace("->", " → "), e.note?.trim())}>
@@ -354,8 +369,8 @@ export function BoxDiagram({
               <path
                 d={d}
                 fill="none"
-                stroke={inWalk ? "var(--ink)" : "var(--ink-2)"}
-                strokeWidth={inWalk ? 2 : 1.25}
+                stroke={onStep ? phase!.stroke : inWalk ? "var(--ink)" : "var(--ink-2)"}
+                strokeWidth={onStep || inWalk ? 2 : 1.25}
                 strokeDasharray={e.path === "external" ? "5 4" : undefined}
                 strokeLinejoin="round"
                 markerEnd={head}
@@ -394,7 +409,9 @@ export function BoxDiagram({
 
         {/* Pins on boxes */}
         {spec.boxes.map((bx) => {
+          const mark = overlay?.marks[bx.id];
           const items = [
+            ...(mark !== undefined && phase ? [{ w: 19, draw: (cx: number, cy: number) => stepDisc(mark, bx.id, cx, cy, phase.stroke) }] : []),
             ...(showControls ? (controlsAt.get(bx.id) ?? []).map((id) => ({ w: 19, draw: (cx: number, cy: number) => chip(id, bx.id, cx, cy) })) : []),
             ...(showRisks ? (risksAt.get(bx.id) ?? []).map((id) => ({ w: TAG_W, draw: (cx: number, cy: number) => tag(id, bx.id, cx, cy, !boxLit(bx.id)) })) : []),
           ];
@@ -404,7 +421,7 @@ export function BoxDiagram({
         {/* Pins and step numbers on arrows */}
         {spec.lines.map((l) => {
           const items = [
-            ...(steps.get(l.key) ?? []).map((n) => ({ w: 19, draw: (cx: number, cy: number) => stepDisc(n, l.key, cx, cy) })),
+            ...(overlay ? [] : steps.get(l.key) ?? []).map((n) => ({ w: 19, draw: (cx: number, cy: number) => stepDisc(n, l.key, cx, cy) })),
             ...(showControls ? (controlsAt.get(l.key) ?? []).map((id) => ({ w: 19, draw: (cx: number, cy: number) => chip(id, l.key, cx, cy) })) : []),
             ...(showRisks ? (risksAt.get(l.key) ?? []).map((id) => ({ w: TAG_W, draw: (cx: number, cy: number) => tag(id, l.key, cx, cy, !lineLit(l.key)) })) : []),
           ];

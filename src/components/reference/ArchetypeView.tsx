@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * One pattern on the page: one tab strip — enable, how it works, risks and flows, incidents —
- * then the drawing at full width and the tab's panel beneath it. The tabs sit above the drawing
- * because they govern both: which pins the drawing carries and which panel is shown. The drawing is the
- * trust-boundary view by default, with the item-level canvas one switch away. It shows the
- * control chips at rest; the flows tab swaps them for the walk's numbers and the risk tags
- * where risk enters. On Enable every row is one of those chips: opening a row lights its chip,
- * and picking a chip opens its row.
- * Chosen over an inspector rail and a scroll-linked story after all three ran side by side.
+ * One pattern on the page: the drawing at full width, then one tab strip beneath it — enable,
+ * how it works, risks, flows, incidents — and the tab's panel under that. A tab governs both
+ * what the drawing carries and which panel shows: control chips at rest, the coded risk tags on
+ * Risks, a walk's step numbers on Flows. The strip sticks under the site header once the page
+ * has scrolled past it, and choosing a tab from there brings the drawing back into view, so a
+ * tab never changes something the reader cannot see. On Enable every row is one of the chips:
+ * opening a row lights its chip, and picking a chip opens its row.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -19,9 +18,7 @@ import { cloudById, clouds, incidents } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
-import { FlowDiagram, type Highlight } from "./FlowDiagram";
-import type { BlockService } from "./FlowDiagramRF";
-import { FlowLegend } from "./FlowLegend";
+import type { BlockService, Highlight } from "@/components/drawing/types";
 import { FlowSequence } from "./FlowSequence";
 import { WalkList } from "./rail-lists";
 import { PatternIncidents, PatternRisks } from "@/components/patterns/PatternPanels";
@@ -81,7 +78,11 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
     onTab(next);
     if (next !== "flows") onWalk(null);
     else if (walkIndex === null) onWalk(0);
-    if (next !== "enable") onHighlight(null);
+    if (next !== "enable" && next !== "risks") onHighlight(null);
+    if (next === "risks" && highlight?.kind === "mitigation") onHighlight(null);
+    // Chosen from the stuck strip, far down a panel: bring the drawing back, since the tab changes it.
+    const top = drawingRef.current?.getBoundingClientRect().top;
+    if (top !== undefined && top < 0) requestAnimationFrame(() => drawingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   // A chip picked on the drawing opens its row on Enable, wherever the reader was.
@@ -110,8 +111,6 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
     return () => mq.removeEventListener("change", update);
   }, []);
   const drawingVisible = !narrow || showDrawing;
-  // The boundary drawing is the standard; the detailed canvas keeps every item one switch away.
-  const [view, setView] = useState<"boundaries" | "detailed">("boundaries");
   const scrollToDrawing = () => {
     setShowDrawing(true);
     requestAnimationFrame(() => drawingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -120,31 +119,13 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "enable", label: "Enable", count: archetype.mitigations.length },
     { id: "overview", label: "How it works" },
-    { id: "flows", label: "Risks & flows", count: archetype.risks.length },
+    { id: "risks", label: "Risks", count: archetype.risks.length },
+    { id: "flows", label: "Flows", count: walks.length },
     { id: "incidents", label: "Incidents", count: incidents.filter((i) => i.archetype === archetype.id).length },
   ];
 
   return (
-    <div className="mt-3">
-      <div id="pattern-tabs" className="mb-4 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line" role="tablist">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => go(t.id)}
-            className={`-mb-px shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-3.5 py-2 text-[13px] transition-colors ${
-              tab === t.id
-                ? "border-ink font-semibold text-ink"
-                : "border-transparent text-ink-3 hover:text-ink"
-            }`}
-          >
-            {t.label}
-            {t.count !== undefined && <span className="ml-1.5 opacity-60">{t.count}</span>}
-          </button>
-        ))}
-      </div>
-
+    <div className="mt-4">
       {narrow && (
         <button
           type="button"
@@ -158,84 +139,72 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           </span>
         </button>
       )}
-      {drawingVisible && (
-        <div className="mb-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] text-ink-3">
-          {/* The same pattern, two drawings: boundaries to read it, the detailed canvas for every item. */}
-          <div className="flex items-center gap-2" role="group" aria-label="Drawing">
-            <span>Drawing</span>
-            {(["boundaries", "detailed"] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                onClick={() => setView(v)}
-                title={v === "boundaries" ? "Trust boundaries and components, one line each" : "Every component's items, on the detailed canvas"}
-                className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
-                  view === v ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
-                }`}
-              >
-                {v === "boundaries" ? "Boundaries" : "Detailed"}
-              </button>
-            ))}
-          </div>
-          {implementedOn.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Draw as built on">
-              <span>Drawn as</span>
-              {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
-                <button
-                  key={o.label}
-                  type="button"
-                  aria-pressed={cloudView === o.id || (o.id === null && !viewCloud)}
-                  onClick={() => setCloudView(o.id)}
-                  className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
-                    (o.id === null ? !viewCloud : cloudView === o.id) ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
-                  }`}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          )}
+      {drawingVisible && implementedOn.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-3" role="group" aria-label="Draw as built on">
+          <span>Drawn as</span>
+          {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
+            <button
+              key={o.label}
+              type="button"
+              aria-pressed={cloudView === o.id || (o.id === null && !viewCloud)}
+              onClick={() => setCloudView(o.id)}
+              className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
+                (o.id === null ? !viewCloud : cloudView === o.id) ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       )}
       {drawingVisible && (
         <>
-          <div ref={drawingRef} className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
-            {view === "boundaries" ? (
-              <PatternDrawing
-                archetype={archetype}
-                walk={activeWalk}
-                highlight={highlight}
-                onHighlight={onHighlight}
-                // One kind of pin at a time: risk tags where a walk shows risk entering, control chips everywhere else.
-                pins={tab === "flows" ? "risks" : "capabilities"}
-                onPickMitigation={pickChip}
-                services={services}
-                className="w-full"
-              />
-            ) : (
-              <FlowDiagram
-                archetype={archetype}
-                walk={activeWalk}
-                highlight={highlight}
-                onHighlight={onHighlight}
-                pins={tab === "flows" ? "risks" : "capabilities"}
-                onPickMitigation={pickChip}
-                services={services}
-                className="w-full"
-              />
-            )}
+          <div ref={drawingRef} id="pattern-drawing" className="-mx-6 scroll-mt-20 overflow-hidden border-y border-line bg-paper lg:mx-0 lg:rounded-xl lg:border">
+            <PatternDrawing
+              archetype={archetype}
+              walk={activeWalk}
+              highlight={highlight}
+              onHighlight={onHighlight}
+              // One kind of marker at a time: risk tags on Risks, a walk's steps on Flows, control chips everywhere else.
+              pins={tab === "risks" ? "risks" : "capabilities"}
+              onPickMitigation={pickChip}
+              services={services}
+              className="w-full"
+            />
           </div>
-          {view === "boundaries" ? <DrawingLegend className="mt-3 px-1" risks={tab === "flows"} /> : <FlowLegend className="mt-3 px-1" />}
+          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} />
         </>
       )}
 
-      <div className="mt-5">
+      <div
+        id="pattern-tabs"
+        className="sticky top-14 z-20 -mx-6 mt-5 flex scroll-mt-20 gap-1 overflow-x-auto border-b border-line bg-mist/95 px-6 backdrop-blur lg:mx-0 lg:px-0"
+        role="tablist"
+      >
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => go(t.id)}
+            className={`-mb-px shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-3.5 py-2.5 text-[13.5px] transition-colors ${
+              tab === t.id
+                ? "border-ink font-semibold text-ink"
+                : "border-transparent text-ink-3 hover:text-ink"
+            }`}
+          >
+            {t.label}
+            {t.count !== undefined && <span className="ml-1.5 opacity-60">{t.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5" role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.label}>
         {tab === "overview" && <ArchetypeDetail archetype={archetype} />}
 
         {tab === "incidents" && <PatternIncidents archetype={archetype} />}
 
-        {tab === "flows" && (
+        {tab === "risks" && (
           <PatternRisks
             archetype={archetype}
             lit={highlight?.kind === "risk" ? highlight.id : null}
@@ -245,7 +214,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
         )}
 
         {tab === "flows" && (
-          <div className="mt-6 grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
             <div>
               <p className="text-[12px] leading-snug text-ink-3">
                 Select a flow to number its steps onto the drawing. The first is the complete walk;

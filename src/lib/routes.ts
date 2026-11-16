@@ -1,20 +1,19 @@
 /**
  * Every internal address in one place. Patterns are the front door (`/patterns/<slug>/`), the
- * control catalogue and the tool index sit beside them, and the risk and framework material
+ * control catalogue sits beside them (a tool is reached on its pattern), and the risk and framework material
  * lives under `/reference/`. Old addresses are forwarded by `LegacyRedirect`, which uses the
  * same helpers, so a link and its redirect can never disagree.
  */
 import { archetypeById, toolById } from "@/lib/data";
 
 /** The tabs of a pattern page. Enable is the default and is left out of the address. */
-export type PatternTab = "enable" | "overview" | "flows" | "incidents";
-export const PATTERN_TABS: PatternTab[] = ["enable", "overview", "flows", "incidents"];
+export type PatternTab = "enable" | "overview" | "risks" | "flows" | "incidents";
+export const PATTERN_TABS: PatternTab[] = ["enable", "overview", "risks", "flows", "incidents"];
 
 export const ROUTES = {
   home: "/",
   patterns: "/patterns",
   controls: "/controls",
-  tools: "/tools",
   incidents: "/incidents",
   reference: "/reference",
   riskMap: "/reference/risk-map",
@@ -38,7 +37,7 @@ export function patternHref(archetypeId: string, opts: { tab?: PatternTab; tool?
 /** A tool's settings, on the pattern it belongs to. */
 export const toolHref = (toolId: string): string => {
   const tool = toolById.get(toolId);
-  return tool ? patternHref(tool.architecture, { tool: toolId }) : ROUTES.tools;
+  return tool ? patternHref(tool.architecture, { tool: toolId }) : ROUTES.patterns;
 };
 
 /** A control in the catalogue: a MITRE mitigation or a `cap-*` specialisation. */

@@ -94,7 +94,8 @@ function buildIndex(): Entry[] {
       kind: "Cloud",
       title: c.name,
       hint: `${c.implementations.length} patterns built on it`,
-      href: ROUTES.tools,
+      // A cloud has no page of its own: open it on the first pattern built on it.
+      href: c.implementations[0] ? patternHref(c.implementations[0].architecture, { tool: c.id }) : ROUTES.patterns,
       text: norm(c.name, c.short, c.id),
     })),
     ...incidents.map((i) => ({

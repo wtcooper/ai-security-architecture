@@ -292,8 +292,8 @@ export interface Mitigation {
  *
  * An architecture is a class of AI application drawn in the F5 reference-architecture grammar:
  * mitigation blocks connected by typed data paths, with risks and mitigations pinned onto
- * specific blocks and flows and keyed to a side rail. Geometry is computed by the build from an
- * authored coarse grid — see ArchLayout.
+ * specific blocks and flows. Blocks are placed on an authored coarse grid (`col`, `row`), which
+ * the boundary drawing lays out in the browser (components/drawing/layout.ts).
  */
 
 /**
@@ -317,7 +317,7 @@ export type BlockKind =
 export interface ArchBlockItem {
   id: string;
   label: string;
-  /** One of ICON_NAMES in flow-layout.ts. */
+  /** One of ICON_NAMES in icon-names.ts. */
   icon: string;
   note?: string;
   /** Risk-map anchor for this specific internal. */
@@ -396,8 +396,8 @@ export interface ArchBlock {
   /** Vertical span, for tall side columns like a governance plane. */
   rowSpan?: number;
   /**
-   * The block's grid cell on the boundary drawing, where it should differ from `col` and `row`
-   * (which place it on the detailed canvas). Used to fold a wide zone into fewer columns.
+   * The block's grid cell on the drawing, where it should differ from `col` and `row`.
+   * Used to fold a wide zone into fewer columns.
    */
   cell?: { col: number; row: number; rowSpan?: number };
   note?: string;
@@ -542,53 +542,6 @@ export interface Rect {
   h: number;
 }
 
-/** Geometry computed by scripts/build-data.ts from the authored grid. Never authored. */
-export interface ArchLayout {
-  width: number;
-  height: number;
-  blocks: Record<string, Rect>;
-  /**
-   * Horizontal extent of each top-level grid column. Ownership bands derive their rects from
-   * these rather than from member blocks, so a band holding only a narrow actor figure spans
-   * its column instead of leaving a gutter beside it. Empty columns have zero width.
-   */
-  columns: {
-    x: number;
-    w: number;
-    /** Extra padding the column's band takes on that side, beside a seam that needs room. */
-    padL?: number;
-    padR?: number;
-  }[];
-  /** Top of the ownership bands — encloses first-row risk-tag stacks, not just blocks. */
-  bandTop: number;
-  /** Bottom of the ownership bands — clears the chips on the lowest blocks, not just blocks. */
-  bandBottom?: number;
-  /** Mitigation chips per pin location (block id or "from->to"), so risk tags can clear them. */
-  chipCounts?: Record<string, number>;
-  /** Where a block's chips sit along its bottom border, stepped past any arrow crossing it. */
-  blockChipXs?: Record<string, number[]>;
-  /** Where two bands meet: the x of the left band's right border and the right band's left. */
-  bandSeams?: [number, number][];
-  /**
-   * The governance plane's band: as wide as the ownership bands together, one band gutter
-   * beneath them. Absent when the architecture draws no governance zone.
-   */
-  govBand?: Rect;
-  edges: {
-    from: string;
-    to: string;
-    /** SVG path data, drawn from `from` towards `to`. */
-    d: string;
-    /** Midpoint of the path, where pins and scenario step numbers attach. */
-    midX: number;
-    midY: number;
-    /** True when the segment at the midpoint runs horizontally. */
-    horizontal: boolean;
-    /** Length of the segment the midpoint sits on — the room pins have along the arrow. */
-    extent: number;
-  }[];
-}
-
 export interface Archetype {
   id: string;
   /** The pattern's URL segment: its data file's name, e.g. "endpoint-coding-agent-third-party". */
@@ -628,7 +581,6 @@ export interface Archetype {
   mitigations: string[];
   deviations?: ArchetypeDeviation[];
   sources: { title: string; url: string }[];
-  layout: ArchLayout;
 }
 
 /**

@@ -17,8 +17,8 @@ The registry renders in two places. On the pattern the product instantiates, ste
 settings**) of the **Enable** tab shows one pill per product and, for the one picked, its own
 `settings[]` table; a product with no `settings[]` yet falls back to its `controls[]` record,
 one row per control the pattern pins, grouped by NIST CSF category, each reading Built-in
-(`native`), Partial (`partial`) or Not in tool (`external` or `none`). And the **Tools** page
-(`/tools/`) lists every product with its pattern, linking to those settings.
+(`native`), Partial (`partial`) or Not in tool (`external` or `none`). Search (⌘K) finds
+every product by name and opens those settings on its pattern.
 Nothing in the taxonomy links back to a product, so an entry earns its place by being right
 about that drawing's pinned mitigations, not by being cross-referenced elsewhere.
 
@@ -117,7 +117,7 @@ architectures with their surface).
 5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-6. **Look at it.** `npm run dev`, open `/tools/` and pick your product (or `/patterns/<slug>/?tool=<id>`): the Enable tab's tool settings step
+6. **Look at it.** `npm run dev` and open `/patterns/<slug>/?tool=<id>`: the Enable tab's tool settings step
    with your product as a column and its record open beneath the grid. Check that each
    capability row shows the coverage word you expect from its row, and open a few rows in the
    record for the steps and their links. Without a browser, confirm the compiled entry instead:
