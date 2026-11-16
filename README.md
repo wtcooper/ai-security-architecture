@@ -541,6 +541,25 @@ Everything is text. Clone the repository, and:
    fails on any dangling id and `npm run audit` lists what each product entry has not yet
    addressed.
 
+## Keeping it current
+
+Five skills under `.claude/skills/` carry the procedures for maintaining the catalogue. Each is
+run by asking Claude Code for the thing in plain words.
+
+| Skill | What it does | It leaves |
+| --- | --- | --- |
+| `pattern-research` | Sweeps the web, as of the day it runs, for kinds of AI tool or application the catalogue has no pattern for, and sorts each finding into new pattern, change to an existing pattern, product of an existing pattern, or watch. | A dated report in `docs/research/patterns/`. It changes no data. |
+| `pattern-author` | Adds a pattern, or restructures one, to the [pattern standard](docs/PATTERN-STANDARD.md): the drawing, one-liners, crossings, pins, sequence flows, guidance and finder entry, looped against the build, the drawing audit and the tests. | The pattern's files, and its row in the sign-off table. |
+| `incident-research` | Sweeps the web for AI security incidents since the last one on file, verifies each against its sources, and writes the ones that qualify as walk-throughs on the pattern they happened on. | New files in `data/incidents/` and a dated log in `docs/research/incidents/`. |
+| `tooling-onboard` | Adds or re-verifies a product's security settings under the pattern it belongs to. | A file in `data/tooling/`. |
+| `org-taxonomy-customize` | Records your organisation's status and names for the controls. | `data/status.yaml`. |
+
+The three research and authoring skills hand off to each other: a scan that finds a new kind of
+system recommends a pattern, `pattern-author` draws it, and an incident that fits no pattern is
+sent back to the scan as evidence for one. Both research skills read the current date from the
+machine and record every query they ran, so a gap in the catalogue can be told from a lane
+nobody searched.
+
 ## Deployment
 
 Static export, published to GitHub Pages by

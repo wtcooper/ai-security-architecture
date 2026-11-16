@@ -102,7 +102,7 @@ buy or both), in four layers: foundations for all AI → surface baseline → us
 | Tool registry (`data/tooling/`) and its schema | Keep | Coverage enum unchanged in data; only display collapses to three words. |
 | Capability migration scripts (`migrate:*`, `specialize-capabilities`) | Cut | One-time migrations, already applied. |
 | `tooling-onboard` skill | Keep | |
-| `ref-arch-diagram` skill | Keep | |
+| `ref-arch-diagram` skill | Retired 2026-11-16 | Replaced by `pattern-author`, which authors to the boundary drawing and the pattern standard. |
 | `org-taxonomy-customize` skill | Simplify | Rewritten around `data/status.yaml`. |
 
 ## Follow-ups not in the first pass
