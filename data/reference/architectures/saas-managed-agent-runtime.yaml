@@ -148,7 +148,7 @@ blocks:
   - id: entry
     kind: service
     title: Application front end
-    summary: "our code: binds the user, holds the session"
+    summary: "our code: binds the user, holds the session, starts scheduled runs"
     cosaiComponent: componentApplication
     zone: zoneCloud
     col: 1
@@ -161,7 +161,10 @@ blocks:
       events, answers the approval prompts for tools configured to ask, and dispatches custom
       tools through our gateway — a path back into our systems that needs neither a tunnel nor
       a public endpoint, because the request and the result ride the session stream we
-      already hold.
+      already hold. Where the agent is always on, this is also where it wakes: the schedules
+      and incoming events that start a session with nobody present live in our code, not in
+      the vendor's runtime, and so does the decision about whose access such a session
+      carries.
     items:
       - id: api
         label: App & API endpoint
@@ -171,6 +174,14 @@ blocks:
         label: Identity binding
         icon: shield
         note: Which of our people a session runs for, established before it starts.
+      - id: schedules
+        label: Schedules & events
+        icon: clock
+        note: >
+          The timers, webhooks and queued messages that start a session with nobody present,
+          and the late answer that resumes one. Each is bound to the person it belongs to and
+          to a grant stored when they set it up — narrower than their own access and with an
+          expiry — because a run that wakes by itself has no sign-in to borrow from.
       - id: handlers
         label: Tool handlers
         icon: code
@@ -1066,6 +1077,79 @@ scenarios:
         note: >
           The handler posts the result back. The vendor sees the inputs and the output, never
           the credential or the network.
+  - title: A schedule starts the session with nobody present
+    steps:
+      - follow: entry->managedRuntime
+        label: scheduled invoke, stored grant
+        note: >
+          A timer or webhook held by our front end starts the session. Nobody signed in: it is
+          bound to the person the schedule belongs to, on the grant stored when they set it up.
+      - follow: managedRuntime->tunnel
+        label: through the tunnel
+        note: The runtime reaches back for our data exactly as it would in an attended session.
+      - follow: tunnel->aiGateway
+        label: to our gateway
+        note: Handed to our gateway, which is where an unattended call is still decided.
+      - follow: aiGateway->internalTools
+        label: stored grant, same catalogue
+        note: >
+          Admitted on the stored grant against the same catalogue, per-call policy and budget
+          as any other call. That the run is unattended widens nothing.
+      - follow: internalTools->orgData
+        label: read/write on our side
+        note: The effect lands on our side, with no person anywhere on the path.
+      - follow: internalTools->aiGateway
+        label: recorded
+        note: Recorded against the person the schedule belongs to, and classified on the way back.
+      - follow: aiGateway->tunnel
+        label: into the tunnel
+        note: Back into the connector.
+      - follow: tunnel->managedRuntime
+        label: tool results
+        note: The runtime finishes the run.
+      - follow: managedRuntime->entry
+        label: outcome, held for later
+        note: >
+          The outcome returns to our front end, which records it. Nobody read the steps in
+          between, so the record and the budget are what there is to review.
+      - follow: entry->endUser
+        label: told afterwards
+        note: The person hears about it afterwards, through whatever channel our application uses.
+  - title: An approval arrives after the run has ended
+    steps:
+      - follow: entry->managedRuntime
+        label: event-started session
+        note: An incoming event starts a session, on the stored grant, with nobody present.
+      - follow: managedRuntime->entry
+        label: approval request, session idles
+        note: >
+          The agent reaches a tool configured to ask. The runtime emits the request and the
+          session is saved mid-call; nobody is on the stream to answer it.
+      - follow: entry->endUser
+        label: asked, with an expiry
+        note: >
+          Our front end sends the request to the person over its own channel: this action,
+          these arguments, and when the request lapses.
+      - follow: endUser->entry
+        label: answer, hours later
+        note: >
+          The answer arrives as an event. Our front end signs the person in and checks the
+          answer against the pending request; a general "yes" approves nothing in particular.
+      - follow: entry->managedRuntime
+        label: approval posted, session resumes
+        note: Only then is the approval posted and the saved session resumed.
+      - follow: managedRuntime->tunnel
+        label: through the tunnel
+        note: The held call leaves.
+      - follow: tunnel->aiGateway
+        label: to our gateway
+        note: Our gateway sees the call and the approval bound to it.
+      - follow: aiGateway->internalTools
+        label: admitted with approval
+        note: Admitted now, carrying the approval it lacked before.
+      - follow: internalTools->orgData
+        label: write on our side
+        note: The write executes, attributable to the agent and to the person who approved it.
   - title: A fetched page names a package
     steps:
       - follow: nativeTools->openWeb
@@ -1167,6 +1251,8 @@ deviations:
       they take the sandbox's egress or the vendor's git proxy.
 
 sources:
+  - title: "Anthropic — building always-on agents: an event inbox, timers, memory, permissions and an outbox around an ordinary loop"
+    url: https://claude.com/resources/articles/building-always-on-agents
   - title: "Anthropic — MCP tunnels: outbound-only cloudflared plus proxy, inner TLS terminated at the customer, transport does not authenticate to the upstream"
     url: https://platform.claude.com/docs/en/agents-and-tools/mcp-tunnels/overview
   - title: "Anthropic — self-hosted sandboxes: the loop stays with the provider, tool execution moves to a customer-run polling worker"

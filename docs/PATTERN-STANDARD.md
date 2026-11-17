@@ -106,7 +106,7 @@ themselves are in [PATTERN-FINDINGS.md](PATTERN-FINDINGS.md).
 | Enterprise AI chat with connectors | 1281×796 | 100% | Clean. |
 | Coding & desktop session managed agent runtime | 1310×913 | 99% | Vendor zone folded to one column. Three vendor flows run down through the vendor's own boundary to External. |
 | UI/low-code managed agent runtime | 1057×906 | 100% | People reach the vendor over the top of our cloud, not through it. |
-| API/SDK managed agent runtime | 1056×927 | 100% | Folded from five rows to four. The deploy flow steps round Source control. |
+| API/SDK managed agent runtime | 1056×939 | 100% | Folded from five rows to four. The deploy flow steps round Source control. |
 | Persistent managed agents | 1264×913 | 100% | One label ("browser action / page") sits a little off its arrow. |
 | Single agent workflow | 1006×810 | 100% | The escalation flow runs under the harness to the operator. |
 | Multi-agent workflow | 1232×877 | 100% | Same escalation route; the harness holds three boxes. |
