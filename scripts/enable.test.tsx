@@ -11,7 +11,7 @@ import { ArchetypeDetail, ComponentList } from "../src/components/reference/Arch
 import HomePage from "../src/app/page";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { CloudComparison } from "../src/components/cloud/CloudViews";
-import { cloudOptionsForControl, cloudProductsFor, cloudSlug, controlPlaneOptions, optionsFor } from "../src/components/cloud/model";
+import { cloudOptionsForControl, cloudProductsFor, cloudSlug, optionsFor } from "../src/components/cloud/model";
 import { CapabilityDetail } from "../src/components/capabilities/CapabilityDetail";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";

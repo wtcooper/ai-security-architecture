@@ -122,7 +122,10 @@ architectures with their surface).
    control it delivers and names that control, that the value to set reads as an instruction
    someone could follow, and open a few rows for the path, the default and the vendor's page.
    Quote any value that is a bare number or true/false in the YAML: the build rejects one
-   that is not text.
+   that is not text. Without a browser, confirm the compiled entry instead:
+   `node -e 'const d=require("./src/data/generated/dataset.json");console.log(d.tools.find(t=>t.id==="<id>"))'`.
+   Deliberate exclusions go in the file header comment and under "Exclusions" in
+   `data/tooling/README.md`.
 
 ## Verifying a link
 
