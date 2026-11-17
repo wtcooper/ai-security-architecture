@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * The Enable tab of a pattern: how to put it in place, as two folded steps. The enterprise
- * controls, each saying what this pattern asks of it and where; then the settings of the cloud
- * or tool it runs on, each with its place, value and reason. The tab opens as those two lines
+ * The Enable tab of a pattern: how to put it in place, as two folded steps that read the same
+ * way. The enterprise controls, each saying what to do and why; then the same list as settings
+ * of the cloud or tool it runs on, under the same headings: what to set, why, and the control
+ * each delivers. The tab opens as those two lines
  * and nothing else; a step unfolds to its rows. Every control row is a numbered chip on the
  * drawing above, and every setting names the chips it delivers.
  *
@@ -188,15 +189,13 @@ Two steps to run this pattern safely: put the controls in place, then set them i
       <Step
         n={2}
         id="tools"
-        title={built ? "Cloud & tool settings" : "Tool settings"}
+        title={built ? "Set it in your cloud or tool" : "Set it in your product"}
         aside={products.length ? count(`${cloud ? `${cloud.cloud.short} · ` : ""}${products.length} products`) : undefined}
         expanded={isOpen("tools")}
         onToggle={() => toggle("tools")}
         lead={
           products.length
-            ? built
-              ? "Pick the cloud or tool you build on: what plays each component, and every security setting with where it is set, the value and why."
-              : "Pick the product you run: every security setting with where it is set, the value to set it to and why."
+            ? "The same list, now as settings: what to set and to what, why, and the control each one delivers. Pick your product first."
             : "No product of this kind is catalogued yet. Build it to the controls above."
         }
       >

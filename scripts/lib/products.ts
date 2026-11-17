@@ -34,6 +34,11 @@ export function checkSettings(
     for (const key of ["name", "where", "recommended", "why", "url", "verified"] as const) {
       if (!String(s[key] ?? "").trim()) ctx.fail(`${at}: needs ${key}`);
     }
+    // A bare `true` or `1` in YAML is not text, and a page shows a non-text value as nothing: quote it.
+    for (const key of ["name", "where", "recommended", "why", "default", "requires"] as const) {
+      const value = (s as unknown as Record<string, unknown>)[key];
+      if (value !== undefined && typeof value !== "string") ctx.fail(`${at}: ${key} must be text; write "${String(value)}" in quotes`);
+    }
     if (s.verified && !ISO_DAY.test(s.verified)) ctx.fail(`${at}: verified must be YYYY-MM-DD`);
     if (s.url && !/^https:\/\//.test(s.url)) ctx.fail(`${at}: url must be https`);
     if (!SETTING_AREAS.includes(s.area)) ctx.fail(`${at}: area must be one of ${SETTING_AREAS.join(", ")}`);

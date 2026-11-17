@@ -1,21 +1,25 @@
 "use client";
 
 /**
- * Step 2 of Enable: the products this architecture is built on or bought as, one pill each,
- * coloured by whether the organisation has switched it on. Picking one shows its own settings —
- * every security-relevant switch the vendor or cloud exposes, how it is set, the baseline value
- * (data/tooling/BASELINE.md) and why, the chips on the drawing it delivers, and the
- * organisation's status for it. A product not yet catalogued setting by setting falls back to
- * its capability-by-capability record, so nothing the registry knows is hidden.
+ * Step 2 of Enable: the same list as step 1, now in the product. One pill per product; for the
+ * one picked, every recommended setting as a row shaped like a control row: what to set and the
+ * value, one line of why, and beside it the control it delivers (by number and name) and where
+ * it is set. The settings sit under the same plain headings, in the same order, as the controls
+ * above, so the eye meets nothing new moving from one step to the next.
+ *
+ * A row opens to the rest: the full path, how it is set, the default, what it requires and the
+ * vendor's page. Background on the product is one line and an "About" fold. The status column
+ * appears only once the organisation has recorded a status for that product.
  */
-import { Fragment } from "react";
+import Link from "next/link";
+import { Fragment, useState } from "react";
 
-import { InfoTip } from "@/components/StatusPill";
+import { Prose } from "@/components/Prose";
 import { adoptionFor, archetypeById, capabilityName, settingAdoptionFor, vendorById, type Product } from "@/lib/data";
+import { patternHref } from "@/lib/routes";
 import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
-import { SETTING_AREAS } from "@/lib/types";
-import { ADOPTION_HELP, ADOPTION_META, SETTING_AREA_META, SETTING_VIA_META } from "./labels";
-import { CloudCard } from "@/components/cloud/CloudViews";
+import { ADOPTION_META, SETTING_VIA_META } from "./labels";
+import { controlsDelivered, settingGroups } from "./model";
 import { ToolRecord } from "./ToolRecord";
 
 export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?: string }) {
@@ -65,9 +69,13 @@ function ProductPills({ products, selected, onPick }: { products: Product[]; sel
   );
 }
 
-const GRID = "md:grid-cols-[minmax(0,1.35fr)_92px_minmax(0,1.5fr)_76px_92px]";
+/** Where a setting lives, in a few words: the console, file or service its path starts at. */
+const placeOf = (setting: ProductSetting) => {
+  const head = setting.where.split(/\s+[›→]\s+/)[0].split(" — ")[0].trim();
+  return head.length > 56 ? `${head.slice(0, 54).trimEnd()}…` : head;
+};
 
-/** One product's settings, grouped by admin area. */
+/** One product's settings, under the same headings and in the same order as the controls of step 1. */
 export function SettingsTable({
   product,
   archetype,
@@ -76,31 +84,126 @@ export function SettingsTable({
 }: {
   product: Product;
   archetype: Archetype;
-  /** The capability lit on the drawing, so its chips read as selected here too. */
+  /** The control lit on the drawing, so its name reads as selected here too. */
   lit: string | null;
   onLight: (capabilityId: string) => void;
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
-  const groups = SETTING_AREAS.map((area) => ({ area, rows: product.settings.filter((s) => s.area === area) })).filter((g) => g.rows.length);
+  const groups = settingGroups(archetype, product.settings);
+  // Shown only once a status is recorded for this product; until then every row would read "Not enabled".
+  const recorded = product.settings.some((s) => settingAdoptionFor(product.id, s.id).set);
+  const grid = recorded ? "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)_104px]" : "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)]";
+  const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-paper">
-      <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
-        <span>Setting</span>
-        <span>Set via</span>
-        <span>Recommended</span>
-        <span>Delivers</span>
-        <span className="inline-flex items-center gap-1 md:justify-end">
-          Status
-          <InfoTip text={ADOPTION_HELP} />
-        </span>
+    <div className="overflow-hidden rounded-xl border border-line bg-paper" data-settings={product.id}>
+      <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${grid}`}>
+        <span aria-hidden />
+        <span>What to set</span>
+        <span>Control · where it is set</span>
+        {recorded && <span className="md:text-right">Status</span>}
       </div>
-      {groups.map(({ area, rows }) => (
-        <Fragment key={area}>
-          <p className="border-b border-line bg-mist/30 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">{SETTING_AREA_META[area]}</p>
+      {groups.map((group) => (
+        <Fragment key={group.id}>
+          <div className="border-b border-line bg-mist/40 px-4 py-2" data-setting-group={group.id}>
+            <p className="flex flex-wrap items-baseline gap-x-2.5">
+              <span className="display text-[14px] font-bold text-ink">{group.plain}</span>
+              {group.title ? (
+                <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>
+                  <span className="ident mr-1">{group.id}</span>
+                  {group.title}
+                </span>
+              ) : (
+                <span className="text-[11px] text-ink-3">Hardening the product recommends that is not one of the numbered controls</span>
+              )}
+            </p>
+          </div>
           <ul className="divide-y divide-line border-b border-line last:border-b-0">
-            {rows.map((s) => (
-              <SettingRow key={s.id} productId={product.id} setting={s} number={number} lit={lit} onLight={onLight} />
-            ))}
+            {group.settings.map((s) => {
+              const controls = controlsDelivered(archetype, s);
+              const expanded = open === s.id;
+              const a = settingAdoptionFor(product.id, s.id);
+              return (
+                <li key={s.id} id={`setting-${product.id}-${s.id}`} className="scroll-mt-24">
+                  <button
+                    type="button"
+                    onClick={() => setOpen(expanded ? null : s.id)}
+                    aria-expanded={expanded}
+                    className={`grid w-full grid-cols-[28px_minmax(0,1fr)] gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-mist/50 ${expanded ? "bg-mist/50" : ""} ${grid}`}
+                  >
+                    {/* The first control it delivers, as its chip: the same number that leads that control's row above. */}
+                    <span
+                      className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border text-[10.5px] font-bold ${
+                        controls.length
+                          ? controls.includes(lit ?? "")
+                            ? "border-chip bg-chip text-white"
+                            : "border-chip bg-chip-soft text-chip"
+                          : "border-line bg-mist text-ink-3"
+                      }`}
+                      title={controls.length ? `Delivers control ${number.get(controls[0])}: ${capabilityName(controls[0])}` : "Delivers none of the numbered controls"}
+                    >
+                      {controls.length ? number.get(controls[0]) : "·"}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13.5px] font-semibold leading-snug text-ink" data-setting-name>{s.name}</span>
+                      <span className="mt-0.5 block text-[13px] leading-snug text-ink" data-setting-value>
+                        <span className="text-ink-3">Set to </span>
+                        {s.recommended}
+                      </span>
+                      <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-2">{s.why}</span>
+                    </span>
+                    <span className="col-start-2 text-[12px] leading-snug md:col-start-auto">
+                      {controls.map((id) => (
+                        <span key={id} className="block font-semibold text-ink-2" data-delivers={id}>
+                          <span className="ident mr-1 text-[10.5px] font-bold text-chip">{number.get(id)}</span>
+                          {capabilityName(id)}
+                        </span>
+                      ))}
+                      <span className="block text-ink-3">{placeOf(s)}</span>
+                    </span>
+                    {recorded && (
+                      <span className="col-start-2 md:col-start-auto md:text-right">
+                        <AdoptionPill status={a.status} title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/status.yaml"} />
+                        {a.value && <span className="mt-0.5 block text-[11px] text-ink-3">Set to {a.value}</span>}
+                      </span>
+                    )}
+                  </button>
+                  {expanded && (
+                    <div className="space-y-2 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]" data-setting-detail>
+                      <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[max-content_minmax(0,1fr)]">
+                        <dt className="text-ink-3">Where</dt>
+                        <dd className="ident break-words text-[11.5px] text-ink">{s.where}</dd>
+                        <dt className="text-ink-3">How it is set</dt>
+                        <dd>{s.setVia.map((v) => SETTING_VIA_META[v].label).join(" · ")}</dd>
+                        {s.default && (
+                          <>
+                            <dt className="text-ink-3">Default</dt>
+                            <dd>{s.default}</dd>
+                          </>
+                        )}
+                        {s.requires && (
+                          <>
+                            <dt className="text-ink-3">Requires</dt>
+                            <dd>{s.requires}</dd>
+                          </>
+                        )}
+                        <dt className="text-ink-3">Checked</dt>
+                        <dd>Against the vendor&rsquo;s page on {s.verified}</dd>
+                      </dl>
+                      <span className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+                        <a href={s.url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-introduced hover:underline">
+                          Vendor documentation ↗
+                        </a>
+                        {controls.map((id) => (
+                          <button key={id} type="button" onClick={() => onLight(id)} className="text-[12px] font-semibold text-introduced hover:underline">
+                            {lit === id ? `Control ${number.get(id)} is lit on the drawing` : `Light control ${number.get(id)} on the drawing`}
+                          </button>
+                        ))}
+                      </span>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Fragment>
       ))}
@@ -108,79 +211,61 @@ export function SettingsTable({
   );
 }
 
-function SettingRow({
-  productId,
-  setting: s,
-  number,
-  lit,
-  onLight,
-}: {
-  productId: string;
-  setting: ProductSetting;
-  number: Map<string, number>;
-  lit: string | null;
-  onLight: (id: string) => void;
-}) {
-  const a = settingAdoptionFor(productId, s.id);
-  const chips = s.mitigations.filter((id) => number.has(id)).sort((x, y) => number.get(x)! - number.get(y)!);
-  return (
-    <li id={`setting-${productId}-${s.id}`} className={`grid grid-cols-1 gap-x-4 gap-y-1.5 px-4 py-3 ${GRID}`}>
-      <div className="min-w-0">
-        <a href={s.url} target="_blank" rel="noreferrer" className="text-[13px] font-semibold leading-snug text-ink hover:text-introduced hover:underline">
-          {s.name}
-          <span className="ml-1 text-introduced">↗</span>
-        </a>
-        <p className="ident mt-0.5 break-words text-[10.5px] leading-snug text-ink-3">{s.where}</p>
-        {s.requires && <span className="mt-1 inline-block rounded border border-line px-1.5 text-[10.5px] text-ink-3">{s.requires}</span>}
-      </div>
-      <div className="flex flex-wrap content-start gap-1">
-        {s.setVia.map((v) => (
-          <span key={v} title={SETTING_VIA_META[v].blurb} className="rounded border border-line bg-mist px-1.5 py-px text-[10.5px] font-semibold text-ink-2">
-            {SETTING_VIA_META[v].label}
-          </span>
-        ))}
-      </div>
-      <div className="min-w-0 text-[12.5px] leading-snug">
-        <p className="font-semibold text-ink">{s.recommended}</p>
-        {s.default && <p className="text-[11.5px] text-ink-3">Default: {s.default}</p>}
-        <p className="mt-0.5 text-ink-2">{s.why}</p>
-      </div>
-      <div className="flex flex-wrap content-start gap-1" aria-label="Controls on the drawing">
-        {chips.map((id) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onLight(id)}
-            title={`${capabilityName(id)} — light it on the drawing`}
-            className={`flex h-[21px] w-[21px] items-center justify-center rounded-full border border-chip text-[10.5px] font-bold transition-colors ${
-              lit === id ? "bg-chip text-white" : "bg-chip-soft text-chip hover:bg-chip hover:text-white"
-            }`}
-          >
-            {number.get(id)}
-          </button>
-        ))}
-      </div>
-      <div className="md:text-right">
-        <AdoptionPill status={a.status} title={a.set ? [a.value && `Set to: ${a.value}`, a.note].filter(Boolean).join(" · ") || undefined : "No status recorded in data/status.yaml"} />
-        {a.value && <p className="mt-0.5 text-[11px] text-ink-3">Set to {a.value}</p>}
-      </div>
-    </li>
-  );
-}
-
-/** Who makes it, when it was checked, and the short description; the long record stays a click away. */
+/** One line on the product, and the background behind a fold: the step is about its settings. */
 function ProductHeader({ product, archetype }: { product: Product; archetype: Archetype }) {
-  if (product.kind === "cloud") return <CloudCard archetype={archetype} product={product} />;
+  const count = `${product.settings.length} recommended ${product.settings.length === 1 ? "setting" : "settings"}`;
+  if (product.kind === "cloud") {
+    const { implementation: impl, cloud } = product;
+    return (
+      <div data-product-header={product.id}>
+        <p className="text-[13px] text-ink-2">
+          <span className="font-semibold text-ink">{cloud.name}</span> · {count} · verified {impl.asOf}
+        </p>
+        <details className="mt-1.5">
+          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">About this pattern on {cloud.short}</summary>
+          <div className="mt-2 max-w-3xl">
+            {impl.summary && <Prose blocks={impl.summary} size="sm" />}
+            {impl.reference.length > 0 && (
+              <p className="mt-2 text-[12px] text-ink-3">
+                Follows{" "}
+                {impl.reference.map((r, i) => (
+                  <span key={r.url}>
+                    {i > 0 && " · "}
+                    <a href={r.url} target="_blank" rel="noreferrer" className="font-semibold text-introduced hover:underline">
+                      {r.title}
+                    </a>
+                  </span>
+                ))}
+              </p>
+            )}
+            <p className="mt-2 text-[12px] text-ink-3">
+              What plays each component on {cloud.short} is on the drawing and under{" "}
+              <Link href={patternHref(archetype.id, { tab: "overview", cloud: cloud.id })} className="font-semibold text-introduced hover:underline">
+                How it works
+              </Link>
+              .
+            </p>
+          </div>
+        </details>
+      </div>
+    );
+  }
   const { tool } = product;
   const vendor = vendorById.get(tool.vendor);
   // The settings carry their own check dates; the newest is when this table was last verified.
   const checked = product.settings.map((st) => st.verified).sort().at(-1);
   return (
-    <div>
-      <p className="eyebrow">
-        {vendor?.name ?? tool.vendor} · {tool.family} · {checked ? `settings verified ${checked}` : `verified ${tool.asOf}`}
+    <div data-product-header={product.id}>
+      <p className="text-[13px] text-ink-2">
+        <span className="font-semibold text-ink">{tool.name}</span> · {vendor?.name ?? tool.vendor}
+        {product.settings.length > 0 && ` · ${count}`} · verified {checked ?? tool.asOf}
       </p>
-      <p className="mt-1.5 line-clamp-3 max-w-3xl text-[13px] leading-relaxed text-ink-2">{tool.summary[0]}</p>
+      {tool.summary[0] && (
+        <details className="mt-1.5">
+          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">About {tool.name}</summary>
+          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-ink-2">{tool.summary[0]}</p>
+        </details>
+      )}
     </div>
   );
 }
@@ -204,37 +289,28 @@ export function ProductSettings({
   const fallback = products.find((p) => adoptionFor(p.id).status === "enabled") ?? products[0];
   const product = products.find((p) => p.id === selected) ?? fallback;
   if (!product) return null;
-  const recorded = product.settings.some((s) => settingAdoptionFor(product.id, s.id).set);
   return (
     <div>
       <ProductPills products={products} selected={product.id} onPick={onPick} />
-      <div className="mt-4 rounded-xl border border-line bg-paper px-4 py-4 sm:px-5">
+      <div className="mt-3">
         <ProductHeader product={product} archetype={archetype} />
-        {product.settings.length ? (
-          <>
-            {!recorded && (
-              <p className="mt-3 rounded-lg border border-line bg-mist/50 px-3 py-2 text-[12px] leading-snug text-ink-2">
-                No settings recorded for {product.kind === "cloud" ? product.cloud.short : product.tool.name} yet, so every row reads Not
-                enabled. Record what your organisation has switched on under <code className="ident text-[11px]">products:</code> in{" "}
-                <code className="ident text-[11px]">data/status.yaml</code>.
-              </p>
-            )}
-            <div className="mt-4">
-              <SettingsTable product={product} archetype={archetype} lit={lit} onLight={onLight} />
-            </div>
-          </>
-        ) : product.kind === "tool" ? (
-          <>
-            <p className="mt-3 rounded-lg border border-line bg-mist/50 px-3 py-2 text-[12px] leading-snug text-ink-2">
-              {product.tool.name}&apos;s settings are not catalogued row by row yet. Until they are, this is how it covers each control on{" "}
-              {archetypeById.get(product.tool.architecture)?.title ?? "this pattern"}.
-            </p>
-            <div className="mt-4">
-              <ToolRecord tool={product.tool} />
-            </div>
-          </>
-        ) : null}
       </div>
+      {product.settings.length ? (
+        // Keyed by product, so an open row does not carry over to another product's table.
+        <div className="mt-3">
+          <SettingsTable key={product.id} product={product} archetype={archetype} lit={lit} onLight={onLight} />
+        </div>
+      ) : product.kind === "tool" ? (
+        <>
+          <p className="mt-3 rounded-lg border border-line bg-mist/50 px-3 py-2 text-[12px] leading-snug text-ink-2">
+            {product.tool.name}&apos;s settings are not catalogued row by row yet. Until they are, this is how it covers each control on{" "}
+            {archetypeById.get(product.tool.architecture)?.title ?? "this pattern"}.
+          </p>
+          <div className="mt-4">
+            <ToolRecord tool={product.tool} />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

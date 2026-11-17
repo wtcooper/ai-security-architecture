@@ -44,24 +44,6 @@ export function controlPlaneOptions(archetype: Archetype, product: CloudProduct,
   return product.settings.filter((s) => s.mitigations.some((id) => owned.has(id)));
 }
 
-/** One row of the component table: a box, and what the cloud names for it. */
-export interface ComponentRow {
-  block: ArchBlock;
-  binding?: CloudBinding;
-  /** For a control-plane box: the settings that deliver its controls. */
-  options: ProductSetting[];
-}
-
-/** Every box a cloud has something to say about: components first, then the control plane. People and outside parties are left out. */
-export function componentRows(archetype: Archetype, product: CloudProduct): ComponentRow[] {
-  const rows = archetype.blocks.map((block): ComponentRow => ({
-    block,
-    binding: bindingFor(product, block.id),
-    options: block.kind === "governance" ? controlPlaneOptions(archetype, product, block) : [],
-  }));
-  return [...rows.filter((r) => r.binding), ...rows.filter((r) => !r.binding && r.options.length)];
-}
-
 /** Across every pattern: the settings on each cloud that deliver one control, with the patterns each is used on. */
 export function cloudOptionsForControl(controlId: string): { cloud: CloudPlatform; options: { setting: ProductSetting; patterns: Archetype[] }[] }[] {
   return clouds

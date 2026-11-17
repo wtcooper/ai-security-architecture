@@ -95,8 +95,9 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     const query = new URLSearchParams();
     if (tab !== "enable") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
-    // An open cloud is already named by `cloud`; only a tool needs its own parameter.
-    if (tab === "enable" && selected && selected.tool !== cloud) query.set("tool", selected.tool);
+    // The open product stays in the address, a cloud included: the address is read back into
+    // this page's state, so leaving it out would fold the step the reader just opened.
+    if (tab === "enable" && selected) query.set("tool", selected.tool);
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
   }, [arrived, tab, selected, highlight, cloud]);

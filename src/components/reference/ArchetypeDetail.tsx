@@ -25,9 +25,9 @@ export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archet
         <Prose blocks={archetype.description} size="sm" />
       </Section>
 
-      <Section title="Components" count={archetype.blocks.length}>
+      <Section key={`components-${cloud?.id ?? "generic"}`} title="Components" count={archetype.blocks.length} defaultOpen={Boolean(cloud)}>
         <p className="mb-3 text-[12.5px] leading-snug text-ink-3">
-          Every box on the drawing, by the boundary it sits in, with what it holds.
+          Every box on the drawing, by the boundary it sits in, with what it holds{cloud ? ` and the ${cloud.cloud.short} service that plays it` : ""}.
         </p>
         <ComponentList archetype={archetype} cloud={cloud} />
       </Section>
@@ -141,8 +141,15 @@ export function ComponentList({ archetype, cloud = null }: { archetype: Archetyp
                 {cloud && bindingFor(cloud, b.id) && (
                   <span className="mt-0.5 block text-ink" data-component-service>
                     <span className="font-semibold">On {cloud.cloud.short}: </span>
-                    {bindingFor(cloud, b.id)!.service}
+                    {bindingFor(cloud, b.id)!.url ? (
+                      <a href={bindingFor(cloud, b.id)!.url} target="_blank" rel="noreferrer" className="hover:text-introduced hover:underline">
+                        {bindingFor(cloud, b.id)!.service}
+                      </a>
+                    ) : (
+                      bindingFor(cloud, b.id)!.service
+                    )}
                     {bindingFor(cloud, b.id)!.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
+                    {bindingFor(cloud, b.id)!.note && <span className="block text-[12px] text-ink-3">{bindingFor(cloud, b.id)!.note}</span>}
                   </span>
                 )}
                   {b.note && <span className="mt-0.5 block">{b.note.trim()}</span>}

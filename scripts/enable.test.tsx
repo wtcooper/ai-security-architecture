@@ -15,7 +15,7 @@ import { cloudOptionsForControl, cloudProductsFor, cloudSlug, controlPlaneOption
 import { CapabilityDetail } from "../src/components/capabilities/CapabilityDetail";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
-import { baselineNotPinned, controlGroups } from "../src/components/enable/model";
+import { baselineNotPinned, controlGroups, controlsDelivered, settingGroups } from "../src/components/enable/model";
 import { dataset, enablement, isBaseline, productsForArchetype, toolsForArchetype } from "../src/lib/data";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -50,22 +50,41 @@ test("every pinned control falls in exactly one NIST CSF category, shown in CSF 
   }
 });
 
-test("the tools step shows one pill per product and the picked product's settings, each naming its chips", () => {
-  const arch = dataset.archetypes.find((a) => productsForArchetype(a.id).some((p) => p.id === "toolClaudeCode"))!;
-  const products = productsForArchetype(arch.id);
-  const html = renderToStaticMarkup(
-    <ProductSettings archetype={arch} products={products} selected="toolClaudeCode" onPick={() => {}} lit={null} onLight={() => {}} />,
-  );
-  assert.equal([...html.matchAll(/role="tab"/g)].length, products.length, "a pill per product");
-  const cc = products.find((p) => p.id === "toolClaudeCode")!;
-  assert.equal([...html.matchAll(/id="setting-toolClaudeCode-/g)].length, cc.settings.length, "a row per setting");
-  for (const s of cc.settings) for (const id of s.mitigations) {
-    assert.ok(html.includes(`>${arch.mitigations.indexOf(id) + 1}</button>`), `${s.id} shows chip for ${id}`);
+test("the settings step reads like the controls step: same headings, same order, each row naming the control it delivers", () => {
+  const capName = (id: string) => dataset.mitigations.find((m) => m.id === id)!.title;
+  for (const arch of dataset.archetypes) {
+    const products = productsForArchetype(arch.id);
+    for (const product of products.filter((p) => p.settings.length)) {
+      const where = `${arch.id} ${product.id}`;
+      const html = renderToStaticMarkup(<ProductSettings archetype={arch} products={products} selected={product.id} onPick={() => {}} lit={null} onLight={() => {}} />);
+      assert.equal([...html.matchAll(/role="tab"/g)].length, products.length, `${where}: a pill per product`);
+      assert.equal([...html.matchAll(new RegExp(`id="setting-${product.id}-`, "g"))].length, product.settings.length, `${where}: a row per setting`);
+      // One line about the product; the background is folded, and there is no table of components here.
+      assert.match(html, new RegExp(`data-product-header="${product.id}"`), where);
+      assert.doesNotMatch(html, /data-binding=|data-built-on=|What plays each component on \w+ <|No settings recorded/, `${where}: no background before the settings`);
+      // The same plain headings as the controls step, in the same order, with anything else last.
+      const controlOrder = controlGroups(arch).map((g) => g.id);
+      const bands = [...html.matchAll(/data-setting-group="([^"]+)"/g)].map((m) => m[1]);
+      const expected = settingGroups(arch, product.settings).map((g) => g.id);
+      assert.deepEqual(bands, expected, `${where}: bands`);
+      const named = bands.filter((id) => id !== "extras");
+      assert.deepEqual(named, controlOrder.filter((id) => named.includes(id)), `${where}: bands follow the controls' order`);
+      if (bands.includes("extras")) assert.equal(bands.at(-1), "extras", `${where}: unnumbered hardening comes last`);
+      for (const g of controlGroups(arch)) if (named.includes(g.id)) assert.ok(html.includes(esc(g.plain)), `${where}: heading ${g.plain}`);
+      // Each row says what to set, to what and why, and names the control it delivers, not just its number.
+      for (const st of product.settings) {
+        const row = html.slice(html.indexOf(`id="setting-${product.id}-${st.id}"`));
+        const cell = row.slice(0, row.indexOf("</li>"));
+        for (const text of [st.name, st.recommended, st.why]) assert.ok(cell.includes(esc(text)), `${where} ${st.id}: shows "${text.slice(0, 30)}"`);
+        for (const id of controlsDelivered(arch, st)) {
+          assert.match(cell, new RegExp(`data-delivers="${id.replace(/[.]/g, "\\.")}"`), `${where} ${st.id}: delivers ${id}`);
+          assert.ok(cell.includes(esc(capName(id))) || cell.includes(`>${arch.mitigations.indexOf(id) + 1}<`), `${where} ${st.id}: names ${id}`);
+        }
+      }
+      // Nothing is recorded in data/status.yaml, so there is no status column; the detail waits for a row to be opened.
+      assert.doesNotMatch(html, />Not enabled<|data-setting-detail/, `${where}: no empty status column, no open detail`);
+    }
   }
-  // Nothing is recorded in data/status.yaml, so every row reads Not enabled and the page says where to record it.
-  assert.equal([...html.matchAll(/>Not enabled</g)].length, cc.settings.length);
-  assert.match(html, /data\/status\.yaml/);
-  assert.doesNotMatch(html, /Built-in|Not in tool/, "the capability grid is gone");
 });
 
 test("a product not yet catalogued setting by setting falls back to its capability record", () => {
@@ -235,13 +254,13 @@ test("a cloud architecture lists its clouds first, binds every component and cov
       const product = products.find((p) => p.id === cloud.id)!;
       const delivered = new Set(product.settings.flatMap((s) => s.mitigations));
       for (const id of arch.mitigations) assert.ok(delivered.has(id), `${cloud.id} ${arch.id}: ${id} has a row`);
-      const html = renderToStaticMarkup(
-        <ProductSettings archetype={arch} products={products} selected={cloud.id} onPick={() => {}} lit={null} onLight={() => {}} />,
-      );
-      assert.match(html, new RegExp(`What plays each component on ${cloud.short}`));
-      // Matched as React escapes text, so a service name may carry any character.
-      const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
-      for (const b of impl.bindings) assert.ok(html.includes(escape(b.service)), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
+      // What plays each component is named on the drawing and listed, with its note, under How it works.
+      const cloudProduct = cloudProductsFor(arch.id).find((p) => p.id === cloud.id)!;
+      const html = renderToStaticMarkup(<ComponentList archetype={arch} cloud={cloudProduct} />);
+      for (const b of impl.bindings) {
+        assert.ok(html.includes(esc(b.service)), `${cloud.id} ${arch.id}: ${b.block} binding shown`);
+        if (b.note) assert.ok(html.includes(esc(b.note)), `${cloud.id} ${arch.id}: ${b.block} note shown`);
+      }
     }
   }
 });
@@ -289,17 +308,9 @@ test("a pattern read as built on a cloud names every component's service and tha
       assert.match(html, new RegExp(`aria-pressed="true"[^>]*data-cloud="${product.id}"`), `${where}: the switch shows the cloud`);
       assert.doesNotMatch(html, /id="(controls|tools)"[^>]*><button[^>]*aria-expanded="true"/, `${where}: choosing a cloud leaves the steps folded`);
       assert.match(html, /data-legend-cloud/, `${where}: the legend explains the service names`);
-      // The settings step, opened on the cloud, leads with every component the cloud names and its service.
+      // The settings step, opened on the cloud, shows that cloud's settings.
       const settings = page(arch.id, `tool=${product.id}`);
-      assert.match(settings, new RegExp(`data-built-on="${product.id}"`), `${where}: the settings step leads with the cloud`);
-      for (const b of product.implementation.bindings) {
-        assert.match(settings, new RegExp(`data-binding="${b.block}"`), `${where}: ${b.block} is in the component table`);
-        assert.ok(settings.includes(esc(b.service)), `${where}: ${b.block} names ${b.service}`);
-      }
-      // Every control-plane box that owns a control lists the settings that deliver it.
-      for (const b of arch.blocks.filter((x) => x.kind === "governance")) {
-        if (controlPlaneOptions(arch, product, b).length) assert.match(settings, new RegExp(`data-control-plane="${b.id}"`), `${where}: ${b.id} lists its settings`);
-      }
+      assert.match(settings, new RegExp(`data-settings="${product.id}"`), `${where}: the settings step shows the cloud's settings`);
       // Every pinned control names at least one of the cloud's own settings.
       const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={null} onOpen={() => {}} product={product} />);
       assert.equal([...table.matchAll(/data-option-names/g)].length, arch.mitigations.length, `${where}: every control names a setting`);

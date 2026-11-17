@@ -1,6 +1,6 @@
 /** What the Enable tab derives from an architecture: its enterprise controls by NIST CSF category, and where each sits. */
 import { archetypeById, enablement, mitigationById, mitigationsForArchetype } from "@/lib/data";
-import type { Archetype, Mitigation, Tool, ToolControl } from "@/lib/types";
+import type { Archetype, Mitigation, ProductSetting, Tool, ToolControl } from "@/lib/types";
 
 export interface ControlGroup {
   id: string;
@@ -65,3 +65,41 @@ export function placementsFor(archetypeId: string, capabilityId: string): { bloc
 /** A product's own record on one capability, if the registry has one. */
 export const toolControlFor = (tool: Tool, capabilityId: string): ToolControl | undefined =>
   tool.controls.find((c) => c.mitigation === capabilityId);
+
+/** One band of the settings step: a category's plain heading and the settings filed under it. */
+export interface SettingGroup {
+  /** The category's id, or "extras" for settings that deliver none of the pattern's controls. */
+  id: string;
+  plain: string;
+  /** The CSF category's name; absent for the extras band. */
+  title?: string;
+  function?: string;
+  settings: ProductSetting[];
+}
+
+/** The pattern's controls a setting delivers, in chip order. */
+export const controlsDelivered = (archetype: Archetype, setting: ProductSetting): string[] =>
+  archetype.mitigations.filter((id) => setting.mitigations.includes(id));
+
+/**
+ * A product's settings under the same plain headings, in the same order, as the pattern's
+ * controls in step 1: a setting is filed with the first control it delivers, so step 2 reads
+ * as the same list, now in the product. Settings that deliver none of the pattern's controls
+ * come last, as hardening the product recommends anyway.
+ */
+export function settingGroups(archetype: Archetype, settings: ProductSetting[]): SettingGroup[] {
+  const order = new Map(archetype.mitigations.map((id, i) => [id, i]));
+  const first = (st: ProductSetting) => controlsDelivered(archetype, st)[0];
+  const groups: SettingGroup[] = controlGroups(archetype)
+    .map((g) => {
+      const ids = new Set(g.capabilities.map((c) => c.id));
+      const own = settings.filter((st) => ids.has(first(st) ?? ""));
+      // Within a band, in the order step 1 lists the controls; a product's own order breaks ties.
+      const sorted = own.map((st, i) => ({ st, i })).sort((a, b) => order.get(first(a.st)!)! - order.get(first(b.st)!)! || a.i - b.i).map((x) => x.st);
+      return { id: g.id, plain: g.plain, title: g.title, function: g.function, settings: sorted };
+    })
+    .filter((g) => g.settings.length);
+  const extras = settings.filter((st) => !first(st));
+  if (extras.length) groups.push({ id: "extras", plain: "Also recommended", settings: extras });
+  return groups;
+}

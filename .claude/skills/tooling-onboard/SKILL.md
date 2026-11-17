@@ -117,13 +117,12 @@ architectures with their surface).
 5. **Validate.** `npx tsx scripts/build-data.ts` from the repo root (`npm run data` runs the same
    script); fix every error naming your file. Then `npm run audit` and read section 5b of
    `docs/AUDIT.md`: the "Unaddressed" column should be empty for your entity.
-6. **Look at it.** `npm run dev` and open `/patterns/<slug>/?tool=<id>`: the Enable tab's tool settings step
-   with your product as a column and its record open beneath the grid. Check that each
-   capability row shows the coverage word you expect from its row, and open a few rows in the
-   record for the steps and their links. Without a browser, confirm the compiled entry instead:
-   `node -e 'const d=require("./src/data/generated/dataset.json");console.log(d.tools.find(t=>t.id==="<id>"))'`.
-   Deliberate exclusions go in the file header comment and under "Exclusions" in
-   `data/tooling/README.md`.
+6. **Look at it.** `npm run dev` and open `/patterns/<slug>/?tool=<id>`: the second step of
+   Enable opens on your product. Check that every setting sits under the heading of the
+   control it delivers and names that control, that the value to set reads as an instruction
+   someone could follow, and open a few rows for the path, the default and the vendor's page.
+   Quote any value that is a bare number or true/false in the YAML: the build rejects one
+   that is not text.
 
 ## Verifying a link
 
