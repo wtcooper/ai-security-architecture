@@ -53,7 +53,7 @@ These hold for all patterns because the engine draws them, and are covered by th
 | **C3 Crossings** | `crossing` on every flow whose ends are in different zones | `kind`: `brokered` (through a control point we run), `vendor` (governed by the vendor), `person` (through the person present) or `direct` (nothing of ours in the path). `via`: one line naming what the flow passes through on our side, and for `direct`, starting "Nothing between:" and naming the only thing that does apply. It must agree with the controls pinned on that flow and its ends. |
 | **C4 When it applies** | `useWhen` in `data/overlay/patterns.yaml` | One sentence in the reader's words, plus the search words a reader might use. |
 | **C5 Control plane is used** | `mitigations` on control-plane blocks | Every control-plane box drawn owns at least one control the pattern pins, or the pattern's file says why it is drawn empty. |
-| **C6 Notes** | `note` on every block and flow | The hover text: what it is and why it matters here. |
+| **C6 Notes** | `note` on every block and flow | The hover text: what it is and why it matters here. A control pin's note is its row on Enable: what to put in place at that spot on this pattern, not what the control is in general. |
 | **C7 Walks** | `walkthrough` and `scenarios` | One complete walk and at least two scenario walks, every step on a real flow. |
 | **C8 Guidance** | `data/reference/guidance/<slug>.yaml` | An overview and at least four action-titled items, each citing controls the pattern pins. |
 | **C9 Tools** | `data/tooling/`, `data/clouds/` | At least one catalogued product with settings, and for a pattern you build, its mapping onto each cloud. Where no product exists yet, the Enable tab says so. |

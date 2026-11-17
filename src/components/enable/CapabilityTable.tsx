@@ -4,30 +4,24 @@
  * A pattern's enterprise controls as one table, a band per NIST CSF category and a row per
  * control, each led by the number of its chip on the drawing. Opening a row lights that
  * chip; picking a chip on the drawing opens its row. The open row is the drawing's highlight,
- * so the two can never disagree. A row is kept to its number, name, one line and where it goes;
- * everything else is in the open row. With a cloud chosen, each row also names that cloud's own
- * options for the control, and the open row gives each one's value and why.
+ * so the two can never disagree.
+ *
+ * A row says what to put in place on this pattern, in the pattern's own words, and where: not
+ * the catalogue's definition of the control, which reads the same on every pattern. With a
+ * product chosen (a cloud or a tool) the row also names that product's settings for the
+ * control, and the open row gives each one's place, value and reason. The definition stays in
+ * the open row, last.
  */
 import Link from "next/link";
 import { Fragment } from "react";
 
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
-import { capabilityName, guidanceByArchetype, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor } from "@/lib/data";
-import type { Archetype, Mitigation } from "@/lib/types";
+import { capabilityName, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor, type Product } from "@/lib/data";
+import type { Archetype } from "@/lib/types";
 import { NativeOptions, OptionNames } from "@/components/cloud/CloudViews";
-import { optionsFor, type CloudProduct } from "@/components/cloud/model";
+import { optionsFor, productShort } from "@/components/cloud/model";
 import { placementsFor, type ControlGroup } from "./model";
 import { controlHref } from "@/lib/routes";
-
-/** The first sentence of the authored implementation scope, kept to a couple of lines: what the capability does. */
-const whatItDoes = (m: Mitigation) => {
-  const text = m.implementation.replace(/\s+/g, " ").trim();
-  const end = text.search(/\.\s/);
-  const sentence = end === -1 ? text : text.slice(0, end + 1);
-  if (sentence.length <= 150) return sentence;
-  const cut = sentence.slice(0, 150);
-  return cut.slice(0, cut.lastIndexOf(" ")) + "…";
-};
 
 const anyStatus = Object.values(statusFile).some((s) => s.status);
 // The status column appears once the organisation has recorded any status; until then every row would read "Not set".
@@ -43,12 +37,12 @@ export function CapabilityTable({
   open,
   onOpen,
   onShowDrawing,
-  cloud = null,
+  product = null,
 }: {
   groups: ControlGroup[];
   archetype: Archetype;
-  /** The cloud the pattern is shown as built on: its own options are listed on every control. */
-  cloud?: CloudProduct | null;
+  /** The cloud or tool the reader is enabling: its own settings are named on every control. */
+  product?: Product | null;
   /** The capability whose row is open, which is also the one lit on the drawing. */
   open: string | null;
   onOpen: (id: string | null) => void;
@@ -57,13 +51,12 @@ export function CapabilityTable({
 }) {
   const number = new Map(archetype.mitigations.map((id, i) => [id, i + 1]));
   const pinnedRisks = new Set(archetype.risks);
-  const guidance = guidanceByArchetype.get(archetype.id);
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-paper">
       <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
         <span aria-label="Pin" />
         <span>Control</span>
-        <span>What it does</span>
+        <span>What to put in place here</span>
         <span>Where it goes</span>
         {anyStatus && <StatusHeading />}
       </div>
@@ -86,10 +79,11 @@ export function CapabilityTable({
             {group.capabilities.map((m) => {
           const expanded = open === m.id;
           const where = placementsFor(archetype.id, m.id);
-          const items = guidance?.items.filter((i) => i.mitigations.includes(m.id)) ?? [];
           const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
           const own = statusFile[m.id];
-          const options = cloud ? optionsFor(cloud, m.id) : [];
+          const options = product ? optionsFor(product, m.id) : [];
+          // What this pattern asks of the control, in the pattern's own words, at each place it is pinned.
+          const [lead, ...more] = where.notes;
           return (
             <li key={m.id} id={`control-${m.id}`} className="scroll-mt-24">
               <button
@@ -108,9 +102,9 @@ export function CapabilityTable({
                   <span className="block text-[13.5px] font-semibold leading-snug text-ink">{capabilityName(m.id)}</span>
                   {own?.displayName && <span className="block text-[11.5px] text-ink-3">{m.title}</span>}
                 </span>
-                <span className="col-start-2 text-[12.5px] leading-snug text-ink-2 md:col-start-auto">
-                  {whatItDoes(m)}
-                  {cloud && <OptionNames short={cloud.cloud.short} options={options} />}
+                <span className="col-start-2 text-[12.5px] leading-snug text-ink md:col-start-auto" data-instruction>
+                  {lead ?? m.implementation}
+                  {product && <OptionNames short={productShort(product)} options={options} />}
                 </span>
                 <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.blocks.join(" · ")}</span>
                 {anyStatus && (
@@ -121,23 +115,15 @@ export function CapabilityTable({
               </button>
               {expanded && (
                 <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]">
-                  <p>{m.implementation}</p>
-                  {isBaseline(m.id) && <p className="text-[12px] text-ink-3" data-baseline>{BASELINE_HELP}</p>}
-                  {where.notes.length ? (
+                  {more.length > 0 && (
                     <div>
-                      <p className="eyebrow">On this pattern</p>
-                      <ul className="mt-1 space-y-1">
-                        {where.notes.map((n) => <li key={n}>{n}</li>)}
+                      <p className="eyebrow">Also on this pattern</p>
+                      <ul className="mt-1 space-y-1 text-ink">
+                        {more.map((n) => <li key={n}>{n}</li>)}
                       </ul>
                     </div>
-                  ) : null}
-                  {cloud && <NativeOptions cloud={cloud.cloud} options={options} />}
-                  {items.length > 0 && (
-                    <p className="text-[12px]">
-                      <span className="font-semibold text-ink">Part of: </span>
-                      {items.map((item) => item.title).join(" · ")}
-                    </p>
                   )}
+                  {product && <NativeOptions id={product.id} name={product.name} options={options} />}
                   {reduces.length > 0 && (
                     <p className="text-[12px]">
                       <span className="font-semibold text-ink">Reduces here: </span>
@@ -150,9 +136,14 @@ export function CapabilityTable({
                       ))}
                     </p>
                   )}
-                  <p className="text-[11.5px] text-ink-3">
-                    Delivered by: {m.examples.slice(0, 5).join(" · ")}
-                  </p>
+                  <div className="text-[12px] text-ink-3" data-definition>
+                    <p>
+                      <span className="font-semibold text-ink-2">The control: </span>
+                      {m.implementation}
+                    </p>
+                    <p className="mt-1">Delivered by: {m.examples.slice(0, 5).join(" · ")}</p>
+                    {isBaseline(m.id) && <p className="mt-1" data-baseline>{BASELINE_HELP}</p>}
+                  </div>
                   <span className="flex flex-wrap gap-x-4">
                     {onShowDrawing && (
                       <button type="button" onClick={onShowDrawing} className="text-[12px] font-semibold text-introduced hover:underline">

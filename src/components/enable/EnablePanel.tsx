@@ -1,22 +1,22 @@
 "use client";
 
 /**
- * The Enable tab of a pattern: how to put it in place, as a short list of folded steps. What to
- * do (the plan, from the pattern's guidance); the enterprise controls, by NIST CSF category;
- * then the settings of the cloud or tool it runs on. The tab opens as that list and nothing
- * else, so it first reads as the plan; a step unfolds to its rows. Every control row is a
- * numbered chip on the drawing above, and every setting names the chips it delivers.
+ * The Enable tab of a pattern: how to put it in place, as two folded steps. The enterprise
+ * controls, each saying what this pattern asks of it and where; then the settings of the cloud
+ * or tool it runs on, each with its place, value and reason. The tab opens as those two lines
+ * and nothing else; a step unfolds to its rows. Every control row is a numbered chip on the
+ * drawing above, and every setting names the chips it delivers.
  *
  * A step also stands open while it holds what the reader asked for: the control lit on the
- * drawing, or the product a link opened. With a cloud chosen above the drawing, every control
- * names that cloud's own settings and the last step leads with what plays each component.
+ * drawing, or the product a link opened. Once a product is chosen (a cloud above the drawing,
+ * or a pill in the second step) every control also names that product's own settings for it.
+ * The pattern's governance guidance is prose, not steps, and lives under How it works.
  */
 import { useState, type ReactNode } from "react";
 
-import { Prose } from "@/components/Prose";
-import { capabilityName, guidanceByArchetype, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
+import { capabilityName, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
-import type { CloudProduct } from "@/components/cloud/model";
+import { productShort, type CloudProduct } from "@/components/cloud/model";
 import { BASELINE_HELP, CapabilityTable } from "./CapabilityTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ProductSettings } from "./ProductSettings";
@@ -30,7 +30,7 @@ function Progress({ capabilities }: { capabilities: Mitigation[] }) {
   return <span className="text-[12px] font-normal text-ink-3">{enabled} of {capabilities.length} enabled</span>;
 }
 
-type StepId = "plan" | "controls" | "tools";
+type StepId = "controls" | "tools";
 
 function Step({
   n,
@@ -82,45 +82,6 @@ function Step({
   );
 }
 
-/** The plan: every guidance action with its reasoning and the controls it relies on, then how to govern the pattern. */
-export function EnablePlan({ archetype, onOpenControl }: { archetype: Archetype; onOpenControl: (id: string) => void }) {
-  const guidance = guidanceByArchetype.get(archetype.id);
-  const actions = guidance?.items ?? [];
-  const openControl = onOpenControl;
-  return (
-    <>
-          <ol className="space-y-4">
-            {actions.map((item, i) => (
-              <li key={item.title} className="flex gap-3" data-action>
-                <span className="ident mt-0.5 w-4 shrink-0 text-right text-[12px] text-ink-3">{i + 1}</span>
-                <div className="min-w-0 max-w-3xl">
-                  <p className="text-[13.5px] font-semibold leading-snug text-ink">{item.title}</p>
-                  <div className="mt-1"><Prose blocks={item.body} size="sm" /></div>
-                  <p className="mt-1.5 text-[12px] leading-snug text-ink-3">
-                    Controls:{" "}
-                    {item.mitigations.filter((id) => archetype.mitigations.includes(id)).map((id, k) => (
-                      <span key={id}>
-                        {k > 0 && " · "}
-                        <button type="button" onClick={() => openControl(id)} className="text-ink-2 hover:text-introduced hover:underline">
-                          {archetype.mitigations.indexOf(id) + 1} {capabilityName(id)}
-                        </button>
-                      </span>
-                    ))}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
-          {guidance && guidance.overview.length > 0 && (
-            <details className="mt-4 max-w-3xl">
-              <summary className="cursor-pointer text-[12.5px] font-semibold text-ink-2">How to govern this pattern</summary>
-              <div className="mt-2"><Prose blocks={guidance.overview} size="sm" /></div>
-            </details>
-          )}
-    </>
-  );
-}
-
 const count = (text: string) => <span className="text-[12px] font-normal text-ink-3">{text}</span>;
 
 export function EnablePanel({
@@ -148,8 +109,6 @@ export function EnablePanel({
   const controls = groups.flatMap((g) => g.capabilities);
   const shared = controls.filter((m) => isBaseline(m.id)).length;
   const alsoNeeded = baselineNotPinned(archetype);
-  const guidance = guidanceByArchetype.get(archetype.id);
-  const actions = guidance?.items ?? [];
   const products = productsForArchetype(archetype.id);
   // The open product is the one the reader picked, or else the cloud the pattern is shown on.
   const product = (productId ? products.find((p) => p.id === productId) : undefined) ?? cloud ?? undefined;
@@ -162,7 +121,6 @@ export function EnablePanel({
   // is working down a product's settings, not the control list.
   const [litFromTools, setLitFromTools] = useState(false);
   const holds: Record<StepId, boolean> = {
-    plan: false,
     controls: !litFromTools && controls.some((m) => m.id === open),
     tools: Boolean(productId && products.some((p) => p.id === productId)),
   };
@@ -177,39 +135,17 @@ export function EnablePanel({
     } else next.add(id);
     setUnfolded(next);
   };
-  /** Opens a control's row from the plan: unfolds the controls and brings the row into view. */
-  const openControl = (id: string) => {
-    setLitFromTools(false);
-    onOpen(id);
-    requestAnimationFrame(() => document.getElementById(`control-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
-  };
-
-  const steps: StepId[] = [...(actions.length ? (["plan"] as StepId[]) : []), "controls", "tools"];
-  const n = (id: StepId) => steps.indexOf(id) + 1;
+  const short = product ? productShort(product) : null;
 
   return (
     <div className="space-y-2.5">
       <p className="mb-3 max-w-3xl text-[13px] leading-relaxed text-ink-2">
-        {steps.length === 3 ? "Three" : "Two"} steps to run this pattern safely. Open a step to work through it. Each control is a numbered chip on the
-        drawing: pick a chip to open its row.
+Two steps to run this pattern safely: put the controls in place, then set them in the product you run. Each control is a
+        numbered chip on the drawing: pick a chip to open its row.
       </p>
 
-      {actions.length > 0 && (
-        <Step
-          n={n("plan")}
-          id="plan"
-          title="What to do"
-          aside={count(`${actions.length} actions${guidance?.status === "draft" ? " · draft" : ""}`)}
-          expanded={isOpen("plan")}
-          onToggle={() => toggle("plan")}
-          lead="The plan in plain words: what to put in place and why, before the detail of each control."
-        >
-          <EnablePlan archetype={archetype} onOpenControl={openControl} />
-        </Step>
-      )}
-
       <Step
-        n={n("controls")}
+        n={1}
         id="controls"
         title="Enterprise controls"
         aside={
@@ -220,14 +156,14 @@ export function EnablePanel({
         }
         expanded={isOpen("controls")}
         onToggle={() => toggle("controls")}
-        lead={`The controls your organisation runs, whichever product is chosen, by NIST CSF category.${
-          cloud ? ` Each names the ${cloud.cloud.short} setting that delivers it.` : ""
+        lead={`What to put in place on this pattern, control by control, by NIST CSF category.${
+          short ? ` Each names the ${short} setting that delivers it.` : ""
         }`}
       >
         {shared > 0 && (
           <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3" title={BASELINE_HELP}>
-            {shared} of the {controls.length} are needed by every AI deployment, so they are set up once and reused. Open a row for how to put
-            it in place.
+            {shared} of the {controls.length} are needed by every AI deployment, so they are set up once and reused. Open a row for the
+            settings that deliver it and the risks it reduces.
           </p>
         )}
         <CapabilityTable
@@ -239,7 +175,7 @@ export function EnablePanel({
             onOpen(id);
           }}
           onShowDrawing={onShowDrawing}
-          cloud={cloud}
+          product={product ?? null}
         />
         {alsoNeeded.length > 0 && (
           <p className="mt-2 text-[12px] leading-snug text-ink-3" title={BASELINE_HELP}>
@@ -250,7 +186,7 @@ export function EnablePanel({
       </Step>
 
       <Step
-        n={n("tools")}
+        n={2}
         id="tools"
         title={built ? "Cloud & tool settings" : "Tool settings"}
         aside={products.length ? count(`${cloud ? `${cloud.cloud.short} · ` : ""}${products.length} products`) : undefined}
@@ -259,8 +195,8 @@ export function EnablePanel({
         lead={
           products.length
             ? built
-              ? "What plays each component on the cloud you build on, and its security settings: where each is set, the value and why."
-              : "The security settings of the product you choose: where each is set, the value to set it to and why."
+              ? "Pick the cloud or tool you build on: what plays each component, and every security setting with where it is set, the value and why."
+              : "Pick the product you run: every security setting with where it is set, the value to set it to and why."
             : "No product of this kind is catalogued yet. Build it to the controls above."
         }
       >

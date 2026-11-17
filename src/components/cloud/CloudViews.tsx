@@ -111,12 +111,12 @@ export function OptionNames({ short, options }: { short: string; options: Produc
   );
 }
 
-/** Under an open control: each of the cloud's own settings that delivers it, with where it is set, the value to set and why. */
-export function NativeOptions({ cloud, options }: { cloud: CloudProduct["cloud"]; options: ProductSetting[] }) {
+/** Under an open control: each of the product's own settings that delivers it, with where it is set, the value to set and why. */
+export function NativeOptions({ id, name, options }: { id: string; name: string; options: ProductSetting[] }) {
   if (!options.length) return null;
   return (
-    <div data-native-options={cloud.id}>
-      <p className="eyebrow">On {cloud.name}</p>
+    <div data-native-options={id}>
+      <p className="eyebrow">Set it in {name}</p>
       <ul className="mt-1.5 space-y-2">
         {options.map((s) => (
           <li key={s.id} className="rounded-lg border border-line bg-paper px-3 py-2.5">

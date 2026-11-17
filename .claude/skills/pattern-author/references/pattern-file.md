@@ -166,7 +166,7 @@ pins:
     - mitigation: cap-input-guardrails   # an id from the control catalogue
       at: gateway
       note: >-
-        What the control does at this place on this pattern.
+        What to put in place at this spot on this pattern. This is the control's row on Enable.
 ```
 
 - The pattern's control list, and the chip numbers, come from the order of first appearance
@@ -238,7 +238,8 @@ page.
 
 ## The guidance file
 
-`data/reference/guidance/<surface>-<slug>.yaml`. Required; it is the Enable tab's "What to do".
+`data/reference/guidance/<surface>-<slug>.yaml`. Required; it is shown under How it works as
+"How to govern this pattern".
 
 ```yaml
 archetype: archShortName

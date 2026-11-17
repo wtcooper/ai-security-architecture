@@ -3,7 +3,7 @@
 /**
  * The prose below the diagram. The diagram carries the security content — this panel carries
  * the reading: how the pattern works, every component and what it holds (the drawing shows one
- * line per box; this is the full list), why it is its own pattern, the products that are examples
+ * line per box; this is the full list), how to govern it (the guidance, as prose), why it is its own pattern, the products that are examples
  * of it, where its drawing departs from the catalogue's rules, and where the claims come from. Collapsed except the narrative,
  * because the earlier version of this tab taught that showing everything at once reads as noise.
  */
@@ -13,10 +13,12 @@ import { Prose } from "@/components/Prose";
 import { CloudComparison } from "@/components/cloud/CloudViews";
 import { bindingFor, cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
+import { capabilityName, guidanceByArchetype } from "@/lib/data";
 import type { Archetype } from "@/lib/types";
 
 export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archetype; /** The cloud the pattern is shown as built on. */ cloud?: CloudProduct | null }) {
   const cloudProducts = cloudProductsFor(archetype.id);
+  const guidance = guidanceByArchetype.get(archetype.id);
   return (
     <div className="rounded-xl border border-line bg-paper">
       <Section title="How it works" count={null} defaultOpen>
@@ -38,6 +40,30 @@ export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archet
             function, so its row lists the settings that deliver its controls; their values are on Enable.
           </p>
           <CloudComparison archetype={archetype} products={cloudProducts} />
+        </Section>
+      )}
+
+      {guidance && (
+        // The reasoning behind the controls, as prose. The steps themselves are on Enable.
+        <Section title={`How to govern this pattern${guidance.status === "draft" ? " · draft" : ""}`} count={guidance.items.length}>
+          <div className="max-w-3xl">
+            <Prose blocks={guidance.overview} size="sm" />
+            <ol className="mt-4 space-y-4">
+              {guidance.items.map((item) => (
+                <li key={item.title} data-guidance-item className="text-[13px] leading-snug text-ink-2">
+                  <p className="font-semibold text-ink">{item.title}</p>
+                  <div className="mt-1"><Prose blocks={item.body} size="sm" /></div>
+                  <p className="mt-1 text-[12px] text-ink-3">
+                    Controls:{" "}
+                    {item.mitigations
+                      .filter((id) => archetype.mitigations.includes(id))
+                      .map((id) => `${archetype.mitigations.indexOf(id) + 1} ${capabilityName(id)}`)
+                      .join(" · ")}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </Section>
       )}
 

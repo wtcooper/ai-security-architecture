@@ -24,9 +24,12 @@ export const cloudProductsFor = (archetypeId: string): CloudProduct[] =>
 export const cloudProductFor = (archetypeId: string, cloudId: string | null): CloudProduct | null =>
   cloudId ? cloudProductsFor(archetypeId).find((p) => p.id === cloudId) ?? null : null;
 
-/** The cloud's own settings that deliver one control on this pattern, in the order the cloud lists them. */
-export const optionsFor = (product: CloudProduct, controlId: string): ProductSetting[] =>
+/** A product's own settings that deliver one control on this pattern, in the order the product lists them. */
+export const optionsFor = (product: Product, controlId: string): ProductSetting[] =>
   product.settings.filter((s) => s.mitigations.includes(controlId));
+
+/** How a product is named in a tight space: a cloud by its short name, a tool by its own. */
+export const productShort = (product: Product) => (product.kind === "cloud" ? product.cloud.short : product.tool.name);
 
 /** What plays a component on this cloud, if the cloud's mapping names one. */
 export const bindingFor = (product: CloudProduct, blockId: string): CloudBinding | undefined =>

@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
-import { EnablePanel, EnablePlan } from "../src/components/enable/EnablePanel";
+import { EnablePanel } from "../src/components/enable/EnablePanel";
 import { CapabilityTable } from "../src/components/enable/CapabilityTable";
 import { PatternPage } from "../src/components/patterns/PatternPage";
 import { PatternFinder } from "../src/components/patterns/PatternFinder";
-import { ComponentList } from "../src/components/reference/ArchetypeDetail";
+import { ArchetypeDetail, ComponentList } from "../src/components/reference/ArchetypeDetail";
 import HomePage from "../src/app/page";
 import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
 import { CloudComparison } from "../src/components/cloud/CloudViews";
@@ -102,11 +102,11 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
       <EnablePanel archetype={arch} open={open} onOpen={() => {}} onShowDrawing={() => {}} tool={null} focus={null} onPickTool={() => {}} />,
     );
   for (const arch of dataset.archetypes) {
-    // At rest: the plan, the controls and the settings, each one folded line, and nothing else.
+    // At rest: the controls and the settings, each one folded line, and nothing else.
     const folded = panel(arch, null);
-    assert.equal([...folded.matchAll(/aria-controls="/g)].length, 3, `${arch.id}: three steps`);
+    assert.equal([...folded.matchAll(/aria-controls="/g)].length, 2, `${arch.id}: two steps`);
     assert.doesNotMatch(folded, /aria-expanded="true"/, `${arch.id}: every step starts folded`);
-    assert.ok(folded.indexOf('id="plan"') < folded.indexOf('id="controls"') && folded.indexOf('id="controls"') < folded.indexOf('id="tools"'), `${arch.id}: plan, controls, settings`);
+    assert.ok(folded.indexOf('id="controls"') < folded.indexOf('id="tools"'), `${arch.id}: controls, then settings`);
     assert.doesNotMatch(folded, /id="control-|role="tab"|data-action|data-built-on/, `${arch.id}: no rows until a step is opened`);
     // A control lit on the drawing opens the controls step on its row.
     const html = panel(arch, arch.mitigations[0]);
@@ -124,14 +124,34 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
   }
 });
 
-test("the plan step lists every guidance action with its reasoning and the controls it relies on", () => {
+test("a control row says what this pattern asks of it, not the catalogue's definition; the guidance is under How it works", () => {
   for (const arch of dataset.archetypes) {
+    const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} />);
+    assert.equal([...table.matchAll(/data-instruction/g)].length, arch.mitigations.length, `${arch.id}: an instruction per control`);
+    for (const id of arch.mitigations) {
+      const note = arch.pins.mitigations.find((p) => p.mitigation === id && p.note?.trim())?.note?.trim();
+      assert.ok(note, `${arch.id}: ${id} has its own instruction on this pattern`);
+      assert.ok(table.includes(esc(note!.slice(0, 60))), `${arch.id}: ${id} leads with the pattern's words`);
+    }
+    // The catalogue's definition is in the open row only.
+    assert.equal([...table.matchAll(/data-definition/g)].length, 1, `${arch.id}: one definition, in the open row`);
     const guidance = dataset.guidance.find((g) => g.archetype === arch.id)!;
-    // Folding is the reader's; render the step's content by opening it through its own toggle state.
-    const html = renderToStaticMarkup(<EnablePlan archetype={arch} onOpenControl={() => {}} />);
-    assert.equal([...html.matchAll(/data-action/g)].length, guidance.items.length, `${arch.id}: an entry per action`);
-    for (const item of guidance.items) assert.ok(html.includes(esc(item.title)), `${arch.id}: ${item.title}`);
+    const how = renderToStaticMarkup(<ArchetypeDetail archetype={arch} />);
+    assert.match(how, new RegExp(`How to govern this pattern[^<]*(<[^>]+>\\s*)*${guidance.items.length}`), `${arch.id}: guidance is a section of How it works`);
+    assert.doesNotMatch(page(arch.id), /What to do|data-guidance-item/, `${arch.id}: Enable carries no guidance prose`);
   }
+});
+
+test("with a tool chosen, each control it covers names that tool's settings", () => {
+  const arch = dataset.archetypes.find((a) => productsForArchetype(a.id).some((p) => p.id === "toolClaudeCode"))!;
+  const product = productsForArchetype(arch.id).find((p) => p.id === "toolClaudeCode")!;
+  const covered = arch.mitigations.filter((id) => optionsFor(product, id).length);
+  assert.ok(covered.length > 3, "the tool delivers several controls");
+  const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={covered[0]} onOpen={() => {}} product={product} />);
+  assert.equal([...table.matchAll(/data-option-names/g)].length, covered.length, "a settings line on every control the tool covers, and only those");
+  const first = optionsFor(product, covered[0])[0];
+  assert.match(table, /data-native-options="toolClaudeCode"/);
+  for (const text of [first.name, first.recommended]) assert.ok(table.includes(esc(text)), `the open row shows "${text.slice(0, 40)}"`);
 });
 
 test("a pattern opens on Enable; a tab link opens that tab and a product link opens its settings", () => {
@@ -249,7 +269,7 @@ test("a pattern read as built on a cloud names every component's service and tha
       const html = page(arch.id, `cloud=${cloudSlug(product.id)}`);
       const where = `${arch.id} on ${product.cloud.short}`;
       assert.match(html, new RegExp(`aria-pressed="true"[^>]*data-cloud="${product.id}"`), `${where}: the switch shows the cloud`);
-      assert.doesNotMatch(html, /id="(plan|controls|tools)"[^>]*><button[^>]*aria-expanded="true"/, `${where}: choosing a cloud leaves the steps folded`);
+      assert.doesNotMatch(html, /id="(controls|tools)"[^>]*><button[^>]*aria-expanded="true"/, `${where}: choosing a cloud leaves the steps folded`);
       assert.match(html, /data-legend-cloud/, `${where}: the legend explains the service names`);
       // The settings step, opened on the cloud, leads with every component the cloud names and its service.
       const settings = page(arch.id, `tool=${product.id}`);
@@ -263,7 +283,7 @@ test("a pattern read as built on a cloud names every component's service and tha
         if (controlPlaneOptions(arch, product, b).length) assert.match(settings, new RegExp(`data-control-plane="${b.id}"`), `${where}: ${b.id} lists its settings`);
       }
       // Every pinned control names at least one of the cloud's own settings.
-      const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={null} onOpen={() => {}} cloud={product} />);
+      const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={null} onOpen={() => {}} product={product} />);
       assert.equal([...table.matchAll(/data-option-names/g)].length, arch.mitigations.length, `${where}: every control names a setting`);
       for (const id of arch.mitigations) {
         const options = optionsFor(product, id);
