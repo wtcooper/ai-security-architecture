@@ -11,11 +11,11 @@
 import { Fragment } from "react";
 
 import { InfoTip } from "@/components/StatusPill";
-import { Prose } from "@/components/Prose";
 import { adoptionFor, archetypeById, capabilityName, settingAdoptionFor, vendorById, type Product } from "@/lib/data";
 import type { AdoptionStatus, Archetype, ProductSetting } from "@/lib/types";
 import { SETTING_AREAS } from "@/lib/types";
 import { ADOPTION_HELP, ADOPTION_META, SETTING_AREA_META, SETTING_VIA_META } from "./labels";
+import { CloudCard } from "@/components/cloud/CloudViews";
 import { ToolRecord } from "./ToolRecord";
 
 export function AdoptionPill({ status, title }: { status: AdoptionStatus; title?: string }) {
@@ -170,48 +170,7 @@ function SettingRow({
 
 /** Who makes it, when it was checked, and the short description; the long record stays a click away. */
 function ProductHeader({ product, archetype }: { product: Product; archetype: Archetype }) {
-  if (product.kind === "cloud") {
-    const { implementation: impl } = product;
-    const titleOf = new Map(archetype.blocks.map((b) => [b.id, b.title]));
-    return (
-      <div>
-        <p className="eyebrow">{product.cloud.name} · verified {impl.asOf}</p>
-        {impl.summary && <Prose blocks={impl.summary} className="mt-2" size="sm" />}
-        <details className="mt-3 rounded-lg border border-line bg-mist/40 px-3 py-2">
-          <summary className="cursor-pointer text-[12.5px] font-semibold text-ink">
-            What plays each component on {product.cloud.short} <span className="font-normal text-ink-3">· {impl.bindings.length}</span>
-          </summary>
-          <dl className="mt-2 grid gap-x-5 gap-y-1.5 text-[12.5px] sm:grid-cols-[max-content_minmax(0,1fr)]">
-            {impl.bindings.map((b) => (
-              <div key={b.block} className="contents">
-                <dt className="text-ink-3">{titleOf.get(b.block) ?? b.block}</dt>
-                <dd className="text-ink">
-                  {b.url ? (
-                    <a href={b.url} target="_blank" rel="noreferrer" className="hover:underline">{b.service}</a>
-                  ) : (
-                    b.service
-                  )}
-                  {b.build && <span className="ml-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
-                  {b.note && <span className="block text-[11.5px] text-ink-3">{b.note}</span>}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </details>
-        <p className="mt-2 text-[12px] text-ink-3">
-          Follows{" "}
-          {impl.reference.map((r, i) => (
-            <span key={r.url}>
-              {i > 0 && " · "}
-              <a href={r.url} target="_blank" rel="noreferrer" className="font-semibold text-introduced hover:underline">
-                {r.title}
-              </a>
-            </span>
-          ))}
-        </p>
-      </div>
-    );
-  }
+  if (product.kind === "cloud") return <CloudCard archetype={archetype} product={product} />;
   const { tool } = product;
   const vendor = vendorById.get(tool.vendor);
   // The settings carry their own check dates; the newest is when this table was last verified.

@@ -73,12 +73,15 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
   const cloudProducts = cloudProductsFor(archetype.id);
   const cloudProduct = cloudProductFor(archetype.id, cloud);
   const services = cloudProduct ? servicesFor(cloudProduct.id, archetype.id) : null;
-  // A product picked on Enable: a cloud becomes the page's cloud; a tool is the open product.
+  // A product picked in the settings step is the open product; a cloud is also the page's cloud.
   const pickProduct = (id: string | null) => {
-    if (id && cloudById.has(id)) {
-      onCloud(id);
-      onPickTool(null);
-    } else onPickTool(id);
+    if (id && cloudById.has(id)) onCloud(id);
+    onPickTool(id);
+  };
+  // The switch above the drawing: if a cloud's settings are open, they follow it.
+  const switchCloud = (id: string | null) => {
+    onCloud(id);
+    if (tool && cloudById.has(tool)) onPickTool(id);
   };
 
   const go = (next: Tab) => {
@@ -148,10 +151,10 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
       )}
       {cloudProducts.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <CloudSwitch products={cloudProducts} cloud={cloudProduct?.id ?? null} onCloud={onCloud} />
+          <CloudSwitch products={cloudProducts} cloud={cloudProduct?.id ?? null} onCloud={switchCloud} />
           <p className="text-[12.5px] leading-snug text-ink-3" data-cloud-caption>
             {cloudProduct
-              ? `Shown as built on ${cloudProduct.cloud.name}: each box names the service that plays it, and Enable lists ${cloudProduct.cloud.short}'s own option for every control.`
+              ? `Shown as built on ${cloudProduct.cloud.name}: each box names the service that plays it, and Enable names ${cloudProduct.cloud.short}'s own setting for every control.`
               : "Pick a cloud to see the service that plays each component and that cloud's own option for every control."}
           </p>
         </div>
@@ -263,7 +266,6 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             focus={focus}
             onPickTool={pickProduct}
             cloud={cloudProduct}
-            onCloud={onCloud}
           />
         )}
       </div>

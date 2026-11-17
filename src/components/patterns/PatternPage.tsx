@@ -31,8 +31,8 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
   const linkedTab = params.get("tab") as PatternTab | null;
   // The cloud the pattern is shown as built on: `?cloud=aws`, or an older link that opened the cloud as a product.
   const linkedCloud = cloudProductFor(archetype.id, cloudFromSlug(params.get("cloud") ?? (linkedProduct && cloudById.has(linkedProduct) ? linkedProduct : null))?.id ?? null)?.id ?? null;
-  // A cloud is not a tool: it is carried by `cloud`, and `selected` holds only a catalogued tool.
-  const linkedToolOnly = linkedProduct && !cloudById.has(linkedProduct) ? linkedProduct : null;
+  // A product named in the address opens the settings step on it, whether a tool or a cloud.
+  const linkedToolOnly = linkedProduct;
 
   const tabFrom = (t: PatternTab | null): PatternTab => (t && PATTERN_TABS.includes(t) ? t : "enable");
   const [tab, setTab] = useState<PatternTab>(linkedToolOnly ? "enable" : tabFrom(linkedTab));
@@ -95,7 +95,8 @@ export function PatternPage({ archetypeId }: { archetypeId: string }) {
     const query = new URLSearchParams();
     if (tab !== "enable") query.set("tab", tab);
     if (cloud) query.set("cloud", cloudSlug(cloud));
-    if (tab === "enable" && selected) query.set("tool", selected.tool);
+    // An open cloud is already named by `cloud`; only a tool needs its own parameter.
+    if (tab === "enable" && selected && selected.tool !== cloud) query.set("tool", selected.tool);
     const open = tab === "enable" && highlight?.kind === "mitigation" ? `#control-${highlight.id}` : "";
     window.history.replaceState(null, "", `${window.location.pathname}${query.size ? `?${query}` : ""}${open}`);
   }, [arrived, tab, selected, highlight, cloud]);

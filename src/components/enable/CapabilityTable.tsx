@@ -4,13 +4,13 @@
  * A pattern's enterprise controls as one table, a band per NIST CSF category and a row per
  * control, each led by the number of its chip on the drawing. Opening a row lights that
  * chip; picking a chip on the drawing opens its row. The open row is the drawing's highlight,
- * so the two can never disagree. With a cloud chosen, each row also names that cloud's own
+ * so the two can never disagree. A row is kept to its number, name, one line and where it goes;
+ * everything else is in the open row. With a cloud chosen, each row also names that cloud's own
  * options for the control, and the open row gives each one's value and why.
  */
 import Link from "next/link";
 import { Fragment } from "react";
 
-import { Prose } from "@/components/Prose";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { capabilityName, guidanceByArchetype, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
@@ -29,11 +29,13 @@ const whatItDoes = (m: Mitigation) => {
   return cut.slice(0, cut.lastIndexOf(" ")) + "…";
 };
 
-const GRID = "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.6fr)_minmax(0,0.9fr)_112px]";
+const anyStatus = Object.values(statusFile).some((s) => s.status);
+// The status column appears once the organisation has recorded any status; until then every row would read "Not set".
+const GRID = anyStatus
+  ? "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_104px]"
+  : "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.8fr)_minmax(0,0.9fr)]";
 
 export const BASELINE_HELP = "Needed by every AI deployment, whatever the pattern: set up once and reused.";
-
-const anyStatus = Object.values(statusFile).some((s) => s.status);
 
 export function CapabilityTable({
   groups,
@@ -63,14 +65,14 @@ export function CapabilityTable({
         <span>Control</span>
         <span>What it does</span>
         <span>Where it goes</span>
-        <StatusHeading />
+        {anyStatus && <StatusHeading />}
       </div>
       {groups.map((group) => (
         <Fragment key={group.id}>
-          <div id={`group-${group.id}`} className="border-b border-line bg-mist/30 px-4 py-2">
+          <div id={`group-${group.id}`} className="border-b border-line bg-mist/30 px-4 py-1.5" title={group.blurb}>
             <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2">
               {group.title}
-              <span className="ident rounded-sm border border-line-strong bg-paper px-1 py-px text-[9.5px] font-bold tracking-normal text-ink-3" title={`NIST CSF 2.0 · ${group.function} · ${group.id}`}>
+              <span className="ident text-[10px] font-normal tracking-normal text-ink-3" title={`NIST CSF 2.0 · ${group.function} · ${group.id}`}>
                 {group.id}
               </span>
               {anyStatus && (
@@ -79,7 +81,6 @@ export function CapabilityTable({
                 </span>
               )}
             </p>
-            <p className="mt-0.5 max-w-3xl text-[12px] leading-snug text-ink-3">{group.blurb}</p>
           </div>
           <ul className="divide-y divide-line border-b border-line last:border-b-0">
             {group.capabilities.map((m) => {
@@ -106,24 +107,22 @@ export function CapabilityTable({
                 <span className="min-w-0">
                   <span className="block text-[13.5px] font-semibold leading-snug text-ink">{capabilityName(m.id)}</span>
                   {own?.displayName && <span className="block text-[11.5px] text-ink-3">{m.title}</span>}
-                  {isBaseline(m.id) && (
-                    <span title={BASELINE_HELP} className="mt-1 inline-block rounded border border-line px-1.5 text-[10.5px] font-normal text-ink-3">
-                      Every AI deployment
-                    </span>
-                  )}
                 </span>
                 <span className="col-start-2 text-[12.5px] leading-snug text-ink-2 md:col-start-auto">
                   {whatItDoes(m)}
                   {cloud && <OptionNames short={cloud.cloud.short} options={options} />}
                 </span>
                 <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.blocks.join(" · ")}</span>
-                <span className="col-start-2 md:col-start-auto md:text-right">
-                  <StatusPill status={statusFor(m.id)} title={own?.note} compact />
-                </span>
+                {anyStatus && (
+                  <span className="col-start-2 md:col-start-auto md:text-right">
+                    <StatusPill status={statusFor(m.id)} title={own?.note} compact />
+                  </span>
+                )}
               </button>
               {expanded && (
                 <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]">
                   <p>{m.implementation}</p>
+                  {isBaseline(m.id) && <p className="text-[12px] text-ink-3" data-baseline>{BASELINE_HELP}</p>}
                   {where.notes.length ? (
                     <div>
                       <p className="eyebrow">On this pattern</p>
@@ -133,12 +132,12 @@ export function CapabilityTable({
                     </div>
                   ) : null}
                   {cloud && <NativeOptions cloud={cloud.cloud} options={options} />}
-                  {items.map((item) => (
-                    <div key={item.title} className="rounded-lg border border-line bg-paper px-3 py-2.5">
-                      <p className="font-semibold text-ink">{item.title}</p>
-                      <div className="mt-1"><Prose blocks={item.body} size="sm" /></div>
-                    </div>
-                  ))}
+                  {items.length > 0 && (
+                    <p className="text-[12px]">
+                      <span className="font-semibold text-ink">Part of: </span>
+                      {items.map((item) => item.title).join(" · ")}
+                    </p>
+                  )}
                   {reduces.length > 0 && (
                     <p className="text-[12px]">
                       <span className="font-semibold text-ink">Reduces here: </span>

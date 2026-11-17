@@ -23,15 +23,15 @@ function SettingName({ setting }: { setting: ProductSetting }) {
   );
 }
 
-/** Opens Enable when a cloud is chosen: what the pattern is on that cloud, and what plays each component. */
+/** Leads the settings step for a cloud: what the pattern is on that cloud, and what plays each component. */
 export function CloudCard({ archetype, product }: { archetype: Archetype; product: CloudProduct }) {
   const { implementation: impl, cloud } = product;
   const rows = componentRows(archetype, product);
   const components = rows.filter((r) => r.binding);
   const controlPlane = rows.filter((r) => !r.binding);
   return (
-    <section id="built-on" aria-labelledby="built-on-title" className="scroll-mt-20 rounded-xl border border-line bg-paper px-4 py-4" data-built-on={product.id}>
-      <p id="built-on-title" className="display flex flex-wrap items-baseline gap-x-3 text-[16px] font-bold text-ink">
+    <section id="built-on" aria-labelledby="built-on-title" className="scroll-mt-28" data-built-on={product.id}>
+      <p id="built-on-title" className="display flex flex-wrap items-baseline gap-x-3 text-[15px] font-bold text-ink">
         Built on {cloud.name}
         <span className="text-[11.5px] font-normal text-ink-3">verified {impl.asOf}</span>
       </p>
