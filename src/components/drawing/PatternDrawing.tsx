@@ -311,7 +311,17 @@ export function PatternDrawing({
 }
 
 /** The reading key for the boundary drawing, on one line. */
-export function DrawingLegend({ className = "", risks = false }: { className?: string; /** True where the coded risk tags are showing instead of the controls. */ risks?: boolean }) {
+export function DrawingLegend({
+  className = "",
+  risks = false,
+  cloud,
+}: {
+  className?: string;
+  /** True where the coded risk tags are showing instead of the controls. */
+  risks?: boolean;
+  /** The cloud the drawing is shown as built on, by its short name. */
+  cloud?: string;
+}) {
   const swatch = (tone: keyof typeof BOUNDARY_TONE) => {
     const t = BOUNDARY_TONE[tone];
     return <span aria-hidden className="inline-block h-3 w-5 rounded-[3px]" style={{ background: t.fill, border: `1.5px ${t.dash ? "dashed" : "solid"} ${t.stroke}` }} />;
@@ -368,6 +378,12 @@ export function DrawingLegend({ className = "", risks = false }: { className?: s
         <span aria-hidden className="inline-block h-3 w-[3px] rounded-sm" style={{ background: "var(--ink-2)" }} />
         {REF_LAYERS.map((l) => l.label).join(" · ")} · Control point
       </span>
+      {cloud && (
+        <span className="flex items-center gap-1.5" data-legend-cloud>
+          <span aria-hidden className="text-[11px] font-semibold text-ink">Service name</span>
+          The {cloud} service that plays the box · <span className="text-[9.5px] font-bold tracking-[0.06em] text-ink-3">YOU BUILD THIS</span> where none does
+        </span>
+      )}
       <span className="text-ink-3">Hover anything for detail</span>
     </div>
   );

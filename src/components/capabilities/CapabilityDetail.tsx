@@ -21,7 +21,8 @@ import {
 import type { Mitigation } from "@/lib/types";
 import { ArchetypeLinks } from "@/components/reference/ArchetypeLinks";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
-import { controlHref, cosaiControlHref, riskHref, componentHref } from "@/lib/routes";
+import { cloudOptionsForControl } from "@/components/cloud/model";
+import { cloudHref, controlHref, cosaiControlHref, riskHref, componentHref } from "@/lib/routes";
 
 export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitigation: Mitigation; onClose?: () => void; framed?: boolean }) {
   const controls = controlsForMitigation(mitigation.id);
@@ -29,6 +30,7 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
   const components = componentsForMitigation(mitigation.id);
   const categoryTitle = controlCategories.find((c) => c.id === mitigation.category)?.title;
   const family = enableGroupFor(mitigation.id);
+  const cloudOptions = cloudOptionsForControl(mitigation.id);
   const own = statusFile[mitigation.id];
 
   return (
@@ -132,6 +134,39 @@ export function CapabilityDetail({ mitigation, onClose, framed = true }: { mitig
             {family.title} <span className="text-ink-3">· {family.function}</span>
           </p>
           <p className="mt-1 text-xs text-ink-3">The category this control is grouped under on every pattern. Authored here: NIST publishes no mapping to MITRE.</p>
+        </div>
+      )}
+
+      {cloudOptions.length > 0 && (
+        <div className="mt-6" data-control-clouds>
+          <p className="eyebrow">On each cloud</p>
+          <p className="mt-1 text-xs text-ink-3">
+            The cloud&rsquo;s own setting that delivers this control on the patterns built there, with the value to set. Each opens the cloud&rsquo;s page.
+          </p>
+          <div className="mt-2 space-y-3">
+            {cloudOptions.map(({ cloud, options }) => (
+              <div key={cloud.id}>
+                <Link href={cloudHref(cloud.id)} className="text-[12.5px] font-semibold text-ink hover:text-introduced hover:underline">
+                  {cloud.name} →
+                </Link>
+                <ul className="mt-1 space-y-1.5 border-l border-line pl-3">
+                  {options.map(({ setting: s, patterns }) => (
+                    <li key={s.id} className="text-[12.5px] leading-snug">
+                      <a href={s.url} target="_blank" rel="noreferrer" className="font-semibold text-ink hover:text-introduced hover:underline">
+                        {s.name}
+                        <span className="ml-0.5 text-introduced">↗</span>
+                      </a>
+                      <span className="block text-ink-2">
+                        <span className="font-semibold text-ink">Set to: </span>
+                        {s.recommended}
+                      </span>
+                      <span className="block text-[11.5px] text-ink-3">Used on {patterns.map((a) => a.abbrev ?? a.title).join(" · ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

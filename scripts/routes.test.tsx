@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { legacyCatalogueTarget, legacyPatternTarget } from "../src/components/shell/LegacyRedirect";
 import { findPatterns } from "../src/components/patterns/model";
 import { dataset, toolsForArchetype } from "../src/lib/data";
-import { ROUTES, controlHref, isCosaiControlId, patternHref, toolHref } from "../src/lib/routes";
+import { ROUTES, cloudHref, controlHref, isCosaiControlId, patternHref, toolHref } from "../src/lib/routes";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -74,4 +74,11 @@ test("the pattern finder understands product, cloud and everyday words", () => {
     assert.ok(a.useWhen.length > 20 && a.useWhen.endsWith("."), `${a.id} has a use-when line`);
     assert.equal(ids(a.title)[0], a.id, `${a.id} is found by its own title`);
   }
+});
+
+test("a pattern can be linked as built on a cloud, on any tab, and a cloud has its own page", () => {
+  assert.equal(patternHref("archChatAgent", { cloud: "cloudAws" }), "/patterns/cloud-chat-agent?cloud=aws");
+  assert.equal(patternHref("archChatAgent", { tab: "risks", cloud: "cloudGcp" }), "/patterns/cloud-chat-agent?tab=risks&cloud=gcp");
+  assert.equal(patternHref("archChatAgent", { cloud: "cloudAzure", control: "D3-OTF" }), "/patterns/cloud-chat-agent?cloud=azure#control-D3-OTF");
+  assert.equal(cloudHref("cloudAzure"), `${ROUTES.clouds}?cloud=azure`);
 });

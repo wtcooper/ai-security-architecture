@@ -69,6 +69,7 @@ archetype to pattern.
 | Overview tab: how it works, why it is its own archetype, sources | How it works: the same three, plus every component listed with everything it holds and each item's note, the examples with their notes, and the recorded deviations. |
 | Sequence flows tab: the walks, with risk tags on the drawing | Two tabs. Risks: the pattern's risks as a list, tagged on the drawing. Flows: the walks numbered onto the drawing, the sequence diagram and the boundary-crossings table. |
 | Enable tab: foundations, surface baseline, use-case additions, tools | Enable: "What to do", then enterprise controls by CSF category, then tool settings. Every row and every setting is still there. |
+| Cloud patterns: a "Drawn as" relabelling of the drawing, and each cloud's settings as a product on Enable | The same data, brought to the front. One **Built on** switch (Generic, AWS, Azure, Google Cloud) names every component's service on the drawing, opens Enable with what plays each component, lists that cloud's own setting beside every control, and compares the three clouds under How it works. A new Reference › Clouds page turns it round: one cloud, its patterns and its option for every control. |
 | Incidents, Risks, Controls (CoSAI), Components, Personas, Frameworks | Unchanged. Risks, CoSAI controls, components, personas and frameworks moved under Reference; incidents also appear on their pattern. |
 | The experimental drawings | Removed on purpose: one of them became the drawing. |
 

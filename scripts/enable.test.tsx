@@ -8,6 +8,10 @@ import { PatternPage } from "../src/components/patterns/PatternPage";
 import { PatternFinder } from "../src/components/patterns/PatternFinder";
 import { ComponentList } from "../src/components/reference/ArchetypeDetail";
 import HomePage from "../src/app/page";
+import { CloudsBrowser } from "../src/components/cloud/CloudsBrowser";
+import { CloudComparison } from "../src/components/cloud/CloudViews";
+import { cloudOptionsForControl, cloudProductsFor, cloudSlug, controlPlaneOptions, optionsFor } from "../src/components/cloud/model";
+import { CapabilityDetail } from "../src/components/capabilities/CapabilityDetail";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { coverageWord } from "../src/components/enable/labels";
 import { baselineNotPinned, controlGroups } from "../src/components/enable/model";
@@ -210,4 +214,103 @@ test("the landing page explains how to read a pattern before the finder, and the
   const preview = finder.match(/data-preview="([^"]+)"/)?.[1];
   assert.equal(preview, listed[0], "the first listed pattern is previewed");
   assert.match(finder, /trust-boundary drawing/, "the preview carries the pattern's drawing");
+});
+
+const esc = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+
+test("a pattern read as built on a cloud names every component's service and that cloud's option for every control", () => {
+  for (const arch of dataset.archetypes) {
+    const products = cloudProductsFor(arch.id);
+    const generic = page(arch.id);
+    if (!products.length) {
+      assert.doesNotMatch(generic, /data-cloud-switch/, `${arch.id}: no cloud switch where nothing is mapped`);
+      continue;
+    }
+    assert.match(generic, /data-cloud-switch/, `${arch.id}: the cloud switch is offered`);
+    assert.doesNotMatch(generic, /data-built-on=|data-option-names/, `${arch.id}: cloud-neutral until a cloud is chosen`);
+    for (const product of products) {
+      const html = page(arch.id, `cloud=${cloudSlug(product.id)}`);
+      const where = `${arch.id} on ${product.cloud.short}`;
+      assert.match(html, new RegExp(`aria-pressed="true"[^>]*data-cloud="${product.id}"`), `${where}: the switch shows the cloud`);
+      assert.match(html, new RegExp(`data-built-on="${product.id}"`), `${where}: Enable opens with the cloud's card`);
+      // Every component the cloud names is in the card, with its service.
+      for (const b of product.implementation.bindings) {
+        assert.match(html, new RegExp(`data-binding="${b.block}"`), `${where}: ${b.block} is in the component table`);
+        assert.ok(html.includes(esc(b.service)), `${where}: ${b.block} names ${b.service}`);
+      }
+      // Every control-plane box that owns a control lists the settings that deliver it.
+      for (const b of arch.blocks.filter((x) => x.kind === "governance")) {
+        if (controlPlaneOptions(arch, product, b).length) assert.match(html, new RegExp(`data-control-plane="${b.id}"`), `${where}: ${b.id} lists its settings`);
+      }
+      // Every pinned control names at least one of the cloud's own options.
+      assert.equal([...html.matchAll(/data-option-names/g)].length, arch.mitigations.length, `${where}: every control names an option`);
+      for (const id of arch.mitigations) {
+        const options = optionsFor(product, id);
+        assert.ok(options.length, `${where}: ${id} has an option`);
+        assert.ok(html.includes(esc(options[0].name)), `${where}: ${id} names ${options[0].name}`);
+      }
+      // The settings step stands open on the chosen cloud, and the drawing's legend says what the names are.
+      assert.match(html, /id="tools"[^>]*><button[^>]*aria-expanded="true"/, `${where}: the settings step is open`);
+      assert.match(html, /data-legend-cloud/, `${where}: the legend explains the service names`);
+      // An older link that opened the cloud as a product shows the same thing.
+      assert.match(page(arch.id, `tool=${product.id}`), new RegExp(`data-built-on="${product.id}"`), `${where}: the older link still works`);
+    }
+  }
+});
+
+test("an open control gives each cloud option's place, value and reason; How it works compares the clouds side by side", () => {
+  const arch = dataset.archetypes.find((a) => a.id === "archChatAgent")!;
+  const [product] = cloudProductsFor(arch.id);
+  const control = arch.mitigations[0];
+  const html = renderToStaticMarkup(
+    <EnablePanel archetype={arch} open={control} onOpen={() => {}} onShowDrawing={() => {}} tool={null} onPickTool={() => {}} cloud={product} onCloud={() => {}} />,
+  );
+  for (const s of optionsFor(product, control)) {
+    assert.match(html, new RegExp(`data-native-options="${product.id}"`));
+    for (const text of [s.name, s.where, s.recommended, s.why]) assert.ok(html.includes(esc(text)), `the open control shows "${text.slice(0, 40)}"`);
+  }
+  for (const a of dataset.archetypes) {
+    const products = cloudProductsFor(a.id);
+    if (!products.length) continue;
+    assert.match(page(a.id, `tab=overview&cloud=${cloudSlug(products[0].id)}`), /data-cloud-comparison/, `${a.id}: the comparison opens with a cloud chosen`);
+    const list = renderToStaticMarkup(<ComponentList archetype={a} cloud={products[0]} />);
+    assert.equal([...list.matchAll(/data-component-service/g)].length, products[0].implementation.bindings.length, `${a.id}: every named component shows its service`);
+    const table = renderToStaticMarkup(<CloudComparison archetype={a} products={products} />);
+    for (const p of products) for (const b of p.implementation.bindings) assert.ok(table.includes(esc(b.service)), `${a.id}: ${p.cloud.short} ${b.block}`);
+  }
+});
+
+test("Reference › Clouds lists every pattern on a cloud and an option for every control it delivers; a control lists its cloud options", () => {
+  for (const cloud of dataset.clouds) {
+    const html = renderToStaticMarkup(
+      <AppRouterContext.Provider value={router}>
+        <PathnameContext.Provider value="/reference/clouds">
+          <SearchParamsContext.Provider value={new URLSearchParams(`cloud=${cloudSlug(cloud.id)}`)}>
+            <CloudsBrowser />
+          </SearchParamsContext.Provider>
+        </PathnameContext.Provider>
+      </AppRouterContext.Provider>,
+    );
+    assert.match(html, new RegExp(`data-cloud-page="${cloud.id}"`));
+    for (const impl of cloud.implementations) {
+      assert.match(html, new RegExp(`data-cloud-pattern="${impl.architecture}"`), `${cloud.id}: ${impl.architecture} is listed`);
+      const slug = dataset.archetypes.find((a) => a.id === impl.architecture)!.slug;
+      assert.ok(html.includes(`/patterns/${slug}?cloud=${cloudSlug(cloud.id)}`), `${cloud.id}: ${slug} opens on this cloud`);
+    }
+    // Every setting an implementation uses is on the page, under a control it delivers.
+    const used = new Set(cloud.implementations.flatMap((i) => i.settings));
+    for (const s of cloud.settings.filter((x) => used.has(x.id))) assert.ok(html.includes(esc(s.name)), `${cloud.id}: setting ${s.name}`);
+  }
+  // Every control pinned on a cloud pattern has an option on each cloud that maps that pattern.
+  for (const arch of dataset.archetypes) {
+    for (const product of cloudProductsFor(arch.id)) {
+      for (const id of arch.mitigations) {
+        const entry = cloudOptionsForControl(id).find((c) => c.cloud.id === product.id);
+        assert.ok(entry?.options.some((o) => o.patterns.some((a) => a.id === arch.id)), `${id} on ${product.cloud.short} for ${arch.id}`);
+      }
+    }
+  }
+  const detail = renderToStaticMarkup(<CapabilityDetail mitigation={dataset.mitigations.find((m) => m.id === "D3-OTF")!} />);
+  assert.match(detail, /data-control-clouds/);
+  for (const c of cloudOptionsForControl("D3-OTF")) assert.ok(detail.includes(esc(c.cloud.name)), `the control names ${c.cloud.name}`);
 });

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/Panel";
 import { PhaseLegend } from "@/components/PhaseRail";
 import { LegacyRedirect } from "@/components/shell/LegacyRedirect";
 import { REPO_URL } from "@/components/shell/SiteHeader";
-import { activePersonas, components, controls, mitigations, risks } from "@/lib/data";
+import { activePersonas, clouds, components, controls, mitigations, risks } from "@/lib/data";
 import { visibleFrameworks } from "@/lib/frameworks";
 import { ROUTES } from "@/lib/routes";
 
@@ -54,6 +54,13 @@ const PAGES = [
     count: `${visibleFrameworks.length}`,
     blurb: "Crosswalks to NIST CSF, OWASP, MITRE ATLAS, STRIDE, NIST AI RMF, ISO and the EU AI Act: pick an entry and see what maps to it.",
     when: "To answer an audit or compliance question.",
+  },
+  {
+    href: ROUTES.clouds,
+    label: "Clouds",
+    count: `${clouds.length}`,
+    blurb: "AWS, Azure and Google Cloud: the patterns mapped onto each, the service that plays every component, and the cloud's own setting for every control.",
+    when: "To see what a cloud gives you for a control, or how a pattern is built on it.",
   },
 ];
 

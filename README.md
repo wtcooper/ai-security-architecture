@@ -129,6 +129,7 @@ CoSAI controls, Components, Personas, Frameworks).
 | **Reference › CoSAI controls** | The 35 CoSAI controls in six groups. A CoSAI control's status rolls up from the catalogue controls that deliver it. |
 | **Controls** (`/controls/`) | The full catalogue — 59 MITRE mitigations and 17 authored specialisations — as a matrix of NIST CSF category × deployment surface, tinted by status; one switch regroups the rows by CoSAI control group. Filter by pattern, risk category, stack layer or source. A control's detail shows the MITRE definition, the authored implementation scope, example technologies, its CSF category, the CoSAI controls it contributes to and the patterns that pin it. |
 | **Reference** (`/reference/`) | What each reference page is for, how risk is described, and where the data comes from. |
+| **Reference › Clouds** (`/reference/clouds/`) | One cloud at a time (AWS, Azure, Google Cloud): the patterns mapped onto it, each with the vendor reference architecture it follows, and the cloud's own setting for every control under its NIST CSF category, with where it is set, the value to set, why, and the patterns that use it. |
 | **Reference › Components** | Click any of the 23 components for its description, data flow, the risks that touch it, the controls that protect it — and any place the map differs from CoSAI. |
 | **Reference › Personas** | CoSAI's eight actors — responsibilities, "is this you?" questions, and the risks and controls each carries. |
 | **Reference › Frameworks** | The cross-reference, read backwards. Pick OWASP LLM 2026 / OWASP Agentic / OWASP MCP / ATLAS / STRIDE / NIST / ISO, see what maps to each entry, and watch it light up the map. |
@@ -348,7 +349,19 @@ pattern's file must carry. `npm run drawing:audit` scores every pattern against 
 tests fail if one slips. [`docs/PATTERN-FINDINGS.md`](docs/PATTERN-FINDINGS.md) lists the open
 questions about the patterns themselves that the audit and the review turned up.
 
-The drawing takes cloud relabelling ("Drawn as AWS / Azure / Google Cloud"). Under **Flows**, a
+**A pattern you build can be read as built on a cloud.** The eight "applications you build"
+patterns are mapped onto AWS, Azure and Google Cloud in `data/clouds/`. A **Built on** switch
+above the drawing (Generic · AWS · Azure · Google Cloud) is one state, kept in the address as
+`?cloud=aws` on every tab, and it changes four things together: every box on the drawing names
+the service that plays it (or says "you build this"); Enable opens with what the pattern is on
+that cloud, the vendor reference architecture it follows and a table of what plays each
+component; every control row names that cloud's own settings for it, and the open row gives
+each one's place, value and reason; and How it works compares the three clouds side by side.
+A control-plane box is a function, not one service, so it lists the settings that deliver its
+controls. The tests check, for all 24 pattern-and-cloud pairs, that every named component and
+every pinned control is covered.
+
+Under **Flows**, a
 **boundary crossings** table lists every flow that crosses a trust boundary: what crosses, what
 it passes through on our side (a control point we run, the vendor, the person, or nothing of
 ours), and the controls held there.
@@ -460,7 +473,7 @@ src/
 │   ├── patterns/[slug]/          one static page per pattern
 │   ├── controls/                 the control catalogue
 │   ├── incidents/[id]/           one static page per incident
-│   ├── reference/                the index, and risk-map|risks|cosai-controls|components|personas|frameworks/
+│   ├── reference/                the index, and risk-map|risks|cosai-controls|components|personas|frameworks|clouds/
 │   └── map|risks|components|personas|frameworks|capabilities|enable|examples/
 │                                   retired paths: each only forwards to its new address
 └── components/
@@ -473,6 +486,7 @@ src/
     │                               CataloguePage.tsx is the shared master-detail shell
     ├── capabilities/             the control catalogue (CSF category × surface) and a control's detail
     ├── drawing/                  ★ the boundary drawing: automatic layout, crossings, the crossings table
+    ├── cloud/                    ★ a pattern as built on a cloud: the switch, the component table, options per control, the Clouds page
     ├── reference/                ★ the pattern view (drawing, tabs, panels), sequence flows, switcher, per-block styling
     ├── enable/                   ★ a pattern's Enable tab: what to do, the controls by CSF category, product pills and settings tables
     └── incidents/                the incident list and the per-incident walk-through

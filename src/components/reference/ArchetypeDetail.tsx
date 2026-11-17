@@ -10,10 +10,13 @@
 import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
+import { CloudComparison } from "@/components/cloud/CloudViews";
+import { bindingFor, cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
 import { summaryOf } from "@/components/drawing/layout";
 import type { Archetype } from "@/lib/types";
 
-export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
+export function ArchetypeDetail({ archetype, cloud = null }: { archetype: Archetype; /** The cloud the pattern is shown as built on. */ cloud?: CloudProduct | null }) {
+  const cloudProducts = cloudProductsFor(archetype.id);
   return (
     <div className="rounded-xl border border-line bg-paper">
       <Section title="How it works" count={null} defaultOpen>
@@ -24,8 +27,19 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
         <p className="mb-3 text-[12.5px] leading-snug text-ink-3">
           Every box on the drawing, by the boundary it sits in, with what it holds.
         </p>
-        <ComponentList archetype={archetype} />
+        <ComponentList archetype={archetype} cloud={cloud} />
       </Section>
+
+      {cloudProducts.length > 0 && (
+        // Open when a cloud is chosen: the reader has asked how the pattern is built.
+        <Section key={cloud?.id ?? "generic"} title="On each cloud" count={cloudProducts.length} defaultOpen={Boolean(cloud)}>
+          <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3">
+            What plays each component on {cloudProducts.map((p) => p.cloud.short).join(", ")}, side by side. A control-plane box is a
+            function, so its row lists the settings that deliver its controls; their values are on Enable.
+          </p>
+          <CloudComparison archetype={archetype} products={cloudProducts} />
+        </Section>
+      )}
 
       {archetype.distinguishedBy?.length ? (
         <Section title="Why this is its own pattern" count={null}>
@@ -87,7 +101,7 @@ export function ArchetypeDetail({ archetype }: { archetype: Archetype }) {
 }
 
 /** Every box of the pattern with its note and everything it holds: the full list behind the drawing's one-liners. */
-export function ComponentList({ archetype }: { archetype: Archetype }) {
+export function ComponentList({ archetype, cloud = null }: { archetype: Archetype; cloud?: CloudProduct | null }) {
   return (
       <div className="space-y-5">
         {componentGroups(archetype).map((g) => (
@@ -98,6 +112,13 @@ export function ComponentList({ archetype }: { archetype: Archetype }) {
                 <li key={b.id} data-component={b.id} className="text-[13px] leading-snug text-ink-2">
                   <span className="font-semibold text-ink">{b.title}</span>
                   {summaryOf(b) && <span className="text-ink-3"> · {summaryOf(b)}</span>}
+                {cloud && bindingFor(cloud, b.id) && (
+                  <span className="mt-0.5 block text-ink" data-component-service>
+                    <span className="font-semibold">On {cloud.cloud.short}: </span>
+                    {bindingFor(cloud, b.id)!.service}
+                    {bindingFor(cloud, b.id)!.build && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3">You build this</span>}
+                  </span>
+                )}
                   {b.note && <span className="mt-0.5 block">{b.note.trim()}</span>}
                   {b.items?.length ? (
                     <ul className="mt-1.5 space-y-1 border-l border-line pl-3">

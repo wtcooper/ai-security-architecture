@@ -22,14 +22,19 @@ export const ROUTES = {
   components: "/reference/components",
   personas: "/reference/personas",
   frameworks: "/reference/frameworks",
+  clouds: "/reference/clouds",
 } as const;
 
-/** A pattern's page, optionally on a tab, with a product open, or at one control's row. */
-export function patternHref(archetypeId: string, opts: { tab?: PatternTab; tool?: string; control?: string } = {}): string {
+/** "cloudAws" -> "aws": how a cloud is named in an address. */
+export const cloudSlug = (cloudId: string) => cloudId.replace(/^cloud/, "").toLowerCase();
+
+/** A pattern's page, optionally on a tab, as built on a cloud, with a product open, or at one control's row. */
+export function patternHref(archetypeId: string, opts: { tab?: PatternTab; tool?: string; control?: string; cloud?: string } = {}): string {
   const arch = archetypeById.get(archetypeId);
   if (!arch) return ROUTES.patterns;
   const query = new URLSearchParams();
   if (opts.tab && opts.tab !== "enable") query.set("tab", opts.tab);
+  if (opts.cloud) query.set("cloud", cloudSlug(opts.cloud));
   if (opts.tool) query.set("tool", opts.tool);
   return `${ROUTES.patterns}/${arch.slug}${query.size ? `?${query}` : ""}${opts.control ? `#control-${opts.control}` : ""}`;
 }
@@ -48,6 +53,8 @@ export const componentHref = (id: string) => `${ROUTES.components}?component=${i
 export const personaHref = (id: string) => `${ROUTES.personas}?persona=${id}`;
 export const riskMapHref = (riskId: string, phase: string) => `${ROUTES.riskMap}?risk=${riskId}&phase=${phase}`;
 export const incidentHref = (id: string) => `${ROUTES.incidents}/${id}`;
+/** A cloud's page: the patterns built on it and its own control options. */
+export const cloudHref = (cloudId: string) => `${ROUTES.clouds}?cloud=${cloudSlug(cloudId)}`;
 
 /** A CoSAI control id, as opposed to a catalogue control (D3-…, AML.…, cap-…). */
 export const isCosaiControlId = (id: string) => /^control[A-Z]/.test(id);

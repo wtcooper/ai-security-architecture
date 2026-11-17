@@ -42,7 +42,7 @@ These hold for all patterns because the engine draws them, and are covered by th
 | **S4 External** | External parties sit in a band beneath the trust boundaries, each under what reaches it. The band is tagged "no agreement" only when nothing in it is reached under contract. |
 | **S5 One numbering** | Purple circles are controls, numbered as on the Enable tab. Red tags are risks. Dark squares are the steps of a walk. Nothing else is numbered. |
 | **S6 Type accent** | A box's left edge says what it is: application, model, data, control point, person. |
-| **S7 One drawing** | The boundary drawing is the only drawing of a pattern. It shows one kind of marker at a time (controls, risks, or a flow's steps), takes each cloud's relabelling, and replays incident steps. What a box holds is in its hover card and listed in full under How it works. |
+| **S7 One drawing** | The boundary drawing is the only drawing of a pattern. It shows one kind of marker at a time (controls, risks, or a flow's steps), names each component's service when the pattern is read as built on a cloud, and replays incident steps. What a box holds is in its hover card and listed in full under How it works. |
 
 ## Content: what a pattern's file must carry
 
@@ -57,8 +57,9 @@ These hold for all patterns because the engine draws them, and are covered by th
 | **C7 Walks** | `walkthrough` and `scenarios` | One complete walk and at least two scenario walks, every step on a real flow. |
 | **C8 Guidance** | `data/reference/guidance/<slug>.yaml` | An overview and at least four action-titled items, each citing controls the pattern pins. |
 | **C9 Tools** | `data/tooling/`, `data/clouds/` | At least one catalogued product with settings, and for a pattern you build, its mapping onto each cloud. Where no product exists yet, the Enable tab says so. |
+| **C10 Clouds** | `data/clouds/<cloud>.yaml` | For a pattern you build: on each cloud, a service (or "you build this") for every component, and at least one of the cloud's own settings for every pinned control, each read on the vendor's page. The tests check both for every pattern-and-cloud pair. |
 
-C1 to C3 are the fields the boundary drawing added, and the audit fails on them. C4 to C9
+C1 to C3 are the fields the boundary drawing added, and the audit fails on them. C4 to C10
 predate it: the build already enforces C4 and C8, and the audit reports C5, C6, C7 and C9 as
 open questions in its last column without failing, because closing one is a decision about the
 pattern, not a fix to the drawing.

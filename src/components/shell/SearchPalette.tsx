@@ -29,7 +29,7 @@ import {
 } from "@/lib/data";
 import { SURFACE_SITUATION } from "@/components/patterns/labels";
 import { cloudsFor } from "@/components/patterns/model";
-import { ROUTES, patternHref, controlHref, cosaiControlHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
+import { cloudHref, patternHref, controlHref, cosaiControlHref, incidentHref, riskHref, componentHref, personaHref } from "@/lib/routes";
 
 interface Entry {
   kind: string;
@@ -94,8 +94,7 @@ function buildIndex(): Entry[] {
       kind: "Cloud",
       title: c.name,
       hint: `${c.implementations.length} patterns built on it`,
-      // A cloud has no page of its own: open it on the first pattern built on it.
-      href: c.implementations[0] ? patternHref(c.implementations[0].architecture, { tool: c.id }) : ROUTES.patterns,
+      href: cloudHref(c.id),
       text: norm(c.name, c.short, c.id),
     })),
     ...incidents.map((i) => ({

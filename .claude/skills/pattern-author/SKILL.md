@@ -139,8 +139,9 @@ At a 1366px-wide window, check: the eye can follow each flow end to end; related
 together; no label is ambiguous about which arrow it belongs to; every tab works (Enable shows
 a chip for every control, Risks a tag for every risk, Flows numbers each walk); the pattern
 appears on the home page finder and is found by its own title and by the words a reader would
-use. If the pattern has cloud mappings, switch "Drawn as" to each cloud and confirm no service
-name is cut.
+use. If the pattern has cloud mappings, set **Built on** to each cloud and confirm: no service
+name is cut on the drawing, the component table on Enable is complete, and every control row
+names an option for that cloud.
 
 ## 6. Finish the paperwork
 

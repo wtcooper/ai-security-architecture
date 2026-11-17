@@ -14,7 +14,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EnablePanel } from "@/components/enable/EnablePanel";
 import { DrawingLegend, PatternDrawing } from "@/components/drawing/PatternDrawing";
 import { CrossingsRegister } from "@/components/drawing/CrossingsRegister";
-import { cloudById, clouds, incidents } from "@/lib/data";
+import { CloudSwitch } from "@/components/cloud/CloudSwitch";
+import { cloudProductFor, cloudProductsFor } from "@/components/cloud/model";
+import { cloudById, incidents } from "@/lib/data";
 import { PATTERN_TABS, type PatternTab } from "@/lib/routes";
 import type { Archetype, Scenario } from "@/lib/types";
 import { ArchetypeDetail } from "./ArchetypeDetail";
@@ -55,23 +57,28 @@ interface ArchetypeViewProps {
   tool: string | null;
   focus: string | null;
   onPickTool: (toolId: string | null, capabilityId?: string) => void;
+  /** The cloud the pattern is shown as built on, or null for the cloud-neutral pattern. */
+  cloud: string | null;
+  onCloud: (cloudId: string | null) => void;
 }
 
-export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool }: ArchetypeViewProps) {
+export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk, highlight, onHighlight, tool, focus, onPickTool, cloud, onCloud }: ArchetypeViewProps) {
   const activeWalk = walkIndex === null ? null : walks[walkIndex] ?? null;
   const drawingRef = useRef<HTMLDivElement>(null);
   const open = highlight?.kind === "mitigation" ? highlight.id : null;
 
-  // A first-party cloud architecture can be drawn as built on one cloud: each block shows the
-  // service that plays it. Picking a cloud here or its pill on Enable switches the drawing;
-  // "Generic" keeps the cloud-neutral components.
-  const implementedOn = clouds.filter((c) => c.implementations.some((i) => i.architecture === archetype.id));
-  const [cloudView, setCloudView] = useState<string | null>(tool && cloudById.has(tool) ? tool : null);
-  const viewCloud = implementedOn.find((c) => c.id === cloudView) ?? null;
-  const services = viewCloud ? servicesFor(viewCloud.id, archetype.id) : null;
+  // A pattern the organisation builds can be shown as built on one cloud: each box names the
+  // service that plays it, and Enable lists that cloud's own options beside every control. One
+  // state, held by the page, so the switch above the drawing and the pills on Enable agree.
+  const cloudProducts = cloudProductsFor(archetype.id);
+  const cloudProduct = cloudProductFor(archetype.id, cloud);
+  const services = cloudProduct ? servicesFor(cloudProduct.id, archetype.id) : null;
+  // A product picked on Enable: a cloud becomes the page's cloud; a tool is the open product.
   const pickProduct = (id: string | null) => {
-    onPickTool(id);
-    if (id && cloudById.has(id)) setCloudView(id);
+    if (id && cloudById.has(id)) {
+      onCloud(id);
+      onPickTool(null);
+    } else onPickTool(id);
   };
 
   const go = (next: Tab) => {
@@ -139,22 +146,14 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
           </span>
         </button>
       )}
-      {drawingVisible && implementedOn.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px] text-ink-3" role="group" aria-label="Draw as built on">
-          <span>Drawn as</span>
-          {[{ id: null, label: "Generic" }, ...implementedOn.map((c) => ({ id: c.id, label: c.short }))].map((o) => (
-            <button
-              key={o.label}
-              type="button"
-              aria-pressed={cloudView === o.id || (o.id === null && !viewCloud)}
-              onClick={() => setCloudView(o.id)}
-              className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
-                (o.id === null ? !viewCloud : cloudView === o.id) ? "border-ink bg-ink text-white" : "border-line bg-paper text-ink-2 hover:border-ink-3"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
+      {cloudProducts.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <CloudSwitch products={cloudProducts} cloud={cloudProduct?.id ?? null} onCloud={onCloud} />
+          <p className="text-[12.5px] leading-snug text-ink-3" data-cloud-caption>
+            {cloudProduct
+              ? `Shown as built on ${cloudProduct.cloud.name}: each box names the service that plays it, and Enable lists ${cloudProduct.cloud.short}'s own option for every control.`
+              : "Pick a cloud to see the service that plays each component and that cloud's own option for every control."}
+          </p>
         </div>
       )}
       {drawingVisible && (
@@ -172,7 +171,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
               className="w-full"
             />
           </div>
-          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} />
+          <DrawingLegend className="mt-3 px-1" risks={tab === "risks"} cloud={cloudProduct?.cloud.short} />
         </>
       )}
 
@@ -200,7 +199,7 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
       </div>
 
       <div className="mt-5" role="tabpanel" aria-label={tabs.find((t) => t.id === tab)?.label}>
-        {tab === "overview" && <ArchetypeDetail archetype={archetype} />}
+        {tab === "overview" && <ArchetypeDetail archetype={archetype} cloud={cloudProduct} />}
 
         {tab === "incidents" && <PatternIncidents archetype={archetype} />}
 
@@ -263,6 +262,8 @@ export function ArchetypeView({ archetype, tab, onTab, walks, walkIndex, onWalk,
             tool={tool}
             focus={focus}
             onPickTool={pickProduct}
+            cloud={cloudProduct}
+            onCloud={onCloud}
           />
         )}
       </div>

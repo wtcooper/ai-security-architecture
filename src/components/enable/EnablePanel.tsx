@@ -8,12 +8,19 @@
  * drawing above, and every setting names the chips it delivers, so the requirements and where
  * they go read as one. The controls open unfolded, since they are the plan; the products fold
  * until the reader picks one.
+ *
+ * A pattern the organisation builds can be read as built on one cloud. Then Enable opens with
+ * what plays each component there, every control names that cloud's own options, and the
+ * settings step stands open on that cloud.
  */
 import { useState, type ReactNode } from "react";
 
 import { Prose } from "@/components/Prose";
 import { capabilityName, guidanceByArchetype, isBaseline, productsForArchetype, status, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
+import { CloudSwitch } from "@/components/cloud/CloudSwitch";
+import { CloudCard } from "@/components/cloud/CloudViews";
+import { cloudProductsFor, type CloudProduct } from "@/components/cloud/model";
 import { BASELINE_HELP, CapabilityTable } from "./CapabilityTable";
 import { baselineNotPinned, controlGroups } from "./model";
 import { ProductSettings } from "./ProductSettings";
@@ -102,6 +109,8 @@ export function EnablePanel({
   onShowDrawing,
   tool: productId,
   onPickTool,
+  cloud = null,
+  onCloud,
 }: {
   archetype: Archetype;
   /** The capability row that is open, and lit on the drawing. */
@@ -112,6 +121,9 @@ export function EnablePanel({
   tool: string | null;
   focus?: string | null;
   onPickTool: (productId: string | null) => void;
+  /** The cloud the pattern is shown as built on, or null for the cloud-neutral pattern. */
+  cloud?: CloudProduct | null;
+  onCloud?: (cloudId: string | null) => void;
 }) {
   const groups = controlGroups(archetype);
   const controls = groups.flatMap((g) => g.capabilities);
@@ -119,20 +131,28 @@ export function EnablePanel({
   const alsoNeeded = baselineNotPinned(archetype);
   const guidance = guidanceByArchetype.get(archetype.id);
   const products = productsForArchetype(archetype.id);
-  const product = productId ? products.find((p) => p.id === productId) : undefined;
+  // The open product is the tool the reader picked, or else the cloud the pattern is shown on.
+  const product = productId ? products.find((p) => p.id === productId) : cloud ?? undefined;
+  const cloudProducts = cloudProductsFor(archetype.id);
   const built = products.some((p) => p.kind === "cloud");
   const pinNumber = (m: Mitigation) => archetype.mitigations.indexOf(m.id) + 1;
 
   // The controls start unfolded and the products folded. A step also stands open while it holds
   // the lit capability or the open product, so a chip picked on the drawing or a product link
   // always lands on a visible row.
-  const [unfolded, setUnfolded] = useState<Set<StepId>>(new Set(["controls"]));
+  const [unfolded, setUnfolded] = useState<Set<StepId>>(new Set(cloud ? ["controls", "tools"] : ["controls"]));
   // A chip lit from a setting row lights the drawing without unfolding the controls: the reader
   // is working down a product's settings, not the control list.
   const [litFromTools, setLitFromTools] = useState(false);
+  // Choosing a cloud opens the settings step on it; the reader can still fold it.
+  const [seenCloud, setSeenCloud] = useState<string | null>(cloud?.id ?? null);
+  if ((cloud?.id ?? null) !== seenCloud) {
+    setSeenCloud(cloud?.id ?? null);
+    if (cloud && !unfolded.has("tools")) setUnfolded(new Set([...unfolded, "tools"]));
+  }
   const holds: Record<StepId, boolean> = {
     controls: !litFromTools && controls.some((m) => m.id === open),
-    tools: Boolean(product),
+    tools: Boolean(productId && product),
   };
   const isOpen = (id: StepId) => unfolded.has(id) || holds[id];
   const toggle = (id: StepId) => {
@@ -153,6 +173,19 @@ export function EnablePanel({
         {built ? "cloud and tools it is built on" : "product you choose"}. Each control is a numbered chip on the drawing. Open one to
         light it and read how to put it in place, or pick a chip on the drawing to open its row.
       </p>
+
+      {cloudProducts.length > 0 && onCloud && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-line bg-paper px-4 py-3">
+          <CloudSwitch products={cloudProducts} cloud={cloud?.id ?? null} onCloud={onCloud} label="Show controls as built on" size="sm" />
+          <p className="text-[12px] leading-snug text-ink-3">
+            {cloud
+              ? `Every control below names ${cloud.cloud.short}'s own option for it; open a control for where it is set, the value and why.`
+              : "The controls below are cloud-neutral. Pick a cloud to see its own option for each one."}
+          </p>
+        </div>
+      )}
+
+      {cloud && <CloudCard archetype={archetype} product={cloud} />}
 
       {guidance && guidance.items.length > 0 && (
         <section id="what-to-do" aria-labelledby="what-to-do-title" className="rounded-xl border border-line bg-paper px-4 py-4">
@@ -222,7 +255,7 @@ export function EnablePanel({
         onToggle={() => toggle("controls")}
         lead={`The security controls your organisation runs, whichever product is chosen, grouped by NIST CSF category.${
           shared ? ` ${shared} of the ${controls.length} are needed by every AI deployment, so they are set up once and reused.` : ""
-        }`}
+        }${cloud ? ` Each names the ${cloud.cloud.short} settings that deliver it.` : ""}`}
       >
         <CapabilityTable
           groups={groups}
@@ -233,6 +266,7 @@ export function EnablePanel({
             onOpen(id);
           }}
           onShowDrawing={onShowDrawing}
+          cloud={cloud}
         />
         {alsoNeeded.length > 0 && (
           <p className="mt-2 text-[12px] leading-snug text-ink-3" title={BASELINE_HELP}>

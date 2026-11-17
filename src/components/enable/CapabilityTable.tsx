@@ -4,7 +4,8 @@
  * A pattern's enterprise controls as one table, a band per NIST CSF category and a row per
  * control, each led by the number of its chip on the drawing. Opening a row lights that
  * chip; picking a chip on the drawing opens its row. The open row is the drawing's highlight,
- * so the two can never disagree.
+ * so the two can never disagree. With a cloud chosen, each row also names that cloud's own
+ * options for the control, and the open row gives each one's value and why.
  */
 import Link from "next/link";
 import { Fragment } from "react";
@@ -13,6 +14,8 @@ import { Prose } from "@/components/Prose";
 import { StatusHeading, StatusPill } from "@/components/StatusPill";
 import { capabilityName, guidanceByArchetype, isBaseline, riskCode, risksForMitigation, status as statusFile, statusFor } from "@/lib/data";
 import type { Archetype, Mitigation } from "@/lib/types";
+import { NativeOptions, OptionNames } from "@/components/cloud/CloudViews";
+import { optionsFor, type CloudProduct } from "@/components/cloud/model";
 import { placementsFor, type ControlGroup } from "./model";
 import { controlHref } from "@/lib/routes";
 
@@ -38,9 +41,12 @@ export function CapabilityTable({
   open,
   onOpen,
   onShowDrawing,
+  cloud = null,
 }: {
   groups: ControlGroup[];
   archetype: Archetype;
+  /** The cloud the pattern is shown as built on: its own options are listed on every control. */
+  cloud?: CloudProduct | null;
   /** The capability whose row is open, which is also the one lit on the drawing. */
   open: string | null;
   onOpen: (id: string | null) => void;
@@ -82,6 +88,7 @@ export function CapabilityTable({
           const items = guidance?.items.filter((i) => i.mitigations.includes(m.id)) ?? [];
           const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
           const own = statusFile[m.id];
+          const options = cloud ? optionsFor(cloud, m.id) : [];
           return (
             <li key={m.id} id={`control-${m.id}`} className="scroll-mt-24">
               <button
@@ -105,7 +112,10 @@ export function CapabilityTable({
                     </span>
                   )}
                 </span>
-                <span className="col-start-2 text-[12.5px] leading-snug text-ink-2 md:col-start-auto">{whatItDoes(m)}</span>
+                <span className="col-start-2 text-[12.5px] leading-snug text-ink-2 md:col-start-auto">
+                  {whatItDoes(m)}
+                  {cloud && <OptionNames short={cloud.cloud.short} options={options} />}
+                </span>
                 <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.blocks.join(" · ")}</span>
                 <span className="col-start-2 md:col-start-auto md:text-right">
                   <StatusPill status={statusFor(m.id)} title={own?.note} compact />
@@ -122,6 +132,7 @@ export function CapabilityTable({
                       </ul>
                     </div>
                   ) : null}
+                  {cloud && <NativeOptions cloud={cloud.cloud} options={options} />}
                   {items.map((item) => (
                     <div key={item.title} className="rounded-lg border border-line bg-paper px-3 py-2.5">
                       <p className="font-semibold text-ink">{item.title}</p>
