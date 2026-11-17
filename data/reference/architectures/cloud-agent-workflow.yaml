@@ -676,16 +676,22 @@ pins:
   mitigations:
     - mitigation: AML.M0031
       at: state
+      do: "Keep shared memory separate for each run, and treat what one step wrote as untrusted when a later step reads it."
+      why: "Shared memory is how one agent can steer another."
       note: >-
         Shared memory is what lets one branch of the graph steer another. Scoping it per run, and treating
         what a step wrote as untrusted when a later step reads it, is the control.
     - mitigation: cap-staged-rollout-gate
       at: govSupplyChain
+      do: "Test behaviour before every change to a model, an instruction or an agent."
+      why: "It is the last chance to catch a mistake before it runs unattended for days."
       note: >-
         Behavioural checks in front of every model, prompt or agent change — the last point at which a change
         can be caught before it runs unattended for days.
     - mitigation: cap-agent-tracing
       at: govObservability
+      do: "Keep one unchangeable record of which agent decided what, on whose behalf, and what it handed on, and read it while the workflow is still running."
+      why: "Agents working together or carrying on by themselves are visible only if someone is looking."
       note: >-
         The delegation graph has to be legible after the fact and while it runs: which agent decided what, on
         whose behalf, and what it passed to the next one — an append-only trail assembled here from the traces
@@ -693,12 +699,16 @@ pins:
         fan-out and autonomous persistence are visible only if something is reading.
     - mitigation: D3-APA
       at: events->harness
+      do: "Decide whose access a run uses before it starts: a service account with its own named limits, or access scoped to this one request."
+      why: "It must not be a standing power, and it needs an owner for as long as the work lives."
       note: >-
         The grant a run carries, bound at ingress: a service principal with its own named scope, or an
         on-behalf-of grant scoped to this request — not a standing power, and governed in the directory for as
         long as the work lives.
     - mitigation: D3-AA
       at: harness->gateway
+      do: "Give the supervisor and each specialist agent its own identity with short-lived tokens issued at the gateway."
+      why: "Every step can then be traced to one agent and revoked separately. The agents share one process, so the identities are what keep them apart."
       note: >-
         A logical principal per agent — the supervisor and each specialist, never one shared identity — with
         short-lived tokens minted and constrained at the gateway, so every step in the chain is attributable
@@ -706,77 +716,107 @@ pins:
         compromise of all of them, which is why the grants and not the process boundary carry the separation.
     - mitigation: D3-CH
       at: harness->gateway
+      do: "Hand out credentials at your gateway for each step, short-lived and narrow."
+      why: "Agents then hold no keys of their own for network calls."
       note: >-
         Credentials brokered at step time, short-lived and scoped; agents hold none for network calls — the
         in-process tool set is the drawn exception.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
+      do: "Check every tool call at your AI gateway: which agent, which tool, which arguments."
+      why: "The check sits outside the agents, so they cannot argue their way round it."
       note: A policy decision on every tool call — agent, tool, arguments — outside the loop.
     - mitigation: AML.M0028
       at: gateway->internalTools
+      do: "Run each tool on the calling agent's own task-sized access."
+      why: "No single step should be able to use everything the whole workflow can reach."
       note: >-
         Each tool runs on the calling specialist's own task-scoped grant: only the actions and records
         its step needs, never the workflow's whole reach.
     - mitigation: D3-CTS
       at: orchestration->subagents
+      do: "When the supervisor hands work to a specialist, give the specialist a token for that task only, never the supervisor's own credentials."
+      why: "Handing down full access spreads privilege instead of delegating it."
       note: >-
         Authority narrows where it is handed down: a specialist receives tokens scoped to its task, never the
         supervisor's credentials — delegation that does not narrow is privilege distribution.
     - mitigation: AML.M0036
       at: gateway
+      do: "Set rate and budget ceilings at your AI gateway that count every model and tool call in a run."
+      why: "A workflow that keeps re-planning then hits a ceiling instead of running on."
       note: >-
         Rate and budget ceilings on the crossing: every model and remote tool call any agent makes counts
         against the run's budget, so a loop that keeps re-planning hits the ceiling. Work that never crosses —
         in the sandbox or in process — is not metered here.
     - mitigation: cap-input-guardrails
       at: gateway
+      do: "Screen returned records, web content and the original request at your AI gateway before any agent reads them."
+      why: "Messages between agents and shared memory do not pass through the gateway, so they are not covered here."
       note: >-
         Returned record and web content is classified at the crossing before it reaches any agent's
         context, and the initiator's request text on its first crossing, before the model reads it.
         Inter-agent messages and shared-memory reads never cross here.
     - mitigation: cap-sensitive-data-redaction
       at: state
+      do: "Remove sensitive data from what steps write to the workflow's journal."
+      why: "The journal outlives the workflow, and every agent writes to it."
       note: >-
         Redaction on what steps may journal, because the journal outlives the process — and every writer is in
         scope, the specialists included.
     - mitigation: cap-retrieval-grounding-checks
       at: state
+      do: "Check content before it enters the search index, and keep the index separate for each run."
+      why: "A poisoned document in the index steers every agent that reads it."
       note: >-
         Per-run index scoping and ingest trust on what enters the corpus — the answer to a poisoned index,
         distinct from scoping what a step may read.
     - mitigation: AML.M0029
       at: internalTools->orgData
+      do: "Require approval before writes that matter: pause the step and resume only on an approval for that exact action."
+      why: "The bigger the possible damage, the more the pause is worth."
       note: >-
         An approval gate on consequential writes, sized to the blast radius. The engine suspends the step and
         resumes only on an approval bound to the exact action and workflow state — see the escalation
         scenario.
     - mitigation: cap-data-access-governance
       at: internalTools->orgData
+      do: "Limit reads to what the workflow's own access allows, not everything the service could reach."
+      why: "The service can usually reach far more than any one piece of work needs."
       note: >-
         Reads scoped to the workflow's grant rather than the service's reach — the same entitlement filter the
         siblings enforce on this edge.
     - mitigation: D3-EI
       at: localTools
+      do: "Run code the agents write only in a sandbox that is thrown away after each task, never in the process the agents share."
+      why: "Generated code can do anything the process it runs in can do."
       note: >-
         Generated code runs only in the sandbox — an isolated runtime with its own filesystem and network, torn
         down per task — never in the harness's own process beside the agents.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
+      do: "Register every agent and tool before it can run or be offered, and use that register as your inventory."
+      why: "An agent nobody registered is an agent nobody can switch off."
       note: >-
         Admission for agents and tools — nothing runs or is offered by default, and in a multi-agent graph the
         registry is also the inventory: an agent nobody registered is an agent nobody can revoke. The gateway
         enforces the resulting list per call.
     - mitigation: cap-agent-kill-switch
       at: govObservability
+      do: "Have a stop that works while a workflow is running."
+      why: "These workflows run for days."
       note: A stop that works mid-flight, because these processes run for days.
     - mitigation: cap-mcp-tool-integrity
       at: harness->gateway
+      do: "Check each tool's description against the fingerprint you approved before any agent is offered it, and again after every update."
+      why: "A tool whose description changes after approval can quietly redirect the agents."
       note: >-
         Tool definitions reach the harness's MCP client through the gateway's brokerage, and each is checked
         against the content hash pinned at admission before any agent's model is offered it — a definition
         changed after admission, the rug-pull, is refused, and the check repeats after every update.
     - mitigation: cap-agent-egress-control
       at: localTools
+      do: "Set network rules for the whole agent workload: the sandbox reaches only your AI gateway and package mirror, and the agents' own code reaches a named list."
+      why: "Commands and downloads do not pass through the gateway, so these rules are the only limit on where they go."
       note: >-
         Network policy on the whole harness workload, not just the sandbox: the sandbox reaches only the AI
         gateway and the package mirror, and the in-process handlers' own calls reach a named allowlist. Shell
@@ -784,6 +824,8 @@ pins:
         API calls and sees nothing else.
     - mitigation: D3-FA
       at: sources->registry
+      do: "Scan every package for malware and look-alike names at your package mirror before it is made available inside."
+      why: "Agents install packages by themselves, and a bad one runs inside your environment."
       note: >-
         Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
         public source, before anything inside can pull it. The registered embodiment of artifact

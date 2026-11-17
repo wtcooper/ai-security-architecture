@@ -156,14 +156,14 @@ Two steps to run this pattern safely: put the controls in place, then set them i
         }
         expanded={isOpen("controls")}
         onToggle={() => toggle("controls")}
-        lead={`What to put in place on this pattern, control by control, by NIST CSF category.${
+        lead={`What to do, in plain words, one control at a time.${
           short ? ` Each names the ${short} setting that delivers it.` : ""
         }`}
       >
         {shared > 0 && (
           <p className="mb-3 max-w-3xl text-[12.5px] leading-snug text-ink-3" title={BASELINE_HELP}>
-            {shared} of the {controls.length} are needed by every AI deployment, so they are set up once and reused. Open a row for the
-            settings that deliver it and the risks it reduces.
+            Work down the list. {shared} of the {controls.length} are needed by every AI deployment, so you may already have them. Open a row
+            for the settings that deliver it, the detail and the risks it reduces.
           </p>
         )}
         <CapabilityTable

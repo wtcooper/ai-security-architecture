@@ -6,11 +6,12 @@
  * chip; picking a chip on the drawing opens its row. The open row is the drawing's highlight,
  * so the two can never disagree.
  *
- * A row says what to put in place on this pattern, in the pattern's own words, and where: not
- * the catalogue's definition of the control, which reads the same on every pattern. With a
- * product chosen (a cloud or a tool) the row also names that product's settings for the
- * control, and the open row gives each one's place, value and reason. The definition stays in
- * the open row, last.
+ * A row leads with what to do, as one plain sentence, and why: written for whoever has to put
+ * the control in place, not for a security architect. The control's catalogue name is the
+ * reference beside it, with where it goes on the drawing. With a product chosen (a cloud or a
+ * tool) the row also names that product's settings for the control, and the open row gives
+ * each one's place, value and reason. The architect's note and the catalogue's definition are
+ * in the open row, last.
  */
 import Link from "next/link";
 import { Fragment } from "react";
@@ -25,9 +26,7 @@ import { controlHref } from "@/lib/routes";
 
 const anyStatus = Object.values(statusFile).some((s) => s.status);
 // The status column appears once the organisation has recorded any status; until then every row would read "Not set".
-const GRID = anyStatus
-  ? "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_104px]"
-  : "md:grid-cols-[28px_minmax(0,1.1fr)_minmax(0,1.8fr)_minmax(0,0.9fr)]";
+const GRID = anyStatus ? "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)_104px]" : "md:grid-cols-[28px_minmax(0,2.3fr)_minmax(0,1fr)]";
 
 export const BASELINE_HELP = "Needed by every AI deployment, whatever the pattern: set up once and reused.";
 
@@ -55,21 +54,21 @@ export function CapabilityTable({
     <div className="overflow-hidden rounded-xl border border-line bg-paper">
       <div className={`hidden gap-4 border-b border-line bg-mist/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 md:grid ${GRID}`}>
         <span aria-label="Pin" />
-        <span>Control</span>
-        <span>What to put in place here</span>
-        <span>Where it goes</span>
+        <span>What to do</span>
+        <span>Control · where it goes</span>
         {anyStatus && <StatusHeading />}
       </div>
       {groups.map((group) => (
         <Fragment key={group.id}>
-          <div id={`group-${group.id}`} className="border-b border-line bg-mist/30 px-4 py-1.5" title={group.blurb}>
-            <p className="flex flex-wrap items-baseline gap-x-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-2">
-              {group.title}
-              <span className="ident text-[10px] font-normal tracking-normal text-ink-3" title={`NIST CSF 2.0 · ${group.function} · ${group.id}`}>
-                {group.id}
+          <div id={`group-${group.id}`} className="border-b border-line bg-mist/40 px-4 py-2" title={group.blurb}>
+            <p className="flex flex-wrap items-baseline gap-x-2.5">
+              <span className="display text-[14px] font-bold text-ink">{group.plain}</span>
+              <span className="text-[11px] text-ink-3" title={`NIST CSF 2.0 · ${group.function}`}>
+                <span className="ident mr-1">{group.id}</span>
+                {group.title}
               </span>
               {anyStatus && (
-                <span className="font-normal normal-case tracking-normal text-ink-3">
+                <span className="text-[11px] text-ink-3">
                   {group.capabilities.filter((m) => statusFor(m.id) === "enabled").length} of {group.capabilities.length} enabled
                 </span>
               )}
@@ -82,8 +81,8 @@ export function CapabilityTable({
           const reduces = risksForMitigation(m.id).filter((r) => pinnedRisks.has(r.id));
           const own = statusFile[m.id];
           const options = product ? optionsFor(product, m.id) : [];
-          // What this pattern asks of the control, in the pattern's own words, at each place it is pinned.
-          const [lead, ...more] = where.notes;
+          // One instruction per place the control is pinned; most controls have one.
+          const steps = where.steps;
           return (
             <li key={m.id} id={`control-${m.id}`} className="scroll-mt-24">
               <button
@@ -98,15 +97,21 @@ export function CapabilityTable({
                 >
                   {number.get(m.id)}
                 </span>
-                <span className="min-w-0">
-                  <span className="block text-[13.5px] font-semibold leading-snug text-ink">{capabilityName(m.id)}</span>
-                  {own?.displayName && <span className="block text-[11.5px] text-ink-3">{m.title}</span>}
-                </span>
-                <span className="col-start-2 text-[12.5px] leading-snug text-ink md:col-start-auto" data-instruction>
-                  {lead ?? m.implementation}
+                <span className="min-w-0 space-y-2" data-instruction>
+                  {steps.map((step, i) => (
+                    <span key={i} className="block">
+                      {steps.length > 1 && <span className="mb-0.5 block text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-3">At {step.where.join(" → ")}</span>}
+                      <span className="block text-[13.5px] font-semibold leading-snug text-ink" data-do>{step.do}</span>
+                      <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-2" data-why>{step.why}</span>
+                    </span>
+                  ))}
                   {product && <OptionNames short={productShort(product)} options={options} />}
                 </span>
-                <span className="col-start-2 text-[12px] leading-snug text-ink-3 md:col-start-auto">{where.blocks.join(" · ")}</span>
+                <span className="col-start-2 text-[12px] leading-snug md:col-start-auto">
+                  <span className="block font-semibold text-ink-2" data-control-name>{capabilityName(m.id)}</span>
+                  {own?.displayName && <span className="block text-[11.5px] text-ink-3">{m.title}</span>}
+                  <span className="block text-ink-3">{where.blocks.join(" · ")}</span>
+                </span>
                 {anyStatus && (
                   <span className="col-start-2 md:col-start-auto md:text-right">
                     <StatusPill status={statusFor(m.id)} title={own?.note} compact />
@@ -115,14 +120,6 @@ export function CapabilityTable({
               </button>
               {expanded && (
                 <div className="space-y-3 border-t border-line bg-mist/30 px-4 py-3.5 text-[12.5px] leading-relaxed text-ink-2 md:pl-[60px]">
-                  {more.length > 0 && (
-                    <div>
-                      <p className="eyebrow">Also on this pattern</p>
-                      <ul className="mt-1 space-y-1 text-ink">
-                        {more.map((n) => <li key={n}>{n}</li>)}
-                      </ul>
-                    </div>
-                  )}
                   {product && <NativeOptions id={product.id} name={product.name} options={options} />}
                   {reduces.length > 0 && (
                     <p className="text-[12px]">
@@ -136,9 +133,22 @@ export function CapabilityTable({
                       ))}
                     </p>
                   )}
+                  {steps.some((step) => step.note) && (
+                    <div data-detail>
+                      <p className="eyebrow">In detail</p>
+                      <ul className="mt-1 space-y-1.5">
+                        {steps.filter((step) => step.note).map((step, i) => (
+                          <li key={i}>
+                            {steps.length > 1 && <span className="font-semibold text-ink">{step.where.join(" → ")}: </span>}
+                            {step.note}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <div className="text-[12px] text-ink-3" data-definition>
                     <p>
-                      <span className="font-semibold text-ink-2">The control: </span>
+                      <span className="font-semibold text-ink-2">The control ({m.id}): </span>
                       {m.implementation}
                     </p>
                     <p className="mt-1">Delivered by: {m.examples.slice(0, 5).join(" · ")}</p>

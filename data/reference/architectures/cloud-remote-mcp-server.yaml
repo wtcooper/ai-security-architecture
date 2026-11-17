@@ -529,22 +529,30 @@ pins:
   mitigations:
     - mitigation: D3-CTS
       at: authServer
+      do: "Issue tokens that name this server as their only audience, and refuse any token issued for something else."
+      why: "A token meant for another service must not work here."
       note: >-
         Tokens audience-bound to this server by name, and refused if minted for anything else; the
         `resource` audience is asserted at issuance and checked on every request.
     - mitigation: AML.M0004
       at: callers->gateway
+      do: "Build your own request limits for each client and each customer, sized for callers that retry and run in parallel."
+      why: "The protocol has no limits of its own."
       note: >-
         Per-client and per-tenant, sized for callers that retry and parallelise. This is ours to build
         entirely — the protocol provides no quota mechanism at all.
     - mitigation: AML.M0028
       at: gateway->service
+      do: "Grant each caller only the permissions it needs, ask for more only when an operation requires it, and show a caller only the tools its token allows."
+      why: "A model is never offered a tool the caller is not allowed to use."
       note: >-
         Minimal scopes with step-up rather than an omnibus grant, and the whole set needed for an operation
         emitted in one challenge instead of drip-fed. The tool list is filtered by the presenting token's
         scopes on every request — a tool the caller cannot invoke is never shown to its model.
     - mitigation: cap-mcp-tool-integrity
       at: toolDefs->service
+      do: "Load only the reviewed release of your tool descriptions, check each against the fingerprint recorded at review, and refuse any that differ."
+      why: "A wording change that skipped review could redirect every caller's model."
       note: >-
         The service loads only the reviewed release of its definitions: each is checked against the hash
         recorded at review and refused on mismatch, so an edit that skipped the pipeline never serves. The spec
@@ -552,53 +560,73 @@ pins:
         they receive on their side — their check, not one this server can enforce.
     - mitigation: D3-SYSVA
       at: service
+      do: "Test the server for security flaws the way you would any published application."
+      why: "Behind the protocol it is ordinary software exposed to the internet."
       note: >-
         Behind the protocol this is a published application, and its handlers are ordinary attack surface.
     - mitigation: cap-data-access-governance
       at: service->orgData
+      do: "Separate each customer's data in your own code, on every query."
+      why: "The protocol has no notion of customers, so nothing else does it."
       note: Per-tenant scoping enforced in our own code, because the protocol has no tenants.
     - mitigation: D3-CH
       at: service->orgData
+      do: "Use a separate stored credential for each system the server calls, short-lived, rotated and limited to that system."
+      why: "One leaked credential then opens one system, not all of them."
       note: >-
         A separate, vaulted credential for each upstream we call, short-lived and rotated, scoped to
         that upstream alone.
     - mitigation: AML.M0024
       at: govObservability
+      do: "Log every tool call with its inputs, its customer and who it acted for, and keep the log where you can search it in an incident."
+      why: "Without it you cannot say what the server did or for whom."
       note: >-
         Every invocation with its parameters, its tenant and its delegation, retained where an incident can
         query it.
     - mitigation: D3-CR
       at: authServer
+      do: "Make revoking access stop tokens that are already issued, and measure how long that takes."
+      why: "A revocation that only blocks new tokens leaves the old ones working."
       note: >-
         Revocation that reaches tokens already issued, not merely future ones — introspection, short lifetimes
         and refresh tokens revoked with the grant — with the delay until they stop working measured, not
         assumed. A call already executing completes.
     - mitigation: D3-AVE
       at: govSupplyChain
+      do: "List the server's software components, its gateway and their dependencies, and check them against known-flaw feeds, most exposed first."
+      why: "A published server ages like any other application; fixes ship through your normal release checks."
       note: >-
         The SDK, the gateway and the handlers' dependencies enumerated against vulnerability feeds and
         prioritised by exposure — a published server ages like any other application; the fix itself ships
         through the release gate.
     - mitigation: D3-APA
       at: callers->idp
+      do: "Manage who may reach the server in your identity provider: its list of approved servers, the groups allowed to use each, and conditional-access rules."
+      why: "People joining get access by group, and people leaving lose every new token at once."
       note: >-
         Identity governance where it already lives: the IdP's registry of approved MCP servers, the groups and
         roles that may reach each, and the conditional-access rules — evaluated at every ID-JAG exchange.
         Joiners get access by group; leavers lose every new token at once.
     - mitigation: D3-OTF
       at: authServer
+      do: "Block the authorization server from fetching private or internal addresses when it looks up a client's details."
+      why: "Those lookups could otherwise be pointed at your internal network."
       note: >-
         Client metadata documents make this component an outbound HTTP client: its discovery fetches are
         blocked from private and metadata addresses — the SSRF surface the move away from dynamic
         registration newly created, answered where the fetch happens.
     - mitigation: D3-AA
       at: authServer
+      do: "Make automated callers sign in with their own registered key, and give them narrower permissions than a signed-in person would get."
+      why: "A program has nobody to consent or re-confirm, so it should not borrow a person's authority."
       note: >-
         An autonomous workload is a client with no user: it authenticates with `private_key_jwt` under
         `client_credentials`, its key registered against its own identity, and receives narrower scopes than a
         delegated user would — no consent, no step-up, no borrowed authority.
     - mitigation: D3-CTS
       at: service->authServer
+      do: "Never pass a caller's token on to another system: swap it for a new token limited to that system and that tool, and log the swap."
+      why: "The caller's token then stops at your server, and you can still follow who acted on whose behalf."
       note: >-
         The inbound token stops at the service. A handler that needs an upstream system exchanges it for a
         downstream-audience token scoped to the tool, or calls as the service on its own credential — and the

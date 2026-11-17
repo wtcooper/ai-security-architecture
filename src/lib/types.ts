@@ -216,6 +216,8 @@ export interface EnablementGroup {
   /** The CSF function it belongs to: Govern, Identify, Protect, Detect, Respond or Recover. */
   function: string;
   blurb: string;
+  /** The heading a reader sees: what the category is for, in everyday words. */
+  plain: string;
   /** The blurb on one surface, keyed by surface id, where it reads differently there. */
   surfaces?: Record<string, { blurb?: string }>;
   mitigations: string[];
@@ -477,6 +479,15 @@ export interface MitigationPin {
   mitigation: string;
   /** A block id, or an edge as "from->to". */
   at: string;
+  /**
+   * What to do at this spot on this pattern, as one plain sentence starting with a verb. This is
+   * the headline of the control's row on Enable, written for someone who has to put it in place
+   * and is not a security architect.
+   */
+  do: string;
+  /** Why, in one or two plain sentences: what goes wrong without it. */
+  why: string;
+  /** The precise version, for an architect: what the control does at this spot and what it does not. */
   note?: string;
 }
 

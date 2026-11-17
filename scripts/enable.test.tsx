@@ -124,21 +124,39 @@ test("the Enable tab opens as folded steps; a lit control opens the controls, ba
   }
 });
 
-test("a control row says what this pattern asks of it, not the catalogue's definition; the guidance is under How it works", () => {
+test("a control row leads with a plain instruction and why, at every place it is pinned; the definition and the guidance are elsewhere", () => {
   for (const arch of dataset.archetypes) {
     const table = renderToStaticMarkup(<CapabilityTable groups={controlGroups(arch)} archetype={arch} open={arch.mitigations[0]} onOpen={() => {}} />);
-    assert.equal([...table.matchAll(/data-instruction/g)].length, arch.mitigations.length, `${arch.id}: an instruction per control`);
-    for (const id of arch.mitigations) {
-      const note = arch.pins.mitigations.find((p) => p.mitigation === id && p.note?.trim())?.note?.trim();
-      assert.ok(note, `${arch.id}: ${id} has its own instruction on this pattern`);
-      assert.ok(table.includes(esc(note!.slice(0, 60))), `${arch.id}: ${id} leads with the pattern's words`);
+    assert.equal([...table.matchAll(/data-instruction/g)].length, arch.mitigations.length, `${arch.id}: a row per control`);
+    assert.equal([...table.matchAll(/data-do/g)].length, arch.pins.mitigations.length, `${arch.id}: an instruction at every place a control is pinned`);
+    for (const pin of arch.pins.mitigations) {
+      assert.ok(table.includes(esc(pin.do)), `${arch.id}: ${pin.mitigation} @ ${pin.at} says what to do`);
+      assert.ok(table.includes(esc(pin.why)), `${arch.id}: ${pin.mitigation} @ ${pin.at} says why`);
     }
-    // The catalogue's definition is in the open row only.
+    // Each category has a plain heading; the CSF name is the reference beside it.
+    for (const g of controlGroups(arch)) assert.ok(table.includes(esc(g.plain)) && table.includes(esc(g.title)), `${arch.id}: ${g.id} heading`);
+    // The architect's note and the catalogue's definition are in the open row only.
     assert.equal([...table.matchAll(/data-definition/g)].length, 1, `${arch.id}: one definition, in the open row`);
+    assert.equal([...table.matchAll(/data-detail/g)].length, 1, `${arch.id}: the precise note is in the open row`);
     const guidance = dataset.guidance.find((g) => g.archetype === arch.id)!;
     const how = renderToStaticMarkup(<ArchetypeDetail archetype={arch} />);
     assert.match(how, new RegExp(`How to govern this pattern[^<]*(<[^>]+>\\s*)*${guidance.items.length}`), `${arch.id}: guidance is a section of How it works`);
-    assert.doesNotMatch(page(arch.id), /What to do|data-guidance-item/, `${arch.id}: Enable carries no guidance prose`);
+    assert.doesNotMatch(page(arch.id), /What to do<\/p>|data-guidance-item/, `${arch.id}: Enable carries no guidance prose`);
+  }
+});
+
+test("every instruction is written for someone who is not a security architect", () => {
+  // Words a reader outside security would stop at. The precise term belongs in the note, not in the instruction.
+  const JARGON = /\b(IdP|SSO|DLP|egress|harness|brokered|zone-2|TLS|JWT|OAuth|HITL|blast radius|loopback|least[- ]privilege|microVM|exfiltrat\w*|provenance|principal|attestation|CODEOWNERS|introspection|SSRF|ingress|deputy)\b/i;
+  // An instruction says what to do: it does not open on a thing ("The gateway…", "Per-tool grants…").
+  const NOUN_OPENER = /^(The|A|An|Our|Their|Its|Each|Every|Per|This|That|These|Those|Which|What|Who|Whose|One|Any|All|No|Some)\b/;
+  for (const arch of dataset.archetypes) {
+    for (const pin of arch.pins.mitigations) {
+      const at = `${arch.id} ${pin.mitigation} @ ${pin.at}`;
+      assert.doesNotMatch(pin.do, NOUN_OPENER, `${at}: starts by saying what to do: "${pin.do.slice(0, 40)}"`);
+      assert.doesNotMatch(`${pin.do} ${pin.why}`, JARGON, `${at}: plain words`);
+      assert.ok(pin.do.length <= 260 && pin.why.length <= 220, `${at}: short enough to read at a glance`);
+    }
   }
 });
 

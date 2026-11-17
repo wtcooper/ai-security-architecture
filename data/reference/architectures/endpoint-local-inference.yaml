@@ -384,11 +384,15 @@ pins:
   mitigations:
     - mitigation: D3-FA
       at: hub->weights
+      do: "Download model files to a holding area and scan their format and contents there before anything is allowed to load them."
+      why: "Some model files run code the moment they are opened, so a scan after loading is too late."
       note: >-
         Format and content inspection at quarantine, before promotion — a scan that runs after the runtime
         opens the file has documented an incident, not prevented one.
     - mitigation: D3-AA
       at: api
+      do: "Put a small wrapper in front of the model's local port that makes every application present its own token, and let only the wrapper reach the model."
+      why: "Anything on the machine can call an open local port, including a web page in the browser."
       note: >-
         Caller identity at the wrapper rather than locality as authorization: each local application presents
         its own token, because a browser tab is local too. The raw runtime is reachable only by the wrapper's
@@ -397,56 +401,78 @@ pins:
         deviation.
     - mitigation: cap-output-guardrails
       at: api->runtime
+      do: "Add your own screening of prompts and answers on the way in and out of the model."
+      why: "A hosted service would have done this for you; a local model has none unless you add it."
       note: >-
         Deploy the input and output classification a hosted API would have applied — nothing supplies it here
         by default.
     - mitigation: AML.M0004
       at: api
+      do: "Limit how much each application can ask of the model."
+      why: "Every caller shares one port with no meter, so one of them can starve the rest."
       note: Bound what any single caller can consume, because the callers share one unmetered port.
     - mitigation: AML.M0005
       at: weights
+      do: "Lock down the folder that holds approved models: only the approval step writes to it and only the model's own service account reads it."
+      why: "Otherwise any program running as the user can swap a model or copy your organisation's fine-tunes."
       note: >-
         Restrictive permissions on the model store: only the promotion step writes approved files and only the
         runtime's service account reads them, so no other process running as the user can swap a model or copy
         the organisation's adapters.
     - mitigation: cap-ai-threat-modeling
       at: govSupplyChain
+      do: "Decide and write down whether local models may run at all, on which software, from which sources and on which machines, and review it when something changes."
+      why: "It is the decision every other control here enforces."
       note: >-
         The risk assessment behind the posture: whether local inference may run at all, on which runtimes, from
         which sources and on which machines — weighed against the exposure, supply-chain and data-handling risks
         on this page, recorded, and re-run when a runtime CVE or a new source changes them.
     - mitigation: D3-PA
       at: runtime
+      do: "Use device monitoring to record what the model software runs, which ports it opens and which network interfaces it listens on."
+      why: "That is how you see a model that has been exposed to the network."
       note: >-
         Endpoint telemetry over the serving process: what it executes, which ports it listens on and which
         interfaces it binds.
     - mitigation: AML.M0023
       at: govSupplyChain
+      do: "Keep a record for every approved model: the file and its fingerprint, format, publisher, source, version and what it was built from."
+      why: "When a bad release or a software flaw is announced, this record tells you who is affected."
       note: >-
         A bill of materials for every promoted artifact — model file and digest, format, publisher and source,
         version, base model and adapters — the record every response to a bad release or a parser CVE starts
         from.
     - mitigation: cap-shadow-ai-discovery
       at: runtime
+      do: "Find the model software nobody registered by checking the machines themselves, not by asking people."
+      why: "One person can install it in an afternoon and it appears in no purchase record."
       note: Find the runtimes nobody registered, derived from the machine rather than self-reported.
     - mitigation: cap-staged-rollout-gate
       at: govSupplyChain
+      do: "Test what a model actually does before you approve it for other software to use."
+      why: "No provider has tested it for you."
       note: >-
         Evaluate what the weights actually do before promoting them for other software to call — a gate on
         change, run from the governance band; there is no provider evaluation to inherit.
     - mitigation: AML.M0014
       at: weights->runtime
+      do: "Let the model software load a file only when its fingerprint matches the approved one."
+      why: "A swapped model file is then refused instead of served."
       note: >-
         Weights load only after their digest matches the approved artifact, so a swapped model file is
         refused rather than served.
     - mitigation: D3-OTF
       at: hub->weights
+      do: "At your existing web proxy, block managed machines from public model sites and allow only your internal mirror; let only the holding-area download reach the public sites."
+      why: "Otherwise the model software downloads and opens a file in one step and the scan never happens."
       note: >-
         Model sources held to the internal mirror at the organisation's existing proxy: managed devices do not
         reach the public hubs, and only the quarantine fetch does. Without it a runtime's own pull fetches and
         loads in one step and the scan never happens.
     - mitigation: D3-OTF
       at: runtime
+      do: "At the same proxy, block the model software's own outbound calls: its vendor's cloud models and web search, and any model site except your mirror."
+      why: "The software has switches for these, but a user can change them; the proxy holds when they do."
       note: >-
         The serving application's own outbound calls refused at the same proxy: its vendor's cloud models and
         web search, and any registry but the mirror, so a caller of the local port cannot have it push a model

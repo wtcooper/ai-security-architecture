@@ -83,11 +83,15 @@ build requires of it and how to word it. The judgment calls:
 - **Write the notes.** Every box, flow and pin has a `note`: what it is and why it matters
   *here*. They are the hover text and the How it works list; a pattern without them is a
   picture, with them it is an argument.
-- **A control pin's note is the instruction a reader acts on.** It is the text of that
-  control's row on Enable, in place of the catalogue's definition. Write it as what to put in
-  place at this spot on this pattern: specific, tactical, naming the thing and the place
-  ("Per-tool grants scoped to the working tree and the task, enforced where the tools run"),
-  never a restatement of what the control is in general.
+- **Every control pin says what to do and why, in plain words.** `do` is one sentence that
+  starts with a verb and names the thing and the place ("Give the session a token that
+  reaches one repository and one branch and cannot push to the main branch, approve or
+  merge."). `why` is what goes wrong without it ("The session can then propose a change but
+  cannot ship it."). They are the headline of the control's row on Enable, read by whoever
+  has to put the pattern in place, who is usually not a security architect: write "identity
+  provider" not "IdP", "outbound connections" not "egress", "the agent" not "the harness",
+  and spell out what an abbreviation means or leave it out. Say only what the `note` says;
+  the `note` keeps the precise version for the architect.
 
 ## 3. Write what surrounds the drawing
 

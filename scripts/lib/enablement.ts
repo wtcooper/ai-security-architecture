@@ -38,6 +38,7 @@ export async function loadEnablement(
     check(order.indexOf(group.id) > last, `group ${group.id} is out of CSF order`);
     last = order.indexOf(group.id);
     check(group.blurb?.trim() && group.mitigations?.length, `group ${group.id}: needs a blurb and mitigations`);
+    check(group.plain?.trim() && group.plain.length <= 40, `group ${group.id}: needs a plain heading of at most 40 characters`);
     for (const [surface, own] of Object.entries(group.surfaces ?? {})) {
       check(surfaceIds.has(surface), `group ${group.id}: unknown surface ${surface}`);
       check(own?.blurb?.trim(), `group ${group.id}: surfaces.${surface} needs a blurb`);

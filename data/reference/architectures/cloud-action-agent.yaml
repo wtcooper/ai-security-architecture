@@ -604,6 +604,8 @@ pins:
   mitigations:
     - mitigation: D3-APA
       at: events->planner
+      do: "Decide whose access each run uses before it starts: a service account with its own named limits, or the access of the person the request is for, scoped to the task and set to expire."
+      why: "Every action the agent takes is taken on that access, so it sets the limit on what a run can reach."
       note: >-
         Whose authority a run carries, established at ingress before the loop runs — a service principal with
         its own named scope, or the on-behalf-of grant attached to the message. It is the identity every
@@ -612,22 +614,30 @@ pins:
         wakes on is scoped to the task and expires.
     - mitigation: cap-agent-tool-registry
       at: govSupplyChain
+      do: "Keep a catalogue of the actions the agent may take, and add an action only through a reviewed change."
+      why: "The agent can then do only what you admitted, not whatever the model thinks of."
       note: >-
         Actions exist because the catalogue admitted them, not because a model named them. Admission is a
         change-time decision made here; the gateway enforces the resulting catalogue per call.
     - mitigation: cap-staged-rollout-gate
       at: govSupplyChain
+      do: "Test the agent's behaviour before every change to its model, instructions or actions, and keep the instructions under version control with an owner."
+      why: "Nobody watches a run, so there is no later moment to notice that a change was wrong."
       note: >-
         Behavioural checks in front of every model, prompt or catalogue change — the system instruction
         versioned, reviewed and owned like the catalogue it governs — because with nobody watching a run there
         is no later opportunity to notice the change was wrong.
     - mitigation: AML.M0028
       at: gateway->internalTools
+      do: "Run each tool with only the actions and records that request needs, on the requester's access."
+      why: "The agent's own standing access is far wider than any one request."
       note: >-
         Each tool runs least-privilege on the requester's delegated grant: only the actions and records
         this request needs, never the agent's standing access.
     - mitigation: AML.M0029
       at: internalTools->orgData
+      do: "Require an operator's approval for actions that are costly or cannot be undone, and keep those approvals rare."
+      why: "The approver must not be the person who benefits. Below the threshold, be able to reverse an action instead."
       note: >-
         An approval gate keyed to irreversibility and value, rare enough to be read; below it, reversal rather
         than review. The approver is the operator on the drawing, reached through the approval channel — never the
@@ -635,29 +645,43 @@ pins:
         scenario walks the round trip.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
+      do: "Check every action at your AI gateway when it is requested: this action, this record, this amount."
+      why: "Allow it only if both the requester and the agent are permitted, never if just one of them is."
       note: >-
         A per-invocation policy decision — this action, this record, this value, now — rather than a
         session-time grant, made on the intersection of the requester's grant and the agent's own identity,
         never the union, which is what a confused deputy runs on.
     - mitigation: D3-AA
       at: planner->gateway
+      do: "Give each agent its own identity that can be revoked, and check it at the gateway on every call."
+      why: "You can then tell which agent did what and cut one off without stopping the others."
       note: >-
         A distinct, revocable workload identity per agent, verified at the gateway on every call, so
         actions are attributable and separately revocable.
     - mitigation: cap-data-access-governance
       at: internalTools->orgData
+      do: "Limit every lookup to the account being worked on, and check entitlement before fetching."
+      why: "The agent should never be able to read another customer's records."
       note: Entitlement-filtered retrieval scoped to the account under discussion, enforced before fetching.
     - mitigation: AML.M0031
       at: stateRetrieval
+      do: "Keep the agent's memory separate for each case, with no reads across cases."
+      why: "One case's content could otherwise steer another's."
       note: Case-scoped memory with hard boundaries — no cross-case reads, ever.
     - mitigation: D3-CH
       at: planner->gateway
+      do: "Issue the model credential per workload, with an expiry, from your gateway."
+      why: "The agent's own code then holds no lasting key to leak."
       note: Brokered, per-workload, expiring model credentials; the agent tier holds no standing model key.
     - mitigation: AML.M0036
       at: gateway
+      do: "Set quotas and cost ceilings at your AI gateway."
+      why: "They stop a runaway run before the spending and the actions happen."
       note: Quotas and cost ceilings on the crossing, before token spend and action volume are committed.
     - mitigation: cap-agent-egress-control
       at: localTools
+      do: "Set network rules for the whole agent workload: the sandbox reaches only your AI gateway and package mirror, and the agent's own code reaches a named list."
+      why: "Commands and downloads do not pass through the gateway, so these rules are the only limit on where they go."
       note: >-
         Network policy on the whole harness workload, not just the sandbox: the sandbox reaches only the AI
         gateway and the package mirror, and the in-process handlers' own calls reach a named allowlist. Shell
@@ -665,36 +689,50 @@ pins:
         API calls and sees nothing else.
     - mitigation: cap-input-guardrails
       at: gateway
+      do: "Screen returned records, web content and the triggering request at your AI gateway before the model reads them."
+      why: "Any of them can carry instructions, and whoever wrote the request cannot be trusted about it."
       note: >-
         Returned records and web content are classified at the crossing before they re-enter the loop's
         context, and the trigger payload on its first crossing, before the model reads it — whoever
         authored the request cannot be trusted about it.
     - mitigation: cap-agent-tracing
       at: govObservability
+      do: "Record every action with its reasoning, inputs and identity where the agent can add entries but cannot change them."
+      why: "It is the only account of what an unattended agent did."
       note: >-
         Every action with reasoning, inputs and identity, written where the agent can append and cannot amend.
     - mitigation: cap-agent-kill-switch
       at: govObservability
+      do: "Have a stop that also revokes the agent's identity and does not need a software release."
+      why: "You need to stop it in seconds, not at the next deploy."
       note: A halt that also revokes the agent's identity, and does not require a deploy.
     - mitigation: cap-retrieval-grounding-checks
       at: stateRetrieval
+      do: "Check content before it enters the case index, and keep each customer's content separate inside it."
+      why: "A poisoned document in the index steers every later run that reads it."
       note: >-
         Ingest trust on what enters the case index and per-tenant isolation inside it — the answer to a
         poisoned index, distinct from scoping what a read may return.
     - mitigation: cap-mcp-tool-integrity
       at: planner->gateway
+      do: "Check each tool's description against the fingerprint you approved before the model is offered it, and again after every update."
+      why: "A tool whose description changes after approval can quietly redirect the agent."
       note: >-
         Tool definitions reach the harness's MCP client through the gateway's brokerage, and each is checked
         against the content hash pinned at admission before the model is offered it — a definition changed
         after admission, the rug-pull, is refused, and the check repeats after every update.
     - mitigation: D3-FA
       at: sources->registry
+      do: "Scan every package for malware and look-alike names at your package mirror before it is made available inside."
+      why: "The agent installs packages by itself, and a bad one runs inside your environment."
       note: >-
         Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
         public source, before anything inside can pull it. The registered embodiment of artifact
         scanning, on the one edge where it applies.
     - mitigation: D3-EI
       at: localTools
+      do: "Run code the agent writes only in a sandbox that is thrown away after each task, never inside the agent's own process."
+      why: "Generated code can do anything the process it runs in can do."
       note: >-
         Generated code runs only in the sandbox — an isolated runtime with its own filesystem and
         network, torn down per task — never in the harness's own process.

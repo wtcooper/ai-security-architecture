@@ -96,6 +96,11 @@ export function BoxDiagram({
     const key = edges.has(p.at) || blocks.has(p.at) ? p.at : reverse(p.at);
     if (!risksAt.get(key)?.includes(p.risk)) risksAt.set(key, [...(risksAt.get(key) ?? []), p.risk]);
   }
+  /** What to do at this chip, in plain words: the same sentence that leads its row on Enable. */
+  const doOf = (id: string, at: string) =>
+    (archetype.pins.mitigations.find((p) => (p.at === at || p.at === reverse(at)) && p.mitigation === id) ??
+      // A chip on a control-plane box stands for a control pinned elsewhere: say what to do there.
+      archetype.pins.mitigations.find((p) => p.mitigation === id))?.do;
   const noteOf = (kind: "mitigations" | "risks", id: string, at: string) =>
     (archetype.pins[kind] as { at: string; note?: string; mitigation?: string; risk?: string }[]).find(
       (p) => (p.at === at || p.at === reverse(at)) && (p.mitigation ?? p.risk) === id,
@@ -154,7 +159,7 @@ export function BoxDiagram({
           }
         }}
         style={{ cursor: "pointer", opacity: off ? 0.28 : 1, outlineOffset: 2 }}
-        {...hover(`${n} · ${name}`, noteOf("mitigations", id, at) ?? "Select to open this control on Enable.")}
+        {...hover(`${n} · ${name}`, doOf(id, at) ?? "Select to open this control on Enable.")}
       >
         <circle cx={cx} cy={cy} r={8.5} fill={lit ? "var(--chip)" : tint.background} stroke={lit ? "var(--chip)" : tint.borderColor} strokeWidth={1.2} />
         <text x={cx} y={cy + 3.4} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={lit ? "#fff" : tint.color}>

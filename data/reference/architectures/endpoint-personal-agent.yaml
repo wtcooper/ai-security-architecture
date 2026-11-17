@@ -803,28 +803,38 @@ pins:
   mitigations:
     - mitigation: cap-input-guardrails
       at: relay
+      do: "Screen every incoming message for hidden instructions at the relay you run, including the owner's own messages."
+      why: "The messaging platform before that point is somebody else's, so this is the first place you can check."
       note: >-
         Classify inbound content at the first tier we operate — every message is untrusted, the owner's
         included; the platform before this hop is somebody else's cloud.
     - mitigation: cap-sensitive-data-redaction
       at: relay
+      do: "Check the agent's replies for sensitive data at the relay before they are sent."
+      why: "The AI gateway never sees chat replies, so this is the only inspection that path gets."
       note: >-
         Outbound classification on the reply leg — the only inspection the messaging path gets, because the
         gateway never sees it.
     - mitigation: D3-APA
       at: bridges
+      do: "Use one rule for who may message the agent, tied to your staff directory and applied to every chat channel."
+      why: "Who is allowed to talk to the agent is the whole of the door on this pattern."
       note: >-
         One pairing policy for every channel — directory-bound, re-checked, and administered centrally rather
         than reimplemented per platform; each adapter enforces it on every inbound message. Identity is the
         whole of the admission on this surface.
     - mitigation: cap-agent-action-policy-enforcement
       at: gateway
+      do: "Check each action the agent proposes at your AI gateway before it leaves, and limit runs that start with nobody present to reading and drafting."
+      why: "An agent that wakes by itself should not be able to send or change things unattended."
       note: >-
         Proposed actions evaluated per call at the crossing before they leave — this action, this scope, now —
         rather than a session-time grant the loop argues with itself about. Unattended turns are tagged at
         ingress and bound to a read-only or draft class on every brokered leg.
     - mitigation: D3-MAN
       at: harness
+      do: "Make the agent's local control connection accept only an authenticated client, with a token checked on every message."
+      why: "Otherwise a web page open in the owner's browser can drive the agent."
       note: >-
         The daemon's control socket accepts only messages from an authenticated client — a per-client token
         checked on every WebSocket message, replays refused, origin checked at the handshake — so a page in the
@@ -832,12 +842,16 @@ pins:
         relay are configuration around it, not the authentication.
     - mitigation: AML.M0031
       at: toolPlane->memory
+      do: "Let the agent write only to its own memory files, make its startup rules read-only to it, record where each memory came from and keep snapshots."
+      why: "A poisoned memory survives restarts and runs again on schedule, so you need to be able to trace it and roll it back."
       note: >-
         Scope writes to the agent's own memory files, with the bootstrap rules read-only to it; record which
         message or tool result each write came from; snapshot memory so a poisoned entry can be rolled back; and
         treat what is read back as untrusted input.
     - mitigation: D3-EI
       at: sandbox
+      do: "Run the whole agent inside a sandbox whose settings you own and the agent cannot edit, and add the model key outside the sandbox."
+      why: "A hijacked agent is then contained, and it never holds the key it could leak."
       note: >-
         The boundary itself, with its own kernel, filesystem and network — the operator owns the spec and the
         agent cannot edit it. Note what this buys beyond containment: with the model credential injected at
@@ -845,11 +859,15 @@ pins:
         — though memory, workspace content and tool results can still leave through the allowed routes.
     - mitigation: AML.M0028
       at: toolPlane
+      do: "Give each of the agent's tools only the permissions it needs, not everything the agent's process could do."
+      why: "One misused tool then cannot do everything."
       note: >-
         Per-tool grants on the native tools instead of the daemon's full authority — enforced where the tools
         run, inside the harness.
     - mitigation: D3-CTS
       at: gateway->internalTools
+      do: "For each call to a tool server, issue a token that works only for that server and that task."
+      why: "The agent then never carries the owner's standing access, and a token cannot be reused somewhere else."
       note: >-
         On-behalf-of exchange at the crossing: each remote call carries a token whose audience is that one tool
         server and whose scope is the task — never the owner's standing grants, never a token passed through —
@@ -857,36 +875,50 @@ pins:
         instruction came from the owner is still the pairing and approval pins' question.
     - mitigation: D3-CH
       at: gateway
+      do: "Hand out credentials call by call at your AI gateway, added to the request outside the sandbox."
+      why: "Nothing is stored inside the sandbox for the agent to leak."
       note: >-
         Credentials brokered per call at the crossing and injected into request headers by the host-side
         proxy, so nothing is at rest inside the boundary and the loop never holds a key it could leak.
     - mitigation: cap-output-guardrails
       at: gateway->provider
+      do: "Screen the model's answers at your AI gateway before the agent acts on them."
+      why: "The model's answer becomes the agent's next action."
       note: >-
         Completions are classified at the gateway before they reach the loop — the inspection a hosted
         product would have applied, run by the organisation because the completion becomes the next tool
         call.
     - mitigation: cap-mcp-tool-integrity
       at: toolPlane->registry
+      do: "Check where each tool and skill comes from, require it to be signed, pin the version, and alert when what installs differs from what you reviewed."
+      why: "An update should be a decision, not something that happens to you."
       note: >-
         Provenance, signing and version pinning on the supply path — an update is a decision, and drift
         between what was reviewed and what installs is an alert.
     - mitigation: AML.M0029
       at: internalTools->orgData
+      do: "Require a person's approval before the agent changes business records, and keep those prompts rare."
+      why: "People stop reading approval prompts that appear all the time."
       note: >-
         Approval on consequential writes to systems of record, mirroring the coding-agent siblings — rare
         enough that each prompt is read.
     - mitigation: AML.M0036
       at: harness->gateway
+      do: "Set limits at your AI gateway on how much the agent may spend and how many steps it may take."
+      why: "This agent wakes itself, so a loop can run unnoticed."
       note: Spend and iteration ceilings on the crossing, sized for a loop that wakes itself.
     - mitigation: cap-agent-tracing
       at: gateway
+      do: "Record every model and tool call at your AI gateway where the agent cannot change it, and join it with the relay's log and device monitoring."
+      why: "Chat replies and work done locally never pass through the gateway."
       note: >-
         One correlated trace per brokered call — prompt, tool calls, effects — captured at the crossing and
         written where the agent cannot amend it. Chat replies and local tool work never cross here, so the
         relay's log and the endpoint telemetry are joined to it.
     - mitigation: cap-agent-kill-switch
       at: govObservability
+      do: "Make sure you can cut the agent off in seconds by revoking its identity at your gateway, and also end its process, cancel its scheduled runs and expire its chat pairing from outside the sandbox."
+      why: "Chat, package installs and local tools do not pass through the gateway, so revoking access there does not stop them."
       note: >-
         Revoking the agent's identity cuts off every model and tool call at the crossing within seconds,
         without a deploy. The rest of the stop is enforced from outside the sandbox — the daemon and its
@@ -894,26 +926,36 @@ pins:
         path, the mirror and local tools never cross the gateway.
     - mitigation: cap-shadow-ai-discovery
       at: harness
+      do: "Find the agents nobody registered by checking the devices themselves, not by asking people."
+      why: "People set these up for themselves."
       note: Find the installs nobody registered, derived from the device rather than self-reported.
     - mitigation: D3-PA
       at: harness
+      do: "Use device monitoring on the machine the agent runs on."
+      why: "A long-running program with command-line access is exactly where ordinary malware shows up."
       note: >-
         A long-lived daemon with shell access is exactly the workload endpoint telemetry exists for — incident
         06's payload was a commodity stealer, and the device tooling is what would have seen it.
     - mitigation: cap-agent-tool-registry
       at: gateway
+      do: "Keep an inventory at your AI gateway of every agent that connects to it."
+      why: "In the incident this pattern is built on, owners were found by scanning the internet, not from any inventory."
       note: >-
         Every daemon that reaches the crossing is inventoried there — the one pattern whose incident says
         owners were found by scanning, not by inventory.
     - mitigation: cap-agent-egress-control
       at: sandbox
+      do: "Set the sandbox's network rules so the only ways out are your AI gateway, your package mirror, the chat relay, and web search on an approved list."
+      why: "Commands and web traffic do not pass through the gateway, so these rules are the only limit on where they go."
       note: >-
-        The microVM's network policy: the only routes out of the boundary are the AI gateway, the package
+        The sandbox's network policy: the only routes out of the boundary are the AI gateway, the package
         mirror, the relay the bridges dial, and web search and fetch on the proxy's allowlist. Shell
         commands, fetches and browser traffic are bounded here — not at the gateway, which brokers model,
         MCP and API calls and sees nothing else.
     - mitigation: D3-FA
       at: sources->registry
+      do: "Scan every package for malware and look-alike names at your package mirror before it is made available inside."
+      why: "The agent installs packages by itself, and a bad one runs with the agent's access."
       note: >-
         Admission scanning at the mirror: malware and typosquat checks on everything proxied in from a
         public source, before anything inside can pull it. The registered embodiment of artifact

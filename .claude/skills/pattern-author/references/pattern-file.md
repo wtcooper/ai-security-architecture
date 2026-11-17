@@ -165,10 +165,17 @@ pins:
   mitigations:
     - mitigation: cap-input-guardrails   # an id from the control catalogue
       at: gateway
+      do: "Screen tool results and fetched documents at the AI gateway for hidden instructions before they reach the agent."
+      why: "Content from outside can carry instructions that steer the agent."
       note: >-
-        What to put in place at this spot on this pattern. This is the control's row on Enable.
+        The precise version, for an architect: what the control does at this spot on this
+        pattern and what it does not cover.
 ```
 
+- `do` and `why` are required on every control pin: one plain sentence starting with a verb,
+  then what goes wrong without it (at most 260 and 220 characters, no dashes, no security
+  shorthand). They lead the control's row on Enable and its chip's hover; see the standard's
+  rule C11. The tests reject an instruction that opens on a noun or uses a listed jargon word.
 - The pattern's control list, and the chip numbers, come from the order of first appearance
   in `pins.mitigations`. **Append; never reorder.**
 - A control must apply on this pattern's surface (the catalogue says which). The build fails

@@ -6,6 +6,8 @@ export interface ControlGroup {
   id: string;
   /** The CSF category's name. */
   title: string;
+  /** What the category is for, in everyday words: the heading a reader sees. */
+  plain: string;
   /** The CSF function: Govern, Identify, Protect, Detect, Respond or Recover. */
   function: string;
   blurb: string;
@@ -22,7 +24,7 @@ export function controlGroups(archetype: Archetype): ControlGroup[] {
     .map((g) => {
       const own = g.surfaces?.[archetype.surface];
       const ids = new Set(g.mitigations);
-      return { id: g.id, title: g.title, function: g.function, blurb: own?.blurb ?? g.blurb, capabilities: pinned.filter((m) => ids.has(m.id)) };
+      return { id: g.id, title: g.title, plain: g.plain, function: g.function, blurb: own?.blurb ?? g.blurb, capabilities: pinned.filter((m) => ids.has(m.id)) };
     })
     .filter((g) => g.capabilities.length);
 }
@@ -33,19 +35,31 @@ export const baselineNotPinned = (archetype: Archetype): Mitigation[] => {
   return enablement.baseline.filter((id) => !pinned.has(id)).map((id) => mitigationById.get(id)!);
 };
 
-/** Where an architecture places a capability: every block it is pinned on, and both ends of a flow it is pinned on. */
-export function placementsFor(archetypeId: string, capabilityId: string): { blocks: string[]; notes: string[] } {
+/** One place a control is pinned on a pattern: what to do there, why, and the architect's note. */
+export interface Placement {
+  /** The boxes it sits on: one for a box, both ends for a flow. */
+  where: string[];
+  do: string;
+  why: string;
+  note?: string;
+}
+
+/** Where a pattern places a control: every block it is pinned on, both ends of a flow it is pinned on, and the instruction at each place. */
+export function placementsFor(archetypeId: string, capabilityId: string): { blocks: string[]; notes: string[]; steps: Placement[] } {
   const arch = archetypeById.get(archetypeId);
-  if (!arch) return { blocks: [], notes: [] };
+  if (!arch) return { blocks: [], notes: [], steps: [] };
   const titles = new Map(arch.blocks.map((b) => [b.id, b.title]));
   const blocks = new Set<string>();
   const notes = new Set<string>();
+  const steps: Placement[] = [];
   for (const pin of arch.pins.mitigations) {
     if (pin.mitigation !== capabilityId) continue;
-    for (const id of pin.at.split("->")) if (titles.has(id)) blocks.add(titles.get(id)!);
+    const where = pin.at.split("->").filter((id) => titles.has(id)).map((id) => titles.get(id)!);
+    for (const title of where) blocks.add(title);
     if (pin.note) notes.add(pin.note);
+    steps.push({ where, do: pin.do, why: pin.why, note: pin.note?.trim() });
   }
-  return { blocks: [...blocks], notes: [...notes] };
+  return { blocks: [...blocks], notes: [...notes], steps };
 }
 
 /** A product's own record on one capability, if the registry has one. */

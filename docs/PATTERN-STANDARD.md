@@ -53,13 +53,14 @@ These hold for all patterns because the engine draws them, and are covered by th
 | **C3 Crossings** | `crossing` on every flow whose ends are in different zones | `kind`: `brokered` (through a control point we run), `vendor` (governed by the vendor), `person` (through the person present) or `direct` (nothing of ours in the path). `via`: one line naming what the flow passes through on our side, and for `direct`, starting "Nothing between:" and naming the only thing that does apply. It must agree with the controls pinned on that flow and its ends. |
 | **C4 When it applies** | `useWhen` in `data/overlay/patterns.yaml` | One sentence in the reader's words, plus the search words a reader might use. |
 | **C5 Control plane is used** | `mitigations` on control-plane blocks | Every control-plane box drawn owns at least one control the pattern pins, or the pattern's file says why it is drawn empty. |
-| **C6 Notes** | `note` on every block and flow | The hover text: what it is and why it matters here. A control pin's note is its row on Enable: what to put in place at that spot on this pattern, not what the control is in general. |
+| **C6 Notes** | `note` on every block and flow | The hover text and the architect's version: what it is and why it matters here. |
 | **C7 Walks** | `walkthrough` and `scenarios` | One complete walk and at least two scenario walks, every step on a real flow. |
 | **C8 Guidance** | `data/reference/guidance/<slug>.yaml` | An overview and at least four action-titled items, each citing controls the pattern pins. |
 | **C9 Tools** | `data/tooling/`, `data/clouds/` | At least one catalogued product with settings, and for a pattern you build, its mapping onto each cloud. Where no product exists yet, the Enable tab says so. |
 | **C10 Clouds** | `data/clouds/<cloud>.yaml` | For a pattern you build: on each cloud, a service (or "you build this") for every component, and at least one of the cloud's own settings for every pinned control, each read on the vendor's page. The tests check both for every pattern-and-cloud pair. |
+| **C11 Plain instruction** | `do` and `why` on every control pin | `do`: what to put in place at that spot, as one plain sentence that starts with a verb ("Require a second sign-in factor at your identity provider…"). `why`: what goes wrong without it, in one or two short sentences. Written for whoever has to enable the pattern, not for a security architect: no abbreviations or security terms a general reader would stop at, no dashes, at most 260 and 220 characters. They are the headline of the control's row on Enable and the chip's hover on the drawing; the precise wording stays in `note`. The build requires both and the tests check the wording. |
 
-C1 to C3 are the fields the boundary drawing added, and the audit fails on them. C4 to C10
+C1 to C3 are the fields the boundary drawing added, and the audit fails on them. C4 to C11
 predate it: the build already enforces C4 and C8, and the audit reports C5, C6, C7 and C9 as
 open questions in its last column without failing, because closing one is a decision about the
 pattern, not a fix to the drawing.

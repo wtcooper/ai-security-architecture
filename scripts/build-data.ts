@@ -806,6 +806,16 @@ function checkArchetypes(
     const mitigations: string[] = [];
     for (const pin of arch.pins?.mitigations ?? []) {
       const at = `${where} mitigation pin ${pin.mitigation} @ ${pin.at}`;
+      // The row a reader acts on: one plain instruction and why, not the architect's note.
+      for (const [field, max] of [["do", 260], ["why", 220]] as const) {
+        const text = pin[field]?.trim();
+        if (!text) fail(`${at}: needs a "${field}" line — ${field === "do" ? "what to put in place here, starting with a verb" : "what goes wrong without it"}, in plain words`);
+        else {
+          if (text.length > max) fail(`${at}: "${field}" is ${text.length} characters; keep it to ${max}`);
+          if (!/^[A-Z]/.test(text) || !/[.?]$/.test(text)) fail(`${at}: "${field}" must be a sentence: capital first, full stop last`);
+          if (/[—–]/.test(text)) fail(`${at}: "${field}" uses a dash; write two plain sentences or use a comma`);
+        }
+      }
       const mitigation = mitigationById.get(pin.mitigation);
       if (!mitigation) fail(`${at}: unknown mitigation`);
       else if (mitigation.surfaces?.[arch.surface]?.applies === false) {

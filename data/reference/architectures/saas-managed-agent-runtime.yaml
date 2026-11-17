@@ -817,6 +817,8 @@ pins:
   mitigations:
     - mitigation: D3-APA
       at: sourceControl
+      do: "Set your code host so only named people and registered automations can write the code, issue threads and instruction files the agent reads."
+      why: "Otherwise anyone who can open a public issue can feed the agent instructions."
       note: >-
         The repository host's access policy decides who may write the code, threads and instruction
         files the session reads: write access for named people and registered automations, with non-
@@ -824,12 +826,16 @@ pins:
         public issue is an attack surface.
     - mitigation: AML.M0028
       at: sourceControl
+      do: "Give the session a token that reaches one repository and one branch and cannot push to the main branch, approve or merge."
+      why: "The session can then propose a change but cannot ship it."
       note: >-
         A token that reaches one repository and one branch, cannot push the default branch, mark ready,
         approve or merge; protected scopes and repository blocklists on the products that have them; a
         session that can reach only repositories its trigger could already reach.
     - mitigation: AML.M0029
       at: sourceControl
+      do: "Require a draft pull request that a different person reviews and merges, and put the agent's own instruction files and setup scripts under required review."
+      why: "The review approves the result, not the actions the agent already took to produce it."
       note: >-
         The gate: a draft pull request a person reviews and merges, an initiator whose approval does not
         count, workflows that wait for "approve and run", and the agent's own configuration —
@@ -838,16 +844,22 @@ pins:
         happened when the reviewer arrives, which is why the sandbox and egress pins exist.
     - mitigation: cap-agent-tool-registry
       at: agentDef->managedRuntime
+      do: "Register and review every agent definition before it is deployed."
+      why: "The definition is the only thing there is to review."
       note: >-
         Every definition registered and reviewed before deploy; there is no other artifact to review.
         Change-gating on the data path, per the recorded deviation.
     - mitigation: cap-staged-rollout-gate
       at: agentDef->managedRuntime
+      do: "Release definitions as fixed versions: test them against attacks, send a small share of traffic first, and keep rollback to a single switch."
+      why: "A change to the definition changes what the agent does for everyone at once."
       note: >-
         Immutable versions, adversarial evaluation before an alias moves, a canary first, and rollback that is
         a pointer flip — the software-delivery half of this page's distinction, applied to the definition.
     - mitigation: D3-CTS
       at: managedRuntime
+      do: "Keep credentials in the vendor's vault so the sandbox only ever holds a placeholder, and attach a separate vault per user."
+      why: "By default one vault is shared by every session it is attached to."
       note: >-
         The vault: the runtime substitutes each credential at egress, only toward its named server or host, so
         the sandbox holds a placeholder and the model never sees a value. It is a shared credential for every
@@ -855,6 +867,8 @@ pins:
         arrangement, not the runtime's default.
     - mitigation: cap-agent-action-policy-enforcement
       at: managedRuntime
+      do: "Write per-tool rules in the definition: deny by default, always ask on tools that matter, and use any minimum guardrails the platform lets you lock."
+      why: "The vendor's automatic approval modes are not a substitute for your own rules."
       note: >-
         The definition's per-tool permission rules, evaluated by the runtime before each built-in or MCP call
         executes: deny by default, always-ask on consequential tools, and guardrail floors a builder cannot
@@ -862,24 +876,32 @@ pins:
         Custom tools bypass it and are dispatched by our application through our gateway.
     - mitigation: AML.M0031
       at: managedRuntime
+      do: "Set the agent's memory scope deliberately on the vendor's platform, and confirm in your vendor review how memory is written, kept and recovered."
+      why: "The default scope is wider than most people assume."
       note: >-
         Memory scope is a flag on their platform, and the default is wider than most adopters assume. Setting
         it deliberately is the part we configure; authorized writes, provenance, retention and recovery of that
         state are assured by assessment or recorded as gaps.
     - mitigation: AML.M0036
       at: managedRuntime
+      do: "Set limits on each session's length, steps and cost in the runtime, and keep running totals in your own application."
+      why: "A new session resets a per-session limit, so it is not an organisation-wide ceiling."
       note: >-
         Run limits the runtime enforces on each session — duration, turns or tool calls, and cost where it
         supports them — plus cumulative limits in our application, because a fresh session resets a
         per-session cap. A per-session budget is not an organisation-wide spend ceiling.
     - mitigation: cap-ai-vendor-assessment
       at: managedRuntime
+      do: "Review the vendor's isolation, retention and separation between customers before rollout, and re-check on a schedule."
+      why: "Memory scope, guardrail coverage and tool defaults change as the platform ships."
       note: >-
         Their isolation, retention and tenancy assured by assessment rather than drawn — the only
         representation a vendor-internal control gets — and re-assessed on a clock, because memory scope,
         guardrail coverage and tool-gateway defaults drift as the platform ships.
     - mitigation: D3-EI
       at: nativeTools
+      do: "Make sure each session's tools run in their own sandbox, and harden the worker yourself if you host it."
+      why: "The vendor's boundary stops at the sandbox; a worker you run is yours to secure."
       note: >-
         One sandbox per session around the built-in tools — the provider's container or microVM, or the worker
         we run. Inside it: the shell and file tools the definition enables. Outside it: the loop,
@@ -887,6 +909,8 @@ pins:
         and process user are ours to harden; the provider's boundary stops at the sandbox.
     - mitigation: cap-agent-egress-control
       at: nativeTools
+      do: "Write the sandbox's network allowlist in the environment definition: web fetch, public code hosts and package sources only, with everything else refused."
+      why: "You write the list and the vendor enforces it. Check per product which traffic the list does not cover."
       note: >-
         The environment definition's networking policy, authored by us and enforced by the provider around the
         sandbox: an allowlist of web fetch, public source control and the public package sources or the
@@ -896,6 +920,8 @@ pins:
         declared tool set. A self-hosted worker's egress is our firewall.
     - mitigation: AML.M0028
       at: managedRuntime->vendorTools
+      do: "In the agent's definition, switch on only the tools it needs and list the tool servers it may use, and review the definition like code."
+      why: "Nothing checks what a listed server actually does, and the next version of the definition can undo any of it."
       note: >-
         Per-tool enablement in the definition, and MCP servers admitted only as the
         definition declares them: the settings that make "the agent reaches SaaS data only through an approved
@@ -903,38 +929,52 @@ pins:
         configuration the next definition can undo, which is why the definition is reviewed like code.
     - mitigation: D3-CH
       at: tunnel
+      do: "Issue the tunnel host's token and key with narrow scope, rotate them, and be able to revoke them without rebuilding the host."
+      why: "They are the secrets this path depends on."
       note: >-
         The tunnel token and TLS private key on this host are the load-bearing secrets on the path — issued
         scoped, rotated like a service credential, and revocable without redeploying the host. The tunnel
         carries traffic on them but never authenticates to our server; that is the gateway's job.
     - mitigation: AML.M0028
       at: aiGateway->internalTools
+      do: "Decide at your own gateway which servers and tools the agent may reach, and on whose access."
+      why: "The vendor's side is not yours to configure."
       note: Which servers, which tools, whose grant — decided at our tier because theirs is not ours to configure.
     - mitigation: AML.M0029
       at: aiGateway->internalTools
+      do: "Have your gateway refuse any write that matters unless it carries a person's approval for that exact action, shown to them in your own application."
+      why: "The vendor's own approval prompts are a useful second layer, not the gate."
       note: >-
         Our gateway owns the gate: a consequential write is refused unless it carries an approval bound to the
         exact action — surfaced to the approver through our front end, with the vendor's per-tool approval
         defaults as the second, configured layer.
     - mitigation: cap-input-guardrails
       at: aiGateway
+      do: "Screen tool and connector results at your gateway before they go back to the agent, including records from your own systems."
+      why: "Many people wrote those records, and connectors the vendor calls directly never pass through your gateway."
       note: >-
         Tool and connector content returned through this gateway — on the tunnel path and to our custom-tool
         handlers — is classified here before it goes back to a loop we cannot see, enterprise-data returns
         included, because many hands wrote those records too. Vendor-direct connector content never crosses it.
     - mitigation: cap-agent-tracing
       at: govObservability
+      do: "Export the vendor's session log, combine it with your gateway's record and keep it on your side."
+      why: "A log that exists only in the vendor's console is one you cannot search during an incident."
       note: >-
         Their session event log exported and fused with our gateway's record, and retained on our side — a
         trail that exists only in their console is one we cannot query during an incident.
     - mitigation: cap-agent-kill-switch
       at: govObservability
+      do: "Make sure you can archive the agent, interrupt its running and queued sessions, revoke its stored credentials and stop your own code handling its requests."
+      why: "Rolling back to an older version only affects new sessions."
       note: >-
         Archive the agent, interrupt its running and queued sessions, revoke its vault entries and stop our
         handlers dispatching for it — the SaaS form of the stop, and the response the
         credential-outlives-its-owner scenario actually invokes. An alias rollback alone affects new sessions only.
     - mitigation: D3-APA
       at: endUser->entry
+      do: "Sign every user in through your identity provider at your own front end, and pass that person's identity to the vendor."
+      why: "A shared service account would make every action look like it came from nobody in particular."
       note: >-
         Our identity provider admits the end user to our front end, and the identity binding decides who
         the session runs for — the user's own identity carried to the vendor, never a shared service
