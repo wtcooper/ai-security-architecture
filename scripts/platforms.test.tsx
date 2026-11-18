@@ -6,14 +6,14 @@ import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks
 import { PatternPage } from "../src/components/patterns/PatternPage";
 import { SURFACE_SITUATION } from "../src/components/patterns/labels";
 import { OnCloud } from "../src/components/cloud/CloudViews";
-import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor } from "../src/components/cloud/model";
+import { cloudProductsFor, cloudSlug, differenceMarks, differencesFor, hostedAs, hostingOptionsFor } from "../src/components/cloud/model";
 import { SettingCheck } from "../src/components/enable/SettingCheck";
 import { CapabilityTable } from "../src/components/enable/CapabilityTable";
 import { controlGroups } from "../src/components/enable/model";
 import { ChooseBuild } from "../src/components/enable/ChooseBuild";
 import { ProductSettings } from "../src/components/enable/ProductSettings";
 import { componentChoiceIn, dataset, productsForArchetype } from "../src/lib/data";
-import { checkCommandProblem, type ProductStatusEntry } from "../src/lib/types";
+import { checkCommandProblem, HOSTING_COMPARE, type ProductStatusEntry } from "../src/lib/types";
 import { checkProductStatus } from "./lib/products";
 
 const router = { bfcacheId: "test", back() {}, forward() {}, refresh() {}, hmrRefresh() {}, push() {}, replace() {}, async prefetch() {} };
@@ -229,4 +229,58 @@ test("agent federation checks both peers alike; only whose identity travels diff
   assert.match(a.exemplars!.find((e) => /Rovo/.test(e.name))!.note, /signs in the user/, "the Rovo example says how it differs");
   // No control was added, so no chip was renumbered.
   assert.equal(a.mitigations.length, 13);
+});
+
+test("a platform's hosting options are compared on the same rows; a variant keeps the pattern and still delivers every control", () => {
+  const AGENT_PATTERNS = ["archActionAgent", "archChatAgent", "archAgentWorkflow", "archAgentFederation"];
+  for (const a of hosted) {
+    for (const product of cloudProductsFor(a.id)) {
+      const options = hostingOptionsFor(product);
+      const where = `${a.id} on ${product.cloud.short}`;
+      // Every agent pattern says how it can be hosted on every platform.
+      if (AGENT_PATTERNS.includes(a.id)) assert.ok(options.length, `${where}: lists its hosting options`);
+      if (!options.length) continue;
+      assert.equal(options.filter((o) => o.mapped).length, 1, `${where}: one option is the mapping itself`);
+      for (const o of options) {
+        for (const [key] of HOSTING_COMPARE) assert.ok(o.compare[key]?.trim(), `${where} ${o.id}: answers "${key}"`);
+        assert.ok(o.sources?.length, `${where} ${o.id}: names the pages its comparison rests on`);
+        if (o.kind === "managed") {
+          // The vendor runs the agent loop: another pattern, linked and not redrawn.
+          const other = dataset.archetypes.find((x) => x.id === o.pattern);
+          assert.ok(other && other.id !== a.id, `${where} ${o.id}: points at the pattern that draws it`);
+          if (o.tool) assert.equal(dataset.tools.find((t) => t.id === o.tool)?.architecture, o.pattern, `${where} ${o.id}: its product is catalogued on that pattern`);
+          assert.equal(hostedAs(product, o.id), product, `${where} ${o.id}: choosing it changes nothing on this pattern`);
+          continue;
+        }
+        const as = hostedAs(product, o.id);
+        const delivered = new Set(as.settings.flatMap((st) => st.mitigations));
+        for (const id of a.mitigations) assert.ok(delivered.has(id), `${where} ${o.id}: ${id} is still delivered`);
+        assert.equal(as.implementation.bindings.length, product.implementation.bindings.length, `${where} ${o.id}: every component is still named`);
+        if (o.mapped) continue;
+        // The variant shows on the page: its own component names and its own settings.
+        for (const b of o.bindings ?? []) assert.equal(as.implementation.bindings.find((x) => x.block === b.block)?.service, b.service, `${where} ${o.id}: ${b.block} is renamed`);
+        const html = page(a.id, `cloud=${cloudSlug(product.id)}&host=${o.id}&tool=${product.id}`);
+        assert.equal([...html.matchAll(/data-setting-name/g)].length, as.settings.length, `${where} ${o.id}: the settings step lists the variant's settings`);
+        assert.ok(html.includes(`hosted on ${esc(o.name)}`), `${where} ${o.id}: the page says how it is hosted`);
+      }
+      // The choosing step: a card per option and every comparison row, none ranked.
+      const choose = renderToStaticMarkup(
+        <ChooseBuild archetype={a} products={productsForArchetype(a.id)} platform={product} framework={null} host={null} onPickPlatform={() => {}} onPickHost={() => {}} onPickFramework={() => {}} />,
+      );
+      assert.equal([...choose.matchAll(/data-hosting-option="/g)].length, options.length, `${where}: a card per option`);
+      assert.equal([...choose.matchAll(/data-compare-row="/g)].length, HOSTING_COMPARE.length, `${where}: every comparison row`);
+      for (const o of options.filter((x) => x.kind === "managed")) assert.match(choose, new RegExp(`data-hosting-pattern="${o.pattern}"`), `${where}: ${o.id} links to its pattern`);
+      assert.doesNotMatch(choose, /recommended|best choice|we recommend/i, `${where}: compared, not ranked`);
+    }
+  }
+});
+
+test("an organisation can record which ways of hosting it has approved", () => {
+  const cloud = dataset.clouds.find((c) => c.implementations.some((i) => i.hosting?.length));
+  if (!cloud) return;
+  const option = cloud.implementations.find((i) => i.hosting?.length)!.hosting![0];
+  const ok = checkProductStatus({ products: { [cloud.id]: { hosting: { [option.id]: { status: "enabled", note: "Platform team standard" } } } } }, dataset.tools, dataset.clouds);
+  assert.equal(ok[cloud.id].hosting?.[option.id].status, "enabled");
+  assert.throws(() => checkProductStatus({ products: { [cloud.id]: { hosting: { noSuchOption: { status: "enabled" } } } } }, dataset.tools, dataset.clouds), /no hosting option/);
+  assert.throws(() => checkProductStatus({ products: { [dataset.tools[0].id]: { hosting: { [option.id]: { status: "enabled" } } } } }, dataset.tools, dataset.clouds), /is a tool/);
 });

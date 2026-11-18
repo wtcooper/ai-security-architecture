@@ -48,6 +48,10 @@ the fields; `npm run data` rejects anything it does not recognise.
   `<pattern id>/<component id>` for one pattern. `uses` is at most 60 characters because it is
   printed in the box. Record a choice only where the organisation has approved one; do not
   invent a link.
+- On a platform, `hosting:` records which ways of hosting the organisation has approved, keyed
+  by the hosting option's id in that platform's file: `aks: { status: enabled }`,
+  `containerApps: { status: testing, note: "…" }`. The page compares the options without
+  ranking them; this entry is what turns the comparison into the organisation's own answer.
 
 Check the result on a hosted pattern with **Built on** set to that platform: the box shows the
 organisation's choice, marked as its own, and How it works lists it beside the reference.

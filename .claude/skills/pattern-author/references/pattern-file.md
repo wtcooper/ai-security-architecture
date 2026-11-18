@@ -309,6 +309,30 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
         # role: identity | network | ingress | keys | secrets | registry | logging | other
     quickstart:                     # the vendor's own starting point
       - { title: "…", url: https://… }
+    hosting:                        # optional: the ways this platform can host the pattern
+      - id: containerRuntime        # camelCase; the key in ?host= and in data/status.yaml
+        kind: runtime               # cluster | runtime | managed
+        name: "The service, as the vendor names it"
+        mapped: true                # exactly one: the option the bindings and settings above describe
+        compare: { agentLoop: "…", patching: "…", data: "…", network: "…", identity: "…",
+                   framework: "…", longRunning: "…", portability: "…", effort: "…", fits: "…" }
+        sources: [https://…]
+      - id: ownCluster
+        kind: cluster               # a variant on the same pattern: only what changes
+        name: "…"
+        compare: { … }              # the same ten rows, one sourced sentence each, no ranking
+        bindings: [ { block: harness, service: "Your agent in pods on …" } ]
+        dropSettings: [idsThatNoLongerApply]
+        addSettings: [idsFromTheLibrary]   # every pinned control must still be delivered
+        differences: [ { at: harness->gateway, text: "…", url: https://… } ]
+        alsoNeeded: [ { service: "…", role: network, why: "…" } ]
+      - id: managedService
+        kind: managed               # the vendor runs the agent loop: another pattern, not a variant
+        name: "…"
+        compare: { … }
+        pattern: archManagedAgentRuntime   # the pattern it is drawn as
+        tool: toolTheProduct               # the product catalogued on that pattern
+        offers: [ { name: "…", what: "One sentence.", url: https://… } ]
     settings: [settingIdOne, settingIdTwo]   # rows of the file's settings library
 ```
 
@@ -323,6 +347,11 @@ For a hosted pattern (`surfaceCloud`), each file under `data/clouds/` (`aws.yaml
   applies if the box is built with that.
 - A setting row may carry a `check` (`command`, `expect`, `url`): one read-only command from the
   vendor's command reference. Never a command that creates or changes anything.
+- Hosting options are compared, never ranked: each row is a plain sentence from the vendor's own
+  page, the same rows for every option. Running your code on your own cluster or on the
+  platform's container runtime keeps the pattern's trust boundaries, so it is a variant; a
+  managed agent service moves the agent loop into the vendor's boundary, so it points at the
+  pattern that draws that.
 - An on-premises entry names software the organisation runs, says under `requires` when a
   feature needs a paid edition, and lists under `alsoNeeded` what a cloud provider would
   otherwise have run.
